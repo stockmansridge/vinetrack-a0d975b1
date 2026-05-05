@@ -14,7 +14,9 @@ import {
   Layers,
   UserCog,
   Sprout,
+  Settings,
 } from "lucide-react";
+import { useVineyard } from "@/context/VineyardContext";
 import {
   Sidebar,
   SidebarContent,
