@@ -1,8 +1,12 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import ListPage, { type ListColumn } from "@/pages/setup/ListPage";
 import PaddockMapView from "@/components/PaddockMapView";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { deriveMetrics } from "@/lib/paddockGeometry";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { useVineyard } from "@/context/VineyardContext";
 
 const fmtNum = (n: number, digits = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
