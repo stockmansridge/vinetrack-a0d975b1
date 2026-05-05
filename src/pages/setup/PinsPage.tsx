@@ -94,6 +94,8 @@ export default function PinsPage() {
                   <TableHead>Paddock</TableHead>
                   <TableHead>Row</TableHead>
                   <TableHead>Side</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Done</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Updated</TableHead>
                 </TableRow>
@@ -101,19 +103,19 @@ export default function PinsPage() {
               <TableBody>
                 {isLoading && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground">Loading…</TableCell>
+                    <TableCell colSpan={12} className="text-center text-muted-foreground">Loading…</TableCell>
                   </TableRow>
                 )}
                 {error && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-destructive">
+                    <TableCell colSpan={12} className="text-center text-destructive">
                       {(error as Error).message}
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading && !error && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                       No pins found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -146,6 +148,8 @@ export default function PinsPage() {
                       </TableCell>
                       <TableCell>{p.row_number ?? "—"}</TableCell>
                       <TableCell>{p.side ?? "—"}</TableCell>
+                      <TableCell>{(p as any).growth_stage_code ?? "—"}</TableCell>
+                      <TableCell>{(p as any).is_completed ? "Yes" : "No"}</TableCell>
                       <TableCell>{formatCell(p.created_at)}</TableCell>
                       <TableCell>{formatCell(p.updated_at)}</TableCell>
                     </TableRow>
