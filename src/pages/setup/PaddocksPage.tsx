@@ -1,13 +1,40 @@
 import { useState } from "react";
-import ListPage from "@/pages/setup/ListPage";
+import ListPage, { type ListColumn } from "@/pages/setup/ListPage";
 import PaddockMapView from "@/components/PaddockMapView";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { deriveMetrics } from "@/lib/paddockGeometry";
 
-const paddockCols = [
-  { key: "name", label: "Name" },
-  { key: "planting_year", label: "Planted" },
-  { key: "row_width", label: "Row width (m)" },
+const fmtNum = (n: number, digits = 1) =>
+  Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
+
+const paddockCols: ListColumn[] = [
+  { key: "name", label: "Name", render: (r) => r.name ?? "—" },
+  {
+    key: "area_ha",
+    label: "Area (ha)",
+    render: (r) => {
+      const m = deriveMetrics(r);
+      return m.areaHa > 0 ? fmtNum(m.areaHa, 2) : "—";
+    },
+    filterValue: (r) => String(deriveMetrics(r).areaHa.toFixed(2)),
+  },
+  {
+    key: "rows",
+    label: "Rows",
+    render: (r) => fmtNum(deriveMetrics(r).rowCount, 0),
+    filterValue: (r) => String(deriveMetrics(r).rowCount),
+  },
+  {
+    key: "row_length",
+    label: "Total row length (m)",
+    render: (r) => {
+      const m = deriveMetrics(r);
+      return m.totalRowLengthM > 0 ? fmtNum(m.totalRowLengthM, 0) : "—";
+    },
+    filterValue: (r) => String(Math.round(deriveMetrics(r).totalRowLengthM)),
+  },
   { key: "vine_spacing", label: "Vine spacing (m)" },
+  { key: "intermediate_post_spacing", label: "Int. post spacing (m)" },
   { key: "updated_at", label: "Updated" },
 ];
 
