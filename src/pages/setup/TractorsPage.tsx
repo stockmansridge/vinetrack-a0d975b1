@@ -415,14 +415,25 @@ export default function TractorsPage() {
                 <TableCell>{fmtCell(r.updated_at)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(r)}
-                      aria-label="Edit"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(r)}
+                        aria-label="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setArchiving(r)}
+                        aria-label="Archive tractor"
+                      >
+                        <Archive className="h-4 w-4" />
+                        <span className="ml-1 hidden sm:inline">Archive</span>
+                      </Button>
+                    </div>
                   )}
                 </TableCell>
               </TableRow>
