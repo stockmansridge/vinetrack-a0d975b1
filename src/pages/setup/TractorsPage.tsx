@@ -195,7 +195,7 @@ export default function TractorsPage() {
           brand: trimmedOrNull(form.brand),
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
-          fuel_usage_l_per_hour: numOrNull(form.fuel_usage_l_per_hour),
+          fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
           updated_by: user.id,
           client_updated_at: nowIso,
         };
