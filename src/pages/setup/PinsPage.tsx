@@ -63,13 +63,21 @@ export default function PinsPage() {
     [paddocks],
   );
 
-  // Diagnostics — read-only logging.
+  // Diagnostics — read-only logging (dev only).
   const diag = useMemo(
-    () => buildPinsDiagnostics(selectedVineyardId, pins, paddockPolygonCount),
-    [selectedVineyardId, pins, paddockPolygonCount],
+    () => ({
+      ...buildPinsDiagnostics(selectedVineyardId, pins, paddockPolygonCount),
+      paddockCount: paddocks.length,
+      pinsBySource: pinsResult?.source ?? "n/a",
+      vineyardIdMatches: pinsResult?.vineyardCount ?? 0,
+      paddockIdFallbackAdded: pinsResult?.paddockFallbackCount ?? 0,
+    }),
+    [selectedVineyardId, pins, paddocks.length, paddockPolygonCount, pinsResult],
   );
-  // eslint-disable-next-line no-console
-  console.debug("[PinsPage] diagnostics", diag);
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[PinsPage] diagnostics", diag);
+  }
 
   const filtered = useMemo(() => {
     if (!filter) return pins;
