@@ -152,7 +152,7 @@ export default function TractorsPage() {
       model_year:
         form.model_year === "" ? "" : Number(form.model_year),
       fuel_usage_l_per_hour:
-        form.fuel_usage_l_per_hour === "" ? "" : Number(form.fuel_usage_l_per_hour),
+        form.fuel_usage_l_per_hour === "" ? NaN : Number(form.fuel_usage_l_per_hour),
     });
     if (!parsed.success) {
       const fieldErrors: Partial<Record<keyof FormState, string>> = {};
