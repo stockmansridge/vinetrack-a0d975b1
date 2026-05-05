@@ -8,6 +8,7 @@ const SOFT_DELETE_TABLES = new Set([
   "spray_equipment",
   "vineyards",
   "pins",
+  "spray_records",
 ]);
 
 const applySoftDelete = (q: any, table: string) =>
