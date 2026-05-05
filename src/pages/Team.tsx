@@ -75,6 +75,10 @@ export default function Team() {
         <p className="text-sm text-muted-foreground">Read-only view of vineyard members</p>
       </div>
 
+      <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+        Production data — read-only view. No edits, archives, or deletions are possible from this page.
+      </div>
+
       {data?.forbidden && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           You don’t have permission to view this vineyard team.
