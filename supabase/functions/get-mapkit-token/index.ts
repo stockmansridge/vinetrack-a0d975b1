@@ -9,7 +9,11 @@
 // Returns: { token: string, expiresAt: number } — token TTL ~30 min.
 // READ-ONLY: this function only signs and returns a token; no DB access.
 
-import { corsHeaders } from "@supabase/supabase-js/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 const TTL_SECONDS = 60 * 30; // 30 minutes
 
