@@ -20,6 +20,7 @@ import DataCoverage from "./pages/DataCoverage";
 import PaddocksPage from "./pages/setup/PaddocksPage";
 import TractorsPage from "./pages/setup/TractorsPage";
 import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
+import NewPaddockPage from "./pages/setup/NewPaddockPage";
 
 const queryClient = new QueryClient();
 
