@@ -29,23 +29,18 @@ export default function PaddockMapView() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end">
-        {status === "checking" && (
+      {status === "checking" && (
+        <div className="flex items-center justify-end">
           <Badge variant="outline" className="text-xs">Map: checking…</Badge>
-        )}
-        {status === "apple" && (
-          <Badge variant="secondary" className="text-xs">Map: Apple Maps</Badge>
-        )}
-        {status === "fallback" && (
-          <Badge
-            variant="outline"
-            className="text-xs"
-            title={reason ?? undefined}
-          >
-            Map: OpenStreetMap fallback
+        </div>
+      )}
+      {status === "fallback" && reason && (
+        <div className="flex items-center justify-end">
+          <Badge variant="outline" className="text-xs" title={reason}>
+            Apple Maps unavailable — using fallback
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
       {status === "apple" ? (
         <AppleMapPaddockMap
           onUnavailable={(r) => {
