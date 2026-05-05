@@ -14,11 +14,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import type { ReactNode } from "react";
+
+export interface ListColumn {
+  key: string;
+  label: string;
+  render?: (row: any) => ReactNode;
+  filterValue?: (row: any) => string;
+  className?: string;
+}
+
 interface Props {
   table: string;
   title: string;
   description?: string;
-  columns: { key: string; label: string }[];
+  columns: ListColumn[];
   basePath: string; // e.g. /setup/paddocks
 }
 
