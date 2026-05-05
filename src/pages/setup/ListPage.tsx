@@ -14,11 +14,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import type { ReactNode } from "react";
+
+export interface ListColumn {
+  key: string;
+  label: string;
+  render?: (row: any) => ReactNode;
+  filterValue?: (row: any) => string;
+  className?: string;
+}
+
 interface Props {
   table: string;
   title: string;
   description?: string;
-  columns: { key: string; label: string }[];
+  columns: ListColumn[];
   basePath: string; // e.g. /setup/paddocks
 }
 
@@ -38,7 +48,10 @@ export default function ListPage({ table, title, description, columns, basePath 
     if (!filter) return list;
     const f = filter.toLowerCase();
     return list.filter((r: any) =>
-      columns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(f)),
+      columns.some((c) => {
+        const v = c.filterValue ? c.filterValue(r) : r[c.key];
+        return String(v ?? "").toLowerCase().includes(f);
+      }),
     );
   }, [data, filter, columns]);
 
@@ -95,7 +108,9 @@ export default function ListPage({ table, title, description, columns, basePath 
                 onClick={() => navigate(`${basePath}/${r.id}`)}
               >
                 {columns.map((c) => (
-                  <TableCell key={c.key}>{formatCell(r[c.key])}</TableCell>
+                  <TableCell key={c.key} className={c.className}>
+                    {c.render ? c.render(r) : formatCell(r[c.key])}
+                  </TableCell>
                 ))}
               </TableRow>
             ))}
@@ -107,8 +122,14 @@ export default function ListPage({ table, title, description, columns, basePath 
 }
 
 function formatCell(v: any) {
-  if (v == null) return "—";
+  if (v == null || v === "") return "—";
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d.toLocaleDateString();
+  }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
+
+export { formatCell };
