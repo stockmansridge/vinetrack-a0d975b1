@@ -21,14 +21,6 @@ import PaddocksPage from "./pages/setup/PaddocksPage";
 import TractorsPage from "./pages/setup/TractorsPage";
 
 const queryClient = new QueryClient();
-const tractorCols = [
-  { key: "name", label: "Name" },
-  { key: "brand", label: "Brand" },
-  { key: "model", label: "Model" },
-  { key: "model_year", label: "Year" },
-  { key: "fuel_usage_l_per_hour", label: "Fuel (L/h)" },
-  { key: "updated_at", label: "Updated" },
-];
 const sprayCols = [
   { key: "name", label: "Name" },
   { key: "tank_capacity_litres", label: "Tank capacity (L)" },
