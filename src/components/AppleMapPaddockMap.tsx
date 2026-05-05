@@ -283,9 +283,9 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       annotationsRef.current = newAnnotations;
     }
 
-    // Manual bounds-based region fit (only when no selection / first render)
+    // Manual bounds-based region fit (only on first successful fit)
     let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null;
-    if (allPts.length && !selectedIdRef.current) {
+    if (allPts.length) {
       let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
       for (const pt of allPts) {
         if (pt.lat < minLat) minLat = pt.lat;
@@ -294,6 +294,13 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
         if (pt.lng > maxLng) maxLng = pt.lng;
       }
       bounds = { minLat, maxLat, minLng, maxLng };
+      lastBoundsRef.current = bounds;
+    } else {
+      bounds = lastBoundsRef.current;
+    }
+
+    if (bounds && !didFitRef.current && !selectedIdRef.current) {
+      const { minLat, maxLat, minLng, maxLng } = bounds;
       const centerLat = (minLat + maxLat) / 2;
       const centerLng = (minLng + maxLng) / 2;
       const latDelta = Math.max((maxLat - minLat) * 1.5, 0.002);
@@ -303,23 +310,26 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           new mapkit.Coordinate(centerLat, centerLng),
           new mapkit.CoordinateSpan(latDelta, lngDelta),
         );
+        didFitRef.current = true;
       } catch (err) {
         console.warn("[AppleMap] region set failed", err);
       }
     }
 
-    setRenderPhase("ready");
-    console.info("[AppleMap] render", {
-      ms: Math.round(performance.now() - t0),
-      paddocks: paddocks.length,
-      withGeometry: withGeometry.length,
-      pointsUsed: allPts.length,
-      overlaysAdded: newOverlays.length,
-      annotationsAdded: newAnnotations.length,
-      totalParsedRows,
-      bounds,
-    });
-  }, [withGeometry, selectedId, mapReady, paddocks.length]);
+    if (renderPhase !== "ready") setRenderPhase("ready");
+    if (import.meta.env.DEV) {
+      console.info("[AppleMap] render", {
+        ms: Math.round(performance.now() - t0),
+        paddocks: paddocks.length,
+        withGeometry: withGeometry.length,
+        pointsUsed: allPts.length,
+        overlaysAdded: newOverlays.length,
+        annotationsAdded: newAnnotations.length,
+        totalParsedRows,
+        bounds,
+      });
+    }
+  }, [paddockSig, selectedId, mapReady]);
 
   if (!selectedVineyardId) {
     return <div className="text-muted-foreground">Select a vineyard to view its map.</div>;
