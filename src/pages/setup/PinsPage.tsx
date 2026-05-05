@@ -50,11 +50,28 @@ export default function PinsPage() {
     return m;
   }, [paddocks]);
 
+  const paddockPolygonCount = useMemo(
+    () =>
+      paddocks.reduce(
+        (n, p: any) => n + (parsePolygonPoints(p.polygon_points).length >= 3 ? 1 : 0),
+        0,
+      ),
+    [paddocks],
+  );
+
+  // Diagnostics — read-only logging.
+  const diag = useMemo(
+    () => buildPinsDiagnostics(selectedVineyardId, pins, paddockPolygonCount),
+    [selectedVineyardId, pins, paddockPolygonCount],
+  );
+  // eslint-disable-next-line no-console
+  console.debug("[PinsPage] diagnostics", diag);
+
   const filtered = useMemo(() => {
     if (!filter) return pins;
     const f = filter.toLowerCase();
     return pins.filter((p) =>
-      [p.title, p.mode, p.category, p.priority, p.status, p.notes]
+      [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
   }, [pins, filter]);
