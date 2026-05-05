@@ -6,6 +6,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { supabase as cloudSupabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
