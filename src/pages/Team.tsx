@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
