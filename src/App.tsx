@@ -16,6 +16,7 @@ import ComingSoon from "./pages/ComingSoon";
 import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
 import NotFound from "./pages/NotFound";
+import DataCoverage from "./pages/DataCoverage";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,7 @@ const App = () => (
                       element={<DetailPage table="spray_equipment" title="Spray equipment detail" basePath="/setup/spray-equipment" />}
                     />
                     <Route path="/team" element={<Team />} />
+                    <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
                   </Route>
                 </Route>
