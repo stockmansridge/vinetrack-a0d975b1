@@ -282,8 +282,10 @@ export default function NewPaddockPage() {
       return;
     }
     if (!ENABLE_PRODUCTION_SAVE) {
-      console.warn("[NewPaddock] Production save is DISABLED (ENABLE_PRODUCTION_SAVE = false).");
-      console.log("[NewPaddock] Prepared insert payload:", payload);
+      if (import.meta.env.DEV) {
+        console.warn("[NewPaddock] Production save is DISABLED (ENABLE_PRODUCTION_SAVE = false).");
+        console.log("[NewPaddock] Prepared insert payload:", payload);
+      }
       toast({
         title: "Test mode — save disabled",
         description: "Payload logged to console. Production save is gated by a test flag pending iOS round-trip approval.",
