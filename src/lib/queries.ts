@@ -1,5 +1,5 @@
 // READ-ONLY query helpers. NO writes anywhere in this iteration.
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/ios-supabase/client";
 
 // Tables with a soft-delete column (deleted_at) — filter them out.
 const SOFT_DELETE_TABLES = new Set(["paddocks", "tractors", "spray_equipment", "vineyards"]);

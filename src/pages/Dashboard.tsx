@@ -3,7 +3,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Map, Tractor, SprayCan, Users } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/ios-supabase/client";
 
 const tiles = [
   { key: "paddocks", label: "Paddocks", icon: Map },
