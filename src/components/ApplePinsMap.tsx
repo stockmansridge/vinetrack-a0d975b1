@@ -7,25 +7,18 @@ import { pinStyle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
+import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
+import { validCoord } from "@/lib/pinsDiagnostics";
 
 interface Props {
   onUnavailable: (reason: string) => void;
 }
 
-interface PaddockLite {
+interface Paddock {
   id: string;
   name: string | null;
+  polygon_points: any;
 }
-
-const validCoord = (lat?: number | null, lng?: number | null) =>
-  lat != null &&
-  lng != null &&
-  Number.isFinite(lat) &&
-  Number.isFinite(lng) &&
-  lat >= -90 &&
-  lat <= 90 &&
-  lng >= -180 &&
-  lng <= 180;
 
 function makePinElement(hex: string) {
   const el = document.createElement("div");
@@ -44,6 +37,7 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const annsRef = useRef<any[]>([]);
+  const overlaysRef = useRef<any[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const didFitRef = useRef(false);
 
@@ -55,9 +49,9 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
   });
 
   const { data: paddocks = [] } = useQuery({
-    queryKey: ["paddocks-lite", selectedVineyardId],
+    queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PaddockLite>("paddocks", selectedVineyardId!),
+    queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
     staleTime: 5 * 60_000,
   });
 
@@ -66,6 +60,14 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
     paddocks.forEach((p) => m.set(p.id, p.name));
     return m;
   }, [paddocks]);
+
+  const paddockPolygons = useMemo(
+    () =>
+      paddocks
+        .map((p) => parsePolygonPoints(p.polygon_points))
+        .filter((pts): pts is LatLng[] => pts.length >= 3),
+    [paddocks],
+  );
 
   const withCoords = useMemo(
     () => pins.filter((p) => validCoord(p.latitude, p.longitude)),
@@ -93,6 +95,38 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
     };
   }, [onUnavailable]);
 
+  // Render paddock outlines (faint).
+  useEffect(() => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!mapReady || !map || !mapkit) return;
+
+    if (overlaysRef.current.length) {
+      try { map.removeOverlays(overlaysRef.current); } catch { /* noop */ }
+      overlaysRef.current = [];
+    }
+    const newOverlays: any[] = [];
+    for (const poly of paddockPolygons) {
+      try {
+        const coords = poly.map((p) => new mapkit.Coordinate(p.lat, p.lng));
+        const style = new mapkit.Style({
+          strokeColor: "#34C759",
+          strokeOpacity: 0.7,
+          lineWidth: 1,
+          fillColor: "#34C759",
+          fillOpacity: 0.08,
+        });
+        const overlay = new mapkit.PolygonOverlay(coords, { style });
+        newOverlays.push(overlay);
+      } catch { /* noop */ }
+    }
+    if (newOverlays.length) {
+      try { map.addOverlays(newOverlays); } catch { /* noop */ }
+      overlaysRef.current = newOverlays;
+    }
+  }, [paddockPolygons, mapReady]);
+
+  // Render pin annotations + fit bounds.
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
@@ -109,7 +143,7 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
       const ann = new mapkit.Annotation(
         new mapkit.Coordinate(pin.latitude!, pin.longitude!),
         () => makePinElement(hex),
-        { title: pin.title ?? "" },
+        { title: pin.title ?? (pin as any).button_name ?? "" },
       );
       try {
         ann.addEventListener?.("select", () => setSelectedId(pin.id));
@@ -121,33 +155,44 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
       annsRef.current = newAnns;
     }
 
-    if (!didFitRef.current && withCoords.length) {
-      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-      for (const p of withCoords) {
-        minLat = Math.min(minLat, p.latitude!);
-        maxLat = Math.max(maxLat, p.latitude!);
-        minLng = Math.min(minLng, p.longitude!);
-        maxLng = Math.max(maxLng, p.longitude!);
+    if (!didFitRef.current) {
+      // Prefer pin bounds, else paddock bounds.
+      const pts: { lat: number; lng: number }[] = [];
+      if (withCoords.length) {
+        withCoords.forEach((p) => pts.push({ lat: p.latitude!, lng: p.longitude! }));
+      } else if (paddockPolygons.length) {
+        paddockPolygons.forEach((poly) => poly.forEach((pt) => pts.push(pt)));
       }
-      const centerLat = (minLat + maxLat) / 2;
-      const centerLng = (minLng + maxLng) / 2;
-      const latDelta = Math.max((maxLat - minLat) * 1.5, 0.005);
-      const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.005);
-      try {
-        map.region = new mapkit.CoordinateRegion(
-          new mapkit.Coordinate(centerLat, centerLng),
-          new mapkit.CoordinateSpan(latDelta, lngDelta),
-        );
-        didFitRef.current = true;
-      } catch { /* noop */ }
+      if (pts.length) {
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        for (const p of pts) {
+          minLat = Math.min(minLat, p.lat);
+          maxLat = Math.max(maxLat, p.lat);
+          minLng = Math.min(minLng, p.lng);
+          maxLng = Math.max(maxLng, p.lng);
+        }
+        const centerLat = (minLat + maxLat) / 2;
+        const centerLng = (minLng + maxLng) / 2;
+        const latDelta = Math.max((maxLat - minLat) * 1.5, 0.005);
+        const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.005);
+        try {
+          map.region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(centerLat, centerLng),
+            new mapkit.CoordinateSpan(latDelta, lngDelta),
+          );
+          didFitRef.current = true;
+        } catch { /* noop */ }
+      }
     }
-  }, [withCoords, mapReady]);
+  }, [withCoords, paddockPolygons, mapReady]);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   if (!selectedVineyardId) {
     return <div className="text-muted-foreground">Select a vineyard to view its pins.</div>;
   }
+
+  const noGeometry = withCoords.length === 0 && paddockPolygons.length === 0;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -165,14 +210,24 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
               {(error as Error).message}
             </div>
           )}
-          {!isLoading && mapReady && pins.length > 0 && withCoords.length === 0 && (
-            <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
-              No pins have coordinates.
+          {!isLoading && mapReady && noGeometry && pins.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground bg-background/60 text-center px-4">
+              No pins recorded for this vineyard yet.
             </div>
           )}
-          {!isLoading && pins.length === 0 && (
+          {!isLoading && mapReady && noGeometry && pins.length > 0 && (
             <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
-              No pins for this vineyard.
+              Pins found, but none have map coordinates.
+            </div>
+          )}
+          {!isLoading && mapReady && pins.length > 0 && withCoords.length === 0 && paddockPolygons.length > 0 && (
+            <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
+              Pins found, but none have map coordinates.
+            </div>
+          )}
+          {!isLoading && mapReady && pins.length === 0 && paddockPolygons.length > 0 && (
+            <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
+              No pins recorded for this vineyard yet.
             </div>
           )}
         </div>
