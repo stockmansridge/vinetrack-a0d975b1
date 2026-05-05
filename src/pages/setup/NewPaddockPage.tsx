@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, MapPin, RotateCcw, Undo2 } from "lucide-react";
+import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle } from "lucide-react";
 
 import {
   generateRows,
@@ -48,6 +48,33 @@ type Step = "details" | "boundary" | "rows" | "review";
 
 const fmt = (n: number, d = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
+
+// Simple O(n²) self-intersection check for closed polygon edges. Adjacent
+// edges (sharing a vertex) are skipped. Returns true if any non-adjacent
+// edges cross.
+function polygonHasSelfIntersection(pts: LatLng[]): boolean {
+  const n = pts.length;
+  if (n < 4) return false;
+  const seg = (i: number) => [pts[i], pts[(i + 1) % n]] as const;
+  const cross = (ax: number, ay: number, bx: number, by: number) => ax * by - ay * bx;
+  const intersects = (p1: LatLng, p2: LatLng, p3: LatLng, p4: LatLng) => {
+    const d1 = cross(p4.lng - p3.lng, p4.lat - p3.lat, p1.lng - p3.lng, p1.lat - p3.lat);
+    const d2 = cross(p4.lng - p3.lng, p4.lat - p3.lat, p2.lng - p3.lng, p2.lat - p3.lat);
+    const d3 = cross(p2.lng - p1.lng, p2.lat - p1.lat, p3.lng - p1.lng, p3.lat - p1.lat);
+    const d4 = cross(p2.lng - p1.lng, p2.lat - p1.lat, p4.lng - p1.lng, p4.lat - p1.lat);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  };
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (i === j) continue;
+      if (j === (i + 1) % n || i === (j + 1) % n) continue;
+      const [a, b] = seg(i);
+      const [c, d] = seg(j);
+      if (intersects(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
 
 export default function NewPaddockPage() {
   const navigate = useNavigate();
@@ -193,6 +220,44 @@ export default function NewPaddockPage() {
     vineSpacing, user?.id, vineCountOverride, rowLengthOverride, flowPerEmitter,
     emitterSpacing, intermediatePostSpacing, plantingYear,
   ]);
+
+  // Strip server-managed fields before exposing payload (defensive — these
+  // are not added by the builder, but we filter to make the contract explicit).
+  const exportablePayload = useMemo(() => {
+    const omit = new Set(["created_at", "updated_at", "deleted_at", "sync_version"]);
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(payload)) if (!omit.has(k)) out[k] = v;
+    return out;
+  }, [payload]);
+
+  // Soft warnings (non-blocking)
+  const warnings = useMemo(() => {
+    const w: string[] = [];
+    const requestedRows = Number(rowsCount);
+    if (areaHa > 0 && areaHa < 0.05) w.push(`Area is very small (${areaHa.toFixed(3)} ha) — verify the boundary.`);
+    if (areaHa > 50) w.push(`Area is very large (${areaHa.toFixed(1)} ha) — verify the boundary.`);
+    if (Number.isFinite(requestedRows) && requestedRows > 0 && generated.length > 0 && generated.length < requestedRows) {
+      w.push(`Generated ${generated.length} rows but ${requestedRows} were requested — some rows fall outside the polygon.`);
+    }
+    if (generated.length > 0 && totalRowLengthM < 1) {
+      w.push("Total row length is near zero — check row direction and boundary.");
+    }
+    if (polygon.length >= 4 && polygonHasSelfIntersection(polygon)) {
+      w.push("Polygon appears to self-intersect — boundary edges cross.");
+    }
+    if (!intermediatePostSpacing) w.push("Intermediate post spacing not provided — post count won't be derived.");
+    if (!flowPerEmitter || !emitterSpacing) w.push("Irrigation inputs missing (flow per emitter / emitter spacing) — irrigation rate won't be derived.");
+    return w;
+  }, [areaHa, rowsCount, generated.length, totalRowLengthM, polygon, intermediatePostSpacing, flowPerEmitter, emitterSpacing]);
+
+  const copyPayloadToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(exportablePayload, null, 2));
+      toast({ title: "Payload copied", description: "Insert payload JSON copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Clipboard not available in this context.", variant: "destructive" });
+    }
+  };
 
   // Permission gate
   if (!canEdit) {
@@ -370,6 +435,15 @@ export default function NewPaddockPage() {
               {effectiveVineCount != null && <SummaryRow label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
             </div>
 
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Production write — handle with care</AlertTitle>
+              <AlertDescription className="text-xs space-y-1">
+                <div>Paddock creation affects maps, rows, irrigation, yield and field records. Test carefully before saving to production.</div>
+                <div className="opacity-90">Recommended: verify this payload in a test vineyard before enabling production save.</div>
+              </AlertDescription>
+            </Alert>
+
             {(!intermediatePostSpacing || !flowPerEmitter || !emitterSpacing) && (
               <Alert>
                 <AlertTitle>Optional fields missing</AlertTitle>
@@ -380,17 +454,34 @@ export default function NewPaddockPage() {
               </Alert>
             )}
 
+            {warnings.length > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Warnings ({warnings.length})</AlertTitle>
+                <AlertDescription className="text-xs">
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline"
-                onClick={() => setShowRawPayload((v) => !v)}
-              >
-                {showRawPayload ? "Hide" : "Show"} raw payload
-              </button>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline"
+                  onClick={() => setShowRawPayload((v) => !v)}
+                >
+                  {showRawPayload ? "Hide" : "Show"} raw payload
+                </button>
+                <Button type="button" variant="outline" size="sm" onClick={copyPayloadToClipboard} className="gap-1">
+                  <Copy className="h-3.5 w-3.5" /> Copy payload
+                </Button>
+              </div>
               {showRawPayload && (
                 <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
-                  {JSON.stringify(payload, null, 2)}
+                  {JSON.stringify(exportablePayload, null, 2)}
                 </pre>
               )}
             </div>
