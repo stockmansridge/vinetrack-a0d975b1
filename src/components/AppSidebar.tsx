@@ -16,9 +16,10 @@ import {
   Sprout,
   Settings,
   Database,
-  Leaf,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
+import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { BrandMark } from "@/components/BrandMark";
 import {
   Sidebar,
   SidebarContent,
@@ -60,7 +61,10 @@ const settings = [
 
 export function AppSidebar() {
   const { pathname } = useLocation();
-  const { currentRole } = useVineyard();
+  const { currentRole, memberships, selectedVineyardId } = useVineyard();
+  const { data: logoUrl } = useVineyardLogo();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
 
@@ -80,11 +84,11 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
-            <Leaf className="h-4 w-4" />
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-semibold tracking-tight text-sidebar-foreground">VineTrack</span>
+          <BrandMark logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
+          <div className="flex flex-col leading-tight min-w-0">
+            <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
+              {vineyardName ?? "VineTrack"}
+            </span>
             <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
               Vineyard portal
             </span>
