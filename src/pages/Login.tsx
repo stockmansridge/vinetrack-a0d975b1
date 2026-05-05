@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Leaf } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { toast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -41,12 +41,12 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/40 to-background p-4">
       <Card className="w-full max-w-md shadow-lg border-border/60">
-        <CardHeader className="space-y-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <Leaf className="h-5 w-5" />
+        <CardHeader className="space-y-4 items-center text-center">
+          <BrandMark size={72} className="rounded-2xl" />
+          <div className="space-y-1">
+            <CardTitle className="text-3xl tracking-tight">VineTrack</CardTitle>
+            <CardDescription>Owner & manager portal — sign in</CardDescription>
           </div>
-          <CardTitle className="text-3xl tracking-tight">VineTrack</CardTitle>
-          <CardDescription>Owner & manager portal — sign in</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
