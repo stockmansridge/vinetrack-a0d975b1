@@ -543,13 +543,13 @@ function DrawMap({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: (p: L
       <ClickHandler polygon={polygon} setPolygon={setPolygon} />
       {polygon.length >= 3 && (
         <Polygon
-          positions={polygon.map((p) => [p.lat, p.lng])}
+          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
           pathOptions={{ color: "hsl(145 42% 28%)", weight: 2.5, fillOpacity: 0.25 }}
         />
       )}
       {polygon.length === 2 && (
         <Polyline
-          positions={polygon.map((p) => [p.lat, p.lng])}
+          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
           pathOptions={{ color: "hsl(145 42% 28%)", weight: 2 }}
         />
       )}
@@ -597,7 +597,7 @@ function PreviewMap({ polygon, rows }: { polygon: LatLng[]; rows: GeneratedRow[]
       <FitToPolygon polygon={polygon} />
       {polygon.length >= 3 && (
         <Polygon
-          positions={polygon.map((p) => [p.lat, p.lng])}
+          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
           pathOptions={{ color: "hsl(145 42% 28%)", weight: 2.5, fillOpacity: 0.2 }}
         />
       )}
