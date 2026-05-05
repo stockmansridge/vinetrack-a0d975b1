@@ -61,12 +61,12 @@ const tractorSchema = z.object({
     ])
     .optional(),
   fuel_usage_l_per_hour: z
-    .union([
-      z.literal(""),
-      z.number().min(0, { message: "Fuel usage must be ≥ 0" }).max(1000),
-    ])
-    .optional(),
+    .number({ invalid_type_error: "Fuel usage is required" })
+    .gt(0, { message: "Fuel usage must be greater than 0" })
+    .max(1000, { message: "Fuel usage must be ≤ 1000" }),
 });
+
+const DEFAULT_FUEL_L_PER_HOUR = 14;
 
 type FormState = {
   name: string;
@@ -81,7 +81,7 @@ const emptyForm: FormState = {
   brand: "",
   model: "",
   model_year: "",
-  fuel_usage_l_per_hour: "",
+  fuel_usage_l_per_hour: String(DEFAULT_FUEL_L_PER_HOUR),
 };
 
 const fmtCell = (v: any) => {
@@ -152,7 +152,7 @@ export default function TractorsPage() {
       model_year:
         form.model_year === "" ? "" : Number(form.model_year),
       fuel_usage_l_per_hour:
-        form.fuel_usage_l_per_hour === "" ? "" : Number(form.fuel_usage_l_per_hour),
+        form.fuel_usage_l_per_hour === "" ? NaN : Number(form.fuel_usage_l_per_hour),
     });
     if (!parsed.success) {
       const fieldErrors: Partial<Record<keyof FormState, string>> = {};
@@ -195,7 +195,7 @@ export default function TractorsPage() {
           brand: trimmedOrNull(form.brand),
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
-          fuel_usage_l_per_hour: numOrNull(form.fuel_usage_l_per_hour),
+          fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
           updated_by: user.id,
           client_updated_at: nowIso,
         };
@@ -215,7 +215,7 @@ export default function TractorsPage() {
           brand: trimmedOrNull(form.brand),
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
-          fuel_usage_l_per_hour: numOrNull(form.fuel_usage_l_per_hour),
+          fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
           created_by: user.id,
           updated_by: user.id,
           client_updated_at: nowIso,
@@ -382,7 +382,11 @@ export default function TractorsPage() {
                     maxLength={4}
                   />
                 </Field>
-                <Field label="Fuel usage (L/h)" error={errors.fuel_usage_l_per_hour}>
+                <Field
+                  label="Fuel usage (L/hr) *"
+                  error={errors.fuel_usage_l_per_hour}
+                  hint="Used for fuel cost and operating cost calculations."
+                >
                   <Input
                     inputMode="decimal"
                     value={form.fuel_usage_l_per_hour}
@@ -392,6 +396,7 @@ export default function TractorsPage() {
                         fuel_usage_l_per_hour: e.target.value.replace(/[^\d.]/g, ""),
                       }))
                     }
+                    required
                   />
                 </Field>
               </div>
@@ -419,16 +424,19 @@ export default function TractorsPage() {
 function Field({
   label,
   error,
+  hint,
   children,
 }: {
   label: string;
   error?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1">
       <Label className="text-xs uppercase tracking-wide text-muted-foreground">{label}</Label>
       {children}
+      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
