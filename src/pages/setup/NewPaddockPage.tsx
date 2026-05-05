@@ -471,6 +471,68 @@ export default function NewPaddockPage() {
 
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStep("rows")}>Back</Button>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Production write — handle with care</AlertTitle>
+              <AlertDescription className="text-xs space-y-1">
+                <div>Paddock creation affects maps, rows, irrigation, yield and field records. Test carefully before saving to production.</div>
+                <div className="opacity-90">Recommended: verify this payload in a test vineyard before enabling production save.</div>
+              </AlertDescription>
+            </Alert>
+
+            {(!intermediatePostSpacing || !flowPerEmitter || !emitterSpacing) && (
+              <Alert>
+                <AlertTitle>Optional fields missing</AlertTitle>
+                <AlertDescription className="text-xs">
+                  {!intermediatePostSpacing && <div>• Intermediate post spacing not set — post count won't be derived.</div>}
+                  {(!flowPerEmitter || !emitterSpacing) && <div>• Emitter spacing / flow not set — irrigation rate won't be derived.</div>}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {warnings.length > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Warnings ({warnings.length})</AlertTitle>
+                <AlertDescription className="text-xs">
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline"
+                  onClick={() => setShowRawPayload((v) => !v)}
+                >
+                  {showRawPayload ? "Hide" : "Show"} raw payload
+                </button>
+                <Button type="button" variant="outline" size="sm" onClick={copyPayloadToClipboard} className="gap-1">
+                  <Copy className="h-3.5 w-3.5" /> Copy payload
+                </Button>
+              </div>
+              {showRawPayload && (
+                <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
+                  {JSON.stringify(exportablePayload, null, 2)}
+                </pre>
+              )}
+            </div>
+
+            <Alert variant="destructive">
+              <AlertTitle>Production save is gated</AlertTitle>
+              <AlertDescription className="text-xs">
+                The Save button is disabled by a test flag (<code>ENABLE_PRODUCTION_SAVE</code>) until the
+                payload and row-generation logic are confirmed to round-trip cleanly with iOS. Pressing
+                Save in test mode logs the payload to the console only.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex justify-between gap-2">
+              <Button variant="ghost" onClick={() => setStep("rows")}>Back</Button>
               <Button
                 onClick={onSavePressed}
                 disabled={!ENABLE_PRODUCTION_SAVE || !isValid}
