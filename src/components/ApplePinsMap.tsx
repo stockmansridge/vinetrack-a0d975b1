@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
+import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
 import { pinStyle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
@@ -39,14 +40,7 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
   const annsRef = useRef<any[]>([]);
   const overlaysRef = useRef<any[]>([]);
   const [mapReady, setMapReady] = useState(false);
-  const didFitRef = useRef(false);
-
-  const { data: pins = [], isLoading, error } = useQuery({
-    queryKey: ["pins", selectedVineyardId],
-    enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PinRecord>("pins", selectedVineyardId!),
-    staleTime: 5 * 60_000,
-  });
+  const lastFitKeyRef = useRef<string | null>(null);
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks", selectedVineyardId],
@@ -54,6 +48,16 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
     queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
     staleTime: 5 * 60_000,
   });
+
+  const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
+
+  const { data: pinsResult, isLoading, error } = useQuery({
+    queryKey: ["pins", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
+    staleTime: 5 * 60_000,
+  });
+  const pins = pinsResult?.pins ?? [];
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -155,13 +159,27 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
       annsRef.current = newAnns;
     }
 
-    if (!didFitRef.current) {
-      // Prefer pin bounds, else paddock bounds.
+    // Re-fit when vineyard or geometry changes.
+    const fitKey = `${selectedVineyardId}|p:${withCoords.length}|g:${paddockPolygons.length}`;
+    if (lastFitKeyRef.current !== fitKey) {
       const pts: { lat: number; lng: number }[] = [];
+      let boundsSource: "pins" | "paddocks" | "fallback" = "fallback";
       if (withCoords.length) {
         withCoords.forEach((p) => pts.push({ lat: p.latitude!, lng: p.longitude! }));
+        boundsSource = "pins";
       } else if (paddockPolygons.length) {
         paddockPolygons.forEach((poly) => poly.forEach((pt) => pts.push(pt)));
+        boundsSource = "paddocks";
+      }
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug("[ApplePinsMap] fit", {
+          selectedVineyardId,
+          paddockCount: paddockPolygons.length,
+          pinsCount: pins.length,
+          pinsWithCoords: withCoords.length,
+          boundsSource,
+        });
       }
       if (pts.length) {
         let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
@@ -180,11 +198,11 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
             new mapkit.Coordinate(centerLat, centerLng),
             new mapkit.CoordinateSpan(latDelta, lngDelta),
           );
-          didFitRef.current = true;
+          lastFitKeyRef.current = fitKey;
         } catch { /* noop */ }
       }
     }
-  }, [withCoords, paddockPolygons, mapReady]);
+  }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length]);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 

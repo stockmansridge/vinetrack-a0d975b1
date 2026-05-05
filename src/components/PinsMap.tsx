@@ -5,6 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
+import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { pinStyle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
@@ -43,17 +44,20 @@ export default function PinsMap() {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data: pins = [], isLoading, error } = useQuery({
-    queryKey: ["pins", selectedVineyardId],
-    enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PinRecord>("pins", selectedVineyardId!),
-  });
-
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
   });
+
+  const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
+
+  const { data: pinsResult, isLoading, error } = useQuery({
+    queryKey: ["pins", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const pins = pinsResult?.pins ?? [];
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -85,6 +89,19 @@ export default function PinsMap() {
     }
     return null;
   }, [withCoords, paddockPolygons]);
+
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[PinsMap] diagnostics", {
+      selectedVineyardId,
+      paddockCount: paddocks.length,
+      paddockPolygonCount: paddockPolygons.length,
+      pinsCount: pins.length,
+      pinsWithCoords: withCoords.length,
+      pinsSource: pinsResult?.source ?? "n/a",
+      boundsSource: withCoords.length ? "pins" : paddockPolygons.length ? "paddocks" : "fallback",
+    });
+  }
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
   const hasMap = !!bounds;

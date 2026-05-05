@@ -20,6 +20,7 @@ import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import { pinStyle } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
+import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 
 interface PaddockLite {
   id: string;
@@ -32,17 +33,20 @@ export default function PinsPage() {
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data: pins = [], isLoading, error } = useQuery({
-    queryKey: ["pins", selectedVineyardId],
-    enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PinRecord>("pins", selectedVineyardId!),
-  });
-
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<PaddockLite>("paddocks", selectedVineyardId!),
   });
+
+  const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
+
+  const { data: pinsResult, isLoading, error } = useQuery({
+    queryKey: ["pins", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const pins = pinsResult?.pins ?? [];
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -59,13 +63,21 @@ export default function PinsPage() {
     [paddocks],
   );
 
-  // Diagnostics — read-only logging.
+  // Diagnostics — read-only logging (dev only).
   const diag = useMemo(
-    () => buildPinsDiagnostics(selectedVineyardId, pins, paddockPolygonCount),
-    [selectedVineyardId, pins, paddockPolygonCount],
+    () => ({
+      ...buildPinsDiagnostics(selectedVineyardId, pins, paddockPolygonCount),
+      paddockCount: paddocks.length,
+      pinsBySource: pinsResult?.source ?? "n/a",
+      vineyardIdMatches: pinsResult?.vineyardCount ?? 0,
+      paddockIdFallbackAdded: pinsResult?.paddockFallbackCount ?? 0,
+    }),
+    [selectedVineyardId, pins, paddocks.length, paddockPolygonCount, pinsResult],
   );
-  // eslint-disable-next-line no-console
-  console.debug("[PinsPage] diagnostics", diag);
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[PinsPage] diagnostics", diag);
+  }
 
   const filtered = useMemo(() => {
     if (!filter) return pins;
