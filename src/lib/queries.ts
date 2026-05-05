@@ -2,7 +2,13 @@
 import { supabase } from "@/integrations/ios-supabase/client";
 
 // Tables with a soft-delete column (deleted_at) — filter them out.
-const SOFT_DELETE_TABLES = new Set(["paddocks", "tractors", "spray_equipment", "vineyards"]);
+const SOFT_DELETE_TABLES = new Set([
+  "paddocks",
+  "tractors",
+  "spray_equipment",
+  "vineyards",
+  "pins",
+]);
 
 const applySoftDelete = (q: any, table: string) =>
   SOFT_DELETE_TABLES.has(table) ? q.is("deleted_at", null) : q;
