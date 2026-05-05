@@ -77,9 +77,10 @@ export default function PaddockMap() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["paddocks-map", selectedVineyardId],
+    queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
+    staleTime: 5 * 60_000,
   });
 
   const paddocks = data ?? [];
