@@ -28,6 +28,7 @@ import MaintenancePage from "./pages/setup/MaintenancePage";
 import TripsPage from "./pages/setup/TripsPage";
 import YieldReportsPage from "./pages/setup/YieldReportsPage";
 import SavedChemicalsPage from "./pages/setup/SavedChemicalsPage";
+import SprayPresetsPage from "./pages/setup/SprayPresetsPage";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +78,7 @@ const App = () => (
                     <Route path="/trips" element={<TripsPage />} />
                     <Route path="/yield" element={<YieldReportsPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
+                    <Route path="/setup/spray-presets" element={<SprayPresetsPage />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
