@@ -41,6 +41,7 @@ const setup = [
   { title: "Saved chemicals", url: "/setup/chemicals", icon: Beaker },
   { title: "Spray presets", url: "/setup/spray-presets", icon: Layers },
   { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
+  { title: "Weather", url: "/setup/weather", icon: Cloud },
 ];
 
 const records = [
@@ -54,9 +55,7 @@ const records = [
 
 const team = [{ title: "Team", url: "/team", icon: Users }];
 
-const comingSoon = [
-  { title: "Weather", url: "/soon/weather", icon: Cloud },
-];
+const comingSoon: { title: string; url: string; icon: any }[] = [];
 
 const settings = [
   { title: "Data coverage", url: "/settings/data-coverage", icon: Database },
@@ -122,12 +121,14 @@ export function AppSidebar() {
             <SidebarMenu>{renderItems(team)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(comingSoon)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {comingSoon.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{renderItems(comingSoon)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
         {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
