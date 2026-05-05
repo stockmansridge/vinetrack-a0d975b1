@@ -36,7 +36,7 @@ const main = [{ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard }];
 const setup = [
   { title: "Paddocks", url: "/setup/paddocks", icon: Map },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Spray equipment", url: "/setup/spray-equipment", icon: SprayCan },
+  { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
 ];
 
 const team = [{ title: "Team", url: "/team", icon: Users }];
