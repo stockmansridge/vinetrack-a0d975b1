@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Map,
   Tractor,
-  SprayCan,
+  Gauge,
   Users,
   FileText,
   Cloud,
@@ -15,6 +15,8 @@ import {
   UserCog,
   Sprout,
   Settings,
+  Database,
+  Leaf,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import {
