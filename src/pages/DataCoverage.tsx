@@ -5,7 +5,14 @@ import { Info } from "lucide-react";
 const coverage = [
   {
     table: "Paddocks",
-    fields: ["name", "rows", "vine_spacing"],
+    fields: [
+      "name", "polygon_points", "rows", "variety_allocations",
+      "row_direction", "row_width", "row_offset", "intermediate_post_spacing",
+      "vine_spacing", "vine_count_override", "row_length_override",
+      "flow_per_emitter", "emitter_spacing",
+      "budburst_date", "flowering_date", "veraison_date", "harvest_date",
+      "planting_year", "calculation_mode_override", "reset_mode_override",
+    ],
   },
   {
     table: "Tractors",
