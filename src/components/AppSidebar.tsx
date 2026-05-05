@@ -52,8 +52,14 @@ const comingSoon = [
   { title: "Yield reports", url: "/soon/yield", icon: FileText },
 ];
 
+const settings = [
+  { title: "Data coverage", url: "/settings/data-coverage", icon: Settings },
+];
+
 export function AppSidebar() {
   const { pathname } = useLocation();
+  const { currentRole } = useVineyard();
+  const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
 
   const renderItems = (items: typeof main) =>
