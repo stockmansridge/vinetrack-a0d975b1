@@ -1,10 +1,16 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
-import { fetchList } from "@/lib/queries";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -25,32 +31,10 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
-
-interface SprayRecord {
-  id: string;
-  vineyard_id: string;
-  trip_id?: string | null;
-  date?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  temperature?: number | null;
-  wind_speed?: number | null;
-  wind_direction?: string | null;
-  humidity?: number | null;
-  spray_reference?: string | null;
-  notes?: string | null;
-  number_of_fans_jets?: number | null;
-  average_speed?: number | null;
-  equipment_type?: string | null;
-  tractor?: string | null;
-  tractor_gear?: string | null;
-  is_template?: boolean | null;
-  operation_type?: string | null;
-  tanks?: any;
-  created_at?: string | null;
-  updated_at?: string | null;
-  deleted_at?: string | null;
-}
+import {
+  fetchSprayRecordsForVineyard,
+  type SprayRecord,
+} from "@/lib/sprayRecordsQuery";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -61,7 +45,6 @@ const fmtDate = (v?: string | null) => {
 
 const fmtTime = (v?: string | null) => {
   if (!v) return "—";
-  // accept "HH:mm:ss" or ISO
   if (/^\d{2}:\d{2}/.test(v)) return v.slice(0, 5);
   const d = new Date(v);
   if (!isNaN(d.getTime())) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -70,48 +53,119 @@ const fmtTime = (v?: string | null) => {
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
+const ANY = "__any__";
+
 export default function SprayRecordsPage() {
   const { selectedVineyardId } = useVineyard();
   const [filter, setFilter] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [opType, setOpType] = useState<string>(ANY);
   const [selected, setSelected] = useState<SprayRecord | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["spray_records", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<SprayRecord>("spray_records", selectedVineyardId!),
+    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
   });
 
+  const records = data?.records ?? [];
+
+  const operationTypes = useMemo(() => {
+    const s = new Set<string>();
+    records.forEach((r) => r.operation_type && s.add(r.operation_type));
+    return Array.from(s).sort();
+  }, [records]);
+
   const rows = useMemo(() => {
-    const list = (data ?? []).filter((r) => !r.is_template);
-    // sort newest first by date then start_time
+    let list = records.slice();
     list.sort((a, b) => {
       const ad = (a.date ?? "") + (a.start_time ?? "");
       const bd = (b.date ?? "") + (b.start_time ?? "");
       return bd.localeCompare(ad);
     });
-    if (!filter.trim()) return list;
-    const f = filter.toLowerCase();
-    return list.filter((r) =>
-      [r.date, r.tractor, r.spray_reference, r.operation_type, r.equipment_type, r.notes]
-        .some((v) => String(v ?? "").toLowerCase().includes(f)),
-    );
-  }, [data, filter]);
+    if (from) list = list.filter((r) => (r.date ?? "") >= from);
+    if (to) list = list.filter((r) => (r.date ?? "") <= to);
+    if (opType !== ANY) list = list.filter((r) => r.operation_type === opType);
+    if (filter.trim()) {
+      const f = filter.toLowerCase();
+      list = list.filter((r) =>
+        [r.date, r.tractor, r.spray_reference, r.operation_type, r.equipment_type, r.notes]
+          .some((v) => String(v ?? "").toLowerCase().includes(f)),
+      );
+    }
+    return list;
+  }, [records, filter, from, to, opType]);
+
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[SprayRecordsPage] diagnostics", {
+      selectedVineyardId,
+      sprayRecordsCount: records.length,
+      recordsBySource: data?.source ?? "n/a",
+      rawCountBeforeTemplateFilter: data?.rawCount ?? 0,
+      templatesExcluded: data?.templatesExcluded ?? 0,
+      // No deleted/archive flag other than deleted_at, which is filtered server-side.
+      missingDisplayFields: {
+        missingDate: data?.missingDate ?? 0,
+        missingTractor: data?.missingTractor ?? 0,
+      },
+      // Schema gaps surfaced for the team:
+      //   - spray_records has no `paddock_id` → no paddock filter.
+      //   - spray_records has no `operator` → no operator filter.
+      //   - spray_records has no explicit status field.
+      schemaGaps: ["no paddock_id", "no operator", "no status"],
+      filtered: rows.length,
+    });
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Spray records</h1>
           <p className="text-sm text-muted-foreground">
-            Read-only. Filter by date, tractor, reference, or operation type.
+            Read-only. Templates and soft-deleted records are excluded.
           </p>
         </div>
-        <Input
-          placeholder="Filter…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="w-64"
-        />
+      </div>
+
+      <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+        Production data — read-only view. No edits, archives, or deletions are possible from this page.
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">From</div>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">To</div>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Operation</div>
+          <Select value={opType} onValueChange={setOpType}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Any" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>Any operation</SelectItem>
+              {operationTypes.map((o) => (
+                <SelectItem key={o} value={o}>{o}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1 ml-auto">
+          <div className="text-xs text-muted-foreground">Search</div>
+          <Input
+            placeholder="Date, tractor, reference, notes…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-72"
+          />
+        </div>
       </div>
 
       <Card>
@@ -134,9 +188,7 @@ export default function SprayRecordsPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
-                  Loading…
-                </TableCell>
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-6">Loading…</TableCell>
               </TableRow>
             )}
             {error && (
@@ -149,7 +201,7 @@ export default function SprayRecordsPage() {
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
-                  No spray records for this vineyard yet.
+                  No spray records found for this vineyard.
                 </TableCell>
               </TableRow>
             )}
@@ -163,11 +215,7 @@ export default function SprayRecordsPage() {
                 <TableCell>{fmtTime(r.start_time)}</TableCell>
                 <TableCell>{fmtTime(r.end_time)}</TableCell>
                 <TableCell>
-                  {r.operation_type ? (
-                    <Badge variant="secondary">{r.operation_type}</Badge>
-                  ) : (
-                    "—"
-                  )}
+                  {r.operation_type ? <Badge variant="secondary">{r.operation_type}</Badge> : "—"}
                 </TableCell>
                 <TableCell>{fmt(r.spray_reference)}</TableCell>
                 <TableCell>{fmt(r.tractor)}</TableCell>
@@ -194,6 +242,7 @@ export default function SprayRecordsPage() {
     </div>
   );
 }
+
 
 function SprayRecordSheet({
   record,
