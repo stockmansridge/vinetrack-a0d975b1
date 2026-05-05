@@ -46,6 +46,7 @@ const records = [
   { title: "Work tasks", url: "/work-tasks", icon: ClipboardList },
   { title: "Maintenance", url: "/maintenance", icon: Wrench },
   { title: "Trips", url: "/trips", icon: Sprout },
+  { title: "Yield reports", url: "/yield", icon: FileText },
 ];
 
 const team = [{ title: "Team", url: "/team", icon: Users }];
@@ -55,7 +56,6 @@ const comingSoon = [
   { title: "Spray presets", url: "/soon/spray-presets", icon: Layers },
   { title: "Operator categories", url: "/soon/operator-categories", icon: UserCog },
   { title: "Weather", url: "/soon/weather", icon: Cloud },
-  { title: "Yield reports", url: "/soon/yield", icon: FileText },
 ];
 
 const settings = [
