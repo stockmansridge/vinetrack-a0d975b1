@@ -43,6 +43,7 @@ interface AppleMapPaddockMapProps {
 export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMapProps) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
@@ -82,12 +83,13 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
         if (cancelled || !containerRef.current || mapRef.current) return;
         mapRef.current = new mapkit.Map(containerRef.current, {
           mapType: mapkit.Map.MapTypes.Hybrid,
+          isRotationEnabled: true,
           showsCompass: mapkit.FeatureVisibility.Adaptive,
           showsScale: mapkit.FeatureVisibility.Adaptive,
           showsZoomControl: true,
           showsUserLocationControl: false,
-          isRotationEnabled: false,
         });
+        setMapReady(true);
       })
       .catch((e) => {
         if (!cancelled) onUnavailable(e?.message || "MapKit init failed");
@@ -96,14 +98,15 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       cancelled = true;
       try { mapRef.current?.destroy?.(); } catch { /* noop */ }
       mapRef.current = null;
+      setMapReady(false);
     };
   }, [onUnavailable]);
 
-  // Render overlays + annotations
+  // Render overlays + annotations + fit region
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
-    if (!map || !mapkit) return;
+    if (!mapReady || !map || !mapkit) return;
 
     if (overlaysRef.current.length) {
       try { map.removeOverlays(overlaysRef.current); } catch { /* noop */ }
@@ -116,12 +119,18 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
 
     const newOverlays: any[] = [];
     const newAnnotations: any[] = [];
-    const allCoords: any[] = [];
+    const allPts: LatLng[] = [];
+
+    const validPt = (pt: LatLng) =>
+      Number.isFinite(pt.lat) && Number.isFinite(pt.lng) &&
+      pt.lat >= -90 && pt.lat <= 90 && pt.lng >= -180 && pt.lng <= 180;
 
     for (const p of withGeometry) {
       const isSelected = p.paddock.id === selectedId;
-      const coords = p.polygon.map((pt: LatLng) => new mapkit.Coordinate(pt.lat, pt.lng));
-      allCoords.push(...coords);
+      const validPolyPts = p.polygon.filter(validPt);
+      if (validPolyPts.length < 3) continue;
+      const coords = validPolyPts.map((pt) => new mapkit.Coordinate(pt.lat, pt.lng));
+      allPts.push(...validPolyPts);
 
       const poly = new mapkit.PolygonOverlay(coords, {
         style: new mapkit.Style({
@@ -138,7 +147,6 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       poly.addEventListener("select", () => setSelectedId(p.paddock.id));
       newOverlays.push(poly);
 
-      // Rows: first/last labelled, all rendered as straight start->end lines.
       const rowSegments = p.rows
         .map((r: any) => {
           if (r.start && r.end) return { start: r.start, end: r.end };
@@ -147,7 +155,8 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           }
           return null;
         })
-        .filter(Boolean) as { start: LatLng; end: LatLng }[];
+        .filter((s): s is { start: LatLng; end: LatLng } =>
+          !!s && validPt(s.start) && validPt(s.end));
 
       rowSegments.forEach((seg, i) => {
         newOverlays.push(
@@ -184,8 +193,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
         }
       });
 
-      // Paddock name chip at centroid
-      if (p.centroid && p.paddock.name) {
+      if (p.centroid && validPt(p.centroid) && p.paddock.name) {
         const name = p.paddock.name;
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(p.centroid.lat, p.centroid.lng),
@@ -209,25 +217,47 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       annotationsRef.current = newAnnotations;
     }
 
-    if (allCoords.length) {
+    // Manual bounds-based region fit (more reliable than fromCoordinates).
+    let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null;
+    if (allPts.length) {
+      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+      for (const pt of allPts) {
+        if (pt.lat < minLat) minLat = pt.lat;
+        if (pt.lat > maxLat) maxLat = pt.lat;
+        if (pt.lng < minLng) minLng = pt.lng;
+        if (pt.lng > maxLng) maxLng = pt.lng;
+      }
+      bounds = { minLat, maxLat, minLng, maxLng };
+      const centerLat = (minLat + maxLat) / 2;
+      const centerLng = (minLng + maxLng) / 2;
+      const latDelta = Math.max((maxLat - minLat) * 1.5, 0.002);
+      const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.002);
       try {
-        const region = mapkit.CoordinateRegion.fromCoordinates(allCoords);
-        // 1.5x span padding per spec §6
-        const padded = new mapkit.CoordinateRegion(
-          region.center,
-          new mapkit.CoordinateSpan(
-            region.span.latitudeDelta * 1.5,
-            region.span.longitudeDelta * 1.5,
-          ),
+        map.region = new mapkit.CoordinateRegion(
+          new mapkit.Coordinate(centerLat, centerLng),
+          new mapkit.CoordinateSpan(latDelta, lngDelta),
         );
-        map.region = padded;
-      } catch { /* noop */ }
+      } catch (err) {
+        console.warn("[AppleMap] region set failed", err);
+      }
     }
-  }, [withGeometry, selectedId]);
+
+    console.info("[AppleMap] render", {
+      selectedVineyardId,
+      paddocks: paddocks.length,
+      withGeometry: withGeometry.length,
+      pointsUsed: allPts.length,
+      overlaysAdded: newOverlays.length,
+      annotationsAdded: newAnnotations.length,
+      bounds,
+    });
+  }, [withGeometry, selectedId, mapReady, paddocks.length, selectedVineyardId]);
 
   if (!selectedVineyardId) {
     return <div className="text-muted-foreground">Select a vineyard to view its map.</div>;
   }
+
+  const noGeometryAtAll = !isLoading && !error && parsed.length > 0 && withGeometry.length === 0;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -245,9 +275,9 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
               {(error as Error).message}
             </div>
           )}
-          {!isLoading && !error && !withGeometry.length && (
+          {noGeometryAtAll && (
             <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
-              No paddock geometry yet.
+              No mapped paddock geometry found.
             </div>
           )}
         </div>
