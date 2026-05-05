@@ -108,7 +108,9 @@ export default function ListPage({ table, title, description, columns, basePath 
                 onClick={() => navigate(`${basePath}/${r.id}`)}
               >
                 {columns.map((c) => (
-                  <TableCell key={c.key}>{formatCell(r[c.key])}</TableCell>
+                  <TableCell key={c.key} className={c.className}>
+                    {c.render ? c.render(r) : formatCell(r[c.key])}
+                  </TableCell>
                 ))}
               </TableRow>
             ))}
