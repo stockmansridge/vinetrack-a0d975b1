@@ -171,7 +171,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       newOverlays.push(poly);
 
       // Row segments — canonical iOS shape uses start/end (parsed) only.
-      const rowSegments = p.rows
+      const rowSegments: { start: LatLng; end: LatLng; number?: number }[] = p.rows
         .map((r) => (r.start && r.end ? { start: r.start, end: r.end, number: r.number } : null))
         .filter((s): s is { start: LatLng; end: LatLng; number?: number } =>
           !!s && validPt(s.start) && validPt(s.end));
