@@ -49,10 +49,10 @@ export default function AppLayout() {
             <div className="ml-auto flex items-center gap-3">
               <span
                 className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                title="This portal is connected to the production database but cannot modify data."
+                title="Production database — only tractor setup edits are enabled in this phase."
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
-                Read-only portal — production data
+                Production portal — setup edits enabled for tractors
               </span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
