@@ -119,9 +119,11 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           showsZoomControl: true,
           showsUserLocationControl: false,
         });
-        console.info("[AppleMap] mapkit ready", {
-          ms: Math.round(performance.now() - t0),
-        });
+        if (import.meta.env.DEV) {
+          console.info("[AppleMap] mapkit ready", {
+            ms: Math.round(performance.now() - t0),
+          });
+        }
         setMapReady(true);
         setRenderPhase("rendering");
       })
@@ -312,7 +314,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
         );
         didFitRef.current = true;
       } catch (err) {
-        console.warn("[AppleMap] region set failed", err);
+        if (import.meta.env.DEV) console.warn("[AppleMap] region set failed", err);
       }
     }
 
