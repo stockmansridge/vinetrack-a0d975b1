@@ -168,7 +168,14 @@ export default function PaddockMap() {
 
       <div className="space-y-4">
         {selected ? (
-          <DetailPanel data={selected} onClose={() => setSelectedId(null)} />
+          <PaddockDetailPanel
+            paddock={selected.paddock}
+            metrics={selected.metrics}
+            parsedRowsCount={selected.rows.length}
+            rawRowsCount={Array.isArray(selected.paddock.rows) ? selected.paddock.rows.length : 0}
+            polygonPointCount={selected.polygon.length}
+            onClose={() => setSelectedId(null)}
+          />
         ) : (
           <Card>
             <CardHeader>
