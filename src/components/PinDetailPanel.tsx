@@ -15,6 +15,8 @@ export interface PinRecord {
   priority?: string | null;
   status?: string | null;
   title?: string | null;
+  button_name?: string | null;
+  button_color?: string | null;
   notes?: string | null;
   latitude?: number | null;
   longitude?: number | null;
