@@ -19,13 +19,9 @@ import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
 import PaddocksPage from "./pages/setup/PaddocksPage";
 import TractorsPage from "./pages/setup/TractorsPage";
+import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
 
 const queryClient = new QueryClient();
-const sprayCols = [
-  { key: "name", label: "Name" },
-  { key: "tank_capacity_litres", label: "Tank capacity (L)" },
-  { key: "updated_at", label: "Updated" },
-];
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
