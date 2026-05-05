@@ -48,10 +48,7 @@ const App = () => (
                   <Route element={<AppLayout />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
-                    <Route
-                      path="/setup/paddocks"
-                      element={<ListPage table="paddocks" title="Paddocks" columns={paddockCols} basePath="/setup/paddocks" />}
-                    />
+                    <Route path="/setup/paddocks" element={<PaddocksPage />} />
                     <Route
                       path="/setup/paddocks/:id"
                       element={<DetailPage table="paddocks" title="Paddock detail" basePath="/setup/paddocks" />}
