@@ -18,6 +18,9 @@ import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import { pinStyle } from "@/lib/pinStyle";
+import { buildPinsDiagnostics, pinDisplayTitle, validCoord } from "@/lib/pinsDiagnostics";
+import { useVineyard as useV } from "@/context/VineyardContext";
+import { parsePolygonPoints } from "@/lib/paddockGeometry";
 
 interface PaddockLite {
   id: string;
