@@ -17,16 +17,9 @@ import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
 import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
+import PaddocksPage from "./pages/setup/PaddocksPage";
 
 const queryClient = new QueryClient();
-
-const paddockCols = [
-  { key: "name", label: "Name" },
-  { key: "planting_year", label: "Planted" },
-  { key: "row_width", label: "Row width (m)" },
-  { key: "vine_spacing", label: "Vine spacing (m)" },
-  { key: "updated_at", label: "Updated" },
-];
 const tractorCols = [
   { key: "name", label: "Name" },
   { key: "model", label: "Model" },
