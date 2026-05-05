@@ -220,15 +220,11 @@ function PaddockLayer({
   const { paddock, polygon, rows, color, centroid } = data;
   const positions = polygon.map((p: LatLng) => [p.lat, p.lng] as [number, number]);
 
-  // Reduce rows to first/last segments for labelling per spec §4
-  const rowSegments: { start: LatLng; end: LatLng }[] = rows
-    .map((r: any) => {
-      if (r.start && r.end) return { start: r.start, end: r.end };
-      if (r.points && r.points.length >= 2) {
-        return { start: r.points[0], end: r.points[r.points.length - 1] };
-      }
-      return null;
-    })
+  // Canonical iOS rows are start/end pairs with .number
+  const rowSegments: { start: LatLng; end: LatLng; number?: number }[] = rows
+    .map((r: any) =>
+      r.start && r.end ? { start: r.start, end: r.end, number: r.number } : null,
+    )
     .filter(Boolean);
 
   return (
