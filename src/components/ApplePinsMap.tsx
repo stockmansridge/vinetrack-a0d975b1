@@ -42,19 +42,22 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
   const [mapReady, setMapReady] = useState(false);
   const didFitRef = useRef(false);
 
-  const { data: pins = [], isLoading, error } = useQuery({
-    queryKey: ["pins", selectedVineyardId],
-    enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PinRecord>("pins", selectedVineyardId!),
-    staleTime: 5 * 60_000,
-  });
-
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
     staleTime: 5 * 60_000,
   });
+
+  const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
+
+  const { data: pinsResult, isLoading, error } = useQuery({
+    queryKey: ["pins", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
+    staleTime: 5 * 60_000,
+  });
+  const pins = pinsResult?.pins ?? [];
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
