@@ -18,6 +18,7 @@ import DetailPage from "./pages/setup/DetailPage";
 import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
 import PaddocksPage from "./pages/setup/PaddocksPage";
+import TractorsPage from "./pages/setup/TractorsPage";
 
 const queryClient = new QueryClient();
 const tractorCols = [
@@ -58,7 +59,7 @@ const App = () => (
                     />
                     <Route
                       path="/setup/tractors"
-                      element={<ListPage table="tractors" title="Tractors" columns={tractorCols} basePath="/setup/tractors" />}
+                      element={<TractorsPage />}
                     />
                     <Route
                       path="/setup/tractors/:id"
