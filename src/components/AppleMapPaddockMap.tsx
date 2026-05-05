@@ -14,11 +14,8 @@ import { paddockColor } from "@/lib/paddockColor";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import "@/components/map/mapChips.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import PaddockDetailPanel from "@/components/PaddockDetailPanel";
 
 interface Paddock {
   id: string;
@@ -31,53 +28,72 @@ interface Paddock {
   emitter_spacing?: number | null;
   vine_count_override?: number | null;
   row_width?: number | null;
+  updated_at?: string | null;
 }
 
 const ROW_GREEN = "#34C759";
-const fmt = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : "—");
 
 interface AppleMapPaddockMapProps {
   onUnavailable: (reason: string) => void;
 }
 
+// Module-level memo: parsed geometry per (id + updated_at).
+const geomCache = new Map<string, ReturnType<typeof buildParsed>>();
+function buildParsed(p: Paddock) {
+  const polygon = parsePolygonPoints(p.polygon_points);
+  const rows = parseRows(p.rows);
+  return {
+    polygon,
+    rows,
+    centroid: polygonCentroid(polygon),
+    color: paddockColor(p.id),
+    metrics: deriveMetrics(p),
+  };
+}
+function getParsed(p: Paddock) {
+  const key = `${p.id}:${p.updated_at ?? ""}`;
+  let v = geomCache.get(key);
+  if (!v) {
+    v = buildParsed(p);
+    geomCache.set(key, v);
+  }
+  return v;
+}
+
 export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMapProps) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
   const [mapReady, setMapReady] = useState(false);
+  const [renderPhase, setRenderPhase] = useState<"loading-mapkit" | "rendering" | "ready">(
+    "loading-mapkit",
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const annotationsRef = useRef<any[]>([]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["paddocks-applemap", selectedVineyardId],
+    queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
+    staleTime: 5 * 60_000,
   });
 
   const paddocks = data ?? [];
   const parsed = useMemo(
-    () =>
-      paddocks.map((p) => {
-        const polygon = parsePolygonPoints(p.polygon_points);
-        return {
-          paddock: p,
-          polygon,
-          rows: parseRows(p.rows),
-          color: paddockColor(p.id),
-          centroid: polygonCentroid(polygon),
-          metrics: deriveMetrics(p),
-        };
-      }),
+    () => paddocks.map((p) => ({ paddock: p, ...getParsed(p) })),
     [paddocks],
   );
   const withGeometry = parsed.filter((p) => p.polygon.length >= 3);
   const withoutGeometry = parsed.filter((p) => p.polygon.length < 3);
   const selected = parsed.find((p) => p.paddock.id === selectedId) ?? null;
 
-  // Init MapKit map (Hybrid)
+  // Init MapKit map
   useEffect(() => {
     let cancelled = false;
+    const t0 = performance.now();
     initMapKit()
       .then((mapkit) => {
         if (cancelled || !containerRef.current || mapRef.current) return;
@@ -89,7 +105,11 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           showsZoomControl: true,
           showsUserLocationControl: false,
         });
+        console.info("[AppleMap] mapkit ready", {
+          ms: Math.round(performance.now() - t0),
+        });
         setMapReady(true);
+        setRenderPhase("rendering");
       })
       .catch((e) => {
         if (!cancelled) onUnavailable(e?.message || "MapKit init failed");
@@ -107,6 +127,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
     if (!mapReady || !map || !mapkit) return;
+    const t0 = performance.now();
 
     if (overlaysRef.current.length) {
       try { map.removeOverlays(overlaysRef.current); } catch { /* noop */ }
@@ -124,6 +145,8 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
     const validPt = (pt: LatLng) =>
       Number.isFinite(pt.lat) && Number.isFinite(pt.lng) &&
       pt.lat >= -90 && pt.lat <= 90 && pt.lng >= -180 && pt.lng <= 180;
+
+    let totalParsedRows = 0;
 
     for (const p of withGeometry) {
       const isSelected = p.paddock.id === selectedId;
@@ -147,67 +170,94 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       poly.addEventListener("select", () => setSelectedId(p.paddock.id));
       newOverlays.push(poly);
 
+      // Row segments — canonical iOS shape uses start/end (parsed) only.
       const rowSegments = p.rows
-        .map((r: any) => {
-          if (r.start && r.end) return { start: r.start, end: r.end };
-          if (r.points && r.points.length >= 2) {
-            return { start: r.points[0], end: r.points[r.points.length - 1] };
-          }
-          return null;
-        })
-        .filter((s): s is { start: LatLng; end: LatLng } =>
+        .map((r) => (r.start && r.end ? { start: r.start, end: r.end, number: r.number } : null))
+        .filter((s): s is { start: LatLng; end: LatLng; number?: number } =>
           !!s && validPt(s.start) && validPt(s.end));
 
-      rowSegments.forEach((seg, i) => {
-        newOverlays.push(
-          new mapkit.PolylineOverlay(
-            [
-              new mapkit.Coordinate(seg.start.lat, seg.start.lng),
-              new mapkit.Coordinate(seg.end.lat, seg.end.lng),
-            ],
-            {
-              style: new mapkit.Style({
-                strokeColor: ROW_GREEN,
-                strokeOpacity: 0.85,
-                lineWidth: 1.5,
-                lineCap: "round",
-              }),
-            },
-          ),
-        );
-        const isFirst = i === 0;
-        const isLast = i === rowSegments.length - 1;
-        if (isFirst || isLast) {
-          const num = i + 1;
-          const ann = new mapkit.Annotation(
-            new mapkit.Coordinate(seg.start.lat, seg.start.lng),
-            () => {
-              const el = document.createElement("div");
-              el.className = "vt-row-chip";
-              el.textContent = String(num);
-              return el;
-            },
-            { anchorOffset: new DOMPoint(0, -6) },
-          );
-          newAnnotations.push(ann);
-        }
-      });
+      totalParsedRows += rowSegments.length;
 
+      // Render row lines for selected paddock OR when ≤200 total rows in view.
+      const renderRowsForThis = isSelected || withGeometry.length <= 1 || (p.rows.length <= 200);
+
+      if (renderRowsForThis) {
+        rowSegments.forEach((seg) => {
+          newOverlays.push(
+            new mapkit.PolylineOverlay(
+              [
+                new mapkit.Coordinate(seg.start.lat, seg.start.lng),
+                new mapkit.Coordinate(seg.end.lat, seg.end.lng),
+              ],
+              {
+                style: new mapkit.Style({
+                  strokeColor: ROW_GREEN,
+                  strokeOpacity: 0.85,
+                  lineWidth: 1.5,
+                  lineCap: "round",
+                }),
+              },
+            ),
+          );
+        });
+
+        // Label first + last row only at startPoint.
+        const labelTargets =
+          rowSegments.length === 0
+            ? []
+            : rowSegments.length === 1
+            ? [{ seg: rowSegments[0], n: rowSegments[0].number ?? 1 }]
+            : [
+                { seg: rowSegments[0], n: rowSegments[0].number ?? 1 },
+                {
+                  seg: rowSegments[rowSegments.length - 1],
+                  n: rowSegments[rowSegments.length - 1].number ?? rowSegments.length,
+                },
+              ];
+        for (const { seg, n } of labelTargets) {
+          newAnnotations.push(
+            new mapkit.Annotation(
+              new mapkit.Coordinate(seg.start.lat, seg.start.lng),
+              () => {
+                const el = document.createElement("div");
+                el.className = "vt-row-chip";
+                el.textContent = String(n);
+                return el;
+              },
+              { anchorOffset: new DOMPoint(0, -6) },
+            ),
+          );
+        }
+      }
+
+      // Clickable name annotation
       if (p.centroid && validPt(p.centroid) && p.paddock.name) {
         const name = p.paddock.name;
+        const id = p.paddock.id;
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(p.centroid.lat, p.centroid.lng),
           () => {
             const el = document.createElement("div");
             el.className = "vt-name-chip";
+            el.style.pointerEvents = "auto";
+            el.style.cursor = "pointer";
             el.textContent = name;
+            el.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              setSelectedId(id);
+            });
             return el;
           },
         );
+        // Also hook MapKit's own select event
+        try {
+          ann.addEventListener?.("select", () => setSelectedId(id));
+        } catch { /* noop */ }
         newAnnotations.push(ann);
       }
     }
 
+    // Batch add
     if (newOverlays.length) {
       map.addOverlays(newOverlays);
       overlaysRef.current = newOverlays;
@@ -217,9 +267,9 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       annotationsRef.current = newAnnotations;
     }
 
-    // Manual bounds-based region fit (more reliable than fromCoordinates).
+    // Manual bounds-based region fit (only when no selection / first render)
     let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null;
-    if (allPts.length) {
+    if (allPts.length && !selectedIdRef.current) {
       let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
       for (const pt of allPts) {
         if (pt.lat < minLat) minLat = pt.lat;
@@ -242,16 +292,18 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       }
     }
 
+    setRenderPhase("ready");
     console.info("[AppleMap] render", {
-      selectedVineyardId,
+      ms: Math.round(performance.now() - t0),
       paddocks: paddocks.length,
       withGeometry: withGeometry.length,
       pointsUsed: allPts.length,
       overlaysAdded: newOverlays.length,
       annotationsAdded: newAnnotations.length,
+      totalParsedRows,
       bounds,
     });
-  }, [withGeometry, selectedId, mapReady, paddocks.length, selectedVineyardId]);
+  }, [withGeometry, selectedId, mapReady, paddocks.length]);
 
   if (!selectedVineyardId) {
     return <div className="text-muted-foreground">Select a vineyard to view its map.</div>;
@@ -260,14 +312,14 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   const noGeometryAtAll = !isLoading && !error && parsed.length > 0 && withGeometry.length === 0;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+    <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
       <Card className="overflow-hidden">
         <div className="relative h-[600px] w-full bg-muted">
           <div ref={containerRef} className="h-full w-full" />
           <MapSourceBadge source="apple" />
-          {isLoading && (
+          {(isLoading || !mapReady) && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground bg-background/60">
-              Loading map…
+              {!mapReady ? "Loading Apple Maps…" : "Rendering paddocks…"}
             </div>
           )}
           {error && (
@@ -285,14 +337,21 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
 
       <div className="space-y-4">
         {selected ? (
-          <DetailPanel data={selected} onClose={() => setSelectedId(null)} />
+          <PaddockDetailPanel
+            paddock={selected.paddock}
+            metrics={selected.metrics}
+            parsedRowsCount={selected.rows.length}
+            rawRowsCount={Array.isArray(selected.paddock.rows) ? selected.paddock.rows.length : 0}
+            polygonPointCount={selected.polygon.length}
+            onClose={() => setSelectedId(null)}
+          />
         ) : (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Map</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Click a paddock to see derived metrics. {withGeometry.length} paddock
+              Click a paddock or its name label to see details. {withGeometry.length} paddock
               {withGeometry.length === 1 ? "" : "s"} on map.
             </CardContent>
           </Card>
@@ -314,59 +373,6 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           </Card>
         )}
       </div>
-    </div>
-  );
-}
-
-function DetailPanel({ data, onClose }: { data: any; onClose: () => void }) {
-  const { paddock, metrics } = data;
-  return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-[380px] sm:w-[380px] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{paddock.name ?? "Unnamed paddock"}</SheetTitle>
-          <SheetDescription>Read-only derived metrics</SheetDescription>
-        </SheetHeader>
-        <div className="mt-4 space-y-3 text-sm">
-          <Row label="Area" value={`${fmt(metrics.areaHa, 3)} ha`} />
-          <Row label="Rows" value={String(metrics.rowCount)} />
-          <Row label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
-          <Row
-            label="Vines"
-            value={
-              metrics.vineCount == null
-                ? "—"
-                : `${metrics.vineCount.toLocaleString()} (${metrics.vineCountSource})`
-            }
-          />
-          <Row
-            label="Intermediate posts"
-            value={metrics.intermediatePostCount == null ? "—" : metrics.intermediatePostCount.toLocaleString()}
-          />
-          <Row
-            label="Emitters"
-            value={metrics.emitterCount == null ? "—" : metrics.emitterCount.toLocaleString()}
-          />
-          <Row label="Row width" value={paddock.row_width ? `${paddock.row_width} m` : "—"} />
-          <Row label="Vine spacing" value={paddock.vine_spacing ? `${paddock.vine_spacing} m` : "—"} />
-          <div className="pt-3 border-t">
-            <Button asChild variant="outline" size="sm" className="w-full">
-              <Link to={`/setup/paddocks/${paddock.id}`}>
-                Open full detail <ExternalLink className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
     </div>
   );
 }
