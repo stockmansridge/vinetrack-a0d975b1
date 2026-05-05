@@ -1,13 +1,10 @@
 import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BrandMark } from "@/components/BrandMark";
 import { toast } from "@/hooks/use-toast";
+import appIcon from "@/assets/vinetrack-app-icon.png";
 
 export default function Login() {
   const { session, loading } = useAuth();
@@ -39,34 +36,140 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/40 to-background p-4">
-      <Card className="w-full max-w-md shadow-lg border-border/60">
-        <CardHeader className="space-y-4 items-center text-center">
-          <BrandMark size={72} className="rounded-2xl" />
-          <div className="space-y-1">
-            <CardTitle className="text-3xl tracking-tight">VineTrack</CardTitle>
-            <CardDescription>Owner & manager portal — sign in</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Signing in…" : "Sign in"}
-            </Button>
-            <button type="button" onClick={onReset} className="text-sm text-muted-foreground hover:underline w-full text-center">
-              Forgot password?
-            </button>
-          </form>
-        </CardContent>
-      </Card>
+    <div
+      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(135deg, #0F6E33 0%, #054721 50%, #022C17 100%)",
+      }}
+    >
+      {/* Soft top-left radial highlight */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(420px circle at 18% 12%, rgba(255,255,255,0.15), transparent 60%)",
+        }}
+      />
+
+      <div className="relative w-full max-w-sm flex flex-col items-center gap-6">
+        {/* Logo tile */}
+        <div
+          className="overflow-hidden bg-[#0B5128] ring-1 ring-white/25"
+          style={{
+            width: 102,
+            height: 102,
+            borderRadius: 26,
+            boxShadow: "0 8px 14px rgba(0,0,0,0.35)",
+          }}
+        >
+          <img src={appIcon} alt="VineTrack" className="h-full w-full object-cover" />
+        </div>
+
+        {/* Title + tagline */}
+        <div className="text-center space-y-2">
+          <h1
+            className="text-white font-extrabold tracking-tight"
+            style={{ fontSize: 48, lineHeight: 1, textShadow: "0 2px 2px rgba(0,0,0,0.28)" }}
+          >
+            VineTrack
+          </h1>
+          <p className="text-white/90 font-medium text-base leading-snug px-4">
+            Built by viticulturists to manage
+            <br />
+            vineyard work, row by row.
+          </p>
+        </div>
+
+        {/* Feature chips */}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {["GPS Pins", "Row Tracking", "Spray Records"].map((label) => (
+            <span
+              key={label}
+              className="rounded-full border border-white/25 px-3 h-[34px] inline-flex items-center text-white text-xs font-bold"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
+        {/* Form card */}
+        <form
+          onSubmit={onSubmit}
+          className="w-full bg-white/95 backdrop-blur-sm p-4 space-y-3"
+          style={{
+            borderRadius: 22,
+            boxShadow: "0 10px 18px rgba(0,0,0,0.20)",
+          }}
+        >
+          <FieldRow icon={<Mail className="h-4 w-4" style={{ color: "#055124" }} />}>
+            <input
+              type="email"
+              required
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
+              style={{ color: "#03331A" }}
+            />
+          </FieldRow>
+          <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
+            <input
+              type="password"
+              required
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
+              style={{ color: "#03331A" }}
+            />
+          </FieldRow>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full h-12 font-bold text-white disabled:opacity-60 transition-opacity"
+            style={{
+              background: "#007AFF",
+              borderRadius: 15,
+              boxShadow: "0 8px 14px rgba(0,0,0,0.22)",
+            }}
+          >
+            {submitting ? "Signing in…" : "Sign In"}
+          </button>
+        </form>
+
+        <button
+          type="button"
+          onClick={onReset}
+          className="text-sm font-medium hover:underline"
+          style={{ color: "#F0EBB8" }}
+        >
+          Forgot password?
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FieldRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div
+      className="flex items-center gap-3 bg-white px-3"
+      style={{
+        minHeight: 48,
+        borderRadius: 16,
+        border: "1px solid rgba(60,60,67,0.18)",
+      }}
+    >
+      <span
+        className="inline-flex items-center justify-center"
+        style={{ width: 32, height: 32, borderRadius: 10, background: "#EDF7E8" }}
+      >
+        {icon}
+      </span>
+      {children}
     </div>
   );
 }
