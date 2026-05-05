@@ -116,6 +116,8 @@ export default function TractorsPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [archiving, setArchiving] = useState<Tractor | null>(null);
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
   const [suggestion, setSuggestion] = useState<
     { value: number; notes: string | null; confidence: string } | null
   >(null);
