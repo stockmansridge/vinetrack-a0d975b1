@@ -49,6 +49,33 @@ type Step = "details" | "boundary" | "rows" | "review";
 const fmt = (n: number, d = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
 
+// Simple O(n²) self-intersection check for closed polygon edges. Adjacent
+// edges (sharing a vertex) are skipped. Returns true if any non-adjacent
+// edges cross.
+function polygonHasSelfIntersection(pts: LatLng[]): boolean {
+  const n = pts.length;
+  if (n < 4) return false;
+  const seg = (i: number) => [pts[i], pts[(i + 1) % n]] as const;
+  const cross = (ax: number, ay: number, bx: number, by: number) => ax * by - ay * bx;
+  const intersects = (p1: LatLng, p2: LatLng, p3: LatLng, p4: LatLng) => {
+    const d1 = cross(p4.lng - p3.lng, p4.lat - p3.lat, p1.lng - p3.lng, p1.lat - p3.lat);
+    const d2 = cross(p4.lng - p3.lng, p4.lat - p3.lat, p2.lng - p3.lng, p2.lat - p3.lat);
+    const d3 = cross(p2.lng - p1.lng, p2.lat - p1.lat, p3.lng - p1.lng, p3.lat - p1.lat);
+    const d4 = cross(p2.lng - p1.lng, p2.lat - p1.lat, p4.lng - p1.lng, p4.lat - p1.lat);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  };
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (i === j) continue;
+      if (j === (i + 1) % n || i === (j + 1) % n) continue;
+      const [a, b] = seg(i);
+      const [c, d] = seg(j);
+      if (intersects(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
+
 export default function NewPaddockPage() {
   const navigate = useNavigate();
   // qc reserved for future use after production save is enabled.
