@@ -41,8 +41,12 @@ export function parsePolygonPoints(raw: any): LatLng[] {
   return out;
 }
 
-/** A single row from the `rows` jsonb. We accept several shapes. */
+/** A single row from the `rows` jsonb. Canonical iOS shape uses
+ * `startPoint` / `endPoint` with `{ id, latitude, longitude }`. We also
+ * accept legacy/alternate shapes for resilience. */
 export type PaddockRow = {
+  id?: string;
+  number?: number;
   start?: LatLng;
   end?: LatLng;
   points?: LatLng[];
@@ -60,8 +64,11 @@ export function parseRows(raw: any): PaddockRow[] {
   for (const r of arr) {
     if (!r || typeof r !== "object") continue;
     const row: PaddockRow = {};
-    const start = r.start ?? r.from ?? r.a;
-    const end = r.end ?? r.to ?? r.b;
+    if (typeof r.id === "string") row.id = r.id;
+    if (isFiniteNum(r.number)) row.number = r.number;
+    // Canonical iOS first, then legacy fallbacks.
+    const start = r.startPoint ?? r.start ?? r.from ?? r.a;
+    const end = r.endPoint ?? r.end ?? r.to ?? r.b;
     if (start) {
       const [s] = parsePolygonPoints([start]);
       if (s) row.start = s;
