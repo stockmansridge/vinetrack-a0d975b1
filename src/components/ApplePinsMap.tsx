@@ -40,7 +40,7 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
   const annsRef = useRef<any[]>([]);
   const overlaysRef = useRef<any[]>([]);
   const [mapReady, setMapReady] = useState(false);
-  const didFitRef = useRef(false);
+  const lastFitKeyRef = useRef<string | null>(null);
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks", selectedVineyardId],
