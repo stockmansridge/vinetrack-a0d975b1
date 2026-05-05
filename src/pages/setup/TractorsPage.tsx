@@ -105,6 +105,10 @@ export default function TractorsPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<
+    { value: number; notes: string | null; confidence: string } | null
+  >(null);
 
   const canEdit = currentRole === "owner" || currentRole === "manager";
 
