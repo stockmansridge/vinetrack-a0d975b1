@@ -257,7 +257,7 @@ function PaddockLayer({
       {rowSegments.length > 0 && (
         <Marker
           position={[rowSegments[0].start.lat, rowSegments[0].start.lng]}
-          icon={rowIcon(1)}
+          icon={rowIcon(rowSegments[0].number ?? 1)}
           interactive={false}
         />
       )}
@@ -267,7 +267,7 @@ function PaddockLayer({
             rowSegments[rowSegments.length - 1].start.lat,
             rowSegments[rowSegments.length - 1].start.lng,
           ]}
-          icon={rowIcon(rowSegments.length)}
+          icon={rowIcon(rowSegments[rowSegments.length - 1].number ?? rowSegments.length)}
           interactive={false}
         />
       )}
@@ -276,7 +276,7 @@ function PaddockLayer({
         <Marker
           position={[centroid.lat, centroid.lng]}
           icon={nameIcon(paddock.name)}
-          interactive={false}
+          eventHandlers={{ click: onClick }}
         />
       )}
     </>
