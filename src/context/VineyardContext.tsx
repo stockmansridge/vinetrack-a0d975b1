@@ -40,8 +40,9 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
     queryFn: async (): Promise<VineyardMembership[]> => {
       const { data, error } = await supabase
         .from("vineyard_members")
-        .select("vineyard_id, role, vineyards(name)")
-        .eq("user_id", user!.id);
+        .select("vineyard_id, role, vineyards!inner(name, deleted_at)")
+        .eq("user_id", user!.id)
+        .is("vineyards.deleted_at", null);
       if (error) throw error;
       return (data ?? [])
         .filter((m: any) => ALLOWED_ROLES.includes(m.role))

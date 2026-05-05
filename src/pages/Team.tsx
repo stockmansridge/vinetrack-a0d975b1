@@ -21,13 +21,13 @@ export default function Team() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vineyard_members")
-        .select("user_id, role, profiles(display_name, email)")
+        .select("user_id, role, joined_at, profiles!vineyard_members_user_id_fkey(full_name, email, avatar_url)")
         .eq("vineyard_id", selectedVineyardId!);
       if (error) {
-        // fall back without join if profiles isn't reachable
+        // fall back without join if profiles isn't reachable under RLS
         const { data: d2, error: e2 } = await supabase
           .from("vineyard_members")
-          .select("user_id, role")
+          .select("user_id, role, joined_at")
           .eq("vineyard_id", selectedVineyardId!);
         if (e2) throw e2;
         return d2 ?? [];
@@ -63,8 +63,8 @@ export default function Team() {
             {data?.map((m: any) => (
               <TableRow key={m.user_id}>
                 <TableCell>
-                  <div className="font-medium">{m.profiles?.display_name ?? m.profiles?.email ?? m.user_id}</div>
-                  {m.profiles?.email && m.profiles?.display_name && (
+                  <div className="font-medium">{m.profiles?.full_name ?? m.profiles?.email ?? m.user_id}</div>
+                  {m.profiles?.email && m.profiles?.full_name && (
                     <div className="text-xs text-muted-foreground">{m.profiles.email}</div>
                   )}
                 </TableCell>
