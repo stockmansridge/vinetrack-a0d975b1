@@ -435,42 +435,6 @@ export default function NewPaddockPage() {
               {effectiveVineCount != null && <SummaryRow label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
             </div>
 
-            {(!intermediatePostSpacing || !flowPerEmitter || !emitterSpacing) && (
-              <Alert>
-                <AlertTitle>Optional fields missing</AlertTitle>
-                <AlertDescription className="text-xs">
-                  {!intermediatePostSpacing && <div>• Intermediate post spacing not set — post count won't be derived.</div>}
-                  {(!flowPerEmitter || !emitterSpacing) && <div>• Emitter spacing / flow not set — irrigation rate won't be derived.</div>}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline"
-                onClick={() => setShowRawPayload((v) => !v)}
-              >
-                {showRawPayload ? "Hide" : "Show"} raw payload
-              </button>
-              {showRawPayload && (
-                <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
-                  {JSON.stringify(payload, null, 2)}
-                </pre>
-              )}
-            </div>
-
-            <Alert variant="destructive">
-              <AlertTitle>Production save is gated</AlertTitle>
-              <AlertDescription className="text-xs">
-                The Save button is disabled by a test flag (<code>ENABLE_PRODUCTION_SAVE</code>) until the
-                payload and row-generation logic are confirmed to round-trip cleanly with iOS. Pressing
-                Save in test mode logs the payload to the console only.
-              </AlertDescription>
-            </Alert>
-
-            <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("rows")}>Back</Button>
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Production write — handle with care</AlertTitle>
