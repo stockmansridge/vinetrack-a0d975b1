@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Sparkles } from "lucide-react";
 import { z } from "zod";
 
 interface Tractor {
