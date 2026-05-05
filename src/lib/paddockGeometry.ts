@@ -190,14 +190,16 @@ export function deriveMetrics(paddock: any): DerivedMetrics {
     vineCountSource = "derived";
   }
 
+  // iOS: rawPosts = floor(total / intermediateSpacing); endPosts = 2 * rows.count;
+  //      intermediatePostCount = max(0, rawPosts - endPosts)
   const intermediatePostCount =
     isFiniteNum(intermediateSpacing) && intermediateSpacing > 0 && totalRowLengthM > 0
-      ? Math.round(totalRowLengthM / intermediateSpacing)
+      ? Math.max(0, Math.floor(totalRowLengthM / intermediateSpacing) - 2 * rowCount)
       : null;
 
   const emitterCount =
     isFiniteNum(emitterSpacing) && emitterSpacing > 0 && totalRowLengthM > 0
-      ? Math.round(totalRowLengthM / emitterSpacing)
+      ? Math.floor(totalRowLengthM / emitterSpacing)
       : null;
 
   return {
