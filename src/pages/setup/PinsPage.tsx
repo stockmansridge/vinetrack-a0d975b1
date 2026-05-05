@@ -103,6 +103,10 @@ export default function PinsPage() {
         </TabsList>
       </div>
 
+      <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+        Production data — read-only view. No edits, archives, or deletions are possible from this page.
+      </div>
+
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex justify-end">
           <Input

@@ -48,7 +48,7 @@ export async function fetchPinsForVineyard(
       }
     } else if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.warn("[pins] paddock_id fallback query failed:", byPaddock.error.message);
+      if (import.meta.env.DEV) console.warn("[pins] paddock_id fallback query failed:", byPaddock.error.message);
     }
   }
 
