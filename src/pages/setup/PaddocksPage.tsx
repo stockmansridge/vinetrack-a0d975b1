@@ -44,12 +44,26 @@ const paddockCols: ListColumn[] = [
 
 export default function PaddocksPage() {
   const [tab, setTab] = useState("table");
+  const { currentRole } = useVineyard();
+  const canEdit = currentRole === "owner" || currentRole === "manager";
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="table">Table</TabsTrigger>
-        <TabsTrigger value="map">Map</TabsTrigger>
-      </TabsList>
+      <div className="flex items-center justify-between gap-2">
+        <TabsList>
+          <TabsTrigger value="table">Table</TabsTrigger>
+          <TabsTrigger value="map">Map</TabsTrigger>
+        </TabsList>
+        {canEdit && (
+          <Button asChild size="sm" className="gap-1">
+            <Link to="/setup/paddocks/new">
+              <Plus className="h-4 w-4" /> New paddock
+              <span className="ml-1 rounded-full bg-warning/20 px-1.5 text-[10px] font-medium text-warning-foreground/90">
+                test
+              </span>
+            </Link>
+          </Button>
+        )}
+      </div>
       <TabsContent value="table" className="mt-0">
         <ListPage
           table="paddocks"
