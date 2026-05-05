@@ -82,8 +82,9 @@ export default function ListPage({ table, title, description, columns, basePath 
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
-                  No records.
+                <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
+                  No records found. If expected records are missing, check that the selected
+                  vineyard is correct and that this user has owner/manager access.
                 </TableCell>
               </TableRow>
             )}
