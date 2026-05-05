@@ -148,7 +148,7 @@ export default function PinsPage() {
                       onClick={() => setSelectedId(p.id)}
                       data-active={p.id === selectedId}
                     >
-                      <TableCell className="font-medium">{p.title || "—"}</TableCell>
+                      <TableCell className="font-medium">{pinDisplayTitle(p as any)}</TableCell>
                       <TableCell>
                         {p.mode ? (
                           <Badge
