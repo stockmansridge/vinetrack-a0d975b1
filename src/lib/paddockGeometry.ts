@@ -186,7 +186,7 @@ export function deriveMetrics(paddock: any): DerivedMetrics {
     vineCount = Math.round(paddock.vine_count_override);
     vineCountSource = "override";
   } else if (isFiniteNum(vineSpacing) && vineSpacing > 0 && totalRowLengthM > 0) {
-    vineCount = Math.round(totalRowLengthM / vineSpacing);
+    vineCount = Math.floor(totalRowLengthM / vineSpacing);
     vineCountSource = "derived";
   }
 
