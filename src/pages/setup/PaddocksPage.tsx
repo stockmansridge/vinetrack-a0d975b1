@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ListPage from "@/pages/setup/ListPage";
-import PaddockMap from "@/components/PaddockMap";
+import PaddockMapView from "@/components/PaddockMapView";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const paddockCols = [
@@ -28,7 +28,7 @@ export default function PaddocksPage() {
         />
       </TabsContent>
       <TabsContent value="map" className="mt-0">
-        <PaddockMap />
+        <PaddockMapView />
       </TabsContent>
     </Tabs>
   );
