@@ -45,6 +45,7 @@ const records = [
   { title: "Spray records", url: "/spray-records", icon: FileText },
   { title: "Work tasks", url: "/work-tasks", icon: ClipboardList },
   { title: "Maintenance", url: "/maintenance", icon: Wrench },
+  { title: "Trips", url: "/trips", icon: Sprout },
 ];
 
 const team = [{ title: "Team", url: "/team", icon: Users }];
@@ -54,7 +55,6 @@ const comingSoon = [
   { title: "Spray presets", url: "/soon/spray-presets", icon: Layers },
   { title: "Operator categories", url: "/soon/operator-categories", icon: UserCog },
   { title: "Weather", url: "/soon/weather", icon: Cloud },
-  { title: "Trips", url: "/soon/trips", icon: Sprout },
   { title: "Yield reports", url: "/soon/yield", icon: FileText },
 ];
 
