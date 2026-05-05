@@ -46,7 +46,14 @@ export default function AppLayout() {
               </Select>
               {currentRole && <Badge variant="secondary">{currentRole}</Badge>}
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-3">
+              <span
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                title="This portal is connected to the production database but cannot modify data."
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                Read-only portal — production data
+              </span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1">
