@@ -16,11 +16,8 @@ import { paddockColor } from "@/lib/paddockColor";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import "@/components/map/mapChips.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import PaddockDetailPanel from "@/components/PaddockDetailPanel";
 
 interface Paddock {
   id: string;
