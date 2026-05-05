@@ -194,6 +194,44 @@ export default function NewPaddockPage() {
     emitterSpacing, intermediatePostSpacing, plantingYear,
   ]);
 
+  // Strip server-managed fields before exposing payload (defensive — these
+  // are not added by the builder, but we filter to make the contract explicit).
+  const exportablePayload = useMemo(() => {
+    const omit = new Set(["created_at", "updated_at", "deleted_at", "sync_version"]);
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(payload)) if (!omit.has(k)) out[k] = v;
+    return out;
+  }, [payload]);
+
+  // Soft warnings (non-blocking)
+  const warnings = useMemo(() => {
+    const w: string[] = [];
+    const requestedRows = Number(rowsCount);
+    if (areaHa > 0 && areaHa < 0.05) w.push(`Area is very small (${areaHa.toFixed(3)} ha) — verify the boundary.`);
+    if (areaHa > 50) w.push(`Area is very large (${areaHa.toFixed(1)} ha) — verify the boundary.`);
+    if (Number.isFinite(requestedRows) && requestedRows > 0 && generated.length > 0 && generated.length < requestedRows) {
+      w.push(`Generated ${generated.length} rows but ${requestedRows} were requested — some rows fall outside the polygon.`);
+    }
+    if (generated.length > 0 && totalRowLengthM < 1) {
+      w.push("Total row length is near zero — check row direction and boundary.");
+    }
+    if (polygon.length >= 4 && polygonHasSelfIntersection(polygon)) {
+      w.push("Polygon appears to self-intersect — boundary edges cross.");
+    }
+    if (!intermediatePostSpacing) w.push("Intermediate post spacing not provided — post count won't be derived.");
+    if (!flowPerEmitter || !emitterSpacing) w.push("Irrigation inputs missing (flow per emitter / emitter spacing) — irrigation rate won't be derived.");
+    return w;
+  }, [areaHa, rowsCount, generated.length, totalRowLengthM, polygon, intermediatePostSpacing, flowPerEmitter, emitterSpacing]);
+
+  const copyPayloadToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(exportablePayload, null, 2));
+      toast({ title: "Payload copied", description: "Insert payload JSON copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Clipboard not available in this context.", variant: "destructive" });
+    }
+  };
+
   // Permission gate
   if (!canEdit) {
     return (
