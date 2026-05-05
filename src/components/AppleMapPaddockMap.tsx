@@ -82,13 +82,27 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   });
 
   const paddocks = data ?? [];
-  const parsed = useMemo(
-    () => paddocks.map((p) => ({ paddock: p, ...getParsed(p) })),
+  // Stable signature for paddock geometry — changes only when ids/updated_at change.
+  const paddockSig = useMemo(
+    () => paddocks.map((p) => `${p.id}:${p.updated_at ?? ""}`).join("|"),
     [paddocks],
   );
-  const withGeometry = parsed.filter((p) => p.polygon.length >= 3);
-  const withoutGeometry = parsed.filter((p) => p.polygon.length < 3);
+  const parsed = useMemo(
+    () => paddocks.map((p) => ({ paddock: p, ...getParsed(p) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paddockSig],
+  );
+  const withGeometry = useMemo(
+    () => parsed.filter((p) => p.polygon.length >= 3),
+    [parsed],
+  );
+  const withoutGeometry = useMemo(
+    () => parsed.filter((p) => p.polygon.length < 3),
+    [parsed],
+  );
   const selected = parsed.find((p) => p.paddock.id === selectedId) ?? null;
+  const lastBoundsRef = useRef<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null);
+  const didFitRef = useRef(false);
 
   // Init MapKit map
   useEffect(() => {
