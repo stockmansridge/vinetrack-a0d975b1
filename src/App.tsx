@@ -21,6 +21,7 @@ import PaddocksPage from "./pages/setup/PaddocksPage";
 import TractorsPage from "./pages/setup/TractorsPage";
 import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
 import NewPaddockPage from "./pages/setup/NewPaddockPage";
+import PinsPage from "./pages/setup/PinsPage";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
                       path="/setup/spray-equipment/:id"
                       element={<DetailPage table="spray_equipment" title="Spray equipment detail" basePath="/setup/spray-equipment" />}
                     />
+                    <Route path="/pins" element={<PinsPage />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
