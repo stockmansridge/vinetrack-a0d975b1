@@ -6,6 +6,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { supabase as cloudSupabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Sparkles } from "lucide-react";
 import { z } from "zod";
 
 interface Tractor {
@@ -104,6 +105,10 @@ export default function TractorsPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<
+    { value: number; notes: string | null; confidence: string } | null
+  >(null);
 
   const canEdit = currentRole === "owner" || currentRole === "manager";
 
@@ -127,6 +132,7 @@ export default function TractorsPage() {
     setEditing(null);
     setForm(emptyForm);
     setErrors({});
+    setSuggestion(null);
     setDialogOpen(true);
   };
 
@@ -141,7 +147,48 @@ export default function TractorsPage() {
         t.fuel_usage_l_per_hour != null ? String(t.fuel_usage_l_per_hour) : "",
     });
     setErrors({});
+    setSuggestion(null);
     setDialogOpen(true);
+  };
+
+  const handleSuggest = async () => {
+    const brand = form.brand.trim();
+    const model = form.model.trim();
+    const year = form.model_year.trim();
+    if (!brand && !model && !year) {
+      toast.error("Enter brand, model, or year first.");
+      return;
+    }
+    setSuggesting(true);
+    setSuggestion(null);
+    try {
+      const { data, error } = await cloudSupabase.functions.invoke(
+        "suggest-tractor-fuel",
+        { body: { brand, model, year: year ? Number(year) : undefined } },
+      );
+      if (error) throw error;
+      const fuel = Number((data as any)?.fuel_l_per_hour);
+      if (!Number.isFinite(fuel) || fuel <= 0) {
+        throw new Error("No estimate returned");
+      }
+      setSuggestion({
+        value: fuel,
+        notes: (data as any)?.notes ?? null,
+        confidence: (data as any)?.confidence ?? "low",
+      });
+    } catch (e) {
+      console.error("suggest fuel failed", e);
+      toast.error("Could not estimate fuel use. Please enter manually.");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const acceptSuggestion = () => {
+    if (!suggestion) return;
+    setForm((f) => ({ ...f, fuel_usage_l_per_hour: String(suggestion.value) }));
+    setErrors((e) => ({ ...e, fuel_usage_l_per_hour: undefined }));
+    setSuggestion(null);
   };
 
   const validate = () => {
@@ -399,6 +446,50 @@ export default function TractorsPage() {
                     required
                   />
                 </Field>
+              </div>
+              <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Estimated fuel use only. Actual use varies by load, PTO work,
+                    terrain and operator.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSuggest}
+                    disabled={suggesting}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {suggesting ? "Estimating…" : "Suggest fuel usage"}
+                  </Button>
+                </div>
+                {suggestion && (
+                  <div className="flex items-center justify-between gap-2 rounded bg-background p-2 text-sm">
+                    <div>
+                      <span className="font-medium">{suggestion.value} L/hr</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({suggestion.confidence} confidence)
+                      </span>
+                      {suggestion.notes && (
+                        <p className="text-xs text-muted-foreground">{suggestion.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSuggestion(null)}
+                      >
+                        Dismiss
+                      </Button>
+                      <Button type="button" size="sm" onClick={acceptSuggestion}>
+                        Use {suggestion.value}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter>
