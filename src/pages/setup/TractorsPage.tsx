@@ -567,6 +567,34 @@ export default function TractorsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!archiving}
+        onOpenChange={(o) => !o && !archiveSubmitting && setArchiving(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this tractor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the tractor from active setup lists but keep the
+              record for sync/history.
+              {archiving?.name ? ` (${archiving.name})` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleArchive();
+              }}
+              disabled={archiveSubmitting || !canEdit}
+            >
+              {archiveSubmitting ? "Archiving…" : "Archive tractor"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
