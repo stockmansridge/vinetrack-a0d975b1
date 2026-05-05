@@ -305,7 +305,8 @@ function YieldSheet({
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
-            {row?.__kind === "historical" ? "Historical yield" : "Estimation session"} — {fmtDate(sortDate(row as AnyRow))}
+            {row?.__kind === "historical" ? "Historical yield" : "Estimation session"}
+            {row ? ` — ${fmtDate(sortDate(row))}` : ""}
           </SheetTitle>
         </SheetHeader>
         {row?.__kind === "historical" && <HistoricalDetail row={row as HistoricalYieldRecord} />}
