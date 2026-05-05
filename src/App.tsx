@@ -17,16 +17,9 @@ import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
 import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
+import PaddocksPage from "./pages/setup/PaddocksPage";
 
 const queryClient = new QueryClient();
-
-const paddockCols = [
-  { key: "name", label: "Name" },
-  { key: "planting_year", label: "Planted" },
-  { key: "row_width", label: "Row width (m)" },
-  { key: "vine_spacing", label: "Vine spacing (m)" },
-  { key: "updated_at", label: "Updated" },
-];
 const tractorCols = [
   { key: "name", label: "Name" },
   { key: "model", label: "Model" },
@@ -55,10 +48,7 @@ const App = () => (
                   <Route element={<AppLayout />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
-                    <Route
-                      path="/setup/paddocks"
-                      element={<ListPage table="paddocks" title="Paddocks" columns={paddockCols} basePath="/setup/paddocks" />}
-                    />
+                    <Route path="/setup/paddocks" element={<PaddocksPage />} />
                     <Route
                       path="/setup/paddocks/:id"
                       element={<DetailPage table="paddocks" title="Paddock detail" basePath="/setup/paddocks" />}
