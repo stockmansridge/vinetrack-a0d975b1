@@ -61,12 +61,12 @@ const tractorSchema = z.object({
     ])
     .optional(),
   fuel_usage_l_per_hour: z
-    .union([
-      z.literal(""),
-      z.number().min(0, { message: "Fuel usage must be ≥ 0" }).max(1000),
-    ])
-    .optional(),
+    .number({ invalid_type_error: "Fuel usage is required" })
+    .gt(0, { message: "Fuel usage must be greater than 0" })
+    .max(1000, { message: "Fuel usage must be ≤ 1000" }),
 });
+
+const DEFAULT_FUEL_L_PER_HOUR = 14;
 
 type FormState = {
   name: string;
