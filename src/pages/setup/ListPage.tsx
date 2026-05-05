@@ -48,7 +48,10 @@ export default function ListPage({ table, title, description, columns, basePath 
     if (!filter) return list;
     const f = filter.toLowerCase();
     return list.filter((r: any) =>
-      columns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(f)),
+      columns.some((c) => {
+        const v = c.filterValue ? c.filterValue(r) : r[c.key];
+        return String(v ?? "").toLowerCase().includes(f);
+      }),
     );
   }, [data, filter, columns]);
 
