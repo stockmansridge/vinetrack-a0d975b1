@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "react-router-dom";
 import { fetchOne } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 
 interface Props {
   table: string;
@@ -36,10 +38,7 @@ export default function DetailPage({ table, title, basePath }: Props) {
           {data && (
             <dl className="grid gap-3 sm:grid-cols-2">
               {Object.entries(data).map(([k, v]) => (
-                <div key={k}>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">{k}</dt>
-                  <dd className="text-sm font-medium break-words">{format(v)}</dd>
-                </div>
+                <Field key={k} k={k} v={v} />
               ))}
             </dl>
           )}
@@ -52,9 +51,47 @@ export default function DetailPage({ table, title, basePath }: Props) {
   );
 }
 
-function format(v: any) {
-  if (v == null) return "—";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  if (typeof v === "object") return <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(v, null, 2)}</pre>;
-  return String(v);
+function Field({ k, v }: { k: string; v: any }) {
+  const isObj = v != null && typeof v === "object";
+  return (
+    <div className={isObj ? "sm:col-span-2" : ""}>
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{k}</dt>
+      <dd className="text-sm font-medium break-words">
+        {isObj ? <JsonField value={v} /> : <Scalar v={v} />}
+      </dd>
+    </div>
+  );
+}
+
+function Scalar({ v }: { v: any }) {
+  if (v == null) return <span className="text-muted-foreground">—</span>;
+  if (typeof v === "boolean") return <span>{v ? "Yes" : "No"}</span>;
+  return <span>{String(v)}</span>;
+}
+
+function JsonField({ value }: { value: any }) {
+  const [open, setOpen] = useState(false);
+  const summary = Array.isArray(value)
+    ? `${value.length} item${value.length === 1 ? "" : "s"}`
+    : `${Object.keys(value).length} key${Object.keys(value).length === 1 ? "" : "s"}`;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 rounded border bg-muted/40 px-2 py-1 text-xs hover:bg-muted"
+        >
+          <span>{summary}</span>
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <pre className="mt-1 max-h-80 overflow-auto rounded border bg-background p-2 text-[11px] leading-tight font-mono whitespace-pre-wrap break-words">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
