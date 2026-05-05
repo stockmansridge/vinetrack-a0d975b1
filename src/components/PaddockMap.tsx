@@ -50,7 +50,7 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   return null;
 }
 
-const fmt = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : "—");
+
 
 const nameIcon = (name: string) =>
   L.divIcon({
