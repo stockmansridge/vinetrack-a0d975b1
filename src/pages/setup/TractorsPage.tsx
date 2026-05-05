@@ -81,7 +81,7 @@ const emptyForm: FormState = {
   brand: "",
   model: "",
   model_year: "",
-  fuel_usage_l_per_hour: "",
+  fuel_usage_l_per_hour: String(DEFAULT_FUEL_L_PER_HOUR),
 };
 
 const fmtCell = (v: any) => {
