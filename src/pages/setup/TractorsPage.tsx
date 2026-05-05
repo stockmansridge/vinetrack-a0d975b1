@@ -447,6 +447,50 @@ export default function TractorsPage() {
                   />
                 </Field>
               </div>
+              <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Estimated fuel use only. Actual use varies by load, PTO work,
+                    terrain and operator.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSuggest}
+                    disabled={suggesting}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {suggesting ? "Estimating…" : "Suggest fuel usage"}
+                  </Button>
+                </div>
+                {suggestion && (
+                  <div className="flex items-center justify-between gap-2 rounded bg-background p-2 text-sm">
+                    <div>
+                      <span className="font-medium">{suggestion.value} L/hr</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({suggestion.confidence} confidence)
+                      </span>
+                      {suggestion.notes && (
+                        <p className="text-xs text-muted-foreground">{suggestion.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSuggestion(null)}
+                      >
+                        Dismiss
+                      </Button>
+                      <Button type="button" size="sm" onClick={acceptSuggestion}>
+                        Use {suggestion.value}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <DialogFooter>
               <Button
