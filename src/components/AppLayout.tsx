@@ -29,11 +29,11 @@ export default function AppLayout() {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-14 flex items-center gap-3 border-b px-3">
+          <header className="h-14 flex items-center gap-3 border-b bg-card/80 backdrop-blur px-4">
             <SidebarTrigger />
             <div className="flex items-center gap-2">
               <Select value={selectedVineyardId ?? undefined} onValueChange={selectVineyard}>
-                <SelectTrigger className="w-[240px]">
+                <SelectTrigger className="w-[240px] rounded-lg">
                   <SelectValue placeholder="Select vineyard" />
                 </SelectTrigger>
                 <SelectContent>
@@ -44,20 +44,25 @@ export default function AppLayout() {
                   ))}
                 </SelectContent>
               </Select>
-              {currentRole && <Badge variant="secondary">{currentRole}</Badge>}
+              {currentRole && (
+                <Badge variant="secondary" className="capitalize">
+                  {currentRole}
+                </Badge>
+              )}
             </div>
             <div className="ml-auto flex items-center gap-3">
               <span
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                title="Production database — only tractor setup edits are enabled in this phase."
+                className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning-foreground/90"
+                title="Production database — only tractor & spray equipment setup edits are enabled."
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
-                Production portal — setup edits enabled for tractors
+                <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
+                Production portal
               </span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1">
-                    {user?.email} <ChevronDown className="h-4 w-4" />
+                  <Button variant="ghost" size="sm" className="gap-1 rounded-full">
+                    <span className="hidden sm:inline">{user?.email}</span>
+                    <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -66,7 +71,7 @@ export default function AppLayout() {
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 p-6 bg-muted/20">
+          <main className="flex-1 p-6 bg-background">
             <Outlet />
           </main>
         </div>

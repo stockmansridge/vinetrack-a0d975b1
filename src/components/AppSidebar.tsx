@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Map,
   Tractor,
-  SprayCan,
+  Gauge,
   Users,
   FileText,
   Cloud,
@@ -15,6 +15,8 @@ import {
   UserCog,
   Sprout,
   Settings,
+  Database,
+  Leaf,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import {
@@ -34,7 +36,7 @@ const main = [{ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard }];
 const setup = [
   { title: "Paddocks", url: "/setup/paddocks", icon: Map },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Spray equipment", url: "/setup/spray-equipment", icon: SprayCan },
+  { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
 ];
 
 const team = [{ title: "Team", url: "/team", icon: Users }];
@@ -53,7 +55,7 @@ const comingSoon = [
 ];
 
 const settings = [
-  { title: "Data coverage", url: "/settings/data-coverage", icon: Settings },
+  { title: "Data coverage", url: "/settings/data-coverage", icon: Database },
 ];
 
 export function AppSidebar() {
@@ -76,8 +78,18 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="px-4 py-3">
-        <span className="font-semibold tracking-tight">VineTrack</span>
+      <SidebarHeader className="px-4 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
+            <Leaf className="h-4 w-4" />
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="font-semibold tracking-tight text-sidebar-foreground">VineTrack</span>
+            <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
+              Vineyard portal
+            </span>
+          </div>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
