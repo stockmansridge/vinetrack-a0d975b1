@@ -296,6 +296,42 @@ export default function TractorsPage() {
     }
   };
 
+  const handleArchive = async () => {
+    if (!archiving) return;
+    if (!canEdit) {
+      toast.error("Only owners and managers can archive tractors.");
+      return;
+    }
+    setArchiveSubmitting(true);
+    try {
+      const { error: rpcErr } = await supabase.rpc("soft_delete_tractor", {
+        p_id: archiving.id,
+      });
+      if (rpcErr) {
+        const msg = (rpcErr.message || "").toLowerCase();
+        if (
+          msg.includes("permission") ||
+          msg.includes("denied") ||
+          msg.includes("not allowed") ||
+          msg.includes("rls")
+        ) {
+          toast.error("Only owners and managers can archive tractors.");
+        } else {
+          toast.error(`Archive failed: ${rpcErr.message}`);
+        }
+        return;
+      }
+      toast.success("Tractor archived");
+      await qc.invalidateQueries({ queryKey: ["list", "tractors", selectedVineyardId] });
+      await qc.invalidateQueries({ queryKey: ["count", "tractors", selectedVineyardId] });
+      setArchiving(null);
+    } catch (err: any) {
+      toast.error(`Archive failed: ${err?.message ?? "Unknown error"}`);
+    } finally {
+      setArchiveSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
