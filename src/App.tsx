@@ -22,8 +22,9 @@ const queryClient = new QueryClient();
 
 const paddockCols = [
   { key: "name", label: "Name" },
-  { key: "rows", label: "Rows" },
-  { key: "vine_spacing", label: "Vine spacing" },
+  { key: "planting_year", label: "Planted" },
+  { key: "row_width", label: "Row width (m)" },
+  { key: "vine_spacing", label: "Vine spacing (m)" },
   { key: "updated_at", label: "Updated" },
 ];
 const tractorCols = [
