@@ -55,7 +55,7 @@ const App = () => (
                     />
                     <Route
                       path="/setup/spray-equipment"
-                      element={<ListPage table="spray_equipment" title="Spray equipment" columns={sprayCols} basePath="/setup/spray-equipment" />}
+                      element={<SprayEquipmentPage />}
                     />
                     <Route
                       path="/setup/spray-equipment/:id"
