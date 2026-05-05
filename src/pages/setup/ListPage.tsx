@@ -122,8 +122,14 @@ export default function ListPage({ table, title, description, columns, basePath 
 }
 
 function formatCell(v: any) {
-  if (v == null) return "—";
+  if (v == null || v === "") return "—";
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d.toLocaleDateString();
+  }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
+
+export { formatCell };
