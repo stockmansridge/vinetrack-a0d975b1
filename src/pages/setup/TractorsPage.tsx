@@ -132,6 +132,7 @@ export default function TractorsPage() {
     setEditing(null);
     setForm(emptyForm);
     setErrors({});
+    setSuggestion(null);
     setDialogOpen(true);
   };
 
@@ -146,7 +147,48 @@ export default function TractorsPage() {
         t.fuel_usage_l_per_hour != null ? String(t.fuel_usage_l_per_hour) : "",
     });
     setErrors({});
+    setSuggestion(null);
     setDialogOpen(true);
+  };
+
+  const handleSuggest = async () => {
+    const brand = form.brand.trim();
+    const model = form.model.trim();
+    const year = form.model_year.trim();
+    if (!brand && !model && !year) {
+      toast.error("Enter brand, model, or year first.");
+      return;
+    }
+    setSuggesting(true);
+    setSuggestion(null);
+    try {
+      const { data, error } = await cloudSupabase.functions.invoke(
+        "suggest-tractor-fuel",
+        { body: { brand, model, year: year ? Number(year) : undefined } },
+      );
+      if (error) throw error;
+      const fuel = Number((data as any)?.fuel_l_per_hour);
+      if (!Number.isFinite(fuel) || fuel <= 0) {
+        throw new Error("No estimate returned");
+      }
+      setSuggestion({
+        value: fuel,
+        notes: (data as any)?.notes ?? null,
+        confidence: (data as any)?.confidence ?? "low",
+      });
+    } catch (e) {
+      console.error("suggest fuel failed", e);
+      toast.error("Could not estimate fuel use. Please enter manually.");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const acceptSuggestion = () => {
+    if (!suggestion) return;
+    setForm((f) => ({ ...f, fuel_usage_l_per_hour: String(suggestion.value) }));
+    setErrors((e) => ({ ...e, fuel_usage_l_per_hour: undefined }));
+    setSuggestion(null);
   };
 
   const validate = () => {
