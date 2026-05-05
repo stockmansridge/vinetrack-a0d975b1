@@ -16,6 +16,7 @@ import ComingSoon from "./pages/ComingSoon";
 import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
 import NotFound from "./pages/NotFound";
+import DataCoverage from "./pages/DataCoverage";
 
 const queryClient = new QueryClient();
 
