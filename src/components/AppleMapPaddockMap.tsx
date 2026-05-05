@@ -6,11 +6,13 @@ import {
   deriveMetrics,
   parsePolygonPoints,
   parseRows,
-  parseVarietyAllocations,
   polygonCentroid,
   LatLng,
 } from "@/lib/paddockGeometry";
 import { initMapKit } from "@/lib/mapkit";
+import { paddockColor } from "@/lib/paddockColor";
+import MapSourceBadge from "@/components/MapSourceBadge";
+import "@/components/map/mapChips.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +33,7 @@ interface Paddock {
   row_width?: number | null;
 }
 
-const PALETTE = ["#E55934", "#23967F", "#9B5DE5", "#1F8FCD", "#F2A341", "#D7457E"];
+const ROW_GREEN = "#34C759";
 const fmt = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : "—");
 
 interface AppleMapPaddockMapProps {
@@ -44,6 +46,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
+  const annotationsRef = useRef<any[]>([]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["paddocks-applemap", selectedVineyardId],
@@ -54,32 +57,35 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
   const paddocks = data ?? [];
   const parsed = useMemo(
     () =>
-      paddocks.map((p, i) => ({
-        paddock: p,
-        polygon: parsePolygonPoints(p.polygon_points),
-        rows: parseRows(p.rows),
-        allocations: parseVarietyAllocations(p.variety_allocations),
-        color: PALETTE[i % PALETTE.length],
-        centroid: polygonCentroid(parsePolygonPoints(p.polygon_points)),
-        metrics: deriveMetrics(p),
-      })),
+      paddocks.map((p) => {
+        const polygon = parsePolygonPoints(p.polygon_points);
+        return {
+          paddock: p,
+          polygon,
+          rows: parseRows(p.rows),
+          color: paddockColor(p.id),
+          centroid: polygonCentroid(polygon),
+          metrics: deriveMetrics(p),
+        };
+      }),
     [paddocks],
   );
   const withGeometry = parsed.filter((p) => p.polygon.length >= 3);
   const withoutGeometry = parsed.filter((p) => p.polygon.length < 3);
   const selected = parsed.find((p) => p.paddock.id === selectedId) ?? null;
 
-  // Initialise MapKit + map instance
+  // Init MapKit map (Hybrid)
   useEffect(() => {
     let cancelled = false;
     initMapKit()
       .then((mapkit) => {
-        if (cancelled || !containerRef.current) return;
-        if (mapRef.current) return;
+        if (cancelled || !containerRef.current || mapRef.current) return;
         mapRef.current = new mapkit.Map(containerRef.current, {
-          showsZoomControl: true,
-          showsCompass: mapkit.FeatureVisibility.Adaptive,
           mapType: mapkit.Map.MapTypes.Hybrid,
+          showsCompass: mapkit.FeatureVisibility.Adaptive,
+          showsScale: mapkit.FeatureVisibility.Adaptive,
+          showsZoomControl: true,
+          showsUserLocationControl: false,
           isRotationEnabled: false,
         });
       })
@@ -88,83 +94,109 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       });
     return () => {
       cancelled = true;
-      try {
-        mapRef.current?.destroy?.();
-      } catch {
-        /* noop */
-      }
+      try { mapRef.current?.destroy?.(); } catch { /* noop */ }
       mapRef.current = null;
     };
   }, [onUnavailable]);
 
-  // Render overlays whenever data changes
+  // Render overlays + annotations
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
     if (!map || !mapkit) return;
 
-    // Clear previous overlays
     if (overlaysRef.current.length) {
-      try {
-        map.removeOverlays(overlaysRef.current);
-      } catch {
-        /* noop */
-      }
+      try { map.removeOverlays(overlaysRef.current); } catch { /* noop */ }
       overlaysRef.current = [];
+    }
+    if (annotationsRef.current.length) {
+      try { map.removeAnnotations(annotationsRef.current); } catch { /* noop */ }
+      annotationsRef.current = [];
     }
 
     const newOverlays: any[] = [];
+    const newAnnotations: any[] = [];
     const allCoords: any[] = [];
 
     for (const p of withGeometry) {
+      const isSelected = p.paddock.id === selectedId;
       const coords = p.polygon.map((pt: LatLng) => new mapkit.Coordinate(pt.lat, pt.lng));
       allCoords.push(...coords);
-      const style = new mapkit.Style({
-        strokeColor: p.color,
-        fillColor: p.color,
-        fillOpacity: 0.25,
-        lineWidth: 2,
+
+      const poly = new mapkit.PolygonOverlay(coords, {
+        style: new mapkit.Style({
+          strokeColor: p.color,
+          fillColor: p.color,
+          fillOpacity: isSelected ? 0.35 : 0.25,
+          strokeOpacity: isSelected ? 1.0 : 0.9,
+          lineWidth: isSelected ? 3.5 : 2.5,
+          lineJoin: "round",
+          lineCap: "round",
+        }),
+        data: { id: p.paddock.id },
       });
-      const poly = new mapkit.PolygonOverlay(coords, { style, data: { id: p.paddock.id } });
       poly.addEventListener("select", () => setSelectedId(p.paddock.id));
       newOverlays.push(poly);
 
-      // Allocation polygons
-      p.allocations
-        .filter((a: any) => a.polygon && a.polygon.length >= 3)
-        .forEach((a: any, i: number) => {
-          const ac = a.polygon.map((pt: LatLng) => new mapkit.Coordinate(pt.lat, pt.lng));
-          newOverlays.push(
-            new mapkit.PolygonOverlay(ac, {
-              style: new mapkit.Style({
-                strokeColor: PALETTE[(i + 2) % PALETTE.length],
-                fillColor: PALETTE[(i + 2) % PALETTE.length],
-                fillOpacity: 0.3,
-                lineWidth: 1,
-                lineDash: [4, 4],
-              }),
-            }),
-          );
-        });
+      // Rows: first/last labelled, all rendered as straight start->end lines.
+      const rowSegments = p.rows
+        .map((r: any) => {
+          if (r.start && r.end) return { start: r.start, end: r.end };
+          if (r.points && r.points.length >= 2) {
+            return { start: r.points[0], end: r.points[r.points.length - 1] };
+          }
+          return null;
+        })
+        .filter(Boolean) as { start: LatLng; end: LatLng }[];
 
-      // Rows as polylines
-      for (const r of p.rows) {
-        const pts: any[] = [];
-        if (r.points && r.points.length >= 2) {
-          for (const pt of r.points) pts.push(new mapkit.Coordinate(pt.lat, pt.lng));
-        } else if (r.start && r.end) {
-          pts.push(
-            new mapkit.Coordinate(r.start.lat, r.start.lng),
-            new mapkit.Coordinate(r.end.lat, r.end.lng),
+      rowSegments.forEach((seg, i) => {
+        newOverlays.push(
+          new mapkit.PolylineOverlay(
+            [
+              new mapkit.Coordinate(seg.start.lat, seg.start.lng),
+              new mapkit.Coordinate(seg.end.lat, seg.end.lng),
+            ],
+            {
+              style: new mapkit.Style({
+                strokeColor: ROW_GREEN,
+                strokeOpacity: 0.85,
+                lineWidth: 1.5,
+                lineCap: "round",
+              }),
+            },
+          ),
+        );
+        const isFirst = i === 0;
+        const isLast = i === rowSegments.length - 1;
+        if (isFirst || isLast) {
+          const num = i + 1;
+          const ann = new mapkit.Annotation(
+            new mapkit.Coordinate(seg.start.lat, seg.start.lng),
+            () => {
+              const el = document.createElement("div");
+              el.className = "vt-row-chip";
+              el.textContent = String(num);
+              return el;
+            },
+            { anchorOffset: new DOMPoint(0, -6) },
           );
+          newAnnotations.push(ann);
         }
-        if (pts.length >= 2) {
-          newOverlays.push(
-            new mapkit.PolylineOverlay(pts, {
-              style: new mapkit.Style({ strokeColor: p.color, lineWidth: 1, strokeOpacity: 0.6 }),
-            }),
-          );
-        }
+      });
+
+      // Paddock name chip at centroid
+      if (p.centroid && p.paddock.name) {
+        const name = p.paddock.name;
+        const ann = new mapkit.Annotation(
+          new mapkit.Coordinate(p.centroid.lat, p.centroid.lng),
+          () => {
+            const el = document.createElement("div");
+            el.className = "vt-name-chip";
+            el.textContent = name;
+            return el;
+          },
+        );
+        newAnnotations.push(ann);
       }
     }
 
@@ -172,16 +204,26 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       map.addOverlays(newOverlays);
       overlaysRef.current = newOverlays;
     }
+    if (newAnnotations.length) {
+      map.addAnnotations(newAnnotations);
+      annotationsRef.current = newAnnotations;
+    }
 
     if (allCoords.length) {
       try {
         const region = mapkit.CoordinateRegion.fromCoordinates(allCoords);
-        map.region = region;
-      } catch {
-        /* noop */
-      }
+        // 1.5x span padding per spec §6
+        const padded = new mapkit.CoordinateRegion(
+          region.center,
+          new mapkit.CoordinateSpan(
+            region.span.latitudeDelta * 1.5,
+            region.span.longitudeDelta * 1.5,
+          ),
+        );
+        map.region = padded;
+      } catch { /* noop */ }
     }
-  }, [withGeometry]);
+  }, [withGeometry, selectedId]);
 
   if (!selectedVineyardId) {
     return <div className="text-muted-foreground">Select a vineyard to view its map.</div>;
@@ -192,6 +234,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
       <Card className="overflow-hidden">
         <div className="relative h-[600px] w-full bg-muted">
           <div ref={containerRef} className="h-full w-full" />
+          <MapSourceBadge source="apple" />
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground bg-background/60">
               Loading map…
@@ -200,6 +243,11 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           {error && (
             <div className="absolute inset-0 flex items-center justify-center text-destructive bg-background/60">
               {(error as Error).message}
+            </div>
+          )}
+          {!isLoading && !error && !withGeometry.length && (
+            <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
+              No paddock geometry yet.
             </div>
           )}
         </div>

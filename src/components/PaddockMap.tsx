@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, Polyline, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useVineyard } from "@/context/VineyardContext";
@@ -9,10 +9,12 @@ import {
   deriveMetrics,
   parsePolygonPoints,
   parseRows,
-  parseVarietyAllocations,
   polygonCentroid,
   LatLng,
 } from "@/lib/paddockGeometry";
+import { paddockColor } from "@/lib/paddockColor";
+import MapSourceBadge from "@/components/MapSourceBadge";
+import "@/components/map/mapChips.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -33,21 +35,16 @@ interface Paddock {
   row_width?: number | null;
 }
 
-const PALETTE = [
-  "hsl(20 90% 50%)",
-  "hsl(160 70% 40%)",
-  "hsl(280 60% 55%)",
-  "hsl(200 80% 45%)",
-  "hsl(40 90% 50%)",
-  "hsl(340 70% 50%)",
-];
+const ROW_GREEN = "#34C759";
 
 function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   const map = useMap();
   useEffect(() => {
     if (bounds) {
       try {
-        map.fitBounds(bounds, { padding: [24, 24] });
+        // 1.5× span padding ≈ pad bounding box by 25% per side
+        const lb = L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.25);
+        map.fitBounds(lb, { padding: [16, 16] });
       } catch {
         /* noop */
       }
@@ -57,6 +54,26 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
 }
 
 const fmt = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : "—");
+
+const nameIcon = (name: string) =>
+  L.divIcon({
+    className: "",
+    html: `<div class="vt-name-chip">${escapeHtml(name)}</div>`,
+    iconSize: [0, 0],
+  });
+
+const rowIcon = (n: number) =>
+  L.divIcon({
+    className: "",
+    html: `<div class="vt-row-chip">${n}</div>`,
+    iconSize: [0, 0],
+  });
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!
+  );
+}
 
 export default function PaddockMap() {
   const { selectedVineyardId } = useVineyard();
@@ -72,16 +89,13 @@ export default function PaddockMap() {
 
   const parsed = useMemo(
     () =>
-      paddocks.map((p, i) => {
+      paddocks.map((p) => {
         const polygon = parsePolygonPoints(p.polygon_points);
-        const rows = parseRows(p.rows);
-        const allocations = parseVarietyAllocations(p.variety_allocations);
         return {
           paddock: p,
           polygon,
-          rows,
-          allocations,
-          color: PALETTE[i % PALETTE.length],
+          rows: parseRows(p.rows),
+          color: paddockColor(p.id),
           centroid: polygonCentroid(polygon),
           metrics: deriveMetrics(p),
         };
@@ -111,7 +125,7 @@ export default function PaddockMap() {
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <Card className="overflow-hidden">
-        <div className="h-[600px] w-full bg-muted">
+        <div className="relative h-[600px] w-full bg-muted">
           {isLoading && (
             <div className="h-full flex items-center justify-center text-muted-foreground">Loading map…</div>
           )}
@@ -122,8 +136,7 @@ export default function PaddockMap() {
           )}
           {!isLoading && !error && !withGeometry.length && (
             <div className="h-full flex items-center justify-center text-muted-foreground text-center px-4">
-              No paddocks have map boundaries yet. If expected records are missing, check that
-              the selected vineyard is correct and that this user has owner/manager access.
+              No paddock geometry yet.
             </div>
           )}
           {!isLoading && !error && withGeometry.length > 0 && (
@@ -152,6 +165,7 @@ export default function PaddockMap() {
               ))}
             </MapContainer>
           )}
+          <MapSourceBadge source="fallback" />
         </div>
       </Card>
 
@@ -195,12 +209,23 @@ function PaddockLayer({
   active,
   onClick,
 }: {
-  data: ReturnType<typeof useMemo> extends never ? never : any;
+  data: any;
   active: boolean;
   onClick: () => void;
 }) {
-  const { paddock, polygon, rows, allocations, color, centroid } = data;
+  const { paddock, polygon, rows, color, centroid } = data;
   const positions = polygon.map((p: LatLng) => [p.lat, p.lng] as [number, number]);
+
+  // Reduce rows to first/last segments for labelling per spec §4
+  const rowSegments: { start: LatLng; end: LatLng }[] = rows
+    .map((r: any) => {
+      if (r.start && r.end) return { start: r.start, end: r.end };
+      if (r.points && r.points.length >= 2) {
+        return { start: r.points[0], end: r.points[r.points.length - 1] };
+      }
+      return null;
+    })
+    .filter(Boolean);
 
   return (
     <>
@@ -208,53 +233,52 @@ function PaddockLayer({
         positions={positions}
         pathOptions={{
           color,
-          weight: active ? 3 : 2,
-          fillOpacity: active ? 0.35 : 0.18,
+          weight: active ? 3.5 : 2.5,
+          opacity: active ? 1.0 : 0.9,
+          fillColor: color,
+          fillOpacity: active ? 0.35 : 0.25,
+          lineJoin: "round",
+          lineCap: "round",
         }}
         eventHandlers={{ click: onClick }}
-      >
-        {centroid && (
-          <Tooltip
-            direction="center"
-            permanent
-            className="!bg-transparent !border-0 !shadow-none !text-foreground !font-medium"
-          >
-            {paddock.name ?? "Unnamed"}
-          </Tooltip>
-        )}
-      </Polygon>
+      />
 
-      {allocations
-        .filter((a: any) => a.polygon && a.polygon.length >= 3)
-        .map((a: any, i: number) => (
-          <Polygon
-            key={`alloc-${paddock.id}-${i}`}
-            positions={a.polygon.map((p: LatLng) => [p.lat, p.lng])}
-            pathOptions={{
-              color: PALETTE[(i + 2) % PALETTE.length],
-              weight: 1,
-              fillOpacity: 0.25,
-              dashArray: "4,4",
-            }}
-          />
-        ))}
+      {rowSegments.map((seg, i) => (
+        <Polyline
+          key={`row-${paddock.id}-${i}`}
+          positions={[
+            [seg.start.lat, seg.start.lng],
+            [seg.end.lat, seg.end.lng],
+          ]}
+          pathOptions={{ color: ROW_GREEN, weight: 1.5, opacity: 0.85, lineCap: "round" }}
+        />
+      ))}
 
-      {rows.map((r: any, i: number) => {
-        const pts: [number, number][] = [];
-        if (r.points && r.points.length >= 2) {
-          for (const p of r.points) pts.push([p.lat, p.lng]);
-        } else if (r.start && r.end) {
-          pts.push([r.start.lat, r.start.lng], [r.end.lat, r.end.lng]);
-        }
-        if (pts.length < 2) return null;
-        return (
-          <Polyline
-            key={`row-${paddock.id}-${i}`}
-            positions={pts}
-            pathOptions={{ color, weight: 1, opacity: 0.6 }}
-          />
-        );
-      })}
+      {rowSegments.length > 0 && (
+        <Marker
+          position={[rowSegments[0].start.lat, rowSegments[0].start.lng]}
+          icon={rowIcon(1)}
+          interactive={false}
+        />
+      )}
+      {rowSegments.length > 1 && (
+        <Marker
+          position={[
+            rowSegments[rowSegments.length - 1].start.lat,
+            rowSegments[rowSegments.length - 1].start.lng,
+          ]}
+          icon={rowIcon(rowSegments.length)}
+          interactive={false}
+        />
+      )}
+
+      {centroid && paddock.name && (
+        <Marker
+          position={[centroid.lat, centroid.lng]}
+          icon={nameIcon(paddock.name)}
+          interactive={false}
+        />
+      )}
     </>
   );
 }
