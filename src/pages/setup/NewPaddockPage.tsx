@@ -51,7 +51,7 @@ const fmt = (n: number, d = 1) =>
 
 export default function NewPaddockPage() {
   const navigate = useNavigate();
-  const qc = useQueryClient();
+  // qc reserved for future use after production save is enabled.
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
