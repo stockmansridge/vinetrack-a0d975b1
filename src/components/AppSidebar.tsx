@@ -121,12 +121,14 @@ export function AppSidebar() {
             <SidebarMenu>{renderItems(team)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(comingSoon)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {comingSoon.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{renderItems(comingSoon)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
         {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
