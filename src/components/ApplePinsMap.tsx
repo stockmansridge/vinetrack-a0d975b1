@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
+import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
 import { pinStyle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
