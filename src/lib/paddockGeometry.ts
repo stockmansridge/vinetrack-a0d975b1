@@ -41,8 +41,12 @@ export function parsePolygonPoints(raw: any): LatLng[] {
   return out;
 }
 
-/** A single row from the `rows` jsonb. We accept several shapes. */
+/** A single row from the `rows` jsonb. Canonical iOS shape uses
+ * `startPoint` / `endPoint` with `{ id, latitude, longitude }`. We also
+ * accept legacy/alternate shapes for resilience. */
 export type PaddockRow = {
+  id?: string;
+  number?: number;
   start?: LatLng;
   end?: LatLng;
   points?: LatLng[];
@@ -60,8 +64,11 @@ export function parseRows(raw: any): PaddockRow[] {
   for (const r of arr) {
     if (!r || typeof r !== "object") continue;
     const row: PaddockRow = {};
-    const start = r.start ?? r.from ?? r.a;
-    const end = r.end ?? r.to ?? r.b;
+    if (typeof r.id === "string") row.id = r.id;
+    if (isFiniteNum(r.number)) row.number = r.number;
+    // Canonical iOS first, then legacy fallbacks.
+    const start = r.startPoint ?? r.start ?? r.from ?? r.a;
+    const end = r.endPoint ?? r.end ?? r.to ?? r.b;
     if (start) {
       const [s] = parsePolygonPoints([start]);
       if (s) row.start = s;
@@ -179,18 +186,20 @@ export function deriveMetrics(paddock: any): DerivedMetrics {
     vineCount = Math.round(paddock.vine_count_override);
     vineCountSource = "override";
   } else if (isFiniteNum(vineSpacing) && vineSpacing > 0 && totalRowLengthM > 0) {
-    vineCount = Math.round(totalRowLengthM / vineSpacing);
+    vineCount = Math.floor(totalRowLengthM / vineSpacing);
     vineCountSource = "derived";
   }
 
+  // iOS: rawPosts = floor(total / intermediateSpacing); endPosts = 2 * rows.count;
+  //      intermediatePostCount = max(0, rawPosts - endPosts)
   const intermediatePostCount =
     isFiniteNum(intermediateSpacing) && intermediateSpacing > 0 && totalRowLengthM > 0
-      ? Math.round(totalRowLengthM / intermediateSpacing)
+      ? Math.max(0, Math.floor(totalRowLengthM / intermediateSpacing) - 2 * rowCount)
       : null;
 
   const emitterCount =
     isFiniteNum(emitterSpacing) && emitterSpacing > 0 && totalRowLengthM > 0
-      ? Math.round(totalRowLengthM / emitterSpacing)
+      ? Math.floor(totalRowLengthM / emitterSpacing)
       : null;
 
   return {

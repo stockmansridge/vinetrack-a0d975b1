@@ -16,11 +16,8 @@ import { paddockColor } from "@/lib/paddockColor";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import "@/components/map/mapChips.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import PaddockDetailPanel from "@/components/PaddockDetailPanel";
 
 interface Paddock {
   id: string;
@@ -53,7 +50,7 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   return null;
 }
 
-const fmt = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : "—");
+
 
 const nameIcon = (name: string) =>
   L.divIcon({
@@ -80,9 +77,10 @@ export default function PaddockMap() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["paddocks-map", selectedVineyardId],
+    queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
+    staleTime: 5 * 60_000,
   });
 
   const paddocks = data ?? [];
@@ -171,7 +169,14 @@ export default function PaddockMap() {
 
       <div className="space-y-4">
         {selected ? (
-          <DetailPanel data={selected} onClose={() => setSelectedId(null)} />
+          <PaddockDetailPanel
+            paddock={selected.paddock}
+            metrics={selected.metrics}
+            parsedRowsCount={selected.rows.length}
+            rawRowsCount={Array.isArray(selected.paddock.rows) ? selected.paddock.rows.length : 0}
+            polygonPointCount={selected.polygon.length}
+            onClose={() => setSelectedId(null)}
+          />
         ) : (
           <Card>
             <CardHeader>
@@ -216,15 +221,11 @@ function PaddockLayer({
   const { paddock, polygon, rows, color, centroid } = data;
   const positions = polygon.map((p: LatLng) => [p.lat, p.lng] as [number, number]);
 
-  // Reduce rows to first/last segments for labelling per spec §4
-  const rowSegments: { start: LatLng; end: LatLng }[] = rows
-    .map((r: any) => {
-      if (r.start && r.end) return { start: r.start, end: r.end };
-      if (r.points && r.points.length >= 2) {
-        return { start: r.points[0], end: r.points[r.points.length - 1] };
-      }
-      return null;
-    })
+  // Canonical iOS rows are start/end pairs with .number
+  const rowSegments: { start: LatLng; end: LatLng; number?: number }[] = rows
+    .map((r: any) =>
+      r.start && r.end ? { start: r.start, end: r.end, number: r.number } : null,
+    )
     .filter(Boolean);
 
   return (
@@ -257,7 +258,7 @@ function PaddockLayer({
       {rowSegments.length > 0 && (
         <Marker
           position={[rowSegments[0].start.lat, rowSegments[0].start.lng]}
-          icon={rowIcon(1)}
+          icon={rowIcon(rowSegments[0].number ?? 1)}
           interactive={false}
         />
       )}
@@ -267,7 +268,7 @@ function PaddockLayer({
             rowSegments[rowSegments.length - 1].start.lat,
             rowSegments[rowSegments.length - 1].start.lng,
           ]}
-          icon={rowIcon(rowSegments.length)}
+          icon={rowIcon(rowSegments[rowSegments.length - 1].number ?? rowSegments.length)}
           interactive={false}
         />
       )}
@@ -276,62 +277,9 @@ function PaddockLayer({
         <Marker
           position={[centroid.lat, centroid.lng]}
           icon={nameIcon(paddock.name)}
-          interactive={false}
+          eventHandlers={{ click: onClick }}
         />
       )}
     </>
-  );
-}
-
-function DetailPanel({ data, onClose }: { data: any; onClose: () => void }) {
-  const { paddock, metrics } = data;
-  return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-[380px] sm:w-[380px] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{paddock.name ?? "Unnamed paddock"}</SheetTitle>
-          <SheetDescription>Read-only derived metrics</SheetDescription>
-        </SheetHeader>
-        <div className="mt-4 space-y-3 text-sm">
-          <Row label="Area" value={`${fmt(metrics.areaHa, 3)} ha`} />
-          <Row label="Rows" value={String(metrics.rowCount)} />
-          <Row label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
-          <Row
-            label="Vines"
-            value={
-              metrics.vineCount == null
-                ? "—"
-                : `${metrics.vineCount.toLocaleString()} (${metrics.vineCountSource})`
-            }
-          />
-          <Row
-            label="Intermediate posts"
-            value={metrics.intermediatePostCount == null ? "—" : metrics.intermediatePostCount.toLocaleString()}
-          />
-          <Row
-            label="Emitters"
-            value={metrics.emitterCount == null ? "—" : metrics.emitterCount.toLocaleString()}
-          />
-          <Row label="Row width" value={paddock.row_width ? `${paddock.row_width} m` : "—"} />
-          <Row label="Vine spacing" value={paddock.vine_spacing ? `${paddock.vine_spacing} m` : "—"} />
-          <div className="pt-3 border-t">
-            <Button asChild variant="outline" size="sm" className="w-full">
-              <Link to={`/setup/paddocks/${paddock.id}`}>
-                Open full detail <ExternalLink className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
   );
 }
