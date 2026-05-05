@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polygon, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useVineyard } from "@/context/VineyardContext";
@@ -9,21 +9,14 @@ import { pinStyle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
+import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
+import { validCoord } from "@/lib/pinsDiagnostics";
 
-interface PaddockLite {
+interface Paddock {
   id: string;
   name: string | null;
+  polygon_points: any;
 }
-
-const validCoord = (lat?: number | null, lng?: number | null) =>
-  lat != null &&
-  lng != null &&
-  Number.isFinite(lat) &&
-  Number.isFinite(lng) &&
-  lat >= -90 &&
-  lat <= 90 &&
-  lng >= -180 &&
-  lng <= 180;
 
 const pinIcon = (hex: string) =>
   L.divIcon({
@@ -57,9 +50,9 @@ export default function PinsMap() {
   });
 
   const { data: paddocks = [] } = useQuery({
-    queryKey: ["paddocks-lite", selectedVineyardId],
+    queryKey: ["paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PaddockLite>("paddocks", selectedVineyardId!),
+    queryFn: () => fetchList<Paddock>("paddocks", selectedVineyardId!),
   });
 
   const paddockNameById = useMemo(() => {
@@ -68,17 +61,38 @@ export default function PinsMap() {
     return m;
   }, [paddocks]);
 
+  const paddockPolygons = useMemo(
+    () =>
+      paddocks
+        .map((p) => parsePolygonPoints(p.polygon_points))
+        .filter((pts): pts is LatLng[] => pts.length >= 3),
+    [paddocks],
+  );
+
   const withCoords = useMemo(
     () => pins.filter((p) => validCoord(p.latitude, p.longitude)),
     [pins],
   );
 
   const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
-    if (!withCoords.length) return null;
-    return L.latLngBounds(withCoords.map((p) => [p.latitude!, p.longitude!] as [number, number]));
-  }, [withCoords]);
+    if (withCoords.length) {
+      return L.latLngBounds(withCoords.map((p) => [p.latitude!, p.longitude!] as [number, number]));
+    }
+    if (paddockPolygons.length) {
+      const all: [number, number][] = [];
+      paddockPolygons.forEach((poly) => poly.forEach((pt) => all.push([pt.lat, pt.lng])));
+      if (all.length) return L.latLngBounds(all);
+    }
+    return null;
+  }, [withCoords, paddockPolygons]);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
+  const hasMap = !!bounds;
+  const initialCenter: [number, number] = withCoords[0]
+    ? [withCoords[0].latitude!, withCoords[0].longitude!]
+    : paddockPolygons[0]
+      ? [paddockPolygons[0][0].lat, paddockPolygons[0][0].lng]
+      : [0, 0];
 
   if (!selectedVineyardId) {
     return <div className="text-muted-foreground">Select a vineyard to view its pins.</div>;
@@ -96,38 +110,54 @@ export default function PinsMap() {
               {(error as Error).message}
             </div>
           )}
-          {!isLoading && !error && pins.length === 0 && (
+          {!isLoading && !error && !hasMap && (
             <div className="h-full flex items-center justify-center text-muted-foreground text-center px-4">
-              No pins for this vineyard.
+              {pins.length === 0
+                ? "No pins recorded for this vineyard yet. No paddock geometry to display."
+                : "No mapped pins or paddock geometry found."}
             </div>
           )}
-          {!isLoading && !error && pins.length > 0 && withCoords.length === 0 && (
-            <div className="h-full flex items-center justify-center text-muted-foreground text-center px-4">
-              No pins have coordinates.
-            </div>
-          )}
-          {!isLoading && !error && withCoords.length > 0 && (
-            <MapContainer
-              center={[withCoords[0].latitude!, withCoords[0].longitude!]}
-              zoom={15}
-              scrollWheelZoom
-              className="h-full w-full"
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                maxZoom={19}
-              />
-              <FitBounds bounds={bounds} />
-              {withCoords.map((p) => (
-                <Marker
-                  key={p.id}
-                  position={[p.latitude!, p.longitude!]}
-                  icon={pinIcon(pinStyle(p.mode).hex)}
-                  eventHandlers={{ click: () => setSelectedId(p.id) }}
+          {!isLoading && !error && hasMap && (
+            <>
+              <MapContainer
+                center={initialCenter}
+                zoom={15}
+                scrollWheelZoom
+                className="h-full w-full"
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  maxZoom={19}
                 />
-              ))}
-            </MapContainer>
+                <FitBounds bounds={bounds} />
+                {paddockPolygons.map((poly, i) => (
+                  <Polygon
+                    key={`pad-${i}`}
+                    positions={poly.map((p) => [p.lat, p.lng]) as [number, number][]}
+                    pathOptions={{ color: "#34C759", weight: 1, opacity: 0.6, fillOpacity: 0.08 }}
+                  />
+                ))}
+                {withCoords.map((p) => (
+                  <Marker
+                    key={p.id}
+                    position={[p.latitude!, p.longitude!]}
+                    icon={pinIcon(pinStyle(p.mode).hex)}
+                    eventHandlers={{ click: () => setSelectedId(p.id) }}
+                  />
+                ))}
+              </MapContainer>
+              {pins.length > 0 && withCoords.length === 0 && (
+                <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
+                  Pins found, but none have map coordinates.
+                </div>
+              )}
+              {pins.length === 0 && (
+                <div className="absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/80 px-3 py-1 text-sm text-muted-foreground">
+                  No pins recorded for this vineyard yet.
+                </div>
+              )}
+            </>
           )}
           <MapSourceBadge source="fallback" />
         </div>
