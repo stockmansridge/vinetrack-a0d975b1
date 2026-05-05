@@ -382,7 +382,11 @@ export default function TractorsPage() {
                     maxLength={4}
                   />
                 </Field>
-                <Field label="Fuel usage (L/h)" error={errors.fuel_usage_l_per_hour}>
+                <Field
+                  label="Fuel usage (L/hr) *"
+                  error={errors.fuel_usage_l_per_hour}
+                  hint="Used for fuel cost and operating cost calculations."
+                >
                   <Input
                     inputMode="decimal"
                     value={form.fuel_usage_l_per_hour}
@@ -392,6 +396,7 @@ export default function TractorsPage() {
                         fuel_usage_l_per_hour: e.target.value.replace(/[^\d.]/g, ""),
                       }))
                     }
+                    required
                   />
                 </Field>
               </div>
