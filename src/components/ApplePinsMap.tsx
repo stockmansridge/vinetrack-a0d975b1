@@ -159,13 +159,27 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
       annsRef.current = newAnns;
     }
 
-    if (!didFitRef.current) {
-      // Prefer pin bounds, else paddock bounds.
+    // Re-fit when vineyard or geometry changes.
+    const fitKey = `${selectedVineyardId}|p:${withCoords.length}|g:${paddockPolygons.length}`;
+    if (lastFitKeyRef.current !== fitKey) {
       const pts: { lat: number; lng: number }[] = [];
+      let boundsSource: "pins" | "paddocks" | "fallback" = "fallback";
       if (withCoords.length) {
         withCoords.forEach((p) => pts.push({ lat: p.latitude!, lng: p.longitude! }));
+        boundsSource = "pins";
       } else if (paddockPolygons.length) {
         paddockPolygons.forEach((poly) => poly.forEach((pt) => pts.push(pt)));
+        boundsSource = "paddocks";
+      }
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug("[ApplePinsMap] fit", {
+          selectedVineyardId,
+          paddockCount: paddockPolygons.length,
+          pinsCount: pins.length,
+          pinsWithCoords: withCoords.length,
+          boundsSource,
+        });
       }
       if (pts.length) {
         let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
@@ -184,11 +198,11 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
             new mapkit.Coordinate(centerLat, centerLng),
             new mapkit.CoordinateSpan(latDelta, lngDelta),
           );
-          didFitRef.current = true;
+          lastFitKeyRef.current = fitKey;
         } catch { /* noop */ }
       }
     }
-  }, [withCoords, paddockPolygons, mapReady]);
+  }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length]);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
