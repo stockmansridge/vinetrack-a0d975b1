@@ -22,6 +22,7 @@ import TractorsPage from "./pages/setup/TractorsPage";
 import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
 import NewPaddockPage from "./pages/setup/NewPaddockPage";
 import PinsPage from "./pages/setup/PinsPage";
+import SprayRecordsPage from "./pages/setup/SprayRecordsPage";
 
 const queryClient = new QueryClient();
 
