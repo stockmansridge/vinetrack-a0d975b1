@@ -55,7 +55,7 @@ const comingSoon = [
 ];
 
 const settings = [
-  { title: "Data coverage", url: "/settings/data-coverage", icon: Settings },
+  { title: "Data coverage", url: "/settings/data-coverage", icon: Database },
 ];
 
 export function AppSidebar() {
