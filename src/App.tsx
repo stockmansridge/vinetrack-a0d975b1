@@ -21,20 +21,19 @@ const queryClient = new QueryClient();
 
 const paddockCols = [
   { key: "name", label: "Name" },
-  { key: "area", label: "Area" },
-  { key: "varietal", label: "Varietal" },
   { key: "rows", label: "Rows" },
+  { key: "vine_spacing", label: "Vine spacing" },
+  { key: "updated_at", label: "Updated" },
 ];
 const tractorCols = [
   { key: "name", label: "Name" },
-  { key: "make", label: "Make" },
   { key: "model", label: "Model" },
-  { key: "registration", label: "Registration" },
+  { key: "updated_at", label: "Updated" },
 ];
 const sprayCols = [
   { key: "name", label: "Name" },
-  { key: "type", label: "Type" },
-  { key: "capacity", label: "Capacity" },
+  { key: "tank_capacity_litres", label: "Tank capacity (L)" },
+  { key: "updated_at", label: "Updated" },
 ];
 
 const App = () => (
