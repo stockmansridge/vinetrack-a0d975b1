@@ -27,7 +27,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Sparkles } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Pencil, Sparkles, Archive } from "lucide-react";
 import { z } from "zod";
 
 interface Tractor {
@@ -106,6 +116,8 @@ export default function TractorsPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [archiving, setArchiving] = useState<Tractor | null>(null);
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
   const [suggestion, setSuggestion] = useState<
     { value: number; notes: string | null; confidence: string } | null
   >(null);
@@ -284,6 +296,42 @@ export default function TractorsPage() {
     }
   };
 
+  const handleArchive = async () => {
+    if (!archiving) return;
+    if (!canEdit) {
+      toast.error("Only owners and managers can archive tractors.");
+      return;
+    }
+    setArchiveSubmitting(true);
+    try {
+      const { error: rpcErr } = await supabase.rpc("soft_delete_tractor", {
+        p_id: archiving.id,
+      });
+      if (rpcErr) {
+        const msg = (rpcErr.message || "").toLowerCase();
+        if (
+          msg.includes("permission") ||
+          msg.includes("denied") ||
+          msg.includes("not allowed") ||
+          msg.includes("rls")
+        ) {
+          toast.error("Only owners and managers can archive tractors.");
+        } else {
+          toast.error(`Archive failed: ${rpcErr.message}`);
+        }
+        return;
+      }
+      toast.success("Tractor archived");
+      await qc.invalidateQueries({ queryKey: ["list", "tractors", selectedVineyardId] });
+      await qc.invalidateQueries({ queryKey: ["count", "tractors", selectedVineyardId] });
+      setArchiving(null);
+    } catch (err: any) {
+      toast.error(`Archive failed: ${err?.message ?? "Unknown error"}`);
+    } finally {
+      setArchiveSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -367,14 +415,25 @@ export default function TractorsPage() {
                 <TableCell>{fmtCell(r.updated_at)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(r)}
-                      aria-label="Edit"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(r)}
+                        aria-label="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setArchiving(r)}
+                        aria-label="Archive tractor"
+                      >
+                        <Archive className="h-4 w-4" />
+                        <span className="ml-1 hidden sm:inline">Archive</span>
+                      </Button>
+                    </div>
                   )}
                 </TableCell>
               </TableRow>
@@ -508,6 +567,34 @@ export default function TractorsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!archiving}
+        onOpenChange={(o) => !o && !archiveSubmitting && setArchiving(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this tractor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the tractor from active setup lists but keep the
+              record for sync/history.
+              {archiving?.name ? ` (${archiving.name})` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleArchive();
+              }}
+              disabled={archiveSubmitting || !canEdit}
+            >
+              {archiveSubmitting ? "Archiving…" : "Archive tractor"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
