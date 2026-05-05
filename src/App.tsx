@@ -66,6 +66,7 @@ const App = () => (
                       element={<DetailPage table="spray_equipment" title="Spray equipment detail" basePath="/setup/spray-equipment" />}
                     />
                     <Route path="/pins" element={<PinsPage />} />
+                    <Route path="/spray-records" element={<SprayRecordsPage />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
