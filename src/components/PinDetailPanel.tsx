@@ -54,7 +54,7 @@ export default function PinDetailPanel({ pin, paddockName, onClose }: Props) {
       <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-2">
         <div className="space-y-1.5 min-w-0">
           <CardTitle className="text-base truncate">
-            {pin.title?.trim() || "Untitled pin"}
+            {pin.title?.trim() || pin.button_name?.trim() || pin.mode?.trim() || "Untitled pin"}
           </CardTitle>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
