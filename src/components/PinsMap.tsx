@@ -90,6 +90,19 @@ export default function PinsMap() {
     return null;
   }, [withCoords, paddockPolygons]);
 
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[PinsMap] diagnostics", {
+      selectedVineyardId,
+      paddockCount: paddocks.length,
+      paddockPolygonCount: paddockPolygons.length,
+      pinsCount: pins.length,
+      pinsWithCoords: withCoords.length,
+      pinsSource: pinsResult?.source ?? "n/a",
+      boundsSource: withCoords.length ? "pins" : paddockPolygons.length ? "paddocks" : "fallback",
+    });
+  }
+
   const selected = pins.find((p) => p.id === selectedId) ?? null;
   const hasMap = !!bounds;
   const initialCenter: [number, number] = withCoords[0]
