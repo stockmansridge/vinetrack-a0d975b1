@@ -40,6 +40,7 @@ const setup = [
   { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
   { title: "Saved chemicals", url: "/setup/chemicals", icon: Beaker },
   { title: "Spray presets", url: "/setup/spray-presets", icon: Layers },
+  { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
 ];
 
 const records = [
@@ -54,7 +55,6 @@ const records = [
 const team = [{ title: "Team", url: "/team", icon: Users }];
 
 const comingSoon = [
-  { title: "Operator categories", url: "/soon/operator-categories", icon: UserCog },
   { title: "Weather", url: "/soon/weather", icon: Cloud },
 ];
 
