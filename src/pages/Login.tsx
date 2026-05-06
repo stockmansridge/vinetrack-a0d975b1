@@ -71,29 +71,30 @@ export default function Login() {
         <div className="text-center space-y-2">
           <h1
             className="text-white font-extrabold tracking-tight"
-            style={{ fontSize: 44, lineHeight: 1, textShadow: "0 2px 2px rgba(0,0,0,0.28)" }}
+            style={{ fontSize: 40, lineHeight: 1.05, textShadow: "0 2px 2px rgba(0,0,0,0.28)" }}
           >
             VineTrack Portal
           </h1>
-          <p className="text-white/90 font-medium text-base leading-snug px-4">
-            Sign in with the same account you use
-            <br />
-            in the VineTrack iOS app.
+          <p className="text-white/90 font-semibold text-[15px] leading-snug px-4">
+            Management access for vineyard Owners and Managers.
+          </p>
+          <p className="text-white/85 font-medium text-[13px] leading-snug px-4">
+            Sign in with the same account you use in the VineTrack iOS app.
           </p>
         </div>
 
-        {/* Info message */}
+        {/* Info card */}
         <div
-          className="w-full rounded-2xl border border-white/25 bg-white/10 backdrop-blur-sm px-4 py-3 text-center"
-          style={{ borderRadius: 16 }}
+          className="w-full bg-[#FFFDF2] px-4 py-3 text-center ring-1 ring-black/5"
+          style={{ borderRadius: 16, boxShadow: "0 6px 12px rgba(0,0,0,0.18)" }}
         >
-          <p className="text-white text-[13px] font-semibold leading-snug">
-            Accounts are created in the VineTrack app. Portal access is available to vineyard
-            Owners and Managers only.
+          <p className="text-[13px] font-semibold leading-snug" style={{ color: "#03331A" }}>
+            Accounts are created in the VineTrack iOS app. Sign in here with your existing
+            VineTrack account.
           </p>
-          <p className="mt-1.5 text-white/80 text-[11px] leading-snug">
-            Operators can continue using the VineTrack app, but portal access is restricted to
-            management roles.
+          <p className="mt-1.5 text-[12px] leading-snug" style={{ color: "#3B4A40" }}>
+            Portal access is limited to vineyard Owners and Managers. Operators can continue
+            using the VineTrack app.
           </p>
         </div>
 
