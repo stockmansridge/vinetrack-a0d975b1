@@ -119,12 +119,12 @@ export function AppSidebar() {
           <SidebarGroupLabel>Reports &amp; Exports</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled>
-                  <FileText className="h-4 w-4" />
-                  <span className="opacity-60">Coming soon</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {renderItems([
+                { title: "Overview", url: "/reports", icon: FileText },
+                { title: "Spray reports", url: "/reports/spray", icon: FileText },
+                { title: "Rainfall reports", url: "/reports/rainfall", icon: FileText },
+                { title: "iOS documents", url: "/reports/documents", icon: FileText },
+              ])}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
