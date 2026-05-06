@@ -30,11 +30,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, FileDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   fetchSprayRecordsForVineyard,
   type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
+import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
