@@ -653,3 +653,158 @@ function DavisCard({
     </Card>
   );
 }
+
+function fmtNum(v: number | null | undefined, digits = 1, suffix = "") {
+  if (v == null || Number.isNaN(v)) return "—";
+  return `${Number(v).toFixed(digits)}${suffix}`;
+}
+
+function compassFrom(deg?: number | null) {
+  if (deg == null || Number.isNaN(deg)) return "";
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(((deg % 360) / 22.5)) % 16];
+}
+
+function LiveWeatherCard({
+  vineyardId,
+  anyConfigured,
+}: {
+  vineyardId: string;
+  anyConfigured: boolean;
+}) {
+  const { data, isLoading, refetch, isFetching } = useQuery<LiveWeatherResult>({
+    queryKey: ["live_weather", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchLiveWeather(vineyardId),
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <Cloud className="h-4 w-4" /> Live weather
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Latest in-vineyard observations from your configured station.
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="gap-1"
+        >
+          {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          Refresh
+        </Button>
+      </div>
+
+      {isLoading && (
+        <div className="text-sm text-muted-foreground">Loading current weather…</div>
+      )}
+
+      {!isLoading && data && data.available === false && (
+        <LiveEmptyState
+          reason={data.reason}
+          message={data.message}
+          anyConfigured={anyConfigured}
+        />
+      )}
+
+      {!isLoading && data && data.available === true && (
+        <div className="space-y-3">
+          {data.stale && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              Reading is stale (&gt; 1 hour old). Station may be offline.
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-3 text-sm">
+            <Reading icon={<Thermometer className="h-3.5 w-3.5" />} label="Temperature" value={fmtNum(data.reading.temperature_c, 1, " °C")} />
+            <Reading icon={<Droplets className="h-3.5 w-3.5" />} label="Humidity" value={fmtNum(data.reading.humidity_pct, 0, " %")} />
+            <Reading
+              icon={<Wind className="h-3.5 w-3.5" />}
+              label="Wind"
+              value={
+                data.reading.wind_speed_kmh == null
+                  ? "—"
+                  : `${fmtNum(data.reading.wind_speed_kmh, 1, " km/h")}${
+                      data.reading.wind_direction_deg != null
+                        ? ` ${compassFrom(data.reading.wind_direction_deg)}`
+                        : ""
+                    }`
+              }
+            />
+            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain today" value={fmtNum(data.reading.rain_today_mm, 1, " mm")} />
+            <Reading icon={<CloudRain className="h-3.5 w-3.5" />} label="Rain rate" value={fmtNum(data.reading.rain_rate_mm_per_hr, 2, " mm/h")} />
+            <Reading icon={<Cloud className="h-3.5 w-3.5" />} label="Station" value={data.reading.station_name ?? "—"} />
+          </div>
+          <div className="text-xs text-muted-foreground border-t pt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <span>Source: {data.reading.source ?? "—"}</span>
+            <span>Last observation: {fmtDate(data.reading.observed_at)}</span>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function LiveEmptyState({
+  reason,
+  message,
+  anyConfigured,
+}: {
+  reason: "rpc_missing" | "not_configured" | "no_data" | "error";
+  message?: string;
+  anyConfigured: boolean;
+}) {
+  if (reason === "rpc_missing") {
+    return (
+      <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1">
+        <div className="font-medium">Server-side weather RPC required</div>
+        <p className="text-xs text-muted-foreground">
+          Live readings need a safe server-side RPC
+          (<code className="text-[11px]">get_vineyard_current_weather</code>) so the
+          portal never reads Davis credentials directly. Ask Rork/Supabase to
+          deploy this RPC; until then live weather only renders in the iOS app.
+        </p>
+      </div>
+    );
+  }
+  if (reason === "not_configured" || !anyConfigured) {
+    return (
+      <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm">
+        No weather provider is configured for this vineyard yet. Configure Davis
+        WeatherLink below to start collecting in-vineyard observations.
+      </div>
+    );
+  }
+  if (reason === "no_data") {
+    return (
+      <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-3 text-sm text-amber-900 dark:text-amber-200">
+        Configured, but no live readings are available right now. The station
+        may be offline, or no observations have been received yet.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm">
+      Could not load live weather{message ? `: ${message}` : "."}
+    </div>
+  );
+}
+
+function Reading({
+  icon, label, value,
+}: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-md border p-2.5">
+      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+        {icon} {label}
+      </div>
+      <div className="text-base font-semibold">{value}</div>
+    </div>
+  );
+}
