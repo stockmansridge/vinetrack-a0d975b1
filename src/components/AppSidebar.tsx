@@ -69,7 +69,7 @@ export function AppSidebar() {
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
 
-  const renderItems = (items: typeof main) =>
+  const renderItems = (items: typeof dashboard) =>
     items.map((item) => (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton asChild isActive={isActive(item.url)}>
@@ -98,26 +98,34 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(main)}</SidebarMenu>
+            <SidebarMenu>{renderItems(dashboard)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Setup</SidebarGroupLabel>
+          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(operations)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Setup &amp; Configuration</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(setup)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Records</SidebarGroupLabel>
+          <SidebarGroupLabel>Reports &amp; Exports</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(records)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Team</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(team)}</SidebarMenu>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled>
+                  <FileText className="h-4 w-4" />
+                  <span className="opacity-60">Coming soon</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         {comingSoon.length > 0 && (
