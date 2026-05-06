@@ -563,6 +563,47 @@ function DavisCard({
               </Button>
             )}
 
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={async () => {
+                const wind = sensorState(status?.has_wind, status?.detected_sensors, "wind");
+                const th = sensorState(status?.has_temperature_humidity, status?.detected_sensors, "temp_humidity");
+                const rain = sensorState(status?.has_rain, status?.detected_sensors, "rain");
+                const diag = {
+                  vineyardId,
+                  provider: DAVIS,
+                  configured,
+                  has_api_key: status?.has_api_key ?? null,
+                  has_api_secret: status?.has_api_secret ?? null,
+                  is_active: status?.is_active ?? null,
+                  station_id: status?.station_id ?? null,
+                  station_name: status?.station_name ?? null,
+                  last_tested_at: status?.last_tested_at ?? null,
+                  last_test_status: status?.last_test_status ?? null,
+                  detectedSensors: status?.detected_sensors ?? [],
+                  hasWindSensor: wind,
+                  hasTemperatureHumiditySensor: th,
+                  hasRainSensor: rain,
+                  has_leaf_wetness: status?.has_leaf_wetness ?? null,
+                  caller_role: status?.caller_role ?? null,
+                  rpc_error: status?.error ?? null,
+                  last_portal_test_code: lastTestCode,
+                  generated_at: new Date().toISOString(),
+                };
+                try {
+                  await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
+                  toast.success("Davis diagnostics copied to clipboard");
+                } catch {
+                  toast.error("Could not copy diagnostics");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+              Copy diagnostics
+            </Button>
+
             <div className="ml-auto">
               <Button
                 variant="destructive"
