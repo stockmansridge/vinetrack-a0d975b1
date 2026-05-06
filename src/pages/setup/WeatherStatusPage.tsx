@@ -393,6 +393,7 @@ function DavisCard({
   const testSavedMut = useMutation({
     mutationFn: () => testSavedDavis(vineyardId),
     onSuccess: (r) => {
+      setLastTestCode(r.code ?? (r.ok ? "ok" : null));
       if (r.ok) toast.success("Saved credentials tested OK");
       else toast.error(`Test failed${r.message ? `: ${r.message}` : ""}`);
       onChanged();
