@@ -94,8 +94,7 @@ export default function WeatherStatusPage() {
       <div>
         <h1 className="text-2xl font-semibold">Weather</h1>
         <p className="text-sm text-muted-foreground">
-          Vineyard-level weather integration settings. Changes here apply to
-          everyone using this vineyard in the VineTrack app and portal.
+          Vineyard-level weather settings. Changes apply to all app users in this vineyard.
         </p>
       </div>
 
