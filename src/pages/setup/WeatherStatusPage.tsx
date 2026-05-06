@@ -358,6 +358,7 @@ function DavisCard({
   const [apiKey, setApiKey] = useState<string>("");
   const [apiSecret, setApiSecret] = useState<string>("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [lastTestCode, setLastTestCode] = useState<string | null>(null);
 
   useEffect(() => {
     setEnabled(!!status?.is_active);
