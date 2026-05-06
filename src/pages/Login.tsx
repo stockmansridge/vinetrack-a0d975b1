@@ -82,16 +82,19 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Feature chips */}
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {["GPS Pins", "Row Tracking", "Spray Records"].map((label) => (
-            <span
-              key={label}
-              className="rounded-full border border-white/25 px-3 h-[34px] inline-flex items-center text-white text-xs font-bold"
-            >
-              {label}
-            </span>
-          ))}
+        {/* Info message */}
+        <div
+          className="w-full rounded-2xl border border-white/25 bg-white/10 backdrop-blur-sm px-4 py-3 text-center"
+          style={{ borderRadius: 16 }}
+        >
+          <p className="text-white text-[13px] font-semibold leading-snug">
+            Accounts are created in the VineTrack app. Portal access is available to vineyard
+            Owners and Managers only.
+          </p>
+          <p className="mt-1.5 text-white/80 text-[11px] leading-snug">
+            Operators can continue using the VineTrack app, but portal access is restricted to
+            management roles.
+          </p>
         </div>
 
         {/* Form card */}
