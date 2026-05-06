@@ -183,6 +183,25 @@ function friendlyErrorMessage(code?: string, fallback?: string) {
   }
 }
 
+async function diagnoseDavisProxyAvailability(url: string): Promise<string> {
+  try {
+    const probe = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (probe.status === 404) {
+      return "function_not_found";
+    }
+
+    return "cors_failed";
+  } catch {
+    return "cors_failed";
+  }
+}
+
 /** Direct fetch to davis-proxy on the iOS Supabase project, with the
  *  signed-in user's JWT. Returns a normalised result with friendly errors. */
 async function callDavisProxy(payload: Record<string, unknown>): Promise<DavisTestResult> {
@@ -222,17 +241,17 @@ async function callDavisProxy(payload: Record<string, unknown>): Promise<DavisTe
       body: JSON.stringify(payload),
     });
   } catch (e: any) {
+    const code = await diagnoseDavisProxyAvailability(url);
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.error(
-        `[WeatherTest] network error name=${e?.name} message=${e?.message}`,
+        `[WeatherTest] network error name=${e?.name} message=${e?.message} diagnosed=${code}`,
       );
     }
     return {
       ok: false,
-      code: "cors_failed",
-      message:
-        "Could not reach the weather service. Check your connection and try again.",
+      code,
+      message: friendlyErrorMessage(code),
     };
   }
 
