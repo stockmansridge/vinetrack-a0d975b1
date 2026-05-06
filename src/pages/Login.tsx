@@ -71,14 +71,14 @@ export default function Login() {
         <div className="text-center space-y-2">
           <h1
             className="text-white font-extrabold tracking-tight"
-            style={{ fontSize: 48, lineHeight: 1, textShadow: "0 2px 2px rgba(0,0,0,0.28)" }}
+            style={{ fontSize: 44, lineHeight: 1, textShadow: "0 2px 2px rgba(0,0,0,0.28)" }}
           >
-            VineTrack
+            VineTrack Portal
           </h1>
           <p className="text-white/90 font-medium text-base leading-snug px-4">
-            Built by viticulturists to manage
+            Sign in with the same account you use
             <br />
-            vineyard work, row by row.
+            in the VineTrack iOS app.
           </p>
         </div>
 
