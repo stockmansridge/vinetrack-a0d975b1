@@ -153,6 +153,11 @@ export default function WeatherStatusPage() {
             />
           </div>
 
+          <LiveWeatherCard
+            vineyardId={selectedVineyardId!}
+            anyConfigured={!!(davis?.configured || wu?.configured)}
+          />
+
           <DavisCard
             status={davis}
             canEdit={canEdit}
