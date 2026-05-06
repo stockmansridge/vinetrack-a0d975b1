@@ -10,7 +10,8 @@ export default function NoAccess() {
         <CardHeader>
           <CardTitle>Portal access restricted</CardTitle>
           <CardDescription>
-            This portal is for owners and managers. Use the iOS app to continue.
+            You're signed in, but this portal is only available to vineyard Owners and Managers.
+            Please ask the vineyard owner to update your access in the VineTrack app.
           </CardDescription>
         </CardHeader>
         <CardContent>
