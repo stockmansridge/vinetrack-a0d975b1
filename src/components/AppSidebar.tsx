@@ -32,28 +32,27 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 
-const main = [{ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard }];
+const dashboard = [{ title: "Overview", url: "/dashboard", icon: LayoutDashboard }];
 
-const setup = [
-  { title: "Paddocks", url: "/setup/paddocks", icon: Map },
-  { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
-  { title: "Saved chemicals", url: "/setup/chemicals", icon: Beaker },
-  { title: "Spray presets", url: "/setup/spray-presets", icon: Layers },
-  { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
-  { title: "Weather", url: "/setup/weather", icon: Cloud },
-];
-
-const records = [
-  { title: "Pins", url: "/pins", icon: MapPin },
+const operations = [
+  { title: "Trips", url: "/trips", icon: Sprout },
   { title: "Spray records", url: "/spray-records", icon: FileText },
   { title: "Work tasks", url: "/work-tasks", icon: ClipboardList },
   { title: "Maintenance", url: "/maintenance", icon: Wrench },
-  { title: "Trips", url: "/trips", icon: Sprout },
+  { title: "Pins / Repairs", url: "/pins", icon: MapPin },
   { title: "Yield reports", url: "/yield", icon: FileText },
 ];
 
-const team = [{ title: "Team", url: "/team", icon: Users }];
+const setup = [
+  { title: "Team", url: "/team", icon: Users },
+  { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
+  { title: "Tractors", url: "/setup/tractors", icon: Tractor },
+  { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
+  { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
+  { title: "Spray templates", url: "/setup/spray-presets", icon: Layers },
+  { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
+  { title: "Weather settings", url: "/setup/weather", icon: Cloud },
+];
 
 const comingSoon: { title: string; url: string; icon: any }[] = [];
 
@@ -70,7 +69,7 @@ export function AppSidebar() {
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
 
-  const renderItems = (items: typeof main) =>
+  const renderItems = (items: typeof dashboard) =>
     items.map((item) => (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton asChild isActive={isActive(item.url)}>
@@ -99,26 +98,34 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(main)}</SidebarMenu>
+            <SidebarMenu>{renderItems(dashboard)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Setup</SidebarGroupLabel>
+          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(operations)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Setup &amp; Configuration</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(setup)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Records</SidebarGroupLabel>
+          <SidebarGroupLabel>Reports &amp; Exports</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(records)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Team</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(team)}</SidebarMenu>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled>
+                  <FileText className="h-4 w-4" />
+                  <span className="opacity-60">Coming soon</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         {comingSoon.length > 0 && (
