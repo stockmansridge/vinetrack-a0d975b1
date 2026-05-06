@@ -319,11 +319,11 @@ function DavisCard({
         apiSecret: apiSecret.trim() === "" ? null : apiSecret,
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Weather settings saved");
       setApiKey("");
       setApiSecret("");
-      onChanged();
+      await onChanged();
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed to save"),
   });
@@ -452,6 +452,12 @@ function DavisCard({
             Leaving API key or secret blank preserves the values already stored
             server-side. Stored credentials are never displayed.
           </p>
+
+          {(configured || hasKey || hasSecret) && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              The API key and API secret inputs clear after save by design. Use the stored-status rows above to confirm whether credentials are saved for this vineyard.
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Button
