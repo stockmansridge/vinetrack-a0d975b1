@@ -36,10 +36,12 @@ import {
 } from "lucide-react";
 import {
   deleteWeatherIntegration,
+  fetchLiveWeather,
   fetchWeatherStatusForVineyard,
   saveWeatherIntegration,
   testSavedDavis,
   testTypedDavis,
+  type LiveWeatherResult,
   type WeatherIntegrationStatus,
   type WeatherProvider,
 } from "@/lib/weatherStatusQuery";
