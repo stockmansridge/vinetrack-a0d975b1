@@ -205,6 +205,51 @@ function YN({ v }: { v: boolean | null | undefined }) {
   );
 }
 
+// ISS / outdoor Davis sensor_type codes that imply temp/humidity + wind + rain.
+const ISS_LIKE_SENSOR_TYPES = new Set(["23", "37", "43", "45", "46", "48", "55"]);
+
+/** Returns 'detected' | 'not_detected' | 'unknown' for a sensor capability,
+ *  combining the explicit boolean from the RPC with sensor_type fallback. */
+function sensorState(
+  explicit: boolean | null | undefined,
+  detected: string[] | null | undefined,
+  capability: "wind" | "temp_humidity" | "rain",
+): "detected" | "not_detected" | "unknown" {
+  if (explicit === true) return "detected";
+  const tags = (detected ?? []).map((s) => String(s).toLowerCase());
+  // Direct tag match (e.g. "wind", "temp", "rain", "iss").
+  const tagHit =
+    (capability === "wind" && tags.some((t) => t.includes("wind"))) ||
+    (capability === "temp_humidity" &&
+      tags.some((t) => t.includes("temp") || t.includes("hum") || t.includes("iss"))) ||
+    (capability === "rain" && tags.some((t) => t.includes("rain") || t.includes("iss")));
+  // Numeric sensor_type fallback (ISS-like => temp/hum + wind + rain).
+  const issHit = tags.some((t) => ISS_LIKE_SENSOR_TYPES.has(t));
+  if (tagHit || issHit) return "detected";
+  if (explicit === false) return "not_detected";
+  return "unknown";
+}
+
+function SensorBadge({ state }: { state: "detected" | "not_detected" | "unknown" }) {
+  if (state === "detected")
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <Check className="h-3 w-3" /> Detected
+      </Badge>
+    );
+  if (state === "not_detected")
+    return (
+      <Badge variant="outline" className="gap-1 text-muted-foreground">
+        <X className="h-3 w-3" /> Not detected
+      </Badge>
+    );
+  return (
+    <Badge variant="outline" className="gap-1 text-muted-foreground">
+      <HelpCircle className="h-3 w-3" /> Unknown
+    </Badge>
+  );
+}
+
 function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/50 last:border-0 py-1">
@@ -216,9 +261,13 @@ function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode 
 
 function StatusBlock({ status }: { status?: WeatherIntegrationStatus }) {
   if (!status) return null;
+  const wind = sensorState(status.has_wind, status.detected_sensors, "wind");
+  const th = sensorState(status.has_temperature_humidity, status.detected_sensors, "temp_humidity");
+  const rain = sensorState(status.has_rain, status.detected_sensors, "rain");
   return (
     <>
       <div className="grid gap-2 sm:grid-cols-2 text-sm">
+        <Row label="Configured" value={<YN v={status.configured} />} />
         <Row label="Active" value={<YN v={status.is_active} />} />
         <Row label="Station name" value={status.station_name ?? "—"} />
         <Row label="Station ID" value={status.station_id ?? "—"} />
@@ -232,9 +281,9 @@ function StatusBlock({ status }: { status?: WeatherIntegrationStatus }) {
       <div>
         <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Sensors</div>
         <div className="grid gap-2 sm:grid-cols-2 text-sm">
-          <Row label={<span className="flex items-center gap-1"><CloudRain className="h-3 w-3" /> Rain</span>} value={<YN v={status.has_rain} />} />
-          <Row label={<span className="flex items-center gap-1"><Wind className="h-3 w-3" /> Wind</span>} value={<YN v={status.has_wind} />} />
-          <Row label={<span className="flex items-center gap-1"><Thermometer className="h-3 w-3" /> Temp / humidity</span>} value={<YN v={status.has_temperature_humidity} />} />
+          <Row label={<span className="flex items-center gap-1"><Wind className="h-3 w-3" /> Wind</span>} value={<SensorBadge state={wind} />} />
+          <Row label={<span className="flex items-center gap-1"><Thermometer className="h-3 w-3" /> Temp / humidity</span>} value={<SensorBadge state={th} />} />
+          <Row label={<span className="flex items-center gap-1"><CloudRain className="h-3 w-3" /> Rain</span>} value={<SensorBadge state={rain} />} />
           <Row label={<span className="flex items-center gap-1"><Leaf className="h-3 w-3" /> Leaf wetness</span>} value={<YN v={status.has_leaf_wetness} />} />
         </div>
         {status.detected_sensors && status.detected_sensors.length > 0 && (
@@ -242,6 +291,16 @@ function StatusBlock({ status }: { status?: WeatherIntegrationStatus }) {
             {status.detected_sensors.map((s) => (
               <Badge key={s} variant="outline" className="text-xs">{s}</Badge>
             ))}
+          </div>
+        )}
+        {(wind === "detected" || th === "detected" || rain === "detected") && (
+          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+            {wind === "detected" && (
+              <div>Wind sensor detected. Live wind readings render in the iOS app when Davis returns them.</div>
+            )}
+            {th === "detected" && (
+              <div>Temp/Humidity sensor detected. Live readings render in the iOS app when Davis returns them.</div>
+            )}
           </div>
         )}
       </div>
