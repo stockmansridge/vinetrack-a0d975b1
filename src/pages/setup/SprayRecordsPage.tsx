@@ -30,11 +30,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, FileDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   fetchSprayRecordsForVineyard,
   type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
+import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -56,7 +58,9 @@ const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const ANY = "__any__";
 
 export default function SprayRecordsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -236,6 +240,7 @@ export default function SprayRecordsPage() {
 
       <SprayRecordSheet
         record={selected}
+        vineyardName={vineyardName}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
@@ -246,10 +251,12 @@ export default function SprayRecordsPage() {
 
 function SprayRecordSheet({
   record,
+  vineyardName,
   open,
   onOpenChange,
 }: {
   record: SprayRecord | null;
+  vineyardName?: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -263,6 +270,16 @@ function SprayRecordSheet({
         </SheetHeader>
         {record && (
           <div className="mt-4 space-y-4 text-sm">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => exportSprayRecordPdf(record, vineyardName)}
+                className="gap-1.5"
+              >
+                <FileDown className="h-3.5 w-3.5" /> Export PDF
+              </Button>
+            </div>
             <Section title="Schedule">
               <Field label="Date" value={fmtDate(record.date)} />
               <Field label="Start" value={fmtTime(record.start_time)} />
