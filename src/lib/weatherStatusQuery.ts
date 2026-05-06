@@ -324,3 +324,62 @@ export async function testTypedDavis(args: {
     stationId: args.stationId ?? null,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Live current weather. Attempts a safe server-side RPC
+// `get_vineyard_current_weather(p_vineyard_id)`. Returns sanitized readings
+// only — no credentials. If the RPC isn't deployed yet, returns
+// { available: false, reason: "rpc_missing" } so the UI can show a clear
+// "server-side weather RPC required" state.
+// ---------------------------------------------------------------------------
+
+export interface LiveWeatherReading {
+  source: string | null;
+  station_name?: string | null;
+  observed_at?: string | null;
+  temperature_c?: number | null;
+  humidity_pct?: number | null;
+  wind_speed_kmh?: number | null;
+  wind_direction_deg?: number | null;
+  rain_today_mm?: number | null;
+  rain_rate_mm_per_hr?: number | null;
+}
+
+export type LiveWeatherResult =
+  | { available: true; reading: LiveWeatherReading; stale: boolean }
+  | { available: false; reason: "rpc_missing" | "not_configured" | "no_data" | "error"; message?: string };
+
+export async function fetchLiveWeather(vineyardId: string): Promise<LiveWeatherResult> {
+  const res = await (supabase.rpc as any)("get_vineyard_current_weather", {
+    p_vineyard_id: vineyardId,
+  });
+  if (res.error) {
+    const msg = String(res.error.message ?? "");
+    const code = String((res.error as any).code ?? "");
+    // PostgREST: PGRST202 = function not found in schema cache. 404-like errors too.
+    if (code === "PGRST202" || /not\s*found|does not exist/i.test(msg)) {
+      return { available: false, reason: "rpc_missing", message: msg };
+    }
+    return { available: false, reason: "error", message: msg };
+  }
+  const row = Array.isArray(res.data) ? res.data[0] : res.data;
+  if (!row) return { available: false, reason: "no_data" };
+  const observed = row.observed_at ?? row.last_observation_at ?? null;
+  const ageMs = observed ? Date.now() - new Date(observed).getTime() : null;
+  const stale = ageMs == null ? true : ageMs > 60 * 60 * 1000; // >1h
+  return {
+    available: true,
+    stale,
+    reading: {
+      source: row.source ?? null,
+      station_name: row.station_name ?? null,
+      observed_at: observed,
+      temperature_c: row.temperature_c ?? row.temperature ?? null,
+      humidity_pct: row.humidity_pct ?? row.humidity ?? null,
+      wind_speed_kmh: row.wind_speed_kmh ?? row.wind_speed ?? null,
+      wind_direction_deg: row.wind_direction_deg ?? row.wind_direction ?? null,
+      rain_today_mm: row.rain_today_mm ?? row.rain_today ?? null,
+      rain_rate_mm_per_hr: row.rain_rate_mm_per_hr ?? row.rain_rate ?? null,
+    },
+  };
+}
