@@ -286,8 +286,7 @@ async function callDavisProxy(payload: Record<string, unknown>): Promise<DavisTe
 export async function testSavedDavis(vineyardId: string): Promise<DavisTestResult> {
   return callDavisProxy({
     action: "test_saved",
-    vineyard_id: vineyardId,
-    provider: "davis_weatherlink",
+    vineyardId,
   });
 }
 
@@ -300,10 +299,9 @@ export async function testTypedDavis(args: {
 }): Promise<DavisTestResult> {
   return callDavisProxy({
     action: "test",
-    vineyard_id: args.vineyardId,
-    provider: "davis_weatherlink",
-    api_key: args.apiKey,
-    api_secret: args.apiSecret,
-    station_id: args.stationId ?? null,
+    vineyardId: args.vineyardId,
+    apiKey: args.apiKey,
+    apiSecret: args.apiSecret,
+    stationId: args.stationId ?? null,
   });
 }
