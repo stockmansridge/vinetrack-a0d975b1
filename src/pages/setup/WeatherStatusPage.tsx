@@ -445,6 +445,14 @@ function DavisCard({
 
       {configured && <StatusBlock status={status} />}
 
+      {lastTestCode === "function_not_found" && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+          Test connection is unavailable: the <code>davis-proxy</code> server function is not deployed on the production backend yet.
+          Saved credentials are still stored securely and used by the iOS app —
+          this only blocks the in-portal connection test. Use the Copy diagnostics button below when reporting this to support.
+        </div>
+      )}
+
       {!canEdit && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           Only vineyard Owners and Managers can change weather integration settings.
