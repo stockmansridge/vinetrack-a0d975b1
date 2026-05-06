@@ -31,6 +31,10 @@ import SavedChemicalsPage from "./pages/setup/SavedChemicalsPage";
 import SprayPresetsPage from "./pages/setup/SprayPresetsPage";
 import OperatorCategoriesPage from "./pages/setup/OperatorCategoriesPage";
 import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
+import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
+import SprayReportsPage from "./pages/reports/SprayReportsPage";
+import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
+import DocumentsPage from "./pages/reports/DocumentsPage";
 
 const queryClient = new QueryClient();
 
@@ -83,6 +87,10 @@ const App = () => (
                     <Route path="/setup/spray-presets" element={<SprayPresetsPage />} />
                     <Route path="/setup/operator-categories" element={<OperatorCategoriesPage />} />
                     <Route path="/setup/weather" element={<WeatherStatusPage />} />
+                    <Route path="/reports" element={<ReportsIndexPage />} />
+                    <Route path="/reports/spray" element={<SprayReportsPage />} />
+                    <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
+                    <Route path="/reports/documents" element={<DocumentsPage />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
