@@ -31,6 +31,8 @@ import {
   TestTube2,
   Trash2,
   Loader2,
+  Copy,
+  HelpCircle,
 } from "lucide-react";
 import {
   deleteWeatherIntegration,
