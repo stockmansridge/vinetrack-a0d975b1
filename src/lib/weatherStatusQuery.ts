@@ -190,7 +190,7 @@ async function callDavisProxy(payload: Record<string, unknown>): Promise<DavisTe
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.debug(
-      `[WeatherTest] invoking davis-proxy action=${action} vineyardId=${payload.vineyard_id} provider=davis_weatherlink`,
+      `[WeatherTest] invoking davis-proxy action=${action} vineyardId=${payload.vineyardId}`,
     );
   }
 
