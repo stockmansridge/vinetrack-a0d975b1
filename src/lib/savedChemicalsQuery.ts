@@ -66,3 +66,69 @@ export async function fetchSavedChemicalsForVineyard(
     missingRate: chemicals.filter((c) => c.rate_per_ha == null).length,
   };
 }
+
+export interface SavedChemicalInput {
+  name: string;
+  active_ingredient?: string | null;
+  chemical_group?: string | null;
+  use?: string | null;
+  manufacturer?: string | null;
+  crop?: string | null;
+  problem?: string | null;
+  rate_per_ha?: number | null;
+  unit?: string | null;
+  restrictions?: string | null;
+  notes?: string | null;
+}
+
+const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
+  "name", "active_ingredient", "chemical_group", "use", "manufacturer",
+  "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
+];
+
+function sanitize(input: SavedChemicalInput) {
+  const out: Record<string, any> = {};
+  for (const k of ALLOWED_FIELDS) {
+    const v = input[k];
+    if (v === undefined) continue;
+    if (typeof v === "string") {
+      const t = v.trim();
+      out[k] = t === "" ? null : t;
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
+  const payload = { ...sanitize(input), vineyard_id: vineyardId };
+  const { data, error } = await supabase
+    .from("saved_chemicals")
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as SavedChemical;
+}
+
+export async function updateSavedChemical(id: string, input: SavedChemicalInput) {
+  const payload = sanitize(input);
+  const { data, error } = await supabase
+    .from("saved_chemicals")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as SavedChemical;
+}
+
+export async function archiveSavedChemical(id: string) {
+  const { error } = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
+  if (error) {
+    // Try alternate arg name as fallback
+    const alt = await supabase.rpc("soft_delete_saved_chemicals", { id } as any);
+    if (alt.error) throw error;
+  }
+}
