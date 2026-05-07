@@ -38,6 +38,22 @@ const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
 const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
 
+// Operation type options. Source: matches the iOS app's spray operation
+// categories (also reflected in the SavedChemicals "Use" field placeholder:
+// "Fungicide, Insecticide…"). Backend column `operation_type` is free text;
+// we constrain the portal to these three canonical values.
+export const OPERATION_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "Fungicide", label: "Fungicide" },
+  { value: "Herbicide", label: "Herbicide" },
+  { value: "Insecticide", label: "Insecticide" },
+];
+
+const OP_LABEL_BY_VALUE = new Map(OPERATION_TYPE_OPTIONS.map((o) => [o.value.toLowerCase(), o.label]));
+const opTypeLabel = (v?: string | null) => {
+  if (!v) return "—";
+  return OP_LABEL_BY_VALUE.get(v.toLowerCase()) ?? v;
+};
+
 type LookupMaps = {
   paddocks: Map<string, string>;
   tractors: Map<string, string>;
@@ -193,12 +209,12 @@ function JobsTable({
 
   const columns = useMemo(() => {
     if (mode === "templates") {
-      return ["Name", "Operation", "Target", "Chemicals", "Water (L)", "Rate / ha", "Updated", ""];
+      return ["Name", "Operation", "Target pest/disease/weed", "Chemicals", "Water (L)", "Rate / ha", "Updated", ""];
     }
     if (mode === "archived") {
       return ["Name", "Type", "Status", "Updated", ""];
     }
-    return ["Name", "Planned date", "Status", "Operation", "Target", "Equipment", "Operator", "Updated", ""];
+    return ["Name", "Planned date", "Status", "Operation", "Target pest/disease/weed", "Equipment", "Operator", "Updated", ""];
   }, [mode]);
 
   return (
@@ -222,8 +238,8 @@ function JobsTable({
               {mode === "templates" ? (
                 <>
                   <TableCell className="font-medium">{fmt(j.name)}</TableCell>
-                  <TableCell>{fmt(j.operation_type)}</TableCell>
-                  <TableCell>{fmt(j.target)}</TableCell>
+                  <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
+                  <TableCell>{j.target ? j.target : "—"}</TableCell>
                   <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell>
                   <TableCell>{fmt(j.water_volume)}</TableCell>
                   <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
@@ -241,8 +257,8 @@ function JobsTable({
                   <TableCell className="font-medium">{fmt(j.name)}</TableCell>
                   <TableCell>{fmtDate(j.planned_date)}</TableCell>
                   <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
-                  <TableCell>{fmt(j.operation_type)}</TableCell>
-                  <TableCell>{fmt(j.target)}</TableCell>
+                  <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
+                  <TableCell>{j.target ? j.target : "—"}</TableCell>
                   <TableCell>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
@@ -411,13 +427,28 @@ function SprayJobSheet({
 
             <div className="space-y-1">
               <Label>Operation type</Label>
-              <Input value={form.operation_type ?? ""} placeholder="e.g. Fungicide"
-                onChange={(e) => setForm({ ...form, operation_type: e.target.value })} />
+              <Select
+                value={form.operation_type ?? ""}
+                onValueChange={(v) => setForm({ ...form, operation_type: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select operation type" /></SelectTrigger>
+                <SelectContent>
+                  {OPERATION_TYPE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
-              <Label>Target</Label>
-              <Input value={form.target ?? ""} placeholder="e.g. Powdery mildew"
-                onChange={(e) => setForm({ ...form, target: e.target.value })} />
+              <Label>Target pest / disease / weed</Label>
+              <Input
+                value={form.target ?? ""}
+                placeholder="e.g. powdery mildew, downy mildew, botrytis, weeds, insects"
+                onChange={(e) => setForm({ ...form, target: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional — what this spray is intended to control.
+              </p>
             </div>
 
             <div className="space-y-1">
