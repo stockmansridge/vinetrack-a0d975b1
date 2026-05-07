@@ -904,3 +904,12 @@ function SprayJobSheet({
     </Sheet>
   );
 }
+
+function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div className={`rounded border p-2 ${warn ? "border-warning bg-warning/10" : ""}`}>
+      <div className="text-muted-foreground text-[10px] uppercase tracking-wide">{label}</div>
+      <div className={`font-medium ${warn ? "text-warning-foreground" : ""}`}>{value}</div>
+    </div>
+  );
+}
