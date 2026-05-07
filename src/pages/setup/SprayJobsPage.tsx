@@ -677,7 +677,8 @@ function SprayJobSheet({
             </div>
           </div>
 
-          {/* VSP water-rate calculator */}
+          {/* VSP water-rate calculator — only relevant for Foliar Spray */}
+          {isFoliar ? (
           <div className="rounded-md border p-3 space-y-3">
             <div>
               <div className="font-medium">VSP water-rate calculator</div>
