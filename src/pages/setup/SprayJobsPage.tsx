@@ -440,6 +440,8 @@ function SprayJobSheet({
     ? form.row_spacing_metres ?? null
     : meanRowSpacing;
 
+  const isFoliar = (form.operation_type ?? "") === "Foliar Spray";
+
   const litresPer100m = vspLitresPer100m(form.vsp_canopy_size, form.vsp_canopy_density);
   const calculatedLitresPerHa = vspLitresPerHa(
     form.vsp_canopy_size,
@@ -451,8 +453,9 @@ function SprayJobSheet({
     ? form.spray_rate_per_ha ?? null
     : calculatedLitresPerHa;
 
-  const concentrationFactor =
-    !effectiveSprayRate || effectiveSprayRate <= 0 || calculatedLitresPerHa == null
+  const concentrationFactor = !isFoliar
+    ? 1.0
+    : !effectiveSprayRate || effectiveSprayRate <= 0 || calculatedLitresPerHa == null
       ? 1.0
       : calculatedLitresPerHa / effectiveSprayRate;
 
@@ -464,17 +467,17 @@ function SprayJobSheet({
   // Sync derived values into the form (deferred to avoid setState-in-render).
   useMemo(() => {
     const next: Partial<SprayJobInput> = {};
-    if ((form.row_spacing_metres ?? null) !== (effectiveRowSpacing ?? null)) {
+    if (isFoliar && (form.row_spacing_metres ?? null) !== (effectiveRowSpacing ?? null)) {
       next.row_spacing_metres = effectiveRowSpacing ?? null;
     }
-    if (!sprayRateOverridden && (form.spray_rate_per_ha ?? null) !== (effectiveSprayRate ?? null)) {
+    if (isFoliar && !sprayRateOverridden && (form.spray_rate_per_ha ?? null) !== (effectiveSprayRate ?? null)) {
       next.spray_rate_per_ha = effectiveSprayRate ?? null;
     }
     const cfRounded = Math.round(concentrationFactor * 100) / 100;
     if ((form.concentration_factor ?? 1) !== cfRounded) {
       next.concentration_factor = cfRounded;
     }
-    if (computedWaterVolume != null) {
+    if (isFoliar && computedWaterVolume != null) {
       const wv = Math.round(computedWaterVolume);
       if ((form.water_volume ?? null) !== wv) next.water_volume = wv;
     }
@@ -482,9 +485,10 @@ function SprayJobSheet({
       queueMicrotask(() => setForm((f) => ({ ...f, ...next })));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveRowSpacing, effectiveSprayRate, concentrationFactor, computedWaterVolume]);
+  }, [effectiveRowSpacing, effectiveSprayRate, concentrationFactor, computedWaterVolume, isFoliar]);
 
-  const cfWarning = Math.abs(concentrationFactor - 1.0) > 0.005;
+  const cfWarning = isFoliar && Math.abs(concentrationFactor - 1.0) > 0.005;
+
   const fmt1 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(1));
   const fmt2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
   const fmt0 = (n: number | null | undefined) => (n == null ? "—" : Math.round(n).toString());
