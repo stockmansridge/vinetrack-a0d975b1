@@ -340,7 +340,20 @@ function SprayJobSheet({
     tractor_id: job?.tractor_id ?? null,
     operator_user_id: job?.operator_user_id ?? null,
     notes: job?.notes ?? "",
+    growth_stage_code: job?.growth_stage_code ?? null,
+    vsp_canopy_size: job?.vsp_canopy_size ?? null,
+    vsp_canopy_density: job?.vsp_canopy_density ?? null,
+    row_spacing_metres: job?.row_spacing_metres ?? null,
+    concentration_factor: job?.concentration_factor ?? 1.0,
   }));
+
+  // Whether the user has manually overridden the row spacing or spray rate.
+  const [rowSpacingOverridden, setRowSpacingOverridden] = useState<boolean>(
+    !!job?.row_spacing_metres,
+  );
+  const [sprayRateOverridden, setSprayRateOverridden] = useState<boolean>(
+    !!job?.spray_rate_per_ha,
+  );
 
   const [paddockIds, setPaddockIds] = useState<string[]>([]);
   const [paddocksOpen, setPaddocksOpen] = useState(false);
