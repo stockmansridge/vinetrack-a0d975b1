@@ -548,15 +548,23 @@ function SprayJobSheet({
               </p>
             </div>
 
-            <div className="space-y-1">
-              <Label>Water volume (L)</Label>
-              <Input type="number" value={form.water_volume ?? ""}
-                onChange={(e) => setForm({ ...form, water_volume: e.target.value === "" ? null : Number(e.target.value) })} />
-            </div>
-            <div className="space-y-1">
-              <Label>Spray rate per ha</Label>
-              <Input type="number" value={form.spray_rate_per_ha ?? ""}
-                onChange={(e) => setForm({ ...form, spray_rate_per_ha: e.target.value === "" ? null : Number(e.target.value) })} />
+            <div className="space-y-1 col-span-2">
+              <Label>Growth stage (E-L)</Label>
+              <Select
+                value={form.growth_stage_code ?? "__none"}
+                onValueChange={(v) =>
+                  setForm({ ...form, growth_stage_code: v === "__none" ? null : v })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="— Not set —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— Not set —</SelectItem>
+                  {GROWTH_STAGES.map((g) => (
+                    <SelectItem key={g.code} value={g.code}>{g.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Optional — Eichhorn-Lorenz growth stage.</p>
             </div>
 
             <div className="space-y-1">
