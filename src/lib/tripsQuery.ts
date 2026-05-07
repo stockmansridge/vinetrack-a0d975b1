@@ -45,6 +45,8 @@ export interface Trip {
   is_filling_tank?: boolean | null;
   filling_tank_number?: number | null;
   person_name?: string | null;
+  trip_function?: string | null;
+  trip_title?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;

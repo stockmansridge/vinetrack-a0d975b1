@@ -34,6 +34,35 @@ interface PaddockLite {
 }
 
 const ANY = "__any__";
+const SPRAY = "__spray__";
+const MAINT = "__maint__";
+
+const TRIP_FUNCTION_LABELS: Record<string, string> = {
+  slashing: "Slashing",
+  mulching: "Mulching",
+  harrowing: "Harrowing",
+  mowing: "Mowing",
+  spraying: "Spraying",
+  fertilising: "Fertilising",
+  undervineWeeding: "Undervine weeding",
+  interRowCultivation: "Inter-row cultivation",
+  pruning: "Pruning",
+  shootThinning: "Shoot thinning",
+  canopyWork: "Canopy work",
+  irrigationCheck: "Irrigation check",
+  repairs: "Repairs",
+  other: "Other",
+};
+const tripFunctionLabel = (v?: string | null) =>
+  v ? TRIP_FUNCTION_LABELS[v] ?? v : null;
+const tripDisplayName = (t: Trip): string => {
+  if (t.trip_title && t.trip_title.trim()) return t.trip_title.trim();
+  const fn = tripFunctionLabel(t.trip_function);
+  if (fn) return fn;
+  if (t.tracking_pattern) return t.tracking_pattern;
+  if (t.paddock_name) return t.paddock_name;
+  return "—";
+};
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -74,6 +103,7 @@ export default function TripsPage() {
   const [paddockId, setPaddockId] = useState<string>(ANY);
   const [pattern, setPattern] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
+  const [tripFn, setTripFn] = useState<string>(ANY);
   const [selected, setSelected] = useState<Trip | null>(null);
 
   const { data: paddocks = [] } = useQuery({
@@ -113,15 +143,22 @@ export default function TripsPage() {
     if (paddockId !== ANY) list = list.filter((t) => t.paddock_id === paddockId);
     if (pattern !== ANY) list = list.filter((t) => t.tracking_pattern === pattern);
     if (status !== ANY) list = list.filter((t) => tripStatus(t) === status);
+    if (tripFn === SPRAY) {
+      list = list.filter((t) => t.trip_function === "spraying");
+    } else if (tripFn === MAINT) {
+      list = list.filter((t) => t.trip_function && t.trip_function !== "spraying");
+    } else if (tripFn !== ANY) {
+      list = list.filter((t) => t.trip_function === tripFn);
+    }
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((t) =>
-        [t.paddock_name, t.tracking_pattern, t.person_name]
+        [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
     return list;
-  }, [trips, filter, from, to, paddockId, pattern, status]);
+  }, [trips, filter, from, to, paddockId, pattern, status, tripFn]);
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
@@ -201,6 +238,20 @@ export default function TripsPage() {
           </Select>
         </div>
         <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Function</div>
+          <Select value={tripFn} onValueChange={setTripFn}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All functions</SelectItem>
+              <SelectItem value={SPRAY}>Spraying only</SelectItem>
+              <SelectItem value={MAINT}>Maintenance (non-spray)</SelectItem>
+              {Object.entries(TRIP_FUNCTION_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Status</div>
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Any" /></SelectTrigger>
@@ -228,6 +279,8 @@ export default function TripsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Start</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Function</TableHead>
               <TableHead>Paddock</TableHead>
               <TableHead>Pattern</TableHead>
               <TableHead>Person</TableHead>
@@ -238,14 +291,14 @@ export default function TripsPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No trips found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -253,9 +306,12 @@ export default function TripsPage() {
             {rows.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
+              const fnLabel = tripFunctionLabel(t.trip_function);
               return (
                 <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
                   <TableCell>{fmtDate(t.start_time)}</TableCell>
+                  <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>
+                  <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>
                   <TableCell>{fmt(padName)}</TableCell>
                   <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{t.tracking_pattern}</Badge> : "—"}</TableCell>
                   <TableCell>{fmt(t.person_name)}</TableCell>
@@ -307,7 +363,7 @@ function TripSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Trip — {fmtDay(trip?.start_time)}</SheetTitle>
+          <SheetTitle>{trip ? tripDisplayName(trip) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
@@ -318,6 +374,8 @@ function TripSheet({
               <Field label="Status" value={tripStatus(trip)} />
             </Section>
             <Section title="Context">
+              <Field label="Title" value={fmt(trip.trip_title)} />
+              <Field label="Function" value={fmt(tripFunctionLabel(trip.trip_function))} />
               <Field label="Paddock" value={fmt(padName)} />
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
