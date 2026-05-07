@@ -38,6 +38,22 @@ const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
 const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
 
+// Operation type options. Source: matches the iOS app's spray operation
+// categories (also reflected in the SavedChemicals "Use" field placeholder:
+// "Fungicide, Insecticide…"). Backend column `operation_type` is free text;
+// we constrain the portal to these three canonical values.
+export const OPERATION_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "Fungicide", label: "Fungicide" },
+  { value: "Herbicide", label: "Herbicide" },
+  { value: "Insecticide", label: "Insecticide" },
+];
+
+const OP_LABEL_BY_VALUE = new Map(OPERATION_TYPE_OPTIONS.map((o) => [o.value.toLowerCase(), o.label]));
+const opTypeLabel = (v?: string | null) => {
+  if (!v) return "—";
+  return OP_LABEL_BY_VALUE.get(v.toLowerCase()) ?? v;
+};
+
 type LookupMaps = {
   paddocks: Map<string, string>;
   tractors: Map<string, string>;
