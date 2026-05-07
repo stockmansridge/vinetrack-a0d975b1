@@ -150,8 +150,8 @@ export function summarizeRainfall(rows: RainfallDay[]): RainfallSummary {
 
   const list = Array.from(sources);
   let label = "No data";
-  if (list.length === 1) label = list[0];
-  else if (list.length > 1) label = "Mixed";
+  if (list.length === 1) label = sourceLabel(list[0]);
+  else if (list.length > 1) label = `Mixed (${list.map(sourceLabel).join(", ")})`;
   else if (rows.length > 0) label = "Unknown";
 
   return {
