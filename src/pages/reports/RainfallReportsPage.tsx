@@ -81,6 +81,9 @@ export default function RainfallReportsPage() {
             Daily rainfall recorded for the selected vineyard. Sourced via the
             secure <code className="font-mono text-xs">get_daily_rainfall</code> RPC.
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Source priority: Manual → Davis WeatherLink → Weather Underground → Open-Meteo.
+          </p>
         </div>
         <Button size="sm" variant="outline" disabled title="Export coming soon">
           <Download className="h-4 w-4 mr-1" /> Export (coming soon)
