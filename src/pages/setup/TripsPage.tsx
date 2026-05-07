@@ -154,6 +154,15 @@ export default function TripsPage() {
         <p className="text-sm text-muted-foreground">
           Read-only. Soft-deleted trips are excluded.
         </p>
+        {!isLoading && !error && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Showing {rows.length} of {trips.length} trips for this vineyard
+            {data ? ` · source: ${data.source}` : ""}
+            {data && (data.paddockFallbackCount || data.paddockJsonbFallbackCount)
+              ? ` (+${data.paddockFallbackCount} via paddock_id, +${data.paddockJsonbFallbackCount} via paddock_ids)`
+              : ""}
+          </p>
+        )}
       </div>
 
       <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
