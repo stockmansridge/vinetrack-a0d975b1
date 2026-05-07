@@ -139,6 +139,38 @@ export async function duplicateSprayJob(id: string, asTemplate: boolean): Promis
   return "";
 }
 
+export interface VineyardTeamMember {
+  membership_id: string;
+  vineyard_id: string;
+  user_id: string;
+  role: string;
+  joined_at: string | null;
+  display_name: string | null;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
+export async function fetchVineyardTeamMembers(vineyardId: string): Promise<VineyardTeamMember[]> {
+  const { data, error } = await supabase.rpc("get_vineyard_team_members", {
+    p_vineyard_id: vineyardId,
+  });
+  if (error) {
+    if ((error as any).code === "42501" || (error as any).code === "PGRST202") return [];
+    throw error;
+  }
+  return (data ?? []) as VineyardTeamMember[];
+}
+
+export function memberLabel(m: VineyardTeamMember): string {
+  return (
+    (m.display_name && m.display_name.trim()) ||
+    (m.full_name && m.full_name.trim()) ||
+    (m.email && m.email.trim()) ||
+    m.user_id.slice(0, 8)
+  );
+}
+
 export function chemicalLinesSummary(lines?: SprayJobChemicalLine[] | null): string {
   if (!lines || !lines.length) return "—";
   return lines
