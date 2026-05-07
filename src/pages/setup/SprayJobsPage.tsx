@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -22,8 +23,11 @@ import {
   createSprayJob, updateSprayJob,
   archiveSprayJob, restoreSprayJob, duplicateSprayJob,
   chemicalLinesSummary,
+  fetchVineyardTeamMembers, memberLabel,
   type SprayJob, type SprayJobChemicalLine, type SprayJobInput,
+  type VineyardTeamMember,
 } from "@/lib/sprayJobsQuery";
+import { ChemicalPicker } from "@/components/spray/ChemicalPicker";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -32,13 +36,61 @@ const fmtDate = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
-const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled", "archived"];
+const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
+
+type LookupMaps = {
+  paddocks: Map<string, string>;
+  tractors: Map<string, string>;
+  equipment: Map<string, string>;
+  members: Map<string, string>;
+};
+
+function useLookups(vineyardId: string | null) {
+  const { data: paddocks } = useQuery({
+    queryKey: ["paddocks-list", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchList("paddocks", vineyardId!),
+  });
+  const { data: tractors } = useQuery({
+    queryKey: ["tractors-list", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchList("tractors", vineyardId!),
+  });
+  const { data: equipment } = useQuery({
+    queryKey: ["equipment-list", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchList("spray_equipment", vineyardId!),
+  });
+  const { data: members } = useQuery({
+    queryKey: ["team-members", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchVineyardTeamMembers(vineyardId!),
+  });
+
+  const maps: LookupMaps = useMemo(() => {
+    const m: LookupMaps = {
+      paddocks: new Map(),
+      tractors: new Map(),
+      equipment: new Map(),
+      members: new Map(),
+    };
+    (paddocks ?? []).forEach((p: any) => m.paddocks.set(p.id, p.name ?? p.block_name ?? "Unnamed paddock"));
+    (tractors ?? []).forEach((t: any) => m.tractors.set(t.id, t.name ?? t.model ?? "Tractor"));
+    (equipment ?? []).forEach((e: any) => m.equipment.set(e.id, e.name ?? e.type ?? "Equipment"));
+    (members ?? []).forEach((u) => m.members.set(u.user_id, memberLabel(u)));
+    return m;
+  }, [paddocks, tractors, equipment, members]);
+
+  return { paddocks: paddocks ?? [], tractors: tractors ?? [], equipment: equipment ?? [], members: (members ?? []) as VineyardTeamMember[], maps };
+}
 
 export default function SprayJobsPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const [tab, setTab] = useState<"planned" | "templates" | "archived">("planned");
   const [editing, setEditing] = useState<{ job: SprayJob | null; isTemplate: boolean } | null>(null);
+
+  const lookups = useLookups(selectedVineyardId);
 
   return (
     <div className="space-y-4">
@@ -65,22 +117,16 @@ export default function SprayJobsPage() {
         </TabsList>
 
         <TabsContent value="planned">
-          <JobsTable
-            mode="planned"
-            canEdit={canEdit}
-            onEdit={(job) => setEditing({ job, isTemplate: false })}
-            onNewFromTemplate={undefined}
-          />
+          <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
+            onEdit={(job) => setEditing({ job, isTemplate: false })} />
         </TabsContent>
         <TabsContent value="templates">
-          <JobsTable
-            mode="templates"
-            canEdit={canEdit}
-            onEdit={(job) => setEditing({ job, isTemplate: true })}
-          />
+          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps}
+            onEdit={(job) => setEditing({ job, isTemplate: true })} />
         </TabsContent>
         <TabsContent value="archived">
-          <JobsTable mode="archived" canEdit={canEdit} onEdit={(job) => setEditing({ job, isTemplate: !!job.is_template })} />
+          <JobsTable mode="archived" canEdit={canEdit} maps={lookups.maps}
+            onEdit={(job) => setEditing({ job, isTemplate: !!job.is_template })} />
         </TabsContent>
       </Tabs>
 
@@ -92,6 +138,7 @@ export default function SprayJobsPage() {
           job={editing.job}
           isTemplate={editing.isTemplate}
           canEdit={canEdit}
+          lookups={lookups}
         />
       )}
     </div>
@@ -99,14 +146,12 @@ export default function SprayJobsPage() {
 }
 
 function JobsTable({
-  mode,
-  canEdit,
-  onEdit,
+  mode, canEdit, onEdit, maps,
 }: {
   mode: "planned" | "templates" | "archived";
   canEdit: boolean;
   onEdit: (job: SprayJob) => void;
-  onNewFromTemplate?: (job: SprayJob) => void;
+  maps: LookupMaps;
 }) {
   const { selectedVineyardId } = useVineyard();
   const qc = useQueryClient();
@@ -153,7 +198,7 @@ function JobsTable({
     if (mode === "archived") {
       return ["Name", "Type", "Status", "Updated", ""];
     }
-    return ["Name", "Planned date", "Status", "Operation", "Target", "Equipment", "Updated", ""];
+    return ["Name", "Planned date", "Status", "Operation", "Target", "Equipment", "Operator", "Updated", ""];
   }, [mode]);
 
   return (
@@ -198,7 +243,8 @@ function JobsTable({
                   <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
                   <TableCell>{fmt(j.operation_type)}</TableCell>
                   <TableCell>{fmt(j.target)}</TableCell>
-                  <TableCell className="font-mono text-xs">{j.equipment_id ? j.equipment_id.slice(0, 8) : "—"}</TableCell>
+                  <TableCell>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</TableCell>
+                  <TableCell>{j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
                 </>
               )}
@@ -243,7 +289,7 @@ function JobsTable({
 }
 
 function SprayJobSheet({
-  open, onOpenChange, vineyardId, job, isTemplate, canEdit,
+  open, onOpenChange, vineyardId, job, isTemplate, canEdit, lookups,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -251,6 +297,7 @@ function SprayJobSheet({
   job: SprayJob | null;
   isTemplate: boolean;
   canEdit: boolean;
+  lookups: ReturnType<typeof useLookups>;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -274,7 +321,9 @@ function SprayJobSheet({
   }));
 
   const [paddockIds, setPaddockIds] = useState<string[]>([]);
-  // Load existing paddock links when editing
+  const [paddocksOpen, setPaddocksOpen] = useState(false);
+  const [pickerLineIndex, setPickerLineIndex] = useState<number | null>(null);
+
   useQuery({
     queryKey: ["spray_job_paddocks", job?.id],
     enabled: !!job?.id,
@@ -285,24 +334,9 @@ function SprayJobSheet({
     },
   });
 
-  const { data: paddocks } = useQuery({
-    queryKey: ["paddocks-list", vineyardId],
-    queryFn: () => fetchList("paddocks", vineyardId),
-  });
-  const { data: tractors } = useQuery({
-    queryKey: ["tractors-list", vineyardId],
-    queryFn: () => fetchList("tractors", vineyardId),
-  });
-  const { data: equipment } = useQuery({
-    queryKey: ["equipment-list", vineyardId],
-    queryFn: () => fetchList("spray_equipment", vineyardId),
-  });
-
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (editing) {
-        return updateSprayJob(job!.id, form, paddockIds);
-      }
+      if (editing) return updateSprayJob(job!.id, form, paddockIds);
       return createSprayJob(form, paddockIds);
     },
     onSuccess: () => {
@@ -320,10 +354,18 @@ function SprayJobSheet({
       return { ...f, chemical_lines: next };
     });
   };
-  const addLine = () =>
-    setForm((f) => ({ ...f, chemical_lines: [...(f.chemical_lines ?? []), { name: "", rate: null, unit: "L/ha", notes: "" }] }));
+  const addLine = () => {
+    setForm((f) => ({
+      ...f,
+      chemical_lines: [...(f.chemical_lines ?? []), { name: "", rate: null, unit: "L/ha", notes: "" }],
+    }));
+    setPickerLineIndex((form.chemical_lines ?? []).length);
+  };
   const removeLine = (i: number) =>
     setForm((f) => ({ ...f, chemical_lines: (f.chemical_lines ?? []).filter((_, idx) => idx !== i) }));
+
+  const togglePaddock = (id: string) =>
+    setPaddockIds((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -338,91 +380,104 @@ function SprayJobSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1 col-span-2">
               <Label>Name</Label>
-              <Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder={form.is_template ? "e.g. Powdery mildew preventive" : "e.g. Block A spray — week 14"} />
             </div>
 
             <div className="flex items-center gap-2 col-span-2">
-              <Checkbox
-                id="tpl"
-                checked={!!form.is_template}
-                onCheckedChange={(c) => setForm({ ...form, is_template: !!c })}
-              />
+              <Checkbox id="tpl" checked={!!form.is_template}
+                onCheckedChange={(c) => setForm({ ...form, is_template: !!c })} />
               <Label htmlFor="tpl">Reusable template</Label>
             </div>
 
             {!form.is_template && (
-              <div className="space-y-1">
-                <Label>Planned date</Label>
-                <Input
-                  type="date"
-                  value={form.planned_date ?? ""}
-                  onChange={(e) => setForm({ ...form, planned_date: e.target.value || null })}
-                />
-              </div>
+              <>
+                <div className="space-y-1">
+                  <Label>Planned date</Label>
+                  <Input type="date" value={form.planned_date ?? ""}
+                    onChange={(e) => setForm({ ...form, planned_date: e.target.value || null })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <Select value={form.status ?? "draft"} onValueChange={(v) => setForm({ ...form, status: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
 
             <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={form.status ?? ""} onValueChange={(v) => setForm({ ...form, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
               <Label>Operation type</Label>
-              <Input value={form.operation_type ?? ""} onChange={(e) => setForm({ ...form, operation_type: e.target.value })} />
+              <Input value={form.operation_type ?? ""} placeholder="e.g. Fungicide"
+                onChange={(e) => setForm({ ...form, operation_type: e.target.value })} />
             </div>
             <div className="space-y-1">
               <Label>Target</Label>
-              <Input value={form.target ?? ""} onChange={(e) => setForm({ ...form, target: e.target.value })} />
+              <Input value={form.target ?? ""} placeholder="e.g. Powdery mildew"
+                onChange={(e) => setForm({ ...form, target: e.target.value })} />
             </div>
 
             <div className="space-y-1">
               <Label>Water volume (L)</Label>
-              <Input type="number" value={form.water_volume ?? ""} onChange={(e) => setForm({ ...form, water_volume: e.target.value === "" ? null : Number(e.target.value) })} />
+              <Input type="number" value={form.water_volume ?? ""}
+                onChange={(e) => setForm({ ...form, water_volume: e.target.value === "" ? null : Number(e.target.value) })} />
             </div>
             <div className="space-y-1">
               <Label>Spray rate per ha</Label>
-              <Input type="number" value={form.spray_rate_per_ha ?? ""} onChange={(e) => setForm({ ...form, spray_rate_per_ha: e.target.value === "" ? null : Number(e.target.value) })} />
+              <Input type="number" value={form.spray_rate_per_ha ?? ""}
+                onChange={(e) => setForm({ ...form, spray_rate_per_ha: e.target.value === "" ? null : Number(e.target.value) })} />
             </div>
 
             <div className="space-y-1">
               <Label>Tractor</Label>
-              <Select value={form.tractor_id ?? "__none"} onValueChange={(v) => setForm({ ...form, tractor_id: v === "__none" ? null : v })}>
+              <Select value={form.tractor_id ?? "__none"}
+                onValueChange={(v) => setForm({ ...form, tractor_id: v === "__none" ? null : v })}>
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">— None —</SelectItem>
-                  {(tractors ?? []).map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name ?? t.id}</SelectItem>
+                  {lookups.tractors.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name ?? t.model ?? "Tractor"}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
               <Label>Equipment</Label>
-              <Select value={form.equipment_id ?? "__none"} onValueChange={(v) => setForm({ ...form, equipment_id: v === "__none" ? null : v })}>
+              <Select value={form.equipment_id ?? "__none"}
+                onValueChange={(v) => setForm({ ...form, equipment_id: v === "__none" ? null : v })}>
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">— None —</SelectItem>
-                  {(equipment ?? []).map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name ?? t.id}</SelectItem>
+                  {lookups.equipment.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name ?? t.type ?? "Equipment"}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1 col-span-2">
-              <Label>Operator user ID</Label>
-              <Input
-                placeholder="UUID — leave blank if not assigned"
-                value={form.operator_user_id ?? ""}
-                onChange={(e) => setForm({ ...form, operator_user_id: e.target.value || null })}
-              />
-              <p className="text-xs text-muted-foreground">Operator picker will be added once the team-members list is wired.</p>
-            </div>
+            {!form.is_template && (
+              <div className="space-y-1 col-span-2">
+                <Label>Operator</Label>
+                <Select value={form.operator_user_id ?? "__none"}
+                  onValueChange={(v) => setForm({ ...form, operator_user_id: v === "__none" ? null : v })}>
+                  <SelectTrigger><SelectValue placeholder="— Not assigned —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— Not assigned —</SelectItem>
+                    {lookups.members.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {memberLabel(m)} <span className="text-muted-foreground">· {m.role}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {lookups.members.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No team members visible for this vineyard.</p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1 col-span-2">
               <Label>Notes</Label>
@@ -430,61 +485,102 @@ function SprayJobSheet({
             </div>
           </div>
 
+          {/* Paddocks */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label>Paddocks</Label>
-              <span className="text-xs text-muted-foreground">{paddockIds.length} selected</span>
+              <Label>Paddocks / blocks</Label>
+              <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" size="sm" variant="outline">
+                    <Plus className="h-3.5 w-3.5 mr-1" />Select paddocks
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="end">
+                  <div className="max-h-60 overflow-y-auto divide-y">
+                    {lookups.paddocks.length === 0 && (
+                      <div className="p-3 text-xs text-muted-foreground">No paddocks for this vineyard.</div>
+                    )}
+                    {lookups.paddocks.map((p: any) => {
+                      const checked = paddockIds.includes(p.id);
+                      return (
+                        <label key={p.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/40 text-sm">
+                          <Checkbox checked={checked} onCheckedChange={() => togglePaddock(p.id)} />
+                          <span>{p.name ?? "Unnamed paddock"}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
-            <div className="rounded-md border max-h-48 overflow-y-auto divide-y">
-              {(paddocks ?? []).length === 0 && (
-                <div className="p-3 text-xs text-muted-foreground">No paddocks for this vineyard.</div>
-              )}
-              {(paddocks ?? []).map((p: any) => {
-                const checked = paddockIds.includes(p.id);
-                return (
-                  <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-muted/40">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(c) => {
-                        setPaddockIds((cur) => c ? [...cur, p.id] : cur.filter((id) => id !== p.id));
-                      }}
-                    />
-                    <span>{p.name ?? p.id}</span>
-                  </label>
-                );
-              })}
+            <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+              {paddockIds.length === 0 && <span className="text-xs text-muted-foreground">No paddocks selected.</span>}
+              {paddockIds.map((id) => (
+                <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                  {lookups.maps.paddocks.get(id) ?? "Unknown"}
+                  {canEdit && (
+                    <button type="button" onClick={() => togglePaddock(id)} className="hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </Badge>
+              ))}
             </div>
           </div>
 
+          {/* Chemicals */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label>Chemical lines</Label>
-              {canEdit && <Button type="button" size="sm" variant="outline" onClick={addLine}><Plus className="h-3.5 w-3.5 mr-1" />Add line</Button>}
+              <Label>Chemicals</Label>
+              {canEdit && (
+                <Button type="button" size="sm" variant="outline" onClick={addLine}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Add chemical
+                </Button>
+              )}
             </div>
             <div className="space-y-2">
               {(form.chemical_lines ?? []).length === 0 && (
-                <div className="text-xs text-muted-foreground">No chemical lines yet.</div>
+                <div className="text-xs text-muted-foreground">No chemicals added yet.</div>
               )}
               {(form.chemical_lines ?? []).map((line, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-end rounded-md border p-2">
-                  <div className="col-span-5 space-y-1">
-                    <Label className="text-xs">Product name</Label>
-                    <Input value={line.name ?? ""} onChange={(e) => setLine(i, { name: e.target.value })} />
+                <div key={i} className="rounded-md border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{line.name || "Select a chemical…"}</div>
+                      {line.active_ingredient && (
+                        <div className="text-xs text-muted-foreground truncate">{line.active_ingredient}</div>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      {canEdit && (
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setPickerLineIndex(i)}>
+                          {line.name ? "Change" : "Pick"}
+                        </Button>
+                      )}
+                      {canEdit && (
+                        <Button type="button" size="sm" variant="ghost" onClick={() => removeLine(i)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Rate</Label>
-                    <Input type="number" value={line.rate ?? ""} onChange={(e) => setLine(i, { rate: e.target.value === "" ? null : Number(e.target.value) })} />
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Unit</Label>
-                    <Input value={line.unit ?? ""} onChange={(e) => setLine(i, { unit: e.target.value })} />
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Notes</Label>
-                    <Input value={line.notes ?? ""} onChange={(e) => setLine(i, { notes: e.target.value })} />
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    {canEdit && <Button type="button" size="sm" variant="ghost" onClick={() => removeLine(i)}>×</Button>}
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-3 space-y-1">
+                      <Label className="text-xs">Rate</Label>
+                      <Input type="number" value={line.rate ?? ""} onChange={(e) => setLine(i, { rate: e.target.value === "" ? null : Number(e.target.value) })} />
+                    </div>
+                    <div className="col-span-3 space-y-1">
+                      <Label className="text-xs">Unit</Label>
+                      <Input value={line.unit ?? ""} onChange={(e) => setLine(i, { unit: e.target.value })} />
+                    </div>
+                    <div className="col-span-3 space-y-1">
+                      <Label className="text-xs">Water rate</Label>
+                      <Input type="number" value={line.water_rate ?? ""} onChange={(e) => setLine(i, { water_rate: e.target.value === "" ? null : Number(e.target.value) })} />
+                    </div>
+                    <div className="col-span-3 space-y-1">
+                      <Label className="text-xs">Notes</Label>
+                      <Input value={line.notes ?? ""} onChange={(e) => setLine(i, { notes: e.target.value })} />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -500,6 +596,28 @@ function SprayJobSheet({
             </Button>
           )}
         </SheetFooter>
+
+        {pickerLineIndex !== null && (
+          <ChemicalPicker
+            open={pickerLineIndex !== null}
+            onOpenChange={(o) => !o && setPickerLineIndex(null)}
+            vineyardId={vineyardId}
+            canCreate={canEdit}
+            onSelect={(c) => {
+              const idx = pickerLineIndex;
+              if (idx == null) return;
+              setLine(idx, {
+                chemical_id: c.id,
+                name: c.name ?? "",
+                active_ingredient: c.active_ingredient ?? null,
+                rate: c.rate_per_ha ?? null,
+                unit: c.unit ?? "L/ha",
+                notes: c.restrictions ?? null,
+              });
+              setPickerLineIndex(null);
+            }}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );
