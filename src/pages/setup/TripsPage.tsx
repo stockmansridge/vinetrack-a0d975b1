@@ -143,15 +143,22 @@ export default function TripsPage() {
     if (paddockId !== ANY) list = list.filter((t) => t.paddock_id === paddockId);
     if (pattern !== ANY) list = list.filter((t) => t.tracking_pattern === pattern);
     if (status !== ANY) list = list.filter((t) => tripStatus(t) === status);
+    if (tripFn === SPRAY) {
+      list = list.filter((t) => t.trip_function === "spraying");
+    } else if (tripFn === MAINT) {
+      list = list.filter((t) => t.trip_function && t.trip_function !== "spraying");
+    } else if (tripFn !== ANY) {
+      list = list.filter((t) => t.trip_function === tripFn);
+    }
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((t) =>
-        [t.paddock_name, t.tracking_pattern, t.person_name]
+        [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
     return list;
-  }, [trips, filter, from, to, paddockId, pattern, status]);
+  }, [trips, filter, from, to, paddockId, pattern, status, tripFn]);
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
