@@ -215,12 +215,12 @@ function JobsTable({
 
   const columns = useMemo(() => {
     if (mode === "templates") {
-      return ["Name", "Operation", "Target pest/disease/weed", "Chemicals", "Water (L)", "Rate / ha", "Updated", ""];
+      return ["Name", "Operation", "Target pest/disease/weed", "Growth", "Chemicals", "Water (L)", "Rate / ha", "CF", "Updated", ""];
     }
     if (mode === "archived") {
       return ["Name", "Type", "Status", "Updated", ""];
     }
-    return ["Name", "Planned date", "Status", "Operation", "Target pest/disease/weed", "Equipment", "Operator", "Updated", ""];
+    return ["Name", "Planned date", "Status", "Operation", "Target pest/disease/weed", "Growth", "Rate / ha", "Water (L)", "CF", "Equipment", "Operator", "Updated", ""];
   }, [mode]);
 
   return (
