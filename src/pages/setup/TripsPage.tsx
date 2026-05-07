@@ -363,7 +363,7 @@ function TripSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Trip — {fmtDay(trip?.start_time)}</SheetTitle>
+          <SheetTitle>{trip ? tripDisplayName(trip) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
@@ -374,6 +374,8 @@ function TripSheet({
               <Field label="Status" value={tripStatus(trip)} />
             </Section>
             <Section title="Context">
+              <Field label="Title" value={fmt(trip.trip_title)} />
+              <Field label="Function" value={fmt(tripFunctionLabel(trip.trip_function))} />
               <Field label="Paddock" value={fmt(padName)} />
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
