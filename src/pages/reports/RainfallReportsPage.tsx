@@ -7,6 +7,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import {
   fetchDailyRainfall,
   rangeForPreset,
+  sourceLabel,
   summarizeRainfall,
   type RangePreset,
 } from "@/lib/rainfallQuery";
@@ -33,8 +34,8 @@ const PRESETS: { value: RangePreset; label: string }[] = [
   { value: "last7", label: "Last 7 days" },
   { value: "last14", label: "Last 14 days" },
   { value: "last30", label: "Last 30 days" },
-  { value: "thisMonth", label: "This month" },
-  { value: "thisSeason", label: "This season" },
+  { value: "currentYear", label: "Current year" },
+  { value: "last365", label: "Last 365 days" },
   { value: "custom", label: "Custom" },
 ];
 
