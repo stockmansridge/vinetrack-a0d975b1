@@ -150,9 +150,9 @@ export default function RainfallReportsPage() {
         />
       )}
 
-      {!isLoading && data && !data.ok && (
+      {!isLoading && data && data.ok === false ? (
         <RpcErrorState reason={data.reason} message={data.message} />
-      )}
+      ) : null}
 
       {!isLoading && data?.ok && rows.length === 0 && (
         <EmptyState
