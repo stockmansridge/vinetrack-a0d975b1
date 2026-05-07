@@ -37,6 +37,7 @@ const dashboard = [{ title: "Overview", url: "/dashboard", icon: LayoutDashboard
 const operations = [
   { title: "Trips", url: "/trips", icon: Sprout },
   { title: "Spray records", url: "/spray-records", icon: FileText },
+  { title: "Spray jobs & templates", url: "/spray-jobs", icon: Layers },
   { title: "Work tasks", url: "/work-tasks", icon: ClipboardList },
   { title: "Maintenance", url: "/maintenance", icon: Wrench },
   { title: "Pins / Repairs", url: "/pins", icon: MapPin },
