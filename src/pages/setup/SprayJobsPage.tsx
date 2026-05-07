@@ -823,6 +823,13 @@ function SprayJobSheet({
               </div>
             </div>
           </div>
+          ) : (
+            <div className="rounded-md border p-3 text-xs text-muted-foreground">
+              VSP water-rate calculator applies to Foliar Spray jobs only.
+              {form.operation_type === "Banded Spray" && " Banded Spray uses a fixed application — concentration factor is held at 1.0."}
+              {form.operation_type === "Spreader" && " Spreader jobs do not use a spray water rate."}
+            </div>
+          )}
 
 
           <div>
