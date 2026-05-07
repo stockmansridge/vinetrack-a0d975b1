@@ -29,6 +29,11 @@ export interface SprayJob {
   tractor_id?: string | null;
   operator_user_id?: string | null;
   notes?: string | null;
+  growth_stage_code?: string | null;
+  vsp_canopy_size?: string | null;
+  vsp_canopy_density?: string | null;
+  row_spacing_metres?: number | null;
+  concentration_factor?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
