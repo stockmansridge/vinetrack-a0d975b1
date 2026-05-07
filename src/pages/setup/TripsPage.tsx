@@ -103,6 +103,7 @@ export default function TripsPage() {
   const [paddockId, setPaddockId] = useState<string>(ANY);
   const [pattern, setPattern] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
+  const [tripFn, setTripFn] = useState<string>(ANY);
   const [selected, setSelected] = useState<Trip | null>(null);
 
   const { data: paddocks = [] } = useQuery({
