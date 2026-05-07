@@ -73,3 +73,30 @@ Items captured but **not yet implemented**. Each entry notes scope, guardrails, 
 ### Blockers
 - `vineyard_invitations` table + RPCs do not exist yet — requires Rork/Supabase migration.
 - Until then, no portal UI is built. Team page remains read-only for membership.
+
+---
+
+## 2. Portal Chemical AI Lookup
+
+**Status:** Not started — placeholder shown in chemical picker ("AI chemical lookup coming later").
+
+**Goal:** Bring the iOS AI-assisted chemical lookup into the portal so Owners/Managers can create `saved_chemicals` rows from a product name without typing every field.
+
+### Scope
+- Surface inside the Spray Job/Template chemical picker → "Add chemical" flow.
+- Also available from Setup → Saved Chemicals.
+- Owner/Manager only.
+
+### Backend dependency
+- Reuse the existing iOS `chemical-info-lookup` Edge Function if it can be safely invoked from the portal (verify auth + RLS + rate limits).
+- If not portable, wrap behind a new SECURITY DEFINER RPC or Edge Function callable from the portal.
+- Must NOT require service-role key in browser.
+
+### UX
+- Free-text input ("Enter product name") → AI returns suggested name, active ingredient, group, use, default rate/unit, restrictions.
+- User reviews + edits before saving to `saved_chemicals`.
+- Result is then auto-attached to the spray job line that opened the flow.
+
+### Blockers
+- Need confirmation that the iOS `chemical-info-lookup` function is reachable from portal auth context.
+- Need rate-limit / cost guardrails before exposing to portal users.
