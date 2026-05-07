@@ -664,7 +664,153 @@ function SprayJobSheet({
             </div>
           </div>
 
-          {/* Chemicals */}
+          {/* VSP water-rate calculator */}
+          <div className="rounded-md border p-3 space-y-3">
+            <div>
+              <div className="font-medium">VSP water-rate calculator</div>
+              <p className="text-xs text-muted-foreground">
+                Calculates spray water rate from canopy size, density, and row spacing.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>VSP canopy size</Label>
+                <Select
+                  value={form.vsp_canopy_size ?? "__none"}
+                  onValueChange={(v) => setForm({ ...form, vsp_canopy_size: v === "__none" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="— Select —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— Not set —</SelectItem>
+                    {VSP_CANOPY_SIZES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Canopy density</Label>
+                <Select
+                  value={form.vsp_canopy_density ?? "__none"}
+                  onValueChange={(v) => setForm({ ...form, vsp_canopy_density: v === "__none" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="— Select —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— Not set —</SelectItem>
+                    {VSP_DENSITIES.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Row spacing (m)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={
+                    rowSpacingOverridden
+                      ? form.row_spacing_metres ?? ""
+                      : meanRowSpacing != null ? meanRowSpacing.toFixed(2) : ""
+                  }
+                  placeholder={meanRowSpacing != null ? meanRowSpacing.toFixed(2) : "Enter row spacing"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setRowSpacingOverridden(true);
+                    setForm({ ...form, row_spacing_metres: v === "" ? null : Number(v) });
+                  }}
+                />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {meanRowSpacing != null
+                      ? `Mean from selected paddocks: ${meanRowSpacing.toFixed(2)} m`
+                      : "Select paddocks with row spacing data or enter row spacing manually."}
+                  </span>
+                  {rowSpacingOverridden && (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        setRowSpacingOverridden(false);
+                        setForm({ ...form, row_spacing_metres: meanRowSpacing ?? null });
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Spray rate (L/ha)</Label>
+                <Input
+                  type="number"
+                  value={
+                    sprayRateOverridden
+                      ? form.spray_rate_per_ha ?? ""
+                      : calculatedLitresPerHa != null ? Math.round(calculatedLitresPerHa) : ""
+                  }
+                  placeholder={calculatedLitresPerHa != null ? String(Math.round(calculatedLitresPerHa)) : "—"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSprayRateOverridden(true);
+                    setForm({ ...form, spray_rate_per_ha: v === "" ? null : Number(v) });
+                  }}
+                />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Optional override of calculated rate.</span>
+                  {sprayRateOverridden && (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        setSprayRateOverridden(false);
+                        setForm({ ...form, spray_rate_per_ha: calculatedLitresPerHa ?? null });
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <Stat label="L / 100 m" value={fmt0(litresPer100m)} />
+              <Stat label="Calculated L/ha" value={fmt0(calculatedLitresPerHa)} />
+              <Stat label="Row spacing (m)" value={fmt1(effectiveRowSpacing)} />
+              <Stat
+                label="Concentration factor"
+                value={fmt2(concentrationFactor)}
+                warn={cfWarning}
+              />
+            </div>
+
+            {effectiveRowSpacing != null && effectiveRowSpacing <= 0 && (
+              <p className="text-xs text-destructive">Row spacing must be greater than zero.</p>
+            )}
+            {cfWarning && (
+              <p className="text-xs text-warning-foreground">
+                Concentration factor differs from canopy recommendation.
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t">
+              <div className="text-xs">
+                <div className="text-muted-foreground">Total area (selected)</div>
+                <div className="font-medium">{totalAreaHa != null ? `${totalAreaHa.toFixed(2)} ha` : "—"}</div>
+              </div>
+              <div className="text-xs">
+                <div className="text-muted-foreground">Total water volume</div>
+                <div className="font-medium">
+                  {computedWaterVolume != null
+                    ? `${Math.round(computedWaterVolume).toLocaleString()} L`
+                    : "Total water volume requires paddock area."}
+                </div>
+              </div>
+            </div>
+          </div>
+
+
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label>Chemicals</Label>
