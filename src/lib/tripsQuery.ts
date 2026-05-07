@@ -54,9 +54,10 @@ export interface Trip {
 
 export interface TripsQueryResult {
   trips: Trip[];
-  source: "vineyard_id" | "paddock_id" | "merged" | "empty";
+  source: "vineyard_id" | "paddock_id" | "paddock_ids_jsonb" | "merged" | "empty";
   vineyardCount: number;
   paddockFallbackCount: number;
+  paddockJsonbFallbackCount: number;
   deletedExcluded: number;
   missingStart: number;
   missingPaddock: number;
@@ -66,6 +67,7 @@ export async function fetchTripsForVineyard(
   vineyardId: string,
   paddockIds: string[],
 ): Promise<TripsQueryResult> {
+  // 1) Primary: vineyard_id direct match.
   const byVineyard = await supabase
     .from("trips")
     .select("*")
@@ -75,12 +77,13 @@ export async function fetchTripsForVineyard(
 
   const primary = (byVineyard.data ?? []) as Trip[];
   const ids = new Set(primary.map((t) => t.id));
-
   let merged: Trip[] = primary;
   let paddockFallbackCount = 0;
+  let paddockJsonbFallbackCount = 0;
   let source: TripsQueryResult["source"] = primary.length ? "vineyard_id" : "empty";
 
   if (paddockIds.length) {
+    // 2) Fallback: scalar paddock_id in this vineyard's paddocks.
     const byPaddock = await supabase
       .from("trips")
       .select("*")
@@ -89,24 +92,48 @@ export async function fetchTripsForVineyard(
     if (!byPaddock.error) {
       const extras = ((byPaddock.data ?? []) as Trip[]).filter((t) => !ids.has(t.id));
       paddockFallbackCount = extras.length;
+      extras.forEach((t) => ids.add(t.id));
       if (extras.length) {
-        merged = primary.concat(extras);
+        merged = merged.concat(extras);
         source = primary.length ? "merged" : "paddock_id";
       }
     } else if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      if (import.meta.env.DEV) console.warn("[trips] paddock_id fallback query failed:", byPaddock.error.message);
+      console.warn("[trips] paddock_id fallback failed:", byPaddock.error.message);
+    }
+
+    // 3) Fallback: jsonb paddock_ids array contains any of this vineyard's paddocks.
+    // Build OR of cs.[<uuid>] filters (jsonb contains array element).
+    const orExpr = paddockIds
+      .map((pid) => `paddock_ids.cs.["${pid}"]`)
+      .join(",");
+    const byJsonb = await supabase
+      .from("trips")
+      .select("*")
+      .or(orExpr)
+      .is("deleted_at", null);
+    if (!byJsonb.error) {
+      const extras = ((byJsonb.data ?? []) as Trip[]).filter((t) => !ids.has(t.id));
+      paddockJsonbFallbackCount = extras.length;
+      if (extras.length) {
+        merged = merged.concat(extras);
+        source = merged.length === extras.length ? "paddock_ids_jsonb" : "merged";
+      }
+    } else if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn("[trips] paddock_ids jsonb fallback failed:", byJsonb.error.message);
     }
   }
 
-  // No archive column on trips; only deleted_at (already excluded above).
   return {
     trips: merged,
     source,
     vineyardCount: primary.length,
     paddockFallbackCount,
+    paddockJsonbFallbackCount,
     deletedExcluded: 0,
     missingStart: merged.filter((t) => !t.start_time).length,
     missingPaddock: merged.filter((t) => !t.paddock_id && !t.paddock_name).length,
   };
 }
+
