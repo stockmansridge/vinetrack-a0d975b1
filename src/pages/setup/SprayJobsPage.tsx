@@ -402,6 +402,84 @@ function SprayJobSheet({
   const togglePaddock = (id: string) =>
     setPaddockIds((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
 
+  // Selected paddock objects (for area + row width data).
+  const selectedPaddocks = useMemo(
+    () => lookups.paddocks.filter((p: any) => paddockIds.includes(p.id)),
+    [lookups.paddocks, paddockIds],
+  );
+
+  const meanRowSpacing = useMemo(() => {
+    const widths = selectedPaddocks
+      .map((p: any) => Number(p.row_width))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!widths.length) return null;
+    return widths.reduce((a, b) => a + b, 0) / widths.length;
+  }, [selectedPaddocks]);
+
+  const totalAreaHa = useMemo(() => {
+    if (!selectedPaddocks.length) return null;
+    let total = 0;
+    let any = false;
+    for (const p of selectedPaddocks as any[]) {
+      const m = deriveMetrics(p);
+      if (m.areaHa > 0) { total += m.areaHa; any = true; }
+    }
+    return any ? total : null;
+  }, [selectedPaddocks]);
+
+  const effectiveRowSpacing = rowSpacingOverridden
+    ? form.row_spacing_metres ?? null
+    : meanRowSpacing;
+
+  const litresPer100m = vspLitresPer100m(form.vsp_canopy_size, form.vsp_canopy_density);
+  const calculatedLitresPerHa = vspLitresPerHa(
+    form.vsp_canopy_size,
+    form.vsp_canopy_density,
+    effectiveRowSpacing ?? null,
+  );
+
+  const effectiveSprayRate = sprayRateOverridden
+    ? form.spray_rate_per_ha ?? null
+    : calculatedLitresPerHa;
+
+  const concentrationFactor =
+    !effectiveSprayRate || effectiveSprayRate <= 0 || calculatedLitresPerHa == null
+      ? 1.0
+      : calculatedLitresPerHa / effectiveSprayRate;
+
+  const computedWaterVolume =
+    totalAreaHa != null && effectiveSprayRate != null
+      ? totalAreaHa * effectiveSprayRate
+      : null;
+
+  // Sync derived values into the form (deferred to avoid setState-in-render).
+  useMemo(() => {
+    const next: Partial<SprayJobInput> = {};
+    if ((form.row_spacing_metres ?? null) !== (effectiveRowSpacing ?? null)) {
+      next.row_spacing_metres = effectiveRowSpacing ?? null;
+    }
+    if (!sprayRateOverridden && (form.spray_rate_per_ha ?? null) !== (effectiveSprayRate ?? null)) {
+      next.spray_rate_per_ha = effectiveSprayRate ?? null;
+    }
+    const cfRounded = Math.round(concentrationFactor * 100) / 100;
+    if ((form.concentration_factor ?? 1) !== cfRounded) {
+      next.concentration_factor = cfRounded;
+    }
+    if (computedWaterVolume != null) {
+      const wv = Math.round(computedWaterVolume);
+      if ((form.water_volume ?? null) !== wv) next.water_volume = wv;
+    }
+    if (Object.keys(next).length) {
+      queueMicrotask(() => setForm((f) => ({ ...f, ...next })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveRowSpacing, effectiveSprayRate, concentrationFactor, computedWaterVolume]);
+
+  const cfWarning = Math.abs(concentrationFactor - 1.0) > 0.005;
+  const fmt1 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(1));
+  const fmt2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
+  const fmt0 = (n: number | null | undefined) => (n == null ? "—" : Math.round(n).toString());
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
