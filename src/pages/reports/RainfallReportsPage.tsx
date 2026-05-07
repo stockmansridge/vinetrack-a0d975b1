@@ -7,6 +7,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import {
   fetchDailyRainfall,
   rangeForPreset,
+  sourceLabel,
   summarizeRainfall,
   type RangePreset,
 } from "@/lib/rainfallQuery";
@@ -33,8 +34,8 @@ const PRESETS: { value: RangePreset; label: string }[] = [
   { value: "last7", label: "Last 7 days" },
   { value: "last14", label: "Last 14 days" },
   { value: "last30", label: "Last 30 days" },
-  { value: "thisMonth", label: "This month" },
-  { value: "thisSeason", label: "This season" },
+  { value: "currentYear", label: "Current year" },
+  { value: "last365", label: "Last 365 days" },
   { value: "custom", label: "Custom" },
 ];
 
@@ -79,6 +80,9 @@ export default function RainfallReportsPage() {
           <p className="text-sm text-muted-foreground mt-1">
             Daily rainfall recorded for the selected vineyard. Sourced via the
             secure <code className="font-mono text-xs">get_daily_rainfall</code> RPC.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Source priority: Manual → Davis WeatherLink → Weather Underground → Open-Meteo.
           </p>
         </div>
         <Button size="sm" variant="outline" disabled title="Export coming soon">
@@ -185,7 +189,7 @@ export default function RainfallReportsPage() {
                       r.rainfall_mm.toFixed(1)
                     )}
                   </TableCell>
-                  <TableCell>{r.source ?? "—"}</TableCell>
+                  <TableCell>{sourceLabel(r.source)}</TableCell>
                   <TableCell>{r.station_name ?? "—"}</TableCell>
                   <TableCell className="max-w-[240px] truncate">{r.notes ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">

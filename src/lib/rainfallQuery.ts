@@ -77,8 +77,8 @@ export type RangePreset =
   | "last7"
   | "last14"
   | "last30"
-  | "thisMonth"
-  | "thisSeason"
+  | "currentYear"
+  | "last365"
   | "custom";
 
 export function rangeForPreset(preset: RangePreset, today = new Date()): { from: Date; to: Date } {
@@ -97,16 +97,28 @@ export function rangeForPreset(preset: RangePreset, today = new Date()): { from:
     case "last30":
       from.setDate(from.getDate() - 29);
       return { from, to };
-    case "thisMonth":
-      return { from: new Date(today.getFullYear(), today.getMonth(), 1), to };
-    case "thisSeason": {
-      // Southern hemisphere viticulture year: 1 July → 30 June
-      const y = today.getMonth() >= 6 ? today.getFullYear() : today.getFullYear() - 1;
-      return { from: new Date(y, 6, 1), to };
-    }
+    case "currentYear":
+      return { from: new Date(today.getFullYear(), 0, 1), to };
+    case "last365":
+      from.setDate(from.getDate() - 364);
+      return { from, to };
     case "custom":
       return { from, to };
   }
+}
+
+// ---------- Source labels ----------
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: "Manual",
+  davis_weatherlink: "Davis WeatherLink",
+  wunderground_pws: "Weather Underground",
+  open_meteo: "Open-Meteo fallback",
+};
+
+export function sourceLabel(src: string | null | undefined): string {
+  if (!src) return "—";
+  return SOURCE_LABELS[src] ?? src;
 }
 
 // ---------- Summary ----------
@@ -138,8 +150,8 @@ export function summarizeRainfall(rows: RainfallDay[]): RainfallSummary {
 
   const list = Array.from(sources);
   let label = "No data";
-  if (list.length === 1) label = list[0];
-  else if (list.length > 1) label = "Mixed";
+  if (list.length === 1) label = sourceLabel(list[0]);
+  else if (list.length > 1) label = `Mixed (${list.map(sourceLabel).join(", ")})`;
   else if (rows.length > 0) label = "Unknown";
 
   return {
