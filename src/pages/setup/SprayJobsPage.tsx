@@ -238,8 +238,8 @@ function JobsTable({
               {mode === "templates" ? (
                 <>
                   <TableCell className="font-medium">{fmt(j.name)}</TableCell>
-                  <TableCell>{fmt(j.operation_type)}</TableCell>
-                  <TableCell>{fmt(j.target)}</TableCell>
+                  <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
+                  <TableCell>{j.target ? j.target : "—"}</TableCell>
                   <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell>
                   <TableCell>{fmt(j.water_volume)}</TableCell>
                   <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
@@ -257,8 +257,8 @@ function JobsTable({
                   <TableCell className="font-medium">{fmt(j.name)}</TableCell>
                   <TableCell>{fmtDate(j.planned_date)}</TableCell>
                   <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
-                  <TableCell>{fmt(j.operation_type)}</TableCell>
-                  <TableCell>{fmt(j.target)}</TableCell>
+                  <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
+                  <TableCell>{j.target ? j.target : "—"}</TableCell>
                   <TableCell>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
