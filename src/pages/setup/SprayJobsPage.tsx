@@ -28,6 +28,12 @@ import {
   type VineyardTeamMember,
 } from "@/lib/sprayJobsQuery";
 import { ChemicalPicker } from "@/components/spray/ChemicalPicker";
+import {
+  GROWTH_STAGES, GROWTH_STAGE_LABEL,
+  VSP_CANOPY_SIZES, VSP_DENSITIES,
+  vspLitresPer100m, vspLitresPerHa,
+} from "@/lib/vspWaterRate";
+import { deriveMetrics } from "@/lib/paddockGeometry";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -209,12 +215,12 @@ function JobsTable({
 
   const columns = useMemo(() => {
     if (mode === "templates") {
-      return ["Name", "Operation", "Target pest/disease/weed", "Chemicals", "Water (L)", "Rate / ha", "Updated", ""];
+      return ["Name", "Operation", "Target pest/disease/weed", "Growth", "Chemicals", "Water (L)", "Rate / ha", "CF", "Updated", ""];
     }
     if (mode === "archived") {
       return ["Name", "Type", "Status", "Updated", ""];
     }
-    return ["Name", "Planned date", "Status", "Operation", "Target pest/disease/weed", "Equipment", "Operator", "Updated", ""];
+    return ["Name", "Planned date", "Status", "Operation", "Target pest/disease/weed", "Growth", "Rate / ha", "Water (L)", "CF", "Equipment", "Operator", "Updated", ""];
   }, [mode]);
 
   return (
@@ -240,9 +246,13 @@ function JobsTable({
                   <TableCell className="font-medium">{fmt(j.name)}</TableCell>
                   <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
                   <TableCell>{j.target ? j.target : "—"}</TableCell>
+                  <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
+                    {j.growth_stage_code ?? "—"}
+                  </TableCell>
                   <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell>
                   <TableCell>{fmt(j.water_volume)}</TableCell>
                   <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
+                  <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
                 </>
               ) : mode === "archived" ? (
@@ -259,6 +269,12 @@ function JobsTable({
                   <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
                   <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
                   <TableCell>{j.target ? j.target : "—"}</TableCell>
+                  <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
+                    {j.growth_stage_code ?? "—"}
+                  </TableCell>
+                  <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
+                  <TableCell>{fmt(j.water_volume)}</TableCell>
+                  <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell>
                   <TableCell>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
@@ -334,7 +350,20 @@ function SprayJobSheet({
     tractor_id: job?.tractor_id ?? null,
     operator_user_id: job?.operator_user_id ?? null,
     notes: job?.notes ?? "",
+    growth_stage_code: job?.growth_stage_code ?? null,
+    vsp_canopy_size: job?.vsp_canopy_size ?? null,
+    vsp_canopy_density: job?.vsp_canopy_density ?? null,
+    row_spacing_metres: job?.row_spacing_metres ?? null,
+    concentration_factor: job?.concentration_factor ?? 1.0,
   }));
+
+  // Whether the user has manually overridden the row spacing or spray rate.
+  const [rowSpacingOverridden, setRowSpacingOverridden] = useState<boolean>(
+    !!job?.row_spacing_metres,
+  );
+  const [sprayRateOverridden, setSprayRateOverridden] = useState<boolean>(
+    !!job?.spray_rate_per_ha,
+  );
 
   const [paddockIds, setPaddockIds] = useState<string[]>([]);
   const [paddocksOpen, setPaddocksOpen] = useState(false);
@@ -382,6 +411,84 @@ function SprayJobSheet({
 
   const togglePaddock = (id: string) =>
     setPaddockIds((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
+
+  // Selected paddock objects (for area + row width data).
+  const selectedPaddocks = useMemo(
+    () => lookups.paddocks.filter((p: any) => paddockIds.includes(p.id)),
+    [lookups.paddocks, paddockIds],
+  );
+
+  const meanRowSpacing = useMemo(() => {
+    const widths = selectedPaddocks
+      .map((p: any) => Number(p.row_width))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!widths.length) return null;
+    return widths.reduce((a, b) => a + b, 0) / widths.length;
+  }, [selectedPaddocks]);
+
+  const totalAreaHa = useMemo(() => {
+    if (!selectedPaddocks.length) return null;
+    let total = 0;
+    let any = false;
+    for (const p of selectedPaddocks as any[]) {
+      const m = deriveMetrics(p);
+      if (m.areaHa > 0) { total += m.areaHa; any = true; }
+    }
+    return any ? total : null;
+  }, [selectedPaddocks]);
+
+  const effectiveRowSpacing = rowSpacingOverridden
+    ? form.row_spacing_metres ?? null
+    : meanRowSpacing;
+
+  const litresPer100m = vspLitresPer100m(form.vsp_canopy_size, form.vsp_canopy_density);
+  const calculatedLitresPerHa = vspLitresPerHa(
+    form.vsp_canopy_size,
+    form.vsp_canopy_density,
+    effectiveRowSpacing ?? null,
+  );
+
+  const effectiveSprayRate = sprayRateOverridden
+    ? form.spray_rate_per_ha ?? null
+    : calculatedLitresPerHa;
+
+  const concentrationFactor =
+    !effectiveSprayRate || effectiveSprayRate <= 0 || calculatedLitresPerHa == null
+      ? 1.0
+      : calculatedLitresPerHa / effectiveSprayRate;
+
+  const computedWaterVolume =
+    totalAreaHa != null && effectiveSprayRate != null
+      ? totalAreaHa * effectiveSprayRate
+      : null;
+
+  // Sync derived values into the form (deferred to avoid setState-in-render).
+  useMemo(() => {
+    const next: Partial<SprayJobInput> = {};
+    if ((form.row_spacing_metres ?? null) !== (effectiveRowSpacing ?? null)) {
+      next.row_spacing_metres = effectiveRowSpacing ?? null;
+    }
+    if (!sprayRateOverridden && (form.spray_rate_per_ha ?? null) !== (effectiveSprayRate ?? null)) {
+      next.spray_rate_per_ha = effectiveSprayRate ?? null;
+    }
+    const cfRounded = Math.round(concentrationFactor * 100) / 100;
+    if ((form.concentration_factor ?? 1) !== cfRounded) {
+      next.concentration_factor = cfRounded;
+    }
+    if (computedWaterVolume != null) {
+      const wv = Math.round(computedWaterVolume);
+      if ((form.water_volume ?? null) !== wv) next.water_volume = wv;
+    }
+    if (Object.keys(next).length) {
+      queueMicrotask(() => setForm((f) => ({ ...f, ...next })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveRowSpacing, effectiveSprayRate, concentrationFactor, computedWaterVolume]);
+
+  const cfWarning = Math.abs(concentrationFactor - 1.0) > 0.005;
+  const fmt1 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(1));
+  const fmt2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
+  const fmt0 = (n: number | null | undefined) => (n == null ? "—" : Math.round(n).toString());
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -451,15 +558,23 @@ function SprayJobSheet({
               </p>
             </div>
 
-            <div className="space-y-1">
-              <Label>Water volume (L)</Label>
-              <Input type="number" value={form.water_volume ?? ""}
-                onChange={(e) => setForm({ ...form, water_volume: e.target.value === "" ? null : Number(e.target.value) })} />
-            </div>
-            <div className="space-y-1">
-              <Label>Spray rate per ha</Label>
-              <Input type="number" value={form.spray_rate_per_ha ?? ""}
-                onChange={(e) => setForm({ ...form, spray_rate_per_ha: e.target.value === "" ? null : Number(e.target.value) })} />
+            <div className="space-y-1 col-span-2">
+              <Label>Growth stage (E-L)</Label>
+              <Select
+                value={form.growth_stage_code ?? "__none"}
+                onValueChange={(v) =>
+                  setForm({ ...form, growth_stage_code: v === "__none" ? null : v })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="— Not set —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— Not set —</SelectItem>
+                  {GROWTH_STAGES.map((g) => (
+                    <SelectItem key={g.code} value={g.code}>{g.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Optional — Eichhorn-Lorenz growth stage.</p>
             </div>
 
             <div className="space-y-1">
@@ -559,7 +674,153 @@ function SprayJobSheet({
             </div>
           </div>
 
-          {/* Chemicals */}
+          {/* VSP water-rate calculator */}
+          <div className="rounded-md border p-3 space-y-3">
+            <div>
+              <div className="font-medium">VSP water-rate calculator</div>
+              <p className="text-xs text-muted-foreground">
+                Calculates spray water rate from canopy size, density, and row spacing.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>VSP canopy size</Label>
+                <Select
+                  value={form.vsp_canopy_size ?? "__none"}
+                  onValueChange={(v) => setForm({ ...form, vsp_canopy_size: v === "__none" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="— Select —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— Not set —</SelectItem>
+                    {VSP_CANOPY_SIZES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Canopy density</Label>
+                <Select
+                  value={form.vsp_canopy_density ?? "__none"}
+                  onValueChange={(v) => setForm({ ...form, vsp_canopy_density: v === "__none" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="— Select —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— Not set —</SelectItem>
+                    {VSP_DENSITIES.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Row spacing (m)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={
+                    rowSpacingOverridden
+                      ? form.row_spacing_metres ?? ""
+                      : meanRowSpacing != null ? meanRowSpacing.toFixed(2) : ""
+                  }
+                  placeholder={meanRowSpacing != null ? meanRowSpacing.toFixed(2) : "Enter row spacing"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setRowSpacingOverridden(true);
+                    setForm({ ...form, row_spacing_metres: v === "" ? null : Number(v) });
+                  }}
+                />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {meanRowSpacing != null
+                      ? `Mean from selected paddocks: ${meanRowSpacing.toFixed(2)} m`
+                      : "Select paddocks with row spacing data or enter row spacing manually."}
+                  </span>
+                  {rowSpacingOverridden && (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        setRowSpacingOverridden(false);
+                        setForm({ ...form, row_spacing_metres: meanRowSpacing ?? null });
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Spray rate (L/ha)</Label>
+                <Input
+                  type="number"
+                  value={
+                    sprayRateOverridden
+                      ? form.spray_rate_per_ha ?? ""
+                      : calculatedLitresPerHa != null ? Math.round(calculatedLitresPerHa) : ""
+                  }
+                  placeholder={calculatedLitresPerHa != null ? String(Math.round(calculatedLitresPerHa)) : "—"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSprayRateOverridden(true);
+                    setForm({ ...form, spray_rate_per_ha: v === "" ? null : Number(v) });
+                  }}
+                />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Optional override of calculated rate.</span>
+                  {sprayRateOverridden && (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        setSprayRateOverridden(false);
+                        setForm({ ...form, spray_rate_per_ha: calculatedLitresPerHa ?? null });
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <Stat label="L / 100 m" value={fmt0(litresPer100m)} />
+              <Stat label="Calculated L/ha" value={fmt0(calculatedLitresPerHa)} />
+              <Stat label="Row spacing (m)" value={fmt1(effectiveRowSpacing)} />
+              <Stat
+                label="Concentration factor"
+                value={fmt2(concentrationFactor)}
+                warn={cfWarning}
+              />
+            </div>
+
+            {effectiveRowSpacing != null && effectiveRowSpacing <= 0 && (
+              <p className="text-xs text-destructive">Row spacing must be greater than zero.</p>
+            )}
+            {cfWarning && (
+              <p className="text-xs text-warning-foreground">
+                Concentration factor differs from canopy recommendation.
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t">
+              <div className="text-xs">
+                <div className="text-muted-foreground">Total area (selected)</div>
+                <div className="font-medium">{totalAreaHa != null ? `${totalAreaHa.toFixed(2)} ha` : "—"}</div>
+              </div>
+              <div className="text-xs">
+                <div className="text-muted-foreground">Total water volume</div>
+                <div className="font-medium">
+                  {computedWaterVolume != null
+                    ? `${Math.round(computedWaterVolume).toLocaleString()} L`
+                    : "Total water volume requires paddock area."}
+                </div>
+              </div>
+            </div>
+          </div>
+
+
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label>Chemicals</Label>
@@ -651,5 +912,14 @@ function SprayJobSheet({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div className={`rounded border p-2 ${warn ? "border-warning bg-warning/10" : ""}`}>
+      <div className="text-muted-foreground text-[10px] uppercase tracking-wide">{label}</div>
+      <div className={`font-medium ${warn ? "text-warning-foreground" : ""}`}>{value}</div>
+    </div>
   );
 }
