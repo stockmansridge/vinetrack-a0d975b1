@@ -189,7 +189,7 @@ export default function RainfallReportsPage() {
                       r.rainfall_mm.toFixed(1)
                     )}
                   </TableCell>
-                  <TableCell>{r.source ?? "—"}</TableCell>
+                  <TableCell>{sourceLabel(r.source)}</TableCell>
                   <TableCell>{r.station_name ?? "—"}</TableCell>
                   <TableCell className="max-w-[240px] truncate">{r.notes ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
