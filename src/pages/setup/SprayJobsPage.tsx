@@ -246,9 +246,13 @@ function JobsTable({
                   <TableCell className="font-medium">{fmt(j.name)}</TableCell>
                   <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
                   <TableCell>{j.target ? j.target : "—"}</TableCell>
+                  <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
+                    {j.growth_stage_code ?? "—"}
+                  </TableCell>
                   <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell>
                   <TableCell>{fmt(j.water_volume)}</TableCell>
                   <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
+                  <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
                 </>
               ) : mode === "archived" ? (
@@ -265,6 +269,12 @@ function JobsTable({
                   <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
                   <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
                   <TableCell>{j.target ? j.target : "—"}</TableCell>
+                  <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
+                    {j.growth_stage_code ?? "—"}
+                  </TableCell>
+                  <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
+                  <TableCell>{fmt(j.water_volume)}</TableCell>
+                  <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell>
                   <TableCell>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "—" : "—"}</TableCell>
                   <TableCell>{fmtDate(j.updated_at)}</TableCell>
