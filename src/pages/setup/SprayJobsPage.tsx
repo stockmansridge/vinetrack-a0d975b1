@@ -28,6 +28,12 @@ import {
   type VineyardTeamMember,
 } from "@/lib/sprayJobsQuery";
 import { ChemicalPicker } from "@/components/spray/ChemicalPicker";
+import {
+  GROWTH_STAGES, GROWTH_STAGE_LABEL,
+  VSP_CANOPY_SIZES, VSP_DENSITIES,
+  vspLitresPer100m, vspLitresPerHa,
+} from "@/lib/vspWaterRate";
+import { deriveMetrics } from "@/lib/paddockGeometry";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
