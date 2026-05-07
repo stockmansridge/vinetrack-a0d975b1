@@ -427,13 +427,28 @@ function SprayJobSheet({
 
             <div className="space-y-1">
               <Label>Operation type</Label>
-              <Input value={form.operation_type ?? ""} placeholder="e.g. Fungicide"
-                onChange={(e) => setForm({ ...form, operation_type: e.target.value })} />
+              <Select
+                value={form.operation_type ?? ""}
+                onValueChange={(v) => setForm({ ...form, operation_type: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select operation type" /></SelectTrigger>
+                <SelectContent>
+                  {OPERATION_TYPE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
-              <Label>Target</Label>
-              <Input value={form.target ?? ""} placeholder="e.g. Powdery mildew"
-                onChange={(e) => setForm({ ...form, target: e.target.value })} />
+              <Label>Target pest / disease / weed</Label>
+              <Input
+                value={form.target ?? ""}
+                placeholder="e.g. powdery mildew, downy mildew, botrytis, weeds, insects"
+                onChange={(e) => setForm({ ...form, target: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional — what this spray is intended to control.
+              </p>
             </div>
 
             <div className="space-y-1">
