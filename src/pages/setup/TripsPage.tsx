@@ -238,6 +238,20 @@ export default function TripsPage() {
           </Select>
         </div>
         <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Function</div>
+          <Select value={tripFn} onValueChange={setTripFn}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All functions</SelectItem>
+              <SelectItem value={SPRAY}>Spraying only</SelectItem>
+              <SelectItem value={MAINT}>Maintenance (non-spray)</SelectItem>
+              {Object.entries(TRIP_FUNCTION_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Status</div>
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Any" /></SelectTrigger>
