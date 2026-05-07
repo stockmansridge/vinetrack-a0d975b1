@@ -279,6 +279,8 @@ export default function TripsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Start</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Function</TableHead>
               <TableHead>Paddock</TableHead>
               <TableHead>Pattern</TableHead>
               <TableHead>Person</TableHead>
@@ -289,14 +291,14 @@ export default function TripsPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No trips found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -304,9 +306,12 @@ export default function TripsPage() {
             {rows.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
+              const fnLabel = tripFunctionLabel(t.trip_function);
               return (
                 <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
                   <TableCell>{fmtDate(t.start_time)}</TableCell>
+                  <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>
+                  <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>
                   <TableCell>{fmt(padName)}</TableCell>
                   <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{t.tracking_pattern}</Badge> : "—"}</TableCell>
                   <TableCell>{fmt(t.person_name)}</TableCell>
