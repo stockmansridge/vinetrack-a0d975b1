@@ -38,6 +38,14 @@ import {
 } from "@/components/ui/table";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
+import {
+  LiveWeatherSummary,
+  evaluateTripWeather,
+  TripWeatherBadge,
+  type WeatherContext,
+} from "@/components/dashboard/LiveWeatherSummary";
+import { fetchLiveWeather } from "@/lib/weatherStatusQuery";
+import { fetchRainForecast, summarizeForecast } from "@/lib/rainForecastQuery";
 
 interface PaddockLite {
   id: string;
