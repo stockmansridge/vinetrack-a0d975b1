@@ -7,6 +7,7 @@ import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight } f
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
+import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
@@ -159,6 +160,8 @@ export default function Dashboard() {
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
         />
       </div>
+
+      <VineyardOverviewMap />
 
       <div>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Quick links</h2>
