@@ -122,35 +122,30 @@ export default function PinsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Title</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Paddock</TableHead>
-                  <TableHead>Row</TableHead>
-                  <TableHead>Side</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead>Done</TableHead>
+                  <TableHead className="text-right">Row</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Priority</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead>Updated</TableHead>
+                  <TableHead>Completed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-muted-foreground">Loading…</TableCell>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">Loading…</TableCell>
                   </TableRow>
                 )}
                 {error && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-destructive">
+                    <TableCell colSpan={7} className="text-center text-destructive">
                       {(error as Error).message}
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading && !error && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No pins found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -164,29 +159,36 @@ export default function PinsPage() {
                       onClick={() => setSelectedId(p.id)}
                       data-active={p.id === selectedId}
                     >
-                      <TableCell className="font-medium">{pinDisplayTitle(p as any)}</TableCell>
-                      <TableCell>
-                        {p.mode ? (
-                          <Badge
-                            variant="secondary"
-                            style={{ background: style.hex + "22", color: style.hex }}
-                          >
-                            {p.mode}
-                          </Badge>
-                        ) : "—"}
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ background: style.hex }}
+                            title={style.label}
+                          />
+                          <span className="truncate">{pinDisplayTitle(p as any)}</span>
+                        </div>
                       </TableCell>
-                      <TableCell>{p.category ?? "—"}</TableCell>
-                      <TableCell>{p.priority ?? "—"}</TableCell>
-                      <TableCell>{p.status ?? "—"}</TableCell>
                       <TableCell>
-                        {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? p.paddock_id.slice(0, 8)) : "—"}
+                        {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
-                      <TableCell>{p.row_number ?? "—"}</TableCell>
-                      <TableCell>{p.side ?? "—"}</TableCell>
-                      <TableCell>{(p as any).growth_stage_code ?? "—"}</TableCell>
-                      <TableCell>{(p as any).is_completed ? "Yes" : "No"}</TableCell>
-                      <TableCell>{formatCell(p.created_at)}</TableCell>
-                      <TableCell>{formatCell(p.updated_at)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{p.row_number ?? "—"}</TableCell>
+                      <TableCell>
+                        {(p as any).is_completed ? (
+                          <Badge>Completed</Badge>
+                        ) : p.status ? (
+                          <Badge variant="outline">{p.status}</Badge>
+                        ) : (
+                          <Badge variant="outline">Open</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -198,6 +200,7 @@ export default function PinsPage() {
               <PinDetailPanel
                 pin={selected}
                 paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+                vineyardName={vineyardName}
                 onClose={() => setSelectedId(null)}
               />
             ) : (
