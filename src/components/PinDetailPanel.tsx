@@ -215,20 +215,36 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
           )}
         </Section>
 
-        {pin.photo_path && (
+        {hasPhotoRef && (
           <div className="pt-1">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
               Photo
             </div>
             {photoUrl ? (
-              <img
-                src={photoUrl}
-                alt={pin.title ?? "Pin photo"}
-                loading="lazy"
-                className="w-full max-h-64 object-cover rounded-md border"
-              />
-            ) : (
+              <a href={photoUrl} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={photoUrl}
+                  alt={pin.title ?? "Pin photo"}
+                  loading="lazy"
+                  className="w-full max-h-64 object-cover rounded-md border hover:opacity-90 transition"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                    const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (sib) sib.style.display = "flex";
+                  }}
+                />
+                <div
+                  className="hidden h-24 rounded-md border bg-muted/50 items-center justify-center text-xs text-muted-foreground"
+                >
+                  Image unavailable
+                </div>
+              </a>
+            ) : photoPath ? (
               <div className="h-24 rounded-md bg-muted animate-pulse" />
+            ) : (
+              <div className="h-24 rounded-md border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground">
+                Image unavailable
+              </div>
             )}
           </div>
         )}
