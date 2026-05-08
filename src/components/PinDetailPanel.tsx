@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-import { pinStyle } from "@/lib/pinStyle";
+import { pinStyle, formatRowNumber } from "@/lib/pinStyle";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -59,7 +59,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
-  const style = pinStyle(pin.mode);
+  const style = pinStyle(pin.mode, pin.button_color);
   const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -116,7 +116,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
-          <Field label="Row" value={pin.row_number} />
+          <Field label="Row" value={formatRowNumber(pin.row_number)} />
           <Field label="Side" value={pin.side} />
           {coords && (
             <div className="text-xs text-muted-foreground pt-1">

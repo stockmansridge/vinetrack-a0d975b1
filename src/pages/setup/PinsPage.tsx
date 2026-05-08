@@ -17,7 +17,7 @@ import {
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
-import { pinStyle } from "@/lib/pinStyle";
+import { pinStyle, formatRowNumber } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -153,7 +153,7 @@ export default function PinsPage() {
                   </TableRow>
                 )}
                 {filtered.map((p) => {
-                  const style = pinStyle(p.mode);
+                  const style = pinStyle(p.mode, (p as any).button_color);
                   return (
                     <TableRow
                       key={p.id}
@@ -174,7 +174,7 @@ export default function PinsPage() {
                       <TableCell>
                         {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{p.row_number ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatRowNumber(p.row_number)}</TableCell>
                       <TableCell>
                         {(p as any).is_completed ? (
                           <Badge>Completed</Badge>
