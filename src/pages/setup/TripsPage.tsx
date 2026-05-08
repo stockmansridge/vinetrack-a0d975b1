@@ -27,6 +27,17 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { Button } from "@/components/ui/button";
+import {
+  parseCorrections,
+  parseSeeding,
+  summarizeCoverage,
+  formatCorrectionLine,
+  tripToCsvRow,
+  rowsToCsv,
+  downloadCsv,
+  downloadTripPdf,
+} from "@/lib/tripReport";
 
 interface PaddockLite {
   id: string;
@@ -186,21 +197,38 @@ export default function TripsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Trips</h1>
-        <p className="text-sm text-muted-foreground">
-          Read-only. Soft-deleted trips are excluded.
-        </p>
-        {!isLoading && !error && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Showing {rows.length} of {trips.length} trips for this vineyard
-            {data ? ` · source: ${data.source}` : ""}
-            {data && (data.paddockFallbackCount || data.paddockJsonbFallbackCount)
-              ? ` (+${data.paddockFallbackCount} via paddock_id, +${data.paddockJsonbFallbackCount} via paddock_ids)`
-              : ""}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Trips</h1>
+          <p className="text-sm text-muted-foreground">
+            Read-only. Soft-deleted trips are excluded.
           </p>
-        )}
+          {!isLoading && !error && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Showing {rows.length} of {trips.length} trips for this vineyard
+              {data ? ` · source: ${data.source}` : ""}
+              {data && (data.paddockFallbackCount || data.paddockJsonbFallbackCount)
+                ? ` (+${data.paddockFallbackCount} via paddock_id, +${data.paddockJsonbFallbackCount} via paddock_ids)`
+                : ""}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={rows.length === 0}
+          onClick={() => {
+            const csvRows = rows.map((t) => {
+              const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
+              return tripToCsvRow(t, padName, tripDisplayName(t), tripFunctionLabel(t.trip_function));
+            });
+            downloadCsv(`trips_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
+          }}
+        >
+          Export CSV
+        </Button>
       </div>
+
 
       <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
@@ -359,6 +387,9 @@ function TripSheet({
   const completed = arrayLen(trip?.completed_paths);
   const skipped = arrayLen(trip?.skipped_paths);
   const pins = arrayLen(trip?.pin_ids);
+  const corrections = trip ? parseCorrections(trip.manual_correction_events) : [];
+  const seeding = trip ? parseSeeding(trip.seeding_details) : null;
+  const cov = trip ? summarizeCoverage(trip) : null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -367,30 +398,71 @@ function TripSheet({
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  downloadTripPdf(trip, {
+                    paddockName: padName ?? null,
+                    tripDisplay: tripDisplayName(trip),
+                    tripFunctionLabel: tripFunctionLabel(trip.trip_function),
+                  })
+                }
+              >
+                Download Trip Report PDF
+              </Button>
+            </div>
             <Section title="Schedule">
-              <Field label="Start" value={fmtDate(trip.start_time)} />
-              <Field label="End" value={fmtDate(trip.end_time)} />
+              <Field label="Date" value={fmtDate(trip.start_time)} />
+              <Field label="Start time" value={trip.start_time ? new Date(trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />
+              <Field label="Finish time" value={trip.end_time ? new Date(trip.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />
               <Field label="Duration" value={fmtDuration(trip.start_time, trip.end_time)} />
               <Field label="Status" value={tripStatus(trip)} />
             </Section>
-            <Section title="Context">
-              <Field label="Title" value={fmt(trip.trip_title)} />
-              <Field label="Function" value={fmt(tripFunctionLabel(trip.trip_function))} />
-              <Field label="Paddock" value={fmt(padName)} />
+            <Section title="Job record">
+              <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
+              <Field label="Title / details" value={fmt(trip.trip_title)} />
+              <Field label="Paddock / block" value={fmt(padName)} />
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
-            <Section title="Coverage">
+            <Section title="Rows / paths">
+              <Field label="Rows covered" value={String(cov?.rowsCovered ?? 0)} />
+              <Field label="Completed" value={String(cov?.completed ?? completed)} />
+              <Field label="Partial" value={String(cov?.partial ?? 0)} />
+              <Field label="Skipped" value={String(cov?.skipped ?? skipped)} />
+              <Field label="Manually marked complete" value={String(cov?.manuallyMarkedComplete ?? 0)} />
               <Field label="Total distance" value={fmtKm(trip.total_distance)} />
-              <Field label="Current path distance" value={fmtKm(trip.current_path_distance)} />
-              <Field label="Current row" value={fmt(trip.current_row_number)} />
-              <Field label="Next row" value={fmt(trip.next_row_number)} />
-              <Field label="Sequence index" value={fmt(trip.sequence_index)} />
               <Field label="Path points" value={points == null ? "—" : String(points)} />
-              <Field label="Completed paths" value={completed == null ? "—" : String(completed)} />
-              <Field label="Skipped paths" value={skipped == null ? "—" : String(skipped)} />
               <Field label="Pins" value={pins == null ? "—" : String(pins)} />
             </Section>
+            {corrections.length > 0 && (
+              <Section title="Manual corrections">
+                <ul className="space-y-1 list-disc pl-5">
+                  {corrections.map((c, i) => (
+                    <li key={i}>{formatCorrectionLine(c)}</li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+            {seeding && trip.trip_function === "seeding" && (
+              <Section title="Seeding details">
+                {seeding.boxes.map((b) => (
+                  <Field
+                    key={b.name}
+                    label={b.name}
+                    value={[b.contents, b.rate, b.notes].filter(Boolean).join(" · ") || "—"}
+                  />
+                ))}
+                {seeding.sowing_depth_cm != null && (
+                  <Field label="Sowing depth" value={`${seeding.sowing_depth_cm} cm`} />
+                )}
+                {seeding.mix_lines.map((line, i) => (
+                  <Field key={i} label={`Mix line ${i + 1}`} value={line} />
+                ))}
+              </Section>
+            )}
             {(trip.total_tanks != null || trip.active_tank_number != null) && (
               <Section title="Tanks">
                 <Field label="Active tank" value={fmt(trip.active_tank_number)} />

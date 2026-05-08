@@ -47,6 +47,8 @@ export interface Trip {
   person_name?: string | null;
   trip_function?: string | null;
   trip_title?: string | null;
+  manual_correction_events?: string[] | null;
+  seeding_details?: any;
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
