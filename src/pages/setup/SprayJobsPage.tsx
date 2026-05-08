@@ -269,15 +269,58 @@ function JobsTable({
 
   const rows = data ?? [];
 
-  const columns = useMemo(() => {
+  type ColDef = { key: string; label: string; align?: "right"; accessor: (j: SprayJob) => any };
+  const STATUS_ORDER: Record<string, number> = {
+    draft: 1, scheduled: 2, in_progress: 3, completed: 4, cancelled: 5,
+  };
+  const columnDefs: ColDef[] = useMemo(() => {
     if (mode === "templates") {
-      return ["Name", "Operation", "Target pest/disease/weed", "Growth", "Chemicals", "Water (L)", "Rate / ha", "CF", "Updated", ""];
+      return [
+        { key: "name", label: "Name", accessor: (j) => j.name ?? "" },
+        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type) },
+        { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "" },
+        { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "" },
+        { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines) },
+        { key: "water", label: "Water (L)", accessor: (j) => (j.water_volume == null ? null : Number(j.water_volume)) },
+        { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)) },
+        { key: "cf", label: "CF", accessor: (j) => (j.concentration_factor == null ? null : Number(j.concentration_factor)) },
+        { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null) },
+      ];
     }
     if (mode === "archived") {
-      return ["Name", "Type", "Status", "Updated", ""];
+      return [
+        { key: "name", label: "Name", accessor: (j) => j.name ?? "" },
+        { key: "type", label: "Type", accessor: (j) => (j.is_template ? "Template" : "Planned") },
+        { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0 },
+        { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null) },
+      ];
     }
-    return ["Name", "Planned date", "Status", "Operation", "Target pest/disease/weed", "Growth", "Rate / ha", "Water (L)", "CF", "Equipment", "Operator", "Updated", ""];
-  }, [mode]);
+    return [
+      { key: "name", label: "Name", accessor: (j) => j.name ?? "" },
+      { key: "planned", label: "Planned date", accessor: (j) => (j.planned_date ? new Date(j.planned_date) : null) },
+      { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0 },
+      { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type) },
+      { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "" },
+      { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "" },
+      { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)) },
+      { key: "water", label: "Water (L)", accessor: (j) => (j.water_volume == null ? null : Number(j.water_volume)) },
+      { key: "cf", label: "CF", accessor: (j) => (j.concentration_factor == null ? null : Number(j.concentration_factor)) },
+      { key: "equipment", label: "Equipment", accessor: (j) => (j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "" : "") },
+      { key: "operator", label: "Operator", accessor: (j) => (j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "" : "") },
+      { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null) },
+    ];
+  }, [mode, maps]);
+
+  const accessorMap = useMemo(() => {
+    const m: Record<string, (j: SprayJob) => any> = {};
+    columnDefs.forEach((c) => { m[c.key] = c.accessor; });
+    return m;
+  }, [columnDefs]);
+  const { sorted, getSortDirection, toggleSort } = useSortableTable<SprayJob, string>(rows, {
+    accessors: accessorMap,
+    initial: { key: mode === "planned" ? "planned" : "updated", direction: "desc" },
+  });
+  const totalCols = columnDefs.length + 1; // +1 for actions column
 
   return (
     <div className="space-y-3">
