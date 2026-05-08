@@ -56,6 +56,9 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Select chemical</DialogTitle>
+            <DialogDescription>
+              Pick a chemical from this vineyard's saved library, or add a new one.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
