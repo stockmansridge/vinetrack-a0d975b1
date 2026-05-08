@@ -81,6 +81,36 @@ const tripColor = (v?: string | null) =>
 const tripDisplay = (t: Trip) =>
   t.trip_title?.trim() || tripFnLabel(t.trip_function);
 
+// Distinct, stable color per-trip for the overview map.
+// Avoids paddock greens and common pin reds/yellows by sweeping HSL hues
+// while skipping a green band.
+function buildTripPalette(ids: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const n = Math.max(ids.length, 1);
+  const hues: number[] = [];
+  // Generate evenly spaced hues, skipping 90-160 (green band shared with paddocks).
+  const step = 360 / Math.max(n + 2, 6);
+  let h = 200;
+  while (hues.length < n) {
+    const hh = ((h % 360) + 360) % 360;
+    if (!(hh >= 90 && hh <= 160)) hues.push(hh);
+    h += step;
+  }
+  ids.forEach((id, i) => {
+    const hue = hues[i % hues.length];
+    // High saturation, mid-light for visibility on satellite imagery.
+    out.set(id, `hsl(${hue.toFixed(0)} 85% 55%)`);
+  });
+  return out;
+}
+
+const fmtShortDate = (v?: string | null) => {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+};
+
 const fmtDateTime = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
