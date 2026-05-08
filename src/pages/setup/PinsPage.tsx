@@ -34,11 +34,22 @@ interface PaddockLite {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const queryClient = useQueryClient();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { resolve } = useTeamLookup(selectedVineyardId);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const resolvePerson = (raw?: string | null, userId?: string | null): string => {
+    const fromId = userId ? resolve(userId) : null;
+    if (fromId) return fromId;
+    const t = (raw ?? "").trim();
+    if (!t) return userId ? "Unknown member" : "—";
+    if (UUID_RE.test(t)) return resolve(t) ?? "Unknown member";
+    return t;
+  };
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
