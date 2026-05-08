@@ -94,6 +94,19 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use]);
 
+  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer";
+  const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
+    accessors: {
+      name: (c) => c.name ?? "",
+      active_ingredient: (c) => c.active_ingredient ?? "",
+      group: (c) => c.chemical_group ?? "",
+      use: (c) => c.use ?? "",
+      rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
+      manufacturer: (c) => c.manufacturer ?? "",
+    },
+    initial: { key: "name", direction: "asc" },
+  });
+
   const archivedRows = useMemo(() => {
     let list = archived.slice().sort((a, b) => (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""));
     if (filter.trim()) {
@@ -106,6 +119,18 @@ export default function SavedChemicalsPage() {
     }
     return list;
   }, [archived, filter]);
+
+  type ArcSortKey = "name" | "category" | "active_ingredient" | "manufacturer" | "archived";
+  const { sorted: sortedArchived, getSortDirection: arcSortDir, toggleSort: arcToggle } = useSortableTable<typeof archivedRows[number], ArcSortKey>(archivedRows, {
+    accessors: {
+      name: (c) => c.name ?? "",
+      category: (c) => c.use ?? "",
+      active_ingredient: (c) => c.active_ingredient ?? "",
+      manufacturer: (c) => c.manufacturer ?? "",
+      archived: (c) => (c.deleted_at ? new Date(c.deleted_at) : null),
+    },
+    initial: { key: "archived", direction: "desc" },
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
