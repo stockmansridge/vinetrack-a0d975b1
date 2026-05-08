@@ -14,6 +14,27 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
+import logoUrl from "@/assets/vinetrack-leaf.png";
+
+// Cache the logo data URL between exports.
+let _logoDataUrl: string | null = null;
+async function loadLogoDataUrl(): Promise<string | null> {
+  if (_logoDataUrl) return _logoDataUrl;
+  try {
+    const res = await fetch(logoUrl);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    _logoDataUrl = dataUrl;
+    return dataUrl;
+  } catch {
+    return null;
+  }
+}
 
 // ---------- Manual corrections parsing ----------
 
