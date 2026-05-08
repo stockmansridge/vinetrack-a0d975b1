@@ -143,7 +143,7 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
 
     const newAnns: any[] = [];
     for (const pin of withCoords) {
-      const hex = pinStyle(pin.mode).hex;
+      const hex = pinStyle(pin.mode, (pin as any).button_color).hex;
       const ann = new mapkit.Annotation(
         new mapkit.Coordinate(pin.latitude!, pin.longitude!),
         () => makePinElement(hex),
