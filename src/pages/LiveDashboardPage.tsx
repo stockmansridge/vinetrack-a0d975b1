@@ -480,20 +480,23 @@ export default function LiveDashboardPage() {
               <TableBody>
                 {tripsQ.isLoading && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                       Loading…
                     </TableCell>
                   </TableRow>
                 )}
                 {!tripsQ.isLoading && visibleSorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                       No active or recently finished trips.
                     </TableCell>
                   </TableRow>
                 )}
                 {visibleSorted.map(({ trip, status }) => {
                   const counts = rowCounts(trip);
+                  const wxLabel = status === "active" || status === "paused"
+                    ? evaluateTripWeather(trip.trip_function, weatherContext)
+                    : null;
                   return (
                     <TableRow
                       key={trip.id}
