@@ -94,9 +94,25 @@ export default function RainfallReportsPage() {
             Source priority: Manual → Davis WeatherLink → Weather Underground → Open-Meteo.
           </p>
         </div>
-        <Button size="sm" variant="outline" disabled title="Export coming soon">
-          <Download className="h-4 w-4 mr-1" /> Export (coming soon)
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" disabled={!rows.length}>
+              <Download className="h-4 w-4 mr-1" /> Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => downloadRainfallPdf(rows, vineyardName, from, to)}
+            >
+              Download PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => downloadRainfallCsv(rows, vineyardName, from, to)}
+            >
+              Download CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Range controls */}
