@@ -153,7 +153,7 @@ export default function PinsPage() {
                   </TableRow>
                 )}
                 {filtered.map((p) => {
-                  const style = pinStyle(p.mode);
+                  const style = pinStyle(p.mode, (p as any).button_color);
                   return (
                     <TableRow
                       key={p.id}
@@ -174,7 +174,7 @@ export default function PinsPage() {
                       <TableCell>
                         {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{p.row_number ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatRowNumber(p.row_number)}</TableCell>
                       <TableCell>
                         {(p as any).is_completed ? (
                           <Badge>Completed</Badge>
