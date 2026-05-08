@@ -186,8 +186,13 @@ function NewChemicalDialog({
               <Input value={form.chemical_group} onChange={(e) => setForm({ ...form, chemical_group: e.target.value })} />
             </div>
             <div className="space-y-1">
-              <Label>Use</Label>
-              <Input value={form.use} onChange={(e) => setForm({ ...form, use: e.target.value })} />
+              <Label>Product type / category</Label>
+              <Select value={form.use} onValueChange={(v) => setForm({ ...form, use: v })}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Default rate</Label>
