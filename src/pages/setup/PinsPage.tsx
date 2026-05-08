@@ -79,6 +79,23 @@ export default function PinsPage() {
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.debug("[PinsPage] diagnostics", diag);
+    // Temporary inspection: distinct classifier values across loaded pins.
+    const tally = (k: string) => {
+      const m = new Map<string, number>();
+      for (const p of pins) {
+        const v = String((p as any)[k] ?? "∅");
+        m.set(v, (m.get(v) ?? 0) + 1);
+      }
+      return Object.fromEntries([...m.entries()].sort((a, b) => b[1] - a[1]));
+    };
+    // eslint-disable-next-line no-console
+    console.debug("[PinsPage] distinct values", {
+      mode: tally("mode"),
+      category: tally("category"),
+      button_color: tally("button_color"),
+      priority: tally("priority"),
+      status: tally("status"),
+    });
   }
 
   const filtered = useMemo(() => {
