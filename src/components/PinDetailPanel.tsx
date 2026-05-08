@@ -59,7 +59,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
-  const style = pinStyle(pin.mode);
+  const style = pinStyle(pin.mode, pin.button_color);
   const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
