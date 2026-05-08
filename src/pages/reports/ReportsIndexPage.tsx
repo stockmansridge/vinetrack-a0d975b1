@@ -53,7 +53,7 @@ export default function ReportsIndexPage() {
                     <Icon className="h-4 w-4" />
                     <h2 className="font-medium">{s.title}</h2>
                   </div>
-                  <Badge variant={s.status === "Partial" ? "secondary" : "outline"}>
+                  <Badge variant={s.status === "Available" ? "default" : s.status === "Partial" ? "secondary" : "outline"}>
                     {s.status}
                   </Badge>
                 </div>
