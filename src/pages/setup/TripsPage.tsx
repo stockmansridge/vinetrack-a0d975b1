@@ -459,7 +459,13 @@ function TripSheet({
                   <Field label="Sowing depth" value={`${seeding.sowing_depth_cm} cm`} />
                 )}
                 {seeding.mix_lines.map((line, i) => (
-                  <Field key={i} label={`Mix line ${i + 1}`} value={line} />
+                  <Field
+                    key={i}
+                    label={`Mix line ${i + 1}`}
+                    value={[line.name, line.percent && `${line.percent}%`, line.kg_per_ha && `${line.kg_per_ha} kg/ha`, line.supplier]
+                      .filter(Boolean)
+                      .join(" · ") || JSON.stringify(line.raw)}
+                  />
                 ))}
               </Section>
             )}
