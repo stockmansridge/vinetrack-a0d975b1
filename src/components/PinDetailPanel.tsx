@@ -58,14 +58,58 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </div>
 );
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function formatDateTime(v?: string | null): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
   const style = pinStyle(pin.mode, pin.button_color);
   const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
 
-  const createdByName = resolve(pin.created_by);
-  const completedByName = resolve(pin.completed_by_user_id, pin.completed_by);
+  // Resolve `created_by`: it may be a UUID (resolve via team) or a free-text
+  // name/email from older clients. Never display a raw UUID.
+  const createdByRaw = (pin.created_by ?? "").trim();
+  let createdByDisplay: string;
+  if (!createdByRaw) {
+    createdByDisplay = "Unknown";
+  } else if (UUID_RE.test(createdByRaw)) {
+    createdByDisplay = resolve(createdByRaw) ?? "Unknown";
+  } else {
+    createdByDisplay = createdByRaw;
+  }
+
+  // Completed by: prefer user_id lookup, then text fallback, then "Not completed".
+  let completedByDisplay: string;
+  if (!pin.is_completed) {
+    completedByDisplay = "Not completed";
+  } else {
+    const fromId = pin.completed_by_user_id
+      ? resolve(pin.completed_by_user_id)
+      : null;
+    const txt = (pin.completed_by ?? "").trim();
+    completedByDisplay =
+      fromId ??
+      (txt && !UUID_RE.test(txt) ? txt : null) ??
+      (pin.completed_by_user_id ? "Unknown member" : "Unknown");
+  }
+
+  const createdAtDisplay = formatDateTime(pin.created_at) ?? "Not recorded";
+  const completedAtDisplay = pin.is_completed
+    ? formatDateTime(pin.completed_at) ?? "Not recorded"
+    : "Not completed";
 
   const coords =
     pin.latitude != null && pin.longitude != null
@@ -126,17 +170,30 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         </Section>
 
         <Section title="Audit">
-          <Field label="Created by" value={createdByName ?? "—"} />
-          <Field label="Created at" value={pin.created_at} />
-          {pin.is_completed ? (
-            <>
-              <Field label="Completed by" value={completedByName ?? "Unknown"} />
-              <Field label="Completed at" value={pin.completed_at} />
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">Not completed</div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Created by</span>
+            <span className="text-right font-medium break-words">{createdByDisplay}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Created at</span>
+            <span className="text-right font-medium break-words">{createdAtDisplay}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Completed by</span>
+            <span className="text-right font-medium break-words">{completedByDisplay}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Completed at</span>
+            <span className="text-right font-medium break-words">{completedAtDisplay}</span>
+          </div>
+          {pin.updated_at && (
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Updated at</span>
+              <span className="text-right font-medium break-words">
+                {formatDateTime(pin.updated_at) ?? "—"}
+              </span>
+            </div>
           )}
-          <Field label="Updated at" value={pin.updated_at} />
         </Section>
 
         {pin.photo_path && (
