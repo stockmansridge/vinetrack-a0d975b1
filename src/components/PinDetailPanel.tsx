@@ -116,7 +116,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
-          <Field label="Row" value={pin.row_number} />
+          <Field label="Row" value={formatRowNumber(pin.row_number)} />
           <Field label="Side" value={pin.side} />
           {coords && (
             <div className="text-xs text-muted-foreground pt-1">
