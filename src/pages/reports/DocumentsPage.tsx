@@ -266,6 +266,20 @@ export default function DocumentsPage() {
 
   const loading = tripsQuery.isLoading || sprayJobsQuery.isLoading;
 
+  type DocSortKey = "name" | "type" | "vineyard" | "block" | "related" | "date" | "source";
+  const { sorted: sortedFiltered, getSortDirection, toggleSort } = useSortableTable<typeof filtered[number], DocSortKey>(filtered, {
+    accessors: {
+      name: (it) => it.name ?? "",
+      type: (it) => it.typeLabel,
+      vineyard: (it) => it.vineyardName,
+      block: (it) => it.paddockName ?? "",
+      related: (it) => it.related ?? "",
+      date: (it) => (it.createdAt ? new Date(it.createdAt) : null),
+      source: (it) => it.source,
+    },
+    initial: { key: "date", direction: "desc" },
+  });
+
   if (!selectedVineyardId) {
     return (
       <div className="p-6">
