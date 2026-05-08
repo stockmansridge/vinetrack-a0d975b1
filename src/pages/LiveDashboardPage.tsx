@@ -16,6 +16,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { extractPathPoints, parseCorrections } from "@/lib/tripReport";
+import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
