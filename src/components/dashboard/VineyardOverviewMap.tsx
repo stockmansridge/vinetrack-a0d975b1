@@ -697,8 +697,8 @@ function TripPanelBody({
       )}
       <div className="pt-3">
         <Button asChild size="sm" variant="outline" className="w-full">
-          <Link to={`/setup/trips/${trip.id}`}>
-            Open trip detail <ExternalLink className="ml-1 h-3 w-3" />
+          <Link to={`/trips`}>
+            Open in Trips <ExternalLink className="ml-1 h-3 w-3" />
           </Link>
         </Button>
       </div>
