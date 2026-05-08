@@ -1022,3 +1022,237 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
     </div>
   );
 }
+
+// ============================================================================
+// Linked spray records — Planned vs Actual
+// ============================================================================
+
+function LinkedRecordsSection({
+  jobId, job, vineyardId, canEdit,
+}: {
+  jobId: string;
+  job: SprayJob;
+  vineyardId: string;
+  canEdit: boolean;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [linkOpen, setLinkOpen] = useState(false);
+
+  const { data: linked = [], isLoading } = useQuery({
+    queryKey: ["spray_records_linked", jobId],
+    queryFn: () => fetchLinkedSprayRecords(jobId),
+  });
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["spray_records_linked", jobId] });
+    qc.invalidateQueries({ queryKey: ["spray_records_unlinked", vineyardId] });
+  };
+
+  const unlinkMut = useMutation({
+    mutationFn: (recId: string) => unlinkSprayRecord(recId),
+    onSuccess: () => { toast({ title: "Unlinked" }); refresh(); },
+    onError: (e: any) =>
+      toast({ title: "Unlink failed", description: e.message, variant: "destructive" }),
+  });
+
+  const showCompletionBanner =
+    linked.length > 0 && job.status !== "completed" && job.status !== "cancelled";
+
+  return (
+    <div className="rounded-md border p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="font-medium">Linked spray records</div>
+          <p className="text-xs text-muted-foreground">
+            Completed compliance records linked back to this planned job.
+          </p>
+        </div>
+        {canEdit && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setLinkOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" />Link existing record
+          </Button>
+        )}
+      </div>
+
+      {showCompletionBanner && (
+        <div className="rounded border border-warning bg-warning/10 px-3 py-2 text-xs">
+          This job appears completed (matching spray record found) but its status is
+          still <span className="font-medium">{job.status ?? "draft"}</span>. Consider
+          marking it completed.
+        </div>
+      )}
+
+      {isLoading && <div className="text-xs text-muted-foreground">Loading…</div>}
+
+      {!isLoading && linked.length === 0 && (
+        <div className="text-xs text-muted-foreground">No spray records linked yet.</div>
+      )}
+
+      {linked.map((rec) => {
+        const diff = comparePlannedVsActual(job, rec);
+        const water = recordTotalWaterLitres(rec);
+        const chems = recordChemicalNames(rec);
+        return (
+          <div key={rec.id} className="rounded border p-2 space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-medium">
+                  {rec.spray_reference || rec.date || rec.id.slice(0, 8)}
+                </div>
+                <div className="text-muted-foreground">
+                  {rec.date ?? "—"}{rec.start_time ? ` · ${rec.start_time.slice(0, 5)}` : ""}
+                  {rec.tractor ? ` · ${rec.tractor}` : ""}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={diff.ok ? "secondary" : "destructive"}>
+                  {diff.ok ? "Matches plan" : "Differs"}
+                </Badge>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => unlinkMut.mutate(rec.id)}
+                    disabled={unlinkMut.isPending}
+                    title="Unlink"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
+                  Planned
+                </div>
+                <div>Op: {fmt(job.operation_type)}</div>
+                <div>Water: {job.water_volume != null ? `${job.water_volume} L` : "—"}</div>
+                <div className="truncate" title={chemicalLinesSummary(job.chemical_lines)}>
+                  Chems: {chemicalLinesSummary(job.chemical_lines)}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
+                  Actual
+                </div>
+                <div>Op: {fmt(rec.operation_type)}</div>
+                <div>Water: {water != null ? `${water} L` : "—"}</div>
+                <div className="truncate" title={chems.join(", ") || "—"}>
+                  Chems: {chems.length ? chems.join(", ") : "—"}
+                </div>
+              </div>
+            </div>
+            {!diff.ok && (
+              <ul className="list-disc pl-4 text-warning-foreground">
+                {diff.notes.map((n, i) => <li key={i}>{n}</li>)}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+
+      {linkOpen && (
+        <LinkRecordDialog
+          open={linkOpen}
+          onOpenChange={setLinkOpen}
+          jobId={jobId}
+          vineyardId={vineyardId}
+          onLinked={refresh}
+        />
+      )}
+    </div>
+  );
+}
+
+function LinkRecordDialog({
+  open, onOpenChange, jobId, vineyardId, onLinked,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  jobId: string;
+  vineyardId: string;
+  onLinked: () => void;
+}) {
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+
+  const { data: records = [], isLoading } = useQuery({
+    queryKey: ["spray_records_unlinked", vineyardId],
+    queryFn: () => fetchUnlinkedSprayRecords(vineyardId),
+    enabled: open,
+  });
+
+  const linkMut = useMutation({
+    mutationFn: (recId: string) => linkSprayRecord(recId, jobId),
+    onSuccess: () => {
+      toast({ title: "Linked" });
+      onLinked();
+      onOpenChange(false);
+    },
+    onError: (e: any) =>
+      toast({ title: "Link failed", description: e.message, variant: "destructive" }),
+  });
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((r) => {
+      const hay = [r.spray_reference, r.date, r.tractor, r.operation_type, r.notes]
+        .filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [records, search]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Link existing spray record</SheetTitle>
+        </SheetHeader>
+        <div className="mt-4 space-y-3">
+          <Input
+            placeholder="Search by reference, tractor, operation…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {!isLoading && filtered.length === 0 && (
+            <div className="text-sm text-muted-foreground">
+              No unlinked spray records for this vineyard.
+            </div>
+          )}
+          <div className="space-y-2">
+            {filtered.map((rec) => (
+              <div
+                key={rec.id}
+                className="rounded border p-2 flex items-center justify-between gap-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium truncate">
+                    {rec.spray_reference || rec.date || rec.id.slice(0, 8)}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {rec.date ?? "—"}
+                    {rec.operation_type ? ` · ${rec.operation_type}` : ""}
+                    {rec.tractor ? ` · ${rec.tractor}` : ""}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => linkMut.mutate(rec.id)}
+                  disabled={linkMut.isPending}
+                >
+                  Link
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
