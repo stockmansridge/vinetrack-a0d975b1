@@ -252,6 +252,34 @@ export default function LiveDashboardPage() {
   const allTrips = tripsQ.data?.trips ?? [];
   const lastRefresh = tripsQ.dataUpdatedAt ? new Date(tripsQ.dataUpdatedAt) : null;
 
+  // Weather context for per-trip badges. The full <LiveWeatherSummary /> card
+  // also fetches these; React Query dedupes by key so this is a single network
+  // call per refresh cycle.
+  const weatherCtxQ = useQuery({
+    queryKey: ["live-weather", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchLiveWeather(selectedVineyardId!),
+    refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
+  });
+  const forecastCtxQ = useQuery({
+    queryKey: ["rain-forecast", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchRainForecast(selectedVineyardId!, 7),
+    refetchInterval: 15 * 60_000,
+    refetchIntervalInBackground: false,
+  });
+  const weatherContext: WeatherContext = useMemo(() => {
+    const w = weatherCtxQ.data;
+    const f = forecastCtxQ.data;
+    const rainSoon = f && f.available ? summarizeForecast(f.days).rainSoon : false;
+    return {
+      available: !!(w && w.available),
+      reading: w && w.available ? w.reading : null,
+      rainSoon,
+    };
+  }, [weatherCtxQ.data, forecastCtxQ.data]);
+
   // Filters
   const [search, setSearch] = useState("");
   const [opFilter, setOpFilter] = useState<string>(ANY);
