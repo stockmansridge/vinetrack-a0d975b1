@@ -723,12 +723,30 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     y = (doc as any).lastAutoTable.finalY + 18;
   }
 
-  // 8. Route Map
+  // 8. Route Map — prefer satellite tile composite, fall back to SVG preview.
   y = sectionHeader(doc, "Route Map", y);
   const mapH = 240;
   y = ensureSpace(doc, y, mapH + 10);
   const points = extractPathPoints(t.path_points);
-  drawRouteMap(doc, points, 40, y, pageW - 80, mapH);
+  const satelliteDataUrl = (ctx as any).satelliteRouteDataUrl as string | null | undefined;
+  const mapW = pageW - 80;
+  if (satelliteDataUrl && points.length >= 2) {
+    try {
+      doc.addImage(satelliteDataUrl, "PNG", 40, y, mapW, mapH);
+      doc.setDrawColor(180);
+      doc.setLineWidth(0.5);
+      doc.rect(40, y, mapW, mapH);
+    } catch {
+      drawRouteMap(doc, points, 40, y, mapW, mapH);
+    }
+  } else {
+    if (points.length >= 2) {
+      doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(120);
+      doc.text("Satellite map unavailable — route preview shown.", 40, y - 2);
+      doc.setTextColor(0);
+    }
+    drawRouteMap(doc, points, 40, y, mapW, mapH);
+  }
   y += mapH + 12;
 
   // 9. Footer (every page)
