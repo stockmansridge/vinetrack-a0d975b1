@@ -157,13 +157,13 @@ export default function PinsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Paddock</TableHead>
-                  <TableHead className="text-right">Row</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Completed</TableHead>
+                  <SortableTableHead active={getSortDirection("title")} onSort={() => toggleSort("title")}>Title</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
+                  <SortableTableHead align="right" active={getSortDirection("row")} onSort={() => toggleSort("row")}>Row</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("priority")} onSort={() => toggleSort("priority")}>Priority</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("completed")} onSort={() => toggleSort("completed")}>Completed</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -179,14 +179,14 @@ export default function PinsPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {!isLoading && !error && filtered.length === 0 && (
+                {!isLoading && !error && sorted.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No pins found for this vineyard.
                     </TableCell>
                   </TableRow>
                 )}
-                {filtered.map((p) => {
+                {sorted.map((p) => {
                   const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
                   return (
                     <TableRow
