@@ -7,6 +7,7 @@ import { deriveMetrics } from "@/lib/paddockGeometry";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
+import PaddockImportExportDialog from "@/components/paddocks/PaddockImportExportDialog";
 
 const fmtNum = (n: number, digits = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
