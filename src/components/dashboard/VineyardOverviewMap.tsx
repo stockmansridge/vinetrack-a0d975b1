@@ -778,7 +778,7 @@ function PinPanelBody({
       )}
       <div className="pt-3">
         <Button asChild size="sm" variant="outline" className="w-full">
-          <Link to={`/setup/pins?focus=${pin.id}`}>
+          <Link to={`/pins`}>
             Open in Pins <ExternalLink className="ml-1 h-3 w-3" />
           </Link>
         </Button>
