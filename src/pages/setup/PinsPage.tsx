@@ -110,7 +110,8 @@ export default function PinsPage() {
   }, [pins, filter]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
-  const { sorted, getSortDirection, toggleSort } = useSortableTable(filtered, {
+  type PinSortKey = "title" | "paddock" | "row" | "status" | "priority" | "created" | "completed";
+  const { sorted, getSortDirection, toggleSort } = useSortableTable<any, PinSortKey>(filtered, {
     accessors: {
       title: (p: any) => (p.title ?? p.button_name ?? "") as string,
       paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
