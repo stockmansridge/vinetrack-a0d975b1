@@ -79,7 +79,13 @@ function formatDateTime(v?: string | null): string | null {
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
-  const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
+  // Pins may store photo as a storage path (signed) or as a direct URL.
+  const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
+  const directPhotoUrl =
+    pin.photo_url ?? pin.image_url ?? pin.attachment_url ?? null;
+  const signedPhotoUrl = usePinPhoto(photoPath ?? undefined);
+  const photoUrl = directPhotoUrl ?? signedPhotoUrl;
+  const hasPhotoRef = !!(photoPath || directPhotoUrl);
   const { selectedVineyardId } = useVineyard();
   const { lookup, resolve } = useTeamLookup(pin.vineyard_id ?? selectedVineyardId);
 
