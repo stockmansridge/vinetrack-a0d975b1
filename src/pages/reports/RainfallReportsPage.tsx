@@ -168,6 +168,9 @@ export default function RainfallReportsPage() {
         <SummaryCard label="Source" value={summary.sourceLabel} />
       </div>
 
+      {/* Monthly rain calendar */}
+      <RainCalendar vineyardId={selectedVineyardId} />
+
       {/* Table or empty / error state */}
       {isLoading && (
         <Card className="p-8 text-center text-sm text-muted-foreground">
