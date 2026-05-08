@@ -176,6 +176,27 @@ export default function TripsPage() {
     return list;
   }, [trips, filter, from, to, paddockId, pattern, status, tripFn]);
 
+  type TripSortKey = "start" | "name" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
+  const durationMs = (s?: string | null, e?: string | null) => {
+    if (!s || !e) return null;
+    const ms = new Date(e).getTime() - new Date(s).getTime();
+    return isNaN(ms) || ms < 0 ? null : ms;
+  };
+  const { sorted: rowsSorted, getSortDirection, toggleSort } = useSortableTable<typeof rows[number], TripSortKey>(rows, {
+    accessors: {
+      start: (t) => (t.start_time ? new Date(t.start_time) : null),
+      name: (t) => tripDisplayName(t),
+      function: (t) => tripFunctionLabel(t.trip_function) ?? "",
+      paddock: (t) => t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? "" : ""),
+      pattern: (t) => t.tracking_pattern ?? "",
+      person: (t) => t.person_name ?? "",
+      duration: (t) => durationMs(t.start_time, t.end_time),
+      distance: (t) => (t.total_distance == null ? null : Number(t.total_distance)),
+      status: (t) => tripStatus(t),
+    },
+    initial: { key: "start", direction: "desc" },
+  });
+
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.debug("[TripsPage] diagnostics", {
