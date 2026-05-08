@@ -31,6 +31,7 @@ import {
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
+import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -462,6 +463,22 @@ function ChemicalEditor({
   const set = <K extends keyof SavedChemicalInput>(k: K, v: SavedChemicalInput[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
 
+  const applySuggestion = (s: AppliedSuggestion) => {
+    setForm((p) => ({
+      ...p,
+      name: s.name ?? p.name ?? "",
+      active_ingredient: s.active_ingredient ?? p.active_ingredient ?? "",
+      use: s.category ?? p.use ?? "",
+      chemical_group: s.chemical_group ?? p.chemical_group ?? "",
+      manufacturer: s.manufacturer ?? p.manufacturer ?? "",
+      unit: s.rate_unit ?? p.unit ?? "",
+      notes: s.notes ?? p.notes ?? "",
+    }));
+    if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
+    if (s.whp_days) setWhp(s.whp_days);
+    if (s.rei_hours) setRei(s.rei_hours);
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -469,6 +486,7 @@ function ChemicalEditor({
           <SheetTitle>{initial ? "Edit chemical" : "New chemical"}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-3 text-sm">
+          <ChemicalAILookup initialName={form.name ?? ""} onApply={applySuggestion} />
           <Field label="Product name *">
             <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
           </Field>
