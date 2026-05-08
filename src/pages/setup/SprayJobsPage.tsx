@@ -179,7 +179,9 @@ function JobsTable({
   onEdit: (job: SprayJob) => void;
   maps: LookupMaps;
 }) {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -192,6 +194,51 @@ function JobsTable({
         archived: mode === "archived",
       }),
   });
+
+  const lookupMaps: JobLookups = {
+    paddockNameById: maps.paddocks,
+    tractorNameById: maps.tractors,
+    equipmentNameById: maps.equipment,
+    memberNameById: maps.members,
+  };
+
+  const handleExportRowPdf = async (job: SprayJob) => {
+    try {
+      const ids = await fetchSprayJobPaddockIds(job.id);
+      exportSprayJobPdf(job, ids, lookupMaps, vineyardName);
+    } catch (e: any) {
+      toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  // Years available for the program export (planned tab only).
+  const years = useMemo(() => {
+    const set = new Set<number>();
+    (data ?? []).forEach((j) => {
+      const y = jobYear(j);
+      if (y != null) set.add(y);
+    });
+    const arr = Array.from(set).sort((a, b) => b - a);
+    if (!arr.length) arr.push(new Date().getFullYear());
+    return arr;
+  }, [data]);
+  const [yearSel, setYearSel] = useState<string>(() => String(new Date().getFullYear()));
+
+  const handleYearExport = async (kind: "pdf" | "csv") => {
+    const year = Number(yearSel);
+    const yearJobs = (data ?? []).filter((j) => jobYear(j) === year);
+    try {
+      const padMap = await fetchJobPaddockMap(yearJobs.map((j) => j.id));
+      if (kind === "pdf") {
+        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year);
+      } else {
+        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year);
+      }
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e.message, variant: "destructive" });
+    }
+  };
+
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["spray_jobs", selectedVineyardId] });
 
