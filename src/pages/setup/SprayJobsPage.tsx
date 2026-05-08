@@ -968,6 +968,15 @@ function SprayJobSheet({
               ))}
             </div>
           </div>
+
+          {editing && !form.is_template && (
+            <LinkedRecordsSection
+              jobId={job!.id}
+              job={job!}
+              vineyardId={vineyardId}
+              canEdit={canEdit}
+            />
+          )}
         </fieldset>
 
         <SheetFooter className="mt-6 gap-2">
