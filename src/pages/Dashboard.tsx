@@ -161,6 +161,8 @@ export default function Dashboard() {
         />
       </div>
 
+      <VineyardOverviewMap />
+
       <div>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Quick links</h2>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
