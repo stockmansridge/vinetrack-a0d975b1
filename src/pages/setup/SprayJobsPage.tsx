@@ -275,7 +275,25 @@ function JobsTable({
   }, [mode]);
 
   return (
-    <Card>
+    <div className="space-y-3">
+      {mode === "planned" && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="text-sm text-muted-foreground">Yearly program:</span>
+          <Select value={yearSel} onValueChange={setYearSel}>
+            <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={() => handleYearExport("pdf")}>
+            <FileDown className="h-3.5 w-3.5 mr-1" /> PDF
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleYearExport("csv")}>
+            <Download className="h-3.5 w-3.5 mr-1" /> CSV
+          </Button>
+        </div>
+      )}
+      <Card>
       <Table>
         <TableHeader>
           <TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}</TableRow>
