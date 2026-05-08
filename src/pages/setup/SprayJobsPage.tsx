@@ -386,6 +386,7 @@ function JobsTable({
         </TableBody>
       </Table>
     </Card>
+    </div>
   );
 }
 
