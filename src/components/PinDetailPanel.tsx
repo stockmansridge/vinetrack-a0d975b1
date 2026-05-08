@@ -170,17 +170,30 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         </Section>
 
         <Section title="Audit">
-          <Field label="Created by" value={createdByName ?? "—"} />
-          <Field label="Created at" value={pin.created_at} />
-          {pin.is_completed ? (
-            <>
-              <Field label="Completed by" value={completedByName ?? "Unknown"} />
-              <Field label="Completed at" value={pin.completed_at} />
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">Not completed</div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Created by</span>
+            <span className="text-right font-medium break-words">{createdByDisplay}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Created at</span>
+            <span className="text-right font-medium break-words">{createdAtDisplay}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Completed by</span>
+            <span className="text-right font-medium break-words">{completedByDisplay}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Completed at</span>
+            <span className="text-right font-medium break-words">{completedAtDisplay}</span>
+          </div>
+          {pin.updated_at && (
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Updated at</span>
+              <span className="text-right font-medium break-words">
+                {formatDateTime(pin.updated_at) ?? "—"}
+              </span>
+            </div>
           )}
-          <Field label="Updated at" value={pin.updated_at} />
         </Section>
 
         {pin.photo_path && (
