@@ -38,6 +38,14 @@ import {
 } from "@/components/ui/table";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
+import {
+  LiveWeatherSummary,
+  evaluateTripWeather,
+  TripWeatherBadge,
+  type WeatherContext,
+} from "@/components/dashboard/LiveWeatherSummary";
+import { fetchLiveWeather } from "@/lib/weatherStatusQuery";
+import { fetchRainForecast, summarizeForecast } from "@/lib/rainForecastQuery";
 
 interface PaddockLite {
   id: string;
@@ -244,6 +252,34 @@ export default function LiveDashboardPage() {
   const allTrips = tripsQ.data?.trips ?? [];
   const lastRefresh = tripsQ.dataUpdatedAt ? new Date(tripsQ.dataUpdatedAt) : null;
 
+  // Weather context for per-trip badges. The full <LiveWeatherSummary /> card
+  // also fetches these; React Query dedupes by key so this is a single network
+  // call per refresh cycle.
+  const weatherCtxQ = useQuery({
+    queryKey: ["live-weather", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchLiveWeather(selectedVineyardId!),
+    refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
+  });
+  const forecastCtxQ = useQuery({
+    queryKey: ["rain-forecast", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchRainForecast(selectedVineyardId!, 7),
+    refetchInterval: 15 * 60_000,
+    refetchIntervalInBackground: false,
+  });
+  const weatherContext: WeatherContext = useMemo(() => {
+    const w = weatherCtxQ.data;
+    const f = forecastCtxQ.data;
+    const rainSoon = f && f.available ? summarizeForecast(f.days).rainSoon : false;
+    return {
+      available: !!(w && w.available),
+      reading: w && w.available ? w.reading : null,
+      rainSoon,
+    };
+  }, [weatherCtxQ.data, forecastCtxQ.data]);
+
   // Filters
   const [search, setSearch] = useState("");
   const [opFilter, setOpFilter] = useState<string>(ANY);
@@ -384,7 +420,8 @@ export default function LiveDashboardPage() {
         <SummaryCard label="Operators active today" value={summary.operators} Icon={Users} />
       </div>
 
-      {/* Filters */}
+      {/* Live weather + rain forecast */}
+      <LiveWeatherSummary vineyardId={selectedVineyardId} />
       <Card className="p-3 flex flex-wrap gap-2 items-center">
         <Input
           value={search}
@@ -437,25 +474,29 @@ export default function LiveDashboardPage() {
                   <SortableTableHead active={liveSortDir("row")} onSort={() => liveToggle("row")}>Row</SortableTableHead>
                   <SortableTableHead active={liveSortDir("progress")} onSort={() => liveToggle("progress")}>Progress</SortableTableHead>
                   <SortableTableHead active={liveSortDir("updated")} onSort={() => liveToggle("updated")}>Updated</SortableTableHead>
+                  <TableHead>Weather</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tripsQ.isLoading && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                       Loading…
                     </TableCell>
                   </TableRow>
                 )}
                 {!tripsQ.isLoading && visibleSorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                       No active or recently finished trips.
                     </TableCell>
                   </TableRow>
                 )}
                 {visibleSorted.map(({ trip, status }) => {
                   const counts = rowCounts(trip);
+                  const wxLabel = status === "active" || status === "paused"
+                    ? evaluateTripWeather(trip.trip_function, weatherContext)
+                    : null;
                   return (
                     <TableRow
                       key={trip.id}
@@ -489,6 +530,9 @@ export default function LiveDashboardPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs">
                         {fmtRelative(trip.updated_at)}
+                      </TableCell>
+                      <TableCell>
+                        <TripWeatherBadge label={wxLabel} />
                       </TableCell>
                     </TableRow>
                   );
