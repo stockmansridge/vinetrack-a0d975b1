@@ -54,16 +54,19 @@ export default function PaddocksPage() {
           <TabsTrigger value="table">Table</TabsTrigger>
           <TabsTrigger value="map">Map</TabsTrigger>
         </TabsList>
-        {canEdit && (
-          <Button asChild size="sm" className="gap-1">
-            <Link to="/setup/paddocks/new">
-              <Plus className="h-4 w-4" /> New paddock
-              <span className="ml-1 rounded-full bg-warning/20 px-1.5 text-[10px] font-medium text-warning-foreground/90">
-                test
-              </span>
-            </Link>
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <PaddockImportExportDialog />
+          {canEdit && (
+            <Button asChild size="sm" className="gap-1">
+              <Link to="/setup/paddocks/new">
+                <Plus className="h-4 w-4" /> New paddock
+                <span className="ml-1 rounded-full bg-warning/20 px-1.5 text-[10px] font-medium text-warning-foreground/90">
+                  test
+                </span>
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
       <TabsContent value="table" className="mt-0">
         <ListPage
