@@ -16,6 +16,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { extractPathPoints, parseCorrections } from "@/lib/tripReport";
+import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -144,31 +145,6 @@ function RouteMini({ trip }: { trip: Trip | null }) {
       </Card>
     );
   }
-  const w = 480;
-  const h = 220;
-  const pad = 12;
-  const lats = pts.map((p) => p.lat);
-  const lngs = pts.map((p) => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const dLat = Math.max(maxLat - minLat, 1e-6);
-  const dLng = Math.max(maxLng - minLng, 1e-6);
-  const proj = (lat: number, lng: number) => {
-    const x = pad + ((lng - minLng) / dLng) * (w - pad * 2);
-    const y = pad + (1 - (lat - minLat) / dLat) * (h - pad * 2);
-    return [x, y] as const;
-  };
-  const path = pts
-    .map((p, i) => {
-      const [x, y] = proj(p.lat, p.lng);
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const [sx, sy] = proj(pts[0].lat, pts[0].lng);
-  const last = pts[pts.length - 1];
-  const [ex, ey] = proj(last.lat, last.lng);
   return (
     <Card className="p-3 space-y-2">
       <div className="flex items-center gap-2 text-sm">
@@ -176,11 +152,7 @@ function RouteMini({ trip }: { trip: Trip | null }) {
         <span className="font-medium">{tripDisplay(trip)}</span>
         <span className="text-muted-foreground">· {trip.paddock_name ?? "—"}</span>
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto bg-muted/30 rounded">
-        <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} />
-        <circle cx={sx} cy={sy} r={4} fill="#22a046" />
-        <circle cx={ex} cy={ey} r={4} fill="#d23232" />
-      </svg>
+      <TripRouteAppleMap pathPoints={trip.path_points} height={260} />
       <div className="text-xs text-muted-foreground flex justify-between">
         <span>● Start</span>
         <span>{pts.length} points</span>
