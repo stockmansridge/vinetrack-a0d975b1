@@ -5,10 +5,10 @@
 //   - Pins (colour-mapped from iOS, clickable)
 // Detail panel renders to the right on large screens, below on small.
 // READ-ONLY — no writes.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ExternalLink, Layers, X } from "lucide-react";
+import { Crosshair, ExternalLink, Layers, X } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
@@ -80,6 +80,36 @@ const tripColor = (v?: string | null) =>
   (v && TRIP_FUNCTION_COLORS[v]) || "#1E5AC8";
 const tripDisplay = (t: Trip) =>
   t.trip_title?.trim() || tripFnLabel(t.trip_function);
+
+// Distinct, stable color per-trip for the overview map.
+// Avoids paddock greens and common pin reds/yellows by sweeping HSL hues
+// while skipping a green band.
+function buildTripPalette(ids: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const n = Math.max(ids.length, 1);
+  const hues: number[] = [];
+  // Generate evenly spaced hues, skipping 90-160 (green band shared with paddocks).
+  const step = 360 / Math.max(n + 2, 6);
+  let h = 200;
+  while (hues.length < n) {
+    const hh = ((h % 360) + 360) % 360;
+    if (!(hh >= 90 && hh <= 160)) hues.push(hh);
+    h += step;
+  }
+  ids.forEach((id, i) => {
+    const hue = hues[i % hues.length];
+    // High saturation, mid-light for visibility on satellite imagery.
+    out.set(id, `hsl(${hue.toFixed(0)} 85% 55%)`);
+  });
+  return out;
+}
+
+const fmtShortDate = (v?: string | null) => {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+};
 
 const fmtDateTime = (v?: string | null) => {
   if (!v) return "—";
@@ -203,6 +233,79 @@ export default function VineyardOverviewMap({
     [pins],
   );
 
+  // Pre-parse trip paths once per recentTrips; sort newest first.
+  const parsedTrips = useMemo(() => {
+    const validPt = (pt: LatLng) =>
+      Number.isFinite(pt.lat) && Number.isFinite(pt.lng) &&
+      pt.lat >= -90 && pt.lat <= 90 && pt.lng >= -180 && pt.lng <= 180;
+    const arr = recentTrips.map((t) => {
+      const pts = extractPathPoints(t.path_points).filter(validPt);
+      return { trip: t, points: pts };
+    });
+    arr.sort((a, b) => {
+      const ta = a.trip.start_time ? new Date(a.trip.start_time).getTime() : 0;
+      const tb = b.trip.start_time ? new Date(b.trip.start_time).getTime() : 0;
+      return tb - ta;
+    });
+    return arr;
+  }, [recentTrips]);
+
+  // Stable per-trip color palette for current view.
+  const tripPalette = useMemo(
+    () => buildTripPalette(parsedTrips.map((t) => t.trip.id)),
+    [parsedTrips],
+  );
+
+  // Helpers for fitting the camera.
+  const fitToBounds = useCallback((pts: LatLng[]) => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!map || !mapkit || !pts.length) return false;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const pt of pts) {
+      if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) continue;
+      if (pt.lat < minLat) minLat = pt.lat;
+      if (pt.lat > maxLat) maxLat = pt.lat;
+      if (pt.lng < minLng) minLng = pt.lng;
+      if (pt.lng > maxLng) maxLng = pt.lng;
+    }
+    if (!Number.isFinite(minLat)) return false;
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const latDelta = Math.max((maxLat - minLat) * 1.4, 0.002);
+    const lngDelta = Math.max((maxLng - minLng) * 1.4, 0.002);
+    try {
+      map.region = new mapkit.CoordinateRegion(
+        new mapkit.Coordinate(centerLat, centerLng),
+        new mapkit.CoordinateSpan(latDelta, lngDelta),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Compute the vineyard "home" extent: paddocks → trips/pins.
+  const vineyardExtent = useMemo<LatLng[]>(() => {
+    const validPt = (pt: LatLng) =>
+      Number.isFinite(pt.lat) && Number.isFinite(pt.lng);
+    const polyPts: LatLng[] = [];
+    for (const p of parsedPaddocks) {
+      for (const pt of p.polygon) if (validPt(pt)) polyPts.push(pt);
+    }
+    if (polyPts.length) return polyPts;
+    const fallback: LatLng[] = [];
+    for (const t of parsedTrips) for (const pt of t.points) fallback.push(pt);
+    for (const pin of pinsWithCoords) {
+      fallback.push({ lat: Number(pin.latitude), lng: Number(pin.longitude) });
+    }
+    return fallback;
+  }, [parsedPaddocks, parsedTrips, pinsWithCoords]);
+
+  const recenterVineyard = useCallback(() => {
+    fitToBounds(vineyardExtent);
+  }, [fitToBounds, vineyardExtent]);
+
   // ---------- Init MapKit ----------
 
   useEffect(() => {
@@ -298,21 +401,21 @@ export default function VineyardOverviewMap({
       }
     }
 
-    // Trip polylines
+    // Trip polylines — per-trip color, dim non-selected when one is selected.
     if (showTrips) {
-      for (const t of recentTrips) {
-        const pts = extractPathPoints(t.path_points).filter(validPt);
+      const hasSelectedTrip = selection?.kind === "trip";
+      for (const { trip: t, points: pts } of parsedTrips) {
         if (pts.length < 2) continue;
         allPts.push(...pts);
-        const isSelected =
-          selection?.kind === "trip" && selection.id === t.id;
-        const color = tripColor(t.trip_function);
+        const isSelected = hasSelectedTrip && selection!.id === t.id;
+        const dim = hasSelectedTrip && !isSelected;
+        const color = tripPalette.get(t.id) ?? "#1E5AC8";
         const coords = pts.map((p) => new mapkit.Coordinate(p.lat, p.lng));
         const line = new mapkit.PolylineOverlay(coords, {
           style: new mapkit.Style({
             strokeColor: color,
-            strokeOpacity: isSelected ? 1.0 : 0.85,
-            lineWidth: isSelected ? 5 : 3,
+            strokeOpacity: isSelected ? 1.0 : dim ? 0.25 : 0.85,
+            lineWidth: isSelected ? 6 : dim ? 2 : 3,
             lineCap: "round",
             lineJoin: "round",
           }),
@@ -365,36 +468,25 @@ export default function VineyardOverviewMap({
       annotationsRef.current = newAnnotations;
     }
 
-    // Fit once on first available bounds.
-    if (!didFitRef.current && allPts.length) {
-      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-      for (const pt of allPts) {
-        if (pt.lat < minLat) minLat = pt.lat;
-        if (pt.lat > maxLat) maxLat = pt.lat;
-        if (pt.lng < minLng) minLng = pt.lng;
-        if (pt.lng > maxLng) maxLng = pt.lng;
-      }
-      const centerLat = (minLat + maxLat) / 2;
-      const centerLng = (minLng + maxLng) / 2;
-      const latDelta = Math.max((maxLat - minLat) * 1.5, 0.002);
-      const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.002);
-      try {
-        map.region = new mapkit.CoordinateRegion(
-          new mapkit.Coordinate(centerLat, centerLng),
-          new mapkit.CoordinateSpan(latDelta, lngDelta),
-        );
+    // Initial fit: prefer the vineyard extent (paddocks → trips/pins).
+    if (!didFitRef.current) {
+      const extent = vineyardExtent.length ? vineyardExtent : allPts;
+      if (extent.length && fitToBounds(extent)) {
         didFitRef.current = true;
-      } catch { /* noop */ }
+      }
     }
   }, [
     mapReady,
     parsedPaddocks,
-    recentTrips,
+    parsedTrips,
+    tripPalette,
     pinsWithCoords,
     showPaddocks,
     showTrips,
     showPins,
     selection,
+    vineyardExtent,
+    fitToBounds,
   ]);
 
   // Reset fit when vineyard switches.
@@ -402,6 +494,15 @@ export default function VineyardOverviewMap({
     didFitRef.current = false;
     setSelection(null);
   }, [selectedVineyardId]);
+
+  // When a trip becomes selected, zoom to its route.
+  useEffect(() => {
+    if (selection?.kind !== "trip") return;
+    const entry = parsedTrips.find((t) => t.trip.id === selection.id);
+    if (entry && entry.points.length >= 2) {
+      fitToBounds(entry.points);
+    }
+  }, [selection, parsedTrips, fitToBounds]);
 
   // ---------- Selected entities ----------
 
@@ -464,6 +565,19 @@ export default function VineyardOverviewMap({
         <div className="grid lg:grid-cols-[1fr_360px]">
           <div className="relative bg-muted" style={{ height }}>
             <div ref={containerRef} className="absolute inset-0" />
+            {mapReady && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="absolute left-3 top-3 h-8 gap-1.5 shadow-md"
+                onClick={recenterVineyard}
+                disabled={!vineyardExtent.length}
+                title="Re-centre on vineyard extent"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+                Re-centre
+              </Button>
+            )}
             {!mapReady && !mapError && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground bg-background/60">
                 Loading satellite map…
@@ -487,7 +601,7 @@ export default function VineyardOverviewMap({
             {selection == null ? (
               <EmptyPanel
                 paddockCount={parsedPaddocks.length}
-                tripCount={recentTrips.length}
+                tripCount={parsedTrips.length}
                 pinCount={pinsWithCoords.length}
                 showPins={showPins}
                 showTrips={showTrips}
@@ -523,6 +637,7 @@ export default function VineyardOverviewMap({
                       ? paddockNameById.get(selectedTrip.paddock_id) ?? selectedTrip.paddock_name ?? null
                       : selectedTrip.paddock_name ?? null
                   }
+                  swatchColor={tripPalette.get(selectedTrip.id)}
                 />
               </PanelShell>
             ) : selectedPin ? (
@@ -543,10 +658,21 @@ export default function VineyardOverviewMap({
             ) : (
               <EmptyPanel
                 paddockCount={parsedPaddocks.length}
-                tripCount={recentTrips.length}
+                tripCount={parsedTrips.length}
                 pinCount={pinsWithCoords.length}
                 showPins={showPins}
                 showTrips={showTrips}
+              />
+            )}
+
+            {showTrips && (
+              <RecentTripsList
+                days={days}
+                entries={parsedTrips}
+                palette={tripPalette}
+                paddockNameById={paddockNameById}
+                selectedTripId={selection?.kind === "trip" ? selection.id : null}
+                onSelect={(id) => setSelection({ kind: "trip", id })}
               />
             )}
           </div>
@@ -677,14 +803,26 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function TripPanelBody({
   trip,
   paddockName,
+  swatchColor,
 }: {
   trip: Trip;
   paddockName: string | null;
+  swatchColor?: string;
 }) {
   const completed = Array.isArray(trip.completed_paths) ? trip.completed_paths.length : 0;
   const planned = Array.isArray(trip.row_sequence) ? trip.row_sequence.length : 0;
   return (
     <div className="space-y-2">
+      {swatchColor && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className="inline-block h-2.5 w-6 rounded-full"
+            style={{ background: swatchColor }}
+            aria-hidden
+          />
+          Route colour on map
+        </div>
+      )}
       <Row label="Type" value={tripFnLabel(trip.trip_function)} />
       <Row label="Block" value={paddockName ?? trip.paddock_name ?? "—"} />
       <Row label="Operator" value={trip.person_name ?? "—"} />
@@ -783,6 +921,97 @@ function PinPanelBody({
           </Link>
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ---------- Recent trips list ----------
+
+function RecentTripsList({
+  days,
+  entries,
+  palette,
+  paddockNameById,
+  selectedTripId,
+  onSelect,
+}: {
+  days: number;
+  entries: { trip: Trip; points: LatLng[] }[];
+  palette: Map<string, string>;
+  paddockNameById: Map<string, string>;
+  selectedTripId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="border-t p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Recent trips — last {days} days
+        </div>
+        <Badge variant="secondary" className="text-[10px]">
+          {entries.length}
+        </Badge>
+      </div>
+      {entries.length === 0 ? (
+        <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+          No trips in this period
+        </div>
+      ) : (
+        <ul className="space-y-1.5">
+          {entries.map(({ trip, points }) => {
+            const isSelected = trip.id === selectedTripId;
+            const color = palette.get(trip.id) ?? "#1E5AC8";
+            const block =
+              (trip.paddock_id && paddockNameById.get(trip.paddock_id)) ||
+              trip.paddock_name ||
+              null;
+            const operator = trip.person_name?.trim() || null;
+            const date = fmtShortDate(trip.start_time);
+            const hasRoute = points.length >= 2;
+            return (
+              <li key={trip.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(trip.id)}
+                  className={`flex w-full items-start gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary/10"
+                      : "border-transparent hover:bg-muted/50"
+                  }`}
+                >
+                  <span
+                    className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: color }}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-foreground">
+                      {tripDisplay(trip)}
+                    </span>
+                    <span className="block truncate text-muted-foreground">
+                      {[
+                        tripFnLabel(trip.trip_function),
+                        block,
+                        operator,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      {date && <span>{date}</span>}
+                      {!hasRoute && (
+                        <span className="rounded bg-muted px-1 py-0.5">
+                          No route recorded
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
