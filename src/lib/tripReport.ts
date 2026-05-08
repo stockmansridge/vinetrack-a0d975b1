@@ -265,7 +265,7 @@ export function parseTankSessions(sessions: any): TankSessionRow[] {
   return sessions.map((s: any, i: number): TankSessionRow => {
     const num = s?.tank_number ?? s?.tankNumber ?? s?.number ?? i + 1;
     const isComplete =
-      s?.is_complete ?? s?.isComplete ?? s?.complete ?? !!s?.end_time ?? false;
+      s?.is_complete ?? s?.isComplete ?? s?.complete ?? !!(s?.end_time ?? s?.endTime);
     const start = s?.start_time ?? s?.startTime;
     const end = s?.end_time ?? s?.endTime;
     const fillStart = s?.fill_start_time ?? s?.fillStartTime;
