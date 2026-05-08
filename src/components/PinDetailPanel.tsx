@@ -32,6 +32,10 @@ export interface PinRecord {
   created_by?: string | null;
   updated_by?: string | null;
   photo_path?: string | null;
+  photo_url?: string | null;
+  image_url?: string | null;
+  attachment_path?: string | null;
+  attachment_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
