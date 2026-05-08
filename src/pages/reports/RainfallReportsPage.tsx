@@ -11,6 +11,13 @@ import {
   summarizeRainfall,
   type RangePreset,
 } from "@/lib/rainfallQuery";
+import { downloadRainfallPdf, downloadRainfallCsv } from "@/lib/rainfallExport";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
