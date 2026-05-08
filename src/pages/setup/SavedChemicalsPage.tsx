@@ -26,6 +26,7 @@ import {
   createSavedChemical, updateSavedChemical, archiveSavedChemical,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
+import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Plus, Pencil, Archive } from "lucide-react";
 
 const ANY = "__any__";
