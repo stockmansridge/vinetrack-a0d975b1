@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import SelectVineyard from "./pages/SelectVineyard";
 import NoAccess from "./pages/NoAccess";
 import Dashboard from "./pages/Dashboard";
+import LiveDashboardPage from "./pages/LiveDashboardPage";
 import Team from "./pages/Team";
 import ComingSoon from "./pages/ComingSoon";
 import ListPage from "./pages/setup/ListPage";
