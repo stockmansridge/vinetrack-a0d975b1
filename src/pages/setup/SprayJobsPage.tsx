@@ -344,19 +344,31 @@ function JobsTable({
       <Card>
       <Table>
         <TableHeader>
-          <TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}</TableRow>
+          <TableRow>
+            {columnDefs.map((c) => (
+              <SortableTableHead
+                key={c.key}
+                align={c.align}
+                active={getSortDirection(c.key)}
+                onSort={() => toggleSort(c.key)}
+              >
+                {c.label}
+              </SortableTableHead>
+            ))}
+            <TableHead className="w-1" />
+          </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading && (
-            <TableRow><TableCell colSpan={columns.length} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+            <TableRow><TableCell colSpan={totalCols} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
           )}
           {error && (
-            <TableRow><TableCell colSpan={columns.length} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+            <TableRow><TableCell colSpan={totalCols} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
           )}
-          {!isLoading && !error && rows.length === 0 && (
-            <TableRow><TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">No records.</TableCell></TableRow>
+          {!isLoading && !error && sorted.length === 0 && (
+            <TableRow><TableCell colSpan={totalCols} className="text-center text-muted-foreground py-8">No records.</TableCell></TableRow>
           )}
-          {rows.map((j) => (
+          {sorted.map((j) => (
             <TableRow key={j.id} className="cursor-pointer" onClick={() => onEdit(j)}>
               {mode === "templates" ? (
                 <>
