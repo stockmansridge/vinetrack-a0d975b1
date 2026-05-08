@@ -109,6 +109,20 @@ export default function PinsPage() {
     );
   }, [pins, filter]);
 
+  const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
+  const { sorted, getSortDirection, toggleSort } = useSortableTable(filtered, {
+    accessors: {
+      title: (p: any) => (p.title ?? p.button_name ?? "") as string,
+      paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
+      row: (p: any) => (p.row_number == null ? null : Number(p.row_number)),
+      status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
+      priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
+      created: (p: any) => (p.created_at ? new Date(p.created_at) : null),
+      completed: (p: any) => (p.is_completed && p.completed_at ? new Date(p.completed_at) : null),
+    },
+    initial: { key: "created", direction: "desc" },
+  });
+
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   return (
