@@ -107,7 +107,9 @@ function tripStatus(t: Trip): "active" | "paused" | "completed" {
 }
 
 export default function TripsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -360,6 +362,7 @@ export default function TripsPage() {
       <TripSheet
         trip={selected}
         paddockNameById={paddockNameById}
+        vineyardName={vineyardName}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
@@ -374,11 +377,13 @@ function arrayLen(v: any): number | null {
 function TripSheet({
   trip,
   paddockNameById,
+  vineyardName,
   open,
   onOpenChange,
 }: {
   trip: Trip | null;
   paddockNameById: Map<string, string | null>;
+  vineyardName: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -390,6 +395,20 @@ function TripSheet({
   const corrections = trip ? parseCorrections(trip.manual_correction_events) : [];
   const seeding = trip ? parseSeeding(trip.seeding_details) : null;
   const cov = trip ? summarizeCoverage(trip) : null;
+
+  // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
+  const blockNames: string[] = (() => {
+    if (!trip) return [];
+    const ids = Array.isArray(trip.paddock_ids) ? (trip.paddock_ids as string[]) : [];
+    if (ids.length) {
+      return ids
+        .map((id) => paddockNameById.get(id) ?? null)
+        .filter((v): v is string => !!v);
+    }
+    if (padName) return [padName];
+    return [];
+  })();
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -407,6 +426,9 @@ function TripSheet({
                     paddockName: padName ?? null,
                     tripDisplay: tripDisplayName(trip),
                     tripFunctionLabel: tripFunctionLabel(trip.trip_function),
+                    vineyardName,
+                    blockNames,
+                    pinCount: pins,
                   })
                 }
               >
@@ -459,7 +481,13 @@ function TripSheet({
                   <Field label="Sowing depth" value={`${seeding.sowing_depth_cm} cm`} />
                 )}
                 {seeding.mix_lines.map((line, i) => (
-                  <Field key={i} label={`Mix line ${i + 1}`} value={line} />
+                  <Field
+                    key={i}
+                    label={`Mix line ${i + 1}`}
+                    value={[line.name, line.percent && `${line.percent}%`, line.kg_per_ha && `${line.kg_per_ha} kg/ha`, line.supplier]
+                      .filter(Boolean)
+                      .join(" · ") || JSON.stringify(line.raw)}
+                  />
                 ))}
               </Section>
             )}
