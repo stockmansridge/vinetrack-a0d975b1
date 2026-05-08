@@ -26,6 +26,7 @@ import {
   createSavedChemical, updateSavedChemical, archiveSavedChemical,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
+import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Plus, Pencil, Archive } from "lucide-react";
 
 const ANY = "__any__";
@@ -243,16 +244,20 @@ function ChemicalEditor({
   const { toast } = useToast();
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
+  const [whp, setWhp] = useState("");
+  const [rei, setRei] = useState("");
+  const [restNotes, setRestNotes] = useState("");
 
   // Reset when opening
   useMemo(() => {
     if (open) {
       if (initial) {
+        const useVal = matchCategory(initial.use) ?? (initial.use ?? "");
         setForm({
           name: initial.name ?? "",
           active_ingredient: initial.active_ingredient ?? "",
           chemical_group: initial.chemical_group ?? "",
-          use: initial.use ?? "",
+          use: useVal,
           manufacturer: initial.manufacturer ?? "",
           crop: initial.crop ?? "",
           problem: initial.problem ?? "",
@@ -262,9 +267,16 @@ function ChemicalEditor({
           notes: initial.notes ?? "",
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
+        const p = parseRestrictions(initial.restrictions);
+        setWhp(p.whpDays);
+        setRei(p.reiHours);
+        setRestNotes(p.rest);
       } else {
         setForm(EMPTY);
         setRateStr("");
+        setWhp("");
+        setRei("");
+        setRestNotes("");
       }
     }
   }, [open, initial]);
@@ -275,7 +287,8 @@ function ChemicalEditor({
       if (rateNum != null && Number.isNaN(rateNum)) {
         throw new Error("Rate per ha must be a number");
       }
-      const payload: SavedChemicalInput = { ...form, rate_per_ha: rateNum };
+      const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
+      const payload: SavedChemicalInput = { ...form, rate_per_ha: rateNum, restrictions };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
@@ -297,31 +310,48 @@ function ChemicalEditor({
           <SheetTitle>{initial ? "Edit chemical" : "New chemical"}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-3 text-sm">
-          <Field label="Name *">
+          <Field label="Product name *">
             <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
           </Field>
           <Field label="Active ingredient">
             <Input value={form.active_ingredient ?? ""} onChange={(e) => set("active_ingredient", e.target.value)} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Group"><Input value={form.chemical_group ?? ""} onChange={(e) => set("chemical_group", e.target.value)} /></Field>
-            <Field label="Use"><Input value={form.use ?? ""} onChange={(e) => set("use", e.target.value)} placeholder="Fungicide, Insecticide…" /></Field>
+            <Field label="Product type / category">
+              <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Chemical group (optional)">
+              <Input value={form.chemical_group ?? ""} onChange={(e) => set("chemical_group", e.target.value)} placeholder="e.g. Group 3, DMI" />
+            </Field>
           </div>
-          <Field label="Manufacturer">
+          <Field label="Supplier / manufacturer">
             <Input value={form.manufacturer ?? ""} onChange={(e) => set("manufacturer", e.target.value)} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Crop"><Input value={form.crop ?? ""} onChange={(e) => set("crop", e.target.value)} /></Field>
-            <Field label="Target / problem"><Input value={form.problem ?? ""} onChange={(e) => set("problem", e.target.value)} /></Field>
+            <Field label="Target pest / disease / weed"><Input value={form.problem ?? ""} onChange={(e) => set("problem", e.target.value)} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Rate per ha">
+            <Field label="Default rate">
               <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
             </Field>
-            <Field label="Unit"><Input value={form.unit ?? ""} onChange={(e) => set("unit", e.target.value)} placeholder="L/ha, g/ha…" /></Field>
+            <Field label="Rate unit"><Input value={form.unit ?? ""} onChange={(e) => set("unit", e.target.value)} placeholder="L/ha, g/ha…" /></Field>
           </div>
-          <Field label="Restrictions (incl. WHP / REI)">
-            <Textarea rows={3} value={form.restrictions ?? ""} onChange={(e) => set("restrictions", e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Withholding period (days)">
+              <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />
+            </Field>
+            <Field label="Re-entry period (hours)">
+              <Input type="number" inputMode="decimal" step="any" value={rei} onChange={(e) => setRei(e.target.value)} />
+            </Field>
+          </div>
+          <Field label="Other restrictions / safety notes">
+            <Textarea rows={2} value={restNotes} onChange={(e) => setRestNotes(e.target.value)} />
           </Field>
           <Field label="Notes">
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
