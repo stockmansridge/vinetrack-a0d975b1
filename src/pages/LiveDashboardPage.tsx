@@ -531,6 +531,9 @@ export default function LiveDashboardPage() {
                       <TableCell className="text-muted-foreground text-xs">
                         {fmtRelative(trip.updated_at)}
                       </TableCell>
+                      <TableCell>
+                        <TripWeatherBadge label={wxLabel} />
+                      </TableCell>
                     </TableRow>
                   );
                 })}
