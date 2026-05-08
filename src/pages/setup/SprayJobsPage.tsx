@@ -351,6 +351,11 @@ function JobsTable({
               )}
               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-end gap-1">
+                  {mode !== "archived" && (
+                    <Button size="sm" variant="ghost" onClick={() => handleExportRowPdf(j)} title="Download PDF">
+                      <FileDown className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   {canEdit && mode !== "archived" && (
                     <>
                       <Button size="sm" variant="ghost" onClick={() => onEdit(j)} title="Edit">
