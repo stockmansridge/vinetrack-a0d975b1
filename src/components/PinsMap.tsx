@@ -159,7 +159,7 @@ export default function PinsMap() {
                   <Marker
                     key={p.id}
                     position={[p.latitude!, p.longitude!]}
-                    icon={pinIcon(pinStyle(p.mode, (p as any).button_color).hex)}
+                    icon={pinIcon(pinStyle(p.mode, (p as any).button_color, (p as any).category).hex)}
                     eventHandlers={{ click: () => setSelectedId(p.id) }}
                   />
                 ))}
