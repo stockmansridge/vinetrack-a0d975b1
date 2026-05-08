@@ -428,15 +428,15 @@ export default function LiveDashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Trip</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Block</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Row</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Updated</TableHead>
+                  <SortableTableHead active={liveSortDir("trip")} onSort={() => liveToggle("trip")}>Trip</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("status")} onSort={() => liveToggle("status")}>Status</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("operator")} onSort={() => liveToggle("operator")}>Operator</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("block")} onSort={() => liveToggle("block")}>Block</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("started")} onSort={() => liveToggle("started")}>Started</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("duration")} onSort={() => liveToggle("duration")}>Duration</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("row")} onSort={() => liveToggle("row")}>Row</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("progress")} onSort={() => liveToggle("progress")}>Progress</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("updated")} onSort={() => liveToggle("updated")}>Updated</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -447,14 +447,14 @@ export default function LiveDashboardPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {!tripsQ.isLoading && visible.length === 0 && (
+                {!tripsQ.isLoading && visibleSorted.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                       No active or recently finished trips.
                     </TableCell>
                   </TableRow>
                 )}
-                {visible.map(({ trip, status }) => {
+                {visibleSorted.map(({ trip, status }) => {
                   const counts = rowCounts(trip);
                   return (
                     <TableRow
