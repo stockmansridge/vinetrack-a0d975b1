@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown } from "lucide-react";
+import {
+  exportSprayJobPdf, exportYearlySprayProgramPdf, exportYearlySprayProgramCsv,
+  fetchJobPaddockMap, jobYear, type JobLookups,
+} from "@/lib/sprayJobsExport";
+
 import { useVineyard } from "@/context/VineyardContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -174,7 +179,9 @@ function JobsTable({
   onEdit: (job: SprayJob) => void;
   maps: LookupMaps;
 }) {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -187,6 +194,51 @@ function JobsTable({
         archived: mode === "archived",
       }),
   });
+
+  const lookupMaps: JobLookups = {
+    paddockNameById: maps.paddocks,
+    tractorNameById: maps.tractors,
+    equipmentNameById: maps.equipment,
+    memberNameById: maps.members,
+  };
+
+  const handleExportRowPdf = async (job: SprayJob) => {
+    try {
+      const ids = await fetchSprayJobPaddockIds(job.id);
+      exportSprayJobPdf(job, ids, lookupMaps, vineyardName);
+    } catch (e: any) {
+      toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  // Years available for the program export (planned tab only).
+  const years = useMemo(() => {
+    const set = new Set<number>();
+    (data ?? []).forEach((j) => {
+      const y = jobYear(j);
+      if (y != null) set.add(y);
+    });
+    const arr = Array.from(set).sort((a, b) => b - a);
+    if (!arr.length) arr.push(new Date().getFullYear());
+    return arr;
+  }, [data]);
+  const [yearSel, setYearSel] = useState<string>(() => String(new Date().getFullYear()));
+
+  const handleYearExport = async (kind: "pdf" | "csv") => {
+    const year = Number(yearSel);
+    const yearJobs = (data ?? []).filter((j) => jobYear(j) === year);
+    try {
+      const padMap = await fetchJobPaddockMap(yearJobs.map((j) => j.id));
+      if (kind === "pdf") {
+        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year);
+      } else {
+        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year);
+      }
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e.message, variant: "destructive" });
+    }
+  };
+
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["spray_jobs", selectedVineyardId] });
 
@@ -223,7 +275,25 @@ function JobsTable({
   }, [mode]);
 
   return (
-    <Card>
+    <div className="space-y-3">
+      {mode === "planned" && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="text-sm text-muted-foreground">Yearly program:</span>
+          <Select value={yearSel} onValueChange={setYearSel}>
+            <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={() => handleYearExport("pdf")}>
+            <FileDown className="h-3.5 w-3.5 mr-1" /> PDF
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleYearExport("csv")}>
+            <Download className="h-3.5 w-3.5 mr-1" /> CSV
+          </Button>
+        </div>
+      )}
+      <Card>
       <Table>
         <TableHeader>
           <TableRow>{columns.map((c) => <TableHead key={c}>{c}</TableHead>)}</TableRow>
@@ -281,6 +351,11 @@ function JobsTable({
               )}
               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-end gap-1">
+                  {mode !== "archived" && (
+                    <Button size="sm" variant="ghost" onClick={() => handleExportRowPdf(j)} title="Download PDF">
+                      <FileDown className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   {canEdit && mode !== "archived" && (
                     <>
                       <Button size="sm" variant="ghost" onClick={() => onEdit(j)} title="Edit">
@@ -316,6 +391,7 @@ function JobsTable({
         </TableBody>
       </Table>
     </Card>
+    </div>
   );
 }
 
