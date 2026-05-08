@@ -174,6 +174,9 @@ function NewChemicalDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add new chemical</DialogTitle>
+          <DialogDescription>
+            Save a new chemical to this vineyard's library. AI lookup is optional and never auto-saves.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <ChemicalAILookup
