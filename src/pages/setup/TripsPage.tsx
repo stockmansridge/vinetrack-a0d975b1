@@ -27,6 +27,17 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { Button } from "@/components/ui/button";
+import {
+  parseCorrections,
+  parseSeeding,
+  summarizeCoverage,
+  formatCorrectionLine,
+  tripToCsvRow,
+  rowsToCsv,
+  downloadCsv,
+  downloadTripPdf,
+} from "@/lib/tripReport";
 
 interface PaddockLite {
   id: string;
