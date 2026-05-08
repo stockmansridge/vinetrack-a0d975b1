@@ -224,12 +224,12 @@ export default function SavedChemicalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Active ingredient</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Use</TableHead>
-                  <TableHead>Rate/ha</TableHead>
-                  <TableHead>Manufacturer</TableHead>
+                  <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}>Name</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}>Active ingredient</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}>Group</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Rate/ha</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -240,14 +240,14 @@ export default function SavedChemicalsPage() {
                 {error && (
                   <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
-                {!isLoading && !error && rows.length === 0 && (
+                {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
                 )}
-                {rows.map((c) => (
+                {sortedRows.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{fmt(c.name)}</TableCell>
                     <TableCell>{fmt(c.active_ingredient)}</TableCell>
