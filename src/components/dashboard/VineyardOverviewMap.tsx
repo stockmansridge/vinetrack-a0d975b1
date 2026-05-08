@@ -601,7 +601,7 @@ export default function VineyardOverviewMap({
             {selection == null ? (
               <EmptyPanel
                 paddockCount={parsedPaddocks.length}
-                tripCount={recentTrips.length}
+                tripCount={parsedTrips.length}
                 pinCount={pinsWithCoords.length}
                 showPins={showPins}
                 showTrips={showTrips}
@@ -637,6 +637,7 @@ export default function VineyardOverviewMap({
                       ? paddockNameById.get(selectedTrip.paddock_id) ?? selectedTrip.paddock_name ?? null
                       : selectedTrip.paddock_name ?? null
                   }
+                  swatchColor={tripPalette.get(selectedTrip.id)}
                 />
               </PanelShell>
             ) : selectedPin ? (
@@ -657,10 +658,21 @@ export default function VineyardOverviewMap({
             ) : (
               <EmptyPanel
                 paddockCount={parsedPaddocks.length}
-                tripCount={recentTrips.length}
+                tripCount={parsedTrips.length}
                 pinCount={pinsWithCoords.length}
                 showPins={showPins}
                 showTrips={showTrips}
+              />
+            )}
+
+            {showTrips && (
+              <RecentTripsList
+                days={days}
+                entries={parsedTrips}
+                palette={tripPalette}
+                paddockNameById={paddockNameById}
+                selectedTripId={selection?.kind === "trip" ? selection.id : null}
+                onSelect={(id) => setSelection({ kind: "trip", id })}
               />
             )}
           </div>
