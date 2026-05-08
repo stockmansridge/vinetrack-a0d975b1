@@ -15,6 +15,7 @@ import { PRODUCT_CATEGORIES } from "@/lib/chemicalCategories";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 
 interface Props {
   open: boolean;
