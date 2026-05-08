@@ -803,14 +803,26 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function TripPanelBody({
   trip,
   paddockName,
+  swatchColor,
 }: {
   trip: Trip;
   paddockName: string | null;
+  swatchColor?: string;
 }) {
   const completed = Array.isArray(trip.completed_paths) ? trip.completed_paths.length : 0;
   const planned = Array.isArray(trip.row_sequence) ? trip.row_sequence.length : 0;
   return (
     <div className="space-y-2">
+      {swatchColor && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className="inline-block h-2.5 w-6 rounded-full"
+            style={{ background: swatchColor }}
+            aria-hidden
+          />
+          Route colour on map
+        </div>
+      )}
       <Row label="Type" value={tripFnLabel(trip.trip_function)} />
       <Row label="Block" value={paddockName ?? trip.paddock_name ?? "—"} />
       <Row label="Operator" value={trip.person_name ?? "—"} />
