@@ -420,7 +420,8 @@ export default function LiveDashboardPage() {
         <SummaryCard label="Operators active today" value={summary.operators} Icon={Users} />
       </div>
 
-      {/* Filters */}
+      {/* Live weather + rain forecast */}
+      <LiveWeatherSummary vineyardId={selectedVineyardId} />
       <Card className="p-3 flex flex-wrap gap-2 items-center">
         <Input
           value={search}
