@@ -77,7 +77,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
   const { selectedVineyardId } = useVineyard();
-  const { lookup, resolve } = useTeamLookup(selectedVineyardId);
+  const { lookup, resolve } = useTeamLookup(pin.vineyard_id ?? selectedVineyardId);
 
   // Resolve `created_by`: it may be a UUID (resolve via team) or a free-text
   // name/email from older clients. Never display a raw UUID.
