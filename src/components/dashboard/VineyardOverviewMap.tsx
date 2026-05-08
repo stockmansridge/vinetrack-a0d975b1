@@ -401,21 +401,21 @@ export default function VineyardOverviewMap({
       }
     }
 
-    // Trip polylines
+    // Trip polylines — per-trip color, dim non-selected when one is selected.
     if (showTrips) {
-      for (const t of recentTrips) {
-        const pts = extractPathPoints(t.path_points).filter(validPt);
+      const hasSelectedTrip = selection?.kind === "trip";
+      for (const { trip: t, points: pts } of parsedTrips) {
         if (pts.length < 2) continue;
         allPts.push(...pts);
-        const isSelected =
-          selection?.kind === "trip" && selection.id === t.id;
-        const color = tripColor(t.trip_function);
+        const isSelected = hasSelectedTrip && selection!.id === t.id;
+        const dim = hasSelectedTrip && !isSelected;
+        const color = tripPalette.get(t.id) ?? "#1E5AC8";
         const coords = pts.map((p) => new mapkit.Coordinate(p.lat, p.lng));
         const line = new mapkit.PolylineOverlay(coords, {
           style: new mapkit.Style({
             strokeColor: color,
-            strokeOpacity: isSelected ? 1.0 : 0.85,
-            lineWidth: isSelected ? 5 : 3,
+            strokeOpacity: isSelected ? 1.0 : dim ? 0.25 : 0.85,
+            lineWidth: isSelected ? 6 : dim ? 2 : 3,
             lineCap: "round",
             lineJoin: "round",
           }),
@@ -468,36 +468,25 @@ export default function VineyardOverviewMap({
       annotationsRef.current = newAnnotations;
     }
 
-    // Fit once on first available bounds.
-    if (!didFitRef.current && allPts.length) {
-      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-      for (const pt of allPts) {
-        if (pt.lat < minLat) minLat = pt.lat;
-        if (pt.lat > maxLat) maxLat = pt.lat;
-        if (pt.lng < minLng) minLng = pt.lng;
-        if (pt.lng > maxLng) maxLng = pt.lng;
-      }
-      const centerLat = (minLat + maxLat) / 2;
-      const centerLng = (minLng + maxLng) / 2;
-      const latDelta = Math.max((maxLat - minLat) * 1.5, 0.002);
-      const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.002);
-      try {
-        map.region = new mapkit.CoordinateRegion(
-          new mapkit.Coordinate(centerLat, centerLng),
-          new mapkit.CoordinateSpan(latDelta, lngDelta),
-        );
+    // Initial fit: prefer the vineyard extent (paddocks → trips/pins).
+    if (!didFitRef.current) {
+      const extent = vineyardExtent.length ? vineyardExtent : allPts;
+      if (extent.length && fitToBounds(extent)) {
         didFitRef.current = true;
-      } catch { /* noop */ }
+      }
     }
   }, [
     mapReady,
     parsedPaddocks,
-    recentTrips,
+    parsedTrips,
+    tripPalette,
     pinsWithCoords,
     showPaddocks,
     showTrips,
     showPins,
     selection,
+    vineyardExtent,
+    fitToBounds,
   ]);
 
   // Reset fit when vineyard switches.
@@ -505,6 +494,15 @@ export default function VineyardOverviewMap({
     didFitRef.current = false;
     setSelection(null);
   }, [selectedVineyardId]);
+
+  // When a trip becomes selected, zoom to its route.
+  useEffect(() => {
+    if (selection?.kind !== "trip") return;
+    const entry = parsedTrips.find((t) => t.trip.id === selection.id);
+    if (entry && entry.points.length >= 2) {
+      fitToBounds(entry.points);
+    }
+  }, [selection, parsedTrips, fitToBounds]);
 
   // ---------- Selected entities ----------
 
