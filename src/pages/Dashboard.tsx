@@ -7,6 +7,7 @@ import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight } f
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
+import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
