@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import PortalInfoBanner from "@/components/PortalInfoBanner";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -71,6 +72,7 @@ export default function AppLayout() {
               </DropdownMenu>
             </div>
           </header>
+          <PortalInfoBanner />
           <main className="flex-1 p-6 bg-background">
             <Outlet />
           </main>
