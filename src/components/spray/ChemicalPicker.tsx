@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -56,6 +56,9 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Select chemical</DialogTitle>
+            <DialogDescription>
+              Pick a chemical from this vineyard's saved library, or add a new one.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -171,6 +174,9 @@ function NewChemicalDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add new chemical</DialogTitle>
+          <DialogDescription>
+            Save a new chemical to this vineyard's library. AI lookup is optional and never auto-saves.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <ChemicalAILookup
