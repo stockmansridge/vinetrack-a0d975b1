@@ -48,15 +48,24 @@ export default function SavedChemicalsPage() {
   const [filter, setFilter] = useState("");
   const [group, setGroup] = useState<string>(ANY);
   const [use, setUse] = useState<string>(ANY);
+  const [tab, setTab] = useState<"active" | "archived">("active");
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["saved_chemicals", selectedVineyardId],
+    queryKey: ["saved_chemicals", selectedVineyardId, "active"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
   });
   const chemicals = data?.chemicals ?? [];
+
+  const archivedQuery = useQuery({
+    queryKey: ["saved_chemicals", selectedVineyardId, "archived"],
+    enabled: !!selectedVineyardId && tab === "archived",
+    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!, { archived: true }),
+  });
+  const archived = archivedQuery.data?.chemicals ?? [];
 
   const groups = useMemo(() => {
     const s = new Set<string>();
@@ -83,14 +92,43 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use]);
 
+  const archivedRows = useMemo(() => {
+    let list = archived.slice().sort((a, b) => (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""));
+    if (filter.trim()) {
+      const f = filter.toLowerCase();
+      list = list.filter((c) =>
+        [c.name, c.active_ingredient, c.manufacturer, c.use].some((v) =>
+          String(v ?? "").toLowerCase().includes(f),
+        ),
+      );
+    }
+    return list;
+  }, [archived, filter]);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
+    // Spray Job pickers and any chemical consumers should refresh too.
+    qc.invalidateQueries({ queryKey: ["saved_chemicals"] });
+  };
+
   const archiveMut = useMutation({
     mutationFn: (id: string) => archiveSavedChemical(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
+      invalidate();
       toast({ title: "Chemical archived" });
       setConfirmArchive(null);
     },
     onError: (e: any) => toast({ title: "Archive failed", description: e?.message ?? String(e), variant: "destructive" }),
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: (id: string) => restoreSavedChemical(id),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Chemical restored" });
+      setConfirmRestore(null);
+    },
+    onError: (e: any) => toast({ title: "Restore failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
   return (
