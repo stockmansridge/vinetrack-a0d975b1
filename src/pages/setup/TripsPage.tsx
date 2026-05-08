@@ -197,22 +197,51 @@ export default function TripsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Trips</h1>
-        <p className="text-sm text-muted-foreground">
-          Read-only. Soft-deleted trips are excluded.
-        </p>
-        {!isLoading && !error && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Showing {rows.length} of {trips.length} trips for this vineyard
-            {data ? ` · source: ${data.source}` : ""}
-            {data && (data.paddockFallbackCount || data.paddockJsonbFallbackCount)
-              ? ` (+${data.paddockFallbackCount} via paddock_id, +${data.paddockJsonbFallbackCount} via paddock_ids)`
-              : ""}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Trips</h1>
+          <p className="text-sm text-muted-foreground">
+            Read-only. Soft-deleted trips are excluded.
           </p>
-        )}
+          {!isLoading && !error && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Showing {rows.length} of {trips.length} trips for this vineyard
+              {data ? ` · source: ${data.source}` : ""}
+              {data && (data.paddockFallbackCount || data.paddockJsonbFallbackCount)
+                ? ` (+${data.paddockFallbackCount} via paddock_id, +${data.paddockJsonbFallbackCount} via paddock_ids)`
+                : ""}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={rows.length === 0}
+          onClick={() => {
+            const csvRows = rows.map((t) => {
+              const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
+              return tripToCsvRow(t, padName, tripDisplayName(t), tripFunctionLabel(t.trip_function));
+            });
+            downloadCsv(`trips_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
+          }}
+        >
+          Export CSV
+        </Button>
       </div>
+    </>
+  );
+  // (the wrapper element below replaces the <div> opener removed above)
+}
 
+function _unused_marker_for_diff() {
+  return null;
+}
+
+export function TripsPageBody() {
+  return null;
+}
+
+function _legacy_outer() { return (
       <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
