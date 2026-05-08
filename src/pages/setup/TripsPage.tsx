@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sheet";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { Button } from "@/components/ui/button";
+import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 import {
   parseCorrections,
   parseSeeding,
@@ -435,6 +436,9 @@ function TripSheet({
                 Download Trip Report PDF
               </Button>
             </div>
+            <Section title="Route map">
+              <TripRouteAppleMap pathPoints={trip.path_points} height={280} />
+            </Section>
             <Section title="Schedule">
               <Field label="Date" value={fmtDate(trip.start_time)} />
               <Field label="Start time" value={trip.start_time ? new Date(trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} />

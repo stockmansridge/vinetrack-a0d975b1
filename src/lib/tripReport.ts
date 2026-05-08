@@ -15,6 +15,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
 import logoUrl from "@/assets/vinetrack-leaf.png";
+import { composeSatelliteRouteImage } from "./satelliteRouteMap";
 
 // Cache the logo data URL between exports.
 let _logoDataUrl: string | null = null;
@@ -722,12 +723,30 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     y = (doc as any).lastAutoTable.finalY + 18;
   }
 
-  // 8. Route Map
+  // 8. Route Map — prefer satellite tile composite, fall back to SVG preview.
   y = sectionHeader(doc, "Route Map", y);
   const mapH = 240;
   y = ensureSpace(doc, y, mapH + 10);
   const points = extractPathPoints(t.path_points);
-  drawRouteMap(doc, points, 40, y, pageW - 80, mapH);
+  const satelliteDataUrl = (ctx as any).satelliteRouteDataUrl as string | null | undefined;
+  const mapW = pageW - 80;
+  if (satelliteDataUrl && points.length >= 2) {
+    try {
+      doc.addImage(satelliteDataUrl, "PNG", 40, y, mapW, mapH);
+      doc.setDrawColor(180);
+      doc.setLineWidth(0.5);
+      doc.rect(40, y, mapW, mapH);
+    } catch {
+      drawRouteMap(doc, points, 40, y, mapW, mapH);
+    }
+  } else {
+    if (points.length >= 2) {
+      doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(120);
+      doc.text("Satellite map unavailable — route preview shown.", 40, y - 2);
+      doc.setTextColor(0);
+    }
+    drawRouteMap(doc, points, 40, y, mapW, mapH);
+  }
   y += mapH + 12;
 
   // 9. Footer (every page)
@@ -758,7 +777,18 @@ function safeFileSegment(s: string | null | undefined, fallback: string): string
 
 export async function downloadTripPdf(t: Trip, ctx: TripPdfContext) {
   const logoDataUrl = await loadLogoDataUrl();
-  const doc = buildTripPdf(t, { ...ctx, logoDataUrl });
+  // Compose satellite route image (best-effort; may return null if tiles fail).
+  let satelliteRouteDataUrl: string | null = null;
+  try {
+    const points = extractPathPoints(t.path_points);
+    if (points.length >= 2) {
+      const result = await composeSatelliteRouteImage(points, 1100, 660);
+      satelliteRouteDataUrl = result?.dataUrl ?? null;
+    }
+  } catch {
+    satelliteRouteDataUrl = null;
+  }
+  const doc = buildTripPdf(t, { ...ctx, logoDataUrl, satelliteRouteDataUrl } as any);
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
