@@ -777,7 +777,18 @@ function safeFileSegment(s: string | null | undefined, fallback: string): string
 
 export async function downloadTripPdf(t: Trip, ctx: TripPdfContext) {
   const logoDataUrl = await loadLogoDataUrl();
-  const doc = buildTripPdf(t, { ...ctx, logoDataUrl });
+  // Compose satellite route image (best-effort; may return null if tiles fail).
+  let satelliteRouteDataUrl: string | null = null;
+  try {
+    const points = extractPathPoints(t.path_points);
+    if (points.length >= 2) {
+      const result = await composeSatelliteRouteImage(points, 1100, 660);
+      satelliteRouteDataUrl = result?.dataUrl ?? null;
+    }
+  } catch {
+    satelliteRouteDataUrl = null;
+  }
+  const doc = buildTripPdf(t, { ...ctx, logoDataUrl, satelliteRouteDataUrl } as any);
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
