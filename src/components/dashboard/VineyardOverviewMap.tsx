@@ -924,3 +924,94 @@ function PinPanelBody({
     </div>
   );
 }
+
+// ---------- Recent trips list ----------
+
+function RecentTripsList({
+  days,
+  entries,
+  palette,
+  paddockNameById,
+  selectedTripId,
+  onSelect,
+}: {
+  days: number;
+  entries: { trip: Trip; points: LatLng[] }[];
+  palette: Map<string, string>;
+  paddockNameById: Map<string, string>;
+  selectedTripId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="border-t p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Recent trips — last {days} days
+        </div>
+        <Badge variant="secondary" className="text-[10px]">
+          {entries.length}
+        </Badge>
+      </div>
+      {entries.length === 0 ? (
+        <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+          No trips in this period
+        </div>
+      ) : (
+        <ul className="space-y-1.5">
+          {entries.map(({ trip, points }) => {
+            const isSelected = trip.id === selectedTripId;
+            const color = palette.get(trip.id) ?? "#1E5AC8";
+            const block =
+              (trip.paddock_id && paddockNameById.get(trip.paddock_id)) ||
+              trip.paddock_name ||
+              null;
+            const operator = trip.person_name?.trim() || null;
+            const date = fmtShortDate(trip.start_time);
+            const hasRoute = points.length >= 2;
+            return (
+              <li key={trip.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(trip.id)}
+                  className={`flex w-full items-start gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary/10"
+                      : "border-transparent hover:bg-muted/50"
+                  }`}
+                >
+                  <span
+                    className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: color }}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-foreground">
+                      {tripDisplay(trip)}
+                    </span>
+                    <span className="block truncate text-muted-foreground">
+                      {[
+                        tripFnLabel(trip.trip_function),
+                        block,
+                        operator,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      {date && <span>{date}</span>}
+                      {!hasRoute && (
+                        <span className="rounded bg-muted px-1 py-0.5">
+                          No route recorded
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
