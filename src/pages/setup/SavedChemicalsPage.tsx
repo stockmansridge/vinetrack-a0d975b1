@@ -23,11 +23,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   fetchSavedChemicalsForVineyard,
-  createSavedChemical, updateSavedChemical, archiveSavedChemical,
+  createSavedChemical, updateSavedChemical, archiveSavedChemical, restoreSavedChemical,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
-import { Plus, Pencil, Archive } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
