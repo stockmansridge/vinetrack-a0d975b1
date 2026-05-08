@@ -5,10 +5,10 @@
 //   - Pins (colour-mapped from iOS, clickable)
 // Detail panel renders to the right on large screens, below on small.
 // READ-ONLY — no writes.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ExternalLink, Layers, X } from "lucide-react";
+import { Crosshair, ExternalLink, Layers, X } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
