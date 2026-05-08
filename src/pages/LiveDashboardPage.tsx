@@ -36,6 +36,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 
 interface PaddockLite {
   id: string;
@@ -280,6 +282,30 @@ export default function LiveDashboardPage() {
       });
   }, [enriched, search, opFilter, fnFilter, statusFilter]);
 
+  const STATUS_ORDER: Record<Status, number> = { active: 1, paused: 2, finished: 3, older: 4 };
+  type LiveSortKey = "trip" | "status" | "operator" | "block" | "started" | "duration" | "row" | "progress" | "updated";
+  const { sorted: visibleSorted, getSortDirection: liveSortDir, toggleSort: liveToggle } = useSortableTable<typeof visible[number], LiveSortKey>(visible, {
+    accessors: {
+      trip: (v) => tripDisplay(v.trip),
+      status: (v) => STATUS_ORDER[v.status],
+      operator: (v) => v.trip.person_name ?? "",
+      block: (v) => v.trip.paddock_name ?? "",
+      started: (v) => (v.trip.start_time ? new Date(v.trip.start_time) : null),
+      duration: (v) => {
+        if (!v.trip.start_time) return null;
+        const e = v.trip.end_time ? new Date(v.trip.end_time).getTime() : Date.now();
+        return e - new Date(v.trip.start_time).getTime();
+      },
+      row: (v) => (v.trip.current_row_number == null ? null : Number(v.trip.current_row_number)),
+      progress: (v) => {
+        const c = rowCounts(v.trip);
+        return c.planned > 0 ? c.completed / c.planned : null;
+      },
+      updated: (v) => (v.trip.updated_at ? new Date(v.trip.updated_at) : null),
+    },
+    initial: { key: "started", direction: "desc" },
+  });
+
   // Auto-select first active trip if none selected
   useEffect(() => {
     if (!selectedTripId && visible.length) {
@@ -402,15 +428,15 @@ export default function LiveDashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Trip</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Block</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Row</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Updated</TableHead>
+                  <SortableTableHead active={liveSortDir("trip")} onSort={() => liveToggle("trip")}>Trip</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("status")} onSort={() => liveToggle("status")}>Status</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("operator")} onSort={() => liveToggle("operator")}>Operator</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("block")} onSort={() => liveToggle("block")}>Block</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("started")} onSort={() => liveToggle("started")}>Started</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("duration")} onSort={() => liveToggle("duration")}>Duration</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("row")} onSort={() => liveToggle("row")}>Row</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("progress")} onSort={() => liveToggle("progress")}>Progress</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("updated")} onSort={() => liveToggle("updated")}>Updated</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -421,14 +447,14 @@ export default function LiveDashboardPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {!tripsQ.isLoading && visible.length === 0 && (
+                {!tripsQ.isLoading && visibleSorted.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                       No active or recently finished trips.
                     </TableCell>
                   </TableRow>
                 )}
-                {visible.map(({ trip, status }) => {
+                {visibleSorted.map(({ trip, status }) => {
                   const counts = rowCounts(trip);
                   return (
                     <TableRow

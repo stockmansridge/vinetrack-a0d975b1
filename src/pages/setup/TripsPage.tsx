@@ -20,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 import {
   Sheet,
   SheetContent,
@@ -174,6 +176,27 @@ export default function TripsPage() {
     return list;
   }, [trips, filter, from, to, paddockId, pattern, status, tripFn]);
 
+  type TripSortKey = "start" | "name" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
+  const durationMs = (s?: string | null, e?: string | null) => {
+    if (!s || !e) return null;
+    const ms = new Date(e).getTime() - new Date(s).getTime();
+    return isNaN(ms) || ms < 0 ? null : ms;
+  };
+  const { sorted: rowsSorted, getSortDirection, toggleSort } = useSortableTable<typeof rows[number], TripSortKey>(rows, {
+    accessors: {
+      start: (t) => (t.start_time ? new Date(t.start_time) : null),
+      name: (t) => tripDisplayName(t),
+      function: (t) => tripFunctionLabel(t.trip_function) ?? "",
+      paddock: (t) => t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? "" : ""),
+      pattern: (t) => t.tracking_pattern ?? "",
+      person: (t) => t.person_name ?? "",
+      duration: (t) => durationMs(t.start_time, t.end_time),
+      distance: (t) => (t.total_distance == null ? null : Number(t.total_distance)),
+      status: (t) => tripStatus(t),
+    },
+    initial: { key: "start", direction: "desc" },
+  });
+
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.debug("[TripsPage] diagnostics", {
@@ -309,15 +332,15 @@ export default function TripsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Start</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Function</TableHead>
-              <TableHead>Paddock</TableHead>
-              <TableHead>Pattern</TableHead>
-              <TableHead>Person</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Distance</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead active={getSortDirection("start")} onSort={() => toggleSort("start")}>Start</SortableTableHead>
+              <SortableTableHead active={getSortDirection("name")} onSort={() => toggleSort("name")}>Name</SortableTableHead>
+              <SortableTableHead active={getSortDirection("function")} onSort={() => toggleSort("function")}>Function</SortableTableHead>
+              <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
+              <SortableTableHead active={getSortDirection("pattern")} onSort={() => toggleSort("pattern")}>Pattern</SortableTableHead>
+              <SortableTableHead active={getSortDirection("person")} onSort={() => toggleSort("person")}>Person</SortableTableHead>
+              <SortableTableHead active={getSortDirection("duration")} onSort={() => toggleSort("duration")}>Duration</SortableTableHead>
+              <SortableTableHead active={getSortDirection("distance")} onSort={() => toggleSort("distance")}>Distance</SortableTableHead>
+              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -327,14 +350,14 @@ export default function TripsPage() {
             {error && (
               <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
-            {!isLoading && !error && rows.length === 0 && (
+            {!isLoading && !error && rowsSorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No trips found for this vineyard.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((t) => {
+            {rowsSorted.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
               const fnLabel = tripFunctionLabel(t.trip_function);

@@ -35,6 +35,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 import { cn } from "@/lib/utils";
 
 const PRESETS: { value: RangePreset; label: string }[] = [
@@ -192,38 +194,7 @@ export default function RainfallReportsPage() {
 
       {!isLoading && data?.ok && rows.length > 0 && (
         <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Rainfall (mm)</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Station</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead>Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((r) => (
-                <TableRow key={r.date}>
-                  <TableCell>{r.date ? format(new Date(r.date), "PP") : "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {r.rainfall_mm == null ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      r.rainfall_mm.toFixed(1)
-                    )}
-                  </TableCell>
-                  <TableCell>{sourceLabel(r.source)}</TableCell>
-                  <TableCell>{r.station_name ?? "—"}</TableCell>
-                  <TableCell className="max-w-[240px] truncate">{r.notes ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {r.updated_at ? format(new Date(r.updated_at), "PP p") : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <RainfallTable rows={rows} />
         </Card>
       )}
 
@@ -274,6 +245,55 @@ function RpcErrorState({ reason, message }: { reason: "rpc_missing" | "forbidden
   } as const;
   const m = map[reason];
   return <EmptyState title={m.title} message={m.msg} />;
+}
+
+function RainfallTable({ rows }: { rows: any[] }) {
+  type RainSortKey = "date" | "rainfall" | "source" | "station" | "notes" | "updated";
+  const { sorted, getSortDirection, toggleSort } = useSortableTable<any, RainSortKey>(rows, {
+    accessors: {
+      date: (r) => (r.date ? new Date(r.date) : null),
+      rainfall: (r) => (r.rainfall_mm == null ? null : Number(r.rainfall_mm)),
+      source: (r) => sourceLabel(r.source),
+      station: (r) => r.station_name ?? "",
+      notes: (r) => r.notes ?? "",
+      updated: (r) => (r.updated_at ? new Date(r.updated_at) : null),
+    },
+    initial: { key: "date", direction: "desc" },
+  });
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date</SortableTableHead>
+          <SortableTableHead align="right" active={getSortDirection("rainfall")} onSort={() => toggleSort("rainfall")}>Rainfall (mm)</SortableTableHead>
+          <SortableTableHead active={getSortDirection("source")} onSort={() => toggleSort("source")}>Source</SortableTableHead>
+          <SortableTableHead active={getSortDirection("station")} onSort={() => toggleSort("station")}>Station</SortableTableHead>
+          <SortableTableHead active={getSortDirection("notes")} onSort={() => toggleSort("notes")}>Notes</SortableTableHead>
+          <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sorted.map((r) => (
+          <TableRow key={r.date}>
+            <TableCell>{r.date ? format(new Date(r.date), "PP") : "—"}</TableCell>
+            <TableCell className="text-right tabular-nums">
+              {r.rainfall_mm == null ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                r.rainfall_mm.toFixed(1)
+              )}
+            </TableCell>
+            <TableCell>{sourceLabel(r.source)}</TableCell>
+            <TableCell>{r.station_name ?? "—"}</TableCell>
+            <TableCell className="max-w-[240px] truncate">{r.notes ?? "—"}</TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {r.updated_at ? format(new Date(r.updated_at), "PP p") : "—"}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
 
 function DateField({

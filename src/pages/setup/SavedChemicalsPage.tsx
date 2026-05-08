@@ -14,6 +14,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
 } from "@/components/ui/sheet";
@@ -92,6 +94,19 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use]);
 
+  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer";
+  const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
+    accessors: {
+      name: (c) => c.name ?? "",
+      active_ingredient: (c) => c.active_ingredient ?? "",
+      group: (c) => c.chemical_group ?? "",
+      use: (c) => c.use ?? "",
+      rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
+      manufacturer: (c) => c.manufacturer ?? "",
+    },
+    initial: { key: "name", direction: "asc" },
+  });
+
   const archivedRows = useMemo(() => {
     let list = archived.slice().sort((a, b) => (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""));
     if (filter.trim()) {
@@ -104,6 +119,18 @@ export default function SavedChemicalsPage() {
     }
     return list;
   }, [archived, filter]);
+
+  type ArcSortKey = "name" | "category" | "active_ingredient" | "manufacturer" | "archived";
+  const { sorted: sortedArchived, getSortDirection: arcSortDir, toggleSort: arcToggle } = useSortableTable<typeof archivedRows[number], ArcSortKey>(archivedRows, {
+    accessors: {
+      name: (c) => c.name ?? "",
+      category: (c) => c.use ?? "",
+      active_ingredient: (c) => c.active_ingredient ?? "",
+      manufacturer: (c) => c.manufacturer ?? "",
+      archived: (c) => (c.deleted_at ? new Date(c.deleted_at) : null),
+    },
+    initial: { key: "archived", direction: "desc" },
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
@@ -197,12 +224,12 @@ export default function SavedChemicalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Active ingredient</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Use</TableHead>
-                  <TableHead>Rate/ha</TableHead>
-                  <TableHead>Manufacturer</TableHead>
+                  <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}>Name</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}>Active ingredient</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}>Group</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Rate/ha</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -213,14 +240,14 @@ export default function SavedChemicalsPage() {
                 {error && (
                   <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
-                {!isLoading && !error && rows.length === 0 && (
+                {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
                 )}
-                {rows.map((c) => (
+                {sortedRows.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{fmt(c.name)}</TableCell>
                     <TableCell>{fmt(c.active_ingredient)}</TableCell>
@@ -264,11 +291,11 @@ export default function SavedChemicalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Active ingredient</TableHead>
-                  <TableHead>Manufacturer</TableHead>
-                  <TableHead>Archived</TableHead>
+                  <SortableTableHead active={arcSortDir("name")} onSort={() => arcToggle("name")}>Name</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("category")} onSort={() => arcToggle("category")}>Category</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("active_ingredient")} onSort={() => arcToggle("active_ingredient")}>Active ingredient</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("manufacturer")} onSort={() => arcToggle("manufacturer")}>Manufacturer</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("archived")} onSort={() => arcToggle("archived")}>Archived</SortableTableHead>
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -279,14 +306,14 @@ export default function SavedChemicalsPage() {
                 {archivedQuery.error && (
                   <TableRow><TableCell colSpan={canEdit ? 6 : 5} className="text-center text-destructive py-6">{(archivedQuery.error as Error).message}</TableCell></TableRow>
                 )}
-                {!archivedQuery.isLoading && !archivedQuery.error && archivedRows.length === 0 && (
+                {!archivedQuery.isLoading && !archivedQuery.error && sortedArchived.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={canEdit ? 6 : 5} className="text-center text-muted-foreground py-8">
                       No archived chemicals.
                     </TableCell>
                   </TableRow>
                 )}
-                {archivedRows.map((c) => (
+                {sortedArchived.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{fmt(c.name)}</TableCell>
                     <TableCell>{fmt(c.use)}</TableCell>

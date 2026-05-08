@@ -14,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -107,6 +109,21 @@ export default function PinsPage() {
     );
   }, [pins, filter]);
 
+  const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
+  type PinSortKey = "title" | "paddock" | "row" | "status" | "priority" | "created" | "completed";
+  const { sorted, getSortDirection, toggleSort } = useSortableTable<any, PinSortKey>(filtered, {
+    accessors: {
+      title: (p: any) => (p.title ?? p.button_name ?? "") as string,
+      paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
+      row: (p: any) => (p.row_number == null ? null : Number(p.row_number)),
+      status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
+      priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
+      created: (p: any) => (p.created_at ? new Date(p.created_at) : null),
+      completed: (p: any) => (p.is_completed && p.completed_at ? new Date(p.completed_at) : null),
+    },
+    initial: { key: "created", direction: "desc" },
+  });
+
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   return (
@@ -140,13 +157,13 @@ export default function PinsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Paddock</TableHead>
-                  <TableHead className="text-right">Row</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Completed</TableHead>
+                  <SortableTableHead active={getSortDirection("title")} onSort={() => toggleSort("title")}>Title</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
+                  <SortableTableHead align="right" active={getSortDirection("row")} onSort={() => toggleSort("row")}>Row</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("priority")} onSort={() => toggleSort("priority")}>Priority</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("completed")} onSort={() => toggleSort("completed")}>Completed</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -162,14 +179,14 @@ export default function PinsPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {!isLoading && !error && filtered.length === 0 && (
+                {!isLoading && !error && sorted.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No pins found for this vineyard.
                     </TableCell>
                   </TableRow>
                 )}
-                {filtered.map((p) => {
+                {sorted.map((p) => {
                   const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
                   return (
                     <TableRow

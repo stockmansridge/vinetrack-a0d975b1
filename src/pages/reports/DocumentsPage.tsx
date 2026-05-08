@@ -45,6 +45,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 
 interface PaddockLite {
   id: string;
@@ -264,6 +266,20 @@ export default function DocumentsPage() {
 
   const loading = tripsQuery.isLoading || sprayJobsQuery.isLoading;
 
+  type DocSortKey = "name" | "type" | "vineyard" | "block" | "related" | "date" | "source";
+  const { sorted: sortedFiltered, getSortDirection, toggleSort } = useSortableTable<typeof filtered[number], DocSortKey>(filtered, {
+    accessors: {
+      name: (it) => it.name ?? "",
+      type: (it) => it.typeLabel,
+      vineyard: (it) => it.vineyardName,
+      block: (it) => it.paddockName ?? "",
+      related: (it) => it.related ?? "",
+      date: (it) => (it.createdAt ? new Date(it.createdAt) : null),
+      source: (it) => it.source,
+    },
+    initial: { key: "date", direction: "desc" },
+  });
+
   if (!selectedVineyardId) {
     return (
       <div className="p-6">
@@ -363,13 +379,13 @@ export default function DocumentsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Vineyard</TableHead>
-              <TableHead>Block</TableHead>
-              <TableHead>Related</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Source</TableHead>
+              <SortableTableHead active={getSortDirection("name")} onSort={() => toggleSort("name")}>Name</SortableTableHead>
+              <SortableTableHead active={getSortDirection("type")} onSort={() => toggleSort("type")}>Type</SortableTableHead>
+              <SortableTableHead active={getSortDirection("vineyard")} onSort={() => toggleSort("vineyard")}>Vineyard</SortableTableHead>
+              <SortableTableHead active={getSortDirection("block")} onSort={() => toggleSort("block")}>Block</SortableTableHead>
+              <SortableTableHead active={getSortDirection("related")} onSort={() => toggleSort("related")}>Related</SortableTableHead>
+              <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date</SortableTableHead>
+              <SortableTableHead active={getSortDirection("source")} onSort={() => toggleSort("source")}>Source</SortableTableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -381,7 +397,7 @@ export default function DocumentsPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && sortedFiltered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                   No documents match the current filters.
@@ -389,7 +405,7 @@ export default function DocumentsPage() {
               </TableRow>
             )}
             {!loading &&
-              filtered.map((it) => (
+              sortedFiltered.map((it) => (
                 <TableRow key={it.id}>
                   <TableCell className="font-medium">{it.name}</TableCell>
                   <TableCell>
