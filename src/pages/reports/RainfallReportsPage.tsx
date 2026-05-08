@@ -47,7 +47,9 @@ const PRESETS: { value: RangePreset; label: string }[] = [
 ];
 
 export default function RainfallReportsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? "Vineyard";
   const [preset, setPreset] = useState<RangePreset>("last30");
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
