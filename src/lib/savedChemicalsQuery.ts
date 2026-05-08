@@ -126,8 +126,12 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
 export async function archiveSavedChemical(id: string) {
   const { error } = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
   if (error) {
-    // Try alternate arg name as fallback
     const alt = await supabase.rpc("soft_delete_saved_chemicals", { id } as any);
     if (alt.error) throw error;
   }
+}
+
+export async function restoreSavedChemical(id: string) {
+  const { error } = await supabase.rpc("restore_saved_chemicals", { p_id: id } as any);
+  if (error) throw error;
 }
