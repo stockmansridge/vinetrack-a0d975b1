@@ -14,6 +14,27 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
+import logoUrl from "@/assets/vinetrack-leaf.png";
+
+// Cache the logo data URL between exports.
+let _logoDataUrl: string | null = null;
+async function loadLogoDataUrl(): Promise<string | null> {
+  if (_logoDataUrl) return _logoDataUrl;
+  try {
+    const res = await fetch(logoUrl);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    _logoDataUrl = dataUrl;
+    return dataUrl;
+  } catch {
+    return null;
+  }
+}
 
 // ---------- Manual corrections parsing ----------
 
@@ -520,14 +541,23 @@ function tripTitle(ctx: TripPdfContext, t: Trip): string {
   return fn ? `Trip Report — ${fn}` : "Trip Report";
 }
 
-export function buildTripPdf(t: Trip, ctx: TripPdfContext): jsPDF {
+export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: string | null }): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   let y = 48;
 
-  // 1. Title
-  doc.setFont("helvetica", "bold").setFontSize(18);
-  doc.text(tripTitle(ctx, t), 40, y);
+  // 1. Header — VineTrack logo + dynamic title
+  const title = tripTitle(ctx, t);
+  const logoSize = 32;
+  if (ctx.logoDataUrl) {
+    try {
+      doc.addImage(ctx.logoDataUrl, "PNG", 40, y - 24, logoSize, logoSize);
+    } catch {
+      /* ignore image errors */
+    }
+  }
+  doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(0);
+  doc.text(title, ctx.logoDataUrl ? 40 + logoSize + 12 : 40, y);
   y += 24;
 
   // 2. Trip Details
@@ -726,8 +756,9 @@ function safeFileSegment(s: string | null | undefined, fallback: string): string
   return v.replace(/[^\w\-]+/g, "_").slice(0, 50);
 }
 
-export function downloadTripPdf(t: Trip, ctx: TripPdfContext) {
-  const doc = buildTripPdf(t, ctx);
+export async function downloadTripPdf(t: Trip, ctx: TripPdfContext) {
+  const logoDataUrl = await loadLogoDataUrl();
+  const doc = buildTripPdf(t, { ...ctx, logoDataUrl });
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
