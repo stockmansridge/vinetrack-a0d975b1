@@ -3,6 +3,9 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { SprayJob, SprayJobChemicalLine } from "./sprayJobsQuery";
+import {
+  fetchLinkedSprayRecords, recordTotalWaterLitres, recordChemicalNames,
+} from "./sprayJobsQuery";
 
 const NR = "Not recorded";
 
