@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sheet";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { Button } from "@/components/ui/button";
+import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 import {
   parseCorrections,
   parseSeeding,
