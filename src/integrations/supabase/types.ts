@@ -20,7 +20,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      restore_saved_chemicals: { Args: { p_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

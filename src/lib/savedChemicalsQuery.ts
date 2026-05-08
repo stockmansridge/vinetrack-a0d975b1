@@ -48,12 +48,11 @@ export interface SavedChemicalsQueryResult {
 
 export async function fetchSavedChemicalsForVineyard(
   vineyardId: string,
+  opts: { archived?: boolean } = {},
 ): Promise<SavedChemicalsQueryResult> {
-  const res = await supabase
-    .from("saved_chemicals")
-    .select("*")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+  let q = supabase.from("saved_chemicals").select("*").eq("vineyard_id", vineyardId);
+  q = opts.archived ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
+  const res = await q;
   if (res.error) throw res.error;
 
   const chemicals = (res.data ?? []) as SavedChemical[];
@@ -127,8 +126,12 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
 export async function archiveSavedChemical(id: string) {
   const { error } = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
   if (error) {
-    // Try alternate arg name as fallback
     const alt = await supabase.rpc("soft_delete_saved_chemicals", { id } as any);
     if (alt.error) throw error;
   }
+}
+
+export async function restoreSavedChemical(id: string) {
+  const { error } = await supabase.rpc("restore_saved_chemicals", { p_id: id } as any);
+  if (error) throw error;
 }

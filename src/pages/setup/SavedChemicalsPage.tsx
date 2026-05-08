@@ -23,11 +23,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   fetchSavedChemicalsForVineyard,
-  createSavedChemical, updateSavedChemical, archiveSavedChemical,
+  createSavedChemical, updateSavedChemical, archiveSavedChemical, restoreSavedChemical,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
-import { Plus, Pencil, Archive } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -47,15 +48,24 @@ export default function SavedChemicalsPage() {
   const [filter, setFilter] = useState("");
   const [group, setGroup] = useState<string>(ANY);
   const [use, setUse] = useState<string>(ANY);
+  const [tab, setTab] = useState<"active" | "archived">("active");
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["saved_chemicals", selectedVineyardId],
+    queryKey: ["saved_chemicals", selectedVineyardId, "active"],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
   });
   const chemicals = data?.chemicals ?? [];
+
+  const archivedQuery = useQuery({
+    queryKey: ["saved_chemicals", selectedVineyardId, "archived"],
+    enabled: !!selectedVineyardId && tab === "archived",
+    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!, { archived: true }),
+  });
+  const archived = archivedQuery.data?.chemicals ?? [];
 
   const groups = useMemo(() => {
     const s = new Set<string>();
@@ -82,14 +92,43 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use]);
 
+  const archivedRows = useMemo(() => {
+    let list = archived.slice().sort((a, b) => (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""));
+    if (filter.trim()) {
+      const f = filter.toLowerCase();
+      list = list.filter((c) =>
+        [c.name, c.active_ingredient, c.manufacturer, c.use].some((v) =>
+          String(v ?? "").toLowerCase().includes(f),
+        ),
+      );
+    }
+    return list;
+  }, [archived, filter]);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
+    // Spray Job pickers and any chemical consumers should refresh too.
+    qc.invalidateQueries({ queryKey: ["saved_chemicals"] });
+  };
+
   const archiveMut = useMutation({
     mutationFn: (id: string) => archiveSavedChemical(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
+      invalidate();
       toast({ title: "Chemical archived" });
       setConfirmArchive(null);
     },
     onError: (e: any) => toast({ title: "Archive failed", description: e?.message ?? String(e), variant: "destructive" }),
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: (id: string) => restoreSavedChemical(id),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Chemical restored" });
+      setConfirmRestore(null);
+    },
+    onError: (e: any) => toast({ title: "Restore failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
   return (
@@ -113,90 +152,163 @@ export default function SavedChemicalsPage() {
         Production data — changes save immediately to the live vineyard database.
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Group</div>
-          <Select value={group} onValueChange={setGroup}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY}>Any group</SelectItem>
-              {groups.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Use</div>
-          <Select value={use} onValueChange={setUse}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY}>Any use</SelectItem>
-              {uses.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 ml-auto">
-          <div className="text-xs text-muted-foreground">Search</div>
-          <Input
-            placeholder="Name, ingredient, target…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-72"
-          />
-        </div>
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "archived")}>
+        <TabsList>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="archived">
+            Archived{archived.length ? ` (${archived.length})` : ""}
+          </TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Active ingredient</TableHead>
-              <TableHead>Group</TableHead>
-              <TableHead>Use</TableHead>
-              <TableHead>Rate/ha</TableHead>
-              <TableHead>Manufacturer</TableHead>
-              {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
-              <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
-            )}
-            {error && (
-              <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
-            )}
-            {!isLoading && !error && rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-8">
-                  No chemicals found for this vineyard.
-                </TableCell>
-              </TableRow>
-            )}
-            {rows.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{fmt(c.name)}</TableCell>
-                <TableCell>{fmt(c.active_ingredient)}</TableCell>
-                <TableCell>{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>
-                <TableCell>{fmt(c.use)}</TableCell>
-                <TableCell>
-                  {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${c.unit}` : ""}`}
-                </TableCell>
-                <TableCell>{fmt(c.manufacturer)}</TableCell>
-                {canEdit && (
-                  <TableCell className="text-right">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmArchive(c)}>
-                      <Archive className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
+        <TabsContent value="active" className="space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Group</div>
+              <Select value={group} onValueChange={setGroup}>
+                <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY}>Any group</SelectItem>
+                  {groups.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Use</div>
+              <Select value={use} onValueChange={setUse}>
+                <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY}>Any use</SelectItem>
+                  {uses.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 ml-auto">
+              <div className="text-xs text-muted-foreground">Search</div>
+              <Input
+                placeholder="Name, ingredient, target…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="w-72"
+              />
+            </div>
+          </div>
+
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Active ingredient</TableHead>
+                  <TableHead>Group</TableHead>
+                  <TableHead>Use</TableHead>
+                  <TableHead>Rate/ha</TableHead>
+                  <TableHead>Manufacturer</TableHead>
+                  {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading && (
+                  <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+                {error && (
+                  <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                )}
+                {!isLoading && !error && rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-8">
+                      No chemicals found for this vineyard.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {rows.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{fmt(c.name)}</TableCell>
+                    <TableCell>{fmt(c.active_ingredient)}</TableCell>
+                    <TableCell>{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>
+                    <TableCell>{fmt(c.use)}</TableCell>
+                    <TableCell>
+                      {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${c.unit}` : ""}`}
+                    </TableCell>
+                    <TableCell>{fmt(c.manufacturer)}</TableCell>
+                    {canEdit && (
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmArchive(c)}>
+                          <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="archived" className="space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1 ml-auto">
+              <div className="text-xs text-muted-foreground">Search archived</div>
+              <Input
+                placeholder="Name, ingredient, manufacturer…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="w-72"
+              />
+            </div>
+          </div>
+
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Active ingredient</TableHead>
+                  <TableHead>Manufacturer</TableHead>
+                  <TableHead>Archived</TableHead>
+                  {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {archivedQuery.isLoading && (
+                  <TableRow><TableCell colSpan={canEdit ? 6 : 5} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                )}
+                {archivedQuery.error && (
+                  <TableRow><TableCell colSpan={canEdit ? 6 : 5} className="text-center text-destructive py-6">{(archivedQuery.error as Error).message}</TableCell></TableRow>
+                )}
+                {!archivedQuery.isLoading && !archivedQuery.error && archivedRows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={canEdit ? 6 : 5} className="text-center text-muted-foreground py-8">
+                      No archived chemicals.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {archivedRows.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{fmt(c.name)}</TableCell>
+                    <TableCell>{fmt(c.use)}</TableCell>
+                    <TableCell>{fmt(c.active_ingredient)}</TableCell>
+                    <TableCell>{fmt(c.manufacturer)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {c.deleted_at ? new Date(c.deleted_at).toLocaleDateString() : "—"}
+                    </TableCell>
+                    {canEdit && (
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" className="gap-1" onClick={() => setConfirmRestore(c)}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Restore
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <ChemicalEditor
         open={!!editing}
@@ -204,7 +316,7 @@ export default function SavedChemicalsPage() {
         initial={editing && editing !== "new" ? editing : null}
         vineyardId={selectedVineyardId!}
         onSaved={() => {
-          qc.invalidateQueries({ queryKey: ["saved_chemicals", selectedVineyardId] });
+          invalidate();
           setEditing(null);
         }}
       />
@@ -214,7 +326,7 @@ export default function SavedChemicalsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive “{confirmArchive?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              The chemical will be soft-deleted and hidden from this list. This can be restored from the iOS app if needed.
+              The chemical will be soft-deleted and hidden from spray-job pickers. You can restore it later from the Archived tab.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -224,6 +336,26 @@ export default function SavedChemicalsPage() {
               onClick={() => confirmArchive && archiveMut.mutate(confirmArchive.id)}
             >
               {archiveMut.isPending ? "Archiving…" : "Archive"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmRestore} onOpenChange={(o) => !o && setConfirmRestore(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore “{confirmRestore?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This chemical will become active again and reappear in spray-job pickers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={restoreMut.isPending}
+              onClick={() => confirmRestore && restoreMut.mutate(confirmRestore.id)}
+            >
+              {restoreMut.isPending ? "Restoring…" : "Restore"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
