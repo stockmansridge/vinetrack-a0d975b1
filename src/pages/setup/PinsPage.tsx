@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -31,11 +34,22 @@ interface PaddockLite {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const queryClient = useQueryClient();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { resolve } = useTeamLookup(selectedVineyardId);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const resolvePerson = (raw?: string | null, userId?: string | null): string => {
+    const fromId = userId ? resolve(userId) : null;
+    if (fromId) return fromId;
+    const t = (raw ?? "").trim();
+    if (!t) return userId ? "Unknown member" : "—";
+    if (UUID_RE.test(t)) return resolve(t) ?? "Unknown member";
+    return t;
+  };
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
@@ -110,19 +124,43 @@ export default function PinsPage() {
   }, [pins, filter]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
-  type PinSortKey = "title" | "paddock" | "row" | "status" | "priority" | "created" | "completed";
+  type PinSortKey =
+    | "title" | "mode" | "paddock" | "row" | "status"
+    | "priority" | "category" | "stage"
+    | "created" | "createdBy" | "completed" | "completedBy";
   const { sorted, getSortDirection, toggleSort } = useSortableTable<any, PinSortKey>(filtered, {
     accessors: {
       title: (p: any) => (p.title ?? p.button_name ?? "") as string,
+      mode: (p: any) => (p.mode ?? "") as string,
       paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
       row: (p: any) => (p.row_number == null ? null : Number(p.row_number)),
       status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
       priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
+      category: (p: any) => (p.category ?? "") as string,
+      stage: (p: any) => (p.growth_stage_code ?? "") as string,
       created: (p: any) => (p.created_at ? new Date(p.created_at) : null),
+      createdBy: (p: any) => resolvePerson(p.created_by, p.created_by_user_id),
       completed: (p: any) => (p.is_completed && p.completed_at ? new Date(p.completed_at) : null),
+      completedBy: (p: any) => p.is_completed ? resolvePerson(p.completed_by, p.completed_by_user_id) : "",
     },
     initial: { key: "created", direction: "desc" },
   });
+
+  // Hide optional columns when no pins have a value for them.
+  const hasMode = pins.some((p: any) => p.mode);
+  const hasPriority = pins.some((p: any) => p.priority);
+  const hasCategory = pins.some((p: any) => p.category);
+  const hasStage = pins.some((p: any) => p.growth_stage_code);
+  const hasAnyCompleted = pins.some((p: any) => p.is_completed);
+
+  const colCount =
+    4 /* title, paddock, row, status */ +
+    (hasMode ? 1 : 0) +
+    (hasPriority ? 1 : 0) +
+    (hasCategory ? 1 : 0) +
+    (hasStage ? 1 : 0) +
+    2 /* created, createdBy */ +
+    (hasAnyCompleted ? 2 : 0);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
@@ -144,13 +182,27 @@ export default function PinsPage() {
       </div>
 
       <TabsContent value="table" className="mt-0 space-y-4">
-        <div className="flex justify-end">
-          <Input
-            placeholder="Filter…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-64"
-          />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-muted-foreground">
+            {pins.length} pin{pins.length === 1 ? "" : "s"}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["pins", selectedVineyardId] })}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Input
+              placeholder="Filter…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="w-64"
+            />
+          </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <Card>
@@ -158,36 +210,45 @@ export default function PinsPage() {
               <TableHeader>
                 <TableRow>
                   <SortableTableHead active={getSortDirection("title")} onSort={() => toggleSort("title")}>Title</SortableTableHead>
+                  {hasMode && <SortableTableHead active={getSortDirection("mode")} onSort={() => toggleSort("mode")}>Type</SortableTableHead>}
                   <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
                   <SortableTableHead align="right" active={getSortDirection("row")} onSort={() => toggleSort("row")}>Row</SortableTableHead>
                   <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
-                  <SortableTableHead active={getSortDirection("priority")} onSort={() => toggleSort("priority")}>Priority</SortableTableHead>
+                  {hasPriority && <SortableTableHead active={getSortDirection("priority")} onSort={() => toggleSort("priority")}>Priority</SortableTableHead>}
+                  {hasCategory && <SortableTableHead active={getSortDirection("category")} onSort={() => toggleSort("category")}>Category</SortableTableHead>}
+                  {hasStage && <SortableTableHead active={getSortDirection("stage")} onSort={() => toggleSort("stage")}>Stage</SortableTableHead>}
                   <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
-                  <SortableTableHead active={getSortDirection("completed")} onSort={() => toggleSort("completed")}>Completed</SortableTableHead>
+                  <SortableTableHead active={getSortDirection("createdBy")} onSort={() => toggleSort("createdBy")}>Created by</SortableTableHead>
+                  {hasAnyCompleted && <SortableTableHead active={getSortDirection("completed")} onSort={() => toggleSort("completed")}>Completed</SortableTableHead>}
+                  {hasAnyCompleted && <SortableTableHead active={getSortDirection("completedBy")} onSort={() => toggleSort("completedBy")}>Completed by</SortableTableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">Loading…</TableCell>
+                    <TableCell colSpan={colCount} className="text-center text-muted-foreground">Loading…</TableCell>
                   </TableRow>
                 )}
                 {error && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-destructive">
+                    <TableCell colSpan={colCount} className="text-center text-destructive">
                       {(error as Error).message}
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading && !error && sorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      No pins found for this vineyard.
+                    <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
+                      {filter ? "No pins match this filter." : "No pins found for this vineyard."}
                     </TableCell>
                   </TableRow>
                 )}
                 {sorted.map((p) => {
                   const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
+                  const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
+                  const completedBy = (p as any).is_completed
+                    ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
+                    : "—";
                   return (
                     <TableRow
                       key={p.id}
@@ -205,6 +266,7 @@ export default function PinsPage() {
                           <span className="truncate">{pinDisplayTitle(p as any)}</span>
                         </div>
                       </TableCell>
+                      {hasMode && <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>}
                       <TableCell>
                         {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
@@ -218,13 +280,23 @@ export default function PinsPage() {
                           <Badge variant="outline">Open</Badge>
                         )}
                       </TableCell>
-                      <TableCell>
-                        {p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}
-                      </TableCell>
+                      {hasPriority && (
+                        <TableCell>
+                          {p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}
+                        </TableCell>
+                      )}
+                      {hasCategory && <TableCell>{p.category ?? "—"}</TableCell>}
+                      {hasStage && <TableCell>{p.growth_stage_code ?? "—"}</TableCell>}
                       <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}
-                      </TableCell>
+                      <TableCell className="text-sm">{createdBy}</TableCell>
+                      {hasAnyCompleted && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}
+                        </TableCell>
+                      )}
+                      {hasAnyCompleted && (
+                        <TableCell className="text-sm">{completedBy}</TableCell>
+                      )}
                     </TableRow>
                   );
                 })}

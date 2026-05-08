@@ -32,6 +32,10 @@ export interface PinRecord {
   created_by?: string | null;
   updated_by?: string | null;
   photo_path?: string | null;
+  photo_url?: string | null;
+  image_url?: string | null;
+  attachment_path?: string | null;
+  attachment_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -75,7 +79,13 @@ function formatDateTime(v?: string | null): string | null {
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
-  const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
+  // Pins may store photo as a storage path (signed) or as a direct URL.
+  const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
+  const directPhotoUrl =
+    pin.photo_url ?? pin.image_url ?? pin.attachment_url ?? null;
+  const signedPhotoUrl = usePinPhoto(photoPath ?? undefined);
+  const photoUrl = directPhotoUrl ?? signedPhotoUrl;
+  const hasPhotoRef = !!(photoPath || directPhotoUrl);
   const { selectedVineyardId } = useVineyard();
   const { lookup, resolve } = useTeamLookup(pin.vineyard_id ?? selectedVineyardId);
 
@@ -205,20 +215,36 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
           )}
         </Section>
 
-        {pin.photo_path && (
+        {hasPhotoRef && (
           <div className="pt-1">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
               Photo
             </div>
             {photoUrl ? (
-              <img
-                src={photoUrl}
-                alt={pin.title ?? "Pin photo"}
-                loading="lazy"
-                className="w-full max-h-64 object-cover rounded-md border"
-              />
-            ) : (
+              <a href={photoUrl} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={photoUrl}
+                  alt={pin.title ?? "Pin photo"}
+                  loading="lazy"
+                  className="w-full max-h-64 object-cover rounded-md border hover:opacity-90 transition"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                    const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (sib) sib.style.display = "flex";
+                  }}
+                />
+                <div
+                  className="hidden h-24 rounded-md border bg-muted/50 items-center justify-center text-xs text-muted-foreground"
+                >
+                  Image unavailable
+                </div>
+              </a>
+            ) : photoPath ? (
               <div className="h-24 rounded-md bg-muted animate-pulse" />
+            ) : (
+              <div className="h-24 rounded-md border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground">
+                Image unavailable
+              </div>
             )}
           </div>
         )}
