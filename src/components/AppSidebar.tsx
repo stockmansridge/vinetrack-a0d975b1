@@ -33,7 +33,10 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 
-const dashboard = [{ title: "Overview", url: "/dashboard", icon: LayoutDashboard }];
+const dashboard = [
+  { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Live dashboard", url: "/dashboard/live", icon: Activity },
+];
 
 const operations = [
   { title: "Trips", url: "/trips", icon: Sprout },
