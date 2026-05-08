@@ -332,15 +332,15 @@ export default function TripsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Start</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Function</TableHead>
-              <TableHead>Paddock</TableHead>
-              <TableHead>Pattern</TableHead>
-              <TableHead>Person</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Distance</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead active={getSortDirection("start")} onSort={() => toggleSort("start")}>Start</SortableTableHead>
+              <SortableTableHead active={getSortDirection("name")} onSort={() => toggleSort("name")}>Name</SortableTableHead>
+              <SortableTableHead active={getSortDirection("function")} onSort={() => toggleSort("function")}>Function</SortableTableHead>
+              <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
+              <SortableTableHead active={getSortDirection("pattern")} onSort={() => toggleSort("pattern")}>Pattern</SortableTableHead>
+              <SortableTableHead active={getSortDirection("person")} onSort={() => toggleSort("person")}>Person</SortableTableHead>
+              <SortableTableHead active={getSortDirection("duration")} onSort={() => toggleSort("duration")}>Duration</SortableTableHead>
+              <SortableTableHead active={getSortDirection("distance")} onSort={() => toggleSort("distance")}>Distance</SortableTableHead>
+              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -350,14 +350,14 @@ export default function TripsPage() {
             {error && (
               <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
-            {!isLoading && !error && rows.length === 0 && (
+            {!isLoading && !error && rowsSorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No trips found for this vineyard.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((t) => {
+            {rowsSorted.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
               const fnLabel = tripFunctionLabel(t.trip_function);
