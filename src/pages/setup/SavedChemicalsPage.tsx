@@ -291,11 +291,11 @@ export default function SavedChemicalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Active ingredient</TableHead>
-                  <TableHead>Manufacturer</TableHead>
-                  <TableHead>Archived</TableHead>
+                  <SortableTableHead active={arcSortDir("name")} onSort={() => arcToggle("name")}>Name</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("category")} onSort={() => arcToggle("category")}>Category</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("active_ingredient")} onSort={() => arcToggle("active_ingredient")}>Active ingredient</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("manufacturer")} onSort={() => arcToggle("manufacturer")}>Manufacturer</SortableTableHead>
+                  <SortableTableHead active={arcSortDir("archived")} onSort={() => arcToggle("archived")}>Archived</SortableTableHead>
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -306,14 +306,14 @@ export default function SavedChemicalsPage() {
                 {archivedQuery.error && (
                   <TableRow><TableCell colSpan={canEdit ? 6 : 5} className="text-center text-destructive py-6">{(archivedQuery.error as Error).message}</TableCell></TableRow>
                 )}
-                {!archivedQuery.isLoading && !archivedQuery.error && archivedRows.length === 0 && (
+                {!archivedQuery.isLoading && !archivedQuery.error && sortedArchived.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={canEdit ? 6 : 5} className="text-center text-muted-foreground py-8">
                       No archived chemicals.
                     </TableCell>
                   </TableRow>
                 )}
-                {archivedRows.map((c) => (
+                {sortedArchived.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{fmt(c.name)}</TableCell>
                     <TableCell>{fmt(c.use)}</TableCell>
