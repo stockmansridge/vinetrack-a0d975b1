@@ -173,6 +173,21 @@ function NewChemicalDialog({
           <DialogTitle>Add new chemical</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
+          <ChemicalAILookup
+            initialName={form.name}
+            onApply={(s: AppliedSuggestion) =>
+              setForm((p) => ({
+                ...p,
+                name: s.name ?? p.name,
+                active_ingredient: s.active_ingredient ?? p.active_ingredient,
+                chemical_group: s.chemical_group ?? p.chemical_group,
+                use: (s.category as string) ?? p.use,
+                rate_per_ha: s.rate_per_ha != null ? String(s.rate_per_ha) : p.rate_per_ha,
+                unit: s.rate_unit ?? p.unit,
+                notes: s.notes ?? p.notes,
+              }))
+            }
+          />
           <div className="space-y-1">
             <Label>Name *</Label>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
