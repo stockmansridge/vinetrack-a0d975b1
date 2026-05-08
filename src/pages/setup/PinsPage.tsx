@@ -153,7 +153,7 @@ export default function PinsPage() {
                   </TableRow>
                 )}
                 {filtered.map((p) => {
-                  const style = pinStyle(p.mode, (p as any).button_color);
+                  const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
                   return (
                     <TableRow
                       key={p.id}
