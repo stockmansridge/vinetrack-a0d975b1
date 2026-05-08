@@ -14,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
