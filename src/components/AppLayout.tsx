@@ -72,6 +72,7 @@ export default function AppLayout() {
               </DropdownMenu>
             </div>
           </header>
+          <PortalInfoBanner />
           <main className="flex-1 p-6 bg-background">
             <Outlet />
           </main>
