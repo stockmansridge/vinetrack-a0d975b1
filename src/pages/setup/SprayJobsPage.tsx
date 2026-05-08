@@ -5,7 +5,7 @@ import {
   exportSprayJobPdf, exportYearlySprayProgramPdf, exportYearlySprayProgramCsv,
   fetchJobPaddockMap, jobYear, type JobLookups,
 } from "@/lib/sprayJobsExport";
-import { fetchSprayJobPaddockIds as _fetchPaddIds } from "@/lib/sprayJobsQuery";
+
 import { useVineyard } from "@/context/VineyardContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
