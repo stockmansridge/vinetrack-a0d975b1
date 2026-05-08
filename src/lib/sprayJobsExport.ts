@@ -3,6 +3,9 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { SprayJob, SprayJobChemicalLine } from "./sprayJobsQuery";
+import {
+  fetchLinkedSprayRecords, recordTotalWaterLitres, recordChemicalNames,
+} from "./sprayJobsQuery";
 
 const NR = "Not recorded";
 
@@ -66,7 +69,7 @@ function paddockNamesFor(ids: string[] | undefined, lookups: JobLookups): string
 // Individual Spray Job PDF
 // ============================================================
 
-export function exportSprayJobPdf(
+export async function exportSprayJobPdf(
   job: SprayJob,
   paddockIds: string[],
   lookups: JobLookups,
@@ -199,6 +202,37 @@ export function exportSprayJobPdf(
     const notesLines = doc.splitTextToSize(job.notes, pageWidth - margin * 2);
     doc.text(notesLines, margin, y + 12);
     y += notesLines.length * 12 + 12;
+  }
+
+  // Linked actual records (best-effort; non-fatal on error)
+  try {
+    const linked = await fetchLinkedSprayRecords(job.id);
+    if (linked.length) {
+      if (y > pageHeight - 140) { doc.addPage(); y = 50; }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("Linked spray records (actual)", margin, y);
+      const rows = linked.map((r) => [
+        r.date ?? NR,
+        r.spray_reference ?? r.id.slice(0, 8),
+        r.operation_type ?? NR,
+        r.tractor ?? NR,
+        recordChemicalNames(r).join(", ") || NR,
+        recordTotalWaterLitres(r) != null ? `${recordTotalWaterLitres(r)} L` : NR,
+      ]);
+      autoTable(doc, {
+        startY: y + 6,
+        head: [["Date", "Reference", "Operation", "Tractor", "Chemicals", "Water"]],
+        body: rows,
+        theme: "striped",
+        styles: { fontSize: 8, cellPadding: 4, valign: "top" },
+        headStyles: { fillColor: [60, 90, 60], textColor: 255 },
+        margin: { left: margin, right: margin },
+      });
+      y = (doc as any).lastAutoTable.finalY + 16;
+    }
+  } catch {
+    // ignore — linked records are auxiliary
   }
 
   // Footer

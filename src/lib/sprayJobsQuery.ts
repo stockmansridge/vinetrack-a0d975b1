@@ -181,6 +181,134 @@ export function memberLabel(m: VineyardTeamMember): string {
   );
 }
 
+// ---------------- Linked spray records ----------------
+//
+// `spray_records.spray_job_id` (uuid, nullable) connects a completed spray
+// record back to its planned job. We update only that column from the client.
+
+export interface LinkedSprayRecord {
+  id: string;
+  vineyard_id: string;
+  spray_job_id?: string | null;
+  trip_id?: string | null;
+  date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  spray_reference?: string | null;
+  operation_type?: string | null;
+  tractor?: string | null;
+  equipment_type?: string | null;
+  notes?: string | null;
+  tanks?: any;
+  is_template?: boolean | null;
+}
+
+export async function fetchLinkedSprayRecords(jobId: string): Promise<LinkedSprayRecord[]> {
+  const { data, error } = await supabase
+    .from("spray_records")
+    .select("*")
+    .eq("spray_job_id", jobId)
+    .is("deleted_at", null)
+    .order("date", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as LinkedSprayRecord[]).filter((r) => !r.is_template);
+}
+
+export async function fetchUnlinkedSprayRecords(vineyardId: string): Promise<LinkedSprayRecord[]> {
+  const { data, error } = await supabase
+    .from("spray_records")
+    .select("*")
+    .eq("vineyard_id", vineyardId)
+    .is("spray_job_id", null)
+    .is("deleted_at", null)
+    .order("date", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return ((data ?? []) as LinkedSprayRecord[]).filter((r) => !r.is_template);
+}
+
+export async function linkSprayRecord(recordId: string, jobId: string): Promise<void> {
+  const { error } = await supabase
+    .from("spray_records")
+    .update({ spray_job_id: jobId })
+    .eq("id", recordId);
+  if (error) throw error;
+}
+
+export async function unlinkSprayRecord(recordId: string): Promise<void> {
+  const { error } = await supabase
+    .from("spray_records")
+    .update({ spray_job_id: null })
+    .eq("id", recordId);
+  if (error) throw error;
+}
+
+/** Sum of tank volumes across `tanks` jsonb (best-effort). */
+export function recordTotalWaterLitres(rec: LinkedSprayRecord): number | null {
+  const t = rec.tanks;
+  if (!t) return null;
+  const arr = Array.isArray(t) ? t : Array.isArray((t as any).tanks) ? (t as any).tanks : null;
+  if (!arr) return null;
+  let sum = 0;
+  let any = false;
+  for (const x of arr) {
+    const v = Number(x?.volume ?? x?.water_volume ?? x?.litres);
+    if (Number.isFinite(v) && v > 0) { sum += v; any = true; }
+  }
+  return any ? Math.round(sum) : null;
+}
+
+/** Flatten chemical names from a record's tanks jsonb. */
+export function recordChemicalNames(rec: LinkedSprayRecord): string[] {
+  const t = rec.tanks;
+  if (!t) return [];
+  const arr = Array.isArray(t) ? t : Array.isArray((t as any).tanks) ? (t as any).tanks : null;
+  if (!arr) return [];
+  const names = new Set<string>();
+  for (const tk of arr) {
+    const chems = Array.isArray(tk?.chemicals) ? tk.chemicals : Array.isArray(tk?.lines) ? tk.lines : [];
+    for (const c of chems) {
+      const n = (c?.name ?? c?.chemical_name ?? "").toString().trim();
+      if (n) names.add(n);
+    }
+  }
+  return Array.from(names);
+}
+
+export interface PlannedActualDiff {
+  ok: boolean;
+  notes: string[];
+}
+
+export function comparePlannedVsActual(
+  job: SprayJob,
+  rec: LinkedSprayRecord,
+): PlannedActualDiff {
+  const notes: string[] = [];
+  const plannedOp = (job.operation_type ?? "").toLowerCase().trim();
+  const actualOp = (rec.operation_type ?? "").toLowerCase().trim();
+  if (plannedOp && actualOp && plannedOp !== actualOp) {
+    notes.push(`Operation differs: planned ${job.operation_type} vs actual ${rec.operation_type}`);
+  }
+  const plannedChems = (job.chemical_lines ?? [])
+    .map((l) => (l.name ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  const actualChems = recordChemicalNames(rec).map((n) => n.toLowerCase());
+  const missing = plannedChems.filter((c) => !actualChems.some((a) => a.includes(c) || c.includes(a)));
+  const extra = actualChems.filter((c) => !plannedChems.some((a) => a.includes(c) || c.includes(a)));
+  if (missing.length) notes.push(`Missing chemicals: ${missing.join(", ")}`);
+  if (extra.length) notes.push(`Additional chemicals: ${extra.join(", ")}`);
+  const plannedWater = job.water_volume ?? null;
+  const actualWater = recordTotalWaterLitres(rec);
+  if (plannedWater != null && actualWater != null) {
+    const pct = Math.abs(actualWater - plannedWater) / Math.max(plannedWater, 1);
+    if (pct > 0.15) {
+      notes.push(`Water volume off by >15% (planned ${plannedWater} L, actual ${actualWater} L)`);
+    }
+  }
+  return { ok: notes.length === 0, notes };
+}
+
 export function chemicalLinesSummary(lines?: SprayJobChemicalLine[] | null): string {
   if (!lines || !lines.length) return "—";
   return lines
