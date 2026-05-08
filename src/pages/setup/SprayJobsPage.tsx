@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown } from "lucide-react";
+import {
+  exportSprayJobPdf, exportYearlySprayProgramPdf, exportYearlySprayProgramCsv,
+  fetchJobPaddockMap, jobYear, type JobLookups,
+} from "@/lib/sprayJobsExport";
+import { fetchSprayJobPaddockIds as _fetchPaddIds } from "@/lib/sprayJobsQuery";
 import { useVineyard } from "@/context/VineyardContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
