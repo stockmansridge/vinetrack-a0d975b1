@@ -11,6 +11,10 @@ import {
   createSavedChemical,
   type SavedChemical,
 } from "@/lib/savedChemicalsQuery";
+import { PRODUCT_CATEGORIES } from "@/lib/chemicalCategories";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 interface Props {
   open: boolean;
