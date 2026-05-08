@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { RainCalendar } from "@/components/rainfall/RainCalendar";
 import { cn } from "@/lib/utils";
 
 const PRESETS: { value: RangePreset; label: string }[] = [
