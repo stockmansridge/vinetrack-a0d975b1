@@ -74,7 +74,7 @@ function formatDateTime(v?: string | null): string | null {
 }
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
-  const style = pinStyle(pin.mode, pin.button_color);
+  const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
