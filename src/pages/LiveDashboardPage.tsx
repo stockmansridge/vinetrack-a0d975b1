@@ -474,6 +474,7 @@ export default function LiveDashboardPage() {
                   <SortableTableHead active={liveSortDir("row")} onSort={() => liveToggle("row")}>Row</SortableTableHead>
                   <SortableTableHead active={liveSortDir("progress")} onSort={() => liveToggle("progress")}>Progress</SortableTableHead>
                   <SortableTableHead active={liveSortDir("updated")} onSort={() => liveToggle("updated")}>Updated</SortableTableHead>
+                  <TableHead>Weather</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
