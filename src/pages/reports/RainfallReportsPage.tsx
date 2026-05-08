@@ -11,6 +11,13 @@ import {
   summarizeRainfall,
   type RangePreset,
 } from "@/lib/rainfallQuery";
+import { downloadRainfallPdf, downloadRainfallCsv } from "@/lib/rainfallExport";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,7 +47,9 @@ const PRESETS: { value: RangePreset; label: string }[] = [
 ];
 
 export default function RainfallReportsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? "Vineyard";
   const [preset, setPreset] = useState<RangePreset>("last30");
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
@@ -85,9 +94,25 @@ export default function RainfallReportsPage() {
             Source priority: Manual → Davis WeatherLink → Weather Underground → Open-Meteo.
           </p>
         </div>
-        <Button size="sm" variant="outline" disabled title="Export coming soon">
-          <Download className="h-4 w-4 mr-1" /> Export (coming soon)
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" disabled={!rows.length}>
+              <Download className="h-4 w-4 mr-1" /> Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => downloadRainfallPdf(rows, vineyardName, from, to)}
+            >
+              Download PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => downloadRainfallCsv(rows, vineyardName, from, to)}
+            >
+              Download CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Range controls */}
