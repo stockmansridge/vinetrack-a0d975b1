@@ -29,8 +29,11 @@ import {
   archiveSprayJob, restoreSprayJob, duplicateSprayJob,
   chemicalLinesSummary,
   fetchVineyardTeamMembers, memberLabel,
+  fetchLinkedSprayRecords, fetchUnlinkedSprayRecords,
+  linkSprayRecord, unlinkSprayRecord,
+  comparePlannedVsActual, recordTotalWaterLitres, recordChemicalNames,
   type SprayJob, type SprayJobChemicalLine, type SprayJobInput,
-  type VineyardTeamMember,
+  type VineyardTeamMember, type LinkedSprayRecord,
 } from "@/lib/sprayJobsQuery";
 import { ChemicalPicker } from "@/components/spray/ChemicalPicker";
 import {
