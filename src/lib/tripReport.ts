@@ -15,6 +15,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
 import logoUrl from "@/assets/vinetrack-leaf.png";
+import { composeSatelliteRouteImage } from "./satelliteRouteMap";
 
 // Cache the logo data URL between exports.
 let _logoDataUrl: string | null = null;
