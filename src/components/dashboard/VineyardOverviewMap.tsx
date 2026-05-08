@@ -233,6 +233,79 @@ export default function VineyardOverviewMap({
     [pins],
   );
 
+  // Pre-parse trip paths once per recentTrips; sort newest first.
+  const parsedTrips = useMemo(() => {
+    const validPt = (pt: LatLng) =>
+      Number.isFinite(pt.lat) && Number.isFinite(pt.lng) &&
+      pt.lat >= -90 && pt.lat <= 90 && pt.lng >= -180 && pt.lng <= 180;
+    const arr = recentTrips.map((t) => {
+      const pts = extractPathPoints(t.path_points).filter(validPt);
+      return { trip: t, points: pts };
+    });
+    arr.sort((a, b) => {
+      const ta = a.trip.start_time ? new Date(a.trip.start_time).getTime() : 0;
+      const tb = b.trip.start_time ? new Date(b.trip.start_time).getTime() : 0;
+      return tb - ta;
+    });
+    return arr;
+  }, [recentTrips]);
+
+  // Stable per-trip color palette for current view.
+  const tripPalette = useMemo(
+    () => buildTripPalette(parsedTrips.map((t) => t.trip.id)),
+    [parsedTrips],
+  );
+
+  // Helpers for fitting the camera.
+  const fitToBounds = useCallback((pts: LatLng[]) => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!map || !mapkit || !pts.length) return false;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const pt of pts) {
+      if (!Number.isFinite(pt.lat) || !Number.isFinite(pt.lng)) continue;
+      if (pt.lat < minLat) minLat = pt.lat;
+      if (pt.lat > maxLat) maxLat = pt.lat;
+      if (pt.lng < minLng) minLng = pt.lng;
+      if (pt.lng > maxLng) maxLng = pt.lng;
+    }
+    if (!Number.isFinite(minLat)) return false;
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const latDelta = Math.max((maxLat - minLat) * 1.4, 0.002);
+    const lngDelta = Math.max((maxLng - minLng) * 1.4, 0.002);
+    try {
+      map.region = new mapkit.CoordinateRegion(
+        new mapkit.Coordinate(centerLat, centerLng),
+        new mapkit.CoordinateSpan(latDelta, lngDelta),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Compute the vineyard "home" extent: paddocks → trips/pins.
+  const vineyardExtent = useMemo<LatLng[]>(() => {
+    const validPt = (pt: LatLng) =>
+      Number.isFinite(pt.lat) && Number.isFinite(pt.lng);
+    const polyPts: LatLng[] = [];
+    for (const p of parsedPaddocks) {
+      for (const pt of p.polygon) if (validPt(pt)) polyPts.push(pt);
+    }
+    if (polyPts.length) return polyPts;
+    const fallback: LatLng[] = [];
+    for (const t of parsedTrips) for (const pt of t.points) fallback.push(pt);
+    for (const pin of pinsWithCoords) {
+      fallback.push({ lat: Number(pin.latitude), lng: Number(pin.longitude) });
+    }
+    return fallback;
+  }, [parsedPaddocks, parsedTrips, pinsWithCoords]);
+
+  const recenterVineyard = useCallback(() => {
+    fitToBounds(vineyardExtent);
+  }, [fitToBounds, vineyardExtent]);
+
   // ---------- Init MapKit ----------
 
   useEffect(() => {
