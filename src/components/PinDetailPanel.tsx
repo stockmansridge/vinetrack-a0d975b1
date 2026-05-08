@@ -77,16 +77,16 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoUrl = usePinPhoto(pin.photo_path ?? undefined);
   const { selectedVineyardId } = useVineyard();
-  const { resolve } = useTeamLookup(selectedVineyardId);
+  const { lookup, resolve } = useTeamLookup(selectedVineyardId);
 
   // Resolve `created_by`: it may be a UUID (resolve via team) or a free-text
   // name/email from older clients. Never display a raw UUID.
   const createdByRaw = (pin.created_by ?? "").trim();
   let createdByDisplay: string;
   if (!createdByRaw) {
-    createdByDisplay = "Unknown";
+    createdByDisplay = "Not recorded";
   } else if (UUID_RE.test(createdByRaw)) {
-    createdByDisplay = resolve(createdByRaw) ?? "Unknown";
+    createdByDisplay = resolve(createdByRaw) ?? "Unknown member";
   } else {
     createdByDisplay = createdByRaw;
   }
@@ -103,7 +103,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
     completedByDisplay =
       fromId ??
       (txt && !UUID_RE.test(txt) ? txt : null) ??
-      (pin.completed_by_user_id ? "Unknown member" : "Unknown");
+      (pin.completed_by_user_id ? "Unknown member" : "Not recorded");
   }
 
   const createdAtDisplay = formatDateTime(pin.created_at) ?? "Not recorded";
@@ -115,6 +115,10 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
     pin.latitude != null && pin.longitude != null
       ? `${pin.latitude.toFixed(6)}, ${pin.longitude.toFixed(6)}`
       : null;
+
+  const debugAuditInfo = import.meta.env.DEV
+    ? `created_by=${!createdByRaw ? "null" : UUID_RE.test(createdByRaw) ? "uuid" : "text"} · team members=${lookup.size} · matched=${createdByRaw && UUID_RE.test(createdByRaw) && lookup.has(createdByRaw) ? "yes" : "no"}`
+    : null;
 
   return (
     <Card>
@@ -192,6 +196,11 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
               <span className="text-right font-medium break-words">
                 {formatDateTime(pin.updated_at) ?? "—"}
               </span>
+            </div>
+          )}
+          {debugAuditInfo && (
+            <div className="pt-1 text-[11px] text-muted-foreground">
+              {debugAuditInfo}
             </div>
           )}
         </Section>
