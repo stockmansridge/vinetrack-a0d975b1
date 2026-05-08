@@ -149,9 +149,9 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
             <CloudOff className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium">Weather unavailable</span>
             <span className="text-muted-foreground text-xs">
-              {weather && !weather.available && weather.reason === "rpc_missing"
+              {weather && weather.available === false && weather.reason === "rpc_missing"
                 ? "Server-side weather RPC not deployed"
-                : weather && !weather.available && weather.reason === "no_data"
+                : weather && weather.available === false && weather.reason === "no_data"
                 ? "No recent observations"
                 : "Live readings could not be fetched"}
             </span>
