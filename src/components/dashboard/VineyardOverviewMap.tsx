@@ -565,6 +565,19 @@ export default function VineyardOverviewMap({
         <div className="grid lg:grid-cols-[1fr_360px]">
           <div className="relative bg-muted" style={{ height }}>
             <div ref={containerRef} className="absolute inset-0" />
+            {mapReady && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="absolute left-3 top-3 h-8 gap-1.5 shadow-md"
+                onClick={recenterVineyard}
+                disabled={!vineyardExtent.length}
+                title="Re-centre on vineyard extent"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+                Re-centre
+              </Button>
+            )}
             {!mapReady && !mapError && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground bg-background/60">
                 Loading satellite map…
