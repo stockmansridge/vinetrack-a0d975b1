@@ -28,7 +28,9 @@ interface PaddockLite {
 }
 
 export default function PinsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
