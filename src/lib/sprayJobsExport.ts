@@ -69,7 +69,7 @@ function paddockNamesFor(ids: string[] | undefined, lookups: JobLookups): string
 // Individual Spray Job PDF
 // ============================================================
 
-export function exportSprayJobPdf(
+export async function exportSprayJobPdf(
   job: SprayJob,
   paddockIds: string[],
   lookups: JobLookups,
