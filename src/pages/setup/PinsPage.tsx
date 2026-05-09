@@ -368,7 +368,7 @@ export default function PinsPage() {
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
-        <PinsMapView />
+        <PinsMapView statusFilter={statusFilter} />
       </TabsContent>
     </Tabs>
   );
