@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2, RefreshCw, CloudSun, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -82,16 +82,9 @@ export default function IrrigationCalculatorPage() {
       selectedVineyardId
         ? fetchIrrigationForecast(selectedVineyardId, duration)
         : ({ available: false, reason: "no_coords" } as IrrigationForecastResult),
-    enabled: !!selectedVineyardId && mode === "forecast",
+    enabled: !!selectedVineyardId,
     staleTime: 1000 * 60 * 30,
   });
-
-  // Auto-switch to manual if forecast clearly unavailable for this vineyard
-  useEffect(() => {
-    if (mode === "forecast" && forecastQuery.data && !forecastQuery.data.available) {
-      // leave on forecast tab so the user sees the message; they can switch
-    }
-  }, [forecastQuery.data, mode]);
 
   const updateSetting = <K extends keyof IrrigationSettings>(k: K, v: string) => {
     const num = parseFloat(v);
@@ -124,26 +117,54 @@ export default function IrrigationCalculatorPage() {
   }, [manualDays]);
 
   const activeDays = mode === "forecast" ? forecastDays : manualForecastDays;
+  const appRateMissing = settings.irrigationApplicationRateMmPerHour <= 0;
+  const hasDays = activeDays.length > 0;
+  const recent = parseFloat(recentRain) || 0;
 
-  const validation = useMemo(() => {
-    if (!activeDays.length) {
-      return mode === "forecast"
-        ? "Forecast not loaded yet — load a forecast or switch to Manual mode."
-        : "Add at least one forecast day with an ETo value.";
+  // Always compute breakdown/deficits when we have days (uses temp rate when missing).
+  const preview = useMemo(() => {
+    if (!hasDays) return null;
+    const ratedSettings = appRateMissing
+      ? { ...settings, irrigationApplicationRateMmPerHour: 1 }
+      : settings;
+    return calculateIrrigation(activeDays, ratedSettings, recent);
+  }, [activeDays, settings, recent, hasDays, appRateMissing]);
+
+  // Final result only when app rate is set.
+  const result = !appRateMissing && hasDays ? preview : null;
+
+  const interpretation = useMemo(() => {
+    if (forecastQuery.isLoading && mode === "forecast" && !hasDays) {
+      return {
+        status: "none" as const,
+        label: "Loading forecast",
+        headline: "Loading forecast…",
+        detail: "Fetching ETo and rainfall for your vineyard location.",
+      };
     }
-    if (settings.irrigationApplicationRateMmPerHour <= 0) {
-      return "Enter an irrigation application rate greater than 0 mm/hr.";
+    if (mode === "forecast" && !hasDays && forecastQuery.data && forecastQuery.data.available === false) {
+      const reason = forecastQuery.data.reason;
+      return {
+        status: "none" as const,
+        label: "Forecast unavailable",
+        headline:
+          reason === "no_coords"
+            ? "Forecast unavailable because this vineyard does not have a weather station or location configured."
+            : "Forecast data could not be loaded. You can enter forecast values manually.",
+        detail: "Switch to Manual Calculator to enter ETo and rainfall by hand.",
+      };
     }
-    return null;
-  }, [activeDays, settings, mode]);
-
-  const result = useMemo(() => {
-    if (validation) return null;
-    const recent = parseFloat(recentRain) || 0;
-    return calculateIrrigation(activeDays, settings, recent);
-  }, [activeDays, settings, recentRain, validation]);
-
-  const interpretation = interpretRecommendation(result);
+    if (hasDays && appRateMissing) {
+      return {
+        status: "none" as const,
+        label: "Application rate needed",
+        headline:
+          "Forecast loaded. Enter your irrigation application rate in mm/hr to calculate the recommended irrigation time.",
+        detail: "All other forecast figures are shown below.",
+      };
+    }
+    return interpretRecommendation(result);
+  }, [forecastQuery.isLoading, forecastQuery.data, mode, hasDays, appRateMissing, result]);
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -168,30 +189,32 @@ export default function IrrigationCalculatorPage() {
             </Badge>
           </div>
         </CardHeader>
-        {result && (
+        {preview && (
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-            <Stat label="Forecast crop use" value={`${fmt(result.forecastCropUseMm)} mm`} />
+            <Stat label="Forecast crop use" value={`${fmt(preview.forecastCropUseMm)} mm`} />
             <Stat
               label="Forecast effective rain"
-              value={`${fmt(result.forecastEffectiveRainMm)} mm`}
+              value={`${fmt(preview.forecastEffectiveRainMm)} mm`}
             />
-            <Stat label="Recent rain offset" value={`${fmt(result.recentActualRainMm)} mm`} />
-            <Stat label="Net deficit" value={`${fmt(result.netDeficitMm)} mm`} />
-            <Stat label="Gross irrigation required" value={`${fmt(result.grossIrrigationMm)} mm`} />
+            <Stat label="Recent rain offset" value={`${fmt(preview.recentActualRainMm)} mm`} />
+            <Stat label="Net deficit" value={`${fmt(preview.netDeficitMm)} mm`} />
+            <Stat
+              label="Gross irrigation required"
+              value={result ? `${fmt(result.grossIrrigationMm)} mm` : "—"}
+            />
             <Stat
               label="Application rate used"
-              value={`${fmt(settings.irrigationApplicationRateMmPerHour)} mm/hr`}
+              value={
+                appRateMissing
+                  ? "Not set"
+                  : `${fmt(settings.irrigationApplicationRateMmPerHour)} mm/hr`
+              }
             />
             <Stat
               label="Recommended duration"
-              value={formatHoursMinutes(result.recommendedIrrigationMinutes)}
+              value={result ? formatHoursMinutes(result.recommendedIrrigationMinutes) : "—"}
               highlight
             />
-          </CardContent>
-        )}
-        {validation && (
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{validation}</p>
           </CardContent>
         )}
       </Card>
@@ -268,7 +291,7 @@ export default function IrrigationCalculatorPage() {
         </CardContent>
       </Card>
 
-      {result && activeDays.length > 0 && (
+      {preview && activeDays.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Daily breakdown</CardTitle>
@@ -286,7 +309,7 @@ export default function IrrigationCalculatorPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {result.dailyBreakdown.map((d, i) => (
+                {preview.dailyBreakdown.map((d, i) => (
                   <TableRow key={i}>
                     <TableCell>{formatDateLabel(d.date)}</TableCell>
                     <TableCell>{fmt(d.forecastEToMm)} mm</TableCell>
