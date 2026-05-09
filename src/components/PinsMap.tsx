@@ -6,7 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
-import { pinStyle, pinDisplayCoords } from "@/lib/pinStyle";
+import { pinStyle, pinDisplayCoords, applyPinStatusFilter } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -40,7 +40,7 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   return null;
 }
 
-export default function PinsMap() {
+export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "active" | "completed" | "all" } = {}) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -57,7 +57,8 @@ export default function PinsMap() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
   });
-  const pins = pinsResult?.pins ?? [];
+  const allPins = pinsResult?.pins ?? [];
+  const pins = useMemo(() => applyPinStatusFilter(allPins, statusFilter), [allPins, statusFilter]);
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();

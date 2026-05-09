@@ -20,9 +20,9 @@ import {
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
-import PinsMapView from "@/components/PinsMapView";
+import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -39,6 +39,7 @@ export default function PinsPage() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
   const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -114,14 +115,29 @@ export default function PinsPage() {
     });
   }
 
+  const statusCounts = useMemo(() => {
+    let active = 0;
+    let completed = 0;
+    for (const p of pins) {
+      if (pinIsCompleted(p as any)) completed++;
+      else active++;
+    }
+    return { active, completed, all: pins.length };
+  }, [pins]);
+
+  const statusFiltered = useMemo(
+    () => applyPinStatusFilter(pins, statusFilter),
+    [pins, statusFilter],
+  );
+
   const filtered = useMemo(() => {
-    if (!filter) return pins;
+    if (!filter) return statusFiltered;
     const f = filter.toLowerCase();
-    return pins.filter((p) =>
+    return statusFiltered.filter((p) =>
       [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [pins, filter]);
+  }, [statusFiltered, filter]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
@@ -184,10 +200,30 @@ export default function PinsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
+      <div className="flex items-center gap-2">
+        <div className="inline-flex rounded-md border bg-background p-0.5">
+          {([
+            { key: "active", label: "Active", count: statusCounts.active },
+            { key: "completed", label: "Completed", count: statusCounts.completed },
+            { key: "all", label: "All", count: statusCounts.all },
+          ] as const).map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={statusFilter === opt.key ? "secondary" : "ghost"}
+              className="h-7 px-3 text-xs"
+              onClick={() => setStatusFilter(opt.key)}
+            >
+              {opt.label} ({opt.count})
+            </Button>
+          ))}
+        </div>
+      </div>
+
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs text-muted-foreground">
-            {pins.length} pin{pins.length === 1 ? "" : "s"}
+            {sorted.length} pin{sorted.length === 1 ? "" : "s"}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -242,7 +278,13 @@ export default function PinsPage() {
                 {!isLoading && !error && sorted.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
-                      {filter ? "No pins match this filter." : "No pins found for this vineyard."}
+                      {filter
+                        ? "No pins match the current filters."
+                        : statusFilter === "active"
+                          ? "No active pins found."
+                          : statusFilter === "completed"
+                            ? "No completed pins found."
+                            : "No pins found."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -326,7 +368,7 @@ export default function PinsPage() {
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
-        <PinsMapView />
+        <PinsMapView statusFilter={statusFilter} />
       </TabsContent>
     </Tabs>
   );

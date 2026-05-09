@@ -4,7 +4,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
-import { pinStyle, pinDisplayCoords } from "@/lib/pinStyle";
+import { pinStyle, pinDisplayCoords, applyPinStatusFilter } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -13,6 +13,7 @@ import { validCoord } from "@/lib/pinsDiagnostics";
 
 interface Props {
   onUnavailable: (reason: string) => void;
+  statusFilter?: "active" | "completed" | "all";
 }
 
 interface Paddock {
@@ -32,7 +33,7 @@ function makePinElement(hex: string) {
   return el;
 }
 
-export default function ApplePinsMap({ onUnavailable }: Props) {
+export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -57,7 +58,8 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
     queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
     staleTime: 5 * 60_000,
   });
-  const pins = pinsResult?.pins ?? [];
+  const allPins = pinsResult?.pins ?? [];
+  const pins = useMemo(() => applyPinStatusFilter(allPins, statusFilter), [allPins, statusFilter]);
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
