@@ -24,6 +24,13 @@ export interface PinRecord {
   longitude?: number | null;
   row_number?: number | null;
   side?: string | null;
+  driving_row_number?: number | null;
+  pin_row_number?: number | null;
+  pin_side?: string | null;
+  along_row_distance_m?: number | null;
+  snapped_latitude?: number | null;
+  snapped_longitude?: number | null;
+  snapped_to_row?: boolean | null;
   growth_stage_code?: string | null;
   is_completed?: boolean | null;
   completed_by?: string | null;
