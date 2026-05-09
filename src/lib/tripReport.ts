@@ -124,6 +124,135 @@ export function formatCorrectionLine(c: ParsedCorrection): string {
   return t ? `${t} — ${c.label}` : c.label;
 }
 
+// Internal recovery / diagnostic event keys we hide from the formal report.
+// They flood the log without giving an operator anything actionable.
+const INTERNAL_CORRECTION_KEYS = new Set([
+  "auto_sequence_recover",
+  "auto_sequence_recovered",
+  "auto_sequence_advanced",
+  "auto_sequence_resync",
+  "auto_lock_recover",
+  "snap_to_live_path",
+  "live_path_resync",
+  "kalman_reset",
+  "gps_reacquired",
+]);
+
+function correctionKey(raw: string): string {
+  const head = raw.split(" at ")[0].trim();
+  return head.split(":")[0]?.trim() ?? "";
+}
+
+function correctionValue(raw: string): string {
+  const head = raw.split(" at ")[0].trim();
+  return head.split(":").slice(1).join(":").trim();
+}
+
+export interface CorrectionGroup {
+  /** Either a single parsed event or a collapsed summary. */
+  timestampLabel: string;
+  label: string;
+  count: number;
+  hidden: boolean;
+}
+
+/**
+ * Build the rows shown in the PDF's Manual Corrections section:
+ *  - Drop purely internal recovery/diagnostic events.
+ *  - Collapse runs of repeated keys (e.g. dozens of `auto_sequence_recover`)
+ *    into a single readable summary line.
+ *  - Preserve operator-meaningful events (manual_complete, end_review_*,
+ *    paddocks_added, auto_realign_*).
+ */
+export function summariseCorrections(events?: string[] | null): CorrectionGroup[] {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  const visible: { raw: string; key: string; parsed: ParsedCorrection }[] = [];
+  let hiddenCount = 0;
+  let firstHiddenTs: string | undefined;
+  for (const e of events) {
+    if (typeof e !== "string") continue;
+    const key = correctionKey(e);
+    if (INTERNAL_CORRECTION_KEYS.has(key)) {
+      hiddenCount += 1;
+      if (!firstHiddenTs) {
+        const ts = e.match(TIME_RE)?.[1];
+        if (ts) firstHiddenTs = ts;
+      }
+      continue;
+    }
+    visible.push({ raw: e, key, parsed: parseCorrection(e) });
+  }
+
+  // Collapse adjacent duplicates (same key + same value) into a single row
+  // with a count. Non-adjacent duplicates remain separate so timeline order
+  // is preserved.
+  const out: CorrectionGroup[] = [];
+  for (let i = 0; i < visible.length; i++) {
+    const cur = visible[i];
+    let count = 1;
+    const curVal = correctionValue(cur.raw);
+    while (
+      i + 1 < visible.length &&
+      visible[i + 1].key === cur.key &&
+      correctionValue(visible[i + 1].raw) === curVal
+    ) {
+      count += 1;
+      i += 1;
+    }
+    const t = fmtTimeOnly(cur.parsed.timestamp) ?? "—";
+    out.push({
+      timestampLabel: t,
+      label: count > 1 ? `${cur.parsed.label} (×${count})` : cur.parsed.label,
+      count,
+      hidden: false,
+    });
+  }
+  if (hiddenCount > 0) {
+    out.push({
+      timestampLabel: fmtTimeOnly(firstHiddenTs) ?? "—",
+      label: `${hiddenCount} internal sequence-recovery event${hiddenCount === 1 ? "" : "s"} hidden`,
+      count: hiddenCount,
+      hidden: true,
+    });
+  }
+  return out;
+}
+
+// ---------- Pattern label ----------
+
+const PATTERN_LABELS: Record<string, string> = {
+  everysecondrow: "Every Second Row",
+  every_second_row: "Every Second Row",
+  everyotherrow: "Every Other Row",
+  sequential: "Sequential",
+  oneafteranother: "Sequential",
+  freedrive: "Free Drive",
+  free_drive: "Free Drive",
+  threefive: "3/5 Pattern",
+  three_five: "3/5 Pattern",
+  "3/5": "3/5 Pattern",
+  "3_5": "3/5 Pattern",
+  fullcoverage: "Full Coverage",
+  full_coverage: "Full Coverage",
+};
+
+export function formatPatternLabel(p?: string | null): string {
+  if (!p) return "—";
+  const norm = String(p).trim();
+  const key = norm.toLowerCase().replace(/\s+/g, "");
+  if (PATTERN_LABELS[key]) return PATTERN_LABELS[key];
+  // Fall back: split camelCase / snake_case / kebab-case → Title Case.
+  const spaced = norm
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  return spaced
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
 // ---------- Seeding details ----------
 
 export interface SeedingBox {
