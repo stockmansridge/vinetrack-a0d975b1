@@ -71,7 +71,7 @@ export function RainCalendar({ vineyardId }: Props) {
       </div>
 
       {view === "year" ? (
-        <YearView vineyardId={vineyardId} year={year} setYear={setYear} />
+        <YearMatrixView vineyardId={vineyardId} year={year} setYear={setYear} />
       ) : (
         <MonthView vineyardId={vineyardId} cursor={monthCursor} setCursor={setMonthCursor} />
       )}
@@ -82,10 +82,21 @@ export function RainCalendar({ vineyardId }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// Year view: 12 month cards with summaries + compact day grid
+// Year matrix view: rows = day 1..31, columns = Jan..Dec, cells = rainfall mm
 // ---------------------------------------------------------------------------
 
-function YearView({
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function heatStyle(mm: number | null | undefined): React.CSSProperties {
+  if (mm == null || mm <= 0) return {};
+  // Cap intensity around 50mm/day for shading.
+  const intensity = Math.min(1, mm / 50);
+  // sky-blue heat: hsl(200 90% L%) where L drops from 92 to 45
+  const lightness = 92 - intensity * 47;
+  return { backgroundColor: `hsl(200 90% ${lightness}%)`, color: lightness < 60 ? "white" : undefined };
+}
+
+function YearMatrixView({
   vineyardId,
   year,
   setYear,
@@ -99,7 +110,7 @@ function YearView({
   const isCurrent = year === new Date().getFullYear();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["rain-year", vineyardId, year],
+    queryKey: ["rain-year-matrix", vineyardId, year],
     enabled: !!vineyardId,
     queryFn: () => fetchDailyRainfall(vineyardId, from, to),
   });
@@ -110,18 +121,67 @@ function YearView({
     return m;
   }, [data]);
 
-  const yearTotal = useMemo(() => {
-    if (!data?.ok) return 0;
-    return Math.round(
-      data.rows.reduce((s, r) => s + (typeof r.rainfall_mm === "number" ? r.rainfall_mm : 0), 0) * 10,
-    ) / 10;
-  }, [data]);
+  // Per-month aggregates.
+  const monthly = useMemo(() => {
+    return Array.from({ length: 12 }).map((_, m) => {
+      const last = endOfMonth(new Date(year, m, 1)).getDate();
+      let total = 0;
+      let rainDays = 0;
+      let recordedDays = 0;
+      let highest: { date: string; mm: number } | null = null;
+      for (let d = 1; d <= last; d++) {
+        const key = format(new Date(year, m, d), "yyyy-MM-dd");
+        const row = byDate.get(key);
+        const mm = row?.rainfall_mm;
+        if (row == null || mm == null) continue;
+        recordedDays += 1;
+        total += mm;
+        if (mm > 0) {
+          rainDays += 1;
+          if (!highest || mm > highest.mm) highest = { date: key, mm };
+        }
+      }
+      return {
+        month: m,
+        total: Math.round(total * 10) / 10,
+        rainDays,
+        recordedDays,
+        highest,
+        avg: recordedDays > 0 ? Math.round((total / recordedDays) * 10) / 10 : null,
+      };
+    });
+  }, [byDate, year]);
+
+  const yearSummary = useMemo(() => {
+    const total = monthly.reduce((s, m) => s + m.total, 0);
+    const rainDays = monthly.reduce((s, m) => s + m.rainDays, 0);
+    const monthsWithData = monthly.filter((m) => m.recordedDays > 0);
+    let wettestMonth: typeof monthly[number] | null = null;
+    let driestMonth: typeof monthly[number] | null = null;
+    let wettestDay: { date: string; mm: number } | null = null;
+    for (const m of monthsWithData) {
+      if (!wettestMonth || m.total > wettestMonth.total) wettestMonth = m;
+      if (!driestMonth || m.total < driestMonth.total) driestMonth = m;
+      if (m.highest && (!wettestDay || m.highest.mm > wettestDay.mm)) wettestDay = m.highest;
+    }
+    return {
+      total: Math.round(total * 10) / 10,
+      rainDays,
+      wettestMonth,
+      driestMonth,
+      wettestDay,
+      avgPerMonth: monthsWithData.length > 0
+        ? Math.round((total / monthsWithData.length) * 10) / 10
+        : null,
+    };
+  }, [monthly]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs text-muted-foreground">
-          {year} · Total {yearTotal} mm{isLoading ? " · loading…" : ""}
+          {year} · Year total {yearSummary.total} mm · {yearSummary.rainDays} rain days
+          {isLoading ? " · loading…" : ""}
         </p>
         <div className="flex items-center gap-1">
           <Button size="sm" variant="outline" onClick={() => setYear(year - 1)}>
@@ -141,104 +201,141 @@ function YearView({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <MonthCard key={i} year={year} month={i} byDate={byDate} />
-        ))}
+      {/* Day x Month matrix */}
+      <div className="overflow-auto border rounded-md">
+        <table className="w-full text-[11px] border-collapse">
+          <thead className="bg-muted/50 sticky top-0 z-10">
+            <tr>
+              <th className="px-2 py-1.5 text-left font-medium text-muted-foreground sticky left-0 bg-muted/50 z-20 border-r">
+                Day
+              </th>
+              {MONTH_LABELS.map((m) => (
+                <th key={m} className="px-1.5 py-1.5 text-center font-medium text-muted-foreground border-l">
+                  {m}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 31 }).map((_, di) => {
+              const day = di + 1;
+              return (
+                <tr key={day} className="border-t">
+                  <td className="px-2 py-0.5 text-muted-foreground tabular-nums sticky left-0 bg-background z-10 border-r font-medium">
+                    {day}
+                  </td>
+                  {MONTH_LABELS.map((_, mi) => {
+                    const lastDay = endOfMonth(new Date(year, mi, 1)).getDate();
+                    if (day > lastDay) {
+                      return <td key={mi} className="border-l bg-muted/20" />;
+                    }
+                    const date = new Date(year, mi, day);
+                    const key = format(date, "yyyy-MM-dd");
+                    const row = byDate.get(key);
+                    const mm = row?.rainfall_mm;
+                    const hasData = row != null && mm != null;
+                    const today = format(new Date(), "yyyy-MM-dd") === key;
+                    return (
+                      <td key={mi} className={cn("border-l p-0", today && "ring-1 ring-primary ring-inset")}>
+                        <DayPopover date={date} row={row}>
+                          <button
+                            type="button"
+                            style={hasData ? heatStyle(mm) : undefined}
+                            className={cn(
+                              "w-full h-7 px-1 text-center tabular-nums leading-none cursor-pointer hover:outline hover:outline-1 hover:outline-primary",
+                              !hasData && "text-muted-foreground/40",
+                              hasData && (mm as number) === 0 && "text-muted-foreground",
+                              hasData && (mm as number) > 0 && "font-medium",
+                            )}
+                          >
+                            {!hasData
+                              ? "—"
+                              : (mm as number) === 0
+                                ? "0.0"
+                                : (mm as number).toFixed(1)}
+                          </button>
+                        </DayPopover>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+          {/* Monthly summary footer */}
+          <tfoot className="bg-muted/30">
+            <SummaryRow label="Total (mm)" values={monthly.map((m) => (m.recordedDays ? m.total.toFixed(1) : "—"))} bold />
+            <SummaryRow label="Rain days" values={monthly.map((m) => (m.recordedDays ? String(m.rainDays) : "—"))} />
+            <SummaryRow
+              label="Wettest day"
+              values={monthly.map((m) => (m.highest ? `${m.highest.mm.toFixed(1)}` : "—"))}
+            />
+            <SummaryRow
+              label="Avg / day"
+              values={monthly.map((m) => (m.avg != null ? m.avg.toFixed(1) : "—"))}
+            />
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Year summary */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+        <YearStat label="Year total" value={`${yearSummary.total} mm`} />
+        <YearStat label="Rain days" value={String(yearSummary.rainDays)} />
+        <YearStat
+          label="Wettest month"
+          value={yearSummary.wettestMonth ? `${MONTH_LABELS[yearSummary.wettestMonth.month]} (${yearSummary.wettestMonth.total} mm)` : "—"}
+        />
+        <YearStat
+          label="Driest month"
+          value={yearSummary.driestMonth ? `${MONTH_LABELS[yearSummary.driestMonth.month]} (${yearSummary.driestMonth.total} mm)` : "—"}
+        />
+        <YearStat
+          label="Wettest day"
+          value={yearSummary.wettestDay ? `${yearSummary.wettestDay.mm.toFixed(1)} mm` : "—"}
+          sub={yearSummary.wettestDay ? format(new Date(yearSummary.wettestDay.date), "PP") : undefined}
+        />
+        <YearStat
+          label="Avg / month"
+          value={yearSummary.avgPerMonth != null ? `${yearSummary.avgPerMonth} mm` : "—"}
+        />
       </div>
     </div>
   );
 }
 
-function MonthCard({
-  year,
-  month,
-  byDate,
-}: {
-  year: number;
-  month: number;
-  byDate: Map<string, RainfallDay>;
-}) {
-  const first = startOfMonth(new Date(year, month, 1));
-  const last = endOfMonth(first);
-
-  // Summary
-  let total = 0;
-  let rainDays = 0;
-  let highest: { date: string; mm: number } | null = null;
-  let noDataDays = 0;
-  for (let d = 1; d <= last.getDate(); d++) {
-    const key = format(new Date(year, month, d), "yyyy-MM-dd");
-    const row = byDate.get(key);
-    const mm = row?.rainfall_mm;
-    if (row == null || mm == null) {
-      noDataDays += 1;
-      continue;
-    }
-    total += mm;
-    if (mm > 0) {
-      rainDays += 1;
-      if (!highest || mm > highest.mm) highest = { date: key, mm };
-    }
-  }
-  total = Math.round(total * 10) / 10;
-
-  const startWeekday = (first.getDay() + 6) % 7;
-  const cells: { date: Date | null }[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push({ date: null });
-  for (let d = 1; d <= last.getDate(); d++) cells.push({ date: new Date(year, month, d) });
-  const trailing = (7 - (cells.length % 7)) % 7;
-  for (let i = 0; i < trailing; i++) cells.push({ date: null });
-
+function SummaryRow({ label, values, bold }: { label: string; values: string[]; bold?: boolean }) {
   return (
-    <Card className="p-3 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <div className="text-sm font-semibold">{format(first, "MMMM")}</div>
-        <div className="text-xs text-muted-foreground tabular-nums">{total} mm</div>
-      </div>
-      <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
-        <span>{rainDays} rain days</span>
-        <span>·</span>
-        <span>
-          Highest: {highest ? `${highest.mm.toFixed(1)} mm` : "—"}
-        </span>
-        {noDataDays > 0 && (
-          <>
-            <span>·</span>
-            <span>{noDataDays} no-data</span>
-          </>
-        )}
-      </div>
-      <div className="grid grid-cols-7 gap-[2px]">
-        {cells.map((c, i) => {
-          if (!c.date) return <div key={i} className="aspect-square rounded-sm" />;
-          const key = format(c.date, "yyyy-MM-dd");
-          const row = byDate.get(key);
-          const mm = row?.rainfall_mm;
-          const hasData = row != null && mm != null;
-          const isWet = hasData && (mm as number) > 0;
-          const today = format(new Date(), "yyyy-MM-dd") === key;
-          return (
-            <DayPopover key={i} date={c.date} row={row}>
-              <button
-                type="button"
-                className={cn(
-                  "aspect-square rounded-sm border text-[9px] leading-none flex items-center justify-center cursor-pointer hover:ring-1 hover:ring-primary",
-                  isWet && "bg-sky-100 dark:bg-sky-950/50 border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-200 font-medium",
-                  !hasData && "bg-muted/40 text-muted-foreground/50",
-                  hasData && !isWet && "bg-background",
-                  today && "ring-1 ring-primary",
-                )}
-              >
-                {c.date.getDate()}
-              </button>
-            </DayPopover>
-          );
-        })}
-      </div>
+    <tr className="border-t">
+      <td className="px-2 py-1 text-muted-foreground sticky left-0 bg-muted/30 z-10 border-r text-[11px]">
+        {label}
+      </td>
+      {values.map((v, i) => (
+        <td
+          key={i}
+          className={cn(
+            "px-1 py-1 text-center tabular-nums border-l text-[11px]",
+            bold && "font-semibold",
+            v === "—" && "text-muted-foreground/50",
+          )}
+        >
+          {v}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function YearStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <Card className="p-2.5">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold mt-0.5">{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
     </Card>
   );
 }
+
 
 function DayPopover({
   date,
