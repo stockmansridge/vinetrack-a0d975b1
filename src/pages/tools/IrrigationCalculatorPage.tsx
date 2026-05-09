@@ -75,10 +75,10 @@ export default function IrrigationCalculatorPage() {
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Irrigation Calculator</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Irrigation Advisor</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Estimate irrigation requirements from forecast ETo, forecast rainfall, crop coefficient,
-          irrigation efficiency, and your irrigation application rate.
+          Irrigation Advisor estimates irrigation requirements from forecast ETo, rainfall, crop
+          coefficient, irrigation efficiency, and your irrigation application rate.
         </p>
       </div>
 
