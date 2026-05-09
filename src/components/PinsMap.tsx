@@ -40,7 +40,7 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   return null;
 }
 
-export default function PinsMap() {
+export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "active" | "completed" | "all" } = {}) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
