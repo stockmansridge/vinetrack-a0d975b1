@@ -22,6 +22,7 @@ import {
 import {
   fetchRainForecast,
   forecastHeadline,
+  forecastUnavailableReason,
   summarizeForecast,
 } from "@/lib/rainForecastQuery";
 
@@ -104,12 +105,21 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
     weather && weather.available ? weather.reading : null;
   const stale = weather && weather.available ? weather.stale : false;
 
-  const forecastLabel = (() => {
-    if (forecastQ.isLoading) return "Loading forecast…";
-    if (!forecast) return "Forecast unavailable";
-    if (!forecast.available) return "Forecast unavailable";
-    return forecastHeadline(summarizeForecast(forecast.days));
+  const forecastInfo = (() => {
+    if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
+    if (!forecast) return { label: "Forecast unavailable", title: "No response from forecast service" };
+    if (forecast.available === false) {
+      return {
+        label: "Forecast unavailable",
+        title: forecastUnavailableReason(forecast.reason, forecast.message),
+      };
+    }
+    return {
+      label: forecastHeadline(summarizeForecast(forecast.days)),
+      title: forecast.via === "open_meteo" ? "Source: Open-Meteo Forecast" : forecast.source ?? undefined,
+    };
   })();
+  const forecastLabel = forecastInfo.label;
 
   const refreshing = weatherQ.isFetching || forecastQ.isFetching;
   const refreshAll = () => {
@@ -119,7 +129,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
 
   const headerRight = (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <Badge variant="outline" className="gap-1">
+      <Badge variant="outline" className="gap-1" title={forecastInfo.title}>
         <CloudRain className="h-3 w-3" />
         {forecastLabel}
       </Badge>
@@ -171,7 +181,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <Badge variant="outline" className="gap-1">
+            <Badge variant="outline" className="gap-1" title={forecastInfo.title}>
               <CloudRain className="h-3 w-3" />
               {forecastLabel}
             </Badge>
