@@ -23,6 +23,9 @@ export interface PaddockRow {
   emitter_spacing?: number | null;
   vine_count_override?: number | null;
   row_length_override?: number | null;
+  /** Calculation-only per-row overrides JSONB.
+   *  Shape: { "<rowNumber>": <lengthM>, ... } e.g. { "1": 245, "3.5": 244.2 }. */
+  row_length_overrides?: Record<string, number> | null;
   variety_allocations?: any;
   polygon_points?: any;
   rows?: any;
