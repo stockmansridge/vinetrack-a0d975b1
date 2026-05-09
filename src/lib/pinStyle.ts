@@ -1,29 +1,33 @@
-// Pin colour mapping — mirrors the iOS app's pin category palette.
-// Source: docs/web-portal-map-style.md §"Suggested category colours" and the
-// iOS UIColor system tints used by the field app.
+// Pin colour mapping — mirrors the iOS app's per-button colour palette.
 //
-// Resolution priority (2026-05 v3, after inspecting real historical data):
-//   1. mode / category → palette  (case-insensitive, trimmed)
-//   2. button_color exactly equals a known palette hex → use that palette
-//      entry. (iOS stores the displayed hex per pin; this lets historical
-//      pins without a `mode` value still resolve to red/green/blue/etc.)
-//   3. button_color is some other valid hex → treat as a deliberate custom
-//      colour and use it as-is.
-//   4. systemGray default.
+// In the iOS app every Repair / Growth button (e.g. "Irrigation",
+// "Broken Post", "Vine Issue", "Powdery", "Downy", "Blackberries")
+// has its own colour stored on `ButtonConfig.color`. When a pin is
+// dropped, that button colour is written to `pins.button_color` —
+// usually as a SwiftUI colour name like "blue", "brown", "darkgreen",
+// "yellow", or as a `#RRGGBB` hex string.
 //
-// Notes:
-//   - We previously *discarded* button_color when it matched a palette hex,
-//     which left every historical iOS pin grey. That was wrong — iOS writes
-//     the palette colour directly into button_color, so a palette match is
-//     in fact the strongest signal we have when `mode` is absent.
+// To make Lovable pins match the iOS app, the resolver order is:
+//
+//   1. pin.button_color  → SwiftUI named colour or hex string.
+//      This is the per-button colour the user actually sees in the
+//      iOS app, so it wins whenever it's present.
+//   2. pin.mode / pin.category  → broad mode palette
+//      (Repair / Growth / Note / Hazard / Spray).
+//   3. Neutral default.
+//
+// All consumers (overview map, live dashboard map, pins page, pin
+// detail panel, trip report) call `pinStyle(mode, button_color,
+// category)` so changing the resolver here updates every surface.
 
 export interface PinStyle {
   hex: string;
   label: string;
 }
 
-// iOS system colours (matches UIKit systemRed / systemGreen / etc.)
-const PALETTE: Record<string, PinStyle> = {
+// Broad mode palette — used when no per-button colour is stored.
+// Hexes match iOS UIKit system tints.
+const MODE_PALETTE: Record<string, PinStyle> = {
   repair: { hex: "#FF3B30", label: "Repair" },
   repairs: { hex: "#FF3B30", label: "Repair" },
   growth: { hex: "#34C759", label: "Growth" },
@@ -33,12 +37,29 @@ const PALETTE: Record<string, PinStyle> = {
   spray: { hex: "#AF52DE", label: "Spray" },
 };
 
-const DEFAULT_STYLE: PinStyle = { hex: "#8E8E93", label: "Other" };
+// SwiftUI / UIKit named colours → hex. Light-mode system tints where
+// applicable so the web matches what the iOS button shows on screen.
+const NAMED_COLORS: Record<string, string> = {
+  red: "#FF3B30",
+  orange: "#FF9500",
+  yellow: "#FFCC00",
+  green: "#34C759",
+  darkgreen: "#1B7F3B",
+  mint: "#00C7BE",
+  teal: "#30B0C7",
+  cyan: "#32ADE6",
+  blue: "#007AFF",
+  indigo: "#5856D6",
+  purple: "#AF52DE",
+  pink: "#FF2D55",
+  brown: "#A2845E",
+  gray: "#8E8E93",
+  grey: "#8E8E93",
+  black: "#000000",
+  white: "#FFFFFF",
+};
 
-// Reverse map: hex → palette entry, for resolving by stored button_color.
-const HEX_TO_PALETTE: Map<string, PinStyle> = new Map(
-  Object.values(PALETTE).map((p) => [p.hex.toUpperCase(), p]),
-);
+const DEFAULT_STYLE: PinStyle = { hex: "#8E8E93", label: "Other" };
 
 const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
 
@@ -48,41 +69,54 @@ function normalizeHex(raw: string): string | null {
   return (s.startsWith("#") ? s : `#${s}`).toUpperCase();
 }
 
-function lookupPalette(key?: string | null): PinStyle | null {
+function lookupMode(key?: string | null): PinStyle | null {
   if (!key) return null;
   const k = key.trim().toLowerCase();
   if (!k) return null;
-  return PALETTE[k] ?? null;
+  return MODE_PALETTE[k] ?? null;
+}
+
+function lookupNamedColor(key: string): string | null {
+  const k = key.trim().toLowerCase().replace(/\s+/g, "");
+  return NAMED_COLORS[k] ?? null;
 }
 
 /**
- * Resolve a pin's display colour.
+ * Resolve a pin's display colour and label.
  *
- * @param mode         pin.mode (preferred classifier)
- * @param buttonColor  pin.button_color (per-pin hex written by iOS)
- * @param category     pin.category (fallback classifier)
+ * @param mode         pin.mode  (broad classifier — Repair / Growth / …)
+ * @param buttonColor  pin.button_color  (the per-button colour from iOS;
+ *                     usually a SwiftUI colour name or `#RRGGBB`)
+ * @param category     pin.category  (fallback classifier)
  */
 export function pinStyle(
   mode?: string | null,
   buttonColor?: string | null,
   category?: string | null,
 ): PinStyle {
-  // 1. Category palette (case-insensitive).
-  const fromMode = lookupPalette(mode) ?? lookupPalette(category);
-  if (fromMode) return fromMode;
+  const modeStyle = lookupMode(mode) ?? lookupMode(category);
 
-  // 2. button_color matches a known palette hex.
-  if (buttonColor) {
-    const hex = normalizeHex(buttonColor);
+  // 1. Per-button colour wins — that's the colour the user dropped.
+  if (buttonColor && buttonColor.trim()) {
+    const raw = buttonColor.trim();
+
+    // Named SwiftUI colour (e.g. "blue", "brown", "darkgreen").
+    const named = lookupNamedColor(raw);
+    if (named) {
+      return { hex: named, label: modeStyle?.label ?? DEFAULT_STYLE.label };
+    }
+
+    // Explicit hex (e.g. "#A2845E" or "A2845E").
+    const hex = normalizeHex(raw);
     if (hex) {
-      const palette = HEX_TO_PALETTE.get(hex);
-      if (palette) return palette;
-      // 3. Custom hex.
-      if (hex !== DEFAULT_STYLE.hex) return { hex, label: "Custom" };
+      return { hex, label: modeStyle?.label ?? DEFAULT_STYLE.label };
     }
   }
 
-  // 4. Fallback.
+  // 2. Fall back to the broad mode/category palette.
+  if (modeStyle) return modeStyle;
+
+  // 3. Neutral default.
   return DEFAULT_STYLE;
 }
 
