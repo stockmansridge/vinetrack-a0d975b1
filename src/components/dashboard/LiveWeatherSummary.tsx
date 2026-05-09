@@ -181,7 +181,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <Badge variant="outline" className="gap-1">
+            <Badge variant="outline" className="gap-1" title={forecastInfo.title}>
               <CloudRain className="h-3 w-3" />
               {forecastLabel}
             </Badge>
