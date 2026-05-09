@@ -921,7 +921,15 @@ function PinPanelBody({
       <Row label="Type" value={pin.mode ?? pin.category ?? "—"} />
       <Row label="Status" value={pin.status ?? (pin.is_completed ? "Completed" : "Open")} />
       <Row label="Block" value={paddockName ?? "—"} />
-      <Row label="Row" value={formatRowNumber(pin.row_number)} />
+      {formatAttachedRow(pin as any) && (
+        <Row label="Attached row" value={formatAttachedRow(pin as any)} />
+      )}
+      {formatDrivingPath(pin as any) && (
+        <Row label="Driving path" value={formatDrivingPath(pin as any)} />
+      )}
+      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any) && (
+        <Row label="Row" value={formatRowNumber(pin.row_number)} />
+      )}
       <Row label="Created by" value={resolveName(pin.created_by) ?? "—"} />
       <Row label="Created" value={fmtDateTime(pin.created_at)} />
       {pin.is_completed && (
