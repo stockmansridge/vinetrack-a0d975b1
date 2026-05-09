@@ -154,8 +154,7 @@ export default function SprayReportsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Spray Reports</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Generate compliance documents from spray data captured by the VineTrack iOS app.
-          Exports are read-only and never modify field data.
+          Export completed spray records and yearly spray programs from VineTrack spray data.
         </p>
       </div>
 
