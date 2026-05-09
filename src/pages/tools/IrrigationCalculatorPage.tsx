@@ -558,7 +558,11 @@ export default function IrrigationCalculatorPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Day</TableHead>
-                  <TableHead>ETo</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      ETo <InfoTip text={FIELD_HELP.eto} />
+                    </span>
+                  </TableHead>
                   <TableHead>Rain</TableHead>
                   <TableHead>Crop use</TableHead>
                   <TableHead>Effective rain</TableHead>
@@ -570,9 +574,13 @@ export default function IrrigationCalculatorPage() {
                   <TableRow key={i}>
                     <TableCell>{formatDateLabel(d.date)}</TableCell>
                     <TableCell>{fmt(d.forecastEToMm)} mm</TableCell>
-                    <TableCell>{fmt(d.forecastRainMm)} mm</TableCell>
+                    <TableCell className={d.forecastRainMm > 0 ? "text-blue-600 font-medium dark:text-blue-400" : ""}>
+                      {fmt(d.forecastRainMm)} mm
+                    </TableCell>
                     <TableCell>{fmt(d.cropUseMm)} mm</TableCell>
-                    <TableCell>{fmt(d.effectiveRainMm)} mm</TableCell>
+                    <TableCell className={d.effectiveRainMm > 0 ? "text-blue-600 font-medium dark:text-blue-400" : ""}>
+                      {fmt(d.effectiveRainMm)} mm
+                    </TableCell>
                     <TableCell>{fmt(d.dailyDeficitMm)} mm</TableCell>
                   </TableRow>
                 ))}
