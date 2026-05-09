@@ -291,7 +291,7 @@ export default function IrrigationCalculatorPage() {
         </CardContent>
       </Card>
 
-      {result && activeDays.length > 0 && (
+      {preview && activeDays.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Daily breakdown</CardTitle>
@@ -309,7 +309,7 @@ export default function IrrigationCalculatorPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {result.dailyBreakdown.map((d, i) => (
+                {preview.dailyBreakdown.map((d, i) => (
                   <TableRow key={i}>
                     <TableCell>{formatDateLabel(d.date)}</TableCell>
                     <TableCell>{fmt(d.forecastEToMm)} mm</TableCell>
