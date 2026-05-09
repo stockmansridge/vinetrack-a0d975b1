@@ -966,20 +966,53 @@ function safeFileSegment(s: string | null | undefined, fallback: string): string
   return v.replace(/[^\w\-]+/g, "_").slice(0, 50);
 }
 
-export async function downloadTripPdf(t: Trip, ctx: TripPdfContext) {
+async function urlToDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function downloadTripPdf(
+  t: Trip,
+  ctx: TripPdfContext & { vineyardLogoUrl?: string | null },
+) {
   const logoDataUrl = await loadLogoDataUrl();
+  // Resolve vineyard logo (signed URL → data URL) when caller provided one.
+  let vineyardLogoDataUrl: string | null = ctx.vineyardLogoDataUrl ?? null;
+  if (!vineyardLogoDataUrl && ctx.vineyardLogoUrl) {
+    vineyardLogoDataUrl = await urlToDataUrl(ctx.vineyardLogoUrl);
+  }
   // Compose satellite route image (best-effort; may return null if tiles fail).
   let satelliteRouteDataUrl: string | null = null;
+  let satelliteRouteSize: { width: number; height: number } | null = null;
   try {
     const points = extractPathPoints(t.path_points);
     if (points.length >= 2) {
       const result = await composeSatelliteRouteImage(points, 1100, 660);
-      satelliteRouteDataUrl = result?.dataUrl ?? null;
+      if (result) {
+        satelliteRouteDataUrl = result.dataUrl;
+        satelliteRouteSize = { width: result.width, height: result.height };
+      }
     }
   } catch {
     satelliteRouteDataUrl = null;
   }
-  const doc = buildTripPdf(t, { ...ctx, logoDataUrl, satelliteRouteDataUrl } as any);
+  const doc = buildTripPdf(t, {
+    ...ctx,
+    logoDataUrl,
+    vineyardLogoDataUrl,
+    satelliteRouteDataUrl,
+    satelliteRouteSize,
+  } as any);
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
