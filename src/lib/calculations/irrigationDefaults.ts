@@ -219,7 +219,7 @@ export function resolveIrrigationRate(input: ResolveRateInput): ResolvedRate {
   // 4. Whole-vineyard calculated rate from valid block infrastructure
   if (!paddockId) {
     const vineyardComputed = calculateVineyardIrrigationRateFromBlocks(vineyardPaddocks);
-    if (vineyardComputed?.rate !== null && vineyardComputed.rate > 0) {
+    if (vineyardComputed && vineyardComputed.rate !== null && vineyardComputed.rate > 0) {
       return vineyardComputed;
     }
   }
