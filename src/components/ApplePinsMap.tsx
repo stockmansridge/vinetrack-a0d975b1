@@ -13,6 +13,7 @@ import { validCoord } from "@/lib/pinsDiagnostics";
 
 interface Props {
   onUnavailable: (reason: string) => void;
+  statusFilter?: "active" | "completed" | "all";
 }
 
 interface Paddock {
