@@ -181,8 +181,14 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
-          <Field label="Row" value={formatRowNumber(pin.row_number)} />
-          <Field label="Side" value={pin.side} />
+          <Field label="Attached row" value={formatAttachedRow(pin)} />
+          <Field label="Driving path" value={formatDrivingPath(pin)} />
+          {pin.pin_row_number == null && pin.driving_row_number == null && pin.row_number != null && (
+            <Field label="Row" value={formatRowNumber(pin.row_number)} />
+          )}
+          {pin.pin_row_number == null && pin.side && (
+            <Field label="Side" value={pin.side} />
+          )}
           {coords && (
             <div className="text-xs text-muted-foreground pt-1">
               Coordinates: <span className="font-mono">{coords}</span>
