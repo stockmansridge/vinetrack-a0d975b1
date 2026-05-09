@@ -189,7 +189,7 @@ export default function IrrigationCalculatorPage() {
       return;
     }
     savePaddockIrrigationRate(selectedPaddockId, currentRate);
-    setRateSource("paddock");
+    setRateSource("paddock-device");
     toast({ title: "Saved on this device." });
   };
 
