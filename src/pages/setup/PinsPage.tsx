@@ -22,7 +22,7 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
-import { pinStyle, formatRowNumber } from "@/lib/pinStyle";
+import { pinStyle, formatRowNumber, formatAttachedRow, formatDrivingPath } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -133,7 +133,10 @@ export default function PinsPage() {
       title: (p: any) => (p.title ?? p.button_name ?? "") as string,
       mode: (p: any) => (p.mode ?? "") as string,
       paddock: (p: any) => (p.paddock_id ? paddockNameById.get(p.paddock_id) ?? "" : "") as string,
-      row: (p: any) => (p.row_number == null ? null : Number(p.row_number)),
+      row: (p: any) => {
+        const v = p.pin_row_number ?? p.driving_row_number ?? p.row_number;
+        return v == null ? null : Number(v);
+      },
       status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
       priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
       category: (p: any) => (p.category ?? "") as string,
@@ -270,7 +273,9 @@ export default function PinsPage() {
                       <TableCell>
                         {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatRowNumber(p.row_number)}</TableCell>
+                      <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
+                        {formatAttachedRow(p as any) ?? formatDrivingPath(p as any) ?? "—"}
+                      </TableCell>
                       <TableCell>
                         {(p as any).is_completed ? (
                           <Badge>Completed</Badge>

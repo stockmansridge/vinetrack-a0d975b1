@@ -4,7 +4,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
-import { pinStyle } from "@/lib/pinStyle";
+import { pinStyle, pinDisplayCoords } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -74,7 +74,11 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
   );
 
   const withCoords = useMemo(
-    () => pins.filter((p) => validCoord(p.latitude, p.longitude)),
+    () =>
+      pins.flatMap((p) => {
+        const c = pinDisplayCoords(p as any);
+        return c ? [{ ...p, latitude: c.lat, longitude: c.lng }] : [];
+      }),
     [pins],
   );
 

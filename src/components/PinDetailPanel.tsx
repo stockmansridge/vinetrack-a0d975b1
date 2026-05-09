@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-import { pinStyle, formatRowNumber } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatRowNumber } from "@/lib/pinStyle";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -24,6 +24,13 @@ export interface PinRecord {
   longitude?: number | null;
   row_number?: number | null;
   side?: string | null;
+  driving_row_number?: number | null;
+  pin_row_number?: number | null;
+  pin_side?: string | null;
+  along_row_distance_m?: number | null;
+  snapped_latitude?: number | null;
+  snapped_longitude?: number | null;
+  snapped_to_row?: boolean | null;
   growth_stage_code?: string | null;
   is_completed?: boolean | null;
   completed_by?: string | null;
@@ -174,8 +181,14 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
-          <Field label="Row" value={formatRowNumber(pin.row_number)} />
-          <Field label="Side" value={pin.side} />
+          <Field label="Attached row" value={formatAttachedRow(pin)} />
+          <Field label="Driving path" value={formatDrivingPath(pin)} />
+          {pin.pin_row_number == null && pin.driving_row_number == null && pin.row_number != null && (
+            <Field label="Row" value={formatRowNumber(pin.row_number)} />
+          )}
+          {pin.pin_row_number == null && pin.side && (
+            <Field label="Side" value={pin.side} />
+          )}
           {coords && (
             <div className="text-xs text-muted-foreground pt-1">
               Coordinates: <span className="font-mono">{coords}</span>

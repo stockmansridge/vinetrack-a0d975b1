@@ -22,7 +22,7 @@ import {
   type LatLng,
 } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
-import { pinStyle, formatRowNumber } from "@/lib/pinStyle";
+import { pinStyle, formatRowNumber, formatAttachedRow, formatDrivingPath, pinDisplayCoords } from "@/lib/pinStyle";
 import { initMapKit } from "@/lib/mapkit";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
@@ -227,9 +227,9 @@ export default function VineyardOverviewMap({
 
   const pinsWithCoords = useMemo(
     () =>
-      pins.filter(
-        (p) => Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude)),
-      ),
+      pins
+        .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
+        .filter((x): x is { pin: typeof pins[number]; coords: { lat: number; lng: number } } => !!x.coords),
     [pins],
   );
 
@@ -296,8 +296,8 @@ export default function VineyardOverviewMap({
     if (polyPts.length) return polyPts;
     const fallback: LatLng[] = [];
     for (const t of parsedTrips) for (const pt of t.points) fallback.push(pt);
-    for (const pin of pinsWithCoords) {
-      fallback.push({ lat: Number(pin.latitude), lng: Number(pin.longitude) });
+    for (const { coords } of pinsWithCoords) {
+      fallback.push({ lat: coords.lat, lng: coords.lng });
     }
     return fallback;
   }, [parsedPaddocks, parsedTrips, pinsWithCoords]);
@@ -428,9 +428,9 @@ export default function VineyardOverviewMap({
 
     // Pin annotations
     if (showPins) {
-      for (const pin of pinsWithCoords) {
-        const lat = Number(pin.latitude);
-        const lng = Number(pin.longitude);
+      for (const { pin, coords } of pinsWithCoords) {
+        const lat = coords.lat;
+        const lng = coords.lng;
         if (!validPt({ lat, lng })) continue;
         allPts.push({ lat, lng });
         const style = pinStyle(pin.mode, pin.button_color, pin.category);
@@ -921,7 +921,15 @@ function PinPanelBody({
       <Row label="Type" value={pin.mode ?? pin.category ?? "—"} />
       <Row label="Status" value={pin.status ?? (pin.is_completed ? "Completed" : "Open")} />
       <Row label="Block" value={paddockName ?? "—"} />
-      <Row label="Row" value={formatRowNumber(pin.row_number)} />
+      {formatAttachedRow(pin as any) && (
+        <Row label="Attached row" value={formatAttachedRow(pin as any)} />
+      )}
+      {formatDrivingPath(pin as any) && (
+        <Row label="Driving path" value={formatDrivingPath(pin as any)} />
+      )}
+      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any) && (
+        <Row label="Row" value={formatRowNumber(pin.row_number)} />
+      )}
       <Row label="Created by" value={resolveName(pin.created_by) ?? "—"} />
       <Row label="Created" value={fmtDateTime(pin.created_at)} />
       {pin.is_completed && (
