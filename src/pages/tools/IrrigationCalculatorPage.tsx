@@ -1,6 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, RefreshCw, CloudSun, Pencil } from "lucide-react";
+import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save } from "lucide-react";
+import { supabase } from "@/integrations/ios-supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import {
+  resolveIrrigationRate,
+  saveVineyardIrrigationRate,
+  savePaddockIrrigationRate,
+} from "@/lib/calculations/irrigationDefaults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,12 +65,15 @@ const STATUS_STYLES: Record<AdvisorStatus, string> = {
 
 export default function IrrigationCalculatorPage() {
   const { selectedVineyardId } = useVineyard();
+  const { toast } = useToast();
   const [mode, setMode] = useState<"forecast" | "manual">("forecast");
   const [duration, setDuration] = useState<number>(5);
+  const [selectedPaddockId, setSelectedPaddockId] = useState<string>("__vineyard__");
 
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
+  const [rateSource, setRateSource] = useState<"paddock" | "vineyard" | "manual" | "none">("none");
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
@@ -86,9 +96,75 @@ export default function IrrigationCalculatorPage() {
     staleTime: 1000 * 60 * 30,
   });
 
+  // Paddocks for the scope selector
+  const paddocksQuery = useQuery({
+    queryKey: ["irrigation-paddocks", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("paddocks")
+        .select("id, name")
+        .eq("vineyard_id", selectedVineyardId!)
+        .is("deleted_at", null)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string | null }>;
+    },
+  });
+
+  // Auto-populate application rate from saved defaults whenever scope changes.
+  useEffect(() => {
+    if (!selectedVineyardId) return;
+    const paddockId = selectedPaddockId === "__vineyard__" ? null : selectedPaddockId;
+    const { rate, source } = resolveIrrigationRate(selectedVineyardId, paddockId);
+    if (rate !== null) {
+      setSettings((s) => ({ ...s, irrigationApplicationRateMmPerHour: rate }));
+      setRateSource(source);
+    } else {
+      setSettings((s) => ({ ...s, irrigationApplicationRateMmPerHour: 0 }));
+      setRateSource("none");
+    }
+  }, [selectedVineyardId, selectedPaddockId]);
+
   const updateSetting = <K extends keyof IrrigationSettings>(k: K, v: string) => {
     const num = parseFloat(v);
     setSettings((s) => ({ ...s, [k]: Number.isFinite(num) ? num : 0 }));
+    if (k === "irrigationApplicationRateMmPerHour") {
+      setRateSource("manual");
+    }
+  };
+
+  const currentRate = settings.irrigationApplicationRateMmPerHour;
+  const canSave = Number.isFinite(currentRate) && currentRate > 0;
+
+  const handleSaveVineyard = () => {
+    if (!selectedVineyardId) return;
+    if (!canSave) {
+      toast({
+        title: "Invalid value",
+        description: "Enter an irrigation application rate greater than 0 mm/hr.",
+        variant: "destructive",
+      });
+      return;
+    }
+    saveVineyardIrrigationRate(selectedVineyardId, currentRate);
+    if (selectedPaddockId === "__vineyard__") setRateSource("vineyard");
+    toast({ title: "Saved irrigation rate." });
+  };
+
+  const handleSavePaddock = () => {
+    if (selectedPaddockId === "__vineyard__") return;
+    if (!canSave) {
+      toast({
+        title: "Invalid value",
+        description: "Enter an irrigation application rate greater than 0 mm/hr.",
+        variant: "destructive",
+      });
+      return;
+    }
+    savePaddockIrrigationRate(selectedPaddockId, currentRate);
+    setRateSource("paddock");
+    toast({ title: "Saved irrigation rate." });
   };
 
   const forecastDays: ForecastDay[] = useMemo(() => {
@@ -175,6 +251,60 @@ export default function IrrigationCalculatorPage() {
           coefficient, irrigation efficiency, and your irrigation application rate.
         </p>
       </div>
+
+      {/* Scope selector */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Apply to</CardTitle>
+          <CardDescription>
+            Choose whole vineyard or a specific block. Saved application rates are reused next time
+            you open the advisor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] items-end">
+          <div className="space-y-1">
+            <Label className="text-xs">Scope</Label>
+            <Select value={selectedPaddockId} onValueChange={setSelectedPaddockId}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__vineyard__">Whole vineyard (default)</SelectItem>
+                {(paddocksQuery.data ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name || "Unnamed block"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {rateSource === "paddock" && "Using saved rate for this block."}
+            {rateSource === "vineyard" && "Using vineyard default rate."}
+            {rateSource === "manual" && "Using manually entered rate."}
+            {rateSource === "none" &&
+              "No saved rate yet — enter mm/hr below and save when ready."}
+          </div>
+        </CardContent>
+        {canSave && (
+          <CardContent className="pt-0 flex flex-wrap gap-2">
+            {selectedPaddockId === "__vineyard__" ? (
+              <Button size="sm" onClick={handleSaveVineyard}>
+                <Save className="h-4 w-4 mr-1" /> Save as vineyard default
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" onClick={handleSavePaddock}>
+                  <Save className="h-4 w-4 mr-1" /> Save for this block
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleSaveVineyard}>
+                  Also save as vineyard default
+                </Button>
+              </>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {/* Recommendation summary */}
       <Card className={`border ${STATUS_STYLES[interpretation.status]}`}>
