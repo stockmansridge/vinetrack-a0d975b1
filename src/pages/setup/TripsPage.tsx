@@ -41,6 +41,9 @@ import {
   downloadCsv,
   downloadTripPdf,
 } from "@/lib/tripReport";
+import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { countTripPins } from "@/lib/tripPinCount";
+
 
 interface PaddockLite {
   id: string;
@@ -414,6 +417,7 @@ function TripSheet({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const { data: vineyardLogoUrl } = useVineyardLogo();
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
   const completed = arrayLen(trip?.completed_paths);
@@ -448,16 +452,18 @@ function TripSheet({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() =>
-                  downloadTripPdf(trip, {
+                onClick={async () => {
+                  const pinCount = await countTripPins(trip);
+                  await downloadTripPdf(trip, {
                     paddockName: padName ?? null,
                     tripDisplay: tripDisplayName(trip),
                     tripFunctionLabel: tripFunctionLabel(trip.trip_function),
                     vineyardName,
                     blockNames,
-                    pinCount: pins,
-                  })
-                }
+                    pinCount,
+                    vineyardLogoUrl: vineyardLogoUrl ?? null,
+                  });
+                }}
               >
                 Download Trip Report PDF
               </Button>

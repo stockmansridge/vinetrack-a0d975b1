@@ -124,6 +124,135 @@ export function formatCorrectionLine(c: ParsedCorrection): string {
   return t ? `${t} — ${c.label}` : c.label;
 }
 
+// Internal recovery / diagnostic event keys we hide from the formal report.
+// They flood the log without giving an operator anything actionable.
+const INTERNAL_CORRECTION_KEYS = new Set([
+  "auto_sequence_recover",
+  "auto_sequence_recovered",
+  "auto_sequence_advanced",
+  "auto_sequence_resync",
+  "auto_lock_recover",
+  "snap_to_live_path",
+  "live_path_resync",
+  "kalman_reset",
+  "gps_reacquired",
+]);
+
+function correctionKey(raw: string): string {
+  const head = raw.split(" at ")[0].trim();
+  return head.split(":")[0]?.trim() ?? "";
+}
+
+function correctionValue(raw: string): string {
+  const head = raw.split(" at ")[0].trim();
+  return head.split(":").slice(1).join(":").trim();
+}
+
+export interface CorrectionGroup {
+  /** Either a single parsed event or a collapsed summary. */
+  timestampLabel: string;
+  label: string;
+  count: number;
+  hidden: boolean;
+}
+
+/**
+ * Build the rows shown in the PDF's Manual Corrections section:
+ *  - Drop purely internal recovery/diagnostic events.
+ *  - Collapse runs of repeated keys (e.g. dozens of `auto_sequence_recover`)
+ *    into a single readable summary line.
+ *  - Preserve operator-meaningful events (manual_complete, end_review_*,
+ *    paddocks_added, auto_realign_*).
+ */
+export function summariseCorrections(events?: string[] | null): CorrectionGroup[] {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  const visible: { raw: string; key: string; parsed: ParsedCorrection }[] = [];
+  let hiddenCount = 0;
+  let firstHiddenTs: string | undefined;
+  for (const e of events) {
+    if (typeof e !== "string") continue;
+    const key = correctionKey(e);
+    if (INTERNAL_CORRECTION_KEYS.has(key)) {
+      hiddenCount += 1;
+      if (!firstHiddenTs) {
+        const ts = e.match(TIME_RE)?.[1];
+        if (ts) firstHiddenTs = ts;
+      }
+      continue;
+    }
+    visible.push({ raw: e, key, parsed: parseCorrection(e) });
+  }
+
+  // Collapse adjacent duplicates (same key + same value) into a single row
+  // with a count. Non-adjacent duplicates remain separate so timeline order
+  // is preserved.
+  const out: CorrectionGroup[] = [];
+  for (let i = 0; i < visible.length; i++) {
+    const cur = visible[i];
+    let count = 1;
+    const curVal = correctionValue(cur.raw);
+    while (
+      i + 1 < visible.length &&
+      visible[i + 1].key === cur.key &&
+      correctionValue(visible[i + 1].raw) === curVal
+    ) {
+      count += 1;
+      i += 1;
+    }
+    const t = fmtTimeOnly(cur.parsed.timestamp) ?? "—";
+    out.push({
+      timestampLabel: t,
+      label: count > 1 ? `${cur.parsed.label} (×${count})` : cur.parsed.label,
+      count,
+      hidden: false,
+    });
+  }
+  if (hiddenCount > 0) {
+    out.push({
+      timestampLabel: fmtTimeOnly(firstHiddenTs) ?? "—",
+      label: `${hiddenCount} internal sequence-recovery event${hiddenCount === 1 ? "" : "s"} hidden`,
+      count: hiddenCount,
+      hidden: true,
+    });
+  }
+  return out;
+}
+
+// ---------- Pattern label ----------
+
+const PATTERN_LABELS: Record<string, string> = {
+  everysecondrow: "Every Second Row",
+  every_second_row: "Every Second Row",
+  everyotherrow: "Every Other Row",
+  sequential: "Sequential",
+  oneafteranother: "Sequential",
+  freedrive: "Free Drive",
+  free_drive: "Free Drive",
+  threefive: "3/5 Pattern",
+  three_five: "3/5 Pattern",
+  "3/5": "3/5 Pattern",
+  "3_5": "3/5 Pattern",
+  fullcoverage: "Full Coverage",
+  full_coverage: "Full Coverage",
+};
+
+export function formatPatternLabel(p?: string | null): string {
+  if (!p) return "—";
+  const norm = String(p).trim();
+  const key = norm.toLowerCase().replace(/\s+/g, "");
+  if (PATTERN_LABELS[key]) return PATTERN_LABELS[key];
+  // Fall back: split camelCase / snake_case / kebab-case → Title Case.
+  const spaced = norm
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  return spaced
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
 // ---------- Seeding details ----------
 
 export interface SeedingBox {
@@ -217,6 +346,34 @@ export function parseSeeding(details: any): ParsedSeeding | null {
     back_used: !!back,
   };
 }
+
+/**
+ * Returns mix lines with `percent` populated. If percent is missing but
+ * kg/ha values are present, computes percent within the line's seed box
+ * (or across all lines if no box is set). Display-only — never written back.
+ */
+export function withCalculatedPercents(lines: SeedingMixLine[]): SeedingMixLine[] {
+  if (!Array.isArray(lines) || lines.length === 0) return lines;
+  // Group by normalised seed_box label (default "_all" when unset).
+  const groups = new Map<string, { total: number; lines: SeedingMixLine[] }>();
+  for (const l of lines) {
+    const key = (l.seed_box ?? "").trim().toLowerCase() || "_all";
+    const kg = Number(l.kg_per_ha);
+    const g = groups.get(key) ?? { total: 0, lines: [] };
+    if (Number.isFinite(kg) && kg > 0) g.total += kg;
+    g.lines.push(l);
+    groups.set(key, g);
+  }
+  return lines.map((l) => {
+    if (l.percent != null && l.percent !== "") return l;
+    const key = (l.seed_box ?? "").trim().toLowerCase() || "_all";
+    const g = groups.get(key);
+    const kg = Number(l.kg_per_ha);
+    if (!g || g.total <= 0 || !Number.isFinite(kg) || kg <= 0) return l;
+    return { ...l, percent: `${((kg / g.total) * 100).toFixed(1)}%` };
+  });
+}
+
 
 // ---------- Coverage summary ----------
 
@@ -431,7 +588,10 @@ export interface TripPdfContext {
   vineyardName?: string | null;
   blockNames?: string[];
   pinCount?: number | null;
+  /** Vineyard logo (signed URL or data URL). Falls back to VineTrack logo. */
+  vineyardLogoDataUrl?: string | null;
 }
+
 
 function drawRouteMap(
   doc: jsPDF,
@@ -547,19 +707,26 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   const pageW = doc.internal.pageSize.getWidth();
   let y = 48;
 
-  // 1. Header — VineTrack logo + dynamic title
+  // 1. Header — vineyard logo if available, else VineTrack fallback
   const title = tripTitle(ctx, t);
-  const logoSize = 32;
-  if (ctx.logoDataUrl) {
+  const logoSize = 36;
+  const headerLogo = ctx.vineyardLogoDataUrl ?? ctx.logoDataUrl ?? null;
+  if (headerLogo) {
     try {
-      doc.addImage(ctx.logoDataUrl, "PNG", 40, y - 24, logoSize, logoSize);
+      const fmtType = /^data:image\/jpeg/i.test(headerLogo) ? "JPEG" : "PNG";
+      doc.addImage(headerLogo, fmtType, 40, y - 26, logoSize, logoSize);
     } catch {
       /* ignore image errors */
     }
   }
   doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(0);
-  doc.text(title, ctx.logoDataUrl ? 40 + logoSize + 12 : 40, y);
-  y += 24;
+  doc.text(title, headerLogo ? 40 + logoSize + 12 : 40, y);
+  if (ctx.vineyardName) {
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(110);
+    doc.text(ctx.vineyardName, headerLogo ? 40 + logoSize + 12 : 40, y + 14);
+    doc.setTextColor(0);
+  }
+  y += 28;
 
   // 2. Trip Details
   y = sectionHeader(doc, "Trip Details", y);
@@ -572,7 +739,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Vineyard", fmt(ctx.vineyardName)],
     [blockLabel, fmt(blocks)],
     ["Trip type", fmt(ctx.tripFunctionLabel ?? t.trip_function)],
-    ["Trip details", fmt(t.trip_title)],
+    ["Job notes", fmt(t.trip_title)],
     ["Operator", fmt(t.person_name)],
     ["Date", fmtDate(t.start_time)],
     ["Start time", fmtTime(t.start_time)],
@@ -580,7 +747,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Duration", fmtDuration(t.start_time, t.end_time)],
     ["Distance", fmtDistance(t.total_distance)],
     ["Average speed", fmtAvgSpeed(t.total_distance, t.start_time, t.end_time)],
-    ["Pattern", fmt(t.tracking_pattern)],
+    ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
   ];
   autoTable(doc, {
@@ -641,12 +808,13 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       doc.setFont("helvetica", "bold").setFontSize(10);
       doc.text("Mix Lines", 40, y);
       y += 4;
+      const mixWithPct = withCalculatedPercents(seeding.mix_lines);
       autoTable(doc, {
         startY: y,
         theme: "grid",
         styles: { fontSize: 9, cellPadding: 3 },
         head: [["Name", "% of mix", "Seed box", "Kg/ha", "Supplier"]],
-        body: seeding.mix_lines.map((m) => [
+        body: mixWithPct.map((m) => [
           fmt(m.name),
           fmt(m.percent),
           fmt(m.seed_box),
@@ -692,16 +860,22 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     }
   }
 
-  // 6. Manual Corrections
-  const corrections = parseCorrections(t.manual_correction_events);
-  if (corrections.length > 0) {
+  // 6. Manual Corrections — collapsed + filtered for readability
+  const corrections = summariseCorrections(t.manual_correction_events);
+  const visibleCorrections = corrections.filter((c) => !c.hidden || c.count >= 5);
+  if (visibleCorrections.length > 0) {
     y = sectionHeader(doc, "Manual Corrections", y);
     autoTable(doc, {
       startY: y,
       theme: "striped",
       styles: { fontSize: 9, cellPadding: 4 },
       head: [["Time", "Event"]],
-      body: corrections.map((c) => [fmtTimeOnly(c.timestamp) ?? "—", c.label]),
+      body: visibleCorrections.map((c) => [
+        c.timestampLabel,
+        c.hidden
+          ? { content: c.label, styles: { textColor: 130, fontStyle: "italic" } as any }
+          : c.label,
+      ]),
     });
     y = (doc as any).lastAutoTable.finalY + 18;
   }
@@ -730,9 +904,26 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   const points = extractPathPoints(t.path_points);
   const satelliteDataUrl = (ctx as any).satelliteRouteDataUrl as string | null | undefined;
   const mapW = pageW - 80;
-  if (satelliteDataUrl && points.length >= 2) {
+  const satelliteSize = (ctx as any).satelliteRouteSize as { width: number; height: number } | undefined;
+  if (satelliteDataUrl && points.length >= 2 && satelliteSize && satelliteSize.width > 0 && satelliteSize.height > 0) {
     try {
-      doc.addImage(satelliteDataUrl, "PNG", 40, y, mapW, mapH);
+      // Preserve aspect ratio so the route overlay is not skewed relative to
+      // the satellite tile background.
+      const srcAspect = satelliteSize.width / satelliteSize.height;
+      const boxAspect = mapW / mapH;
+      let drawW = mapW;
+      let drawH = mapH;
+      if (srcAspect > boxAspect) {
+        drawH = mapW / srcAspect;
+      } else {
+        drawW = mapH * srcAspect;
+      }
+      const offX = 40 + (mapW - drawW) / 2;
+      const offY = y + (mapH - drawH) / 2;
+      // Background frame for letterboxing
+      doc.setFillColor(245, 245, 245);
+      doc.rect(40, y, mapW, mapH, "F");
+      doc.addImage(satelliteDataUrl, "PNG", offX, offY, drawW, drawH);
       doc.setDrawColor(180);
       doc.setLineWidth(0.5);
       doc.rect(40, y, mapW, mapH);
@@ -740,9 +931,9 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       drawRouteMap(doc, points, 40, y, mapW, mapH);
     }
   } else {
-    if (points.length >= 2) {
+    if (points.length >= 2 && !satelliteDataUrl) {
       doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(120);
-      doc.text("Satellite map unavailable — route preview shown.", 40, y - 2);
+      doc.text("Satellite imagery unavailable — route-only preview shown.", 40, y - 2);
       doc.setTextColor(0);
     }
     drawRouteMap(doc, points, 40, y, mapW, mapH);
@@ -775,20 +966,53 @@ function safeFileSegment(s: string | null | undefined, fallback: string): string
   return v.replace(/[^\w\-]+/g, "_").slice(0, 50);
 }
 
-export async function downloadTripPdf(t: Trip, ctx: TripPdfContext) {
+async function urlToDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function downloadTripPdf(
+  t: Trip,
+  ctx: TripPdfContext & { vineyardLogoUrl?: string | null },
+) {
   const logoDataUrl = await loadLogoDataUrl();
+  // Resolve vineyard logo (signed URL → data URL) when caller provided one.
+  let vineyardLogoDataUrl: string | null = ctx.vineyardLogoDataUrl ?? null;
+  if (!vineyardLogoDataUrl && ctx.vineyardLogoUrl) {
+    vineyardLogoDataUrl = await urlToDataUrl(ctx.vineyardLogoUrl);
+  }
   // Compose satellite route image (best-effort; may return null if tiles fail).
   let satelliteRouteDataUrl: string | null = null;
+  let satelliteRouteSize: { width: number; height: number } | null = null;
   try {
     const points = extractPathPoints(t.path_points);
     if (points.length >= 2) {
       const result = await composeSatelliteRouteImage(points, 1100, 660);
-      satelliteRouteDataUrl = result?.dataUrl ?? null;
+      if (result) {
+        satelliteRouteDataUrl = result.dataUrl;
+        satelliteRouteSize = { width: result.width, height: result.height };
+      }
     }
   } catch {
     satelliteRouteDataUrl = null;
   }
-  const doc = buildTripPdf(t, { ...ctx, logoDataUrl, satelliteRouteDataUrl } as any);
+  const doc = buildTripPdf(t, {
+    ...ctx,
+    logoDataUrl,
+    vineyardLogoDataUrl,
+    satelliteRouteDataUrl,
+    satelliteRouteSize,
+  } as any);
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
