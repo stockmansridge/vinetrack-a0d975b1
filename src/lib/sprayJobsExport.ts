@@ -1,6 +1,7 @@
 // Spray Jobs export helpers — single-job PDF and yearly program PDF/CSV.
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { SprayJob, SprayJobChemicalLine } from "./sprayJobsQuery";
 import {
