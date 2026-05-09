@@ -7,6 +7,8 @@ import {
   resolveIrrigationRate,
   saveVineyardIrrigationRate,
   savePaddockIrrigationRate,
+  describeRateSource,
+  type IrrigationRateSource,
 } from "@/lib/calculations/irrigationDefaults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,7 +75,7 @@ export default function IrrigationCalculatorPage() {
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
-  const [rateSource, setRateSource] = useState<"paddock" | "vineyard" | "manual" | "none">("none");
+  const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
@@ -96,27 +98,51 @@ export default function IrrigationCalculatorPage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  // Paddocks for the scope selector
+  // Paddocks for the scope selector. Pull infrastructure too so we can
+  // compute mm/hr from row spacing × emitter spacing × flow per emitter.
   const paddocksQuery = useQuery({
     queryKey: ["irrigation-paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("paddocks")
-        .select("id, name")
+        .select("id, name, row_width, emitter_spacing, flow_per_emitter")
         .eq("vineyard_id", selectedVineyardId!)
         .is("deleted_at", null)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as Array<{ id: string; name: string | null }>;
+      return (data ?? []) as Array<{
+        id: string;
+        name: string | null;
+        row_width: number | null;
+        emitter_spacing: number | null;
+        flow_per_emitter: number | null;
+      }>;
     },
   });
 
-  // Auto-populate application rate from saved defaults whenever scope changes.
+  // Auto-populate application rate from the full fallback chain whenever
+  // scope changes. Shared (database-backed) rates aren't available yet —
+  // pass null so the resolver falls through to computed/device-saved.
   useEffect(() => {
     if (!selectedVineyardId) return;
     const paddockId = selectedPaddockId === "__vineyard__" ? null : selectedPaddockId;
-    const { rate, source } = resolveIrrigationRate(selectedVineyardId, paddockId);
+    const paddock = paddockId
+      ? (paddocksQuery.data ?? []).find((p) => p.id === paddockId)
+      : null;
+    const { rate, source } = resolveIrrigationRate({
+      vineyardId: selectedVineyardId,
+      paddockId,
+      paddockSharedRate: null,
+      vineyardSharedRate: null,
+      paddockInfrastructure: paddock
+        ? {
+            rowSpacingMetres: paddock.row_width,
+            emitterSpacingMetres: paddock.emitter_spacing,
+            emitterFlowLitresPerHour: paddock.flow_per_emitter,
+          }
+        : null,
+    });
     if (rate !== null) {
       setSettings((s) => ({ ...s, irrigationApplicationRateMmPerHour: rate }));
       setRateSource(source);
@@ -124,7 +150,7 @@ export default function IrrigationCalculatorPage() {
       setSettings((s) => ({ ...s, irrigationApplicationRateMmPerHour: 0 }));
       setRateSource("none");
     }
-  }, [selectedVineyardId, selectedPaddockId]);
+  }, [selectedVineyardId, selectedPaddockId, paddocksQuery.data]);
 
   const updateSetting = <K extends keyof IrrigationSettings>(k: K, v: string) => {
     const num = parseFloat(v);
@@ -148,7 +174,7 @@ export default function IrrigationCalculatorPage() {
       return;
     }
     saveVineyardIrrigationRate(selectedVineyardId, currentRate);
-    if (selectedPaddockId === "__vineyard__") setRateSource("vineyard");
+    if (selectedPaddockId === "__vineyard__") setRateSource("vineyard-device");
     toast({ title: "Saved on this device." });
   };
 
@@ -163,7 +189,7 @@ export default function IrrigationCalculatorPage() {
       return;
     }
     savePaddockIrrigationRate(selectedPaddockId, currentRate);
-    setRateSource("paddock");
+    setRateSource("paddock-device");
     toast({ title: "Saved on this device." });
   };
 
@@ -279,11 +305,7 @@ export default function IrrigationCalculatorPage() {
             </Select>
           </div>
           <div className="text-xs text-muted-foreground">
-            {rateSource === "paddock" && "Using rate saved on this device for this block."}
-            {rateSource === "vineyard" && "Using vineyard rate saved on this device."}
-            {rateSource === "manual" && "Using manually entered rate."}
-            {rateSource === "none" &&
-              "No saved rate yet — enter mm/hr below and save when ready."}
+            {describeRateSource(rateSource)}
           </div>
         </CardContent>
         {canSave && (
