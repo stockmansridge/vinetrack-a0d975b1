@@ -448,6 +448,27 @@ function dbValuesFromImport(
   }
   // IMPORTANT: never write polygon_points or rows from import — operational
   // geometry is owned by the iOS app and must not be altered here.
+
+  // Per-row length overrides (calculation-only JSONB column).
+  // - Column absent on import → leave existing value alone.
+  // - Column present with empty value → explicit clear (write null).
+  // - Column present with entries → merge with existing so partial sheets
+  //   don't drop unrelated rows. Specific rows are overwritten by the import.
+  if (v.row_lengths_override_provided) {
+    if (!v.row_lengths_override || v.row_lengths_override.length === 0) {
+      patch.row_length_overrides = null;
+    } else {
+      const existingMap: Record<string, number> =
+        existing?.row_length_overrides && typeof existing.row_length_overrides === "object"
+          ? { ...(existing.row_length_overrides as Record<string, number>) }
+          : {};
+      for (const e of v.row_lengths_override) {
+        existingMap[String(e.rowNumber)] = Number(e.lengthM);
+      }
+      patch.row_length_overrides = existingMap;
+    }
+  }
+
   // variety/clone/rootstock → variety_allocations[0] only when no existing alloc
   if (v.variety || v.clone || v.rootstock) {
     const existingAllocs = Array.isArray(existing?.variety_allocations)
