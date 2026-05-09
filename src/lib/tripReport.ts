@@ -707,19 +707,26 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   const pageW = doc.internal.pageSize.getWidth();
   let y = 48;
 
-  // 1. Header — VineTrack logo + dynamic title
+  // 1. Header — vineyard logo if available, else VineTrack fallback
   const title = tripTitle(ctx, t);
-  const logoSize = 32;
-  if (ctx.logoDataUrl) {
+  const logoSize = 36;
+  const headerLogo = ctx.vineyardLogoDataUrl ?? ctx.logoDataUrl ?? null;
+  if (headerLogo) {
     try {
-      doc.addImage(ctx.logoDataUrl, "PNG", 40, y - 24, logoSize, logoSize);
+      const fmtType = /^data:image\/jpeg/i.test(headerLogo) ? "JPEG" : "PNG";
+      doc.addImage(headerLogo, fmtType, 40, y - 26, logoSize, logoSize);
     } catch {
       /* ignore image errors */
     }
   }
   doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(0);
-  doc.text(title, ctx.logoDataUrl ? 40 + logoSize + 12 : 40, y);
-  y += 24;
+  doc.text(title, headerLogo ? 40 + logoSize + 12 : 40, y);
+  if (ctx.vineyardName) {
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(110);
+    doc.text(ctx.vineyardName, headerLogo ? 40 + logoSize + 12 : 40, y + 14);
+    doc.setTextColor(0);
+  }
+  y += 28;
 
   // 2. Trip Details
   y = sectionHeader(doc, "Trip Details", y);
@@ -732,7 +739,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Vineyard", fmt(ctx.vineyardName)],
     [blockLabel, fmt(blocks)],
     ["Trip type", fmt(ctx.tripFunctionLabel ?? t.trip_function)],
-    ["Trip details", fmt(t.trip_title)],
+    ["Job notes", fmt(t.trip_title)],
     ["Operator", fmt(t.person_name)],
     ["Date", fmtDate(t.start_time)],
     ["Start time", fmtTime(t.start_time)],
@@ -740,7 +747,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Duration", fmtDuration(t.start_time, t.end_time)],
     ["Distance", fmtDistance(t.total_distance)],
     ["Average speed", fmtAvgSpeed(t.total_distance, t.start_time, t.end_time)],
-    ["Pattern", fmt(t.tracking_pattern)],
+    ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
   ];
   autoTable(doc, {
