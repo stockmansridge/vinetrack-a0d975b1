@@ -375,10 +375,14 @@ export default function LiveDashboardPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => tripsQ.refetch()}
-            disabled={tripsQ.isFetching}
+            onClick={() => {
+              tripsQ.refetch();
+              weatherCtxQ.refetch();
+              forecastCtxQ.refetch();
+            }}
+            disabled={tripsQ.isFetching || weatherCtxQ.isFetching}
           >
-            <RefreshCw className={`h-4 w-4 mr-1 ${tripsQ.isFetching ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-1 ${(tripsQ.isFetching || weatherCtxQ.isFetching) ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
