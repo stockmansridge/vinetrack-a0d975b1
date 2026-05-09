@@ -174,7 +174,7 @@ export default function IrrigationCalculatorPage() {
       return;
     }
     saveVineyardIrrigationRate(selectedVineyardId, currentRate);
-    if (selectedPaddockId === "__vineyard__") setRateSource("vineyard");
+    if (selectedPaddockId === "__vineyard__") setRateSource("vineyard-device");
     toast({ title: "Saved on this device." });
   };
 
