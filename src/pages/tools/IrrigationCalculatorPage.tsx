@@ -68,7 +68,46 @@ const STATUS_STYLES: Record<AdvisorStatus, string> = {
   light: "bg-primary/10 text-primary border-primary/30",
   recommended: "bg-primary/15 text-primary border-primary/40",
   high: "bg-destructive/10 text-destructive border-destructive/30",
+  dormant: "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60",
 };
+
+const FIELD_HELP: Record<string, string> = {
+  cropCoefficientKc:
+    "Adjusts reference ETo to better match vine water use. Lower values represent lower vine water use; higher values represent larger canopy and higher demand.",
+  irrigationApplicationRateMmPerHour:
+    "How many millimetres of water your irrigation system applies per hour. This converts irrigation depth into irrigation time.",
+  irrigationEfficiencyPercent:
+    "Allows for losses in the irrigation system and soil. Lower efficiency means more water must be applied to achieve the target amount.",
+  rainfallEffectivenessPercent:
+    "Estimates how much rain is useful to the vines after losses such as runoff, evaporation, canopy interception, or shallow wetting.",
+  replacementPercent:
+    "The percentage of the calculated deficit you want to replace. 100% replaces the full calculated deficit.",
+  soilMoistureBufferMm:
+    "An allowance for water already available in the soil. This reduces the irrigation requirement.",
+  recentRain:
+    "Rain that has already fallen recently. The Advisor uses this to reduce the irrigation requirement.",
+  eto:
+    "Reference evapotranspiration. It estimates water loss from a reference crop through evaporation and transpiration. Vine water use is estimated by multiplying ETo by the crop coefficient.",
+};
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="More information"
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
+        {text}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function IrrigationCalculatorPage() {
   const { selectedVineyardId } = useVineyard();
