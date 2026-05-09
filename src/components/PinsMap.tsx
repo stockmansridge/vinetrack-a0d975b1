@@ -74,7 +74,11 @@ export default function PinsMap() {
   );
 
   const withCoords = useMemo(
-    () => pins.filter((p) => validCoord(p.latitude, p.longitude)),
+    () =>
+      pins.flatMap((p) => {
+        const c = pinDisplayCoords(p as any);
+        return c && validCoord(c.lat, c.lng) ? [{ ...p, latitude: c.lat, longitude: c.lng }] : [];
+      }),
     [pins],
   );
 
