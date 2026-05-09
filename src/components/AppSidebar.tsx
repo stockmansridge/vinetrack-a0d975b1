@@ -17,6 +17,13 @@ import {
   Sprout,
   Settings,
   Database,
+  Calculator,
+  Droplet,
+  Beaker as BeakerIcon,
+  Grape,
+  Thermometer,
+  Sprout as SproutIcon,
+  Grid3x3,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -57,6 +64,15 @@ const setup = [
   { title: "Spray templates", url: "/setup/spray-presets", icon: Layers },
   { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
   { title: "Weather settings", url: "/setup/weather", icon: Cloud },
+];
+
+const tools = [
+  { title: "Irrigation Calculator", url: "/tools/irrigation", icon: Droplet },
+  { title: "Spray / Tank Mix Calculator", url: "/tools/spray-tank-mix", icon: BeakerIcon },
+  { title: "Yield Estimation", url: "/tools/yield-estimation", icon: Grape },
+  { title: "Degree Days / BEDD", url: "/tools/degree-days", icon: Thermometer },
+  { title: "Seeding Mix Calculator", url: "/tools/seeding-mix", icon: SproutIcon },
+  { title: "Block / Row Calculator", url: "/tools/block-row", icon: Grid3x3 },
 ];
 
 const comingSoon: { title: string; url: string; icon: any }[] = [];
@@ -131,6 +147,12 @@ export function AppSidebar() {
                 { title: "Documents & Exports", url: "/reports/documents", icon: FileText },
               ])}
             </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Operational Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(tools)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         {comingSoon.length > 0 && (

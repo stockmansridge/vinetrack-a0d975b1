@@ -37,6 +37,7 @@ import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
+import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +96,12 @@ const App = () => (
                     <Route path="/reports/spray" element={<SprayReportsPage />} />
                     <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
                     <Route path="/reports/documents" element={<DocumentsPage />} />
+                    <Route path="/tools/irrigation" element={<ToolPlaceholder title="Irrigation Calculator" />} />
+                    <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
+                    <Route path="/tools/yield-estimation" element={<ToolPlaceholder title="Yield Estimation" />} />
+                    <Route path="/tools/degree-days" element={<ToolPlaceholder title="Degree Days / BEDD" />} />
+                    <Route path="/tools/seeding-mix" element={<ToolPlaceholder title="Seeding Mix Calculator" />} />
+                    <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
