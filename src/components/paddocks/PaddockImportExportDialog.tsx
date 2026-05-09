@@ -213,10 +213,25 @@ export default function PaddockImportExportDialog() {
             />
             <Alert>
               <AlertTitle>Safe by default</AlertTitle>
-              <AlertDescription className="text-xs">
-                Existing variety/clone allocations linked to block polygons are
-                preserved during import. Replace mode archives missing blocks
-                (soft delete) — never hard-deletes.
+              <AlertDescription className="space-y-2 text-xs">
+                <p>
+                  Polygon and row geometry are <b>never</b> changed by import.
+                  Only setup fields are written. Existing variety/clone
+                  allocations linked to block polygons are preserved. Replace
+                  mode soft-archives missing blocks and never hard-deletes.
+                </p>
+                <p>
+                  <b>Row length overrides</b> are used for vineyard setup
+                  calculations such as vines, posts, drippers, and irrigation
+                  estimates. They do not change Live Trip row tracking or field
+                  guidance geometry.
+                </p>
+                <p className="text-muted-foreground">
+                  Compact format in the <code>row_lengths_override_m</code>{" "}
+                  column: <code>1:245;2:244.2;3.5:243.8</code>. Per-row override
+                  storage is awaiting a schema decision: values are validated
+                  and shown in preview but not yet written to the database.
+                </p>
               </AlertDescription>
             </Alert>
           </>
