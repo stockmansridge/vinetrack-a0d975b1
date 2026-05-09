@@ -200,6 +200,26 @@ export default function PinsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
+      <div className="flex items-center gap-2">
+        <div className="inline-flex rounded-md border bg-background p-0.5">
+          {([
+            { key: "active", label: "Active", count: statusCounts.active },
+            { key: "completed", label: "Completed", count: statusCounts.completed },
+            { key: "all", label: "All", count: statusCounts.all },
+          ] as const).map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={statusFilter === opt.key ? "secondary" : "ghost"}
+              className="h-7 px-3 text-xs"
+              onClick={() => setStatusFilter(opt.key)}
+            >
+              {opt.label} ({opt.count})
+            </Button>
+          ))}
+        </div>
+      </div>
+
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs text-muted-foreground">
