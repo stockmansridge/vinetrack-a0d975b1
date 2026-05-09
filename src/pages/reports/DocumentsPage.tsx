@@ -20,6 +20,8 @@ import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchSprayJobs, type SprayJob } from "@/lib/sprayJobsQuery";
 import { downloadTripPdf } from "@/lib/tripReport";
+import { countTripPins } from "@/lib/tripPinCount";
+import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import {
   downloadRainfallPdf,
   downloadRainfallCsv,
