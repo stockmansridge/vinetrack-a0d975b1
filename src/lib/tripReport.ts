@@ -293,14 +293,22 @@ const pick = (obj: any, ...keys: string[]) => {
   return undefined;
 };
 
+function formatRate(v: string | undefined): string | undefined {
+  if (v == null || v === "") return undefined;
+  const s = String(v).trim();
+  if (!s) return undefined;
+  if (/kg\s*\/\s*ha/i.test(s)) return s;
+  return /^[\d.]+$/.test(s) ? `${s} kg/ha` : s;
+}
+
 function describeBox(label: string, box: any): SeedingBox | null {
   if (!box || typeof box !== "object") return null;
   const keys = Object.keys(box).filter((k) => box[k] != null && box[k] !== "");
   if (keys.length === 0) return null;
   return {
     name: label,
-    contents: pick(box, "contents", "seed", "product", "mix"),
-    rate: pick(box, "rate", "rate_kg_per_ha", "rate_per_ha", "rateKgPerHa"),
+    contents: pick(box, "contents", "seed", "product", "mix", "mix_name", "mixName", "cover_crop", "coverCrop", "name", "label"),
+    rate: formatRate(pick(box, "rate", "rate_kg_per_ha", "rate_per_ha", "rateKgPerHa", "rate_kgPerHa")),
     notes: pick(box, "notes"),
     shutter_slide: pick(box, "shutter_slide", "shutterSlide"),
     bottom_flap: pick(box, "bottom_flap", "bottomFlap"),
