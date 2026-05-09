@@ -189,23 +189,30 @@ export default function IrrigationCalculatorPage() {
             </Badge>
           </div>
         </CardHeader>
-        {result && (
+        {preview && (
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-            <Stat label="Forecast crop use" value={`${fmt(result.forecastCropUseMm)} mm`} />
+            <Stat label="Forecast crop use" value={`${fmt(preview.forecastCropUseMm)} mm`} />
             <Stat
               label="Forecast effective rain"
-              value={`${fmt(result.forecastEffectiveRainMm)} mm`}
+              value={`${fmt(preview.forecastEffectiveRainMm)} mm`}
             />
-            <Stat label="Recent rain offset" value={`${fmt(result.recentActualRainMm)} mm`} />
-            <Stat label="Net deficit" value={`${fmt(result.netDeficitMm)} mm`} />
-            <Stat label="Gross irrigation required" value={`${fmt(result.grossIrrigationMm)} mm`} />
+            <Stat label="Recent rain offset" value={`${fmt(preview.recentActualRainMm)} mm`} />
+            <Stat label="Net deficit" value={`${fmt(preview.netDeficitMm)} mm`} />
+            <Stat
+              label="Gross irrigation required"
+              value={result ? `${fmt(result.grossIrrigationMm)} mm` : "—"}
+            />
             <Stat
               label="Application rate used"
-              value={`${fmt(settings.irrigationApplicationRateMmPerHour)} mm/hr`}
+              value={
+                appRateMissing
+                  ? "Not set"
+                  : `${fmt(settings.irrigationApplicationRateMmPerHour)} mm/hr`
+              }
             />
             <Stat
               label="Recommended duration"
-              value={formatHoursMinutes(result.recommendedIrrigationMinutes)}
+              value={result ? formatHoursMinutes(result.recommendedIrrigationMinutes) : "—"}
               highlight
             />
           </CardContent>
