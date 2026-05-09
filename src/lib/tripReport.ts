@@ -808,12 +808,13 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       doc.setFont("helvetica", "bold").setFontSize(10);
       doc.text("Mix Lines", 40, y);
       y += 4;
+      const mixWithPct = withCalculatedPercents(seeding.mix_lines);
       autoTable(doc, {
         startY: y,
         theme: "grid",
         styles: { fontSize: 9, cellPadding: 3 },
         head: [["Name", "% of mix", "Seed box", "Kg/ha", "Supplier"]],
-        body: seeding.mix_lines.map((m) => [
+        body: mixWithPct.map((m) => [
           fmt(m.name),
           fmt(m.percent),
           fmt(m.seed_box),
@@ -859,16 +860,22 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     }
   }
 
-  // 6. Manual Corrections
-  const corrections = parseCorrections(t.manual_correction_events);
-  if (corrections.length > 0) {
+  // 6. Manual Corrections — collapsed + filtered for readability
+  const corrections = summariseCorrections(t.manual_correction_events);
+  const visibleCorrections = corrections.filter((c) => !c.hidden || c.count >= 5);
+  if (visibleCorrections.length > 0) {
     y = sectionHeader(doc, "Manual Corrections", y);
     autoTable(doc, {
       startY: y,
       theme: "striped",
       styles: { fontSize: 9, cellPadding: 4 },
       head: [["Time", "Event"]],
-      body: corrections.map((c) => [fmtTimeOnly(c.timestamp) ?? "—", c.label]),
+      body: visibleCorrections.map((c) => [
+        c.timestampLabel,
+        c.hidden
+          ? { content: c.label, styles: { textColor: 130, fontStyle: "italic" } as any }
+          : c.label,
+      ]),
     });
     y = (doc as any).lastAutoTable.finalY + 18;
   }
@@ -897,9 +904,26 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   const points = extractPathPoints(t.path_points);
   const satelliteDataUrl = (ctx as any).satelliteRouteDataUrl as string | null | undefined;
   const mapW = pageW - 80;
-  if (satelliteDataUrl && points.length >= 2) {
+  const satelliteSize = (ctx as any).satelliteRouteSize as { width: number; height: number } | undefined;
+  if (satelliteDataUrl && points.length >= 2 && satelliteSize && satelliteSize.width > 0 && satelliteSize.height > 0) {
     try {
-      doc.addImage(satelliteDataUrl, "PNG", 40, y, mapW, mapH);
+      // Preserve aspect ratio so the route overlay is not skewed relative to
+      // the satellite tile background.
+      const srcAspect = satelliteSize.width / satelliteSize.height;
+      const boxAspect = mapW / mapH;
+      let drawW = mapW;
+      let drawH = mapH;
+      if (srcAspect > boxAspect) {
+        drawH = mapW / srcAspect;
+      } else {
+        drawW = mapH * srcAspect;
+      }
+      const offX = 40 + (mapW - drawW) / 2;
+      const offY = y + (mapH - drawH) / 2;
+      // Background frame for letterboxing
+      doc.setFillColor(245, 245, 245);
+      doc.rect(40, y, mapW, mapH, "F");
+      doc.addImage(satelliteDataUrl, "PNG", offX, offY, drawW, drawH);
       doc.setDrawColor(180);
       doc.setLineWidth(0.5);
       doc.rect(40, y, mapW, mapH);
@@ -907,9 +931,9 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       drawRouteMap(doc, points, 40, y, mapW, mapH);
     }
   } else {
-    if (points.length >= 2) {
+    if (points.length >= 2 && !satelliteDataUrl) {
       doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(120);
-      doc.text("Satellite map unavailable — route preview shown.", 40, y - 2);
+      doc.text("Satellite imagery unavailable — route-only preview shown.", 40, y - 2);
       doc.setTextColor(0);
     }
     drawRouteMap(doc, points, 40, y, mapW, mapH);
