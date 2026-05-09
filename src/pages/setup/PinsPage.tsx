@@ -274,7 +274,7 @@ export default function PinsPage() {
                         {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
-                        {formatAttachedRow(p as any) ?? formatDrivingPath(p as any) ?? "—"}
+                        {formatAttachedRow(p as any) ?? formatDrivingPath(p as any) ?? formatLegacyRow(p as any) ?? "—"}
                       </TableCell>
                       <TableCell>
                         {(p as any).is_completed ? (
