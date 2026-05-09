@@ -622,9 +622,9 @@ export async function applyImport(
     result.archived++;
   }
 
-  // NOTE: Per-row length overrides are not yet persisted. Storage location is
-  // pending (see PaddockImportExportDialog notice). They are validated and
-  // surfaced in the preview so admins can review the data shape today.
+  // Per-row length overrides are persisted via dbValuesFromImport into
+  // paddocks.row_length_overrides (calculation-only JSONB). Operational
+  // geometry (polygon_points, rows, paths) is never touched.
   return result;
 }
 
