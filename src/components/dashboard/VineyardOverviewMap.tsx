@@ -227,9 +227,9 @@ export default function VineyardOverviewMap({
 
   const pinsWithCoords = useMemo(
     () =>
-      pins.filter(
-        (p) => Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude)),
-      ),
+      pins
+        .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
+        .filter((x): x is { pin: typeof pins[number]; coords: { lat: number; lng: number } } => !!x.coords),
     [pins],
   );
 
