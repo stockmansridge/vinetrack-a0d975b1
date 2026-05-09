@@ -519,7 +519,10 @@ export default function IrrigationCalculatorPage() {
             { k: "soilMoistureBufferMm", label: "Soil moisture buffer (mm)", step: "0.1" },
           ].map((f) => (
             <div key={f.k} className="space-y-1">
-              <Label className="text-xs">{f.label}</Label>
+              <Label className="text-xs flex items-center gap-1">
+                {f.label}
+                {FIELD_HELP[f.k] ? <InfoTip text={FIELD_HELP[f.k]} /> : null}
+              </Label>
               <Input
                 type="number"
                 step={f.step}
@@ -530,7 +533,10 @@ export default function IrrigationCalculatorPage() {
             </div>
           ))}
           <div className="space-y-1">
-            <Label className="text-xs">Recent actual rain (mm)</Label>
+            <Label className="text-xs flex items-center gap-1">
+              Recent actual rain (mm)
+              <InfoTip text={FIELD_HELP.recentRain} />
+            </Label>
             <Input
               type="number"
               step="0.1"
