@@ -630,6 +630,7 @@ export default function VineyardOverviewMap({
                 title={tripDisplay(selectedTrip)}
                 subtitle="Trip details"
                 onClose={() => setSelection(null)}
+                accentColor={tripPalette.get(selectedTrip.id)}
               >
                 <TripPanelBody
                   trip={selectedTrip}
