@@ -8,6 +8,7 @@
 //   3. If we still have no coordinates, return a clear reason so the UI can
 //      surface it (e.g. "Forecast unavailable — vineyard coordinates not set").
 import { supabase } from "@/integrations/ios-supabase/client";
+import { parsePolygonPoints, polygonCentroid } from "@/lib/paddockGeometry";
 
 export interface RainForecastDay {
   date: string; // YYYY-MM-DD
@@ -86,6 +87,31 @@ async function getVineyardCoords(
     }
   } catch {
     // ignore — column may not exist
+  }
+  // Final fallback: compute the vineyard's centroid from paddock polygons.
+  try {
+    const { data } = await supabase
+      .from("paddocks")
+      .select("polygon_points")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null);
+    const rows = (data ?? []) as Array<{ polygon_points: any }>;
+    let sumLat = 0;
+    let sumLon = 0;
+    let n = 0;
+    for (const r of rows) {
+      const c = polygonCentroid(parsePolygonPoints(r.polygon_points));
+      if (c && isFinite(c.lat) && isFinite(c.lng)) {
+        sumLat += c.lat;
+        sumLon += c.lng;
+        n++;
+      }
+    }
+    if (n > 0) {
+      return { lat: sumLat / n, lon: sumLon / n, station: "Vineyard centre" };
+    }
+  } catch {
+    // ignore
   }
   return null;
 }
