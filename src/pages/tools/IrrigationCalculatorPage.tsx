@@ -305,11 +305,7 @@ export default function IrrigationCalculatorPage() {
             </Select>
           </div>
           <div className="text-xs text-muted-foreground">
-            {rateSource === "paddock" && "Using rate saved on this device for this block."}
-            {rateSource === "vineyard" && "Using vineyard rate saved on this device."}
-            {rateSource === "manual" && "Using manually entered rate."}
-            {rateSource === "none" &&
-              "No saved rate yet — enter mm/hr below and save when ready."}
+            {describeRateSource(rateSource)}
           </div>
         </CardContent>
         {canSave && (
