@@ -115,14 +115,29 @@ export default function PinsPage() {
     });
   }
 
+  const statusCounts = useMemo(() => {
+    let active = 0;
+    let completed = 0;
+    for (const p of pins) {
+      if (pinIsCompleted(p as any)) completed++;
+      else active++;
+    }
+    return { active, completed, all: pins.length };
+  }, [pins]);
+
+  const statusFiltered = useMemo(
+    () => applyPinStatusFilter(pins, statusFilter),
+    [pins, statusFilter],
+  );
+
   const filtered = useMemo(() => {
-    if (!filter) return pins;
+    if (!filter) return statusFiltered;
     const f = filter.toLowerCase();
-    return pins.filter((p) =>
+    return statusFiltered.filter((p) =>
       [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [pins, filter]);
+  }, [statusFiltered, filter]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
