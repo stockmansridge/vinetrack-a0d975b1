@@ -428,9 +428,9 @@ export default function VineyardOverviewMap({
 
     // Pin annotations
     if (showPins) {
-      for (const pin of pinsWithCoords) {
-        const lat = Number(pin.latitude);
-        const lng = Number(pin.longitude);
+      for (const { pin, coords } of pinsWithCoords) {
+        const lat = coords.lat;
+        const lng = coords.lng;
         if (!validPt({ lat, lng })) continue;
         allPts.push({ lat, lng });
         const style = pinStyle(pin.mode, pin.button_color, pin.category);
