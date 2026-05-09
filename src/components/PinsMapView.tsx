@@ -64,13 +64,14 @@ export default function PinsMapView({ statusFilter = "active" }: { statusFilter?
       </div>
       {status === "apple" ? (
         <ApplePinsMap
+          statusFilter={statusFilter}
           onUnavailable={(r) => {
             setReason(r);
             setStatus("fallback");
           }}
         />
       ) : status === "fallback" ? (
-        <PinsMap />
+        <PinsMap statusFilter={statusFilter} />
       ) : (
         <div className="h-[600px] rounded-md bg-muted animate-pulse" />
       )}
