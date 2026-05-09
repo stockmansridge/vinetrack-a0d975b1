@@ -763,12 +763,11 @@ function LiveEmptyState({
   if (reason === "rpc_missing") {
     return (
       <div className="rounded-md border bg-muted/40 px-3 py-3 text-sm space-y-1">
-        <div className="font-medium">Server-side weather RPC required</div>
+        <div className="font-medium">Live weather temporarily unavailable</div>
         <p className="text-xs text-muted-foreground">
-          Live readings need a safe server-side RPC
-          (<code className="text-[11px]">get_vineyard_current_weather</code>) so the
-          portal never reads Davis credentials directly. Ask Rork/Supabase to
-          deploy this RPC; until then live weather only renders in the iOS app.
+          Live readings are not available in the portal right now. Live weather
+          continues to render in the VineTrack iOS app. Please contact support
+          if this persists.
         </p>
       </div>
     );
