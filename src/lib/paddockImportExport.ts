@@ -356,16 +356,18 @@ export function parsePaddocksCsv(text: string): ParsedImport {
       warnings.push(`Planting year ${values.planting_year} looks unusual`);
     }
 
-    // Per-row length overrides (calculation only)
+    // Per-row length overrides (calculation only).
+    // - Cell absent OR empty → leave existing overrides alone.
+    // - Cell == "CLEAR" (case-insensitive) → explicit clear.
+    // - Otherwise parse the compact form.
     const rawOverride = get("row_lengths_override_m");
-    if (rawOverride !== undefined) {
+    if (rawOverride !== undefined && rawOverride !== "") {
       values.row_lengths_override_provided = true;
-      if (rawOverride === "") {
+      if (rawOverride.trim().toUpperCase() === "CLEAR") {
         values.row_lengths_override = [];
       } else {
         try {
           const parsed = parseRowLengthOverrides(rawOverride);
-          // Duplicate row numbers within entry
           const seen = new Set<number>();
           for (const e of parsed) {
             if (seen.has(e.rowNumber)) {
