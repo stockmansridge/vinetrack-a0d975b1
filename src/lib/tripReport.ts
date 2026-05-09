@@ -806,10 +806,29 @@ function ensureSpace(doc: jsPDF, y: number, needed: number, marginBottom = 56): 
 }
 
 function sectionHeader(doc: jsPDF, title: string, y: number): number {
-  y = ensureSpace(doc, y, 28);
-  doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0);
+  y = ensureSpace(doc, y, 32);
+  doc.setFont("helvetica", "bold").setFontSize(13).setTextColor(30, 60, 40);
   doc.text(title, 40, y);
-  return y + 6;
+  doc.setDrawColor(210);
+  doc.setLineWidth(0.5);
+  doc.line(40, y + 4, doc.internal.pageSize.getWidth() - 40, y + 4);
+  doc.setTextColor(0);
+  return y + 14;
+}
+
+// Render a clean two-column "field / value" list (iOS-style, no dark header).
+function renderFieldList(doc: jsPDF, rows: [string, string][], y: number): number {
+  autoTable(doc, {
+    startY: y,
+    theme: "plain",
+    styles: { fontSize: 10, cellPadding: { top: 2, right: 4, bottom: 2, left: 0 }, textColor: 30 },
+    columnStyles: {
+      0: { cellWidth: 140, textColor: 110 },
+      1: { textColor: 20, fontStyle: "bold" as any },
+    },
+    body: rows,
+  });
+  return (doc as any).lastAutoTable.finalY + 12;
 }
 
 function tripTitle(ctx: TripPdfContext, t: Trip): string {
