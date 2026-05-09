@@ -67,7 +67,7 @@ const setup = [
 ];
 
 const tools = [
-  { title: "Irrigation Calculator", url: "/tools/irrigation", icon: Droplet },
+  { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
   { title: "Spray / Tank Mix Calculator", url: "/tools/spray-tank-mix", icon: BeakerIcon },
   { title: "Yield Estimation", url: "/tools/yield-estimation", icon: Grape },
   { title: "Degree Days / BEDD", url: "/tools/degree-days", icon: Thermometer },
