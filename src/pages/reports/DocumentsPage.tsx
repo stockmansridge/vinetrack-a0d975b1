@@ -117,6 +117,7 @@ export default function DocumentsPage() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ??
     "Vineyard";
 
+  const { data: vineyardLogoUrl } = useVineyardLogo();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ReportType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceKind>("all");
@@ -181,15 +182,18 @@ export default function DocumentsPage() {
         createdAt: t.start_time ?? t.created_at ?? null,
         source: "portal",
         formats: ["pdf"],
-        onDownload: () =>
-          downloadTripPdf(t, {
+        onDownload: async () => {
+          const pinCount = await countTripPins(t);
+          await downloadTripPdf(t, {
             paddockName: padName ?? null,
             tripDisplay: tripDisplay(t),
             tripFunctionLabel: tripFn(t.trip_function),
             vineyardName,
             blockNames,
-            pinCount: Array.isArray(t.pin_ids) ? (t.pin_ids as any[]).length : 0,
-          }),
+            pinCount,
+            vineyardLogoUrl: vineyardLogoUrl ?? null,
+          });
+        },
       });
     }
 
