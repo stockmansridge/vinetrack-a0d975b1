@@ -84,7 +84,8 @@ async function fetchOpenMeteoForecast(
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${encodeURIComponent(lat)}` +
     `&longitude=${encodeURIComponent(lon)}` +
-    `&daily=precipitation_sum,precipitation_probability_max` +
+    `&daily=precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,wind_speed_10m_max` +
+    `&wind_speed_unit=kmh` +
     `&timezone=auto&forecast_days=${days}`;
   try {
     const r = await fetch(url);
