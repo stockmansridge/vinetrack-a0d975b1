@@ -58,7 +58,8 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
     queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
     staleTime: 5 * 60_000,
   });
-  const pins = pinsResult?.pins ?? [];
+  const allPins = pinsResult?.pins ?? [];
+  const pins = useMemo(() => applyPinStatusFilter(allPins, statusFilter), [allPins, statusFilter]);
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
