@@ -204,6 +204,7 @@ export default function IrrigationCalculatorPage() {
 
   const currentRate = settings.irrigationApplicationRateMmPerHour;
   const canSave = Number.isFinite(currentRate) && currentRate > 0;
+  const hasAnyComputedBlockRate = paddockOptions.some((paddock) => (paddock.computedRate ?? 0) > 0);
 
   const handleSaveVineyard = () => {
     if (!selectedVineyardId) return;
@@ -337,14 +338,22 @@ export default function IrrigationCalculatorPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__vineyard__">Whole vineyard</SelectItem>
-                {(paddocksQuery.data ?? []).map((p) => (
+                <SelectItem value="__vineyard__">
+                  {vineyardComputedFallback?.rate
+                    ? `Whole vineyard${vineyardComputedFallback.source === "vineyard-computed-average" ? ` · Avg ${fmt(vineyardComputedFallback.rate)} mm/hr` : ` · ${fmt(vineyardComputedFallback.rate)} mm/hr`}`
+                    : "Whole vineyard"}
+                </SelectItem>
+                {paddockOptions.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name || "Unnamed block"}
+                    {p.computedRate ? ` · ${fmt(p.computedRate)} mm/hr` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {selectedPaddockId === "__vineyard__" && !vineyardComputedFallback?.rate && hasAnyComputedBlockRate ? (
+              <p className="text-xs text-muted-foreground">Select a block to use its calculated irrigation rate.</p>
+            ) : null}
           </div>
           <div className="text-xs text-muted-foreground">
             {describeRateSource(rateSource)}
