@@ -13,6 +13,9 @@ export interface RainForecastDay {
   date: string; // YYYY-MM-DD
   rainfall_mm: number | null;
   probability_pct?: number | null;
+  temp_max_c?: number | null;
+  temp_min_c?: number | null;
+  wind_max_kmh?: number | null;
 }
 
 export type RainForecastReason =
