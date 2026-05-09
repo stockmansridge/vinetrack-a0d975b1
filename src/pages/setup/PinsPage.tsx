@@ -223,7 +223,7 @@ export default function PinsPage() {
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs text-muted-foreground">
-            {pins.length} pin{pins.length === 1 ? "" : "s"}
+            {sorted.length} pin{sorted.length === 1 ? "" : "s"}
           </div>
           <div className="flex items-center gap-2">
             <Button
