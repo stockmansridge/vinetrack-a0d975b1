@@ -7,6 +7,8 @@ import {
   resolveIrrigationRate,
   saveVineyardIrrigationRate,
   savePaddockIrrigationRate,
+  describeRateSource,
+  type IrrigationRateSource,
 } from "@/lib/calculations/irrigationDefaults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
