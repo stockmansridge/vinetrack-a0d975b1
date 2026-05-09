@@ -131,3 +131,86 @@ export function formatRowNumber(v: number | null | undefined): string {
   if (Number.isInteger(n)) return `${n}.5`;
   return n.toString();
 }
+
+// ---------- Pin row attachment display ----------
+//
+// Pins now have richer attachment metadata produced by the iOS row-snapping
+// pass. Display priority for customer-facing surfaces:
+//
+//   1. pin_row_number present  →  "Attached to Row 14 — Left"
+//   2. driving_row_number      →  "Driving Path 14.5"
+//   3. legacy row_number       →  "Row 14.5"  (legacy = driving path)
+//
+// Internal field names (snapped_to_row, along_row_distance_m, snapped_*)
+// are never shown to users.
+
+type AttachableSide = string | null | undefined;
+
+function titleCaseSide(side: AttachableSide): string | null {
+  if (!side) return null;
+  const s = String(side).trim();
+  if (!s) return null;
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+export interface PinAttachmentLike {
+  pin_row_number?: number | null;
+  pin_side?: string | null;
+  driving_row_number?: number | null;
+  row_number?: number | null;
+  side?: string | null;
+  snapped_latitude?: number | null;
+  snapped_longitude?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+/** "Attached to Row 14 — Left" or null when no vine-row attachment. */
+export function formatAttachedRow(pin: PinAttachmentLike): string | null {
+  const r = pin.pin_row_number;
+  if (r == null || !Number.isFinite(Number(r))) return null;
+  const side = titleCaseSide(pin.pin_side);
+  return side ? `Attached to Row ${r} — ${side}` : `Attached to Row ${r}`;
+}
+
+/** "Driving Path 14.5" — uses driving_row_number if present, else legacy row_number. */
+export function formatDrivingPath(pin: PinAttachmentLike): string | null {
+  const d = pin.driving_row_number;
+  if (d != null && Number.isFinite(Number(d))) {
+    const n = Number(d);
+    return `Driving Path ${Number.isInteger(n) ? `${n}.5` : n}`;
+  }
+  const legacy = pin.row_number;
+  if (legacy != null && Number.isFinite(Number(legacy))) {
+    return `Driving Path ${formatRowNumber(legacy)}`;
+  }
+  return null;
+}
+
+/**
+ * Best display string for a pin's row attachment — combines attached row
+ * and driving path on separate lines when both exist. Returns null when
+ * the pin has no row metadata at all.
+ */
+export function formatPinRowSummary(pin: PinAttachmentLike): string | null {
+  const lines = [formatAttachedRow(pin), formatDrivingPath(pin)].filter(
+    (s): s is string => !!s,
+  );
+  return lines.length ? lines.join("\n") : null;
+}
+
+/**
+ * Map placement coordinates — prefers snapped lat/lng (pin attached to
+ * the actual vine row), falls back to raw GPS.
+ */
+export function pinDisplayCoords(
+  pin: PinAttachmentLike,
+): { lat: number; lng: number } | null {
+  const sLat = Number(pin.snapped_latitude);
+  const sLng = Number(pin.snapped_longitude);
+  if (Number.isFinite(sLat) && Number.isFinite(sLng)) return { lat: sLat, lng: sLng };
+  const lat = Number(pin.latitude);
+  const lng = Number(pin.longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  return null;
+}
