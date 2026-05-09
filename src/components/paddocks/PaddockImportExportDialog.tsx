@@ -303,9 +303,11 @@ export default function PaddockImportExportDialog() {
                   </AlertTitle>
                   <AlertDescription className="space-y-1 text-xs">
                     <p className="text-muted-foreground">
-                      Calculation only — does not affect Live Trip tracking.
-                      Persistence pending schema decision; values shown for
-                      review only.
+                      Calculation only — saved to the block's row-length
+                      overrides. Does not affect Live Trip tracking, row
+                      guidance, row completion, pins, or map geometry. Empty
+                      cells leave existing overrides unchanged; only blocks
+                      listed above with "clear all" are wiped.
                     </p>
                     <div className="max-h-24 overflow-y-auto rounded border bg-muted/30 p-2">
                       {plan.rowOverrideChanges.map((c) => (
