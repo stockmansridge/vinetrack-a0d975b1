@@ -117,7 +117,7 @@ export default function PaddockImportExportDialog() {
       const result = await applyImport(plan, paddocks, selectedVineyardId);
       const overrideNote =
         result.rowOverridesQueued > 0
-          ? ` (${result.rowOverridesQueued} per-row override(s) reviewed — persistence pending)`
+          ? ` (${result.rowOverridesQueued} per-row override(s) saved)`
           : "";
       if (result.errors.length) {
         toast.error(
@@ -303,9 +303,13 @@ export default function PaddockImportExportDialog() {
                   </AlertTitle>
                   <AlertDescription className="space-y-1 text-xs">
                     <p className="text-muted-foreground">
-                      Calculation only — does not affect Live Trip tracking.
-                      Persistence pending schema decision; values shown for
-                      review only.
+                      Calculation only — saved to the block's row-length
+                      overrides. Does not affect Live Trip tracking, row
+                      guidance, row completion, pins, or map geometry. Empty
+                      cells leave existing overrides unchanged. Listed rows
+                      are merged into existing overrides; use the literal value
+                      <code className="mx-1 rounded bg-muted px-1">CLEAR</code>
+                      in the cell to wipe a block's overrides.
                     </p>
                     <div className="max-h-24 overflow-y-auto rounded border bg-muted/30 p-2">
                       {plan.rowOverrideChanges.map((c) => (

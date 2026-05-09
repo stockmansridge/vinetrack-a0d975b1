@@ -173,6 +173,20 @@ export interface DerivedMetrics {
 /** Per-row length override map keyed by row.number (decimal allowed). */
 export type RowLengthOverrideMap = Map<number, number>;
 
+/** Build a RowLengthOverrideMap from the JSONB column on a paddock row.
+ *  Accepts `{ "1": 245, "3.5": 244.2 }`. Returns undefined when empty/missing. */
+export function readRowLengthOverrides(paddock: any): RowLengthOverrideMap | undefined {
+  const raw = paddock?.row_length_overrides;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const map: RowLengthOverrideMap = new Map();
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const rn = Number(k);
+    const len = Number(v);
+    if (Number.isFinite(rn) && Number.isFinite(len) && len > 0) map.set(rn, len);
+  }
+  return map.size ? map : undefined;
+}
+
 export function deriveMetrics(
   paddock: any,
   opts?: { rowLengthOverrides?: RowLengthOverrideMap },
@@ -182,10 +196,11 @@ export function deriveMetrics(
   const areaHa = polygonAreaHectares(polygon);
   const rowCount = rows.length;
 
-  // Total row length: prefer per-row overrides (calculation-only), then a
-  // single block-level row_length_override applied to every row, then
-  // geometry-derived lengths.
-  const overrides = opts?.rowLengthOverrides;
+  // Total row length: per-row override → block-level override → geometry.
+  // Per-row map may be passed explicitly via opts; otherwise we read from
+  // paddock.row_length_overrides (calculation-only JSONB column).
+  const overrides = opts?.rowLengthOverrides ?? readRowLengthOverrides(paddock);
+
   let totalRowLengthM = 0;
   let rowLengthSource: DerivedMetrics["rowLengthSource"] = "geometry";
   let appliedAnyOverride = false;

@@ -23,6 +23,9 @@ export interface PaddockRow {
   emitter_spacing?: number | null;
   vine_count_override?: number | null;
   row_length_override?: number | null;
+  /** Calculation-only per-row overrides JSONB.
+   *  Shape: { "<rowNumber>": <lengthM>, ... } e.g. { "1": 245, "3.5": 244.2 }. */
+  row_length_overrides?: Record<string, number> | null;
   variety_allocations?: any;
   polygon_points?: any;
   rows?: any;
@@ -120,9 +123,14 @@ export function buildPaddocksCsv(paddocks: PaddockRow[], vineyardName: string): 
   for (const p of paddocks) {
     const m = deriveMetrics(p);
     const a = firstAlloc(p);
-    // Per-row overrides are not yet persisted in the iOS schema; export blank
-    // here. (Once a sidecar/iOS column exists, populate from that source.)
-    const rowOverridesSerialized = "";
+    // Per-row overrides from the JSONB column → compact CSV form.
+    const overrideEntries: RowLengthOverride[] =
+      p.row_length_overrides && typeof p.row_length_overrides === "object"
+        ? Object.entries(p.row_length_overrides)
+            .map(([k, v]) => ({ rowNumber: Number(k), lengthM: Number(v) }))
+            .filter((e) => Number.isFinite(e.rowNumber) && Number.isFinite(e.lengthM) && e.lengthM > 0)
+        : [];
+    const rowOverridesSerialized = serializeRowLengthOverrides(overrideEntries);
     const row: Record<CsvCol, any> = {
       internal_id: p.id ?? "",
       vineyard_name: vineyardName,
@@ -348,16 +356,18 @@ export function parsePaddocksCsv(text: string): ParsedImport {
       warnings.push(`Planting year ${values.planting_year} looks unusual`);
     }
 
-    // Per-row length overrides (calculation only)
+    // Per-row length overrides (calculation only).
+    // - Cell absent OR empty → leave existing overrides alone.
+    // - Cell == "CLEAR" (case-insensitive) → explicit clear.
+    // - Otherwise parse the compact form.
     const rawOverride = get("row_lengths_override_m");
-    if (rawOverride !== undefined) {
+    if (rawOverride !== undefined && rawOverride !== "") {
       values.row_lengths_override_provided = true;
-      if (rawOverride === "") {
+      if (rawOverride.trim().toUpperCase() === "CLEAR") {
         values.row_lengths_override = [];
       } else {
         try {
           const parsed = parseRowLengthOverrides(rawOverride);
-          // Duplicate row numbers within entry
           const seen = new Set<number>();
           for (const e of parsed) {
             if (seen.has(e.rowNumber)) {
@@ -440,6 +450,27 @@ function dbValuesFromImport(
   }
   // IMPORTANT: never write polygon_points or rows from import — operational
   // geometry is owned by the iOS app and must not be altered here.
+
+  // Per-row length overrides (calculation-only JSONB column).
+  // - Column absent on import → leave existing value alone.
+  // - Column present with empty value → explicit clear (write null).
+  // - Column present with entries → merge with existing so partial sheets
+  //   don't drop unrelated rows. Specific rows are overwritten by the import.
+  if (v.row_lengths_override_provided) {
+    if (!v.row_lengths_override || v.row_lengths_override.length === 0) {
+      patch.row_length_overrides = null;
+    } else {
+      const existingMap: Record<string, number> =
+        existing?.row_length_overrides && typeof existing.row_length_overrides === "object"
+          ? { ...(existing.row_length_overrides as Record<string, number>) }
+          : {};
+      for (const e of v.row_lengths_override) {
+        existingMap[String(e.rowNumber)] = Number(e.lengthM);
+      }
+      patch.row_length_overrides = existingMap;
+    }
+  }
+
   // variety/clone/rootstock → variety_allocations[0] only when no existing alloc
   if (v.variety || v.clone || v.rootstock) {
     const existingAllocs = Array.isArray(existing?.variety_allocations)
@@ -593,9 +624,9 @@ export async function applyImport(
     result.archived++;
   }
 
-  // NOTE: Per-row length overrides are not yet persisted. Storage location is
-  // pending (see PaddockImportExportDialog notice). They are validated and
-  // surfaced in the preview so admins can review the data shape today.
+  // Per-row length overrides are persisted via dbValuesFromImport into
+  // paddocks.row_length_overrides (calculation-only JSONB). Operational
+  // geometry (polygon_points, rows, paths) is never touched.
   return result;
 }
 
