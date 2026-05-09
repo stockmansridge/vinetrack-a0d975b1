@@ -62,10 +62,21 @@ export function clearPaddockIrrigationRate(paddockId: string) {
 }
 
 /**
- * Resolve the effective irrigation application rate to use:
- *   1. paddock override (when a paddock is selected and has a saved rate)
- *   2. vineyard default
+ * Resolve the effective irrigation application rate to use.
+ *
+ * Current (device-only) order:
+ *   1. paddock saved rate (when a paddock is selected)
+ *   2. vineyard saved rate
  *   3. null (user must enter manually)
+ *
+ * Future order once shared database fields exist
+ * (vineyards.irrigation_application_rate_mm_per_hour,
+ *  paddocks.irrigation_application_rate_mm_per_hour):
+ *   1. paddock shared rate
+ *   2. vineyard shared rate
+ *   3. paddock device-saved rate
+ *   4. vineyard device-saved rate
+ *   5. null (manual entry)
  */
 export function resolveIrrigationRate(
   vineyardId: string | null,
