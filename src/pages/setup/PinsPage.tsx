@@ -20,9 +20,9 @@ import {
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
-import PinsMapView from "@/components/PinsMapView";
+import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
