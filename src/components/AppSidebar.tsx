@@ -19,7 +19,7 @@ import {
   Database,
   Calculator,
   Droplet,
-  SprayCan,
+  Beaker as BeakerIcon,
   Grape,
   Thermometer,
   Sprout as SproutIcon,
