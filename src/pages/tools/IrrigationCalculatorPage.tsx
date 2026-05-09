@@ -462,9 +462,9 @@ export default function IrrigationCalculatorPage() {
               }
             />
             <Stat
-              label="Recommended duration"
+              label={dormant ? "Calculated irrigation equivalent" : "Recommended duration"}
               value={result ? formatHoursMinutes(result.recommendedIrrigationMinutes) : "—"}
-              highlight
+              highlight={!dormant}
             />
           </CardContent>
         )}
