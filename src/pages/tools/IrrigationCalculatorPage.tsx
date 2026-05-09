@@ -149,7 +149,7 @@ export default function IrrigationCalculatorPage() {
     }
     saveVineyardIrrigationRate(selectedVineyardId, currentRate);
     if (selectedPaddockId === "__vineyard__") setRateSource("vineyard");
-    toast({ title: "Saved irrigation rate." });
+    toast({ title: "Saved on this device." });
   };
 
   const handleSavePaddock = () => {
