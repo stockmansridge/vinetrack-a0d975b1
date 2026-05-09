@@ -611,6 +611,7 @@ export default function VineyardOverviewMap({
                 title={selectedPaddock.paddock.name ?? "Unnamed block"}
                 subtitle="Block details"
                 onClose={() => setSelection(null)}
+                accentColor={selectedPaddock.color}
               >
                 <PaddockDetailContent
                   paddock={selectedPaddock.paddock}
@@ -629,6 +630,7 @@ export default function VineyardOverviewMap({
                 title={tripDisplay(selectedTrip)}
                 subtitle="Trip details"
                 onClose={() => setSelection(null)}
+                accentColor={tripPalette.get(selectedTrip.id)}
               >
                 <TripPanelBody
                   trip={selectedTrip}
@@ -706,20 +708,42 @@ function PanelShell({
   subtitle,
   onClose,
   children,
+  accentColor,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: React.ReactNode;
+  accentColor?: string;
 }) {
   return (
-    <div className="p-4">
+    <div
+      className="p-4 transition-colors"
+      style={
+        accentColor
+          ? {
+              borderLeft: `4px solid ${accentColor}`,
+              boxShadow: `inset 0 0 0 1px ${accentColor}33`,
+              background: `linear-gradient(to right, ${accentColor}14, transparent 40%)`,
+            }
+          : undefined
+      }
+    >
       <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-base font-semibold">{title}</div>
-          {subtitle && (
-            <div className="text-xs text-muted-foreground">{subtitle}</div>
+        <div className="flex min-w-0 items-start gap-2">
+          {accentColor && (
+            <span
+              aria-hidden
+              className="mt-1.5 inline-block h-3 w-3 shrink-0 rounded-sm ring-1 ring-black/10"
+              style={{ background: accentColor }}
+            />
           )}
+          <div className="min-w-0">
+            <div className="truncate text-base font-semibold">{title}</div>
+            {subtitle && (
+              <div className="text-xs text-muted-foreground">{subtitle}</div>
+            )}
+          </div>
         </div>
         <Button
           size="icon"
