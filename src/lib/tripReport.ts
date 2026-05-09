@@ -325,7 +325,7 @@ function describeMixLine(m: any): SeedingMixLine {
     name: pick(m, "name", "species"),
     percent: pick(m, "percent", "percentage", "pct"),
     seed_box: pick(m, "seed_box", "seedBox", "box"),
-    kg_per_ha: pick(m, "kg_per_ha", "kgPerHa", "rate_kg_per_ha"),
+    kg_per_ha: formatRate(pick(m, "kg_per_ha", "kgPerHa", "rate_kg_per_ha", "rate")),
     supplier: pick(m, "supplier", "manufacturer"),
     raw: m,
   };
