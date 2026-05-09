@@ -173,18 +173,22 @@ export function formatAttachedRow(pin: PinAttachmentLike): string | null {
   return side ? `Attached to Row ${r} — ${side}` : `Attached to Row ${r}`;
 }
 
-/** "Driving Path 14.5" — uses driving_row_number if present, else legacy row_number. */
+/**
+ * "Driving Path 14.5" — uses driving_row_number when present.
+ * Does NOT fall back to legacy row_number; legacy is handled separately by
+ * `formatLegacyRow` so callers can choose the right wording.
+ */
 export function formatDrivingPath(pin: PinAttachmentLike): string | null {
   const d = pin.driving_row_number;
-  if (d != null && Number.isFinite(Number(d))) {
-    const n = Number(d);
-    return `Driving Path ${Number.isInteger(n) ? `${n}.5` : n}`;
-  }
-  const legacy = pin.row_number;
-  if (legacy != null && Number.isFinite(Number(legacy))) {
-    return `Driving Path ${formatRowNumber(legacy)}`;
-  }
-  return null;
+  if (d == null || !Number.isFinite(Number(d))) return null;
+  const n = Number(d);
+  return `Driving Path ${Number.isInteger(n) ? `${n}.5` : n}`;
+}
+
+/** Legacy "Row 14.5" — used when neither pin_row_number nor driving_row_number is present. */
+export function formatLegacyRow(pin: PinAttachmentLike): string | null {
+  if (pin.row_number == null || !Number.isFinite(Number(pin.row_number))) return null;
+  return `Row ${formatRowNumber(pin.row_number)}`;
 }
 
 /**

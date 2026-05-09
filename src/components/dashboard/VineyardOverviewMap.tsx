@@ -22,7 +22,7 @@ import {
   type LatLng,
 } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
-import { pinStyle, formatRowNumber, formatAttachedRow, formatDrivingPath, pinDisplayCoords } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayCoords } from "@/lib/pinStyle";
 import { initMapKit } from "@/lib/mapkit";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
@@ -928,7 +928,7 @@ function PinPanelBody({
         <Row label="Driving path" value={formatDrivingPath(pin as any)} />
       )}
       {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any) && (
-        <Row label="Row" value={formatRowNumber(pin.row_number)} />
+        <Row label="Row" value={formatLegacyRow(pin as any) ?? "—"} />
       )}
       <Row label="Created by" value={resolveName(pin.created_by) ?? "—"} />
       <Row label="Created" value={fmtDateTime(pin.created_at)} />

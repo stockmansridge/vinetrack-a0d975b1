@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatRowNumber } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow } from "@/lib/pinStyle";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -183,11 +183,11 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
           <Field label="Paddock" value={paddockName} />
           <Field label="Attached row" value={formatAttachedRow(pin)} />
           <Field label="Driving path" value={formatDrivingPath(pin)} />
-          {pin.pin_row_number == null && pin.driving_row_number == null && pin.row_number != null && (
-            <Field label="Row" value={formatRowNumber(pin.row_number)} />
-          )}
-          {pin.pin_row_number == null && pin.side && (
-            <Field label="Side" value={pin.side} />
+          {!formatAttachedRow(pin) && !formatDrivingPath(pin) && (
+            <>
+              <Field label="Row" value={formatLegacyRow(pin)} />
+              <Field label="Side" value={pin.side} />
+            </>
           )}
           {coords && (
             <div className="text-xs text-muted-foreground pt-1">
