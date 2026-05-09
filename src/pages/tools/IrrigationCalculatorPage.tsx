@@ -349,8 +349,8 @@ export default function IrrigationCalculatorPage() {
         detail: "All other forecast figures are shown below.",
       };
     }
-    return interpretRecommendation(result);
-  }, [forecastQuery.isLoading, forecastQuery.data, mode, hasDays, appRateMissing, result]);
+    return interpretRecommendation(result, { dormant });
+  }, [forecastQuery.isLoading, forecastQuery.data, mode, hasDays, appRateMissing, result, dormant]);
 
   return (
     <div className="space-y-6 max-w-6xl">
