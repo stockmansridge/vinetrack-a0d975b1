@@ -1,70 +1,243 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, FileSpreadsheet, Info } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { FileText, FileSpreadsheet, Info, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-function PlaceholderRow({
-  title,
-  description,
-  status,
-  icon: Icon,
-}: {
-  title: string;
-  description: string;
-  status: "available" | "blocked";
-  icon: typeof FileText;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 border rounded-md p-3">
-      <div className="flex items-start gap-3">
-        <Icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
-        <div>
-          <div className="font-medium text-sm">{title}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{description}</div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <Badge variant={status === "available" ? "secondary" : "outline"}>
-          {status === "available" ? "Coming soon" : "Blocked"}
-        </Badge>
-        <Button size="sm" variant="outline" disabled>
-          Export
-        </Button>
-      </div>
-    </div>
-  );
+import { useVineyard } from "@/context/VineyardContext";
+import { fetchList } from "@/lib/queries";
+import {
+  fetchSprayJobs, fetchVineyardTeamMembers, memberLabel,
+} from "@/lib/sprayJobsQuery";
+import {
+  fetchSprayRecordsForVineyard, type SprayRecord,
+} from "@/lib/sprayRecordsQuery";
+import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import {
+  exportYearlySprayProgramPdf,
+  exportYearlySprayProgramXlsx,
+  fetchJobPaddockMap,
+  jobYear,
+  type JobLookups,
+} from "@/lib/sprayJobsExport";
+
+function fmtRecordLabel(r: SprayRecord): string {
+  const date = r.date ?? "Undated";
+  const ref = r.spray_reference ?? r.id.slice(0, 8);
+  const op = r.operation_type ? ` · ${r.operation_type}` : "";
+  return `${date} — ${ref}${op}`;
 }
 
 export default function SprayReportsPage() {
+  const { selectedVineyardId, memberships } = useVineyard();
+  const { toast } = useToast();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
+
+  // ---- Lookups
+  const { data: paddocks } = useQuery({
+    queryKey: ["paddocks-list", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList("paddocks", selectedVineyardId!),
+  });
+  const { data: tractors } = useQuery({
+    queryKey: ["tractors-list", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList("tractors", selectedVineyardId!),
+  });
+  const { data: equipment } = useQuery({
+    queryKey: ["equipment-list", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList("spray_equipment", selectedVineyardId!),
+  });
+  const { data: members } = useQuery({
+    queryKey: ["team-members", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyardTeamMembers(selectedVineyardId!),
+  });
+
+  const jobLookups: JobLookups = useMemo(() => ({
+    paddockNameById: new Map((paddocks ?? []).map((p: any) => [p.id, p.name ?? p.block_name ?? "Unnamed"])),
+    tractorNameById: new Map((tractors ?? []).map((t: any) => [t.id, t.name ?? t.model ?? "Tractor"])),
+    equipmentNameById: new Map((equipment ?? []).map((e: any) => [e.id, e.name ?? e.type ?? "Equipment"])),
+    memberNameById: new Map((members ?? []).map((u: any) => [u.user_id, memberLabel(u)])),
+  }), [paddocks, tractors, equipment, members]);
+
+  // ---- Records (individual export)
+  const { data: recordsResult, isLoading: recordsLoading } = useQuery({
+    queryKey: ["spray-records", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
+  });
+
+  const records = useMemo(() => {
+    const list = [...(recordsResult?.records ?? [])];
+    list.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    return list;
+  }, [recordsResult]);
+
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const selectedRecord = records.find((r) => r.id === selectedRecordId) ?? null;
+
+  // ---- Spray jobs (yearly program)
+  const { data: jobs, isLoading: jobsLoading } = useQuery({
+    queryKey: ["spray-jobs-program", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchSprayJobs(selectedVineyardId!, { template: false }),
+  });
+
+  const yearsAvailable = useMemo(() => {
+    const ys = new Set<number>();
+    (jobs ?? []).forEach((j) => {
+      const y = jobYear(j);
+      if (y != null) ys.add(y);
+    });
+    const arr = [...ys].sort((a, b) => b - a);
+    if (!arr.length) arr.push(new Date().getFullYear());
+    return arr;
+  }, [jobs]);
+
+  const [year, setYear] = useState<number | null>(null);
+  const effectiveYear = year ?? yearsAvailable[0];
+
+  const jobsForYear = useMemo(
+    () => (jobs ?? []).filter((j) => jobYear(j) === effectiveYear),
+    [jobs, effectiveYear],
+  );
+
+  const handleExportRecord = () => {
+    if (!selectedRecord) return;
+    try {
+      exportSprayRecordPdf(selectedRecord, vineyardName, {
+        // spray_records has no paddock_id — fall back to trip linkage label if any
+        paddockName: null,
+        operatorName: null,
+      });
+    } catch (e: any) {
+      toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleExportProgram = async (kind: "pdf" | "xlsx") => {
+    if (!jobsForYear.length) {
+      toast({ title: "No spray jobs", description: `No planned jobs found for ${effectiveYear}.`, variant: "destructive" });
+      return;
+    }
+    try {
+      const paddockMap = await fetchJobPaddockMap(jobsForYear.map((j) => j.id));
+      if (kind === "pdf") {
+        exportYearlySprayProgramPdf(jobsForYear, paddockMap, jobLookups, vineyardName, effectiveYear);
+      } else {
+        exportYearlySprayProgramXlsx(jobsForYear, paddockMap, jobLookups, vineyardName, effectiveYear);
+      }
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  if (!selectedVineyardId) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Select a vineyard to generate spray reports.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-semibold">Spray Reports</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Export individual spray records and the yearly spray program. These
-          reports are built from spray data captured by the iOS app.
+          Generate compliance documents from spray data captured by the VineTrack iOS app.
+          Exports are read-only and never modify field data.
         </p>
       </div>
 
+      {/* Individual record */}
       <Card className="p-4 space-y-3">
-        <PlaceholderRow
-          icon={FileText}
-          title="Individual spray record (PDF)"
-          description="Single completed spray record exported as a job sheet. Sourced from spray_records."
-          status="available"
-        />
-        <PlaceholderRow
-          icon={FileText}
-          title="Yearly spray program (PDF)"
-          description="Full season spray program. Requires planned spray_jobs table to separate planned vs actual."
-          status="blocked"
-        />
-        <PlaceholderRow
-          icon={FileSpreadsheet}
-          title="Yearly spray program (Excel)"
-          description="Spreadsheet of the season's spray program with totals and chemical usage. Same blocker as PDF."
-          status="blocked"
-        />
+        <div className="flex items-start gap-3">
+          <FileText className="h-5 w-5 mt-0.5 text-muted-foreground" />
+          <div className="flex-1">
+            <div className="font-medium text-sm">Individual spray record (PDF)</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Job-sheet style report for a single completed spray. Includes chemical mix,
+              rates, weather snapshot, equipment and operator details.
+            </div>
+          </div>
+          <Badge variant="secondary">{records.length} record{records.length === 1 ? "" : "s"}</Badge>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+          <div className="space-y-1">
+            <Label htmlFor="record-pick" className="text-xs">Record</Label>
+            <Select
+              value={selectedRecordId ?? ""}
+              onValueChange={(v) => setSelectedRecordId(v || null)}
+              disabled={recordsLoading || !records.length}
+            >
+              <SelectTrigger id="record-pick">
+                <SelectValue placeholder={recordsLoading ? "Loading…" : records.length ? "Choose a spray record" : "No records found"} />
+              </SelectTrigger>
+              <SelectContent>
+                {records.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{fmtRecordLabel(r)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleExportRecord} disabled={!selectedRecord}>
+            <Download className="h-4 w-4 mr-1" /> Export PDF
+          </Button>
+        </div>
+      </Card>
+
+      {/* Yearly program */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <FileSpreadsheet className="h-5 w-5 mt-0.5 text-muted-foreground" />
+          <div className="flex-1">
+            <div className="font-medium text-sm">Yearly spray program</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Full season program covering planned spray jobs, chemicals, rates and target paddocks.
+              Sourced from <code className="font-mono">spray_jobs</code>.
+            </div>
+          </div>
+          <Badge variant="secondary">{(jobs ?? []).length} planned job{(jobs ?? []).length === 1 ? "" : "s"}</Badge>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
+          <div className="space-y-1">
+            <Label htmlFor="year-pick" className="text-xs">Year</Label>
+            <Select
+              value={effectiveYear ? String(effectiveYear) : ""}
+              onValueChange={(v) => setYear(v ? Number(v) : null)}
+              disabled={jobsLoading}
+            >
+              <SelectTrigger id="year-pick">
+                <SelectValue placeholder={jobsLoading ? "Loading…" : "Pick year"} />
+              </SelectTrigger>
+              <SelectContent>
+                {yearsAvailable.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y} ({(jobs ?? []).filter((j) => jobYear(j) === y).length})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="outline" onClick={() => handleExportProgram("pdf")} disabled={!jobsForYear.length}>
+            <FileText className="h-4 w-4 mr-1" /> PDF
+          </Button>
+          <Button onClick={() => handleExportProgram("xlsx")} disabled={!jobsForYear.length}>
+            <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
+          </Button>
+        </div>
       </Card>
 
       <Card className="p-4 space-y-2 bg-muted/30">
@@ -73,21 +246,19 @@ export default function SprayReportsPage() {
         </div>
         <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
           <li>
-            <span className="font-medium text-foreground">Available now:</span>{" "}
-            Completed spray activity captured from the iOS app via{" "}
-            <code className="font-mono">spray_records</code> — chemical, rate,
-            block, operator, equipment, weather snapshot.
+            <span className="font-medium text-foreground">Spray records:</span>{" "}
+            {records.length} completed record{records.length === 1 ? "" : "s"} available in{" "}
+            <code className="font-mono">spray_records</code>.
           </li>
           <li>
-            <span className="font-medium text-foreground">Blocked:</span> Yearly
-            spray <em>program</em> exports require a separate{" "}
-            <code className="font-mono">spray_jobs</code> table to model planned
-            jobs and reusable templates. This needs a Rork/Supabase migration
-            before portal exports can be produced.
+            <span className="font-medium text-foreground">Spray jobs:</span>{" "}
+            {(jobs ?? []).length} planned job{(jobs ?? []).length === 1 ? "" : "s"} across{" "}
+            {yearsAvailable.length} year{yearsAvailable.length === 1 ? "" : "s"} in{" "}
+            <code className="font-mono">spray_jobs</code>.
           </li>
           <li>
-            No write paths are added in the portal. Exports will be read-only
-            generated documents.
+            All exports are generated client-side from existing iOS data — no writes are made
+            to vineyard records.
           </li>
         </ul>
       </Card>

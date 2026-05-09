@@ -1,6 +1,7 @@
 // Spray Jobs export helpers — single-job PDF and yearly program PDF/CSV.
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { SprayJob, SprayJobChemicalLine } from "./sprayJobsQuery";
 import {
@@ -434,4 +435,82 @@ export function jobYear(j: SprayJob): number | null {
   if (!j.planned_date) return null;
   const d = new Date(j.planned_date);
   return isNaN(d.getTime()) ? null : d.getFullYear();
+}
+
+// ============================================================
+// Yearly Spray Program — XLSX (Excel)
+// ============================================================
+
+export function exportYearlySprayProgramXlsx(
+  jobs: SprayJob[],
+  paddockMap: Map<string, string[]>,
+  lookups: JobLookups,
+  vineyardName: string | null,
+  year: number,
+) {
+  const sorted = [...jobs].sort((a, b) => {
+    const da = a.planned_date ? new Date(a.planned_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const db = b.planned_date ? new Date(b.planned_date).getTime() : Number.MAX_SAFE_INTEGER;
+    return da - db;
+  });
+
+  const programRows = sorted.map((j) => ({
+    "Planned date": j.planned_date ?? "",
+    "Status": j.status ?? "",
+    "Job": j.name ?? "",
+    "Operation": opLabel(j.operation_type) === NR ? "" : opLabel(j.operation_type),
+    "Target": j.target ?? "",
+    "Growth stage": j.growth_stage_code ?? "",
+    "Paddocks": (paddockMap.get(j.id) ?? [])
+      .map((id) => lookups.paddockNameById.get(id) ?? "")
+      .filter(Boolean)
+      .join("; "),
+    "Chemicals": (j.chemical_lines ?? [])
+      .map((l) => `${l.name ?? "Unnamed"}${l.rate != null ? ` (${l.rate}${l.unit ? " " + l.unit : ""})` : ""}`)
+      .join("; "),
+    "Water L/ha": j.water_volume ?? "",
+    "Rate L/ha": j.spray_rate_per_ha ?? "",
+    "Concentration factor": j.concentration_factor ?? "",
+    "Equipment": j.equipment_id ? (lookups.equipmentNameById.get(j.equipment_id) ?? "") : "",
+    "Tractor": j.tractor_id ? (lookups.tractorNameById.get(j.tractor_id) ?? "") : "",
+    "Operator": j.operator_user_id ? (lookups.memberNameById.get(j.operator_user_id) ?? "") : "",
+    "Notes": j.notes ?? "",
+  }));
+
+  // Chemical usage breakdown — one row per chemical line, suitable for pivot tables.
+  const chemicalRows: any[] = [];
+  sorted.forEach((j) => {
+    const paddocks = (paddockMap.get(j.id) ?? [])
+      .map((id) => lookups.paddockNameById.get(id) ?? "")
+      .filter(Boolean)
+      .join("; ");
+    (j.chemical_lines ?? []).forEach((l) => {
+      chemicalRows.push({
+        "Planned date": j.planned_date ?? "",
+        "Job": j.name ?? "",
+        "Status": j.status ?? "",
+        "Operation": opLabel(j.operation_type) === NR ? "" : opLabel(j.operation_type),
+        "Paddocks": paddocks,
+        "Chemical": l.name ?? "Unnamed",
+        "Rate": l.rate ?? "",
+        "Unit": l.unit ?? "",
+        "Water rate": l.water_rate ?? "",
+        "Notes": l.notes ?? "",
+      });
+    });
+  });
+
+  const wb = XLSX.utils.book_new();
+
+  const summaryRows = [
+    { Field: "Vineyard", Value: vineyardName ?? "" },
+    { Field: "Year", Value: year },
+    { Field: "Total spray jobs", Value: jobs.length },
+    { Field: "Generated", Value: new Date().toLocaleString() },
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Summary");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(programRows), "Spray Program");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(chemicalRows), "Chemical usage");
+
+  XLSX.writeFile(wb, `spray-program-${year}-${safeFile(vineyardName ?? "vineyard")}.xlsx`);
 }

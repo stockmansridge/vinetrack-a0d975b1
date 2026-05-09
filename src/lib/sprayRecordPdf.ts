@@ -61,9 +61,15 @@ function chemicalSummary(tanks: any): { product: string; rate: string; water: st
   };
 }
 
+export interface SprayRecordPdfContext {
+  paddockName?: string | null;
+  operatorName?: string | null;
+}
+
 export function exportSprayRecordPdf(
   record: SprayRecord,
   vineyardName?: string | null,
+  context?: SprayRecordPdfContext,
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -97,8 +103,8 @@ export function exportSprayRecordPdf(
     ["End time", fmtTime(record.end_time)],
     ["Operation type", fmtVal(record.operation_type)],
     ["Reference", fmtVal(record.spray_reference)],
-    ["Block / Paddock", NR],
-    ["Operator", NR],
+    ["Block / Paddock", fmtVal(context?.paddockName)],
+    ["Operator", fmtVal(context?.operatorName)],
     ["Tractor", fmtVal(record.tractor)],
     ["Tractor gear", fmtVal(record.tractor_gear)],
     ["Equipment", fmtVal(record.equipment_type)],
