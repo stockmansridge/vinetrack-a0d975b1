@@ -149,6 +149,12 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Operational Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(tools)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         {comingSoon.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
