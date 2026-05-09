@@ -167,14 +167,47 @@ export interface DerivedMetrics {
   intermediatePostCount: number | null;
   emitterCount: number | null;
   vineCountSource: "override" | "derived" | "unknown";
+  rowLengthSource: "per-row-override" | "block-override" | "geometry";
 }
 
-export function deriveMetrics(paddock: any): DerivedMetrics {
+/** Per-row length override map keyed by row.number (decimal allowed). */
+export type RowLengthOverrideMap = Map<number, number>;
+
+export function deriveMetrics(
+  paddock: any,
+  opts?: { rowLengthOverrides?: RowLengthOverrideMap },
+): DerivedMetrics {
   const polygon = parsePolygonPoints(paddock?.polygon_points);
   const rows = parseRows(paddock?.rows);
   const areaHa = polygonAreaHectares(polygon);
   const rowCount = rows.length;
-  const totalRowLengthM = rows.reduce((s, r) => s + rowLengthMeters(r), 0);
+
+  // Total row length: prefer per-row overrides (calculation-only), then a
+  // single block-level row_length_override applied to every row, then
+  // geometry-derived lengths.
+  const overrides = opts?.rowLengthOverrides;
+  let totalRowLengthM = 0;
+  let rowLengthSource: DerivedMetrics["rowLengthSource"] = "geometry";
+  let appliedAnyOverride = false;
+  for (const r of rows) {
+    let len: number | undefined;
+    if (overrides && isFiniteNum(r.number) && overrides.has(r.number!)) {
+      len = overrides.get(r.number!);
+      appliedAnyOverride = true;
+    }
+    if (len === undefined) len = rowLengthMeters(r);
+    if (isFiniteNum(len)) totalRowLengthM += len;
+  }
+  if (appliedAnyOverride) {
+    rowLengthSource = "per-row-override";
+  } else if (
+    isFiniteNum(paddock?.row_length_override) &&
+    paddock.row_length_override > 0 &&
+    rowCount > 0
+  ) {
+    totalRowLengthM = paddock.row_length_override * rowCount;
+    rowLengthSource = "block-override";
+  }
 
   const vineSpacing = Number(paddock?.vine_spacing);
   const intermediateSpacing = Number(paddock?.intermediate_post_spacing);
@@ -210,8 +243,10 @@ export function deriveMetrics(paddock: any): DerivedMetrics {
     intermediatePostCount,
     emitterCount,
     vineCountSource,
+    rowLengthSource,
   };
 }
+
 
 export function polygonCentroid(points: LatLng[]): LatLng | null {
   if (!points.length) return null;
