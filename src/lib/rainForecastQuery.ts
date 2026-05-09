@@ -13,6 +13,9 @@ export interface RainForecastDay {
   date: string; // YYYY-MM-DD
   rainfall_mm: number | null;
   probability_pct?: number | null;
+  temp_max_c?: number | null;
+  temp_min_c?: number | null;
+  wind_max_kmh?: number | null;
 }
 
 export type RainForecastReason =
@@ -45,6 +48,9 @@ async function tryRpc(vineyardId: string, days: number): Promise<RainForecastRes
     date: String(r.date ?? r.day ?? r.forecast_date ?? ""),
     rainfall_mm: r.rainfall_mm ?? r.rain_mm ?? r.precip_mm ?? r.amount_mm ?? null,
     probability_pct: r.probability_pct ?? r.pop ?? null,
+    temp_max_c: r.temp_max_c ?? r.temperature_max_c ?? null,
+    temp_min_c: r.temp_min_c ?? r.temperature_min_c ?? null,
+    wind_max_kmh: r.wind_max_kmh ?? r.wind_speed_max_kmh ?? null,
   }));
   return { available: true, days: out, source: raw[0]?.source ?? null, via: "rpc" };
 }
@@ -66,6 +72,21 @@ async function getVineyardCoords(
       return { lat, lon, station: row.station_name ?? null };
     }
   }
+  // Fallback: try the vineyards table directly for lat/lon columns.
+  try {
+    const { data } = await supabase
+      .from("vineyards")
+      .select("latitude, longitude, name")
+      .eq("id", vineyardId)
+      .maybeSingle();
+    const lat = (data as any)?.latitude;
+    const lon = (data as any)?.longitude;
+    if (typeof lat === "number" && typeof lon === "number" && !isNaN(lat) && !isNaN(lon)) {
+      return { lat, lon, station: (data as any)?.name ?? null };
+    }
+  } catch {
+    // ignore — column may not exist
+  }
   return null;
 }
 
@@ -78,7 +99,8 @@ async function fetchOpenMeteoForecast(
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${encodeURIComponent(lat)}` +
     `&longitude=${encodeURIComponent(lon)}` +
-    `&daily=precipitation_sum,precipitation_probability_max` +
+    `&daily=precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,wind_speed_10m_max` +
+    `&wind_speed_unit=kmh` +
     `&timezone=auto&forecast_days=${days}`;
   try {
     const r = await fetch(url);
@@ -89,10 +111,16 @@ async function fetchOpenMeteoForecast(
     const dates: string[] = j?.daily?.time ?? [];
     const sums: any[] = j?.daily?.precipitation_sum ?? [];
     const pops: any[] = j?.daily?.precipitation_probability_max ?? [];
+    const tmax: any[] = j?.daily?.temperature_2m_max ?? [];
+    const tmin: any[] = j?.daily?.temperature_2m_min ?? [];
+    const wmax: any[] = j?.daily?.wind_speed_10m_max ?? [];
     const out: RainForecastDay[] = dates.map((d, i) => ({
       date: d,
       rainfall_mm: typeof sums[i] === "number" ? sums[i] : null,
       probability_pct: typeof pops[i] === "number" ? pops[i] : null,
+      temp_max_c: typeof tmax[i] === "number" ? tmax[i] : null,
+      temp_min_c: typeof tmin[i] === "number" ? tmin[i] : null,
+      wind_max_kmh: typeof wmax[i] === "number" ? wmax[i] : null,
     }));
     if (!out.length) return { available: false, reason: "no_data" };
     return { available: true, days: out, source: "open_meteo_forecast", via: "open_meteo" };

@@ -24,6 +24,7 @@ import {
   forecastHeadline,
   forecastUnavailableReason,
   summarizeForecast,
+  type RainForecastDay,
 } from "@/lib/rainForecastQuery";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -250,7 +251,79 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
           }
         />
       </div>
+      <ForecastStrip
+        days={forecast && forecast.available ? forecast.days : null}
+        loading={forecastQ.isLoading}
+        unavailableLabel={forecastInfo.title ?? forecastLabel}
+      />
     </Card>
+  );
+}
+
+// ---------- 7-day forecast strip ----------
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function ForecastStrip({
+  days,
+  loading,
+  unavailableLabel,
+}: {
+  days: RainForecastDay[] | null;
+  loading: boolean;
+  unavailableLabel?: string;
+}) {
+  if (loading) {
+    return (
+      <div className="text-xs text-muted-foreground border-t pt-3">Loading 7-day forecast…</div>
+    );
+  }
+  if (!days || !days.length) {
+    return (
+      <div className="text-xs text-muted-foreground border-t pt-3">
+        7-day forecast unavailable{unavailableLabel ? ` — ${unavailableLabel}` : ""}
+      </div>
+    );
+  }
+  const week = days.slice(0, 7);
+  return (
+    <div className="border-t pt-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2">7-day forecast</div>
+      <div className="grid grid-cols-7 gap-2">
+        {week.map((d) => {
+          const dt = new Date(d.date);
+          const valid = !isNaN(dt.getTime());
+          const dayLabel = valid ? WEEKDAY_SHORT[dt.getDay()] : d.date;
+          const dateLabel = valid ? `${dt.getDate()}/${dt.getMonth() + 1}` : "";
+          return (
+            <div
+              key={d.date}
+              className="rounded-md border bg-muted/30 px-2 py-2 text-center min-w-0"
+            >
+              <div className="text-xs font-medium">{dayLabel}</div>
+              <div className="text-[10px] text-muted-foreground mb-1">{dateLabel}</div>
+              <div className="flex items-center justify-center gap-1 text-xs">
+                <Thermometer className="h-3 w-3 text-muted-foreground" />
+                <span>
+                  {d.temp_max_c != null ? `${fmt(d.temp_max_c, 0)}°` : "—"}
+                  {d.temp_min_c != null ? (
+                    <span className="text-muted-foreground">/{fmt(d.temp_min_c, 0)}°</span>
+                  ) : null}
+                </span>
+              </div>
+              <div className="flex items-center justify-center gap-1 text-xs mt-0.5">
+                <Wind className="h-3 w-3 text-muted-foreground" />
+                <span>{d.wind_max_kmh != null ? `${fmt(d.wind_max_kmh, 0)} km/h` : "—"}</span>
+              </div>
+              <div className="flex items-center justify-center gap-1 text-xs mt-0.5">
+                <CloudRain className="h-3 w-3 text-muted-foreground" />
+                <span>{d.rainfall_mm != null ? `${fmt(d.rainfall_mm, 1)} mm` : "—"}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
