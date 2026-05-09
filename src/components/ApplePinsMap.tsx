@@ -75,12 +75,10 @@ export default function ApplePinsMap({ onUnavailable }: Props) {
 
   const withCoords = useMemo(
     () =>
-      pins
-        .map((p) => {
-          const c = pinDisplayCoords(p as any);
-          return c ? { ...p, latitude: c.lat, longitude: c.lng } : null;
-        })
-        .filter((p): p is typeof pins[number] => !!p),
+      pins.flatMap((p) => {
+        const c = pinDisplayCoords(p as any);
+        return c ? [{ ...p, latitude: c.lat, longitude: c.lng }] : [];
+      }),
     [pins],
   );
 
