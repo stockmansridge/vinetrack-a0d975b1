@@ -61,9 +61,15 @@ function chemicalSummary(tanks: any): { product: string; rate: string; water: st
   };
 }
 
+export interface SprayRecordPdfContext {
+  paddockName?: string | null;
+  operatorName?: string | null;
+}
+
 export function exportSprayRecordPdf(
   record: SprayRecord,
   vineyardName?: string | null,
+  context?: SprayRecordPdfContext,
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
