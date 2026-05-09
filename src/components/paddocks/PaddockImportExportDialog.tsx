@@ -306,8 +306,10 @@ export default function PaddockImportExportDialog() {
                       Calculation only — saved to the block's row-length
                       overrides. Does not affect Live Trip tracking, row
                       guidance, row completion, pins, or map geometry. Empty
-                      cells leave existing overrides unchanged; only blocks
-                      listed above with "clear all" are wiped.
+                      cells leave existing overrides unchanged. Listed rows
+                      are merged into existing overrides; use the literal value
+                      <code className="mx-1 rounded bg-muted px-1">CLEAR</code>
+                      in the cell to wipe a block's overrides.
                     </p>
                     <div className="max-h-24 overflow-y-auto rounded border bg-muted/30 p-2">
                       {plan.rowOverrideChanges.map((c) => (
