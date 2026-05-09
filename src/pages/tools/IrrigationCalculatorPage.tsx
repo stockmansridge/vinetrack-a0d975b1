@@ -164,7 +164,7 @@ export default function IrrigationCalculatorPage() {
     }
     savePaddockIrrigationRate(selectedPaddockId, currentRate);
     setRateSource("paddock");
-    toast({ title: "Saved irrigation rate." });
+    toast({ title: "Saved on this device." });
   };
 
   const forecastDays: ForecastDay[] = useMemo(() => {
