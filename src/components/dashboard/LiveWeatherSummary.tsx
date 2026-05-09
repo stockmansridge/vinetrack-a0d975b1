@@ -111,7 +111,6 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
     return forecastHeadline(summarizeForecast(forecast.days));
   })();
 
-  const queryClient = useQueryClient();
   const refreshing = weatherQ.isFetching || forecastQ.isFetching;
   const refreshAll = () => {
     weatherQ.refetch();
