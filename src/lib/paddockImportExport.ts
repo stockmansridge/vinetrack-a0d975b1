@@ -1,7 +1,11 @@
 // CSV export & import for paddocks/blocks.
-// - Export: includes commonly edited setup fields plus computed metrics (read-only hints).
-// - Import: parses CSV, validates, supports add-new / update-matching / replace-all (soft delete).
-// Writes use the existing Supabase RLS; only operational roles can apply.
+// - Export: includes commonly edited setup fields plus computed metrics
+//   (read-only hints) and per-row length overrides (compact format).
+// - Import: parses CSV, validates, supports add-new / update-matching /
+//   replace-all (soft archive only — never hard delete).
+// Operational geometry (polygon_points, rows[]) is NEVER altered by import.
+// Per-row length overrides are calculation-only data; trip tracking is
+// untouched.
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "./paddockGeometry";
 
@@ -26,6 +30,13 @@ export interface PaddockRow {
   updated_at?: string | null;
 }
 
+// Per-row exact length override entries (calculation-only).
+// rowNumber matches the iOS row.number / rowNumber identifier (decimal allowed).
+export interface RowLengthOverride {
+  rowNumber: number;
+  lengthM: number;
+}
+
 // Columns in import/export CSV. Order matters.
 export const CSV_COLUMNS = [
   "internal_id",
@@ -44,6 +55,9 @@ export const CSV_COLUMNS = [
   "emitter_spacing_m",
   "vine_count_override",
   "row_length_override_m",
+  // Per-row exact lengths — calculation only. Compact format:
+  //   "1:245;2:244.2;3.5:243.8"
+  "row_lengths_override_m",
   // Computed (export-only hints; ignored on import)
   "area_ha_computed",
   "row_count_computed",
@@ -55,7 +69,7 @@ type CsvCol = (typeof CSV_COLUMNS)[number];
 function csvEscape(v: any): string {
   if (v === null || v === undefined || v === "") return "";
   const s = String(v);
-  if (/[\",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
@@ -70,11 +84,45 @@ function firstAlloc(p: PaddockRow): { variety?: string; clone?: string; rootstoc
   };
 }
 
+// ---------- Per-row override (de)serialisation ----------
+
+/** "1:245;2:244.2" → [{rowNumber:1,lengthM:245}, ...].
+ *  Empty/whitespace returns []. Throws on malformed entry. */
+export function parseRowLengthOverrides(raw: string | null | undefined): RowLengthOverride[] {
+  if (!raw) return [];
+  const t = String(raw).trim();
+  if (!t) return [];
+  const out: RowLengthOverride[] = [];
+  const parts = t.split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
+  for (const part of parts) {
+    const m = part.split(":");
+    if (m.length !== 2) throw new Error(`Bad entry "${part}" (expected rowNumber:length)`);
+    const rowNumber = Number(m[0].trim());
+    const lengthM = Number(m[1].trim());
+    if (!Number.isFinite(rowNumber)) throw new Error(`Bad row number "${m[0]}"`);
+    if (!Number.isFinite(lengthM)) throw new Error(`Bad length "${m[1]}"`);
+    if (lengthM <= 0) throw new Error(`Length must be > 0 (row ${rowNumber})`);
+    out.push({ rowNumber, lengthM });
+  }
+  return out;
+}
+
+export function serializeRowLengthOverrides(arr: RowLengthOverride[]): string {
+  return arr
+    .slice()
+    .sort((a, b) => a.rowNumber - b.rowNumber)
+    .map((o) => `${o.rowNumber}:${Number(o.lengthM.toFixed(2))}`)
+    .join(";");
+}
+
 export function buildPaddocksCsv(paddocks: PaddockRow[], vineyardName: string): string {
   const lines = [CSV_COLUMNS.join(",")];
   for (const p of paddocks) {
     const m = deriveMetrics(p);
     const a = firstAlloc(p);
+    // Per-row overrides are not yet persisted in the iOS schema; export blank
+    // here. (Once a sidecar/iOS column exists, populate from that source.)
+    const rowOverridesSerialized = "";
     const row: Record<CsvCol, any> = {
       internal_id: p.id ?? "",
       vineyard_name: vineyardName,
@@ -92,6 +140,7 @@ export function buildPaddocksCsv(paddocks: PaddockRow[], vineyardName: string): 
       emitter_spacing_m: p.emitter_spacing ?? "",
       vine_count_override: p.vine_count_override ?? "",
       row_length_override_m: p.row_length_override ?? "",
+      row_lengths_override_m: rowOverridesSerialized,
       area_ha_computed: m.areaHa > 0 ? m.areaHa.toFixed(4) : "",
       row_count_computed: m.rowCount || "",
       total_row_length_m_computed:
@@ -103,7 +152,12 @@ export function buildPaddocksCsv(paddocks: PaddockRow[], vineyardName: string): 
 }
 
 export function buildPaddocksTemplateCsv(): string {
-  return CSV_COLUMNS.join(",") + "\n";
+  // Header + a single illustrative comment row (commented via leading #)
+  return (
+    CSV_COLUMNS.join(",") +
+    "\n" +
+    `# Example row,My Vineyard,Pinot Noir,2008,Pinot Noir,115,SO4,3,1.5,,,7,2.3,0.6,,,1:245;2:244.2;3.5:243.8,,,\n`
+  );
 }
 
 export function downloadCsv(filename: string, csv: string) {
@@ -171,9 +225,9 @@ export function parseCsv(text: string): string[][] {
     row.push(cur);
     rows.push(row);
   }
-  // Strip trailing fully-empty rows
+  // Strip trailing fully-empty rows and `# …` comment rows
   while (rows.length && rows[rows.length - 1].every((c) => c === "")) rows.pop();
-  return rows;
+  return rows.filter((r) => !(r.length && r[0].trimStart().startsWith("#")));
 }
 
 // ---------- Import validation ----------
@@ -199,6 +253,11 @@ export interface ParsedImportRow {
     emitter_spacing?: number | null;
     vine_count_override?: number | null;
     row_length_override?: number | null;
+    /** Per-row length overrides parsed from `row_lengths_override_m`. */
+    row_lengths_override?: RowLengthOverride[];
+    /** Whether the column was present (even if empty). Used to differentiate
+     *  "leave alone" vs "explicitly clear". */
+    row_lengths_override_provided?: boolean;
   };
 }
 
@@ -208,12 +267,13 @@ export interface ParsedImport {
   unknownColumns: string[];
 }
 
-function num(s: string | undefined, opts: { nonNeg?: boolean } = {}): number | null | "INVALID" {
+function num(s: string | undefined, opts: { nonNeg?: boolean; positive?: boolean } = {}): number | null | "INVALID" {
   if (s === undefined) return null;
   const t = s.trim();
   if (t === "") return null;
   const n = Number(t);
   if (!Number.isFinite(n)) return "INVALID";
+  if (opts.positive && n <= 0) return "INVALID";
   if (opts.nonNeg && n < 0) return "INVALID";
   return n;
 }
@@ -253,15 +313,16 @@ export function parsePaddocksCsv(text: string): ParsedImport {
     const name = (get("name") ?? "").trim();
     if (!name) errors.push("Missing required column 'name'");
 
+    // row_length_override: must be > 0 if provided
     const numericChecks: [string, number | null | "INVALID"][] = [
-      ["row_width", num(get("row_width_m"), { nonNeg: true })],
-      ["vine_spacing", num(get("vine_spacing_m"), { nonNeg: true })],
+      ["row_width", num(get("row_width_m"), { positive: true })],
+      ["vine_spacing", num(get("vine_spacing_m"), { positive: true })],
       ["row_offset", num(get("row_offset_m"), { nonNeg: true })],
       ["row_direction", num(get("row_direction_deg"))],
-      ["intermediate_post_spacing", num(get("intermediate_post_spacing_m"), { nonNeg: true })],
-      ["flow_per_emitter", num(get("flow_per_emitter_lh"), { nonNeg: true })],
-      ["emitter_spacing", num(get("emitter_spacing_m"), { nonNeg: true })],
-      ["row_length_override", num(get("row_length_override_m"), { nonNeg: true })],
+      ["intermediate_post_spacing", num(get("intermediate_post_spacing_m"), { positive: true })],
+      ["flow_per_emitter", num(get("flow_per_emitter_lh"), { positive: true })],
+      ["emitter_spacing", num(get("emitter_spacing_m"), { positive: true })],
+      ["row_length_override", num(get("row_length_override_m"), { positive: true })],
     ];
     const intChecks: [string, number | null | "INVALID"][] = [
       ["planting_year", int(get("planting_year"))],
@@ -275,7 +336,7 @@ export function parsePaddocksCsv(text: string): ParsedImport {
     values.rootstock = get("rootstock") || undefined;
 
     for (const [k, v] of numericChecks) {
-      if (v === "INVALID") errors.push(`Invalid numeric value for ${k}`);
+      if (v === "INVALID") errors.push(`Invalid numeric value for ${k} (must be a positive number)`);
       else (values as any)[k] = v;
     }
     for (const [k, v] of intChecks) {
@@ -285,6 +346,30 @@ export function parsePaddocksCsv(text: string): ParsedImport {
 
     if (values.planting_year != null && (values.planting_year < 1800 || values.planting_year > 2100)) {
       warnings.push(`Planting year ${values.planting_year} looks unusual`);
+    }
+
+    // Per-row length overrides (calculation only)
+    const rawOverride = get("row_lengths_override_m");
+    if (rawOverride !== undefined) {
+      values.row_lengths_override_provided = true;
+      if (rawOverride === "") {
+        values.row_lengths_override = [];
+      } else {
+        try {
+          const parsed = parseRowLengthOverrides(rawOverride);
+          // Duplicate row numbers within entry
+          const seen = new Set<number>();
+          for (const e of parsed) {
+            if (seen.has(e.rowNumber)) {
+              errors.push(`Duplicate row override for row ${e.rowNumber}`);
+            }
+            seen.add(e.rowNumber);
+          }
+          values.row_lengths_override = parsed;
+        } catch (e: any) {
+          errors.push(`row_lengths_override_m: ${e?.message ?? "invalid format"}`);
+        }
+      }
     }
 
     if (name) {
@@ -318,6 +403,13 @@ export interface ApplyPlan {
   toUpdate: { row: ParsedImportRow; existingId: string }[];
   toSkip: { row: ParsedImportRow; reason: string }[];
   toArchive: { id: string; name: string }[]; // for replace-all
+  // Diagnostics for per-row override changes (preview-only until persistence
+  // storage is decided — see notice in dialog).
+  rowOverrideChanges: {
+    blockName: string;
+    count: number;
+    cleared: boolean;
+  }[];
 }
 
 function dbValuesFromImport(
@@ -346,8 +438,9 @@ function dbValuesFromImport(
     const val = (v as any)[from];
     if (val !== undefined) patch[to] = val;
   }
+  // IMPORTANT: never write polygon_points or rows from import — operational
+  // geometry is owned by the iOS app and must not be altered here.
   // variety/clone/rootstock → variety_allocations[0] only when no existing alloc
-  // (keeps production-critical polygon-bound allocations intact).
   if (v.variety || v.clone || v.rootstock) {
     const existingAllocs = Array.isArray(existing?.variety_allocations)
       ? existing!.variety_allocations
@@ -365,8 +458,6 @@ function dbValuesFromImport(
         },
       ];
     }
-    // If existing allocations are present we preserve them silently to avoid
-    // overwriting per-block setup that the portal cannot reconstruct.
   }
   return patch;
 }
@@ -382,7 +473,13 @@ export function buildApplyPlan(
   }
   const validRows = parsed.rows.filter((r) => r.errors.length === 0);
 
-  const plan: ApplyPlan = { toInsert: [], toUpdate: [], toSkip: [], toArchive: [] };
+  const plan: ApplyPlan = {
+    toInsert: [],
+    toUpdate: [],
+    toSkip: [],
+    toArchive: [],
+    rowOverrideChanges: [],
+  };
 
   for (const row of validRows) {
     const existingMatch = byName.get(row.values.name.toLowerCase());
@@ -405,6 +502,15 @@ export function buildApplyPlan(
       } else {
         plan.toInsert.push(row);
       }
+    }
+    // Collect per-row override changes for preview
+    if (row.values.row_lengths_override_provided) {
+      const overrides = row.values.row_lengths_override ?? [];
+      plan.rowOverrideChanges.push({
+        blockName: row.values.name,
+        count: overrides.length,
+        cleared: overrides.length === 0,
+      });
     }
   }
 
@@ -432,6 +538,7 @@ export interface ApplyResult {
   updated: number;
   archived: number;
   skipped: number;
+  rowOverridesQueued: number;
   errors: string[];
 }
 
@@ -445,6 +552,7 @@ export async function applyImport(
     updated: 0,
     archived: 0,
     skipped: plan.toSkip.length,
+    rowOverridesQueued: plan.rowOverrideChanges.reduce((s, c) => s + c.count, 0),
     errors: [],
   };
   const existingById = new Map(existing.map((e) => [e.id!, e]));
@@ -468,7 +576,7 @@ export async function applyImport(
     else result.updated++;
   }
 
-  // Archive (soft delete) for replace-all
+  // Archive (soft delete) for replace-all — never hard delete.
   for (const a of plan.toArchive) {
     const { error } = await (supabase.rpc as any)("soft_delete_paddock", { p_id: a.id });
     if (error) {
@@ -485,6 +593,9 @@ export async function applyImport(
     result.archived++;
   }
 
+  // NOTE: Per-row length overrides are not yet persisted. Storage location is
+  // pending (see PaddockImportExportDialog notice). They are validated and
+  // surfaced in the preview so admins can review the data shape today.
   return result;
 }
 
