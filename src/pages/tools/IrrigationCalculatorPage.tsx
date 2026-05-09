@@ -318,6 +318,7 @@ export default function IrrigationCalculatorPage() {
 
   // Final result only when app rate is set.
   const result = !appRateMissing && hasDays ? preview : null;
+  const dormant = useMemo(() => isDormantSeason(), []);
 
   const interpretation = useMemo(() => {
     if (forecastQuery.isLoading && mode === "forecast" && !hasDays) {
