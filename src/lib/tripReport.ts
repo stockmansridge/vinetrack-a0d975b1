@@ -424,6 +424,113 @@ export function summarizeCoverage(t: Trip): CoverageSummary {
   return { totalPlanned, rowsCovered, completed, skipped, manuallyMarkedComplete, partial };
 }
 
+// ---------- Row-by-row breakdown ----------
+
+const SOURCE_LABELS: Record<string, string> = {
+  auto: "Auto",
+  automatic: "Auto",
+  manual: "Manual",
+  manual_complete: "Manual",
+  end_review: "End review",
+  end_review_completed: "End review",
+  system_recovery: "System recovery",
+  auto_sequence_recover: "System recovery",
+  recovery: "System recovery",
+};
+
+function formatSource(s: any): string {
+  if (s == null) return "Auto";
+  const k = String(s).trim().toLowerCase();
+  return SOURCE_LABELS[k] ?? (k ? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Auto");
+}
+
+function pathRowNumber(p: any): string | null {
+  if (p == null) return null;
+  if (typeof p === "string" || typeof p === "number") return String(p);
+  const v =
+    p.row_number ?? p.rowNumber ?? p.row ?? p.path_row_number ?? p.number ??
+    p.row_label ?? p.rowLabel ?? p.label ?? null;
+  return v == null ? null : String(v);
+}
+
+function pathPaddockId(p: any): string | null {
+  if (!p || typeof p !== "object") return null;
+  const v = p.paddock_id ?? p.paddockId ?? p.block_id ?? p.blockId ?? null;
+  return v == null ? null : String(v);
+}
+
+function pathSource(p: any): string {
+  if (!p || typeof p !== "object") return "Auto";
+  return formatSource(p.source ?? p.completion_source ?? p.completionSource ?? p.method);
+}
+
+function pathKey(p: any): string {
+  return `${pathPaddockId(p) ?? ""}|${pathRowNumber(p) ?? ""}`;
+}
+
+export interface RowLineEntry {
+  row: string;
+  status: "complete" | "partial" | "missed";
+  source: string;
+}
+export interface RowBlockGroup {
+  blockId: string | null;
+  blockName: string;
+  total: number;
+  complete: number;
+  partial: number;
+  missed: number;
+  rows: RowLineEntry[];
+}
+
+export function buildRowsByBlock(
+  t: Trip,
+  paddockNameById?: Map<string, string | null | undefined>,
+): RowBlockGroup[] {
+  const planned = Array.isArray(t.row_sequence) ? t.row_sequence : [];
+  const completed = Array.isArray(t.completed_paths) ? t.completed_paths : [];
+  const skipped = Array.isArray(t.skipped_paths) ? t.skipped_paths : [];
+
+  const completedMap = new Map<string, any>();
+  for (const c of completed) completedMap.set(pathKey(c), c);
+  const skippedMap = new Map<string, any>();
+  for (const s of skipped) skippedMap.set(pathKey(s), s);
+
+  // Use planned as canonical order; if empty fall back to completed+skipped.
+  const ordered: any[] = planned.length ? planned : [...completed, ...skipped];
+
+  const groups = new Map<string, RowBlockGroup>();
+  for (const p of ordered) {
+    const pid = pathPaddockId(p);
+    const key = pid ?? "_unknown";
+    let name = (pid && paddockNameById?.get(pid)) || (p && (p.paddock_name ?? p.paddockName ?? p.block_name)) || (pid ? "Block" : (t.paddock_name ?? "Rows"));
+    let g = groups.get(key);
+    if (!g) {
+      g = { blockId: pid, blockName: String(name), total: 0, complete: 0, partial: 0, missed: 0, rows: [] };
+      groups.set(key, g);
+    }
+    const k = pathKey(p);
+    let status: RowLineEntry["status"];
+    let source: string;
+    if (completedMap.has(k)) {
+      status = "complete";
+      source = pathSource(completedMap.get(k));
+    } else if (skippedMap.has(k)) {
+      status = "missed";
+      source = pathSource(skippedMap.get(k));
+    } else {
+      status = "partial";
+      source = pathSource(p);
+    }
+    g.total += 1;
+    if (status === "complete") g.complete += 1;
+    else if (status === "missed") g.missed += 1;
+    else g.partial += 1;
+    g.rows.push({ row: pathRowNumber(p) ?? "—", status, source });
+  }
+  return Array.from(groups.values());
+}
+
 // ---------- Tank sessions ----------
 
 export interface TankSessionRow {
