@@ -204,7 +204,6 @@ export default function SprayReportsPage() {
             <div className="font-medium text-sm">Yearly spray program</div>
             <div className="text-xs text-muted-foreground mt-0.5">
               Full season program covering planned spray jobs, chemicals, rates and target paddocks.
-              Sourced from <code className="font-mono">spray_jobs</code>.
             </div>
           </div>
           <Badge variant="secondary">{(jobs ?? []).length} planned job{(jobs ?? []).length === 1 ? "" : "s"}</Badge>
