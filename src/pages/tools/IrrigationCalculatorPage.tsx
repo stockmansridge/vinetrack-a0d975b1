@@ -46,6 +46,7 @@ import { fetchIrrigationForecast, type IrrigationForecastResult } from "@/lib/ca
 import {
   formatHoursMinutes,
   interpretRecommendation,
+  isDormantSeason,
   type AdvisorStatus,
 } from "@/lib/calculations/irrigationAdvisor";
 import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
