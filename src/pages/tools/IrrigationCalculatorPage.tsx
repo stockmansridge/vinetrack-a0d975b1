@@ -708,36 +708,47 @@ function ForecastSection({
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>ETo (mm)</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      ETo (mm) <InfoTip text={FIELD_HELP.eto} />
+                    </span>
+                  </TableHead>
                   <TableHead>Rain (mm)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.forecast.days.map((d: ForecastDay) => (
-                  <TableRow key={d.date}>
-                    <TableCell className="whitespace-nowrap">{formatDateLabel(d.date)}</TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder={d.forecastEToMm.toFixed(2)}
-                        value={etoOverrides[d.date] ?? ""}
-                        onChange={(e) => setEtoOverride(d.date, e.target.value)}
-                        className="h-9 max-w-[120px]"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder={d.forecastRainMm.toFixed(1)}
-                        value={rainOverrides[d.date] ?? ""}
-                        onChange={(e) => setRainOverride(d.date, e.target.value)}
-                        className="h-9 max-w-[120px]"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {data.forecast.days.map((d: ForecastDay) => {
+                  const effectiveRain =
+                    rainOverrides[d.date] != null && rainOverrides[d.date] !== ""
+                      ? parseFloat(rainOverrides[d.date])
+                      : d.forecastRainMm;
+                  const rainIsWet = Number.isFinite(effectiveRain) && effectiveRain > 0;
+                  return (
+                    <TableRow key={d.date}>
+                      <TableCell className="whitespace-nowrap">{formatDateLabel(d.date)}</TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder={d.forecastEToMm.toFixed(2)}
+                          value={etoOverrides[d.date] ?? ""}
+                          onChange={(e) => setEtoOverride(d.date, e.target.value)}
+                          className="h-9 max-w-[120px]"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder={d.forecastRainMm.toFixed(1)}
+                          value={rainOverrides[d.date] ?? ""}
+                          onChange={(e) => setRainOverride(d.date, e.target.value)}
+                          className={`h-9 max-w-[120px] ${rainIsWet ? "text-blue-600 font-medium dark:text-blue-400" : ""}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             <Button variant="ghost" size="sm" onClick={resetOverrides}>
