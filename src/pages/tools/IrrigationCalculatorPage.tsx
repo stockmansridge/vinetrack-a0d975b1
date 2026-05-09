@@ -351,7 +351,7 @@ function ForecastSection({
 }: {
   duration: number;
   setDuration: (n: number) => void;
-  query: ReturnType<typeof useQuery<any>>;
+  query: ReturnType<typeof useQuery<IrrigationForecastResult>>;
   etoOverrides: Record<string, string>;
   rainOverrides: Record<string, string>;
   setEtoOverride: (date: string, v: string) => void;
