@@ -4,6 +4,8 @@ import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
+  calculateIrrigationRateFromInfrastructure,
+  calculateVineyardIrrigationRateFromBlocks,
   resolveIrrigationRate,
   saveVineyardIrrigationRate,
   savePaddockIrrigationRate,
@@ -45,6 +47,7 @@ import {
   interpretRecommendation,
   type AdvisorStatus,
 } from "@/lib/calculations/irrigationAdvisor";
+import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
 
 interface DayRow {
   id: string;
@@ -106,7 +109,7 @@ export default function IrrigationCalculatorPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("paddocks")
-        .select("id, name, row_width, emitter_spacing, flow_per_emitter")
+        .select("id, name, row_width, emitter_spacing, flow_per_emitter, polygon_points")
         .eq("vineyard_id", selectedVineyardId!)
         .is("deleted_at", null)
         .order("name");
@@ -117,9 +120,41 @@ export default function IrrigationCalculatorPage() {
         row_width: number | null;
         emitter_spacing: number | null;
         flow_per_emitter: number | null;
+        polygon_points: unknown;
       }>;
     },
   });
+
+  const paddockOptions = useMemo(() => {
+    return (paddocksQuery.data ?? []).map((paddock) => {
+      const computedRate = calculateIrrigationRateFromInfrastructure({
+        rowSpacingMetres: paddock.row_width,
+        emitterSpacingMetres: paddock.emitter_spacing,
+        emitterFlowLitresPerHour: paddock.flow_per_emitter,
+      });
+      const areaHectares = polygonAreaHectares(parsePolygonPoints(paddock.polygon_points));
+
+      return {
+        ...paddock,
+        areaHectares,
+        computedRate,
+      };
+    });
+  }, [paddocksQuery.data]);
+
+  const vineyardComputedFallback = useMemo(() => {
+    return calculateVineyardIrrigationRateFromBlocks(
+      paddockOptions.map((paddock) => ({
+        paddockId: paddock.id,
+        areaHectares: paddock.areaHectares,
+        infrastructure: {
+          rowSpacingMetres: paddock.row_width,
+          emitterSpacingMetres: paddock.emitter_spacing,
+          emitterFlowLitresPerHour: paddock.flow_per_emitter,
+        },
+      })),
+    );
+  }, [paddockOptions]);
 
   // Auto-populate application rate from the full fallback chain whenever
   // scope changes. Shared (database-backed) rates aren't available yet —
@@ -127,9 +162,7 @@ export default function IrrigationCalculatorPage() {
   useEffect(() => {
     if (!selectedVineyardId) return;
     const paddockId = selectedPaddockId === "__vineyard__" ? null : selectedPaddockId;
-    const paddock = paddockId
-      ? (paddocksQuery.data ?? []).find((p) => p.id === paddockId)
-      : null;
+    const paddock = paddockId ? paddockOptions.find((p) => p.id === paddockId) : null;
     const { rate, source } = resolveIrrigationRate({
       vineyardId: selectedVineyardId,
       paddockId,
@@ -142,6 +175,15 @@ export default function IrrigationCalculatorPage() {
             emitterFlowLitresPerHour: paddock.flow_per_emitter,
           }
         : null,
+      vineyardPaddocks: paddockOptions.map((item) => ({
+        paddockId: item.id,
+        areaHectares: item.areaHectares,
+        infrastructure: {
+          rowSpacingMetres: item.row_width,
+          emitterSpacingMetres: item.emitter_spacing,
+          emitterFlowLitresPerHour: item.flow_per_emitter,
+        },
+      })),
     });
     if (rate !== null) {
       setSettings((s) => ({ ...s, irrigationApplicationRateMmPerHour: rate }));
@@ -150,7 +192,7 @@ export default function IrrigationCalculatorPage() {
       setSettings((s) => ({ ...s, irrigationApplicationRateMmPerHour: 0 }));
       setRateSource("none");
     }
-  }, [selectedVineyardId, selectedPaddockId, paddocksQuery.data]);
+  }, [selectedVineyardId, selectedPaddockId, paddockOptions]);
 
   const updateSetting = <K extends keyof IrrigationSettings>(k: K, v: string) => {
     const num = parseFloat(v);
@@ -162,6 +204,7 @@ export default function IrrigationCalculatorPage() {
 
   const currentRate = settings.irrigationApplicationRateMmPerHour;
   const canSave = Number.isFinite(currentRate) && currentRate > 0;
+  const hasAnyComputedBlockRate = paddockOptions.some((paddock) => (paddock.computedRate ?? 0) > 0);
 
   const handleSaveVineyard = () => {
     if (!selectedVineyardId) return;
@@ -295,14 +338,22 @@ export default function IrrigationCalculatorPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__vineyard__">Whole vineyard</SelectItem>
-                {(paddocksQuery.data ?? []).map((p) => (
+                <SelectItem value="__vineyard__">
+                  {vineyardComputedFallback?.rate
+                    ? `Whole vineyard${vineyardComputedFallback.source === "vineyard-computed-average" ? ` · Avg ${fmt(vineyardComputedFallback.rate)} mm/hr` : ` · ${fmt(vineyardComputedFallback.rate)} mm/hr`}`
+                    : "Whole vineyard"}
+                </SelectItem>
+                {paddockOptions.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name || "Unnamed block"}
+                    {p.computedRate ? ` · ${fmt(p.computedRate)} mm/hr` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {selectedPaddockId === "__vineyard__" && !vineyardComputedFallback?.rate && hasAnyComputedBlockRate ? (
+              <p className="text-xs text-muted-foreground">Select a block to use its calculated irrigation rate.</p>
+            ) : null}
           </div>
           <div className="text-xs text-muted-foreground">
             {describeRateSource(rateSource)}
