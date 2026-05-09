@@ -705,6 +705,8 @@ export interface TripPdfContext {
   pinCount?: number | null;
   /** Vineyard logo (signed URL or data URL). Falls back to VineTrack logo. */
   vineyardLogoDataUrl?: string | null;
+  /** Block id → name lookup for grouping rows by block. */
+  paddockNameById?: Map<string, string | null | undefined>;
 }
 
 
