@@ -117,7 +117,7 @@ export default function PaddockImportExportDialog() {
       const result = await applyImport(plan, paddocks, selectedVineyardId);
       const overrideNote =
         result.rowOverridesQueued > 0
-          ? ` (${result.rowOverridesQueued} per-row override(s) reviewed — persistence pending)`
+          ? ` (${result.rowOverridesQueued} per-row override(s) saved)`
           : "";
       if (result.errors.length) {
         toast.error(
