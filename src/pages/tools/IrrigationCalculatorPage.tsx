@@ -210,11 +210,6 @@ export default function IrrigationCalculatorPage() {
             />
           </CardContent>
         )}
-        {validation && (
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{validation}</p>
-          </CardContent>
-        )}
       </Card>
 
       <Tabs value={mode} onValueChange={(v) => setMode(v as "forecast" | "manual")}>
