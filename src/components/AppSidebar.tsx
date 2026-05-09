@@ -66,6 +66,15 @@ const setup = [
   { title: "Weather settings", url: "/setup/weather", icon: Cloud },
 ];
 
+const tools = [
+  { title: "Irrigation Calculator", url: "/tools/irrigation", icon: Droplet },
+  { title: "Spray / Tank Mix Calculator", url: "/tools/spray-tank-mix", icon: BeakerIcon },
+  { title: "Yield Estimation", url: "/tools/yield-estimation", icon: Grape },
+  { title: "Degree Days / BEDD", url: "/tools/degree-days", icon: Thermometer },
+  { title: "Seeding Mix Calculator", url: "/tools/seeding-mix", icon: SproutIcon },
+  { title: "Block / Row Calculator", url: "/tools/block-row", icon: Grid3x3 },
+];
+
 const comingSoon: { title: string; url: string; icon: any }[] = [];
 
 const settings = [
