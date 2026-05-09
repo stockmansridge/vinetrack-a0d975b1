@@ -24,6 +24,7 @@ import {
   forecastHeadline,
   forecastUnavailableReason,
   summarizeForecast,
+  type RainForecastDay,
 } from "@/lib/rainForecastQuery";
 
 const SOURCE_LABELS: Record<string, string> = {
