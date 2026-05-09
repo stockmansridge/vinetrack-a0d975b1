@@ -37,6 +37,7 @@ import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
+import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 
 const queryClient = new QueryClient();
 
