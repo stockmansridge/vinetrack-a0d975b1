@@ -257,8 +257,8 @@ export default function IrrigationCalculatorPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Apply to</CardTitle>
           <CardDescription>
-            Choose whole vineyard or a specific block. Saved application rates are reused next time
-            you open the advisor.
+            Choose whole vineyard or a specific block. Saved application rates are remembered on
+            this device for next time.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] items-end">
@@ -269,7 +269,7 @@ export default function IrrigationCalculatorPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__vineyard__">Whole vineyard (default)</SelectItem>
+                <SelectItem value="__vineyard__">Whole vineyard</SelectItem>
                 {(paddocksQuery.data ?? []).map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name || "Unnamed block"}
@@ -279,29 +279,35 @@ export default function IrrigationCalculatorPage() {
             </Select>
           </div>
           <div className="text-xs text-muted-foreground">
-            {rateSource === "paddock" && "Using saved rate for this block."}
-            {rateSource === "vineyard" && "Using vineyard default rate."}
+            {rateSource === "paddock" && "Using rate saved on this device for this block."}
+            {rateSource === "vineyard" && "Using vineyard rate saved on this device."}
             {rateSource === "manual" && "Using manually entered rate."}
             {rateSource === "none" &&
               "No saved rate yet — enter mm/hr below and save when ready."}
           </div>
         </CardContent>
         {canSave && (
-          <CardContent className="pt-0 flex flex-wrap gap-2">
-            {selectedPaddockId === "__vineyard__" ? (
-              <Button size="sm" onClick={handleSaveVineyard}>
-                <Save className="h-4 w-4 mr-1" /> Save as vineyard default
-              </Button>
-            ) : (
-              <>
-                <Button size="sm" onClick={handleSavePaddock}>
-                  <Save className="h-4 w-4 mr-1" /> Save for this block
+          <CardContent className="pt-0 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {selectedPaddockId === "__vineyard__" ? (
+                <Button size="sm" onClick={handleSaveVineyard}>
+                  <Save className="h-4 w-4 mr-1" /> Save on this device
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleSaveVineyard}>
-                  Also save as vineyard default
-                </Button>
-              </>
-            )}
+              ) : (
+                <>
+                  <Button size="sm" onClick={handleSavePaddock}>
+                    <Save className="h-4 w-4 mr-1" /> Save for this block on this device
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleSaveVineyard}>
+                    Also save as vineyard rate on this device
+                  </Button>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This value will be remembered on this browser. Shared saving across devices is coming
+              soon.
+            </p>
           </CardContent>
         )}
       </Card>
