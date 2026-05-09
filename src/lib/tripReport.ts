@@ -293,14 +293,22 @@ const pick = (obj: any, ...keys: string[]) => {
   return undefined;
 };
 
+function formatRate(v: string | undefined): string | undefined {
+  if (v == null || v === "") return undefined;
+  const s = String(v).trim();
+  if (!s) return undefined;
+  if (/kg\s*\/\s*ha/i.test(s)) return s;
+  return /^[\d.]+$/.test(s) ? `${s} kg/ha` : s;
+}
+
 function describeBox(label: string, box: any): SeedingBox | null {
   if (!box || typeof box !== "object") return null;
   const keys = Object.keys(box).filter((k) => box[k] != null && box[k] !== "");
   if (keys.length === 0) return null;
   return {
     name: label,
-    contents: pick(box, "contents", "seed", "product", "mix"),
-    rate: pick(box, "rate", "rate_kg_per_ha", "rate_per_ha", "rateKgPerHa"),
+    contents: pick(box, "contents", "seed", "product", "mix", "mix_name", "mixName", "cover_crop", "coverCrop", "name", "label"),
+    rate: formatRate(pick(box, "rate", "rate_kg_per_ha", "rate_per_ha", "rateKgPerHa", "rate_kgPerHa")),
     notes: pick(box, "notes"),
     shutter_slide: pick(box, "shutter_slide", "shutterSlide"),
     bottom_flap: pick(box, "bottom_flap", "bottomFlap"),
@@ -317,7 +325,7 @@ function describeMixLine(m: any): SeedingMixLine {
     name: pick(m, "name", "species"),
     percent: pick(m, "percent", "percentage", "pct"),
     seed_box: pick(m, "seed_box", "seedBox", "box"),
-    kg_per_ha: pick(m, "kg_per_ha", "kgPerHa", "rate_kg_per_ha"),
+    kg_per_ha: formatRate(pick(m, "kg_per_ha", "kgPerHa", "rate_kg_per_ha", "rate")),
     supplier: pick(m, "supplier", "manufacturer"),
     raw: m,
   };
@@ -414,6 +422,113 @@ export function summarizeCoverage(t: Trip): CoverageSummary {
   const manuallyMarkedComplete = manuallyCompletedCount(t.manual_correction_events);
   const partial = Math.max(0, totalPlanned - completed - skipped);
   return { totalPlanned, rowsCovered, completed, skipped, manuallyMarkedComplete, partial };
+}
+
+// ---------- Row-by-row breakdown ----------
+
+const SOURCE_LABELS: Record<string, string> = {
+  auto: "Auto",
+  automatic: "Auto",
+  manual: "Manual",
+  manual_complete: "Manual",
+  end_review: "End review",
+  end_review_completed: "End review",
+  system_recovery: "System recovery",
+  auto_sequence_recover: "System recovery",
+  recovery: "System recovery",
+};
+
+function formatSource(s: any): string {
+  if (s == null) return "Auto";
+  const k = String(s).trim().toLowerCase();
+  return SOURCE_LABELS[k] ?? (k ? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Auto");
+}
+
+function pathRowNumber(p: any): string | null {
+  if (p == null) return null;
+  if (typeof p === "string" || typeof p === "number") return String(p);
+  const v =
+    p.row_number ?? p.rowNumber ?? p.row ?? p.path_row_number ?? p.number ??
+    p.row_label ?? p.rowLabel ?? p.label ?? null;
+  return v == null ? null : String(v);
+}
+
+function pathPaddockId(p: any): string | null {
+  if (!p || typeof p !== "object") return null;
+  const v = p.paddock_id ?? p.paddockId ?? p.block_id ?? p.blockId ?? null;
+  return v == null ? null : String(v);
+}
+
+function pathSource(p: any): string {
+  if (!p || typeof p !== "object") return "Auto";
+  return formatSource(p.source ?? p.completion_source ?? p.completionSource ?? p.method);
+}
+
+function pathKey(p: any): string {
+  return `${pathPaddockId(p) ?? ""}|${pathRowNumber(p) ?? ""}`;
+}
+
+export interface RowLineEntry {
+  row: string;
+  status: "complete" | "partial" | "missed";
+  source: string;
+}
+export interface RowBlockGroup {
+  blockId: string | null;
+  blockName: string;
+  total: number;
+  complete: number;
+  partial: number;
+  missed: number;
+  rows: RowLineEntry[];
+}
+
+export function buildRowsByBlock(
+  t: Trip,
+  paddockNameById?: Map<string, string | null | undefined>,
+): RowBlockGroup[] {
+  const planned = Array.isArray(t.row_sequence) ? t.row_sequence : [];
+  const completed = Array.isArray(t.completed_paths) ? t.completed_paths : [];
+  const skipped = Array.isArray(t.skipped_paths) ? t.skipped_paths : [];
+
+  const completedMap = new Map<string, any>();
+  for (const c of completed) completedMap.set(pathKey(c), c);
+  const skippedMap = new Map<string, any>();
+  for (const s of skipped) skippedMap.set(pathKey(s), s);
+
+  // Use planned as canonical order; if empty fall back to completed+skipped.
+  const ordered: any[] = planned.length ? planned : [...completed, ...skipped];
+
+  const groups = new Map<string, RowBlockGroup>();
+  for (const p of ordered) {
+    const pid = pathPaddockId(p);
+    const key = pid ?? "_unknown";
+    let name = (pid && paddockNameById?.get(pid)) || (p && (p.paddock_name ?? p.paddockName ?? p.block_name)) || (pid ? "Block" : (t.paddock_name ?? "Rows"));
+    let g = groups.get(key);
+    if (!g) {
+      g = { blockId: pid, blockName: String(name), total: 0, complete: 0, partial: 0, missed: 0, rows: [] };
+      groups.set(key, g);
+    }
+    const k = pathKey(p);
+    let status: RowLineEntry["status"];
+    let source: string;
+    if (completedMap.has(k)) {
+      status = "complete";
+      source = pathSource(completedMap.get(k));
+    } else if (skippedMap.has(k)) {
+      status = "missed";
+      source = pathSource(skippedMap.get(k));
+    } else {
+      status = "partial";
+      source = pathSource(p);
+    }
+    g.total += 1;
+    if (status === "complete") g.complete += 1;
+    else if (status === "missed") g.missed += 1;
+    else g.partial += 1;
+    g.rows.push({ row: pathRowNumber(p) ?? "—", status, source });
+  }
+  return Array.from(groups.values());
 }
 
 // ---------- Tank sessions ----------
@@ -590,6 +705,8 @@ export interface TripPdfContext {
   pinCount?: number | null;
   /** Vineyard logo (signed URL or data URL). Falls back to VineTrack logo. */
   vineyardLogoDataUrl?: string | null;
+  /** Block id → name lookup for grouping rows by block. */
+  paddockNameById?: Map<string, string | null | undefined>;
 }
 
 
@@ -691,10 +808,29 @@ function ensureSpace(doc: jsPDF, y: number, needed: number, marginBottom = 56): 
 }
 
 function sectionHeader(doc: jsPDF, title: string, y: number): number {
-  y = ensureSpace(doc, y, 28);
-  doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0);
+  y = ensureSpace(doc, y, 32);
+  doc.setFont("helvetica", "bold").setFontSize(13).setTextColor(30, 60, 40);
   doc.text(title, 40, y);
-  return y + 6;
+  doc.setDrawColor(210);
+  doc.setLineWidth(0.5);
+  doc.line(40, y + 4, doc.internal.pageSize.getWidth() - 40, y + 4);
+  doc.setTextColor(0);
+  return y + 14;
+}
+
+// Render a clean two-column "field / value" list (iOS-style, no dark header).
+function renderFieldList(doc: jsPDF, rows: [string, string][], y: number): number {
+  autoTable(doc, {
+    startY: y,
+    theme: "plain",
+    styles: { fontSize: 10, cellPadding: { top: 2, right: 4, bottom: 2, left: 0 }, textColor: 30 },
+    columnStyles: {
+      0: { cellWidth: 140, textColor: 110 },
+      1: { textColor: 20, fontStyle: "bold" as any },
+    },
+    body: rows,
+  });
+  return (doc as any).lastAutoTable.finalY + 12;
 }
 
 function tripTitle(ctx: TripPdfContext, t: Trip): string {
@@ -750,99 +886,94 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
   ];
-  autoTable(doc, {
-    startY: y,
-    theme: "grid",
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [50, 50, 50] },
-    columnStyles: { 0: { cellWidth: 130, fontStyle: "bold" } },
-    head: [["Field", "Value"]],
-    body: tripDetailsRows,
-  });
-  y = (doc as any).lastAutoTable.finalY + 18;
+  y = renderFieldList(doc, tripDetailsRows, y);
+  y += 6;
 
   // 3. Seeding Details (only when applicable)
   const seeding = parseSeeding(t.seeding_details);
   if (seeding && t.trip_function === "seeding") {
     y = sectionHeader(doc, "Seeding Details", y);
-    const body: [string, string][] = [];
-    if (seeding.sowing_depth_cm != null)
-      body.push(["Sowing depth", `${seeding.sowing_depth_cm} cm`]);
-    body.push(["Front box used", seeding.front_used ? "Yes" : "No"]);
-    body.push(["Rear box used", seeding.back_used ? "Yes" : "No"]);
-    autoTable(doc, {
-      startY: y,
-      theme: "grid",
-      styles: { fontSize: 9, cellPadding: 4 },
-      columnStyles: { 0: { cellWidth: 130, fontStyle: "bold" } },
-      head: [["Field", "Value"]],
-      body,
-    });
-    y = (doc as any).lastAutoTable.finalY + 12;
+    const overview: [string, string][] = [];
+    if (seeding.sowing_depth_cm != null) overview.push(["Sowing depth", `${seeding.sowing_depth_cm} cm`]);
+    overview.push(["Front box used", seeding.front_used ? "Yes" : "No"]);
+    overview.push(["Rear box used", seeding.back_used ? "Yes" : "No"]);
+    y = renderFieldList(doc, overview, y);
 
     for (const b of seeding.boxes) {
-      y = ensureSpace(doc, y, 60);
-      doc.setFont("helvetica", "bold").setFontSize(10);
-      doc.text(b.name, 40, y);
-      y += 4;
-      autoTable(doc, {
-        startY: y,
-        theme: "striped",
-        styles: { fontSize: 9, cellPadding: 3 },
-        columnStyles: { 0: { cellWidth: 130, fontStyle: "bold" } },
-        body: [
-          ["Mix", fmt(b.contents)],
-          ["Rate/ha", fmt(b.rate)],
-          ["Shutter slide", fmt(b.shutter_slide)],
-          ["Bottom flap", fmt(b.bottom_flap)],
-          ["Metering wheel", fmt(b.metering_wheel)],
-          ["Seed volume", fmt(b.seed_volume)],
-          ["Gearbox setting", fmt(b.gearbox_setting)],
-        ].filter(([, v]) => v !== "—" || true),
-      });
-      y = (doc as any).lastAutoTable.finalY + 10;
+      y = ensureSpace(doc, y, 80);
+      y = sectionHeader(doc, b.name, y);
+      const rows: [string, string][] = [
+        ["Mix", fmt(b.contents)],
+        ["Rate/ha", fmt(b.rate)],
+        ["Shutter slide", fmt(b.shutter_slide)],
+        ["Bottom flap", fmt(b.bottom_flap)],
+        ["Metering wheel", fmt(b.metering_wheel)],
+        ["Seed volume", fmt(b.seed_volume)],
+        ["Gearbox setting", fmt(b.gearbox_setting)],
+      ];
+      y = renderFieldList(doc, rows, y);
     }
 
     if (seeding.mix_lines.length > 0) {
-      y = ensureSpace(doc, y, 40);
-      doc.setFont("helvetica", "bold").setFontSize(10);
-      doc.text("Mix Lines", 40, y);
-      y += 4;
+      y = ensureSpace(doc, y, 60);
+      y = sectionHeader(doc, "Mix Lines", y);
       const mixWithPct = withCalculatedPercents(seeding.mix_lines);
-      autoTable(doc, {
-        startY: y,
-        theme: "grid",
-        styles: { fontSize: 9, cellPadding: 3 },
-        head: [["Name", "% of mix", "Seed box", "Kg/ha", "Supplier"]],
-        body: mixWithPct.map((m) => [
-          fmt(m.name),
-          fmt(m.percent),
-          fmt(m.seed_box),
-          fmt(m.kg_per_ha),
-          fmt(m.supplier),
-        ]),
+      mixWithPct.forEach((m, idx) => {
+        y = ensureSpace(doc, y, 64);
+        doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(20);
+        doc.text(`Line ${idx + 1}${m.name ? ` — ${m.name}` : ""}`, 40, y);
+        y += 4;
+        const rows: [string, string][] = [
+          ["% of mix", fmt(m.percent)],
+          ["Seed box", fmt(m.seed_box)],
+          ["Kg/ha", fmt(m.kg_per_ha)],
+        ];
+        if (m.supplier) rows.push(["Supplier", fmt(m.supplier)]);
+        y = renderFieldList(doc, rows, y);
       });
-      y = (doc as any).lastAutoTable.finalY + 18;
     }
   }
 
-  // 4. Rows / Paths Covered
-  const cov = summarizeCoverage(t);
-  y = sectionHeader(doc, "Rows / Paths Covered", y);
-  autoTable(doc, {
-    startY: y,
-    theme: "grid",
-    styles: { fontSize: 9, cellPadding: 4 },
-    head: [["Total planned", "Completed", "Partial", "Missed", "Manually marked complete"]],
-    body: [[
-      String(cov.totalPlanned),
-      String(cov.completed),
-      String(cov.partial),
-      String(cov.skipped),
-      String(cov.manuallyMarkedComplete),
-    ]],
-  });
-  y = (doc as any).lastAutoTable.finalY + 18;
+  // 4. Rows / Paths — row-by-row grouped by block (iOS style).
+  y = ensureSpace(doc, y, 60);
+  y = sectionHeader(doc, "Rows / Paths", y);
+  const groups = buildRowsByBlock(t, ctx.paddockNameById);
+  if (groups.length === 0) {
+    doc.setFont("helvetica", "italic").setFontSize(10).setTextColor(120);
+    doc.text("No row sequence recorded.", 40, y);
+    doc.setTextColor(0);
+    y += 14;
+  } else {
+    for (const g of groups) {
+      y = ensureSpace(doc, y, 40 + g.rows.length * 14);
+      doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(20);
+      doc.text(g.blockName, 40, y);
+      y += 12;
+      doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(90);
+      doc.text(
+        `Total planned ${g.total}   Complete ${g.complete}   Partial ${g.partial}   Missed ${g.missed}`,
+        40,
+        y,
+      );
+      y += 12;
+      for (const r of g.rows) {
+        y = ensureSpace(doc, y, 14);
+        // Status indicator: filled circle in green/orange/red
+        const color: [number, number, number] =
+          r.status === "complete" ? [34, 160, 70] :
+          r.status === "partial" ? [220, 150, 30] : [200, 50, 50];
+        doc.setFillColor(color[0], color[1], color[2]);
+        doc.circle(46, y - 3, 3, "F");
+        doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(20);
+        const statusLabel =
+          r.status === "complete" ? "Complete" :
+          r.status === "partial" ? "Partial" : "Not complete";
+        doc.text(`${r.row}  ${statusLabel} — ${r.source}`, 56, y);
+        y += 12;
+      }
+      y += 6;
+    }
+  }
 
   // 5. Tank Sessions (spray only)
   if (t.trip_function === "spraying") {
@@ -851,8 +982,9 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       y = sectionHeader(doc, "Tank Sessions", y);
       autoTable(doc, {
         startY: y,
-        theme: "striped",
-        styles: { fontSize: 9, cellPadding: 4 },
+        theme: "plain",
+        styles: { fontSize: 9, cellPadding: 4, textColor: 30 },
+        headStyles: { fontStyle: "bold", textColor: 60, lineWidth: { bottom: 0.5 } as any, lineColor: [200, 200, 200] as any },
         head: [["Tank #", "Status", "Rows covered", "Duration", "Fill duration"]],
         body: sessions.map((s) => [s.number, s.status, s.rows, s.duration, s.fillDuration]),
       });
@@ -860,55 +992,31 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     }
   }
 
-  // 6. Manual Corrections — collapsed + filtered for readability
-  const corrections = summariseCorrections(t.manual_correction_events);
-  const visibleCorrections = corrections.filter((c) => !c.hidden || c.count >= 5);
-  if (visibleCorrections.length > 0) {
-    y = sectionHeader(doc, "Manual Corrections", y);
-    autoTable(doc, {
-      startY: y,
-      theme: "striped",
-      styles: { fontSize: 9, cellPadding: 4 },
-      head: [["Time", "Event"]],
-      body: visibleCorrections.map((c) => [
-        c.timestampLabel,
-        c.hidden
-          ? { content: c.label, styles: { textColor: 130, fontStyle: "italic" } as any }
-          : c.label,
-      ]),
-    });
-    y = (doc as any).lastAutoTable.finalY + 18;
-  }
+  // (Manual Corrections section intentionally removed from customer report.)
 
-  // 7. Costs — placeholder section (only render if trip carries cost data)
+  // 6. Costs — placeholder section (only render if trip carries cost data)
   const costs = (t as any).costs ?? (t as any).cost_lines;
   if (Array.isArray(costs) && costs.length > 0) {
     y = sectionHeader(doc, "Costs", y);
-    autoTable(doc, {
-      startY: y,
-      theme: "grid",
-      styles: { fontSize: 9, cellPadding: 4 },
-      head: [["Item", "Amount"]],
-      body: costs.map((c: any) => [
-        String(c.label ?? c.name ?? "—"),
-        String(c.amount ?? c.value ?? "—"),
-      ]),
-    });
-    y = (doc as any).lastAutoTable.finalY + 18;
+    y = renderFieldList(
+      doc,
+      costs.map((c: any) => [String(c.label ?? c.name ?? "—"), String(c.amount ?? c.value ?? "—")] as [string, string]),
+      y,
+    );
   }
 
-  // 8. Route Map — prefer satellite tile composite, fall back to SVG preview.
-  y = sectionHeader(doc, "Route Map", y);
-  const mapH = 240;
-  y = ensureSpace(doc, y, mapH + 10);
+  // 7. Route Map — own page so it stays large and readable.
+  doc.addPage();
+  let mapY = 56;
+  mapY = sectionHeader(doc, "Route Map", mapY);
   const points = extractPathPoints(t.path_points);
-  const satelliteDataUrl = (ctx as any).satelliteRouteDataUrl as string | null | undefined;
+  const pageH = doc.internal.pageSize.getHeight();
   const mapW = pageW - 80;
+  const mapH = pageH - mapY - 70; // leave room for footer
+  const satelliteDataUrl = (ctx as any).satelliteRouteDataUrl as string | null | undefined;
   const satelliteSize = (ctx as any).satelliteRouteSize as { width: number; height: number } | undefined;
   if (satelliteDataUrl && points.length >= 2 && satelliteSize && satelliteSize.width > 0 && satelliteSize.height > 0) {
     try {
-      // Preserve aspect ratio so the route overlay is not skewed relative to
-      // the satellite tile background.
       const srcAspect = satelliteSize.width / satelliteSize.height;
       const boxAspect = mapW / mapH;
       let drawW = mapW;
@@ -919,26 +1027,24 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
         drawW = mapH * srcAspect;
       }
       const offX = 40 + (mapW - drawW) / 2;
-      const offY = y + (mapH - drawH) / 2;
-      // Background frame for letterboxing
+      const offY = mapY + (mapH - drawH) / 2;
       doc.setFillColor(245, 245, 245);
-      doc.rect(40, y, mapW, mapH, "F");
+      doc.rect(40, mapY, mapW, mapH, "F");
       doc.addImage(satelliteDataUrl, "PNG", offX, offY, drawW, drawH);
       doc.setDrawColor(180);
       doc.setLineWidth(0.5);
-      doc.rect(40, y, mapW, mapH);
+      doc.rect(40, mapY, mapW, mapH);
     } catch {
-      drawRouteMap(doc, points, 40, y, mapW, mapH);
+      drawRouteMap(doc, points, 40, mapY, mapW, mapH);
     }
   } else {
     if (points.length >= 2 && !satelliteDataUrl) {
       doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(120);
-      doc.text("Satellite imagery unavailable — route-only preview shown.", 40, y - 2);
+      doc.text("Satellite imagery unavailable — route-only preview shown.", 40, mapY - 2);
       doc.setTextColor(0);
     }
-    drawRouteMap(doc, points, 40, y, mapW, mapH);
+    drawRouteMap(doc, points, 40, mapY, mapW, mapH);
   }
-  y += mapH + 12;
 
   // 9. Footer (every page)
   const totalPages = doc.getNumberOfPages();
@@ -1016,5 +1122,9 @@ export async function downloadTripPdf(
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
-  doc.save(`TripReport_${vineyardSeg}_${fnSeg}_${date}.pdf`);
+  // Append HHMM so duplicate downloads keep clean, customer-facing names
+  // (no "(Lovable)" / "(1)" suffix from the browser dedupe logic).
+  const now = new Date();
+  const stamp = `${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  doc.save(`TripReport_${vineyardSeg}_${fnSeg}_${date}_${stamp}.pdf`);
 }

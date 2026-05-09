@@ -462,6 +462,7 @@ function TripSheet({
                     blockNames,
                     pinCount,
                     vineyardLogoUrl: vineyardLogoUrl ?? null,
+                    paddockNameById,
                   });
                 }}
               >
