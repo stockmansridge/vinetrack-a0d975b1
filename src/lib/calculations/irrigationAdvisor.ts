@@ -1,18 +1,46 @@
 // Advisor-level interpretation on top of the pure irrigation calculation.
 import type { IrrigationRecommendationResult } from "./irrigation";
 
-export type AdvisorStatus = "none" | "light" | "recommended" | "high";
+export type AdvisorStatus = "none" | "light" | "recommended" | "high" | "dormant";
 
 export interface AdvisorInterpretation {
   status: AdvisorStatus;
   label: string;
   headline: string;
   detail: string;
+  dormant?: boolean;
+}
+
+export interface InterpretOptions {
+  /** When true, replace the recommendation language with a dormant-season caution. */
+  dormant?: boolean;
+}
+
+/**
+ * Southern Hemisphere dormant-season heuristic.
+ * June, July, August are treated as likely-dormant. This is intentionally
+ * coarse for the first version; once block phenology / growth-stage data
+ * is wired in we can refine per-block.
+ */
+export function isDormantSeason(date: Date = new Date()): boolean {
+  const m = date.getMonth(); // 0 = Jan
+  return m === 5 || m === 6 || m === 7;
 }
 
 export function interpretRecommendation(
   result: IrrigationRecommendationResult | null,
+  opts: InterpretOptions = {},
 ): AdvisorInterpretation {
+  if (opts.dormant) {
+    return {
+      status: "dormant",
+      label: "Dormant season",
+      headline: "Dormant season caution",
+      detail:
+        "Vines are likely dormant. The calculated water requirement is shown for reference, but irrigation may not be needed unless soil moisture is low, vines are young, or conditions are unusually dry.",
+      dormant: true,
+    };
+  }
   if (!result) {
     return {
       status: "none",
