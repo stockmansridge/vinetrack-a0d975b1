@@ -65,12 +65,15 @@ const STATUS_STYLES: Record<AdvisorStatus, string> = {
 
 export default function IrrigationCalculatorPage() {
   const { selectedVineyardId } = useVineyard();
+  const { toast } = useToast();
   const [mode, setMode] = useState<"forecast" | "manual">("forecast");
   const [duration, setDuration] = useState<number>(5);
+  const [selectedPaddockId, setSelectedPaddockId] = useState<string>("__vineyard__");
 
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
+  const [rateSource, setRateSource] = useState<"paddock" | "vineyard" | "manual" | "none">("none");
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
