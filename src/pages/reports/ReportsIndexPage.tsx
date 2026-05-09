@@ -8,9 +8,9 @@ const sections = [
     to: "/reports/spray",
     title: "Spray Reports",
     description:
-      "Individual spray jobs, yearly spray program (PDF / Excel). Built from spray_records.",
+      "Individual spray records and yearly spray program exports (PDF / Excel).",
     icon: FileText,
-    status: "Partial",
+    status: "Available",
   },
   {
     to: "/reports/rainfall",
