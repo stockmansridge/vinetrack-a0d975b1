@@ -611,6 +611,7 @@ export default function VineyardOverviewMap({
                 title={selectedPaddock.paddock.name ?? "Unnamed block"}
                 subtitle="Block details"
                 onClose={() => setSelection(null)}
+                accentColor={selectedPaddock.color}
               >
                 <PaddockDetailContent
                   paddock={selectedPaddock.paddock}
