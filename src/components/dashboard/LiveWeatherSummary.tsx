@@ -315,10 +315,19 @@ function ForecastStrip({
                 <Wind className="h-3 w-3 text-muted-foreground" />
                 <span>{d.wind_max_kmh != null ? `${fmt(d.wind_max_kmh, 0)} km/h` : "—"}</span>
               </div>
-              <div className="flex items-center justify-center gap-1 text-xs mt-0.5">
-                <CloudRain className="h-3 w-3 text-muted-foreground" />
-                <span>{d.rainfall_mm != null ? `${fmt(d.rainfall_mm, 1)} mm` : "—"}</span>
-              </div>
+              {(() => {
+                const heavy = (d.rainfall_mm ?? 0) >= 5;
+                return (
+                  <div
+                    className={`flex items-center justify-center gap-1 text-xs mt-0.5 rounded px-1 ${
+                      heavy ? "bg-blue-500/15 text-blue-700 font-semibold" : ""
+                    }`}
+                  >
+                    <CloudRain className={`h-3 w-3 ${heavy ? "text-blue-600" : "text-muted-foreground"}`} />
+                    <span>{d.rainfall_mm != null ? `${fmt(d.rainfall_mm, 1)} mm` : "—"}</span>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
