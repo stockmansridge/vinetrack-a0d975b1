@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save } from "lucide-react";
+import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save, Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -45,6 +46,7 @@ import { fetchIrrigationForecast, type IrrigationForecastResult } from "@/lib/ca
 import {
   formatHoursMinutes,
   interpretRecommendation,
+  isDormantSeason,
   type AdvisorStatus,
 } from "@/lib/calculations/irrigationAdvisor";
 import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
@@ -66,7 +68,46 @@ const STATUS_STYLES: Record<AdvisorStatus, string> = {
   light: "bg-primary/10 text-primary border-primary/30",
   recommended: "bg-primary/15 text-primary border-primary/40",
   high: "bg-destructive/10 text-destructive border-destructive/30",
+  dormant: "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60",
 };
+
+const FIELD_HELP: Record<string, string> = {
+  cropCoefficientKc:
+    "Adjusts reference ETo to better match vine water use. Lower values represent lower vine water use; higher values represent larger canopy and higher demand.",
+  irrigationApplicationRateMmPerHour:
+    "How many millimetres of water your irrigation system applies per hour. This converts irrigation depth into irrigation time.",
+  irrigationEfficiencyPercent:
+    "Allows for losses in the irrigation system and soil. Lower efficiency means more water must be applied to achieve the target amount.",
+  rainfallEffectivenessPercent:
+    "Estimates how much rain is useful to the vines after losses such as runoff, evaporation, canopy interception, or shallow wetting.",
+  replacementPercent:
+    "The percentage of the calculated deficit you want to replace. 100% replaces the full calculated deficit.",
+  soilMoistureBufferMm:
+    "An allowance for water already available in the soil. This reduces the irrigation requirement.",
+  recentRain:
+    "Rain that has already fallen recently. The Advisor uses this to reduce the irrigation requirement.",
+  eto:
+    "Reference evapotranspiration. It estimates water loss from a reference crop through evaporation and transpiration. Vine water use is estimated by multiplying ETo by the crop coefficient.",
+};
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="More information"
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
+        {text}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function IrrigationCalculatorPage() {
   const { selectedVineyardId } = useVineyard();
@@ -277,6 +318,7 @@ export default function IrrigationCalculatorPage() {
 
   // Final result only when app rate is set.
   const result = !appRateMissing && hasDays ? preview : null;
+  const dormant = useMemo(() => isDormantSeason(), []);
 
   const interpretation = useMemo(() => {
     if (forecastQuery.isLoading && mode === "forecast" && !hasDays) {
@@ -308,8 +350,8 @@ export default function IrrigationCalculatorPage() {
         detail: "All other forecast figures are shown below.",
       };
     }
-    return interpretRecommendation(result);
-  }, [forecastQuery.isLoading, forecastQuery.data, mode, hasDays, appRateMissing, result]);
+    return interpretRecommendation(result, { dormant });
+  }, [forecastQuery.isLoading, forecastQuery.data, mode, hasDays, appRateMissing, result, dormant]);
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -420,9 +462,9 @@ export default function IrrigationCalculatorPage() {
               }
             />
             <Stat
-              label="Recommended duration"
+              label={dormant ? "Calculated irrigation equivalent" : "Recommended duration"}
               value={result ? formatHoursMinutes(result.recommendedIrrigationMinutes) : "—"}
-              highlight
+              highlight={!dormant}
             />
           </CardContent>
         )}
@@ -477,7 +519,10 @@ export default function IrrigationCalculatorPage() {
             { k: "soilMoistureBufferMm", label: "Soil moisture buffer (mm)", step: "0.1" },
           ].map((f) => (
             <div key={f.k} className="space-y-1">
-              <Label className="text-xs">{f.label}</Label>
+              <Label className="text-xs flex items-center gap-1">
+                {f.label}
+                {FIELD_HELP[f.k] ? <InfoTip text={FIELD_HELP[f.k]} /> : null}
+              </Label>
               <Input
                 type="number"
                 step={f.step}
@@ -488,7 +533,10 @@ export default function IrrigationCalculatorPage() {
             </div>
           ))}
           <div className="space-y-1">
-            <Label className="text-xs">Recent actual rain (mm)</Label>
+            <Label className="text-xs flex items-center gap-1">
+              Recent actual rain (mm)
+              <InfoTip text={FIELD_HELP.recentRain} />
+            </Label>
             <Input
               type="number"
               step="0.1"
@@ -510,7 +558,11 @@ export default function IrrigationCalculatorPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Day</TableHead>
-                  <TableHead>ETo</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      ETo <InfoTip text={FIELD_HELP.eto} />
+                    </span>
+                  </TableHead>
                   <TableHead>Rain</TableHead>
                   <TableHead>Crop use</TableHead>
                   <TableHead>Effective rain</TableHead>
@@ -522,9 +574,13 @@ export default function IrrigationCalculatorPage() {
                   <TableRow key={i}>
                     <TableCell>{formatDateLabel(d.date)}</TableCell>
                     <TableCell>{fmt(d.forecastEToMm)} mm</TableCell>
-                    <TableCell>{fmt(d.forecastRainMm)} mm</TableCell>
+                    <TableCell className={d.forecastRainMm > 0 ? "text-blue-600 font-medium dark:text-blue-400" : ""}>
+                      {fmt(d.forecastRainMm)} mm
+                    </TableCell>
                     <TableCell>{fmt(d.cropUseMm)} mm</TableCell>
-                    <TableCell>{fmt(d.effectiveRainMm)} mm</TableCell>
+                    <TableCell className={d.effectiveRainMm > 0 ? "text-blue-600 font-medium dark:text-blue-400" : ""}>
+                      {fmt(d.effectiveRainMm)} mm
+                    </TableCell>
                     <TableCell>{fmt(d.dailyDeficitMm)} mm</TableCell>
                   </TableRow>
                 ))}
@@ -652,36 +708,47 @@ function ForecastSection({
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>ETo (mm)</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      ETo (mm) <InfoTip text={FIELD_HELP.eto} />
+                    </span>
+                  </TableHead>
                   <TableHead>Rain (mm)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.forecast.days.map((d: ForecastDay) => (
-                  <TableRow key={d.date}>
-                    <TableCell className="whitespace-nowrap">{formatDateLabel(d.date)}</TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder={d.forecastEToMm.toFixed(2)}
-                        value={etoOverrides[d.date] ?? ""}
-                        onChange={(e) => setEtoOverride(d.date, e.target.value)}
-                        className="h-9 max-w-[120px]"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder={d.forecastRainMm.toFixed(1)}
-                        value={rainOverrides[d.date] ?? ""}
-                        onChange={(e) => setRainOverride(d.date, e.target.value)}
-                        className="h-9 max-w-[120px]"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {data.forecast.days.map((d: ForecastDay) => {
+                  const effectiveRain =
+                    rainOverrides[d.date] != null && rainOverrides[d.date] !== ""
+                      ? parseFloat(rainOverrides[d.date])
+                      : d.forecastRainMm;
+                  const rainIsWet = Number.isFinite(effectiveRain) && effectiveRain > 0;
+                  return (
+                    <TableRow key={d.date}>
+                      <TableCell className="whitespace-nowrap">{formatDateLabel(d.date)}</TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder={d.forecastEToMm.toFixed(2)}
+                          value={etoOverrides[d.date] ?? ""}
+                          onChange={(e) => setEtoOverride(d.date, e.target.value)}
+                          className="h-9 max-w-[120px]"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder={d.forecastRainMm.toFixed(1)}
+                          value={rainOverrides[d.date] ?? ""}
+                          onChange={(e) => setRainOverride(d.date, e.target.value)}
+                          className={`h-9 max-w-[120px] ${rainIsWet ? "text-blue-600 font-medium dark:text-blue-400" : ""}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             <Button variant="ghost" size="sm" onClick={resetOverrides}>
