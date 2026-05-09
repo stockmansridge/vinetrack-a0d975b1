@@ -8,6 +8,7 @@
 //   3. If we still have no coordinates, return a clear reason so the UI can
 //      surface it (e.g. "Forecast unavailable — vineyard coordinates not set").
 import { supabase } from "@/integrations/ios-supabase/client";
+import { parsePolygonPoints, polygonCentroid } from "@/lib/paddockGeometry";
 
 export interface RainForecastDay {
   date: string; // YYYY-MM-DD
