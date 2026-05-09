@@ -278,7 +278,13 @@ export default function PinsPage() {
                 {!isLoading && !error && sorted.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
-                      {filter ? "No pins match this filter." : "No pins found for this vineyard."}
+                      {filter
+                        ? "No pins match the current filters."
+                        : statusFilter === "active"
+                          ? "No active pins found."
+                          : statusFilter === "completed"
+                            ? "No completed pins found."
+                            : "No pins found."}
                     </TableCell>
                   </TableRow>
                 )}
