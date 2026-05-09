@@ -41,6 +41,9 @@ import {
   downloadCsv,
   downloadTripPdf,
 } from "@/lib/tripReport";
+import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { countTripPins } from "@/lib/tripPinCount";
+
 
 interface PaddockLite {
   id: string;
