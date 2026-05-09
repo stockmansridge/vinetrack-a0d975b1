@@ -8,7 +8,9 @@ import { initMapKit } from "@/lib/mapkit";
 type Status = "checking" | "apple" | "fallback";
 type Forced = "auto" | "apple" | "osm";
 
-export default function PinsMapView() {
+export type PinStatusFilter = "active" | "completed" | "all";
+
+export default function PinsMapView({ statusFilter = "active" }: { statusFilter?: PinStatusFilter } = {}) {
   const [status, setStatus] = useState<Status>("checking");
   const [reason, setReason] = useState<string | null>(null);
   const [forced, setForced] = useState<Forced>("auto");
