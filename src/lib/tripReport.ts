@@ -886,16 +886,8 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
   ];
-  autoTable(doc, {
-    startY: y,
-    theme: "grid",
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [50, 50, 50] },
-    columnStyles: { 0: { cellWidth: 130, fontStyle: "bold" } },
-    head: [["Field", "Value"]],
-    body: tripDetailsRows,
-  });
-  y = (doc as any).lastAutoTable.finalY + 18;
+  y = renderFieldList(doc, tripDetailsRows, y);
+  y += 6;
 
   // 3. Seeding Details (only when applicable)
   const seeding = parseSeeding(t.seeding_details);
