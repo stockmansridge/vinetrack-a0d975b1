@@ -115,13 +115,17 @@ export default function PaddockImportExportDialog() {
     setBusy(true);
     try {
       const result = await applyImport(plan, paddocks, selectedVineyardId);
+      const overrideNote =
+        result.rowOverridesQueued > 0
+          ? ` (${result.rowOverridesQueued} per-row override(s) reviewed — persistence pending)`
+          : "";
       if (result.errors.length) {
         toast.error(
-          `Import finished with ${result.errors.length} error(s). Inserted ${result.inserted}, updated ${result.updated}, archived ${result.archived}.`,
+          `Import finished with ${result.errors.length} error(s). Created ${result.inserted}, updated ${result.updated}, archived ${result.archived}.${overrideNote}`,
         );
       } else {
         toast.success(
-          `Imported: ${result.inserted} new, ${result.updated} updated, ${result.archived} archived, ${result.skipped} skipped.`,
+          `Created ${result.inserted}, updated ${result.updated}, archived ${result.archived}, skipped ${result.skipped}.${overrideNote}`,
         );
       }
       await queryClient.invalidateQueries({ queryKey: ["list", "paddocks"] });
