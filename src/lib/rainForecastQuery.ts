@@ -96,10 +96,16 @@ async function fetchOpenMeteoForecast(
     const dates: string[] = j?.daily?.time ?? [];
     const sums: any[] = j?.daily?.precipitation_sum ?? [];
     const pops: any[] = j?.daily?.precipitation_probability_max ?? [];
+    const tmax: any[] = j?.daily?.temperature_2m_max ?? [];
+    const tmin: any[] = j?.daily?.temperature_2m_min ?? [];
+    const wmax: any[] = j?.daily?.wind_speed_10m_max ?? [];
     const out: RainForecastDay[] = dates.map((d, i) => ({
       date: d,
       rainfall_mm: typeof sums[i] === "number" ? sums[i] : null,
       probability_pct: typeof pops[i] === "number" ? pops[i] : null,
+      temp_max_c: typeof tmax[i] === "number" ? tmax[i] : null,
+      temp_min_c: typeof tmin[i] === "number" ? tmin[i] : null,
+      wind_max_kmh: typeof wmax[i] === "number" ? wmax[i] : null,
     }));
     if (!out.length) return { available: false, reason: "no_data" };
     return { available: true, days: out, source: "open_meteo_forecast", via: "open_meteo" };
