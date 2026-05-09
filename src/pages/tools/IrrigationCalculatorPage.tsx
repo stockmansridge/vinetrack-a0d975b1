@@ -30,7 +30,7 @@ import {
   type ForecastDay,
   type IrrigationSettings,
 } from "@/lib/calculations/irrigation";
-import { fetchIrrigationForecast } from "@/lib/calculations/irrigationForecast";
+import { fetchIrrigationForecast, type IrrigationForecastResult } from "@/lib/calculations/irrigationForecast";
 import {
   formatHoursMinutes,
   interpretRecommendation,
@@ -76,12 +76,12 @@ export default function IrrigationCalculatorPage() {
     { id: newId(), label: "Day 3", eto: "", rain: "" },
   ]);
 
-  const forecastQuery = useQuery({
+  const forecastQuery = useQuery<IrrigationForecastResult>({
     queryKey: ["irrigation-forecast", selectedVineyardId, duration],
-    queryFn: () =>
+    queryFn: async () =>
       selectedVineyardId
         ? fetchIrrigationForecast(selectedVineyardId, duration)
-        : Promise.resolve({ available: false, reason: "no_coords" } as const),
+        : ({ available: false, reason: "no_coords" } as IrrigationForecastResult),
     enabled: !!selectedVineyardId && mode === "forecast",
     staleTime: 1000 * 60 * 30,
   });
