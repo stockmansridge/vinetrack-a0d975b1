@@ -108,7 +108,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const forecastInfo = (() => {
     if (forecastQ.isLoading) return { label: "Loading forecast…", title: undefined as string | undefined };
     if (!forecast) return { label: "Forecast unavailable", title: "No response from forecast service" };
-    if (!forecast.available) {
+    if (forecast.available === false) {
       return {
         label: "Forecast unavailable",
         title: forecastUnavailableReason(forecast.reason, forecast.message),
