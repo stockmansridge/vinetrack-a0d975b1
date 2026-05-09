@@ -112,6 +112,13 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
     return forecastHeadline(summarizeForecast(forecast.days));
   })();
 
+  const queryClient = useQueryClient();
+  const refreshing = weatherQ.isFetching || forecastQ.isFetching;
+  const refreshAll = () => {
+    weatherQ.refetch();
+    forecastQ.refetch();
+  };
+
   const headerRight = (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <Badge variant="outline" className="gap-1">
@@ -129,11 +136,16 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
           updated {formatDistanceToNowStrict(new Date(reading.observed_at))} ago
         </span>
       )}
-      {stale && reading && (
-        <Badge variant="outline" className="bg-amber-500/15 text-amber-700 border-amber-500/30">
-          Stale
-        </Badge>
-      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2"
+        onClick={refreshAll}
+        disabled={refreshing}
+      >
+        <RefreshCw className={`h-3.5 w-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+        Refresh
+      </Button>
     </div>
   );
 
@@ -165,6 +177,16 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
               <CloudRain className="h-3 w-3" />
               {forecastLabel}
             </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2"
+              onClick={refreshAll}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </div>
         </div>
       </Card>
@@ -173,11 +195,19 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
 
   const wind = reading.wind_speed_kmh;
   const dir = windCardinal(reading.wind_direction_deg);
+  const observedAgo = reading.observed_at
+    ? formatDistanceToNowStrict(new Date(reading.observed_at))
+    : null;
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className={`p-4 space-y-3 ${stale ? "border-amber-500/40 bg-amber-500/5" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-medium">Live vineyard weather</div>
+        <div className="text-sm font-medium flex items-center gap-2">
+          {stale && <AlertTriangle className="h-4 w-4 text-amber-600" />}
+          {stale
+            ? `Weather data stale — last updated ${observedAgo} ago`
+            : "Live vineyard weather"}
+        </div>
         {headerRight}
       </div>
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
