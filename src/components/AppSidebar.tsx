@@ -17,6 +17,13 @@ import {
   Sprout,
   Settings,
   Database,
+  Calculator,
+  Droplet,
+  SprayCan,
+  Grape,
+  Thermometer,
+  Sprout as SproutIcon,
+  Grid3x3,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
