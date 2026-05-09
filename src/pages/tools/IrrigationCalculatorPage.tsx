@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save } from "lucide-react";
+import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save, Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
