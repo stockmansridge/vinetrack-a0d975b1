@@ -402,7 +402,7 @@ function ForecastSection({
         {query.isLoading && (
           <p className="text-sm text-muted-foreground">Loading forecast…</p>
         )}
-        {data && !data.available && (
+        {data && data.available === false && (
           <Alert>
             <AlertTitle>Forecast unavailable</AlertTitle>
             <AlertDescription>
