@@ -1,6 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, RefreshCw, CloudSun, Pencil } from "lucide-react";
+import { Plus, Trash2, RefreshCw, CloudSun, Pencil, Save } from "lucide-react";
+import { supabase } from "@/integrations/ios-supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import {
+  resolveIrrigationRate,
+  saveVineyardIrrigationRate,
+  savePaddockIrrigationRate,
+} from "@/lib/calculations/irrigationDefaults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
