@@ -262,33 +262,66 @@ export default function PaddockImportExportDialog() {
                   <ModeCard
                     value="add-new"
                     title="Add new only"
-                    desc="Skip rows whose name already exists."
+                    desc="Create new blocks. Skip rows whose name already exists."
                   />
                   <ModeCard
                     value="update-matching"
                     title="Update matching"
-                    desc="Match by name within this vineyard."
+                    desc="Update setup fields on blocks matched by name. Geometry untouched."
                   />
                   <ModeCard
                     value="replace-all"
                     title="Replace / start again"
-                    desc="Archive blocks not present in CSV. Dangerous."
+                    desc="Update matching, insert new, soft-archive any block missing from CSV."
                     danger
                   />
                 </RadioGroup>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                <Stat label="Insert" value={plan.toInsert.length} />
-                <Stat label="Update" value={plan.toUpdate.length} />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+                <Stat label="Created" value={plan.toInsert.length} />
+                <Stat label="Updated" value={plan.toUpdate.length} />
                 <Stat
-                  label="Archive"
+                  label="Archived"
                   value={plan.toArchive.length}
                   warn={plan.toArchive.length > 0}
                 />
-                <Stat label="Skip" value={plan.toSkip.length} />
+                <Stat label="Skipped" value={plan.toSkip.length} />
+                <Stat
+                  label="Warnings"
+                  value={totalWarnings}
+                  warn={totalWarnings > 0}
+                />
                 <Stat label="Errors" value={totalErrors} warn={totalErrors > 0} />
               </div>
+
+              {plan.rowOverrideChanges.length > 0 && (
+                <Alert>
+                  <AlertTitle className="text-sm">
+                    Row length override changes ({plan.rowOverrideChanges.length} block
+                    {plan.rowOverrideChanges.length === 1 ? "" : "s"})
+                  </AlertTitle>
+                  <AlertDescription className="space-y-1 text-xs">
+                    <p className="text-muted-foreground">
+                      Calculation only — does not affect Live Trip tracking.
+                      Persistence pending schema decision; values shown for
+                      review only.
+                    </p>
+                    <div className="max-h-24 overflow-y-auto rounded border bg-muted/30 p-2">
+                      {plan.rowOverrideChanges.map((c) => (
+                        <div key={c.blockName} className="flex justify-between">
+                          <span className="font-medium">{c.blockName}</span>
+                          <span className="text-muted-foreground">
+                            {c.cleared
+                              ? "clear all overrides"
+                              : `${c.count} row override${c.count === 1 ? "" : "s"}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {(totalErrors > 0 || totalWarnings > 0 || plan.toSkip.length > 0) && (
                 <ScrollArea className="h-40 rounded border p-2 text-xs">
