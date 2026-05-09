@@ -57,7 +57,8 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
     enabled: !!selectedVineyardId,
     queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
   });
-  const pins = pinsResult?.pins ?? [];
+  const allPins = pinsResult?.pins ?? [];
+  const pins = useMemo(() => applyPinStatusFilter(allPins, statusFilter), [allPins, statusFilter]);
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
