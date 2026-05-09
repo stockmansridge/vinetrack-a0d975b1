@@ -347,6 +347,34 @@ export function parseSeeding(details: any): ParsedSeeding | null {
   };
 }
 
+/**
+ * Returns mix lines with `percent` populated. If percent is missing but
+ * kg/ha values are present, computes percent within the line's seed box
+ * (or across all lines if no box is set). Display-only — never written back.
+ */
+export function withCalculatedPercents(lines: SeedingMixLine[]): SeedingMixLine[] {
+  if (!Array.isArray(lines) || lines.length === 0) return lines;
+  // Group by normalised seed_box label (default "_all" when unset).
+  const groups = new Map<string, { total: number; lines: SeedingMixLine[] }>();
+  for (const l of lines) {
+    const key = (l.seed_box ?? "").trim().toLowerCase() || "_all";
+    const kg = Number(l.kg_per_ha);
+    const g = groups.get(key) ?? { total: 0, lines: [] };
+    if (Number.isFinite(kg) && kg > 0) g.total += kg;
+    g.lines.push(l);
+    groups.set(key, g);
+  }
+  return lines.map((l) => {
+    if (l.percent != null && l.percent !== "") return l;
+    const key = (l.seed_box ?? "").trim().toLowerCase() || "_all";
+    const g = groups.get(key);
+    const kg = Number(l.kg_per_ha);
+    if (!g || g.total <= 0 || !Number.isFinite(kg) || kg <= 0) return l;
+    return { ...l, percent: `${((kg / g.total) * 100).toFixed(1)}%` };
+  });
+}
+
+
 // ---------- Coverage summary ----------
 
 function len(v: any): number {
