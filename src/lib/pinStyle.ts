@@ -218,3 +218,18 @@ export function pinDisplayCoords(
   if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
   return null;
 }
+
+export type PinStatusFilter = "active" | "completed" | "all";
+
+export function pinIsCompleted(pin: { is_completed?: boolean | null }): boolean {
+  return pin?.is_completed === true;
+}
+
+export function applyPinStatusFilter<T extends { is_completed?: boolean | null }>(
+  pins: T[],
+  filter: PinStatusFilter,
+): T[] {
+  if (filter === "all") return pins;
+  if (filter === "completed") return pins.filter(pinIsCompleted);
+  return pins.filter((p) => !pinIsCompleted(p));
+}
