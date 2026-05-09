@@ -72,6 +72,21 @@ async function getVineyardCoords(
       return { lat, lon, station: row.station_name ?? null };
     }
   }
+  // Fallback: try the vineyards table directly for lat/lon columns.
+  try {
+    const { data } = await supabase
+      .from("vineyards")
+      .select("latitude, longitude, name")
+      .eq("id", vineyardId)
+      .maybeSingle();
+    const lat = (data as any)?.latitude;
+    const lon = (data as any)?.longitude;
+    if (typeof lat === "number" && typeof lon === "number" && !isNaN(lat) && !isNaN(lon)) {
+      return { lat, lon, station: (data as any)?.name ?? null };
+    }
+  } catch {
+    // ignore — column may not exist
+  }
   return null;
 }
 
