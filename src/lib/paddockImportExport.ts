@@ -123,9 +123,14 @@ export function buildPaddocksCsv(paddocks: PaddockRow[], vineyardName: string): 
   for (const p of paddocks) {
     const m = deriveMetrics(p);
     const a = firstAlloc(p);
-    // Per-row overrides are not yet persisted in the iOS schema; export blank
-    // here. (Once a sidecar/iOS column exists, populate from that source.)
-    const rowOverridesSerialized = "";
+    // Per-row overrides from the JSONB column → compact CSV form.
+    const overrideEntries: RowLengthOverride[] =
+      p.row_length_overrides && typeof p.row_length_overrides === "object"
+        ? Object.entries(p.row_length_overrides)
+            .map(([k, v]) => ({ rowNumber: Number(k), lengthM: Number(v) }))
+            .filter((e) => Number.isFinite(e.rowNumber) && Number.isFinite(e.lengthM) && e.lengthM > 0)
+        : [];
+    const rowOverridesSerialized = serializeRowLengthOverrides(overrideEntries);
     const row: Record<CsvCol, any> = {
       internal_id: p.id ?? "",
       vineyard_name: vineyardName,
