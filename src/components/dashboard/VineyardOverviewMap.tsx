@@ -296,8 +296,8 @@ export default function VineyardOverviewMap({
     if (polyPts.length) return polyPts;
     const fallback: LatLng[] = [];
     for (const t of parsedTrips) for (const pt of t.points) fallback.push(pt);
-    for (const pin of pinsWithCoords) {
-      fallback.push({ lat: Number(pin.latitude), lng: Number(pin.longitude) });
+    for (const { coords } of pinsWithCoords) {
+      fallback.push({ lat: coords.lat, lng: coords.lng });
     }
     return fallback;
   }, [parsedPaddocks, parsedTrips, pinsWithCoords]);
