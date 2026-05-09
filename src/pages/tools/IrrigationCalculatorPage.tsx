@@ -75,7 +75,7 @@ export default function IrrigationCalculatorPage() {
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
-  const [rateSource, setRateSource] = useState<"paddock" | "vineyard" | "manual" | "none">("none");
+  const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
