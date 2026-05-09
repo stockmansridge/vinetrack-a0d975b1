@@ -235,8 +235,8 @@ function EmptyState({ title, message }: { title: string; message: string }) {
 function RpcErrorState({ reason, message }: { reason: "rpc_missing" | "forbidden" | "error"; message: string }) {
   const map = {
     rpc_missing: {
-      title: "Rainfall service not available",
-      msg: "The get_daily_rainfall RPC is not deployed yet. Ask Rork to expose it on the backend.",
+      title: "Rainfall service unavailable",
+      msg: "Rainfall data is temporarily unavailable. Please try again later or contact support if this persists.",
     },
     forbidden: {
       title: "Permission denied",
