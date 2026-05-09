@@ -48,6 +48,9 @@ async function tryRpc(vineyardId: string, days: number): Promise<RainForecastRes
     date: String(r.date ?? r.day ?? r.forecast_date ?? ""),
     rainfall_mm: r.rainfall_mm ?? r.rain_mm ?? r.precip_mm ?? r.amount_mm ?? null,
     probability_pct: r.probability_pct ?? r.pop ?? null,
+    temp_max_c: r.temp_max_c ?? r.temperature_max_c ?? null,
+    temp_min_c: r.temp_min_c ?? r.temperature_min_c ?? null,
+    wind_max_kmh: r.wind_max_kmh ?? r.wind_speed_max_kmh ?? null,
   }));
   return { available: true, days: out, source: raw[0]?.source ?? null, via: "rpc" };
 }
