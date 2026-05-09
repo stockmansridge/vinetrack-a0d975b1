@@ -33,7 +33,7 @@ function makePinElement(hex: string) {
   return el;
 }
 
-export default function ApplePinsMap({ onUnavailable }: Props) {
+export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
