@@ -22,7 +22,7 @@ import {
   type LatLng,
 } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
-import { pinStyle, formatRowNumber, formatAttachedRow, formatDrivingPath, pinDisplayCoords } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayCoords } from "@/lib/pinStyle";
 import { initMapKit } from "@/lib/mapkit";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
