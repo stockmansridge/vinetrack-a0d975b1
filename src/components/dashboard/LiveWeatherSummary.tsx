@@ -8,7 +8,11 @@ import {
   Thermometer,
   Wind,
   CloudOff,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
+
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
