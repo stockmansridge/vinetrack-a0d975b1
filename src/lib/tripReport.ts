@@ -588,7 +588,10 @@ export interface TripPdfContext {
   vineyardName?: string | null;
   blockNames?: string[];
   pinCount?: number | null;
+  /** Vineyard logo (signed URL or data URL). Falls back to VineTrack logo. */
+  vineyardLogoDataUrl?: string | null;
 }
+
 
 function drawRouteMap(
   doc: jsPDF,
