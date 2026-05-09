@@ -154,8 +154,7 @@ export default function SprayReportsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Spray Reports</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Generate compliance documents from spray data captured by the VineTrack iOS app.
-          Exports are read-only and never modify field data.
+          Export completed spray records and yearly spray programs from VineTrack spray data.
         </p>
       </div>
 
@@ -205,7 +204,6 @@ export default function SprayReportsPage() {
             <div className="font-medium text-sm">Yearly spray program</div>
             <div className="text-xs text-muted-foreground mt-0.5">
               Full season program covering planned spray jobs, chemicals, rates and target paddocks.
-              Sourced from <code className="font-mono">spray_jobs</code>.
             </div>
           </div>
           <Badge variant="secondary">{(jobs ?? []).length} planned job{(jobs ?? []).length === 1 ? "" : "s"}</Badge>
@@ -242,23 +240,17 @@ export default function SprayReportsPage() {
 
       <Card className="p-4 space-y-2 bg-muted/30">
         <div className="flex items-center gap-2 font-medium text-sm">
-          <Info className="h-4 w-4" /> Data readiness
+          <Info className="h-4 w-4" /> Report data
         </div>
         <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
+          <li>Individual spray record PDFs are generated from completed spray records.</li>
           <li>
-            <span className="font-medium text-foreground">Spray records:</span>{" "}
-            {records.length} completed record{records.length === 1 ? "" : "s"} available in{" "}
-            <code className="font-mono">spray_records</code>.
+            Yearly spray program exports are generated from planned spray jobs, templates,
+            and linked completed spray records where available.
           </li>
           <li>
-            <span className="font-medium text-foreground">Spray jobs:</span>{" "}
-            {(jobs ?? []).length} planned job{(jobs ?? []).length === 1 ? "" : "s"} across{" "}
-            {yearsAvailable.length} year{yearsAvailable.length === 1 ? "" : "s"} in{" "}
-            <code className="font-mono">spray_jobs</code>.
-          </li>
-          <li>
-            All exports are generated client-side from existing iOS data — no writes are made
-            to vineyard records.
+            Reports are generated as VineTrack documents for review, compliance, and
+            record keeping.
           </li>
         </ul>
       </Card>

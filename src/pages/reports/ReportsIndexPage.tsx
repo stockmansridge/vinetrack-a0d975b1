@@ -8,9 +8,9 @@ const sections = [
     to: "/reports/spray",
     title: "Spray Reports",
     description:
-      "Individual spray jobs, yearly spray program (PDF / Excel). Built from spray_records.",
+      "Individual spray records and yearly spray program exports (PDF / Excel).",
     icon: FileText,
-    status: "Partial",
+    status: "Available",
   },
   {
     to: "/reports/rainfall",
@@ -36,9 +36,8 @@ export default function ReportsIndexPage() {
       <div>
         <h1 className="text-2xl font-semibold">Reports &amp; Exports</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Vineyard-level reports for Owners and Managers. This section is being
-          built out — placeholder pages indicate what is coming and what is
-          currently blocked by missing backend data.
+          Vineyard-level reports for Owners and Managers. Generate compliance
+          documents and exports from your VineTrack data.
         </p>
       </div>
 

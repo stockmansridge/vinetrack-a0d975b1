@@ -465,12 +465,7 @@ export default function DocumentsPage() {
           <div>
             Trip and Rainfall reports are generated on demand from current data.
             Spray Job and Yearly Spray Program PDFs/CSVs open the Spray Jobs page
-            where rich chemical/equipment lookups are available.
-          </div>
-          <div>
-            Future iOS-generated PDFs, CSVs and Excel files (spray compliance,
-            irrigation, growth stage, yield estimation) will appear in this same
-            list once a documents storage bucket is connected.
+            where rich chemical and equipment details are available.
           </div>
         </div>
       </Card>
