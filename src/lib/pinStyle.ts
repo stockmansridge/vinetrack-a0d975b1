@@ -165,41 +165,56 @@ export interface PinAttachmentLike {
   longitude?: number | null;
 }
 
-/** "Attached to Row 14 — Left" or null when no vine-row attachment. */
+/** Value-only: "Row 14" — side belongs to the driving path, not the attached row. */
 export function formatAttachedRow(pin: PinAttachmentLike): string | null {
   const r = pin.pin_row_number;
   if (r == null || !Number.isFinite(Number(r))) return null;
-  const side = titleCaseSide(pin.pin_side);
-  return side ? `Attached to Row ${r} — ${side}` : `Attached to Row ${r}`;
+  return `Row ${r}`;
 }
 
 /**
- * "Driving Path 14.5" — uses driving_row_number when present.
- * Does NOT fall back to legacy row_number; legacy is handled separately by
- * `formatLegacyRow` so callers can choose the right wording.
+ * Value-only: "14.5 — Right side" (or "14.5" when no side known).
+ * Does NOT fall back to legacy row_number; legacy is handled by `formatLegacyRow`.
  */
 export function formatDrivingPath(pin: PinAttachmentLike): string | null {
   const d = pin.driving_row_number;
   if (d == null || !Number.isFinite(Number(d))) return null;
   const n = Number(d);
-  return `Driving Path ${Number.isInteger(n) ? `${n}.5` : n}`;
+  const num = Number.isInteger(n) ? `${n}.5` : `${n}`;
+  const side = titleCaseSide(pin.pin_side);
+  return side ? `${num} — ${side} side` : num;
 }
 
-/** Legacy "Row 14.5" — used when neither pin_row_number nor driving_row_number is present. */
+/** Value-only: "Right side" — used when pin_side is known but no driving path. */
+export function formatPinSideOnly(pin: PinAttachmentLike): string | null {
+  if (pin.driving_row_number != null && Number.isFinite(Number(pin.driving_row_number))) return null;
+  const side = titleCaseSide(pin.pin_side);
+  return side ? `${side} side` : null;
+}
+
+/** Legacy value-only "14.5" — used when no new attachment fields exist. */
 export function formatLegacyRow(pin: PinAttachmentLike): string | null {
   if (pin.row_number == null || !Number.isFinite(Number(pin.row_number))) return null;
-  return `Row ${formatRowNumber(pin.row_number)}`;
+  return formatRowNumber(pin.row_number);
 }
 
 /**
- * Best display string for a pin's row attachment — combines attached row
- * and driving path on separate lines when both exist. Returns null when
- * the pin has no row metadata at all.
+ * Compact summary for table cells / popups — combines labelled lines:
+ *   "Attached row: Row 14"
+ *   "Driving path: 14.5 — Right side"
  */
 export function formatPinRowSummary(pin: PinAttachmentLike): string | null {
-  const lines = [formatAttachedRow(pin), formatDrivingPath(pin)].filter(
-    (s): s is string => !!s,
-  );
+  const lines: string[] = [];
+  const attached = formatAttachedRow(pin);
+  const driving = formatDrivingPath(pin);
+  const sideOnly = formatPinSideOnly(pin);
+  if (attached) lines.push(`Attached row: ${attached}`);
+  if (driving) lines.push(`Driving path: ${driving}`);
+  else if (sideOnly) lines.push(`Side: ${sideOnly}`);
+  if (!lines.length) {
+    const legacy = formatLegacyRow(pin);
+    if (legacy) lines.push(`Row: ${legacy}`);
+  }
   return lines.length ? lines.join("\n") : null;
 }
 

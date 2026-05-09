@@ -22,7 +22,7 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
+import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -316,7 +316,7 @@ export default function PinsPage() {
                         {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
-                        {formatAttachedRow(p as any) ?? formatDrivingPath(p as any) ?? formatLegacyRow(p as any) ?? "—"}
+                        {formatPinRowSummary(p as any) ?? "—"}
                       </TableCell>
                       <TableCell>
                         {(p as any).is_completed ? (
