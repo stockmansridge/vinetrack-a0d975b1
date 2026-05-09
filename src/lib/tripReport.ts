@@ -1122,5 +1122,9 @@ export async function downloadTripPdf(
   const vineyardSeg = safeFileSegment(ctx.vineyardName, "Vineyard");
   const fnSeg = safeFileSegment(ctx.tripFunctionLabel ?? t.trip_function, "Trip");
   const date = (t.start_time ?? t.created_at ?? "").slice(0, 10) || "trip";
-  doc.save(`TripReport_${vineyardSeg}_${fnSeg}_${date}.pdf`);
+  // Append HHMM so duplicate downloads keep clean, customer-facing names
+  // (no "(Lovable)" / "(1)" suffix from the browser dedupe logic).
+  const now = new Date();
+  const stamp = `${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  doc.save(`TripReport_${vineyardSeg}_${fnSeg}_${date}_${stamp}.pdf`);
 }
