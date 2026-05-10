@@ -103,6 +103,13 @@ export default function TripReportsPage() {
   const [operator, setOperator] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
