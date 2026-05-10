@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
+import vinetrackLogo from "@/assets/vinetrack-logo.png";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
@@ -53,6 +54,7 @@ export default function AppLayout() {
               )}
             </div>
             <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
+              <img src={vinetrackLogo} alt="VineTrack" className="h-7 w-7 object-contain" />
               <span className="text-base">
                 <BrandName />
               </span>
