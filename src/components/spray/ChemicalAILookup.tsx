@@ -61,6 +61,8 @@ interface Props {
   initialName?: string;
   /** Existing chemicals already in the vineyard library. Used to flag duplicate hits. */
   existingLibrary?: ExistingLibraryItem[];
+  /** Vineyard country (e.g. "Australia", "New Zealand", "United States") used to bias results. */
+  country?: string | null;
   /** Apply a candidate (AI lookup OR existing library item). */
   onApply: (s: AppliedSuggestion) => void;
 }
@@ -69,7 +71,7 @@ function normalise(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApply }: Props) {
+export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   const [name, setName] = useState(initialName);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApp
 
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
-        body: { product_name: q },
+        body: { product_name: q, country: country ?? null },
       });
       if (fnErr) throw fnErr;
       const list: RawCandidate[] = Array.isArray(data?.candidates)
