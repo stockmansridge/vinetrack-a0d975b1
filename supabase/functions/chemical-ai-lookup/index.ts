@@ -68,6 +68,8 @@ const tools = [
                 target: { type: "string", description: "Typical target pest/disease/weed" },
                 notes: { type: "string" },
                 safety_note: { type: "string" },
+                country: { type: "string", description: "Primary country of registration for this product." },
+                country_confirmed: { type: "boolean", description: "True if confirmed registered in the user's vineyard country." },
                 confidence: { type: "string", enum: ["high", "medium", "low", "unknown"] },
               },
               required: ["product_name", "category", "confidence", "safety_note"],
