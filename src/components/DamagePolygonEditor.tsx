@@ -202,13 +202,40 @@ export default function DamagePolygonEditor({
         glyphText: String(idx + 1),
         title: `Vertex ${idx + 1}`,
         draggable: true,
+        enabled: true,
         animates: false,
+      });
+      // Some MapKit JS builds only honour `draggable` when set on the
+      // instance after construction.
+      try { ann.draggable = true; } catch { /* noop */ }
+      ann.addEventListener("drag-start", () => {
+        draggingVertexRef.current = true;
+      });
+      ann.addEventListener("dragging", () => {
+        // Live update overlay shape while dragging.
+        const c = ann.coordinate;
+        if (!c) return;
+        const next = valueRef.current.map((v, i) =>
+          i === idx ? { lat: c.latitude, lng: c.longitude } : v,
+        );
+        valueRef.current = next;
+        const overlay = polygonOverlayRef.current;
+        if (overlay && next.length >= 3) {
+          try {
+            overlay.points = next.map(
+              (q) => new mapkit.Coordinate(q.lat, q.lng),
+            );
+          } catch { /* noop */ }
+        }
       });
       ann.addEventListener("drag-end", () => {
         const c = ann.coordinate;
         const next = valueRef.current.map((v, i) =>
           i === idx ? { lat: c.latitude, lng: c.longitude } : v,
         );
+        // Defer clearing the suppression flag until after MapKit's
+        // synthetic single-tap (if any) has fired.
+        setTimeout(() => { draggingVertexRef.current = false; }, 50);
         onChange(next);
       });
       return ann;
