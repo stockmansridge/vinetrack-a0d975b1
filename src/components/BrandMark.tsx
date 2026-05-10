@@ -62,7 +62,7 @@ export function BrandMark({
     <div
       className={cn(
         "inline-flex items-center justify-center overflow-hidden rounded-xl shadow-sm",
-        showLogo ? "bg-card" : "bg-sidebar-primary",
+        "bg-card",
         className,
       )}
       style={{ width: size, height: size }}
