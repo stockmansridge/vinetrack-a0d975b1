@@ -72,10 +72,8 @@ export default function DamagePolygonEditor({
 
         const onTap = (e: any) => {
           if (!drawRef.current) return;
+          if (draggingVertexRef.current) return;
           try {
-            // Defensive: prefer a coordinate the event already carries; fall
-            // back to converting the page point. Older MapKit JS builds expose
-            // `coordinate`, newer builds only `pointOnPage`.
             let coord: any = e?.coordinate ?? null;
             if (!coord) {
               const pt = e?.pointOnPage ?? e?.point ?? null;
