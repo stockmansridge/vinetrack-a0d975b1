@@ -268,7 +268,19 @@ function JobsTable({
     onError: (e: any) => toast({ title: "Duplicate failed", description: e.message, variant: "destructive" }),
   });
 
-  const rows = data ?? [];
+  const [search, setSearch] = useState("");
+  const allRows = data ?? [];
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allRows;
+    return allRows.filter((j) => {
+      const hay = [
+        j.name, j.target, j.operation_type, j.growth_stage_code,
+        j.notes, chemicalLinesSummary(j.chemical_lines),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [allRows, search]);
 
   type ColDef = { key: string; label: string; align?: "right"; accessor: (j: SprayJob) => any };
   const STATUS_ORDER: Record<string, number> = {
