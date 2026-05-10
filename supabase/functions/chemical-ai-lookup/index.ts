@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
           { role: "system", content: SYSTEM },
           {
             role: "user",
-            content: `Look up Australian vineyard product candidates matching: "${product_name.trim()}". Return up to 5 likely matches ordered by likelihood.`,
+            content: `Vineyard country: ${countryStr || "UNKNOWN"}.\nLook up vineyard product candidates matching: "${product_name.trim()}". Return up to 10 likely matches, ordered by likelihood and country relevance. Prefer products registered in ${countryStr || "the user's country"}; only include results from other regions if you have no good local match, and mark them with country_confirmed=false.`,
           },
         ],
         tools,
