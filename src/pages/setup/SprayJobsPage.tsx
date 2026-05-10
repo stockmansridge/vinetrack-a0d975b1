@@ -1076,19 +1076,45 @@ function SprayJobSheet({
                       <Label className="text-xs">Rate</Label>
                       <Input type="number" value={line.rate ?? ""} onChange={(e) => setLine(i, { rate: e.target.value === "" ? null : Number(e.target.value) })} />
                     </div>
-                    <div className="col-span-3 space-y-1">
+                    <div className="col-span-2 space-y-1">
                       <Label className="text-xs">Unit</Label>
-                      <Input value={line.unit ?? ""} onChange={(e) => setLine(i, { unit: e.target.value })} />
+                      <Input
+                        value={chemUnitOnly(line.unit ?? "") || ""}
+                        placeholder="L, mL, kg, g"
+                        onChange={(e) => {
+                          const cu = e.target.value;
+                          const basis: RateBasis = (line.rate_basis as RateBasis) ?? inferRateBasis(line.unit);
+                          setLine(i, { unit: composeUnit(cu, basis) });
+                        }}
+                      />
                     </div>
-                    <div className="col-span-3 space-y-1">
-                      <Label className="text-xs">Water rate</Label>
-                      <Input type="number" value={line.water_rate ?? ""} onChange={(e) => setLine(i, { water_rate: e.target.value === "" ? null : Number(e.target.value) })} />
+                    <div className="col-span-4 space-y-1">
+                      <Label className="text-xs">Rate basis</Label>
+                      <RadioGroup
+                        className="flex gap-4 pt-1.5"
+                        value={(line.rate_basis as RateBasis) ?? inferRateBasis(line.unit)}
+                        onValueChange={(v) => {
+                          const basis = v as RateBasis;
+                          const cu = chemUnitOnly(line.unit ?? "") || "L";
+                          setLine(i, { rate_basis: basis, unit: composeUnit(cu, basis) });
+                        }}
+                      >
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                          <RadioGroupItem value="per_hectare" /> {RATE_BASIS_LABEL.per_hectare}
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                          <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
+                        </label>
+                      </RadioGroup>
                     </div>
                     <div className="col-span-3 space-y-1">
                       <Label className="text-xs">Notes</Label>
                       <Input value={line.notes ?? ""} onChange={(e) => setLine(i, { notes: e.target.value })} />
                     </div>
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Choose whether this product rate is applied by area or by spray volume.
+                  </p>
                 </div>
               ))}
             </div>
