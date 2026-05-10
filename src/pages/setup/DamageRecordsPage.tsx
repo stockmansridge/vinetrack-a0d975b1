@@ -830,7 +830,7 @@ function DamageEditSheet({
             <Select value={form.damage_type} onValueChange={(v) => set("damage_type", v)}>
               <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
               <SelectContent>
-                {DAMAGE_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                {DAMAGE_TYPE_CODES.map((t) => (<SelectItem key={t} value={t}>{damageTypeLabel(t)}</SelectItem>))}
               </SelectContent>
             </Select>
           </Row>
