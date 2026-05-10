@@ -190,12 +190,13 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
 }
 
 function JobsTable({
-  mode, canEdit, onEdit, maps,
+  mode, canEdit, onEdit, maps, templatesOnly = false,
 }: {
   mode: "planned" | "templates" | "archived";
   canEdit: boolean;
   onEdit: (job: SprayJob) => void;
   maps: LookupMaps;
+  templatesOnly?: boolean;
 }) {
   const { selectedVineyardId, memberships } = useVineyard();
   const vineyardName =
