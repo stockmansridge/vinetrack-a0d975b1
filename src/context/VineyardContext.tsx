@@ -7,6 +7,7 @@ export interface VineyardMembership {
   vineyard_id: string;
   role: string;
   vineyard_name?: string | null;
+  vineyard_country?: string | null;
 }
 
 interface VineyardContextValue {
@@ -15,6 +16,7 @@ interface VineyardContextValue {
   selectedVineyardId: string | null;
   selectVineyard: (id: string) => void;
   currentRole: string | null;
+  currentCountry: string | null;
 }
 
 const VineyardContext = createContext<VineyardContextValue>({
@@ -23,6 +25,7 @@ const VineyardContext = createContext<VineyardContextValue>({
   selectedVineyardId: null,
   selectVineyard: () => {},
   currentRole: null,
+  currentCountry: null,
 });
 
 const STORAGE_KEY = "vt_selected_vineyard";
@@ -40,7 +43,7 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
     queryFn: async (): Promise<VineyardMembership[]> => {
       const { data, error } = await supabase
         .from("vineyard_members")
-        .select("vineyard_id, role, vineyards!inner(name, deleted_at)")
+        .select("vineyard_id, role, vineyards!inner(name, country, deleted_at)")
         .eq("user_id", user!.id)
         .is("vineyards.deleted_at", null);
       if (error) throw error;
@@ -50,6 +53,7 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
           vineyard_id: m.vineyard_id,
           role: m.role,
           vineyard_name: m.vineyards?.name ?? null,
+          vineyard_country: m.vineyards?.country ?? null,
         }));
     },
   });
