@@ -11,6 +11,7 @@
 //   single vineyard_id. No withholding_period / re_entry_interval column
 //   (these typically live inside `restrictions` free text).
 import { supabase } from "@/integrations/ios-supabase/client";
+import { iosUnitFromAny, iosBasisCode, inferRateBasis } from "@/lib/rateBasis";
 
 export interface SavedChemical {
   id: string;
@@ -96,6 +97,14 @@ function sanitize(input: SavedChemicalInput) {
     } else {
       out[k] = v;
     }
+  }
+  // iOS-compat: persist `unit` using the iOS raw enum + basis form
+  // ("Litres/ha", "mL/100L", "Kg/ha", "g/100L"). The internal short form
+  // ("L/ha") is only used for editing.
+  if (typeof out.unit === "string" && out.unit) {
+    const basis = iosBasisCode(inferRateBasis(out.unit));
+    const iosUnit = iosUnitFromAny(out.unit);
+    out.unit = basis === "per_100_litres" ? `${iosUnit}/100L` : `${iosUnit}/ha`;
   }
   return out;
 }

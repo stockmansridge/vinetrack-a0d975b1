@@ -2,6 +2,7 @@
 // Backed by the iOS Supabase project. RLS + DB triggers are the authority;
 // the client filters by vineyard_id for safety.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { toIOSChemicalLineCompat, displayUnitText } from "@/lib/rateBasis";
 
 export interface SprayJobChemicalLine {
   chemical_id?: string | null;
@@ -9,22 +10,27 @@ export interface SprayJobChemicalLine {
   active_ingredient?: string | null;
   rate?: number | null;
   /**
-   * Composed unit text (e.g. "mL/100L", "L/ha"). Kept for backward
-   * compatibility with iOS readers that parse the unit text. New writers
-   * should also set `product_type` and `rate_basis` explicitly.
+   * Composed unit text. Internally we may use "L/ha" / "mL/100L" while
+   * editing; on save we normalise to the iOS raw enum ("Litres" / "mL" /
+   * "Kg" / "g") plus the matching legacy `ratePerHa` / `ratePer100L`
+   * numerics so iOS spray-template loading keeps working.
    */
   unit?: string | null;
   /** "liquid" → L/mL · "solid" → kg/g */
   product_type?: "liquid" | "solid" | null;
   /**
-   * Explicit application basis for this line (preferred over parsing unit).
-   *   - "per_hectare" → rate × area
-   *   - "per_100L"    → rate × (water litres / 100)
+   * Explicit application basis for this line. Internal callers may write
+   * either the short ("per_100L") or the iOS-compatible long form
+   * ("per_100_litres"); persistence always uses the long form.
    */
-  rate_basis?: "per_hectare" | "per_100L" | null;
+  rate_basis?: "per_hectare" | "per_100L" | "per_100_litres" | null;
+  /** iOS legacy numeric fields. Filled automatically on save. */
+  ratePerHa?: number | null;
+  ratePer100L?: number | null;
   water_rate?: number | null;
   notes?: string | null;
 }
+
 
 export interface SprayJob {
   id: string;
@@ -112,8 +118,43 @@ export interface SprayJobInput {
   concentration_factor?: number | null;
 }
 
+/**
+ * Normalise a chemical_lines array so the persisted JSON carries the
+ * legacy fields iOS expects (`unit` as raw enum, `ratePerHa`, `ratePer100L`,
+ * `rate_basis = per_hectare | per_100_litres`) alongside our newer
+ * structured fields.
+ */
+export function normaliseChemicalLinesForIOS(
+  lines?: SprayJobChemicalLine[] | null,
+): SprayJobChemicalLine[] | null | undefined {
+  if (lines == null) return lines;
+  return lines.map((l) => {
+    const compat = toIOSChemicalLineCompat({
+      unit: l.unit,
+      product_type: l.product_type ?? null,
+      rate_basis: l.rate_basis ?? null,
+      rate: l.rate ?? null,
+      ratePerHa: l.ratePerHa ?? null,
+      ratePer100L: l.ratePer100L ?? null,
+    });
+    return {
+      ...l,
+      unit: compat.unit,
+      rate_basis: compat.rate_basis,
+      ratePerHa: compat.ratePerHa,
+      ratePer100L: compat.ratePer100L,
+    } as SprayJobChemicalLine;
+  });
+}
+
+function withNormalisedLines<T extends { chemical_lines?: SprayJobChemicalLine[] | null }>(input: T): T {
+  if (!("chemical_lines" in input) || input.chemical_lines == null) return input;
+  return { ...input, chemical_lines: normaliseChemicalLinesForIOS(input.chemical_lines) ?? null };
+}
+
 export async function createSprayJob(input: SprayJobInput, paddockIds: string[]): Promise<SprayJob> {
-  const { data, error } = await supabase.from("spray_jobs").insert(input).select("*").single();
+  const payload = withNormalisedLines(input);
+  const { data, error } = await supabase.from("spray_jobs").insert(payload).select("*").single();
   if (error) throw error;
   const job = data as SprayJob;
   if (paddockIds.length) {
@@ -123,7 +164,8 @@ export async function createSprayJob(input: SprayJobInput, paddockIds: string[])
 }
 
 export async function updateSprayJob(id: string, patch: Partial<SprayJobInput>, paddockIds?: string[]): Promise<SprayJob> {
-  const { data, error } = await supabase.from("spray_jobs").update(patch).eq("id", id).select("*").single();
+  const payload = withNormalisedLines(patch);
+  const { data, error } = await supabase.from("spray_jobs").update(payload).eq("id", id).select("*").single();
   if (error) throw error;
   if (paddockIds) {
     await replaceSprayJobPaddocks(id, paddockIds);
@@ -327,7 +369,8 @@ export function chemicalLinesSummary(lines?: SprayJobChemicalLine[] | null): str
   return lines
     .map((l) => {
       const name = l.name ?? "Unnamed";
-      const rate = l.rate != null ? `${l.rate}${l.unit ? ` ${l.unit}` : ""}` : "";
+      const unitText = displayUnitText(l.unit);
+      const rate = l.rate != null ? `${l.rate}${unitText ? ` ${unitText}` : ""}` : "";
       return rate ? `${name} (${rate})` : name;
     })
     .join(", ");
