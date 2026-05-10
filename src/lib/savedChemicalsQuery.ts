@@ -102,10 +102,6 @@ function sanitize(input: SavedChemicalInput) {
   // ("Litres/ha", "mL/100L", "Kg/ha", "g/100L"). The internal short form
   // ("L/ha") is only used for editing.
   if (typeof out.unit === "string" && out.unit) {
-    // Lazy import to avoid a circular dep with rateBasis (no actual cycle,
-    // but keeps this helper standalone for tests).
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { iosUnitFromAny, iosBasisCode, inferRateBasis } = require("@/lib/rateBasis");
     const basis = iosBasisCode(inferRateBasis(out.unit));
     const iosUnit = iosUnitFromAny(out.unit);
     out.unit = basis === "per_100_litres" ? `${iosUnit}/100L` : `${iosUnit}/ha`;
