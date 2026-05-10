@@ -65,6 +65,7 @@ import {
 } from "@/lib/paddockGeometry";
 import { calculateDamageImpact } from "@/lib/damageImpact";
 import DamageMapView from "@/components/DamageMapView";
+import DamagePolygonEditor from "@/components/DamagePolygonEditor";
 
 const ANY = "__any__";
 
@@ -630,14 +631,30 @@ function DamageEditSheet({
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [polygon, setPolygon] = useState<LatLng[]>([]);
+  const [polygonOutside, setPolygonOutside] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setForm(record ? recordToForm(record) : emptyForm());
+    setPolygon(record ? parsePolygonPoints(record.polygon_points) : []);
+    setPolygonOutside(false);
   }, [open, record]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const selectedPaddock = paddocks.find((p) => p.id === form.paddock_id) ?? null;
+  const paddockPolygon = useMemo<LatLng[]>(
+    () => parsePolygonPoints(selectedPaddock?.polygon_points),
+    [selectedPaddock?.polygon_points],
+  );
+  const blockAreaHa = useMemo(() => polygonAreaHectares(paddockPolygon), [paddockPolygon]);
+  const damageAreaHa = useMemo(() => polygonAreaHectares(polygon), [polygon]);
+  const livePct = Number(form.damage_percent) || 0;
+  const liveDamagedAreaHa = polygon.length >= 3 ? damageAreaHa : blockAreaHa;
+  const liveEffectiveHa = (liveDamagedAreaHa * livePct) / 100;
+  const liveBlockLossPct = blockAreaHa > 0 ? (liveEffectiveHa / blockAreaHa) * 100 : 0;
 
   const buildPayload = (): DamageRecordWriteInput | null => {
     if (!vineyardId) return null;
@@ -661,6 +678,12 @@ function DamageEditSheet({
       notes: form.notes.trim() || null,
       latitude: numOrNull(form.latitude),
       longitude: numOrNull(form.longitude),
+      // iOS canonical shape: [{ latitude, longitude }, …]. Stored as-is when
+      // ≥3 vertices; cleared to null when the user removes the polygon.
+      polygon_points:
+        polygon.length >= 3
+          ? polygon.map((p) => ({ latitude: p.lat, longitude: p.lng }))
+          : null,
     };
   };
 
