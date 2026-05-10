@@ -642,13 +642,14 @@ function recordToForm(r: DamageRecord): FormState {
 }
 
 function DamageEditSheet({
-  open, record, paddocks, vineyardId, userId, onClose, onSaved,
+  open, record, paddocks, vineyardId, userId, userDisplayName, onClose, onSaved,
 }: {
   open: boolean;
   record: DamageRecord | null;
   paddocks: PaddockGeo[];
   vineyardId: string | null;
   userId: string | null;
+  userDisplayName: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -687,6 +688,10 @@ function DamageEditSheet({
       const n = Number(t);
       return isNaN(n) ? null : n;
     };
+    // Operator: preserve existing on edit; auto-fill from current user on create.
+    const operatorName = record
+      ? (record.operator_name ?? null)
+      : (userDisplayName?.trim() || null);
     return {
       vineyard_id: vineyardId,
       paddock_id: form.paddock_id || null,
@@ -697,7 +702,7 @@ function DamageEditSheet({
       damage_percent: numOrNull(form.damage_percent),
       row_number: numOrNull(form.row_number),
       side: form.side || null,
-      operator_name: form.operator_name.trim() || null,
+      operator_name: operatorName,
       notes: form.notes.trim() || null,
       latitude: numOrNull(form.latitude),
       longitude: numOrNull(form.longitude),
@@ -715,7 +720,11 @@ function DamageEditSheet({
       const payload = buildPayload();
       if (!payload) throw new Error("No vineyard selected");
       if (!payload.paddock_id) throw new Error("Paddock is required");
+      if (!payload.date_observed) throw new Error("Date observed is required");
       if (!payload.damage_type) throw new Error("Damage type is required");
+      if (!payload.severity) throw new Error("Severity is required");
+      if (!payload.status) throw new Error("Status is required");
+      if (payload.damage_percent == null) throw new Error("Damage % is required");
       if (record) {
         return updateDamageRecord(record.id, payload);
       }
@@ -738,8 +747,24 @@ function DamageEditSheet({
             Saved to the iOS Supabase project. Visible in iOS after sync.
           </SheetDescription>
         </SheetHeader>
+
+        <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-3 text-xs leading-relaxed text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">How to record damage</p>
+          <p>
+            Select the affected block, then either:
+          </p>
+          <ul className="list-disc pl-5 mt-1 space-y-0.5">
+            <li>draw the damaged area on the map, or</li>
+            <li>enter the row/path and side if the damage is row-specific.</li>
+          </ul>
+          <p className="mt-1.5">
+            Damage type, date observed, severity/status and damage % help estimate
+            yield impact. Notes are optional. Fields marked <span className="text-destructive">*</span> are required.
+          </p>
+        </div>
+
         <div className="mt-4 grid gap-3">
-          <Row label="Paddock *">
+          <Row label="Paddock / block" required>
             <Select value={form.paddock_id} onValueChange={(v) => set("paddock_id", v)}>
               <SelectTrigger><SelectValue placeholder="Select paddock" /></SelectTrigger>
               <SelectContent>
@@ -752,6 +777,11 @@ function DamageEditSheet({
 
           {selectedPaddock && (
             <Section title="Damage area on map">
+              <p className="text-xs text-muted-foreground mb-2">
+                Optional: draw a polygon around the damaged area. This is used with
+                Damage % to estimate yield impact. If you do not draw an area, the
+                record can still be saved using block/row details.
+              </p>
               {paddockPolygon.length >= 3 ? (
                 <>
                   <DamagePolygonEditor
@@ -792,10 +822,10 @@ function DamageEditSheet({
             </Section>
           )}
 
-          <Row label="Date observed">
+          <Row label="Date observed" required>
             <Input type="date" value={form.date_observed} onChange={(e) => set("date_observed", e.target.value)} />
           </Row>
-          <Row label="Damage type *">
+          <Row label="Damage type" required>
             <Select value={form.damage_type} onValueChange={(v) => set("damage_type", v)}>
               <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
               <SelectContent>
@@ -804,9 +834,9 @@ function DamageEditSheet({
             </Select>
           </Row>
           <div className="grid grid-cols-2 gap-3">
-            <Row label="Severity">
+            <Row label="Severity" required>
               <Select value={form.severity} onValueChange={(v) => set("severity", v)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select severity" /></SelectTrigger>
                 <SelectContent>
                   {SEVERITIES.map((s) => (
                     <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
@@ -814,7 +844,7 @@ function DamageEditSheet({
                 </SelectContent>
               </Select>
             </Row>
-            <Row label="Status">
+            <Row label="Status" required>
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -825,34 +855,50 @@ function DamageEditSheet({
               </Select>
             </Row>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Row label="Damage %">
-              <Input type="number" min={0} max={100} value={form.damage_percent}
-                     onChange={(e) => set("damage_percent", e.target.value)} />
-            </Row>
-            <Row label="Row / path">
-              <Input type="number" value={form.row_number}
-                     onChange={(e) => set("row_number", e.target.value)} />
-            </Row>
-            <Row label="Side">
-              <Select value={form.side} onValueChange={(v) => set("side", v)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  {SIDES.map((s) => (
-                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Row>
+          <Row label="Damage %" required>
+            <Input type="number" min={0} max={100} value={form.damage_percent}
+                   onChange={(e) => set("damage_percent", e.target.value)} />
+          </Row>
+
+          <div className="space-y-2 rounded-xl border bg-card/50 p-3">
+            <p className="text-xs text-muted-foreground">
+              Use row/path and side when damage is specific to a row or panel. Use
+              the map polygon when the damage covers an area.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Row label="Row / path">
+                <Input type="number" value={form.row_number}
+                       onChange={(e) => set("row_number", e.target.value)} />
+              </Row>
+              <Row label="Side">
+                <Select value={form.side} onValueChange={(v) => set("side", v)}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    {SIDES.map((s) => (
+                      <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Row>
+            </div>
           </div>
-          <Row label="Operator">
-            <Input value={form.operator_name} onChange={(e) => set("operator_name", e.target.value)} />
-          </Row>
+
           <Row label="Notes">
-            <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={4} />
+            <Textarea
+              value={form.notes}
+              onChange={(e) => set("notes", e.target.value)}
+              rows={4}
+              placeholder="Optional"
+            />
           </Row>
-          {/* Latitude/longitude inputs removed — damage records are polygon-based.
-              Existing lat/lng on legacy records is shown read-only in the detail view. */}
+
+          {/* Operator name is taken from the signed-in user on create and preserved on edit.
+              Latitude/longitude inputs removed — damage records are polygon-based. */}
+          <p className="text-xs text-muted-foreground">
+            {record
+              ? `Operator: ${record.operator_name ?? userDisplayName ?? "—"} (kept from existing record)`
+              : `Operator will be recorded as: ${userDisplayName ?? "current user"}`}
+          </p>
           <p className="text-xs text-muted-foreground">
             Photo upload from the portal is coming soon. Existing iOS-uploaded photos display in the detail view.
           </p>
