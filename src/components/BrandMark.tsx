@@ -9,6 +9,8 @@ interface BrandMarkProps {
   className?: string;
   /** Render as a square tile with brand background (used in headers/login). */
   tile?: boolean;
+  /** Render inside a circular frame with a soft accent-green border (sidebar). */
+  circle?: boolean;
   alt?: string;
 }
 
@@ -21,6 +23,7 @@ export function BrandMark({
   size = 32,
   className,
   tile = true,
+  circle = false,
   alt = "VineTrack",
 }: BrandMarkProps) {
   const [errored, setErrored] = useState(false);
@@ -46,6 +49,25 @@ export function BrandMark({
       className="h-[70%] w-[70%] object-contain"
     />
   );
+
+  if (circle) {
+    return (
+      <div
+        className={cn(
+          "inline-flex items-center justify-center overflow-hidden rounded-full bg-card",
+          className,
+        )}
+        style={{
+          width: size,
+          height: size,
+          border: "1.5px solid rgba(133, 184, 48, 0.55)",
+          boxShadow: "0 0 0 2px rgba(3, 77, 33, 0.35), 0 2px 6px rgba(0,0,0,0.18)",
+        }}
+      >
+        {inner}
+      </div>
+    );
+  }
 
   if (!tile) {
     return (

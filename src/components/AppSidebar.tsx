@@ -118,7 +118,11 @@ export function AppSidebar() {
   const renderItems = (items: NavItem[]) =>
     items.map((item) => (
       <SidebarMenuItem key={item.url}>
-        <SidebarMenuButton asChild isActive={isActive(item.url)}>
+        <SidebarMenuButton
+          asChild
+          isActive={isActive(item.url)}
+          className="rounded-xl data-[active=true]:bg-[hsl(80_58%_46%/0.22)] data-[active=true]:text-white data-[active=true]:border-l-4 data-[active=true]:border-accent data-[active=true]:font-semibold hover:bg-[hsl(80_58%_46%/0.12)] hover:text-white"
+        >
           <NavLink to={item.url} className="flex items-center gap-2">
             <item.icon className="h-4 w-4" />
             <span className="flex-1 truncate">{item.title}</span>
@@ -136,7 +140,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4">
         <div className="flex items-center gap-2">
-          <BrandMark logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
+          <BrandMark circle logoUrl={logoUrl} size={40} alt={vineyardName ?? "VineTrack"} />
           <div className="flex flex-col leading-tight min-w-0">
             <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
               {vineyardName ?? <BrandName />}
