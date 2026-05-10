@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Archive, MapPin as MapPinIcon, Loader2 } from "lucide-react";
+import { Plus, Pencil, Archive, MapPin as MapPinIcon, Loader2, ShieldAlert } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
