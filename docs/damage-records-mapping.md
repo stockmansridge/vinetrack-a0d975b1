@@ -21,7 +21,7 @@
 will write back in the same shape so iOS continues to consume the records
 unchanged.
 
-## Phase 2 — portal polygon draw / edit (next)
+## Phase 2 — shipped
 
 Goal: let managers/owners draw or edit the damage polygon in the portal and
 write back to `damage_records.polygon_points` in the iOS shape.
