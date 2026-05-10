@@ -32,6 +32,8 @@ import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictio
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -517,8 +519,39 @@ function ChemicalEditor({
             <Field label="Default rate">
               <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
             </Field>
-            <Field label="Rate unit"><Input value={form.unit ?? ""} onChange={(e) => set("unit", e.target.value)} placeholder="L/ha, g/ha…" /></Field>
+            <Field label="Unit (chemical)">
+              <Input
+                value={chemUnitOnly(form.unit ?? "")}
+                placeholder="L, mL, kg, g"
+                onChange={(e) => {
+                  const cu = e.target.value;
+                  const basis = inferRateBasis(form.unit);
+                  set("unit", composeUnit(cu, basis));
+                }}
+              />
+            </Field>
           </div>
+          <Field label="Rate basis">
+            <RadioGroup
+              className="flex gap-6"
+              value={inferRateBasis(form.unit)}
+              onValueChange={(v) => {
+                const basis = v as RateBasis;
+                const cu = chemUnitOnly(form.unit ?? "") || "L";
+                set("unit", composeUnit(cu, basis));
+              }}
+            >
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <RadioGroupItem value="per_hectare" /> {RATE_BASIS_LABEL.per_hectare}
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
+              </label>
+            </RadioGroup>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Choose whether this product rate is applied by area or by spray volume.
+            </p>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Withholding period (days)">
               <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />

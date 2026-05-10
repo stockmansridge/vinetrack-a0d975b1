@@ -16,6 +16,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 
 interface Props {
   open: boolean;
@@ -222,8 +224,39 @@ function NewChemicalDialog({
               <Label>Default rate</Label>
               <div className="flex gap-2">
                 <Input type="number" value={form.rate_per_ha} onChange={(e) => setForm({ ...form, rate_per_ha: e.target.value })} />
-                <Input className="w-24" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
+                <Input
+                  className="w-24"
+                  placeholder="L, mL, kg, g"
+                  value={chemUnitOnly(form.unit)}
+                  onChange={(e) => {
+                    const cu = e.target.value;
+                    const basis = inferRateBasis(form.unit);
+                    setForm({ ...form, unit: composeUnit(cu, basis) });
+                  }}
+                />
               </div>
+            </div>
+            <div className="space-y-1 col-span-2">
+              <Label>Rate basis</Label>
+              <RadioGroup
+                className="flex gap-6"
+                value={inferRateBasis(form.unit)}
+                onValueChange={(v) => {
+                  const basis = v as RateBasis;
+                  const cu = chemUnitOnly(form.unit) || "L";
+                  setForm({ ...form, unit: composeUnit(cu, basis) });
+                }}
+              >
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <RadioGroupItem value="per_hectare" /> {RATE_BASIS_LABEL.per_hectare}
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
+                </label>
+              </RadioGroup>
+              <p className="text-[11px] text-muted-foreground">
+                Choose whether this product rate is applied by area or by spray volume.
+              </p>
             </div>
           </div>
           <div className="space-y-1">
