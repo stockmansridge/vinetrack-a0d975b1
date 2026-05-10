@@ -344,6 +344,12 @@ function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vin
           <p className="whitespace-pre-wrap">{row.notes}</p>
         </Section>
       )}
+      <YieldDamageAdjustmentPanel
+        vineyardId={vineyardId}
+        baseTonnes={row.total_yield_tonnes ?? null}
+        baseLabel={row.season ?? (row.year != null ? String(row.year) : undefined)}
+        compact
+      />
       <Section title={`Block results${blocks ? ` (${blocks.length})` : ""}`}>
         {blocks ? (
           <pre className="text-[11px] bg-muted/40 rounded p-2 overflow-x-auto max-h-80">
