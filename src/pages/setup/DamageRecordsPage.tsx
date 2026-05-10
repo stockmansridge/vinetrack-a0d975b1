@@ -333,7 +333,7 @@ export default function DamageRecordsPage() {
                   <TableCell>{r.paddock_id ? (paddockNameById.get(r.paddock_id) ?? "—") : "—"}</TableCell>
                   <TableCell>{fmt(r.row_number)}</TableCell>
                   <TableCell className="capitalize">{fmt(r.side)}</TableCell>
-                  <TableCell>{fmt(r.damage_type)}</TableCell>
+                  <TableCell>{damageTypeLabel(r.damage_type)}</TableCell>
                   <TableCell>
                     {r.severity ? (
                       <Badge variant={SEVERITY_VARIANT[r.severity] ?? "outline"} className="capitalize">
