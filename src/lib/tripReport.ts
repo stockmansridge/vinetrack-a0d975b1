@@ -798,6 +798,21 @@ function drawRouteMap(
   doc.setTextColor(0);
 }
 
+/** Pick the iOS-synced completion notes using the same fallback as the on-screen Trip Report. */
+function pickCompletionNotes(t: Trip): string | null {
+  const candidates = [
+    (t as any).completion_notes,
+    (t as any).notes,
+    (t as any).job_notes,
+  ];
+  for (const v of candidates) {
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s) return s;
+  }
+  return null;
+}
+
 function ensureSpace(doc: jsPDF, y: number, needed: number, marginBottom = 56): number {
   const pageH = doc.internal.pageSize.getHeight();
   if (y + needed > pageH - marginBottom) {
