@@ -793,6 +793,59 @@ function DamageEditSheet({
   );
 }
 
+function DamageEditMap({
+  paddock, existingPolygon, damagePercent,
+}: {
+  paddock: PaddockGeo | null;
+  existingPolygon: any;
+  damagePercent: string;
+}) {
+  const paddockPolygon = useMemo<LatLng[]>(
+    () => parsePolygonPoints(paddock?.polygon_points),
+    [paddock?.polygon_points],
+  );
+  const damagePoly = useMemo<LatLng[]>(
+    () => parsePolygonPoints(existingPolygon),
+    [existingPolygon],
+  );
+  const blockArea = polygonAreaHectares(paddockPolygon);
+  const damageArea = polygonAreaHectares(damagePoly);
+  const pct = Number(damagePercent) || 0;
+  const effective = (damagePoly.length >= 3 ? damageArea : blockArea) * pct / 100;
+
+  if (!paddock) return null;
+  return (
+    <Section title="Damage area on map">
+      {paddockPolygon.length >= 3 ? (
+        <>
+          <DamageMapView
+            paddockPolygon={paddockPolygon}
+            damagePolygon={damagePoly}
+            height={240}
+          />
+          <div className="mt-2 grid gap-1 text-sm">
+            <Field label="Block area" value={`${blockArea.toFixed(2)} ha`} />
+            {damagePoly.length >= 3 ? (
+              <>
+                <Field label="Damage polygon area" value={`${damageArea.toFixed(2)} ha`} />
+                <Field label="Effective loss (at this %)" value={`${effective.toFixed(2)} ha`} />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No damage polygon yet. Drawing in the portal is coming in the next phase — for now, draw the polygon in the iOS app and it will appear here after sync.
+              </p>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          This paddock has no mapped boundary, so we can't show the damage on a map yet.
+        </p>
+      )}
+    </Section>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
