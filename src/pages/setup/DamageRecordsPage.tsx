@@ -660,7 +660,7 @@ function recordToForm(r: DamageRecord): FormState {
 }
 
 function DamageEditSheet({
-  open, record, paddocks, vineyardId, userId, userDisplayName, onClose, onSaved, onSavedRecord,
+  open, record, paddocks, vineyardId, userId, userDisplayName, onClose, onSaved,
 }: {
   open: boolean;
   record: DamageRecord | null;
@@ -670,7 +670,6 @@ function DamageEditSheet({
   userDisplayName: string | null;
   onClose: () => void;
   onSaved: () => void;
-  onSavedRecord: (record: DamageRecord) => void;
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
