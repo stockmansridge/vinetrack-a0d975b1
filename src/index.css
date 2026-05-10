@@ -2,36 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* VineTrack design tokens — modern SaaS / iOS-inspired refresh.
+   All colors MUST be HSL. */
 
 @layer base {
   :root {
-    /* VineTrack — vineyard green on cream */
-    --background: 40 33% 97%;
-    --foreground: 150 18% 12%;
+    /* Page + surface */
+    --background: 100 14% 97%;            /* #F7F9F6 */
+    --foreground: 143 33% 9%;             /* #102016 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 150 18% 12%;
+    --card: 0 0% 100%;                    /* #FFFFFF */
+    --card-foreground: 143 33% 9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 150 18% 12%;
+    --popover-foreground: 143 33% 9%;
 
-    /* Primary: deep vineyard green */
-    --primary: 145 42% 28%;
-    --primary-foreground: 40 33% 97%;
-    --primary-glow: 145 38% 40%;
+    /* Primary: VineTrack deep green #034D21 */
+    --primary: 144 92% 16%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 80 58% 46%;           /* #85B830 accent */
 
-    /* Secondary: softer sage green */
-    --secondary: 130 22% 90%;
-    --secondary-foreground: 145 42% 22%;
+    /* Secondary: very soft green tint */
+    --secondary: 100 14% 94%;
+    --secondary-foreground: 144 92% 16%;
 
-    --muted: 40 20% 93%;
-    --muted-foreground: 150 8% 38%;
+    --muted: 100 14% 96%;
+    --muted-foreground: 138 8% 40%;       /* #5F6F63 */
 
-    --accent: 130 30% 88%;
-    --accent-foreground: 145 42% 22%;
+    /* Accent: VineTrack accent green #85B830 */
+    --accent: 80 58% 46%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
@@ -41,58 +41,61 @@ All colors MUST be HSL.
 
     --map-accent: 210 90% 50%;
 
-    --border: 40 15% 86%;
-    --input: 40 15% 88%;
-    --ring: 145 42% 28%;
+    /* Borders / inputs / focus */
+    --border: 96 13% 90%;                 /* #E3E8E1 */
+    --input: 96 17% 88%;                  /* #DDE5DA */
+    --ring: 80 58% 46%;                   /* accent green focus ring */
 
-    --radius: 0.75rem;
+    --radius: 0.875rem;                   /* 14px — iOS-ish soft corners */
 
-    --sidebar-background: 96 93% 16%;
-    --sidebar-foreground: 96 10% 95%;
-    --sidebar-primary: 96 85% 28%;
-    --sidebar-primary-foreground: 96 10% 95%;
-    --sidebar-accent: 96 85% 22%;
-    --sidebar-accent-foreground: 96 10% 95%;
-    --sidebar-border: 96 50% 30%;
-    --sidebar-ring: 96 80% 50%;
+    /* Sidebar — dark vineyard green identity */
+    --sidebar-background: 144 92% 16%;    /* #034D21 */
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 80 58% 46%;        /* accent green */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 80 50% 28%;         /* active item soft green */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 144 60% 22%;
+    --sidebar-ring: 80 58% 46%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 144 25% 6%;
+    --foreground: 100 10% 96%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 144 22% 9%;
+    --card-foreground: 100 10% 96%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 144 22% 9%;
+    --popover-foreground: 100 10% 96%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 80 58% 46%;
+    --primary-foreground: 144 92% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 144 18% 14%;
+    --secondary-foreground: 100 10% 96%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 144 18% 14%;
+    --muted-foreground: 100 8% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 80 58% 46%;
+    --accent-foreground: 144 92% 10%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 144 15% 18%;
+    --input: 144 15% 18%;
+    --ring: 80 58% 46%;
+
+    --sidebar-background: 144 60% 8%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 80 58% 46%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 80 50% 22%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 144 40% 16%;
+    --sidebar-ring: 80 58% 46%;
   }
 }
 
@@ -102,6 +105,14 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
+
+  /* Subtle, refined scrollbars on horizontally-scrolling tables */
+  .vt-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+  .vt-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  .vt-scroll::-webkit-scrollbar-track { background: transparent; }
 }

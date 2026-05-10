@@ -67,6 +67,12 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        "2xl": "1.125rem",
+      },
+      boxShadow: {
+        soft: "0 8px 24px rgba(3, 77, 33, 0.06)",
+        "soft-sm": "0 1px 2px rgba(16, 32, 22, 0.04)",
+        "focus-ring": "0 0 0 3px rgba(133, 184, 48, 0.18)",
       },
       keyframes: {
         "accordion-down": {
