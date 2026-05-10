@@ -317,6 +317,7 @@ export default function TripReportsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8" />
               <TableHead>Date</TableHead>
               <TableHead>Trip type</TableHead>
               <TableHead>Name</TableHead>
@@ -324,20 +325,21 @@ export default function TripReportsPage() {
               <TableHead>Operator</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Distance</TableHead>
+              <TableHead>Rows</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Report</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={9} className="text-center text-destructive py-8">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center text-destructive py-8">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   No trips match the current filters.
                 </TableCell>
               </TableRow>
@@ -345,32 +347,64 @@ export default function TripReportsPage() {
             {rows.map((t) => {
               const fnLabel = tripFunctionLabel(t.trip_function);
               const s = tripStatus(t);
+              const isOpen = expanded.has(t.id);
+              const summary = summariseRows(t);
               return (
-                <TableRow key={t.id}>
-                  <TableCell>{fmtDay(t.start_time)}</TableCell>
-                  <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>
-                  <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>
-                  <TableCell>{padNameFor(t) ?? "—"}</TableCell>
-                  <TableCell>{t.person_name ?? "—"}</TableCell>
-                  <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>
-                  <TableCell>{fmtKm(t.total_distance)}</TableCell>
-                  <TableCell>
-                    {s === "active" ? <Badge>Active</Badge> :
-                     s === "paused" ? <Badge variant="outline">Paused</Badge> :
-                     <Badge variant="secondary">Completed</Badge>}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleExportPdf(t)}
-                      disabled={exportingId === t.id}
-                    >
-                      <Download className="h-3.5 w-3.5 mr-1" />
-                      {exportingId === t.id ? "Generating…" : "PDF"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <>
+                  <TableRow key={t.id}>
+                    <TableCell className="p-0 pl-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => toggleExpand(t.id)}
+                        aria-label={isOpen ? "Collapse" : "Expand"}
+                      >
+                        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </Button>
+                    </TableCell>
+                    <TableCell>{fmtDay(t.start_time)}</TableCell>
+                    <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>
+                    <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>
+                    <TableCell>{padNameFor(t) ?? "—"}</TableCell>
+                    <TableCell>{t.person_name ?? "—"}</TableCell>
+                    <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>
+                    <TableCell>{fmtKm(t.total_distance)}</TableCell>
+                    <TableCell className="text-xs">
+                      {summary.total > 0 ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Check className="h-3 w-3 text-green-600" />{summary.completed}
+                          <X className="h-3 w-3 text-red-600 ml-1" />{summary.skipped}
+                          <span className="text-muted-foreground ml-1">/ {summary.total}</span>
+                        </span>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {s === "active" ? <Badge>Active</Badge> :
+                       s === "paused" ? <Badge variant="outline">Paused</Badge> :
+                       <Badge variant="secondary">Completed</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleExportPdf(t)}
+                        disabled={exportingId === t.id}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        {exportingId === t.id ? "Generating…" : "PDF"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  {isOpen && (
+                    <TableRow key={`${t.id}-detail`} className="bg-muted/30 hover:bg-muted/30">
+                      <TableCell />
+                      <TableCell colSpan={10} className="py-3">
+                        <RowCompletionDetail trip={t} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               );
             })}
           </TableBody>
