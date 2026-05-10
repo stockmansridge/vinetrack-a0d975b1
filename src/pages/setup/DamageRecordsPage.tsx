@@ -403,7 +403,7 @@ export default function DamageRecordsPage() {
           setEditingOpen(false);
           queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
         }}
-        onSavedRecord={setLatestSavedRecord}
+        
       />
 
       <AlertDialog open={!!archiveTarget} onOpenChange={(o) => !o && setArchiveTarget(null)}>
