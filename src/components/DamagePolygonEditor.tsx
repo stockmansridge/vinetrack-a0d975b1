@@ -43,6 +43,9 @@ export default function DamagePolygonEditor({
   const tapHandlerRef = useRef<((e: any) => void) | null>(null);
   const valueRef = useRef<LatLng[]>(value);
   const drawRef = useRef(true);
+  // Set true while a vertex marker is being dragged so the map's single-tap
+  // handler doesn't add a spurious vertex when MapKit also fires a tap.
+  const draggingVertexRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawing, setDrawing] = useState(true);
