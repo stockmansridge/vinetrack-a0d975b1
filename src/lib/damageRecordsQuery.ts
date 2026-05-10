@@ -114,10 +114,17 @@ export async function createDamageRecord(
   input: DamageRecordWriteInput,
   userId: string | null,
 ): Promise<DamageRecord> {
+  const now = new Date().toISOString();
+  // iOS-compat: legacy `date` column is still read by the iOS app — mirror
+  // `date_observed` into it so portal records show up in iOS lists.
+  // `sync_version` starts at 1 (matches iOS create behaviour).
   const payload: Record<string, any> = {
     ...input,
+    date: input.date_observed ?? now,
     created_by: userId,
-    client_updated_at: new Date().toISOString(),
+    updated_by: userId,
+    client_updated_at: now,
+    sync_version: 1,
   };
   const res = await supabase
     .from("damage_records")
@@ -131,11 +138,26 @@ export async function createDamageRecord(
 export async function updateDamageRecord(
   id: string,
   patch: Partial<DamageRecordWriteInput>,
+  userId: string | null = null,
 ): Promise<DamageRecord> {
+  const now = new Date().toISOString();
+  // Read current sync_version so we can bump it — iOS sync uses
+  // (client_updated_at, sync_version) to detect changes.
+  const current = await supabase
+    .from("damage_records")
+    .select("sync_version")
+    .eq("id", id)
+    .single();
+  const nextVersion = ((current.data?.sync_version as number | null) ?? 0) + 1;
   const payload: Record<string, any> = {
     ...patch,
-    client_updated_at: new Date().toISOString(),
+    client_updated_at: now,
+    sync_version: nextVersion,
   };
+  if (userId) payload.updated_by = userId;
+  if (patch.date_observed !== undefined && patch.date_observed) {
+    payload.date = patch.date_observed;
+  }
   const res = await supabase
     .from("damage_records")
     .update(payload)
@@ -146,14 +168,21 @@ export async function updateDamageRecord(
   return res.data as DamageRecord;
 }
 
-export async function archiveDamageRecord(id: string): Promise<void> {
-  const res = await supabase
+export async function archiveDamageRecord(id: string, userId: string | null = null): Promise<void> {
+  const now = new Date().toISOString();
+  const current = await supabase
     .from("damage_records")
-    .update({
-      deleted_at: new Date().toISOString(),
-      client_updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+    .select("sync_version")
+    .eq("id", id)
+    .single();
+  const nextVersion = ((current.data?.sync_version as number | null) ?? 0) + 1;
+  const payload: Record<string, any> = {
+    deleted_at: now,
+    client_updated_at: now,
+    sync_version: nextVersion,
+  };
+  if (userId) payload.updated_by = userId;
+  const res = await supabase.from("damage_records").update(payload).eq("id", id);
   if (res.error) throw res.error;
 }
 
