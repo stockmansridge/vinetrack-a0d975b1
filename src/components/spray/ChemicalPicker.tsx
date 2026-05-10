@@ -100,16 +100,18 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
               ))}
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-1 border-t">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Sparkles className="h-3 w-3" />
-                AI chemical lookup coming later.
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-1 border-t">
               {canCreate && (
-                <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Add chemical
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    Look up chemical
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add chemical
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -175,7 +177,7 @@ function NewChemicalDialog({
         <DialogHeader>
           <DialogTitle>Add new chemical</DialogTitle>
           <DialogDescription>
-            Save a new chemical to this vineyard's library. AI lookup is optional and never auto-saves.
+            Save a new chemical to this vineyard's library. Use the lookup to pre-fill product details — nothing is saved until you confirm.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
@@ -227,9 +229,6 @@ function NewChemicalDialog({
           <div className="space-y-1">
             <Label>Notes</Label>
             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <Sparkles className="h-3 w-3" /> AI chemical lookup coming later.
           </div>
         </div>
         <DialogFooter>
