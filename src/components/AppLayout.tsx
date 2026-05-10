@@ -20,6 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
+import { BrandName } from "@/components/BrandName";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
@@ -30,7 +32,7 @@ export default function AppLayout() {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center gap-3 border-b bg-card/80 backdrop-blur px-4">
+          <header className="relative h-14 flex items-center gap-3 border-b bg-card/80 backdrop-blur px-4">
             <SidebarTrigger />
             <div className="flex items-center gap-2">
               <Select value={selectedVineyardId ?? undefined} onValueChange={selectVineyard}>
@@ -51,14 +53,13 @@ export default function AppLayout() {
                 </Badge>
               )}
             </div>
-            <div className="ml-auto flex items-center gap-3">
-              <span
-                className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning-foreground/90"
-                title="Production database — only tractor & spray equipment setup edits are enabled."
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
-                Production portal
+            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
+              <BrandMark size={28} alt="VineTrack" />
+              <span className="text-base">
+                <BrandName />
               </span>
+            </div>
+            <div className="ml-auto flex items-center gap-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1 rounded-full">
