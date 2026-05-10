@@ -62,6 +62,7 @@ const work: NavItem[] = [
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yield", url: "/yield", icon: Grape },
+  { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
 ];
 
 // "Reports" — exports & compliance
@@ -95,7 +96,6 @@ const tools: NavItem[] = [
 
 // iOS-synced data views — many are placeholders pending portal pages
 const iosData: NavItem[] = [
-  { title: "Damage Records", url: "/soon/damage-records", icon: AlertTriangle, soon: true },
   { title: "Growth Stage Records", url: "/soon/growth-stage", icon: ImageIcon, soon: true },
   { title: "Yield Estimation Sessions", url: "/soon/yield-estimation-sessions", icon: LineChart, soon: true },
   { title: "Historical Yield", url: "/soon/historical-yield", icon: Grape, soon: true },

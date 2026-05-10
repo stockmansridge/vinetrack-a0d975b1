@@ -23,6 +23,7 @@ import TractorsPage from "./pages/setup/TractorsPage";
 import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
 import NewPaddockPage from "./pages/setup/NewPaddockPage";
 import PinsPage from "./pages/setup/PinsPage";
+import DamageRecordsPage from "./pages/setup/DamageRecordsPage";
 import SprayRecordsPage from "./pages/setup/SprayRecordsPage";
 import WorkTasksPage from "./pages/setup/WorkTasksPage";
 import MaintenancePage from "./pages/setup/MaintenancePage";
@@ -88,6 +89,7 @@ const App = () => (
                     <Route path="/maintenance" element={<MaintenancePage />} />
                     <Route path="/trips" element={<TripsPage />} />
                     <Route path="/yield" element={<YieldReportsPage />} />
+                    <Route path="/damage-records" element={<DamageRecordsPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />
