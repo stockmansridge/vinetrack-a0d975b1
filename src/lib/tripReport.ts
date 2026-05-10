@@ -798,6 +798,21 @@ function drawRouteMap(
   doc.setTextColor(0);
 }
 
+/** Pick the iOS-synced completion notes using the same fallback as the on-screen Trip Report. */
+function pickCompletionNotes(t: Trip): string | null {
+  const candidates = [
+    (t as any).completion_notes,
+    (t as any).notes,
+    (t as any).job_notes,
+  ];
+  for (const v of candidates) {
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s) return s;
+  }
+  return null;
+}
+
 function ensureSpace(doc: jsPDF, y: number, needed: number, marginBottom = 56): number {
   const pageH = doc.internal.pageSize.getHeight();
   if (y + needed > pageH - marginBottom) {
@@ -875,7 +890,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Vineyard", fmt(ctx.vineyardName)],
     [blockLabel, fmt(blocks)],
     ["Trip type", fmt(ctx.tripFunctionLabel ?? t.trip_function)],
-    ["Job notes", fmt(t.trip_title)],
+    ["Trip name", fmt(t.trip_title)],
     ["Operator", fmt(t.person_name)],
     ["Date", fmtDate(t.start_time)],
     ["Start time", fmtTime(t.start_time)],
@@ -888,6 +903,21 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   ];
   y = renderFieldList(doc, tripDetailsRows, y);
   y += 6;
+
+  // 2b. Completion Notes (synced from iOS) — same fallback as on-screen Trip Report.
+  const completionNotes = pickCompletionNotes(t);
+  if (completionNotes) {
+    y = sectionHeader(doc, "Completion Notes", y);
+    const pageW2 = doc.internal.pageSize.getWidth();
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(30);
+    const lines = doc.splitTextToSize(completionNotes, pageW2 - 80) as string[];
+    for (const line of lines) {
+      y = ensureSpace(doc, y, 14);
+      doc.text(line, 40, y);
+      y += 14;
+    }
+    y += 6;
+  }
 
   // 3. Seeding Details (only when applicable)
   const seeding = parseSeeding(t.seeding_details);
