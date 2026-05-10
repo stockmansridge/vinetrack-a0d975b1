@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount, fetchList } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight } from "lucide-react";
+import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
@@ -164,7 +164,19 @@ export default function Dashboard() {
       <VineyardOverviewMap />
 
       <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Quick links</h2>
+        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Daily management</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
+          <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
+          <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} />
+          <QuickLink to="/reports/trips" label="Trip Reports" Icon={Route} />
+          <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} />
+          <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <QuickLink to="/setup/paddocks" label="Paddocks" Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
