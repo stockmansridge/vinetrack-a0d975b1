@@ -889,6 +889,21 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   y = renderFieldList(doc, tripDetailsRows, y);
   y += 6;
 
+  // 2b. Completion Notes (synced from iOS) — same fallback as on-screen Trip Report.
+  const completionNotes = pickCompletionNotes(t);
+  if (completionNotes) {
+    y = sectionHeader(doc, "Completion Notes", y);
+    const pageW2 = doc.internal.pageSize.getWidth();
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(30);
+    const lines = doc.splitTextToSize(completionNotes, pageW2 - 80) as string[];
+    for (const line of lines) {
+      y = ensureSpace(doc, y, 14);
+      doc.text(line, 40, y);
+      y += 14;
+    }
+    y += 6;
+  }
+
   // 3. Seeding Details (only when applicable)
   const seeding = parseSeeding(t.seeding_details);
   if (seeding && t.trip_function === "seeding") {
