@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown } from "lucide-react";
-import { BrandMark } from "@/components/BrandMark";
 import { BrandName } from "@/components/BrandName";
 
 export default function AppLayout() {
