@@ -156,6 +156,13 @@ export async function updateDamageRecord(
     client_updated_at: now,
     sync_version: nextVersion,
   };
+  // Only coerce notes when it's explicitly being patched (avoid overwriting
+  // the existing value with "" on partial updates that don't touch notes).
+  if (patch.notes === null || patch.notes === undefined && "notes" in patch) {
+    payload.notes = "";
+  } else if (patch.notes !== undefined) {
+    payload.notes = patch.notes ?? "";
+  }
   if (userId) payload.updated_by = userId;
   if (patch.date_observed !== undefined && patch.date_observed) {
     payload.date = patch.date_observed;
