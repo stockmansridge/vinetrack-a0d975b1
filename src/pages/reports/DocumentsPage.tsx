@@ -329,6 +329,13 @@ export default function DocumentsPage() {
         </p>
       </div>
 
+      <Card className="p-3 flex items-start gap-2 border-dashed bg-muted/30">
+        <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+        <div className="text-xs text-muted-foreground">
+          iOS-uploaded documents will appear here once document storage is enabled.
+        </div>
+      </Card>
+
       {/* Rainfall on-demand section */}
       <RainfallExports vineyardId={selectedVineyardId} vineyardName={vineyardName} />
 
