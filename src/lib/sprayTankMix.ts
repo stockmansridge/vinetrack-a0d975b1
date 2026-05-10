@@ -72,10 +72,11 @@ export function computeTankMix(inp: TankMixInputs): TankMixResult {
     const rate = Number(line.rate ?? NaN);
     // Prefer the structurally-stored rate_basis on the line; fall back to
     // detecting it from the unit text for legacy records.
-    const explicit = (line as any).rate_basis as "per_hectare" | "per_100L" | null | undefined;
+    const explicit = (line as any).rate_basis as
+      | "per_hectare" | "per_100L" | "per_100_litres" | null | undefined;
     const basis: RateBasis = explicit === "per_hectare"
       ? "per_ha"
-      : explicit === "per_100L"
+      : explicit === "per_100L" || explicit === "per_100_litres"
       ? "per_100L"
       : detectRateBasis(line.unit);
     const unit = chemUnitOnly(line.unit);
