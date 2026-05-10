@@ -727,7 +727,7 @@ function DamageEditSheet({
       if (!payload.status) throw new Error("Status is required");
       if (payload.damage_percent == null) throw new Error("Damage % is required");
       if (record) {
-        return updateDamageRecord(record.id, payload);
+        return updateDamageRecord(record.id, payload, userId);
       }
       return createDamageRecord(payload, userId);
     },
