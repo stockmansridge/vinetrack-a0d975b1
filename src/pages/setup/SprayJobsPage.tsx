@@ -44,6 +44,7 @@ import {
   vspLitresPer100m, vspLitresPerHa,
 } from "@/lib/vspWaterRate";
 import { deriveMetrics } from "@/lib/paddockGeometry";
+import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -267,7 +268,19 @@ function JobsTable({
     onError: (e: any) => toast({ title: "Duplicate failed", description: e.message, variant: "destructive" }),
   });
 
-  const rows = data ?? [];
+  const [search, setSearch] = useState("");
+  const allRows = data ?? [];
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allRows;
+    return allRows.filter((j) => {
+      const hay = [
+        j.name, j.target, j.operation_type, j.growth_stage_code,
+        j.notes, chemicalLinesSummary(j.chemical_lines),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [allRows, search]);
 
   type ColDef = { key: string; label: string; align?: "right"; accessor: (j: SprayJob) => any };
   const STATUS_ORDER: Record<string, number> = {
@@ -324,23 +337,32 @@ function JobsTable({
 
   return (
     <div className="space-y-3">
-      {mode === "planned" && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="text-sm text-muted-foreground">Yearly program:</span>
-          <Select value={yearSel} onValueChange={setYearSel}>
-            <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button size="sm" variant="outline" onClick={() => handleYearExport("pdf")}>
-            <FileDown className="h-3.5 w-3.5 mr-1" /> PDF
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleYearExport("csv")}>
-            <Download className="h-3.5 w-3.5 mr-1" /> CSV
-          </Button>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder={mode === "templates" ? "Search templates by name, target, chemical…" : "Search by name, target, chemical…"}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-72"
+        />
+        <span className="text-xs text-muted-foreground">{sorted.length} {sorted.length === 1 ? "result" : "results"}</span>
+        {mode === "planned" && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Yearly program:</span>
+            <Select value={yearSel} onValueChange={setYearSel}>
+              <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => handleYearExport("pdf")}>
+              <FileDown className="h-3.5 w-3.5 mr-1" /> PDF
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleYearExport("csv")}>
+              <Download className="h-3.5 w-3.5 mr-1" /> CSV
+            </Button>
+          </div>
+        )}
+      </div>
       <Card>
       <Table>
         <TableHeader>
@@ -637,6 +659,33 @@ function SprayJobSheet({
             {editing ? "Edit" : "New"} {form.is_template ? "template" : "planned job"}
           </SheetTitle>
         </SheetHeader>
+
+        {!editing && !form.is_template && (
+          <StartFromTemplatePicker
+            vineyardId={vineyardId}
+            onUseTemplate={(t) => {
+              setForm((f) => ({
+                ...f,
+                name: t.name ? `${t.name} — ${new Date().toLocaleDateString()}` : f.name,
+                operation_type: t.operation_type ?? f.operation_type,
+                target: t.target ?? f.target,
+                chemical_lines: (t.chemical_lines ?? []).map((l) => ({ ...l })),
+                water_volume: t.water_volume ?? f.water_volume,
+                spray_rate_per_ha: t.spray_rate_per_ha ?? f.spray_rate_per_ha,
+                equipment_id: t.equipment_id ?? f.equipment_id,
+                tractor_id: t.tractor_id ?? f.tractor_id,
+                notes: t.notes ?? f.notes,
+                growth_stage_code: t.growth_stage_code ?? f.growth_stage_code,
+                vsp_canopy_size: t.vsp_canopy_size ?? f.vsp_canopy_size,
+                vsp_canopy_density: t.vsp_canopy_density ?? f.vsp_canopy_density,
+                row_spacing_metres: t.row_spacing_metres ?? f.row_spacing_metres,
+                concentration_factor: t.concentration_factor ?? f.concentration_factor,
+              }));
+              if (t.spray_rate_per_ha != null) setSprayRateOverridden(true);
+              if (t.row_spacing_metres != null) setRowSpacingOverridden(true);
+            }}
+          />
+        )}
 
         <fieldset disabled={!canEdit} className="mt-4 space-y-5 text-sm">
           <div className="grid grid-cols-2 gap-3">
@@ -1026,6 +1075,24 @@ function SprayJobSheet({
             </div>
           </div>
 
+          {/* Tank-mix preview — same logic as the iOS spray/tank mix calculator */}
+          <TankMixPreview
+            form={form}
+            tankCapacityL={
+              form.equipment_id
+                ? Number(
+                    (lookups.equipment as any[]).find((e) => e.id === form.equipment_id)
+                      ?.tank_capacity_litres,
+                  ) || null
+                : null
+            }
+            equipmentName={
+              form.equipment_id ? lookups.maps.equipment.get(form.equipment_id) ?? null : null
+            }
+            selectedPaddocks={selectedPaddocks as any[]}
+            totalAreaHa={totalAreaHa}
+          />
+
           {editing && !form.is_template && (
             <LinkedRecordsSection
               jobId={job!.id}
@@ -1311,5 +1378,219 @@ function LinkRecordDialog({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ============================================================================
+// Tank-mix preview — mirrors the iOS spray/tank mix calculator
+// ============================================================================
+
+function TankMixPreview({
+  form, tankCapacityL, equipmentName, selectedPaddocks, totalAreaHa,
+}: {
+  form: SprayJobInput;
+  tankCapacityL: number | null;
+  equipmentName: string | null;
+  selectedPaddocks: any[];
+  totalAreaHa: number | null;
+}) {
+  const sprayRate = form.spray_rate_per_ha ?? null;
+  const lines = form.chemical_lines ?? [];
+  const result = useMemo(
+    () => computeTankMix({
+      totalAreaHa, sprayRatePerHa: sprayRate, tankCapacityL, chemicalLines: lines,
+    }),
+    [totalAreaHa, sprayRate, tankCapacityL, lines],
+  );
+
+  // Per-paddock breakdown
+  const perPaddock = useMemo(() => {
+    return selectedPaddocks.map((p) => {
+      const m = deriveMetrics(p);
+      const water = sprayRate != null && m.areaHa > 0 ? m.areaHa * sprayRate : null;
+      return {
+        id: p.id,
+        name: p.name ?? "Unnamed paddock",
+        areaHa: m.areaHa || null,
+        water,
+      };
+    });
+  }, [selectedPaddocks, sprayRate]);
+
+  const missing: string[] = [];
+  if (totalAreaHa == null) missing.push("paddocks with area");
+  if (sprayRate == null) missing.push("water rate (L/ha)");
+  if (tankCapacityL == null) missing.push("equipment with tank capacity");
+
+  return (
+    <div className="rounded-md border p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="font-medium">Tank-mix preview</div>
+          <p className="text-xs text-muted-foreground">
+            {equipmentName
+              ? `Tank capacity from equipment: ${equipmentName}${tankCapacityL ? ` (${tankCapacityL.toLocaleString()} L)` : ""}`
+              : "Select equipment to set tank capacity."}
+          </p>
+        </div>
+      </div>
+
+      {missing.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Add {missing.join(", ")} to see a full tank-mix preview.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <Stat label="Total area" value={totalAreaHa != null ? `${totalAreaHa.toFixed(2)} ha` : "—"} />
+        <Stat label="Total water" value={result.totalWaterL != null ? `${Math.round(result.totalWaterL).toLocaleString()} L` : "—"} />
+        <Stat label="Full tanks" value={result.numFullTanks != null ? String(result.numFullTanks) : "—"} />
+        <Stat label="Last tank" value={result.lastTankL != null && result.lastTankL > 0 ? `${result.lastTankL.toLocaleString()} L` : "—"} />
+      </div>
+
+      {result.chemicals.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+            Per chemical
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground">
+                <tr className="border-b">
+                  <th className="text-left py-1 pr-2">Chemical</th>
+                  <th className="text-left py-1 pr-2">Rate</th>
+                  <th className="text-right py-1 pr-2">Total</th>
+                  <th className="text-right py-1 pr-2">Per full tank</th>
+                  <th className="text-right py-1">In last tank</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.chemicals.map((c, i) => {
+                  const basis = c.basis === "per_ha" ? "per ha" : c.basis === "per_100L" ? "per 100 L" : "—";
+                  return (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-1 pr-2 font-medium">{c.name}</td>
+                      <td className="py-1 pr-2 text-muted-foreground">
+                        {c.rate ? `${c.rate} ${chemUnitOnly(form.chemical_lines?.[i]?.unit) || ""}` : "—"} <span className="opacity-60">{basis}</span>
+                      </td>
+                      <td className="py-1 pr-2 text-right">{fmtAmount(c.totalAmount, c.unit)}</td>
+                      <td className="py-1 pr-2 text-right">{fmtAmount(c.perFullTank, c.unit)}</td>
+                      <td className="py-1 text-right">{fmtAmount(c.inLastTank, c.unit)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {result.chemicals.some((c) => c.basis === "unknown") && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Tip: set chemical units to <span className="font-medium">L/ha</span>, <span className="font-medium">kg/ha</span>, <span className="font-medium">mL/100L</span>, or <span className="font-medium">g/100L</span> to calculate amounts.
+            </p>
+          )}
+        </div>
+      )}
+
+      {perPaddock.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+            Per block / paddock
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground">
+                <tr className="border-b">
+                  <th className="text-left py-1 pr-2">Paddock</th>
+                  <th className="text-right py-1 pr-2">Area</th>
+                  <th className="text-right py-1">Water</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perPaddock.map((p) => (
+                  <tr key={p.id} className="border-b last:border-0">
+                    <td className="py-1 pr-2 font-medium">{p.name}</td>
+                    <td className="py-1 pr-2 text-right">{p.areaHa != null ? `${p.areaHa.toFixed(2)} ha` : "—"}</td>
+                    <td className="py-1 text-right">{p.water != null ? `${Math.round(p.water).toLocaleString()} L` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Start-from-template picker
+// ============================================================================
+
+function StartFromTemplatePicker({
+  vineyardId, onUseTemplate,
+}: {
+  vineyardId: string;
+  onUseTemplate: (t: SprayJob) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { data: templates = [], isLoading } = useQuery({
+    queryKey: ["spray_jobs", vineyardId, "templates"],
+    queryFn: () => fetchSprayJobs(vineyardId, { template: true, archived: false }),
+  });
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter((t) => {
+      const hay = [t.name, t.target, t.operation_type, chemicalLinesSummary(t.chemical_lines)]
+        .filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [templates, search]);
+
+  return (
+    <div className="mt-4 rounded-md border bg-muted/30 p-3 flex items-center justify-between gap-2">
+      <div className="text-sm">
+        <div className="font-medium">Start from a template?</div>
+        <p className="text-xs text-muted-foreground">
+          Copy a saved template’s settings into this job. You can still edit anything afterwards.
+        </p>
+      </div>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" size="sm" variant="outline">
+            <FileText className="h-3.5 w-3.5 mr-1" /> Use template
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-0" align="end">
+          <div className="p-2 border-b">
+            <Input
+              placeholder="Search templates…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {isLoading && <div className="p-3 text-xs text-muted-foreground">Loading…</div>}
+            {!isLoading && filtered.length === 0 && (
+              <div className="p-3 text-xs text-muted-foreground">No templates available.</div>
+            )}
+            {filtered.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="w-full text-left px-3 py-2 hover:bg-muted/60 text-sm border-b last:border-0"
+                onClick={() => { onUseTemplate(t); setOpen(false); }}
+              >
+                <div className="font-medium truncate">{t.name || "Untitled template"}</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {t.target ? `${t.target} · ` : ""}{chemicalLinesSummary(t.chemical_lines)}
+                </div>
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
