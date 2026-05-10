@@ -517,8 +517,39 @@ function ChemicalEditor({
             <Field label="Default rate">
               <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
             </Field>
-            <Field label="Rate unit"><Input value={form.unit ?? ""} onChange={(e) => set("unit", e.target.value)} placeholder="L/ha, g/ha…" /></Field>
+            <Field label="Unit (chemical)">
+              <Input
+                value={chemUnitOnly(form.unit ?? "")}
+                placeholder="L, mL, kg, g"
+                onChange={(e) => {
+                  const cu = e.target.value;
+                  const basis = inferRateBasis(form.unit);
+                  set("unit", composeUnit(cu, basis));
+                }}
+              />
+            </Field>
           </div>
+          <Field label="Rate basis">
+            <RadioGroup
+              className="flex gap-6"
+              value={inferRateBasis(form.unit)}
+              onValueChange={(v) => {
+                const basis = v as RateBasis;
+                const cu = chemUnitOnly(form.unit ?? "") || "L";
+                set("unit", composeUnit(cu, basis));
+              }}
+            >
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <RadioGroupItem value="per_hectare" /> {RATE_BASIS_LABEL.per_hectare}
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
+              </label>
+            </RadioGroup>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Choose whether this product rate is applied by area or by spray volume.
+            </p>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Withholding period (days)">
               <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />
