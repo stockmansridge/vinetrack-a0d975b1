@@ -387,6 +387,12 @@ export default function DamageRecordsPage() {
         paddocks={paddocks}
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
+        userDisplayName={
+          (user?.user_metadata as any)?.full_name ||
+          (user?.user_metadata as any)?.name ||
+          user?.email ||
+          null
+        }
         onClose={() => setEditingOpen(false)}
         onSaved={() => {
           setEditingOpen(false);
