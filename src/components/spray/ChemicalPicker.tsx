@@ -130,6 +130,12 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
           open={creating}
           onOpenChange={setCreating}
           vineyardId={vineyardId}
+          existingLibrary={data?.chemicals ?? []}
+          onPickExisting={(c) => {
+            setCreating(false);
+            onSelect(c);
+            onOpenChange(false);
+          }}
           onCreated={(c) => {
             qc.invalidateQueries({ queryKey: ["saved-chemicals-picker", vineyardId] });
             qc.invalidateQueries({ queryKey: ["saved_chemicals", vineyardId] });
