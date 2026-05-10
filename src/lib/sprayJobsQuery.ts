@@ -9,6 +9,13 @@ export interface SprayJobChemicalLine {
   active_ingredient?: string | null;
   rate?: number | null;
   unit?: string | null;
+  /**
+   * Explicit application basis for this line. Persisted into the JSON so iOS
+   * can read it without having to parse the unit string.
+   *   - "per_hectare" → rate × area
+   *   - "per_100L"    → rate × (water litres / 100)
+   */
+  rate_basis?: "per_hectare" | "per_100L" | null;
   water_rate?: number | null;
   notes?: string | null;
 }
