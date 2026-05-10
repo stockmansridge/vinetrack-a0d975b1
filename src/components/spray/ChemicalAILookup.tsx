@@ -160,9 +160,16 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
   return (
     <div className="rounded-md border border-dashed p-3 space-y-2 bg-muted/30">
-      <div className="flex items-center gap-1.5 text-xs font-medium">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
-        AI Lookup (Australian labels)
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          AI Lookup {country ? `(${country} labels)` : "(country not set)"}
+        </div>
+        {!country && (
+          <span className="text-[10px] text-muted-foreground italic">
+            Set vineyard country to improve results
+          </span>
+        )}
       </div>
       <div className="flex gap-2">
         <Input
