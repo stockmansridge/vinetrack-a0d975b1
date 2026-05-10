@@ -36,6 +36,7 @@ interface Props {
 export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSelect }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { currentCountry } = useVineyard();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -204,6 +205,7 @@ function NewChemicalDialog({
         <div className="space-y-3 text-sm max-h-[70vh] overflow-y-auto pr-1">
           <ChemicalAILookup
             initialName={form.name}
+            country={currentCountry}
             existingLibrary={existingLibrary.map((c) => ({
               id: c.id,
               name: c.name,
