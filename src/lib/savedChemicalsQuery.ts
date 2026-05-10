@@ -11,6 +11,7 @@
 //   single vineyard_id. No withholding_period / re_entry_interval column
 //   (these typically live inside `restrictions` free text).
 import { supabase } from "@/integrations/ios-supabase/client";
+import { iosUnitFromAny, iosBasisCode, inferRateBasis } from "@/lib/rateBasis";
 
 export interface SavedChemical {
   id: string;
