@@ -402,10 +402,10 @@ export default function DamageRecordsPage() {
 // ---------- Detail / read drawer ----------
 
 function DamageDetailSheet({
-  record, paddockName, createdByName, open, canEdit, onOpenChange, onEdit, onArchive,
+  record, paddock, createdByName, open, canEdit, onOpenChange, onEdit, onArchive,
 }: {
   record: DamageRecord | null;
-  paddockName: string | null;
+  paddock: PaddockGeo | null;
   createdByName: string | null;
   open: boolean;
   canEdit: boolean;
@@ -413,6 +413,23 @@ function DamageDetailSheet({
   onEdit: (r: DamageRecord) => void;
   onArchive: (r: DamageRecord) => void;
 }) {
+  const paddockName = paddock?.name ?? null;
+  const paddockPolygon = useMemo<LatLng[]>(
+    () => parsePolygonPoints(paddock?.polygon_points),
+    [paddock?.polygon_points],
+  );
+  const damagePoly = useMemo<LatLng[]>(
+    () => parsePolygonPoints(record?.polygon_points),
+    [record?.polygon_points],
+  );
+  const blockAreaHa = useMemo(
+    () => polygonAreaHectares(paddockPolygon),
+    [paddockPolygon],
+  );
+  const impact = useMemo(
+    () => record ? calculateDamageImpact(record, blockAreaHa) : null,
+    [record, blockAreaHa],
+  );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -573,7 +590,7 @@ function DamageEditSheet({
 }: {
   open: boolean;
   record: DamageRecord | null;
-  paddocks: PaddockLite[];
+  paddocks: PaddockGeo[];
   vineyardId: string | null;
   userId: string | null;
   onClose: () => void;
