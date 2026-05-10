@@ -47,14 +47,14 @@ All colors MUST be HSL.
 
     --radius: 0.75rem;
 
-    --sidebar-background: 145 30% 16%;
-    --sidebar-foreground: 40 33% 95%;
-    --sidebar-primary: 130 50% 60%;
-    --sidebar-primary-foreground: 145 42% 12%;
-    --sidebar-accent: 145 28% 22%;
-    --sidebar-accent-foreground: 40 33% 95%;
-    --sidebar-border: 145 25% 22%;
-    --sidebar-ring: 130 50% 60%;
+    --sidebar-background: 82 59% 46%;
+    --sidebar-foreground: 82 60% 10%;
+    --sidebar-primary: 82 55% 25%;
+    --sidebar-primary-foreground: 40 33% 95%;
+    --sidebar-accent: 82 55% 56%;
+    --sidebar-accent-foreground: 82 60% 10%;
+    --sidebar-border: 82 45% 38%;
+    --sidebar-ring: 82 65% 50%;
   }
 
   .dark {
