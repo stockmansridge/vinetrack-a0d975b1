@@ -128,6 +128,7 @@ export default function DamagePolygonEditor({
           lineWidth: 2,
         }),
       });
+      overlay.enabled = false;
       map.addOverlay(overlay);
       paddockOverlayRef.current = overlay;
 
@@ -188,6 +189,7 @@ export default function DamagePolygonEditor({
           lineWidth: 2,
         }),
       });
+      overlay.enabled = false;
       map.addOverlay(overlay);
       polygonOverlayRef.current = overlay;
     }
