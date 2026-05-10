@@ -280,14 +280,6 @@ export default function DamageRecordsPage() {
         </div>
       </div>
 
-      <DamageRecordDebugCard
-        latestRecord={debugRecord}
-        compareRecord={compareRecord}
-        compareOptions={compareOptions}
-        compareRecordId={compareRecordId}
-        onCompareRecordChange={setCompareRecordId}
-      />
-
       <Card>
         <Table>
           <TableHeader>
