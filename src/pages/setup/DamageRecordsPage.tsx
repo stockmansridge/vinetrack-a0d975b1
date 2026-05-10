@@ -472,7 +472,7 @@ function DamageDetailSheet({
               <Field label="Paddock" value={paddockName ?? "—"} />
               <Field label="Row / path" value={fmt(record.row_number)} />
               <Field label="Side" value={fmt(record.side)} />
-              <Field label="Damage type" value={fmt(record.damage_type)} />
+              <Field label="Damage type" value={damageTypeLabel(record.damage_type)} />
               <Field label="Severity" value={fmt(record.severity)} />
               <Field label="Status" value={fmt(record.status ?? "open")} />
               <Field label="Damage %" value={record.damage_percent == null ? "—" : `${record.damage_percent}%`} />
