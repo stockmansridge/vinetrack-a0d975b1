@@ -16,6 +16,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 
 interface Props {
   open: boolean;
