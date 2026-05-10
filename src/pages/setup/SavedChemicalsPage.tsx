@@ -527,20 +527,41 @@ function ChemicalEditor({
             <Field label="Crop"><Input value={form.crop ?? ""} onChange={(e) => set("crop", e.target.value)} /></Field>
             <Field label="Target pest / disease / weed"><Input value={form.problem ?? ""} onChange={(e) => set("problem", e.target.value)} /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Default rate">
               <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
             </Field>
-            <Field label="Unit (chemical)">
-              <Input
-                value={chemUnitOnly(form.unit ?? "")}
-                placeholder="L, mL, kg, g"
-                onChange={(e) => {
-                  const cu = e.target.value;
+            <Field label="Product type">
+              <Select
+                value={inferProductType(form.unit)}
+                onValueChange={(v) => {
+                  const pt = v as ProductType;
                   const basis = inferRateBasis(form.unit);
-                  set("unit", composeUnit(cu, basis));
+                  set("unit", composeUnit(defaultUnitFor(pt), basis));
                 }}
-              />
+              >
+                <SelectTrigger><SelectValue placeholder="Liquid / Solid" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
+                  <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Unit">
+              <Select
+                value={(normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(inferProductType(form.unit))}
+                onValueChange={(v) => {
+                  const basis = inferRateBasis(form.unit);
+                  set("unit", composeUnit(v, basis));
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {unitsFor(inferProductType(form.unit)).map((u) => (
+                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
           <Field label="Rate basis">
