@@ -100,16 +100,18 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
               ))}
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-1 border-t">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Sparkles className="h-3 w-3" />
-                AI chemical lookup coming later.
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-1 border-t">
               {canCreate && (
-                <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Add chemical
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    Look up chemical
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add chemical
+                  </Button>
+                </>
               )}
             </div>
           </div>
