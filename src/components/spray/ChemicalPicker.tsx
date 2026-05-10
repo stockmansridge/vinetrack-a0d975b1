@@ -163,6 +163,7 @@ function NewChemicalDialog({
   onPickExisting: (c: SavedChemical) => void;
 }) {
   const { toast } = useToast();
+  const { currentCountry } = useVineyard();
   const [form, setForm] = useState({
     name: "",
     active_ingredient: "",
