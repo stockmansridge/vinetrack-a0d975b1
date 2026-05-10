@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  DAMAGE_TYPES,
+  DAMAGE_TYPE_CODES,
+  damageTypeLabel,
   SEVERITIES,
   STATUSES,
   SIDES,
