@@ -453,6 +453,38 @@ function DamageDetailSheet({
               <Field label="Damage %" value={record.damage_percent == null ? "—" : `${record.damage_percent}%`} />
               <Field label="Operator" value={fmt(record.operator_name) === "—" ? createdByName ?? "—" : record.operator_name!} />
             </Section>
+
+            {(paddockPolygon.length >= 3 || damagePoly.length >= 3) && (
+              <Section title="Damage area">
+                <DamageMapView
+                  paddockPolygon={paddockPolygon}
+                  damagePolygon={damagePoly}
+                  height={260}
+                />
+                {impact && (
+                  <div className="mt-3 grid gap-1.5 text-sm">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#2E7D32" }} />
+                      Paddock
+                      <span className="ml-3 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#E53935" }} />
+                      Damage area
+                    </div>
+                    <Field label="Block area" value={`${impact.blockAreaHa.toFixed(2)} ha`} />
+                    <Field
+                      label="Damaged area"
+                      value={impact.hasPolygon ? `${impact.damagedAreaHa.toFixed(2)} ha` : "Whole block (no polygon)"}
+                    />
+                    <Field label="Damage intensity" value={`${impact.damagePercent}%`} />
+                    <Field label="Effective loss" value={`${impact.effectiveAreaHa.toFixed(2)} ha`} />
+                    <Field
+                      label="Block yield impact"
+                      value={impact.blockAreaHa > 0 ? `${impact.blockLossPct.toFixed(1)}%` : "—"}
+                    />
+                  </div>
+                )}
+              </Section>
+            )}
+
             {record.notes && (
               <Section title="Notes">
                 <p className="whitespace-pre-wrap">{record.notes}</p>
