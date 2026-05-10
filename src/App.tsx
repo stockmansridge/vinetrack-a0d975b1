@@ -34,6 +34,7 @@ import OperatorCategoriesPage from "./pages/setup/OperatorCategoriesPage";
 import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
 import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
+import TripReportsPage from "./pages/reports/TripReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
@@ -93,6 +94,7 @@ const App = () => (
                     <Route path="/setup/operator-categories" element={<OperatorCategoriesPage />} />
                     <Route path="/setup/weather" element={<WeatherStatusPage />} />
                     <Route path="/reports" element={<ReportsIndexPage />} />
+                    <Route path="/reports/trips" element={<TripReportsPage />} />
                     <Route path="/reports/spray" element={<SprayReportsPage />} />
                     <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
                     <Route path="/reports/documents" element={<DocumentsPage />} />

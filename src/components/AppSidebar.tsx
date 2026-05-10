@@ -142,8 +142,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {renderItems([
                 { title: "Overview", url: "/reports", icon: FileText },
-                { title: "Spray reports", url: "/reports/spray", icon: FileText },
-                { title: "Rainfall reports", url: "/reports/rainfall", icon: FileText },
+                { title: "Trip Reports", url: "/reports/trips", icon: FileText },
+                { title: "Spray Records", url: "/reports/spray", icon: FileText },
+                { title: "Rainfall Reports", url: "/reports/rainfall", icon: FileText },
                 { title: "Documents & Exports", url: "/reports/documents", icon: FileText },
               ])}
             </SidebarMenu>
