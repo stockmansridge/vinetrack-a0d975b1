@@ -875,7 +875,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Vineyard", fmt(ctx.vineyardName)],
     [blockLabel, fmt(blocks)],
     ["Trip type", fmt(ctx.tripFunctionLabel ?? t.trip_function)],
-    ["Job notes", fmt(t.trip_title)],
+    ["Trip name", fmt(t.trip_title)],
     ["Operator", fmt(t.person_name)],
     ["Date", fmtDate(t.start_time)],
     ["Start time", fmtTime(t.start_time)],
