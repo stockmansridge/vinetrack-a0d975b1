@@ -53,7 +53,6 @@ export default function AppLayout() {
               )}
             </div>
             <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
-              <BrandMark size={28} alt="VineTrack" />
               <span className="text-base">
                 <BrandName />
               </span>
