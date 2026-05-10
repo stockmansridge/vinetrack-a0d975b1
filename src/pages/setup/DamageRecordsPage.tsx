@@ -91,43 +91,6 @@ const fmtDateTime = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
-const DEBUG_FIELDS = [
-  "id",
-  "vineyard_id",
-  "paddock_id",
-  "date",
-  "date_observed",
-  "damage_type",
-  "damage_percent",
-  "notes",
-  "polygon_points",
-  "row_number",
-  "side",
-  "severity",
-  "status",
-  "operator_name",
-  "latitude",
-  "longitude",
-  "created_by",
-  "updated_by",
-  "created_at",
-  "updated_at",
-  "client_updated_at",
-  "sync_version",
-  "deleted_at",
-] as const satisfies ReadonlyArray<keyof DamageRecord>;
-
-const serialiseDebugValue = (value: unknown) => {
-  if (value == null) return "null";
-  if (typeof value === "string") return value === "" ? '""' : value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-};
-
 const SEVERITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   low: "outline",
   medium: "secondary",
@@ -160,9 +123,6 @@ export default function DamageRecordsPage() {
   const [editingOpen, setEditingOpen] = useState(false);
   const [editing, setEditing] = useState<DamageRecord | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<DamageRecord | null>(null);
-  const [latestSavedRecord, setLatestSavedRecord] = useState<DamageRecord | null>(null);
-  const [compareRecordId, setCompareRecordId] = useState<string>(ANY);
-
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-geo", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -193,28 +153,6 @@ export default function DamageRecordsPage() {
       .sort((a, b) => (b.created_at ?? b.client_updated_at ?? "").localeCompare(a.created_at ?? a.client_updated_at ?? ""));
     return dated[0] ?? null;
   }, [records]);
-  const debugRecord = latestSavedRecord ?? latestRecord;
-  const compareOptions = useMemo(
-    () => records.filter((r) => r.id !== debugRecord?.id),
-    [records, debugRecord?.id],
-  );
-
-  useEffect(() => {
-    if (!compareOptions.length) {
-      setCompareRecordId(ANY);
-      return;
-    }
-    setCompareRecordId((current) => (
-      current !== ANY && compareOptions.some((r) => r.id === current)
-        ? current
-        : compareOptions[0].id
-    ));
-  }, [compareOptions]);
-
-  const compareRecord = compareRecordId === ANY
-    ? null
-    : compareOptions.find((r) => r.id === compareRecordId) ?? null;
-
   const observed = (r: DamageRecord) => r.date_observed ?? r.date ?? r.created_at ?? null;
 
   const rows = useMemo(() => {
@@ -342,14 +280,6 @@ export default function DamageRecordsPage() {
         </div>
       </div>
 
-      <DamageRecordDebugCard
-        latestRecord={debugRecord}
-        compareRecord={compareRecord}
-        compareOptions={compareOptions}
-        compareRecordId={compareRecordId}
-        onCompareRecordChange={setCompareRecordId}
-      />
-
       <Card>
         <Table>
           <TableHeader>
@@ -473,7 +403,7 @@ export default function DamageRecordsPage() {
           setEditingOpen(false);
           queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
         }}
-        onSavedRecord={setLatestSavedRecord}
+        
       />
 
       <AlertDialog open={!!archiveTarget} onOpenChange={(o) => !o && setArchiveTarget(null)}>
@@ -640,126 +570,6 @@ function DamageDetailSheet({
   );
 }
 
-function DamageRecordDebugCard({
-  latestRecord,
-  compareRecord,
-  compareOptions,
-  compareRecordId,
-  onCompareRecordChange,
-}: {
-  latestRecord: DamageRecord | null;
-  compareRecord: DamageRecord | null;
-  compareOptions: DamageRecord[];
-  compareRecordId: string;
-  onCompareRecordChange: (value: string) => void;
-}) {
-  return (
-    <Card className="p-4 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Damage record debug</h2>
-          <p className="text-xs text-muted-foreground">
-            Latest portal-created row values, plus a field-by-field comparison when another row is available.
-          </p>
-        </div>
-        <div className="w-full max-w-sm space-y-1">
-          <div className="text-xs text-muted-foreground">Compare against</div>
-          <Select value={compareRecordId} onValueChange={onCompareRecordChange} disabled={!compareOptions.length}>
-            <SelectTrigger>
-              <SelectValue placeholder={compareOptions.length ? "Select comparison row" : "No comparison row available"} />
-            </SelectTrigger>
-            <SelectContent>
-              {compareOptions.length ? compareOptions.map((record) => (
-                <SelectItem key={record.id} value={record.id}>
-                  {fmtDate(record.date_observed ?? record.date ?? record.created_at)} · {damageTypeLabel(record.damage_type)} · {record.id.slice(0, 8)}
-                </SelectItem>
-              )) : (
-                <SelectItem value={ANY} disabled>No comparison row available</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {!latestRecord ? (
-        <p className="text-sm text-muted-foreground">No damage record available yet for debug output.</p>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <div className="space-y-2">
-            <div className="rounded-lg border bg-secondary/35 p-3">
-              <div className="text-xs text-muted-foreground">Latest record</div>
-              <div className="mt-1 text-sm font-medium break-all">{latestRecord.id}</div>
-            </div>
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[180px]">Field</TableHead>
-                    <TableHead>Latest value</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {DEBUG_FIELDS.map((field) => (
-                    <TableRow key={field}>
-                      <TableCell className="align-top text-xs font-medium text-muted-foreground">{field}</TableCell>
-                      <TableCell>
-                        <pre className="max-w-full whitespace-pre-wrap break-all text-xs leading-5 text-foreground">{serialiseDebugValue(latestRecord[field])}</pre>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="rounded-lg border bg-secondary/35 p-3">
-              <div className="text-xs text-muted-foreground">Comparison result</div>
-              <div className="mt-1 text-sm font-medium break-all">
-                {compareRecord ? compareRecord.id : "No iOS-created comparison row available in current dataset"}
-              </div>
-            </div>
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[160px]">Field</TableHead>
-                    <TableHead>Latest row</TableHead>
-                    <TableHead>Compare row</TableHead>
-                    <TableHead className="w-[110px]">Match</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {DEBUG_FIELDS.map((field) => {
-                    const left = serialiseDebugValue(latestRecord[field]);
-                    const right = compareRecord ? serialiseDebugValue(compareRecord[field]) : "—";
-                    const same = compareRecord ? left === right : null;
-                    return (
-                      <TableRow key={field}>
-                        <TableCell className="align-top text-xs font-medium text-muted-foreground">{field}</TableCell>
-                        <TableCell>
-                          <pre className="max-w-full whitespace-pre-wrap break-all text-xs leading-5 text-foreground">{left}</pre>
-                        </TableCell>
-                        <TableCell>
-                          <pre className="max-w-full whitespace-pre-wrap break-all text-xs leading-5 text-foreground">{right}</pre>
-                        </TableCell>
-                        <TableCell className="align-top">
-                          {same == null ? "—" : (
-                            <Badge variant={same ? "outline" : "secondary"}>{same ? "Same" : "Diff"}</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
 
 function PhotoGrid({ paths }: { paths: string[] }) {
   const [urls, setUrls] = useState<(string | null)[]>([]);
@@ -850,7 +660,7 @@ function recordToForm(r: DamageRecord): FormState {
 }
 
 function DamageEditSheet({
-  open, record, paddocks, vineyardId, userId, userDisplayName, onClose, onSaved, onSavedRecord,
+  open, record, paddocks, vineyardId, userId, userDisplayName, onClose, onSaved,
 }: {
   open: boolean;
   record: DamageRecord | null;
@@ -860,7 +670,6 @@ function DamageEditSheet({
   userDisplayName: string | null;
   onClose: () => void;
   onSaved: () => void;
-  onSavedRecord: (record: DamageRecord) => void;
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -940,8 +749,7 @@ function DamageEditSheet({
       }
       return createDamageRecord(payload, userId);
     },
-    onSuccess: (savedRecord) => {
-      onSavedRecord(savedRecord);
+    onSuccess: () => {
       toast({ title: record ? "Damage record updated" : "Damage record created" });
       onSaved();
     },
