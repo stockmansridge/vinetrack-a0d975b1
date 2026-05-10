@@ -1048,6 +1048,24 @@ function SprayJobSheet({
             </div>
           </div>
 
+          {/* Tank-mix preview — same logic as the iOS spray/tank mix calculator */}
+          <TankMixPreview
+            form={form}
+            tankCapacityL={
+              form.equipment_id
+                ? Number(
+                    (lookups.equipment as any[]).find((e) => e.id === form.equipment_id)
+                      ?.tank_capacity_litres,
+                  ) || null
+                : null
+            }
+            equipmentName={
+              form.equipment_id ? lookups.maps.equipment.get(form.equipment_id) ?? null : null
+            }
+            selectedPaddocks={selectedPaddocks as any[]}
+            totalAreaHa={totalAreaHa}
+          />
+
           {editing && !form.is_template && (
             <LinkedRecordsSection
               jobId={job!.id}
