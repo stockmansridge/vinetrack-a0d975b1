@@ -233,7 +233,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       {candidates && candidates.length > 0 && (
         <div className="space-y-1">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            AI candidates ({candidates.length})
+            Lookup results ({candidates.length})
           </div>
           {candidates.map((c, i) => {
             const unit = c.unit ?? (normaliseUnit(c.unit) as ChemUnit | "");
@@ -298,7 +298,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       )}
 
       <p className="text-[11px] text-muted-foreground leading-snug">
-        AI lookup is a starting point only. Always confirm against the product label before use.
+        Always confirm rates, withholding periods, re-entry intervals, and permitted uses against the current product label for your country.
       </p>
     </div>
   );
