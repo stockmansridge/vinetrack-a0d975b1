@@ -116,42 +116,54 @@ function useLookups(vineyardId: string | null) {
   return { paddocks: paddocks ?? [], tractors: tractors ?? [], equipment: equipment ?? [], members: (members ?? []) as VineyardTeamMember[], maps };
 }
 
-export default function SprayJobsPage() {
+export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly?: boolean } = {}) {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
-  const [tab, setTab] = useState<"planned" | "templates" | "archived">("planned");
+  const [tab, setTab] = useState<"planned" | "templates" | "archived">(
+    templatesOnly ? "templates" : "planned",
+  );
   const [editing, setEditing] = useState<{ job: SprayJob | null; isTemplate: boolean } | null>(null);
 
   const lookups = useLookups(selectedVineyardId);
+
+  const effectiveTab = templatesOnly && tab === "planned" ? "templates" : tab;
 
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Spray Jobs &amp; Templates</h1>
+          <h1 className="text-2xl font-semibold">
+            {templatesOnly ? "Spray Templates" : "Spray Jobs & Templates"}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Plan upcoming spray work and maintain reusable templates. Completed compliance records live under Spray Records.
+            {templatesOnly
+              ? "Create and manage reusable spray templates. Field staff can start a planned job from any active template."
+              : "Plan upcoming spray work and maintain reusable templates. Completed compliance records live under Spray Records."}
           </p>
         </div>
-        {canEdit && tab !== "archived" && (
-          <Button onClick={() => setEditing({ job: null, isTemplate: tab === "templates" })}>
+        {canEdit && effectiveTab !== "archived" && (
+          <Button onClick={() => setEditing({ job: null, isTemplate: effectiveTab === "templates" || templatesOnly })}>
             <Plus className="h-4 w-4 mr-1" />
-            {tab === "templates" ? "New template" : "New planned job"}
+            {templatesOnly
+              ? "New Spray Template"
+              : effectiveTab === "templates" ? "New template" : "New planned job"}
           </Button>
         )}
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={effectiveTab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
-          <TabsTrigger value="planned">Planned Jobs</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
+          {!templatesOnly && <TabsTrigger value="planned">Planned Jobs</TabsTrigger>}
+          <TabsTrigger value="templates">{templatesOnly ? "Active" : "Templates"}</TabsTrigger>
           <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="planned">
-          <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
-            onEdit={(job) => setEditing({ job, isTemplate: false })} />
-        </TabsContent>
+        {!templatesOnly && (
+          <TabsContent value="planned">
+            <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
+              onEdit={(job) => setEditing({ job, isTemplate: false })} />
+          </TabsContent>
+        )}
         <TabsContent value="templates">
           <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps}
             onEdit={(job) => setEditing({ job, isTemplate: true })} />
