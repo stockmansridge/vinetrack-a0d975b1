@@ -58,13 +58,22 @@ import {
   type DamageRecord,
   type DamageRecordWriteInput,
 } from "@/lib/damageRecordsQuery";
+import {
+  parsePolygonPoints,
+  polygonAreaHectares,
+  type LatLng,
+} from "@/lib/paddockGeometry";
+import { calculateDamageImpact } from "@/lib/damageImpact";
+import DamageMapView from "@/components/DamageMapView";
 
 const ANY = "__any__";
 
-interface PaddockLite {
+interface PaddockGeo {
   id: string;
   name: string | null;
+  polygon_points?: any;
 }
+
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -114,11 +123,16 @@ export default function DamageRecordsPage() {
   const [archiveTarget, setArchiveTarget] = useState<DamageRecord | null>(null);
 
   const { data: paddocks = [] } = useQuery({
-    queryKey: ["paddocks-lite", selectedVineyardId],
+    queryKey: ["paddocks-geo", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PaddockLite>("paddocks", selectedVineyardId!),
+    queryFn: () => fetchList<PaddockGeo>("paddocks", selectedVineyardId!),
   });
 
+  const paddockGeoById = useMemo(() => {
+    const m = new Map<string, PaddockGeo>();
+    paddocks.forEach((p) => m.set(p.id, p));
+    return m;
+  }, [paddocks]);
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
     paddocks.forEach((p) => m.set(p.id, p.name));
@@ -340,7 +354,7 @@ export default function DamageRecordsPage() {
 
       <DamageDetailSheet
         record={selected}
-        paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+        paddock={selected?.paddock_id ? paddockGeoById.get(selected.paddock_id) ?? null : null}
         createdByName={resolve(selected?.created_by ?? null)}
         open={!!selected}
         canEdit={canEdit}
