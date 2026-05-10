@@ -23,30 +23,28 @@ export default function PortalInfoBanner() {
   if (!visible) return null;
 
   return (
-    <div className="relative border-b bg-primary/5 px-4 py-3">
-      <div className="flex items-start gap-3 pr-10">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">
-            Welcome to the <BrandName /> Admin Portal
-          </p>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            VineTrack combines an in-field iOS app with this administrator portal.
-            Use the iOS app to record work in the vineyard. Use this portal to review
-            completed work, export reports, manage setup data, and plan upcoming jobs.
-            Pins and trips are completed from the iOS app, not closed from the portal.
-          </p>
-        </div>
+    <div className="relative mx-4 mt-3 rounded-2xl border border-border bg-card px-4 py-2.5 shadow-soft-sm">
+      <div className="flex items-center gap-3 pr-9">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary">
+          <Info className="h-4 w-4 text-primary" aria-hidden="true" />
+        </span>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          <span className="font-medium text-foreground">
+            Welcome to the <BrandName /> Admin Portal.
+          </span>{" "}
+          Use the iOS app to record vineyard work; use this portal to review,
+          export and plan. Pins and trips are completed from the iOS app.
+        </p>
       </div>
       <Button
         variant="ghost"
         size="icon"
-        className="absolute right-2 top-2 h-7 w-7 rounded-full"
+        className="absolute right-1.5 top-1.5 h-6 w-6 rounded-full"
         onClick={handleDismiss}
         aria-label="Dismiss information banner"
         title="Dismiss"
       >
-        <X className="h-4 w-4" />
+        <X className="h-3.5 w-3.5" />
       </Button>
     </div>
   );
