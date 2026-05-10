@@ -251,9 +251,20 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                   <div className="text-sm font-medium">
                     {c.product_name || "Unnamed"}
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    Confidence: {c.confidence ?? "unknown"}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    {c.country && (
+                      <Badge
+                        variant={c.country_confirmed === false ? "outline" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {c.country}
+                        {c.country_confirmed === false ? " (unverified)" : ""}
+                      </Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {c.confidence ?? "unknown"}
+                    </span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                   <Row label="Active" value={c.active_ingredient} />
