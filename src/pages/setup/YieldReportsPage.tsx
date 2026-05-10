@@ -280,7 +280,7 @@ export default function YieldReportsPage() {
         </TabsContent>
       </Tabs>
 
-      <YieldSheet row={selected} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
+      <YieldSheet row={selected} vineyardId={selectedVineyardId} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
     </div>
   );
 }
@@ -296,10 +296,12 @@ function sortDate(r: AnyRow): string | null | undefined {
 
 function YieldSheet({
   row,
+  vineyardId,
   open,
   onOpenChange,
 }: {
   row: AnyRow | null;
+  vineyardId: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -312,14 +314,16 @@ function YieldSheet({
             {row ? ` — ${fmtDate(sortDate(row))}` : ""}
           </SheetTitle>
         </SheetHeader>
-        {row?.__kind === "historical" && <HistoricalDetail row={row as HistoricalYieldRecord} />}
+        {row?.__kind === "historical" && (
+          <HistoricalDetail row={row as HistoricalYieldRecord} vineyardId={vineyardId} />
+        )}
         {row?.__kind === "session" && <SessionDetail row={row as YieldEstimationSession} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function HistoricalDetail({ row }: { row: HistoricalYieldRecord }) {
+function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
   const blocks = Array.isArray(row.block_results) ? row.block_results : null;
   return (
     <div className="mt-4 space-y-4 text-sm">
