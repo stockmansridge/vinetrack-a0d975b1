@@ -48,6 +48,8 @@ interface RawCandidate {
   target?: string;
   notes?: string;
   safety_note?: string;
+  country?: string;
+  country_confirmed?: boolean;
   confidence?: "high" | "medium" | "low" | "unknown";
 }
 
