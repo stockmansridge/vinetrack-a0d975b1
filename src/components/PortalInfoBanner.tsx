@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandName } from "@/components/BrandName";
 
 const STORAGE_KEY = "vt_portal_info_banner_dismissed";
 
@@ -27,7 +28,7 @@ export default function PortalInfoBanner() {
         <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div className="space-y-1">
           <p className="text-sm font-medium text-foreground">
-            Welcome to the VineTrack Admin Portal
+            Welcome to the <BrandName /> Admin Portal
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             VineTrack combines an in-field iOS app with this administrator portal.

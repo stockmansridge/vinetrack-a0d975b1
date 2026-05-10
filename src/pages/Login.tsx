@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
+import { BrandName } from "@/components/BrandName";
 
 export default function Login() {
   const { session, loading } = useAuth();
@@ -73,7 +74,7 @@ export default function Login() {
             className="text-white font-extrabold tracking-tight"
             style={{ fontSize: 40, lineHeight: 1.05, textShadow: "0 2px 2px rgba(0,0,0,0.28)" }}
           >
-            VineTrack Portal
+            <BrandName suffix="Portal" suffixClassName="text-white" className="text-white" />
           </h1>
           <p className="text-white/90 font-semibold text-[15px] leading-snug px-4">
             Management access for vineyard Owners and Managers.
