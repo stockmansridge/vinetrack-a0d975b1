@@ -70,6 +70,19 @@ export function composeUnit(chemUnit: string, basis: RateBasis): string {
   return basis === "per_100L" ? `${cu}/100L` : `${cu}/ha`;
 }
 
+/**
+ * Render a unit string in display form for the UI ("L/ha", "mL/100L", etc.)
+ * regardless of whether the stored value uses iOS raw enums ("Litres/ha")
+ * or the short internal form. Falls back to the original string for unknowns.
+ */
+export function displayUnitText(unit?: string | null): string {
+  if (!unit) return "";
+  const cu = normaliseUnit(unit);
+  if (!cu) return unit;
+  const basis = inferRateBasis(unit);
+  return composeUnit(cu, basis);
+}
+
 /** Default unit for a given product type. */
 export function defaultUnitFor(type: ProductType): ChemUnit {
   return type === "solid" ? "kg" : "L";
