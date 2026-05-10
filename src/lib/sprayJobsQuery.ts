@@ -118,8 +118,43 @@ export interface SprayJobInput {
   concentration_factor?: number | null;
 }
 
+/**
+ * Normalise a chemical_lines array so the persisted JSON carries the
+ * legacy fields iOS expects (`unit` as raw enum, `ratePerHa`, `ratePer100L`,
+ * `rate_basis = per_hectare | per_100_litres`) alongside our newer
+ * structured fields.
+ */
+export function normaliseChemicalLinesForIOS(
+  lines?: SprayJobChemicalLine[] | null,
+): SprayJobChemicalLine[] | null | undefined {
+  if (lines == null) return lines;
+  return lines.map((l) => {
+    const compat = toIOSChemicalLineCompat({
+      unit: l.unit,
+      product_type: l.product_type ?? null,
+      rate_basis: l.rate_basis ?? null,
+      rate: l.rate ?? null,
+      ratePerHa: l.ratePerHa ?? null,
+      ratePer100L: l.ratePer100L ?? null,
+    });
+    return {
+      ...l,
+      unit: compat.unit,
+      rate_basis: compat.rate_basis,
+      ratePerHa: compat.ratePerHa,
+      ratePer100L: compat.ratePer100L,
+    } as SprayJobChemicalLine;
+  });
+}
+
+function withNormalisedLines<T extends { chemical_lines?: SprayJobChemicalLine[] | null }>(input: T): T {
+  if (!("chemical_lines" in input) || input.chemical_lines == null) return input;
+  return { ...input, chemical_lines: normaliseChemicalLinesForIOS(input.chemical_lines) ?? null };
+}
+
 export async function createSprayJob(input: SprayJobInput, paddockIds: string[]): Promise<SprayJob> {
-  const { data, error } = await supabase.from("spray_jobs").insert(input).select("*").single();
+  const payload = withNormalisedLines(input);
+  const { data, error } = await supabase.from("spray_jobs").insert(payload).select("*").single();
   if (error) throw error;
   const job = data as SprayJob;
   if (paddockIds.length) {
@@ -129,7 +164,8 @@ export async function createSprayJob(input: SprayJobInput, paddockIds: string[])
 }
 
 export async function updateSprayJob(id: string, patch: Partial<SprayJobInput>, paddockIds?: string[]): Promise<SprayJob> {
-  const { data, error } = await supabase.from("spray_jobs").update(patch).eq("id", id).select("*").single();
+  const payload = withNormalisedLines(patch);
+  const { data, error } = await supabase.from("spray_jobs").update(payload).eq("id", id).select("*").single();
   if (error) throw error;
   if (paddockIds) {
     await replaceSprayJobPaddocks(id, paddockIds);
