@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandName } from "@/components/BrandName";
 
 const STORAGE_KEY = "vt_portal_info_banner_dismissed";
 

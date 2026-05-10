@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { BrandName } from "@/components/BrandName";
 import {
   LayoutDashboard,
   Activity,
