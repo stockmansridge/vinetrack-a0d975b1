@@ -88,7 +88,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { product_name } = await req.json();
+    const { product_name, country } = await req.json();
+    const countryStr = typeof country === "string" && country.trim() ? country.trim() : "";
     if (!product_name || typeof product_name !== "string" || !product_name.trim()) {
       return new Response(JSON.stringify({ error: "product_name is required" }), {
         status: 400,
