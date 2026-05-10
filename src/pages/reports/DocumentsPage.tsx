@@ -122,6 +122,7 @@ export default function DocumentsPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | ReportType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceKind>("all");
   const [paddockFilter, setPaddockFilter] = useState<string>("__any__");
+  const [tripFnFilter, setTripFnFilter] = useState<string>("__any__");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -243,6 +244,15 @@ export default function DocumentsPage() {
     return out;
   }, [trips, sprayJobs, paddockMap, vineyardName]);
 
+  // Distinct trip functions present in current items (for filter dropdown).
+  const tripFnOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of trips) {
+      if (t.trip_function) s.add(t.trip_function);
+    }
+    return Array.from(s).sort();
+  }, [trips]);
+
   // Apply filters
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -252,9 +262,18 @@ export default function DocumentsPage() {
       if (typeFilter !== "all" && it.type !== typeFilter) return false;
       if (sourceFilter !== "all" && it.source !== sourceFilter) return false;
       if (paddockFilter !== "__any__") {
-        // We only know paddockName per item, not id. Match by name string.
         const want = paddockMap.get(paddockFilter);
         if (!want || it.paddockName !== want) return false;
+      }
+      if (tripFnFilter !== "__any__") {
+        if (it.type !== "trip") return false;
+        const tripId = it.id.replace(/^trip:/, "");
+        const t = trips.find((x) => x.id === tripId);
+        if (tripFnFilter === "__maint__") {
+          if (!t?.trip_function || t.trip_function === "spraying") return false;
+        } else if (t?.trip_function !== tripFnFilter) {
+          return false;
+        }
       }
       if (fromTs && it.createdAt && new Date(it.createdAt).getTime() < fromTs)
         return false;
@@ -268,7 +287,7 @@ export default function DocumentsPage() {
       }
       return true;
     });
-  }, [items, search, typeFilter, sourceFilter, paddockFilter, dateFrom, dateTo, paddockMap]);
+  }, [items, search, typeFilter, sourceFilter, paddockFilter, tripFnFilter, dateFrom, dateTo, paddockMap, trips]);
 
   const loading = tripsQuery.isLoading || sprayJobsQuery.isLoading;
 
@@ -356,6 +375,20 @@ export default function DocumentsPage() {
               {paddocks.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name ?? "—"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={tripFnFilter} onValueChange={setTripFnFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Trip type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__any__">All trip types</SelectItem>
+              <SelectItem value="__maint__">Maintenance (non-spray)</SelectItem>
+              {tripFnOptions.map((fn) => (
+                <SelectItem key={fn} value={fn}>
+                  {TRIP_FUNCTION_LABELS[fn] ?? fn}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -463,9 +496,10 @@ export default function DocumentsPage() {
         <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
         <div className="text-xs text-muted-foreground space-y-1">
           <div>
-            Trip and Rainfall reports are generated on demand from current data.
-            Spray Job and Yearly Spray Program PDFs/CSVs open the Spray Jobs page
-            where rich chemical and equipment details are available.
+            Trip Reports (including Maintenance, Spray, Seeding, Mowing and
+            Custom jobs) and Rainfall Reports are generated on demand from current
+            data. Spray Job and Yearly Spray Program PDFs/CSVs open the Spray Jobs
+            page where rich chemical and equipment details are available.
           </div>
         </div>
       </Card>

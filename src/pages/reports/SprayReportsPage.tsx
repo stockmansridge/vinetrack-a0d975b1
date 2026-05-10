@@ -152,9 +152,12 @@ export default function SprayReportsPage() {
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-semibold">Spray Reports</h1>
+        <h1 className="text-2xl font-semibold">Spray Records & Compliance</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Export completed spray records and yearly spray programs from VineTrack spray data.
+          Export completed spray records and yearly spray programs — including chemicals,
+          rates, WHP/REI, weather and tank mix details. For general per-trip reports
+          (Maintenance, Mowing, Seeding, Spray operations, Custom jobs etc.) use{" "}
+          <strong>Trip Reports</strong>.
         </p>
       </div>
 
