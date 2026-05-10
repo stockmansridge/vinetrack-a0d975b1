@@ -31,6 +31,7 @@ import {
   type YieldEstimationSession,
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
+import YieldDamageAdjustmentPanel from "@/components/YieldDamageAdjustmentPanel";
 
 const ANY = "__any__";
 
@@ -171,6 +172,8 @@ export default function YieldReportsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
+      <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
           <TabsTrigger value="all">All ({allRows.length})</TabsTrigger>
@@ -277,7 +280,7 @@ export default function YieldReportsPage() {
         </TabsContent>
       </Tabs>
 
-      <YieldSheet row={selected} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
+      <YieldSheet row={selected} vineyardId={selectedVineyardId} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
     </div>
   );
 }
@@ -293,10 +296,12 @@ function sortDate(r: AnyRow): string | null | undefined {
 
 function YieldSheet({
   row,
+  vineyardId,
   open,
   onOpenChange,
 }: {
   row: AnyRow | null;
+  vineyardId: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -309,14 +314,16 @@ function YieldSheet({
             {row ? ` — ${fmtDate(sortDate(row))}` : ""}
           </SheetTitle>
         </SheetHeader>
-        {row?.__kind === "historical" && <HistoricalDetail row={row as HistoricalYieldRecord} />}
+        {row?.__kind === "historical" && (
+          <HistoricalDetail row={row as HistoricalYieldRecord} vineyardId={vineyardId} />
+        )}
         {row?.__kind === "session" && <SessionDetail row={row as YieldEstimationSession} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function HistoricalDetail({ row }: { row: HistoricalYieldRecord }) {
+function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
   const blocks = Array.isArray(row.block_results) ? row.block_results : null;
   return (
     <div className="mt-4 space-y-4 text-sm">
@@ -337,6 +344,12 @@ function HistoricalDetail({ row }: { row: HistoricalYieldRecord }) {
           <p className="whitespace-pre-wrap">{row.notes}</p>
         </Section>
       )}
+      <YieldDamageAdjustmentPanel
+        vineyardId={vineyardId}
+        baseTonnes={row.total_yield_tonnes ?? null}
+        baseLabel={row.season ?? (row.year != null ? String(row.year) : undefined)}
+        compact
+      />
       <Section title={`Block results${blocks ? ` (${blocks.length})` : ""}`}>
         {blocks ? (
           <pre className="text-[11px] bg-muted/40 rounded p-2 overflow-x-auto max-h-80">
