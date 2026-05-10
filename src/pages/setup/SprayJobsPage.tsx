@@ -45,6 +45,8 @@ import {
 } from "@/lib/vspWaterRate";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { inferRateBasis, composeUnit, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
