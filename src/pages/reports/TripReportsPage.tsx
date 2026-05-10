@@ -2,7 +2,7 @@
 // (Maintenance, Spray, Seeding, Mowing, Harrowing, Canopy Work, Custom, …).
 // Reuses the existing Trip Report PDF (downloadTripPdf) so output style
 // matches the per-trip export from the Trips page.
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Download, FileSpreadsheet, FileText, Info, Search, ChevronDown, ChevronRight, Check, X, StickyNote } from "lucide-react";
@@ -350,8 +350,8 @@ export default function TripReportsPage() {
               const isOpen = expanded.has(t.id);
               const summary = summariseRows(t);
               return (
-                <>
-                  <TableRow key={t.id}>
+                <Fragment key={t.id}>
+                  <TableRow>
                     <TableCell className="p-0 pl-2">
                       <Button
                         size="icon"
@@ -397,14 +397,14 @@ export default function TripReportsPage() {
                     </TableCell>
                   </TableRow>
                   {isOpen && (
-                    <TableRow key={`${t.id}-detail`} className="bg-muted/30 hover:bg-muted/30">
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell />
                       <TableCell colSpan={10} className="py-3">
                         <RowCompletionDetail trip={t} />
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </TableBody>
