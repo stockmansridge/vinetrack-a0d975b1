@@ -1,7 +1,8 @@
-// Chemical AI Lookup — uses Lovable AI Gateway to suggest fields for a
-// vineyard chemical/product based on the product name. Australian viticulture
-// bias. Always returns a structured JSON suggestion via tool calling so the
-// UI can preview before user saves.
+// Chemical AI Lookup — uses Lovable AI Gateway to suggest one or more
+// candidate matches for a vineyard chemical/product based on the product
+// name. Australian viticulture bias (APVMA labels). Always returns a
+// structured list of candidates via tool calling so the UI can preview
+// multiple options before the user applies one.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -12,50 +13,69 @@ const SYSTEM = `You are an assistant helping Australian viticulture and vineyard
 
 Rules:
 - Bias strongly toward Australian product label information (APVMA registered products).
+- Return up to 5 likely candidate products that match the user's query.
+  - If the query is unambiguous (a single registered product), return one candidate.
+  - If the query is ambiguous (active ingredient, partial name, generic), return multiple candidates ordered by likelihood.
 - Never guess. If you are not confident about a field, leave it empty/null.
-- If a rate varies by target/disease/crop, leave rate_per_ha null and put a note in "notes" such as "Rate varies by target — check label".
-- WHP (withholding period in days) and REI (re-entry interval in hours) must only be returned if you are confident from the Australian label. Otherwise leave null.
-- Category MUST be one of: Fungicide, Herbicide, Insecticide, Fertiliser, Bio-stimulant, Wetting agent / adjuvant, Other. If unknown, use "Other".
-- Always include a short safety_note reminder that the AI suggestion must be verified against the actual product label.
+- For each candidate, infer:
+    - product_type ("liquid" if the formulation is a liquid/EC/SC/SL, "solid" if WG/WP/granule/powder).
+    - unit (one of "L", "mL", "kg", "g") matching the product_type.
+    - rate_basis ("per_hectare" if label rate is per hectare, "per_100L" if per 100 litres of spray volume).
+    - rate_per_unit numeric (e.g. 100 for "100 mL/100L", 1.5 for "1.5 L/ha").
+- If a rate varies by target/disease/crop, leave rate_per_unit null and put a note in "notes" such as "Rate varies by target — check label".
+- WHP (withholding period in days) and REI (re-entry interval in hours) only when confident from the Australian label. Otherwise null.
+- Category MUST be one of: Fungicide, Herbicide, Insecticide, Fertiliser, Bio-stimulant, Wetting agent / adjuvant, Other.
+- Always include a short safety_note reminding the user to verify the suggestion against the actual product label.
 - Keep notes concise (under 240 characters).`;
 
 const tools = [
   {
     type: "function",
     function: {
-      name: "suggest_chemical",
-      description: "Return suggested fields for the named chemical/product.",
+      name: "suggest_candidates",
+      description: "Return one or more candidate chemical/product matches for the named query.",
       parameters: {
         type: "object",
         properties: {
-          product_name: { type: "string", description: "Cleaned product name" },
-          active_ingredient: { type: "string" },
-          category: {
-            type: "string",
-            enum: [
-              "Fungicide",
-              "Herbicide",
-              "Insecticide",
-              "Fertiliser",
-              "Bio-stimulant",
-              "Wetting agent / adjuvant",
-              "Other",
-            ],
-          },
-          chemical_group: { type: "string", description: "e.g. Group 3, DMI" },
-          manufacturer: { type: "string" },
-          rate_per_ha: { type: ["number", "null"] },
-          rate_unit: { type: "string", description: "e.g. L/ha, g/ha, kg/ha" },
-          withholding_period_days: { type: ["number", "null"] },
-          re_entry_period_hours: { type: ["number", "null"] },
-          notes: { type: "string" },
-          safety_note: { type: "string" },
-          confidence: {
-            type: "string",
-            enum: ["high", "medium", "low", "unknown"],
+          candidates: {
+            type: "array",
+            description: "Up to 5 candidate products ordered by likelihood.",
+            items: {
+              type: "object",
+              properties: {
+                product_name: { type: "string", description: "Cleaned product name" },
+                active_ingredient: { type: "string" },
+                category: {
+                  type: "string",
+                  enum: [
+                    "Fungicide",
+                    "Herbicide",
+                    "Insecticide",
+                    "Fertiliser",
+                    "Bio-stimulant",
+                    "Wetting agent / adjuvant",
+                    "Other",
+                  ],
+                },
+                chemical_group: { type: "string", description: "e.g. Group 3, DMI" },
+                manufacturer: { type: "string" },
+                product_type: { type: "string", enum: ["liquid", "solid"] },
+                unit: { type: "string", enum: ["L", "mL", "kg", "g"] },
+                rate_basis: { type: "string", enum: ["per_hectare", "per_100L"] },
+                rate_per_unit: { type: ["number", "null"] },
+                withholding_period_days: { type: ["number", "null"] },
+                re_entry_period_hours: { type: ["number", "null"] },
+                target: { type: "string", description: "Typical target pest/disease/weed" },
+                notes: { type: "string" },
+                safety_note: { type: "string" },
+                confidence: { type: "string", enum: ["high", "medium", "low", "unknown"] },
+              },
+              required: ["product_name", "category", "confidence", "safety_note"],
+              additionalProperties: false,
+            },
           },
         },
-        required: ["product_name", "category", "confidence", "safety_note"],
+        required: ["candidates"],
         additionalProperties: false,
       },
     },
@@ -94,11 +114,11 @@ Deno.serve(async (req) => {
           { role: "system", content: SYSTEM },
           {
             role: "user",
-            content: `Look up Australian vineyard product details for: "${product_name.trim()}". Return only confidently known fields.`,
+            content: `Look up Australian vineyard product candidates matching: "${product_name.trim()}". Return up to 5 likely matches ordered by likelihood.`,
           },
         ],
         tools,
-        tool_choice: { type: "function", function: { name: "suggest_chemical" } },
+        tool_choice: { type: "function", function: { name: "suggest_candidates" } },
       }),
     });
 
@@ -131,9 +151,9 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    let suggestion: any;
+    let parsed: any;
     try {
-      suggestion = JSON.parse(call.function.arguments);
+      parsed = JSON.parse(call.function.arguments);
     } catch {
       return new Response(JSON.stringify({ error: "Could not parse AI suggestion" }), {
         status: 502,
@@ -141,14 +161,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ suggestion }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const candidates = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
+    // Backward-compat: also expose first candidate as `suggestion`.
+    return new Response(
+      JSON.stringify({ candidates, suggestion: candidates[0] ?? null }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e) {
     console.error("chemical-ai-lookup error", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });

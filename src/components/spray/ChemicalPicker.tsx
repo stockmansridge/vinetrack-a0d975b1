@@ -17,7 +17,12 @@ import {
 } from "@/components/ui/select";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
+import {
+  inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
+  inferProductType, defaultUnitFor, unitsFor,
+  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
+  type RateBasis, type ProductType, type ChemUnit,
+} from "@/lib/rateBasis";
 
 interface Props {
   open: boolean;
@@ -125,6 +130,12 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
           open={creating}
           onOpenChange={setCreating}
           vineyardId={vineyardId}
+          existingLibrary={data?.chemicals ?? []}
+          onPickExisting={(c) => {
+            setCreating(false);
+            onSelect(c);
+            onOpenChange(false);
+          }}
           onCreated={(c) => {
             qc.invalidateQueries({ queryKey: ["saved-chemicals-picker", vineyardId] });
             qc.invalidateQueries({ queryKey: ["saved_chemicals", vineyardId] });
@@ -140,12 +151,14 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
 }
 
 function NewChemicalDialog({
-  open, onOpenChange, vineyardId, onCreated,
+  open, onOpenChange, vineyardId, existingLibrary, onCreated, onPickExisting,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   vineyardId: string;
+  existingLibrary: SavedChemical[];
   onCreated: (c: SavedChemical) => void;
+  onPickExisting: (c: SavedChemical) => void;
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState({
@@ -157,6 +170,11 @@ function NewChemicalDialog({
     unit: "L/ha",
     notes: "",
   });
+
+  const productType = inferProductType(form.unit);
+  const chemUnit: ChemUnit =
+    (normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(productType);
+  const basis = inferRateBasis(form.unit);
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -175,17 +193,32 @@ function NewChemicalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Add new chemical</DialogTitle>
           <DialogDescription>
-            Save a new chemical to this vineyard's library. Use the lookup to pre-fill product details — nothing is saved until you confirm.
+            Save a new chemical to this vineyard's library, or pick an existing match the AI lookup finds. Nothing is saved until you confirm.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 text-sm">
+        <div className="space-y-3 text-sm max-h-[70vh] overflow-y-auto pr-1">
           <ChemicalAILookup
             initialName={form.name}
-            onApply={(s: AppliedSuggestion) =>
+            existingLibrary={existingLibrary.map((c) => ({
+              id: c.id,
+              name: c.name,
+              active_ingredient: c.active_ingredient,
+            }))}
+            onApply={(s: AppliedSuggestion) => {
+              if (s.existing_chemical_id) {
+                const match = existingLibrary.find((c) => c.id === s.existing_chemical_id);
+                if (match) onPickExisting(match);
+                return;
+              }
+              const nextBasis = s.rate_basis ?? inferRateBasis(s.rate_unit);
+              const nextType = s.product_type ?? inferProductType(s.unit ?? s.rate_unit);
+              const nextUnit =
+                s.unit ?? (normaliseUnit(s.rate_unit) || defaultUnitFor(nextType));
+              const composed = s.rate_unit ?? composeUnit(nextUnit, nextBasis);
               setForm((p) => ({
                 ...p,
                 name: s.name ?? p.name,
@@ -193,10 +226,10 @@ function NewChemicalDialog({
                 chemical_group: s.chemical_group ?? p.chemical_group,
                 use: (s.category as string) ?? p.use,
                 rate_per_ha: s.rate_per_ha != null ? String(s.rate_per_ha) : p.rate_per_ha,
-                unit: s.rate_unit ?? p.unit,
+                unit: composed,
                 notes: s.notes ?? p.notes,
-              }))
-            }
+              }));
+            }}
           />
           <div className="space-y-1">
             <Label>Name *</Label>
@@ -211,8 +244,8 @@ function NewChemicalDialog({
               <Label>Chemical group</Label>
               <Input value={form.chemical_group} onChange={(e) => setForm({ ...form, chemical_group: e.target.value })} />
             </div>
-            <div className="space-y-1">
-              <Label>Product type / category</Label>
+            <div className="space-y-1 col-span-2">
+              <Label>Category</Label>
               <Select value={form.use} onValueChange={(v) => setForm({ ...form, use: v })}>
                 <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
@@ -222,29 +255,46 @@ function NewChemicalDialog({
             </div>
             <div className="space-y-1">
               <Label>Default rate</Label>
-              <div className="flex gap-2">
-                <Input type="number" value={form.rate_per_ha} onChange={(e) => setForm({ ...form, rate_per_ha: e.target.value })} />
-                <Input
-                  className="w-24"
-                  placeholder="L, mL, kg, g"
-                  value={chemUnitOnly(form.unit)}
-                  onChange={(e) => {
-                    const cu = e.target.value;
-                    const basis = inferRateBasis(form.unit);
-                    setForm({ ...form, unit: composeUnit(cu, basis) });
-                  }}
-                />
-              </div>
+              <Input type="number" value={form.rate_per_ha} onChange={(e) => setForm({ ...form, rate_per_ha: e.target.value })} />
             </div>
-            <div className="space-y-1 col-span-2">
+            <div className="space-y-1">
+              <Label>Product type</Label>
+              <Select
+                value={productType}
+                onValueChange={(v) => {
+                  const pt = v as ProductType;
+                  setForm({ ...form, unit: composeUnit(defaultUnitFor(pt), basis) });
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
+                  <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Unit</Label>
+              <Select
+                value={chemUnit}
+                onValueChange={(v) => setForm({ ...form, unit: composeUnit(v, basis) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {unitsFor(productType).map((u) => (
+                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label>Rate basis</Label>
               <RadioGroup
-                className="flex gap-6"
-                value={inferRateBasis(form.unit)}
+                className="flex gap-4 pt-2"
+                value={basis}
                 onValueChange={(v) => {
-                  const basis = v as RateBasis;
-                  const cu = chemUnitOnly(form.unit) || "L";
-                  setForm({ ...form, unit: composeUnit(cu, basis) });
+                  const b = v as RateBasis;
+                  setForm({ ...form, unit: composeUnit(chemUnit, b) });
                 }}
               >
                 <label className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -254,11 +304,11 @@ function NewChemicalDialog({
                   <RadioGroupItem value="per_100L" /> {RATE_BASIS_LABEL.per_100L}
                 </label>
               </RadioGroup>
-              <p className="text-[11px] text-muted-foreground">
-                Choose whether this product rate is applied by area or by spray volume.
-              </p>
             </div>
           </div>
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            Choose whether this product rate is applied by area or by spray volume.
+          </p>
           <div className="space-y-1">
             <Label>Notes</Label>
             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

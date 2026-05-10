@@ -33,7 +33,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
+import {
+  inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
+  inferProductType, defaultUnitFor, unitsFor,
+  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
+  type RateBasis, type ProductType, type ChemUnit,
+} from "@/lib/rateBasis";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -345,6 +350,7 @@ export default function SavedChemicalsPage() {
         onOpenChange={(o) => !o && setEditing(null)}
         initial={editing && editing !== "new" ? editing : null}
         vineyardId={selectedVineyardId!}
+        existingLibrary={chemicals}
         onSaved={() => {
           invalidate();
           setEditing(null);
@@ -395,12 +401,13 @@ export default function SavedChemicalsPage() {
 }
 
 function ChemicalEditor({
-  open, onOpenChange, initial, vineyardId, onSaved,
+  open, onOpenChange, initial, vineyardId, existingLibrary, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: SavedChemical | null;
   vineyardId: string;
+  existingLibrary: SavedChemical[];
   onSaved: () => void;
 }) {
   const { toast } = useToast();
@@ -466,6 +473,12 @@ function ChemicalEditor({
     setForm((p) => ({ ...p, [k]: v }));
 
   const applySuggestion = (s: AppliedSuggestion) => {
+    // Compose unit text from product type + chem unit + basis when AI gives
+    // structured fields; fall back to whatever rate_unit string was returned.
+    const basis = s.rate_basis ?? inferRateBasis(s.rate_unit);
+    const productType = s.product_type ?? inferProductType(s.unit ?? s.rate_unit);
+    const chemUnit = s.unit ?? (normaliseUnit(s.rate_unit) || defaultUnitFor(productType));
+    const composed = s.rate_unit ?? composeUnit(chemUnit, basis);
     setForm((p) => ({
       ...p,
       name: s.name ?? p.name ?? "",
@@ -473,7 +486,8 @@ function ChemicalEditor({
       use: s.category ?? p.use ?? "",
       chemical_group: s.chemical_group ?? p.chemical_group ?? "",
       manufacturer: s.manufacturer ?? p.manufacturer ?? "",
-      unit: s.rate_unit ?? p.unit ?? "",
+      problem: s.target ?? p.problem ?? "",
+      unit: composed,
       notes: s.notes ?? p.notes ?? "",
     }));
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
@@ -488,7 +502,17 @@ function ChemicalEditor({
           <SheetTitle>{initial ? "Edit chemical" : "New chemical"}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-3 text-sm">
-          <ChemicalAILookup initialName={form.name ?? ""} onApply={applySuggestion} />
+          <ChemicalAILookup
+            initialName={form.name ?? ""}
+            existingLibrary={existingLibrary
+              .filter((c) => !initial || c.id !== initial.id)
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                active_ingredient: c.active_ingredient,
+              }))}
+            onApply={applySuggestion}
+          />
           <Field label="Product name *">
             <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
           </Field>
@@ -515,20 +539,41 @@ function ChemicalEditor({
             <Field label="Crop"><Input value={form.crop ?? ""} onChange={(e) => set("crop", e.target.value)} /></Field>
             <Field label="Target pest / disease / weed"><Input value={form.problem ?? ""} onChange={(e) => set("problem", e.target.value)} /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Default rate">
               <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
             </Field>
-            <Field label="Unit (chemical)">
-              <Input
-                value={chemUnitOnly(form.unit ?? "")}
-                placeholder="L, mL, kg, g"
-                onChange={(e) => {
-                  const cu = e.target.value;
+            <Field label="Product type">
+              <Select
+                value={inferProductType(form.unit)}
+                onValueChange={(v) => {
+                  const pt = v as ProductType;
                   const basis = inferRateBasis(form.unit);
-                  set("unit", composeUnit(cu, basis));
+                  set("unit", composeUnit(defaultUnitFor(pt), basis));
                 }}
-              />
+              >
+                <SelectTrigger><SelectValue placeholder="Liquid / Solid" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="liquid">{PRODUCT_TYPE_LABEL.liquid}</SelectItem>
+                  <SelectItem value="solid">{PRODUCT_TYPE_LABEL.solid}</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Unit">
+              <Select
+                value={(normaliseUnit(form.unit) as ChemUnit) || defaultUnitFor(inferProductType(form.unit))}
+                onValueChange={(v) => {
+                  const basis = inferRateBasis(form.unit);
+                  set("unit", composeUnit(v, basis));
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {unitsFor(inferProductType(form.unit)).map((u) => (
+                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
           <Field label="Rate basis">
