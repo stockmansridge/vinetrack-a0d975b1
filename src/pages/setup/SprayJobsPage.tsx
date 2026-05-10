@@ -1166,12 +1166,15 @@ function SprayJobSheet({
             onSelect={(c) => {
               const idx = pickerLineIndex;
               if (idx == null) return;
+              const basis = inferRateBasis(c.unit);
+              const cu = chemUnitOnly(c.unit ?? "") || "L";
               setLine(idx, {
                 chemical_id: c.id,
                 name: c.name ?? "",
                 active_ingredient: c.active_ingredient ?? null,
                 rate: c.rate_per_ha ?? null,
-                unit: c.unit ?? "L/ha",
+                unit: composeUnit(cu, basis),
+                rate_basis: basis,
                 notes: c.restrictions ?? null,
               });
               setPickerLineIndex(null);
