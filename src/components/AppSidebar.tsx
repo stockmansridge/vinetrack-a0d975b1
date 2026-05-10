@@ -61,7 +61,6 @@ const setup = [
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
   { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-  { title: "Spray templates", url: "/setup/spray-presets", icon: Layers },
   { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
   { title: "Weather settings", url: "/setup/weather", icon: Cloud },
 ];
