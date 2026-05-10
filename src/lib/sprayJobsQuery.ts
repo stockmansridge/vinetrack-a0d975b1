@@ -369,7 +369,8 @@ export function chemicalLinesSummary(lines?: SprayJobChemicalLine[] | null): str
   return lines
     .map((l) => {
       const name = l.name ?? "Unnamed";
-      const rate = l.rate != null ? `${l.rate}${l.unit ? ` ${l.unit}` : ""}` : "";
+      const unitText = displayUnitText(l.unit);
+      const rate = l.rate != null ? `${l.rate}${unitText ? ` ${unitText}` : ""}` : "";
       return rate ? `${name} (${rate})` : name;
     })
     .join(", ");
