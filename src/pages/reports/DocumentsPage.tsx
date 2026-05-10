@@ -122,6 +122,7 @@ export default function DocumentsPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | ReportType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceKind>("all");
   const [paddockFilter, setPaddockFilter] = useState<string>("__any__");
+  const [tripFnFilter, setTripFnFilter] = useState<string>("__any__");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -243,6 +244,15 @@ export default function DocumentsPage() {
     return out;
   }, [trips, sprayJobs, paddockMap, vineyardName]);
 
+  // Distinct trip functions present in current items (for filter dropdown).
+  const tripFnOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of trips) {
+      if (t.trip_function) s.add(t.trip_function);
+    }
+    return Array.from(s).sort();
+  }, [trips]);
+
   // Apply filters
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -252,9 +262,18 @@ export default function DocumentsPage() {
       if (typeFilter !== "all" && it.type !== typeFilter) return false;
       if (sourceFilter !== "all" && it.source !== sourceFilter) return false;
       if (paddockFilter !== "__any__") {
-        // We only know paddockName per item, not id. Match by name string.
         const want = paddockMap.get(paddockFilter);
         if (!want || it.paddockName !== want) return false;
+      }
+      if (tripFnFilter !== "__any__") {
+        if (it.type !== "trip") return false;
+        const tripId = it.id.replace(/^trip:/, "");
+        const t = trips.find((x) => x.id === tripId);
+        if (tripFnFilter === "__maint__") {
+          if (!t?.trip_function || t.trip_function === "spraying") return false;
+        } else if (t?.trip_function !== tripFnFilter) {
+          return false;
+        }
       }
       if (fromTs && it.createdAt && new Date(it.createdAt).getTime() < fromTs)
         return false;
@@ -268,7 +287,7 @@ export default function DocumentsPage() {
       }
       return true;
     });
-  }, [items, search, typeFilter, sourceFilter, paddockFilter, dateFrom, dateTo, paddockMap]);
+  }, [items, search, typeFilter, sourceFilter, paddockFilter, tripFnFilter, dateFrom, dateTo, paddockMap, trips]);
 
   const loading = tripsQuery.isLoading || sprayJobsQuery.isLoading;
 
