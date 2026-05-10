@@ -828,14 +828,8 @@ function DamageEditSheet({
           <Row label="Notes">
             <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={4} />
           </Row>
-          <div className="grid grid-cols-2 gap-3">
-            <Row label="Latitude">
-              <Input value={form.latitude} onChange={(e) => set("latitude", e.target.value)} />
-            </Row>
-            <Row label="Longitude">
-              <Input value={form.longitude} onChange={(e) => set("longitude", e.target.value)} />
-            </Row>
-          </div>
+          {/* Latitude/longitude inputs removed — damage records are polygon-based.
+              Existing lat/lng on legacy records is shown read-only in the detail view. */}
           <p className="text-xs text-muted-foreground">
             Photo upload from the portal is coming soon. Existing iOS-uploaded photos display in the detail view.
           </p>

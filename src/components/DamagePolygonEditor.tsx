@@ -70,12 +70,19 @@ export default function DamagePolygonEditor({
         const onTap = (e: any) => {
           if (!drawRef.current) return;
           try {
-            const pt = e?.pointOnPage;
-            if (!pt) return;
-            const coord = map.convertPointOnPageToCoordinate(pt);
-            if (!coord) return;
-            const next = [...valueRef.current, { lat: coord.latitude, lng: coord.longitude }];
-            onChange(next);
+            // Defensive: prefer a coordinate the event already carries; fall
+            // back to converting the page point. Older MapKit JS builds expose
+            // `coordinate`, newer builds only `pointOnPage`.
+            let coord: any = e?.coordinate ?? null;
+            if (!coord) {
+              const pt = e?.pointOnPage ?? e?.point ?? null;
+              if (!pt) return;
+              coord = map.convertPointOnPageToCoordinate(pt);
+            }
+            const lat = coord?.latitude;
+            const lng = coord?.longitude;
+            if (typeof lat !== "number" || typeof lng !== "number") return;
+            onChange([...valueRef.current, { lat, lng }]);
           } catch { /* noop */ }
         };
         tapHandlerRef.current = onTap;
@@ -294,17 +301,32 @@ export default function DamagePolygonEditor({
   );
 }
 
-// Ray-casting point-in-polygon. Treats lat/lng as a 2D plane — accurate enough
-// for vineyard-scale polygons (<10 km).
+// Standard ray-casting point-in-polygon (Wikipedia / W. Randolph Franklin).
+// Treats lat/lng as a 2D plane — accurate enough for vineyard-scale polygons.
+// Tolerates a closed ring (last point == first point) and ignores degenerate
+// horizontal edges. No epsilon hacks: the strict-greater comparisons handle
+// vertex-on-ray ambiguity consistently.
 function pointInPolygon(pt: LatLng, polygon: LatLng[]): boolean {
+  if (polygon.length < 3) return false;
+  // Drop a closing duplicate so we don't process a zero-length edge.
+  const first = polygon[0];
+  const last = polygon[polygon.length - 1];
+  const ring =
+    polygon.length > 3 && first.lat === last.lat && first.lng === last.lng
+      ? polygon.slice(0, -1)
+      : polygon;
+
+  const x = pt.lng;
+  const y = pt.lat;
   let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lng, yi = polygon[i].lat;
-    const xj = polygon[j].lng, yj = polygon[j].lat;
-    const intersect =
-      yi > pt.lat !== yj > pt.lat &&
-      pt.lng < ((xj - xi) * (pt.lat - yi)) / (yj - yi + 1e-12) + xi;
-    if (intersect) inside = !inside;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].lng, yi = ring[i].lat;
+    const xj = ring[j].lng, yj = ring[j].lat;
+    if (yi === yj) continue; // skip horizontal edges
+    const crosses = (yi > y) !== (yj > y);
+    if (!crosses) continue;
+    const xCross = ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (x < xCross) inside = !inside;
   }
   return inside;
 }
