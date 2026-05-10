@@ -428,3 +428,156 @@ export default function TripReportsPage() {
     </div>
   );
 }
+
+// --- Row completion helpers ---------------------------------------------
+
+interface RowEntry {
+  label: string;
+  completed: boolean;
+  skipped: boolean;
+  manual?: boolean;
+}
+
+function asArray(v: any): any[] {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === "string") {
+    try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; }
+  }
+  return [];
+}
+
+function rowKey(item: any): string | null {
+  if (item == null) return null;
+  if (typeof item === "string" || typeof item === "number") return String(item);
+  if (typeof item === "object") {
+    return String(
+      item.id ?? item.row ?? item.row_number ?? item.rowNumber ?? item.index ?? item.path_id ?? item.pathId ?? "",
+    ) || null;
+  }
+  return null;
+}
+
+function rowLabel(item: any): string {
+  if (item == null) return "—";
+  if (typeof item === "string" || typeof item === "number") return `Row ${item}`;
+  if (typeof item === "object") {
+    if (item.row_number != null) return `Row ${item.row_number}`;
+    if (item.rowNumber != null) return `Row ${item.rowNumber}`;
+    if (item.row != null) return `Row ${item.row}`;
+    if (item.label) return String(item.label);
+    if (item.name) return String(item.name);
+    if (item.id) return `Path ${String(item.id).slice(0, 6)}`;
+  }
+  return "—";
+}
+
+function buildRowEntries(t: Trip): RowEntry[] {
+  const seq = asArray(t.row_sequence);
+  const completed = asArray(t.completed_paths);
+  const skipped = asArray(t.skipped_paths);
+  const manualEvents = Array.isArray(t.manual_correction_events)
+    ? new Set(t.manual_correction_events.map(String))
+    : new Set<string>();
+
+  const completedKeys = new Set(completed.map(rowKey).filter(Boolean) as string[]);
+  const skippedKeys = new Set(skipped.map(rowKey).filter(Boolean) as string[]);
+
+  const base = seq.length ? seq : [...completed, ...skipped];
+  const seen = new Set<string>();
+  const entries: RowEntry[] = [];
+  base.forEach((item) => {
+    const k = rowKey(item) ?? `${entries.length}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    entries.push({
+      label: rowLabel(item),
+      completed: completedKeys.has(k),
+      skipped: skippedKeys.has(k),
+      manual: manualEvents.has(k),
+    });
+  });
+  return entries;
+}
+
+function summariseRows(t: Trip) {
+  const entries = buildRowEntries(t);
+  return {
+    total: entries.length,
+    completed: entries.filter((e) => e.completed).length,
+    skipped: entries.filter((e) => e.skipped).length,
+  };
+}
+
+function RowCompletionDetail({ trip }: { trip: Trip }) {
+  const entries = buildRowEntries(trip);
+  // Opportunistically read completion notes if the iOS app has synced them.
+  const notes =
+    (trip as any).completion_notes ??
+    (trip as any).notes ??
+    (trip as any).job_notes ??
+    null;
+
+  return (
+    <div className="space-y-3">
+      {notes && (
+        <div className="flex items-start gap-2 text-xs">
+          <StickyNote className="h-3.5 w-3.5 mt-0.5 text-muted-foreground" />
+          <div>
+            <div className="font-medium text-foreground">Completion notes</div>
+            <div className="text-muted-foreground whitespace-pre-wrap">{String(notes)}</div>
+          </div>
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        <div className="text-xs text-muted-foreground">
+          No row sequence recorded for this trip.
+        </div>
+      ) : (
+        <div>
+          <div className="text-xs font-medium mb-2">Row completion</div>
+          <div className="flex flex-wrap gap-1.5">
+            {entries.map((e, i) => {
+              const status = e.completed ? "completed" : e.skipped ? "skipped" : "pending";
+              return (
+                <span
+                  key={`${e.label}-${i}`}
+                  className={
+                    "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] " +
+                    (status === "completed"
+                      ? "border-green-600/40 bg-green-500/10 text-green-700 dark:text-green-300"
+                      : status === "skipped"
+                        ? "border-red-600/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                        : "border-border text-muted-foreground")
+                  }
+                  title={`${e.label} — ${status}${e.manual ? " (manual)" : ""}`}
+                >
+                  {status === "completed" ? (
+                    <Check className="h-3 w-3" />
+                  ) : status === "skipped" ? (
+                    <X className="h-3 w-3" />
+                  ) : null}
+                  {e.label}
+                  {e.manual && (
+                    <span className="ml-1 rounded bg-background/60 px-1 text-[9px] uppercase tracking-wide">
+                      Manual
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground flex flex-wrap gap-3">
+            <span className="inline-flex items-center gap-1">
+              <Check className="h-3 w-3 text-green-600" /> Completed
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <X className="h-3 w-3 text-red-600" /> Not completed / skipped
+            </span>
+            <span>Auto/Manual shown where the iOS app records a manual correction.</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
