@@ -2,6 +2,7 @@
 // Backed by the iOS Supabase project. RLS + DB triggers are the authority;
 // the client filters by vineyard_id for safety.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { toIOSChemicalLineCompat } from "@/lib/rateBasis";
 
 export interface SprayJobChemicalLine {
   chemical_id?: string | null;
@@ -9,22 +10,27 @@ export interface SprayJobChemicalLine {
   active_ingredient?: string | null;
   rate?: number | null;
   /**
-   * Composed unit text (e.g. "mL/100L", "L/ha"). Kept for backward
-   * compatibility with iOS readers that parse the unit text. New writers
-   * should also set `product_type` and `rate_basis` explicitly.
+   * Composed unit text. Internally we may use "L/ha" / "mL/100L" while
+   * editing; on save we normalise to the iOS raw enum ("Litres" / "mL" /
+   * "Kg" / "g") plus the matching legacy `ratePerHa` / `ratePer100L`
+   * numerics so iOS spray-template loading keeps working.
    */
   unit?: string | null;
   /** "liquid" → L/mL · "solid" → kg/g */
   product_type?: "liquid" | "solid" | null;
   /**
-   * Explicit application basis for this line (preferred over parsing unit).
-   *   - "per_hectare" → rate × area
-   *   - "per_100L"    → rate × (water litres / 100)
+   * Explicit application basis for this line. Internal callers may write
+   * either the short ("per_100L") or the iOS-compatible long form
+   * ("per_100_litres"); persistence always uses the long form.
    */
-  rate_basis?: "per_hectare" | "per_100L" | null;
+  rate_basis?: "per_hectare" | "per_100L" | "per_100_litres" | null;
+  /** iOS legacy numeric fields. Filled automatically on save. */
+  ratePerHa?: number | null;
+  ratePer100L?: number | null;
   water_rate?: number | null;
   notes?: string | null;
 }
+
 
 export interface SprayJob {
   id: string;
