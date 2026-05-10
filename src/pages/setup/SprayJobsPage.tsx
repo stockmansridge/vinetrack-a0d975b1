@@ -44,7 +44,7 @@ import {
   vspLitresPer100m, vspLitresPerHa,
 } from "@/lib/vspWaterRate";
 import { deriveMetrics } from "@/lib/paddockGeometry";
-import { computeTankMix, fmtAmount, chemUnitOnly, detectRateBasis } from "@/lib/sprayTankMix";
+import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
