@@ -379,6 +379,20 @@ export default function DocumentsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={tripFnFilter} onValueChange={setTripFnFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Trip type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__any__">All trip types</SelectItem>
+              <SelectItem value="__maint__">Maintenance (non-spray)</SelectItem>
+              {tripFnOptions.map((fn) => (
+                <SelectItem key={fn} value={fn}>
+                  {TRIP_FUNCTION_LABELS[fn] ?? fn}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             type="date"
             value={dateFrom}
@@ -482,9 +496,10 @@ export default function DocumentsPage() {
         <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
         <div className="text-xs text-muted-foreground space-y-1">
           <div>
-            Trip and Rainfall reports are generated on demand from current data.
-            Spray Job and Yearly Spray Program PDFs/CSVs open the Spray Jobs page
-            where rich chemical and equipment details are available.
+            Trip Reports (including Maintenance, Spray, Seeding, Mowing and
+            Custom jobs) and Rainfall Reports are generated on demand from current
+            data. Spray Job and Yearly Spray Program PDFs/CSVs open the Spray Jobs
+            page where rich chemical and equipment details are available.
           </div>
         </div>
       </Card>
