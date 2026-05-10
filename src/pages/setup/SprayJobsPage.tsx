@@ -576,7 +576,7 @@ function SprayJobSheet({
   const addLine = () => {
     setForm((f) => ({
       ...f,
-      chemical_lines: [...(f.chemical_lines ?? []), { name: "", rate: null, unit: "L/ha", notes: "" }],
+      chemical_lines: [...(f.chemical_lines ?? []), { name: "", rate: null, unit: "L/ha", rate_basis: "per_hectare", notes: "" }],
     }));
     setPickerLineIndex((form.chemical_lines ?? []).length);
   };
