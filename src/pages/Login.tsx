@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
+import { BrandName } from "@/components/BrandName";
 
 export default function Login() {
   const { session, loading } = useAuth();
