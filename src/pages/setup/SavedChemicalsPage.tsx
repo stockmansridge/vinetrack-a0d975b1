@@ -32,6 +32,8 @@ import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictio
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
