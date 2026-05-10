@@ -77,11 +77,13 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
     }
   }, [memberships, selectedVineyardId, selectVineyard]);
 
-  const currentRole = memberships.find((m) => m.vineyard_id === selectedVineyardId)?.role ?? null;
+  const currentMembership = memberships.find((m) => m.vineyard_id === selectedVineyardId);
+  const currentRole = currentMembership?.role ?? null;
+  const currentCountry = currentMembership?.vineyard_country ?? null;
 
   return (
     <VineyardContext.Provider
-      value={{ memberships, loading: isLoading, selectedVineyardId, selectVineyard, currentRole }}
+      value={{ memberships, loading: isLoading, selectedVineyardId, selectVineyard, currentRole, currentCountry }}
     >
       {children}
     </VineyardContext.Provider>
