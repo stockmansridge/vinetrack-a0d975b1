@@ -91,43 +91,6 @@ const fmtDateTime = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
-const DEBUG_FIELDS = [
-  "id",
-  "vineyard_id",
-  "paddock_id",
-  "date",
-  "date_observed",
-  "damage_type",
-  "damage_percent",
-  "notes",
-  "polygon_points",
-  "row_number",
-  "side",
-  "severity",
-  "status",
-  "operator_name",
-  "latitude",
-  "longitude",
-  "created_by",
-  "updated_by",
-  "created_at",
-  "updated_at",
-  "client_updated_at",
-  "sync_version",
-  "deleted_at",
-] as const satisfies ReadonlyArray<keyof DamageRecord>;
-
-const serialiseDebugValue = (value: unknown) => {
-  if (value == null) return "null";
-  if (typeof value === "string") return value === "" ? '""' : value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-};
-
 const SEVERITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   low: "outline",
   medium: "secondary",
