@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { useVineyard } from "@/context/VineyardContext";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
