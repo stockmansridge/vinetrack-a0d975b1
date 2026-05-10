@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  DAMAGE_TYPES,
+  DAMAGE_TYPE_CODES,
+  damageTypeLabel,
   SEVERITIES,
   STATUSES,
   SIDES,
@@ -170,7 +171,7 @@ export default function DamageRecordsPage() {
   }, [records, from, to, paddockId, damageType, severity, status, filter]);
 
   const archiveMut = useMutation({
-    mutationFn: (id: string) => archiveDamageRecord(id),
+    mutationFn: (id: string) => archiveDamageRecord(id, user?.id ?? null),
     onSuccess: () => {
       toast({ title: "Damage record archived" });
       queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
@@ -234,8 +235,8 @@ export default function DamageRecordsPage() {
             <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>Any type</SelectItem>
-              {DAMAGE_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
+              {DAMAGE_TYPE_CODES.map((t) => (
+                <SelectItem key={t} value={t}>{damageTypeLabel(t)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -332,7 +333,7 @@ export default function DamageRecordsPage() {
                   <TableCell>{r.paddock_id ? (paddockNameById.get(r.paddock_id) ?? "—") : "—"}</TableCell>
                   <TableCell>{fmt(r.row_number)}</TableCell>
                   <TableCell className="capitalize">{fmt(r.side)}</TableCell>
-                  <TableCell>{fmt(r.damage_type)}</TableCell>
+                  <TableCell>{damageTypeLabel(r.damage_type)}</TableCell>
                   <TableCell>
                     {r.severity ? (
                       <Badge variant={SEVERITY_VARIANT[r.severity] ?? "outline"} className="capitalize">
@@ -458,7 +459,7 @@ function DamageDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{record?.damage_type ?? "Damage record"}</SheetTitle>
+          <SheetTitle>{damageTypeLabel(record?.damage_type) === "—" ? "Damage record" : damageTypeLabel(record?.damage_type)}</SheetTitle>
           <SheetDescription>
             {fmtDate(record?.date_observed ?? record?.date ?? record?.created_at)}
             {paddockName ? ` · ${paddockName}` : ""}
@@ -471,7 +472,7 @@ function DamageDetailSheet({
               <Field label="Paddock" value={paddockName ?? "—"} />
               <Field label="Row / path" value={fmt(record.row_number)} />
               <Field label="Side" value={fmt(record.side)} />
-              <Field label="Damage type" value={fmt(record.damage_type)} />
+              <Field label="Damage type" value={damageTypeLabel(record.damage_type)} />
               <Field label="Severity" value={fmt(record.severity)} />
               <Field label="Status" value={fmt(record.status ?? "open")} />
               <Field label="Damage %" value={record.damage_percent == null ? "—" : `${record.damage_percent}%`} />
@@ -623,12 +624,23 @@ const emptyForm = (): FormState => ({
   longitude: "",
 });
 
+// Normalise legacy Title Case damage_type values (e.g. "Hail") to the iOS
+// snake_case codes (e.g. "hail") so the Select shows them correctly and the
+// next save writes the iOS-compatible code.
+const LEGACY_DAMAGE_TYPE_TO_CODE: Record<string, string> = {};
+DAMAGE_TYPE_CODES.forEach((code) => {
+  LEGACY_DAMAGE_TYPE_TO_CODE[damageTypeLabel(code).toLowerCase()] = code;
+  LEGACY_DAMAGE_TYPE_TO_CODE[code] = code;
+});
+const normaliseDamageType = (v?: string | null) =>
+  v ? (LEGACY_DAMAGE_TYPE_TO_CODE[v.toLowerCase()] ?? v) : "";
+
 function recordToForm(r: DamageRecord): FormState {
   const observed = r.date_observed ?? r.date ?? "";
   return {
     paddock_id: r.paddock_id ?? "",
     date_observed: observed ? observed.slice(0, 10) : "",
-    damage_type: r.damage_type ?? "",
+    damage_type: normaliseDamageType(r.damage_type),
     severity: r.severity ?? "",
     status: r.status ?? "open",
     damage_percent: r.damage_percent == null ? "" : String(r.damage_percent),
@@ -726,7 +738,7 @@ function DamageEditSheet({
       if (!payload.status) throw new Error("Status is required");
       if (payload.damage_percent == null) throw new Error("Damage % is required");
       if (record) {
-        return updateDamageRecord(record.id, payload);
+        return updateDamageRecord(record.id, payload, userId);
       }
       return createDamageRecord(payload, userId);
     },
@@ -829,7 +841,7 @@ function DamageEditSheet({
             <Select value={form.damage_type} onValueChange={(v) => set("damage_type", v)}>
               <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
               <SelectContent>
-                {DAMAGE_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                {DAMAGE_TYPE_CODES.map((t) => (<SelectItem key={t} value={t}>{damageTypeLabel(t)}</SelectItem>))}
               </SelectContent>
             </Select>
           </Row>
