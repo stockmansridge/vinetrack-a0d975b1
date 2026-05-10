@@ -401,12 +401,13 @@ export default function SavedChemicalsPage() {
 }
 
 function ChemicalEditor({
-  open, onOpenChange, initial, vineyardId, onSaved,
+  open, onOpenChange, initial, vineyardId, existingLibrary, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: SavedChemical | null;
   vineyardId: string;
+  existingLibrary: SavedChemical[];
   onSaved: () => void;
 }) {
   const { toast } = useToast();
