@@ -8,6 +8,10 @@ import {
   Gauge,
   Users,
   FileText,
+  FileBarChart,
+  CloudRain,
+  FolderOpen,
+  Route,
   Cloud,
   MapPin,
   Wrench,
@@ -16,15 +20,17 @@ import {
   Layers,
   UserCog,
   Sprout,
-  Settings,
   Database,
-  Calculator,
   Droplet,
   Beaker as BeakerIcon,
   Grape,
   Thermometer,
   Sprout as SproutIcon,
   Grid3x3,
+  Image as ImageIcon,
+  AlertTriangle,
+  Fuel,
+  LineChart,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -41,43 +47,63 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 
-const dashboard = [
+type NavItem = { title: string; url: string; icon: any; soon?: boolean };
+
+const dashboard: NavItem[] = [
   { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Live dashboard", url: "/dashboard/live", icon: Activity },
+  { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
 ];
 
-const operations = [
-  { title: "Trips", url: "/trips", icon: Sprout },
-  { title: "Spray jobs & templates", url: "/spray-jobs", icon: Layers },
-  { title: "Work tasks", url: "/work-tasks", icon: ClipboardList },
-  { title: "Maintenance", url: "/maintenance", icon: Wrench },
-  { title: "Pins / Repairs", url: "/pins", icon: MapPin },
-  { title: "Yield reports", url: "/yield", icon: FileText },
+// "Work" — day-to-day operational records
+const work: NavItem[] = [
+  { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
+  { title: "Work Tasks", url: "/work-tasks", icon: ClipboardList },
+  { title: "Field Trips", url: "/trips", icon: Sprout },
+  { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
+  { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
+  { title: "Yield", url: "/yield", icon: Grape },
 ];
 
-const setup = [
+// "Reports" — exports & compliance
+const reports: NavItem[] = [
+  { title: "Trip Reports", url: "/reports/trips", icon: Route },
+  { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
+  { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
+  { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
+];
+
+// "Setup" — vineyard configuration
+const setup: NavItem[] = [
   { title: "Team", url: "/team", icon: Users },
   { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Spray equipment", url: "/setup/spray-equipment", icon: Gauge },
+  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-  { title: "Operator categories", url: "/setup/operator-categories", icon: UserCog },
-  { title: "Weather settings", url: "/setup/weather", icon: Cloud },
+  { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
+  { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
 ];
 
-const tools = [
+// "Tools" — calculators / helpers (most still in build)
+const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
-  { title: "Spray / Tank Mix Calculator", url: "/tools/spray-tank-mix", icon: BeakerIcon },
-  { title: "Yield Estimation", url: "/tools/yield-estimation", icon: Grape },
-  { title: "Degree Days / BEDD", url: "/tools/degree-days", icon: Thermometer },
-  { title: "Seeding Mix Calculator", url: "/tools/seeding-mix", icon: SproutIcon },
-  { title: "Block / Row Calculator", url: "/tools/block-row", icon: Grid3x3 },
+  { title: "Spray / Tank Mix Calculator", url: "/tools/spray-tank-mix", icon: BeakerIcon, soon: true },
+  { title: "Yield Estimation", url: "/tools/yield-estimation", icon: Grape, soon: true },
+  { title: "Degree Days / BEDD", url: "/tools/degree-days", icon: Thermometer, soon: true },
+  { title: "Seeding Mix Calculator", url: "/tools/seeding-mix", icon: SproutIcon, soon: true },
+  { title: "Block / Row Calculator", url: "/tools/block-row", icon: Grid3x3, soon: true },
 ];
 
-const comingSoon: { title: string; url: string; icon: any }[] = [];
+// iOS-synced data views — many are placeholders pending portal pages
+const iosData: NavItem[] = [
+  { title: "Damage Records", url: "/soon/damage-records", icon: AlertTriangle, soon: true },
+  { title: "Growth Stage Records", url: "/soon/growth-stage", icon: ImageIcon, soon: true },
+  { title: "Yield Estimation Sessions", url: "/soon/yield-estimation-sessions", icon: LineChart, soon: true },
+  { title: "Historical Yield", url: "/soon/historical-yield", icon: Grape, soon: true },
+  { title: "Fuel Purchases", url: "/soon/fuel-purchases", icon: Fuel, soon: true },
+];
 
-const settings = [
-  { title: "Data coverage", url: "/settings/data-coverage", icon: Database },
+const settings: NavItem[] = [
+  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
 ];
 
 export function AppSidebar() {
@@ -89,13 +115,18 @@ export function AppSidebar() {
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
 
-  const renderItems = (items: typeof dashboard) =>
+  const renderItems = (items: NavItem[]) =>
     items.map((item) => (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton asChild isActive={isActive(item.url)}>
           <NavLink to={item.url} className="flex items-center gap-2">
             <item.icon className="h-4 w-4" />
-            <span>{item.title}</span>
+            <span className="flex-1 truncate">{item.title}</span>
+            {item.soon && (
+              <span className="ml-auto rounded-sm bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                Soon
+              </span>
+            )}
           </NavLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -124,45 +155,35 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupLabel>Work</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(operations)}</SidebarMenu>
+            <SidebarMenu>{renderItems(work)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Setup &amp; Configuration</SidebarGroupLabel>
+          <SidebarGroupLabel>Reports</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(reports)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Setup</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(setup)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Reports &amp; Exports</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {renderItems([
-                { title: "Overview", url: "/reports", icon: FileText },
-                { title: "Trip Reports", url: "/reports/trips", icon: FileText },
-                { title: "Spray Records", url: "/reports/spray", icon: FileText },
-                { title: "Rainfall Reports", url: "/reports/rainfall", icon: FileText },
-                { title: "Documents & Exports", url: "/reports/documents", icon: FileText },
-              ])}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Operational Tools</SidebarGroupLabel>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(tools)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {comingSoon.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>{renderItems(comingSoon)}</SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        <SidebarGroup>
+          <SidebarGroupLabel>iOS Data (Coming Soon)</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(iosData)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
