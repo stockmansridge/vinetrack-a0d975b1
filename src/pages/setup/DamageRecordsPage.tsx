@@ -123,9 +123,6 @@ export default function DamageRecordsPage() {
   const [editingOpen, setEditingOpen] = useState(false);
   const [editing, setEditing] = useState<DamageRecord | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<DamageRecord | null>(null);
-  const [latestSavedRecord, setLatestSavedRecord] = useState<DamageRecord | null>(null);
-  const [compareRecordId, setCompareRecordId] = useState<string>(ANY);
-
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-geo", selectedVineyardId],
     enabled: !!selectedVineyardId,
