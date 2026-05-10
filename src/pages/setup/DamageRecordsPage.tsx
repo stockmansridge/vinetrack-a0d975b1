@@ -171,7 +171,7 @@ export default function DamageRecordsPage() {
   }, [records, from, to, paddockId, damageType, severity, status, filter]);
 
   const archiveMut = useMutation({
-    mutationFn: (id: string) => archiveDamageRecord(id),
+    mutationFn: (id: string) => archiveDamageRecord(id, user?.id ?? null),
     onSuccess: () => {
       toast({ title: "Damage record archived" });
       queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
