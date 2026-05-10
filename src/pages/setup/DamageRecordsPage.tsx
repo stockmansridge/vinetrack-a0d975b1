@@ -235,8 +235,8 @@ export default function DamageRecordsPage() {
             <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>Any type</SelectItem>
-              {DAMAGE_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
+              {DAMAGE_TYPE_CODES.map((t) => (
+                <SelectItem key={t} value={t}>{damageTypeLabel(t)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
