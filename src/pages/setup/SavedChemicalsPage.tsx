@@ -502,7 +502,17 @@ function ChemicalEditor({
           <SheetTitle>{initial ? "Edit chemical" : "New chemical"}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-3 text-sm">
-          <ChemicalAILookup initialName={form.name ?? ""} onApply={applySuggestion} />
+          <ChemicalAILookup
+            initialName={form.name ?? ""}
+            existingLibrary={existingLibrary
+              .filter((c) => !initial || c.id !== initial.id)
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                active_ingredient: c.active_ingredient,
+              }))}
+            onApply={applySuggestion}
+          />
           <Field label="Product name *">
             <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
           </Field>
