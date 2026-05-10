@@ -459,7 +459,7 @@ function DamageDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{record?.damage_type ?? "Damage record"}</SheetTitle>
+          <SheetTitle>{damageTypeLabel(record?.damage_type) === "—" ? "Damage record" : damageTypeLabel(record?.damage_type)}</SheetTitle>
           <SheetDescription>
             {fmtDate(record?.date_observed ?? record?.date ?? record?.created_at)}
             {paddockName ? ` · ${paddockName}` : ""}
