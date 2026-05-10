@@ -79,3 +79,100 @@ export function defaultUnitFor(type: ProductType): ChemUnit {
 export function unitsFor(type: ProductType): ChemUnit[] {
   return type === "solid" ? SOLID_UNITS : LIQUID_UNITS;
 }
+
+// ---------------------------------------------------------------------------
+// iOS compatibility helpers
+//
+// iOS still reads legacy fields on each spray-line / saved chemical:
+//   - `unit` as the raw enum string ("Litres" | "mL" | "Kg" | "g")
+//   - `ratePerHa` numeric  (set when basis = per hectare)
+//   - `ratePer100L` numeric (set when basis = per 100 litres)
+//   - `rate_basis` enum: "per_hectare" | "per_100_litres"
+//
+// We keep "L/ha", "mL/100L" etc. for internal display, but normalise to the
+// iOS shape at every write boundary (createSprayJob / updateSprayJob and
+// saved-chemical writes that share the same JSON with iOS).
+// ---------------------------------------------------------------------------
+
+/** Map an internal ChemUnit ("L" / "mL" / "kg" / "g") to the iOS raw value. */
+export const IOS_UNIT_MAP: Record<ChemUnit, "Litres" | "mL" | "Kg" | "g"> = {
+  L: "Litres",
+  mL: "mL",
+  kg: "Kg",
+  g: "g",
+};
+
+/** iOS-compatible rate-basis code expected on shared backend payloads. */
+export type IOSRateBasis = "per_hectare" | "per_100_litres";
+
+export function iosBasisCode(basis: RateBasis | IOSRateBasis | string | null | undefined): IOSRateBasis {
+  if (!basis) return "per_hectare";
+  if (basis === "per_100L" || basis === "per_100_litres") return "per_100_litres";
+  return "per_hectare";
+}
+
+/** Resolve the iOS raw `unit` string from any free-text / composed unit. */
+export function iosUnitFromAny(unit?: string | null, productType?: ProductType | null): "Litres" | "mL" | "Kg" | "g" {
+  // Direct iOS value passthrough.
+  const trimmed = (unit ?? "").trim();
+  if (trimmed === "Litres" || trimmed === "Kg") return trimmed;
+  const u = normaliseUnit(unit);
+  if (u) return IOS_UNIT_MAP[u];
+  return IOS_UNIT_MAP[defaultUnitFor(productType ?? "liquid")];
+}
+
+/** Compose a unit string using iOS raw values (e.g. "Litres/ha", "mL/100L"). */
+export function composeIosUnit(chemUnit: string, basis: RateBasis | IOSRateBasis): string {
+  const cu = (chemUnit ?? "").trim() || "Litres";
+  return iosBasisCode(basis) === "per_100_litres" ? `${cu}/100L` : `${cu}/ha`;
+}
+
+export interface IOSChemicalLineCompat {
+  unit: string;                 // iOS raw enum ("Litres" / "mL" / "Kg" / "g")
+  rate_basis: IOSRateBasis;     // "per_hectare" | "per_100_litres"
+  ratePerHa: number | null;
+  ratePer100L: number | null;
+}
+
+/**
+ * Build the iOS-compatible legacy fields for a chemical line. Accepts any
+ * mix of internal/legacy inputs and returns what iOS expects on the shared
+ * `chemical_lines` / `tanks` JSON.
+ */
+export function toIOSChemicalLineCompat(input: {
+  unit?: string | null;
+  product_type?: ProductType | null;
+  rate_basis?: RateBasis | IOSRateBasis | string | null;
+  rate?: number | null;
+  ratePerHa?: number | null;
+  ratePer100L?: number | null;
+}): IOSChemicalLineCompat {
+  const productType = input.product_type ?? inferProductType(input.unit);
+  const basisInternal: RateBasis = input.rate_basis === "per_100L" || input.rate_basis === "per_100_litres"
+    ? "per_100L"
+    : input.rate_basis === "per_hectare"
+    ? "per_hectare"
+    : inferRateBasis(input.unit);
+  const iosBasis = iosBasisCode(basisInternal);
+  const iosUnit = iosUnitFromAny(input.unit, productType);
+
+  const rate = input.rate != null && Number.isFinite(input.rate) ? Number(input.rate) : null;
+  let ratePerHa = input.ratePerHa ?? null;
+  let ratePer100L = input.ratePer100L ?? null;
+
+  if (iosBasis === "per_hectare") {
+    if (rate != null) ratePerHa = rate;
+    ratePer100L = null;
+  } else {
+    if (rate != null) ratePer100L = rate;
+    ratePerHa = null;
+  }
+
+  return {
+    unit: iosUnit,
+    rate_basis: iosBasis,
+    ratePerHa,
+    ratePer100L,
+  };
+}
+
