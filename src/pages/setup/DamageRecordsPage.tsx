@@ -624,12 +624,23 @@ const emptyForm = (): FormState => ({
   longitude: "",
 });
 
+// Normalise legacy Title Case damage_type values (e.g. "Hail") to the iOS
+// snake_case codes (e.g. "hail") so the Select shows them correctly and the
+// next save writes the iOS-compatible code.
+const LEGACY_DAMAGE_TYPE_TO_CODE: Record<string, string> = {};
+DAMAGE_TYPE_CODES.forEach((code) => {
+  LEGACY_DAMAGE_TYPE_TO_CODE[damageTypeLabel(code).toLowerCase()] = code;
+  LEGACY_DAMAGE_TYPE_TO_CODE[code] = code;
+});
+const normaliseDamageType = (v?: string | null) =>
+  v ? (LEGACY_DAMAGE_TYPE_TO_CODE[v.toLowerCase()] ?? v) : "";
+
 function recordToForm(r: DamageRecord): FormState {
   const observed = r.date_observed ?? r.date ?? "";
   return {
     paddock_id: r.paddock_id ?? "",
     date_observed: observed ? observed.slice(0, 10) : "",
-    damage_type: r.damage_type ?? "",
+    damage_type: normaliseDamageType(r.damage_type),
     severity: r.severity ?? "",
     status: r.status ?? "open",
     damage_percent: r.damage_percent == null ? "" : String(r.damage_percent),
