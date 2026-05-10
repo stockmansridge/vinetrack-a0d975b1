@@ -58,13 +58,22 @@ import {
   type DamageRecord,
   type DamageRecordWriteInput,
 } from "@/lib/damageRecordsQuery";
+import {
+  parsePolygonPoints,
+  polygonAreaHectares,
+  type LatLng,
+} from "@/lib/paddockGeometry";
+import { calculateDamageImpact } from "@/lib/damageImpact";
+import DamageMapView from "@/components/DamageMapView";
 
 const ANY = "__any__";
 
-interface PaddockLite {
+interface PaddockGeo {
   id: string;
   name: string | null;
+  polygon_points?: any;
 }
+
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -114,11 +123,16 @@ export default function DamageRecordsPage() {
   const [archiveTarget, setArchiveTarget] = useState<DamageRecord | null>(null);
 
   const { data: paddocks = [] } = useQuery({
-    queryKey: ["paddocks-lite", selectedVineyardId],
+    queryKey: ["paddocks-geo", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<PaddockLite>("paddocks", selectedVineyardId!),
+    queryFn: () => fetchList<PaddockGeo>("paddocks", selectedVineyardId!),
   });
 
+  const paddockGeoById = useMemo(() => {
+    const m = new Map<string, PaddockGeo>();
+    paddocks.forEach((p) => m.set(p.id, p));
+    return m;
+  }, [paddocks]);
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
     paddocks.forEach((p) => m.set(p.id, p.name));
@@ -340,7 +354,7 @@ export default function DamageRecordsPage() {
 
       <DamageDetailSheet
         record={selected}
-        paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+        paddock={selected?.paddock_id ? paddockGeoById.get(selected.paddock_id) ?? null : null}
         createdByName={resolve(selected?.created_by ?? null)}
         open={!!selected}
         canEdit={canEdit}
@@ -388,10 +402,10 @@ export default function DamageRecordsPage() {
 // ---------- Detail / read drawer ----------
 
 function DamageDetailSheet({
-  record, paddockName, createdByName, open, canEdit, onOpenChange, onEdit, onArchive,
+  record, paddock, createdByName, open, canEdit, onOpenChange, onEdit, onArchive,
 }: {
   record: DamageRecord | null;
-  paddockName: string | null;
+  paddock: PaddockGeo | null;
   createdByName: string | null;
   open: boolean;
   canEdit: boolean;
@@ -399,6 +413,23 @@ function DamageDetailSheet({
   onEdit: (r: DamageRecord) => void;
   onArchive: (r: DamageRecord) => void;
 }) {
+  const paddockName = paddock?.name ?? null;
+  const paddockPolygon = useMemo<LatLng[]>(
+    () => parsePolygonPoints(paddock?.polygon_points),
+    [paddock?.polygon_points],
+  );
+  const damagePoly = useMemo<LatLng[]>(
+    () => parsePolygonPoints(record?.polygon_points),
+    [record?.polygon_points],
+  );
+  const blockAreaHa = useMemo(
+    () => polygonAreaHectares(paddockPolygon),
+    [paddockPolygon],
+  );
+  const impact = useMemo(
+    () => record ? calculateDamageImpact(record, blockAreaHa) : null,
+    [record, blockAreaHa],
+  );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -422,6 +453,38 @@ function DamageDetailSheet({
               <Field label="Damage %" value={record.damage_percent == null ? "—" : `${record.damage_percent}%`} />
               <Field label="Operator" value={fmt(record.operator_name) === "—" ? createdByName ?? "—" : record.operator_name!} />
             </Section>
+
+            {(paddockPolygon.length >= 3 || damagePoly.length >= 3) && (
+              <Section title="Damage area">
+                <DamageMapView
+                  paddockPolygon={paddockPolygon}
+                  damagePolygon={damagePoly}
+                  height={260}
+                />
+                {impact && (
+                  <div className="mt-3 grid gap-1.5 text-sm">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#2E7D32" }} />
+                      Paddock
+                      <span className="ml-3 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#E53935" }} />
+                      Damage area
+                    </div>
+                    <Field label="Block area" value={`${impact.blockAreaHa.toFixed(2)} ha`} />
+                    <Field
+                      label="Damaged area"
+                      value={impact.hasPolygon ? `${impact.damagedAreaHa.toFixed(2)} ha` : "Whole block (no polygon)"}
+                    />
+                    <Field label="Damage intensity" value={`${impact.damagePercent}%`} />
+                    <Field label="Effective loss" value={`${impact.effectiveAreaHa.toFixed(2)} ha`} />
+                    <Field
+                      label="Block yield impact"
+                      value={impact.blockAreaHa > 0 ? `${impact.blockLossPct.toFixed(1)}%` : "—"}
+                    />
+                  </div>
+                )}
+              </Section>
+            )}
+
             {record.notes && (
               <Section title="Notes">
                 <p className="whitespace-pre-wrap">{record.notes}</p>
@@ -559,7 +622,7 @@ function DamageEditSheet({
 }: {
   open: boolean;
   record: DamageRecord | null;
-  paddocks: PaddockLite[];
+  paddocks: PaddockGeo[];
   vineyardId: string | null;
   userId: string | null;
   onClose: () => void;
@@ -640,6 +703,13 @@ function DamageEditSheet({
               </SelectContent>
             </Select>
           </Row>
+
+          <DamageEditMap
+            paddock={paddocks.find((p) => p.id === form.paddock_id) ?? null}
+            existingPolygon={record?.polygon_points}
+            damagePercent={form.damage_percent}
+          />
+
           <Row label="Date observed">
             <Input type="date" value={form.date_observed} onChange={(e) => set("date_observed", e.target.value)} />
           </Row>
@@ -720,6 +790,59 @@ function DamageEditSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function DamageEditMap({
+  paddock, existingPolygon, damagePercent,
+}: {
+  paddock: PaddockGeo | null;
+  existingPolygon: any;
+  damagePercent: string;
+}) {
+  const paddockPolygon = useMemo<LatLng[]>(
+    () => parsePolygonPoints(paddock?.polygon_points),
+    [paddock?.polygon_points],
+  );
+  const damagePoly = useMemo<LatLng[]>(
+    () => parsePolygonPoints(existingPolygon),
+    [existingPolygon],
+  );
+  const blockArea = polygonAreaHectares(paddockPolygon);
+  const damageArea = polygonAreaHectares(damagePoly);
+  const pct = Number(damagePercent) || 0;
+  const effective = (damagePoly.length >= 3 ? damageArea : blockArea) * pct / 100;
+
+  if (!paddock) return null;
+  return (
+    <Section title="Damage area on map">
+      {paddockPolygon.length >= 3 ? (
+        <>
+          <DamageMapView
+            paddockPolygon={paddockPolygon}
+            damagePolygon={damagePoly}
+            height={240}
+          />
+          <div className="mt-2 grid gap-1 text-sm">
+            <Field label="Block area" value={`${blockArea.toFixed(2)} ha`} />
+            {damagePoly.length >= 3 ? (
+              <>
+                <Field label="Damage polygon area" value={`${damageArea.toFixed(2)} ha`} />
+                <Field label="Effective loss (at this %)" value={`${effective.toFixed(2)} ha`} />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No damage polygon yet. Drawing in the portal is coming in the next phase — for now, draw the polygon in the iOS app and it will appear here after sync.
+              </p>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          This paddock has no mapped boundary, so we can't show the damage on a map yet.
+        </p>
+      )}
+    </Section>
   );
 }
 
