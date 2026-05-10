@@ -2,7 +2,7 @@
 // Backed by the iOS Supabase project. RLS + DB triggers are the authority;
 // the client filters by vineyard_id for safety.
 import { supabase } from "@/integrations/ios-supabase/client";
-import { toIOSChemicalLineCompat } from "@/lib/rateBasis";
+import { toIOSChemicalLineCompat, displayUnitText } from "@/lib/rateBasis";
 
 export interface SprayJobChemicalLine {
   chemical_id?: string | null;
