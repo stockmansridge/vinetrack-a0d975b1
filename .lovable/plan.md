@@ -1,62 +1,96 @@
-# Restructure Reports → add Trip Reports
 
-## Goal
+## Current state of Documents & Exports (audit)
 
-Make Trip Reports the umbrella reporting area for **all** trip/job types (Maintenance, Spray, Seeding, Mowing, Harrowing, Canopy Work, Custom, …). Keep Spray-specific reporting (compliance records + yearly spray program) as its own section so spray chemicals/rates/WHP/REI etc. continue to live where they belong.
+I checked `src/pages/reports/DocumentsPage.tsx` and the database. Today the page is a **launcher**, not a library:
 
-## What exists today
+1. **On-demand only.** Every row is built in-memory from the live `trips` and `spray_jobs` tables. PDFs/CSVs are generated client-side at click time (`downloadTripPdf`, `downloadRainfallPdf`, etc.). Nothing is stored.
+2. **No stored-file backend.** There is no `documents` / `exported_documents` table in the database, and there are zero Supabase Storage buckets.
+3. **No iOS-generated files.** The iOS app does not currently upload generated PDFs/CSVs/XLSX anywhere we read from. The page hard-codes `source: "portal"` for every item; the "Source: iOS" filter exists in the UI but never matches anything.
+4. **What's already visible:** Trip Reports (one per trip, all functions), Spray Jobs (per job), Yearly Spray Programs (one per year derived from spray jobs), and Rainfall Reports (on-demand range exports). Spray *Records* are reachable via Reports → Spray Records but are not listed as library rows here.
 
-- `TripsPage` (`/trips`) already loads every trip for the vineyard, supports filters by paddock/pattern/function/status/search, opens a Trip detail sheet with a route map and a working **Export PDF** (via `downloadTripPdf` in `src/lib/tripReport.ts`). Maintenance trips are already in this dataset — they just aren’t surfaced under Reports.
-- `SprayReportsPage` (`/reports/spray`) is spray-only (individual spray record PDF + yearly spray program). Its label in the sidebar reads "Spray reports", which the customer reads as the parent of all trip reports.
-- `DocumentsPage` (`/reports/documents`) already aggregates Trip Report PDFs (all functions, including Maintenance) plus Spray Job and Yearly Spray Program PDFs, with filters.
-- Sidebar group "Reports & Exports" currently lists: Overview, Spray reports, Rainfall reports, Documents & Exports.
+So today the answer to your four questions is: **(1) yes, (2) no, (3) no, (4) yes for Trip / Spray Job / Yearly Spray / Rainfall, no for individual Spray Records.**
 
-## Changes
+## Proposed direction
 
-### 1. New page: Trip Reports (`/reports/trips`)
-Dedicated reporting page focused on **exporting** trip reports (not trip operations):
-- Filters: Date range, Block/paddock, Operator (from `person_name`), Trip function (with explicit Maintenance + every value in `TRIP_FUNCTION_LABELS`), Status (Active/Paused/Completed), Search.
-- Table of trips with: Date, Trip type, Block, Operator, Duration, Distance, Pins, Status, **Export PDF** action per row.
-- "Export all (CSV)" button for the filtered set.
-- Uses the existing `downloadTripPdf` from `tripReport.ts` so PDF style stays identical to the Trip Report we already produce (Trip Details, Rows/Paths, Pins, Route Map, VineTrack footer). Manual Corrections section is already excluded for non-spray trips by the existing renderer.
+Keep every existing on-demand export exactly as-is. Layer a real document-library model on top so anything that gets *uploaded* (from iOS or from a future "save to library" portal action) shows up in the same list, with the same filters and downloads.
 
-### 2. Sidebar + routes
-Restructure the **Reports & Exports** group to:
-- Overview (`/reports`)
-- **Trip Reports** (`/reports/trips`) ← new
-- Spray Records (`/reports/spray`) ← same page, renamed label only
-- Rainfall Reports (`/reports/rainfall`)
-- Documents & Exports (`/reports/documents`)
+### 1. Database — new `exported_documents` table
 
-Add the `/reports/trips` route in `App.tsx`.
+```text
+exported_documents
+  id              uuid pk
+  vineyard_id     uuid  (FK-equivalent, indexed)
+  name            text  not null
+  doc_type        text  not null   -- 'trip_report' | 'spray_record'
+                                   --  | 'spray_job' | 'yearly_spray_program'
+                                   --  | 'rainfall_report' | 'yield_report' | 'other'
+  source          text  not null   -- 'ios' | 'portal'
+  format          text  not null   -- 'pdf' | 'csv' | 'xlsx'
+  storage_path    text  not null   -- 'exported-documents/{vineyard_id}/...'
+  size_bytes      bigint
+  paddock_id      uuid  null
+  related_kind    text  null       -- 'trip' | 'spray_job' | 'spray_record' | ...
+  related_id      uuid  null
+  created_by      uuid  null       -- auth user id (nullable for iOS service writes)
+  operator_name   text  null
+  document_date   timestamptz null -- date the underlying record is *for*
+  created_at      timestamptz default now()
+  deleted_at      timestamptz null
+```
 
-### 3. Reports overview page
-Add a "Trip Reports" card at the top describing it as the home for Maintenance, Spray, Seeding, Mowing, Harrowing, Canopy Work and Custom trip reports. Re-label the existing "Spray Reports" card to **Spray Records & Compliance** with copy clarifying it’s for chemical/rate/WHP/REI/tank-mix details and yearly spray programs. Rainfall + Documents cards unchanged.
+Constraints enforced via a `BEFORE INSERT/UPDATE` trigger (not CHECK constraints) so the allowed values for `doc_type`, `source`, `format` can evolve without migration pain.
 
-### 4. Spray Reports page (light copy edits only)
-- Page heading stays useful for spray-specific work but copy clarifies: "For general trip reports — Maintenance, Mowing, Seeding, Spray operations etc. — use **Trip Reports**."
-- No spray functionality removed.
+Indexes on `(vineyard_id, created_at DESC)`, `(vineyard_id, doc_type)`, `(related_kind, related_id)`.
 
-### 5. Documents & Exports
-- Trip Reports already appear here for every `trip_function` including Maintenance — verified in `DocumentsPage` lines 158-198. Add Maintenance to a new **Trip type** secondary filter (built from distinct `trip_function` values on the loaded trips) so users can isolate Maintenance Trip Reports inside the library.
-- Update the empty-state and info copy to mention Maintenance explicitly.
+### 2. RLS
 
-### 6. Wording
-All new copy uses "VineTrack" / "vineyard portal" wording — no internal terms.
+- SELECT: any authenticated user who is a `vineyard_members` row for the document's `vineyard_id` (existing membership pattern).
+- INSERT: members with role `owner` / `manager` / `worker`; iOS uploads use the same auth user, so RLS just works.
+- UPDATE/DELETE: only `owner` / `manager` (soft delete via `deleted_at`).
 
-## Out of scope
+### 3. Storage bucket — `exported-documents` (private)
 
-- No database/schema changes.
-- No changes to the iOS Trip Report PDF layout beyond what `downloadTripPdf` already produces.
-- Spray Records page itself keeps its current spray-only behaviour.
+- Private bucket; downloads via short-lived signed URLs.
+- Path convention: `{vineyard_id}/{doc_type}/{yyyy}/{mm}/{uuid}.{ext}`.
+- Storage RLS mirrors the table: read/write only when the first path segment matches a vineyard the user belongs to.
+
+### 4. Portal UI changes (`DocumentsPage.tsx`)
+
+- Add a new query that loads `exported_documents` for the current vineyard and merges those rows into the existing `LibraryItem[]`.
+- Stored documents get a real **Download** button that opens a signed URL; on-demand items keep their existing generator buttons. Both share the same row component, filters, and sorting.
+- Source filter ("iOS" / "Portal") becomes meaningful — iOS-uploaded files appear with the iOS badge.
+- New "Type" options added: **Spray Record**, **Yield Report**, **Other**.
+- "Save to library" action added to the existing Trip Report / Rainfall PDF generators (uploads the produced blob to Storage and inserts an `exported_documents` row) — opt-in, does not change current click-to-download behaviour.
+- Empty state copy updated to mention iOS uploads will appear once synced.
+
+### 5. iOS / Rork integration (what they need)
+
+The iOS app currently has no path to publish exports. To light up the "Source: iOS" rows:
+
+- Use the same Supabase project credentials already in the app.
+- Upload the generated file to Storage at `exported-documents/{vineyard_id}/{doc_type}/{yyyy}/{mm}/{uuid}.{ext}`.
+- Insert one row into `public.exported_documents` with `source='ios'`, the storage path, the related `trip_id` / `spray_record_id`, and the operator's name.
+- That's it — RLS handles access and the portal will pick the row up automatically.
+
+I'll document this in `docs/ios-document-uploads.md` as part of the change so Rork has a clear contract.
+
+### 6. Out of scope (this round)
+
+- No re-uploading of historical PDFs.
+- No batch/zip export.
+- No edits to the existing Trip Reports / Spray Records / Rainfall pages.
 
 ## Files touched
 
-- `src/pages/reports/TripReportsPage.tsx` (new)
-- `src/App.tsx` (add `/reports/trips` route)
-- `src/components/AppSidebar.tsx` (add Trip Reports entry, relabel Spray)
-- `src/pages/reports/ReportsIndexPage.tsx` (add Trip Reports card, relabel Spray card)
-- `src/pages/reports/SprayReportsPage.tsx` (copy clarification)
-- `src/pages/reports/DocumentsPage.tsx` (add Trip type filter, copy)
+- **New migration**: `exported_documents` table, validation trigger, RLS policies, `exported-documents` storage bucket + storage policies.
+- **New**: `src/lib/exportedDocumentsQuery.ts` (list/insert/sign-url helpers).
+- **Edited**: `src/pages/reports/DocumentsPage.tsx` (merge stored docs into library, real download for stored items, "Save to library" on generators).
+- **New docs**: `docs/ios-document-uploads.md`.
 
-After implementation I’ll confirm the build is clean.
+## Validation
+
+After implementation: `tsc --noEmit`, manual click-through that on-demand Trip/Rainfall/Spray Job exports still work, that an inserted `exported_documents` row appears with a working signed-URL download, and that a non-member cannot read another vineyard's document via direct query or storage URL.
+
+---
+
+If this plan looks right, approve and I'll run the migration first (so types regenerate) and then ship the UI + helpers in a follow-up step. If you'd like the "Save to library" button to be on by default for portal-generated exports rather than opt-in, say so and I'll wire it that way.
