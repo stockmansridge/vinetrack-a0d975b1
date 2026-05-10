@@ -109,7 +109,7 @@ export function AppSidebar() {
           <BrandMark logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
           <div className="flex flex-col leading-tight min-w-0">
             <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
-              {vineyardName ?? "VineTrack"}
+              {vineyardName ?? <BrandName />}
             </span>
             <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
               Vineyard portal
