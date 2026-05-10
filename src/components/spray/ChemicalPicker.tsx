@@ -36,7 +36,6 @@ interface Props {
 export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSelect }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { currentCountry } = useVineyard();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
 
