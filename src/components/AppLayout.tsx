@@ -29,7 +29,7 @@ export default function AppLayout() {
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center gap-3 border-b bg-card/80 backdrop-blur px-4">
             <SidebarTrigger />
             <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export default function AppLayout() {
             </div>
           </header>
           <PortalInfoBanner />
-          <main className="flex-1 p-6 bg-background">
+          <main className="flex-1 p-6 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
             <Outlet />
           </main>
         </div>
