@@ -120,6 +120,8 @@ export async function createDamageRecord(
   // `sync_version` starts at 1 (matches iOS create behaviour).
   const payload: Record<string, any> = {
     ...input,
+    // `notes` is NOT NULL in the iOS DB — coerce nullish to "".
+    notes: input.notes ?? "",
     date: input.date_observed ?? now,
     created_by: userId,
     updated_by: userId,
