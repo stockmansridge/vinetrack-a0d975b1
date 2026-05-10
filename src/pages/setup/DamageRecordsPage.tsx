@@ -91,6 +91,38 @@ const fmtDateTime = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
+const DEBUG_FIELDS = [
+  "id",
+  "vineyard_id",
+  "paddock_id",
+  "date",
+  "date_observed",
+  "damage_type",
+  "damage_percent",
+  "notes",
+  "polygon_points",
+  "row_number",
+  "side",
+  "severity",
+  "status",
+  "created_by",
+  "updated_by",
+  "client_updated_at",
+  "sync_version",
+  "deleted_at",
+] as const satisfies ReadonlyArray<keyof DamageRecord>;
+
+const serialiseDebugValue = (value: unknown) => {
+  if (value == null) return "null";
+  if (typeof value === "string") return value === "" ? '""' : value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
 const SEVERITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   low: "outline",
   medium: "secondary",
@@ -123,6 +155,8 @@ export default function DamageRecordsPage() {
   const [editingOpen, setEditingOpen] = useState(false);
   const [editing, setEditing] = useState<DamageRecord | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<DamageRecord | null>(null);
+  const [latestSavedRecord, setLatestSavedRecord] = useState<DamageRecord | null>(null);
+  const [compareRecordId, setCompareRecordId] = useState<string>(ANY);
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-geo", selectedVineyardId],
@@ -148,6 +182,33 @@ export default function DamageRecordsPage() {
   });
 
   const records = data?.records ?? [];
+  const latestRecord = useMemo(() => {
+    const dated = records
+      .slice()
+      .sort((a, b) => (b.created_at ?? b.client_updated_at ?? "").localeCompare(a.created_at ?? a.client_updated_at ?? ""));
+    return dated[0] ?? null;
+  }, [records]);
+  const debugRecord = latestSavedRecord ?? latestRecord;
+  const compareOptions = useMemo(
+    () => records.filter((r) => r.id !== debugRecord?.id),
+    [records, debugRecord?.id],
+  );
+
+  useEffect(() => {
+    if (!compareOptions.length) {
+      setCompareRecordId(ANY);
+      return;
+    }
+    setCompareRecordId((current) => (
+      current !== ANY && compareOptions.some((r) => r.id === current)
+        ? current
+        : compareOptions[0].id
+    ));
+  }, [compareOptions]);
+
+  const compareRecord = compareRecordId === ANY
+    ? null
+    : compareOptions.find((r) => r.id === compareRecordId) ?? null;
 
   const observed = (r: DamageRecord) => r.date_observed ?? r.date ?? r.created_at ?? null;
 
@@ -276,6 +337,14 @@ export default function DamageRecordsPage() {
         </div>
       </div>
 
+      <DamageRecordDebugCard
+        latestRecord={debugRecord}
+        compareRecord={compareRecord}
+        compareOptions={compareOptions}
+        compareRecordId={compareRecordId}
+        onCompareRecordChange={setCompareRecordId}
+      />
+
       <Card>
         <Table>
           <TableHeader>
@@ -399,6 +468,7 @@ export default function DamageRecordsPage() {
           setEditingOpen(false);
           queryClient.invalidateQueries({ queryKey: ["damage_records", selectedVineyardId] });
         }}
+        onSavedRecord={setLatestSavedRecord}
       />
 
       <AlertDialog open={!!archiveTarget} onOpenChange={(o) => !o && setArchiveTarget(null)}>
