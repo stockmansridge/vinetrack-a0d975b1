@@ -411,6 +411,7 @@ function ChemicalEditor({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
+  const { currentCountry } = useVineyard();
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
   const [whp, setWhp] = useState("");
@@ -504,6 +505,7 @@ function ChemicalEditor({
         <div className="mt-4 space-y-3 text-sm">
           <ChemicalAILookup
             initialName={form.name ?? ""}
+            country={currentCountry}
             existingLibrary={existingLibrary
               .filter((c) => !initial || c.id !== initial.id)
               .map((c) => ({
