@@ -17,7 +17,12 @@ import {
 } from "@/components/ui/select";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { inferRateBasis, composeUnit, chemUnitOnly, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
+import {
+  inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
+  inferProductType, defaultUnitFor, unitsFor,
+  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
+  type RateBasis, type ProductType, type ChemUnit,
+} from "@/lib/rateBasis";
 
 interface Props {
   open: boolean;
