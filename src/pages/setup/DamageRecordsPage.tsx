@@ -302,8 +302,25 @@ export default function DamageRecordsPage() {
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canEdit ? 12 : 11} className="text-center text-muted-foreground py-8">
-                  No damage records match the current filters.
+                <TableCell colSpan={canEdit ? 12 : 11} className="py-12">
+                  <div className="mx-auto flex max-w-md flex-col items-center text-center">
+                    <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
+                      <ShieldAlert className="h-7 w-7 text-accent" aria-hidden="true" />
+                    </span>
+                    <h3 className="text-base font-semibold text-foreground">
+                      No damage records found
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Damage observations from the iOS app will appear here once
+                      synced, or you can create a new record.
+                    </p>
+                    {canEdit && (
+                      <Button onClick={openCreate} className="mt-4">
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        New damage record
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
