@@ -8,10 +8,16 @@ export interface SprayJobChemicalLine {
   name?: string | null;
   active_ingredient?: string | null;
   rate?: number | null;
-  unit?: string | null;
   /**
-   * Explicit application basis for this line. Persisted into the JSON so iOS
-   * can read it without having to parse the unit string.
+   * Composed unit text (e.g. "mL/100L", "L/ha"). Kept for backward
+   * compatibility with iOS readers that parse the unit text. New writers
+   * should also set `product_type` and `rate_basis` explicitly.
+   */
+  unit?: string | null;
+  /** "liquid" → L/mL · "solid" → kg/g */
+  product_type?: "liquid" | "solid" | null;
+  /**
+   * Explicit application basis for this line (preferred over parsing unit).
    *   - "per_hectare" → rate × area
    *   - "per_100L"    → rate × (water litres / 100)
    */
