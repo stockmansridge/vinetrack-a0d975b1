@@ -715,7 +715,8 @@ function DamageEditSheet({
       row_number: numOrNull(form.row_number),
       side: form.side || null,
       operator_name: operatorName,
-      notes: form.notes.trim() || null,
+      // iOS DB has NOT NULL on notes — always send a string, never null.
+      notes: form.notes?.trim() ?? "",
       latitude: numOrNull(form.latitude),
       longitude: numOrNull(form.longitude),
       // iOS canonical shape: [{ latitude, longitude }, …]. Stored as-is when

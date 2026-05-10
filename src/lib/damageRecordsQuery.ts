@@ -120,6 +120,8 @@ export async function createDamageRecord(
   // `sync_version` starts at 1 (matches iOS create behaviour).
   const payload: Record<string, any> = {
     ...input,
+    // `notes` is NOT NULL in the iOS DB — coerce nullish to "".
+    notes: input.notes ?? "",
     date: input.date_observed ?? now,
     created_by: userId,
     updated_by: userId,
@@ -154,6 +156,11 @@ export async function updateDamageRecord(
     client_updated_at: now,
     sync_version: nextVersion,
   };
+  // Only coerce notes when it's explicitly being patched (avoid overwriting
+  // the existing value with "" on partial updates that don't touch notes).
+  if ("notes" in patch) {
+    payload.notes = patch.notes ?? "";
+  }
   if (userId) payload.updated_by = userId;
   if (patch.date_observed !== undefined && patch.date_observed) {
     payload.date = patch.date_observed;
