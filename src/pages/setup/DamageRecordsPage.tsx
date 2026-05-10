@@ -703,6 +703,13 @@ function DamageEditSheet({
               </SelectContent>
             </Select>
           </Row>
+
+          <DamageEditMap
+            paddock={paddocks.find((p) => p.id === form.paddock_id) ?? null}
+            existingPolygon={record?.polygon_points}
+            damagePercent={form.damage_percent}
+          />
+
           <Row label="Date observed">
             <Input type="date" value={form.date_observed} onChange={(e) => set("date_observed", e.target.value)} />
           </Row>
