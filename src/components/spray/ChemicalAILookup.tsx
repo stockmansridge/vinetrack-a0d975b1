@@ -1,10 +1,18 @@
 import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, Check } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
+import {
+  inferProductType,
+  inferRateBasis,
+  normaliseUnit,
+  type ProductType,
+  type RateBasis,
+  type ChemUnit,
+} from "@/lib/rateBasis";
 
 export interface AppliedSuggestion {
   name?: string;
@@ -12,38 +20,61 @@ export interface AppliedSuggestion {
   category?: ProductCategory | "";
   chemical_group?: string;
   manufacturer?: string;
-  rate_per_ha?: number | null;
-  rate_unit?: string;
+  product_type?: ProductType;
+  unit?: ChemUnit;
+  rate_basis?: RateBasis;
+  rate_per_ha?: number | null; // numeric rate value (per the basis)
+  rate_unit?: string;          // composed text e.g. "mL/100L"
   whp_days?: string;
   rei_hours?: string;
+  target?: string;
   notes?: string;
+  /** Set when the user selected an existing library match instead of a new lookup row. */
+  existing_chemical_id?: string;
 }
 
-interface RawSuggestion {
+interface RawCandidate {
   product_name?: string;
   active_ingredient?: string;
   category?: string;
   chemical_group?: string;
   manufacturer?: string;
-  rate_per_ha?: number | null;
-  rate_unit?: string;
+  product_type?: "liquid" | "solid";
+  unit?: ChemUnit;
+  rate_basis?: RateBasis;
+  rate_per_unit?: number | null;
   withholding_period_days?: number | null;
   re_entry_period_hours?: number | null;
+  target?: string;
   notes?: string;
   safety_note?: string;
   confidence?: "high" | "medium" | "low" | "unknown";
 }
 
+export interface ExistingLibraryItem {
+  id: string;
+  name?: string | null;
+  active_ingredient?: string | null;
+}
+
 interface Props {
   initialName?: string;
+  /** Existing chemicals already in the vineyard library. Used to flag duplicate hits. */
+  existingLibrary?: ExistingLibraryItem[];
+  /** Apply a candidate (AI lookup OR existing library item). */
   onApply: (s: AppliedSuggestion) => void;
 }
 
-export function ChemicalAILookup({ initialName = "", onApply }: Props) {
+function normalise(s: string | null | undefined): string {
+  return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApply }: Props) {
   const [name, setName] = useState(initialName);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [suggestion, setSuggestion] = useState<RawSuggestion | null>(null);
+  const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
+  const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
 
   async function runLookup() {
     const q = name.trim();
@@ -52,15 +83,31 @@ export function ChemicalAILookup({ initialName = "", onApply }: Props) {
       return;
     }
     setError(null);
-    setSuggestion(null);
+    setCandidates(null);
+    setExistingMatches([]);
     setLoading(true);
+
+    // First, surface any existing library matches so the user can re-use them
+    // instead of creating a duplicate.
+    const qn = normalise(q);
+    const matches = existingLibrary.filter((c) => {
+      const haystack = `${normalise(c.name)} ${normalise(c.active_ingredient)}`;
+      return qn.length >= 3 && haystack.includes(qn);
+    });
+    setExistingMatches(matches);
+
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
         body: { product_name: q },
       });
       if (fnErr) throw fnErr;
-      if (!data?.suggestion) throw new Error("No suggestion returned");
-      setSuggestion(data.suggestion as RawSuggestion);
+      const list: RawCandidate[] = Array.isArray(data?.candidates)
+        ? data.candidates
+        : data?.suggestion
+        ? [data.suggestion]
+        : [];
+      if (!list.length) throw new Error("No matches returned");
+      setCandidates(list);
     } catch (e: any) {
       setError(e?.message ?? "AI lookup failed");
     } finally {
@@ -68,26 +115,44 @@ export function ChemicalAILookup({ initialName = "", onApply }: Props) {
     }
   }
 
-  function applyAll() {
-    if (!suggestion) return;
-    const cat = matchCategory(suggestion.category) ?? (suggestion.category as ProductCategory | undefined);
+  function applyCandidate(c: RawCandidate) {
+    const cat = matchCategory(c.category) ?? (c.category as ProductCategory | undefined);
+    const unit = (c.unit ?? normaliseUnit(c.unit)) as ChemUnit | "" | undefined;
+    const productType: ProductType = c.product_type
+      ? c.product_type
+      : inferProductType(unit || undefined);
+    const basis: RateBasis = c.rate_basis ?? "per_hectare";
+    const composedUnit =
+      unit ? `${unit}${basis === "per_100L" ? "/100L" : "/ha"}` : undefined;
     onApply({
-      name: suggestion.product_name?.trim() || name.trim(),
-      active_ingredient: suggestion.active_ingredient,
+      name: c.product_name?.trim() || name.trim(),
+      active_ingredient: c.active_ingredient,
       category: cat ?? undefined,
-      chemical_group: suggestion.chemical_group,
-      manufacturer: suggestion.manufacturer,
-      rate_per_ha: suggestion.rate_per_ha ?? null,
-      rate_unit: suggestion.rate_unit,
+      chemical_group: c.chemical_group,
+      manufacturer: c.manufacturer,
+      product_type: productType,
+      unit: (unit || undefined) as ChemUnit | undefined,
+      rate_basis: basis,
+      rate_per_ha: c.rate_per_unit ?? null,
+      rate_unit: composedUnit,
       whp_days:
-        suggestion.withholding_period_days != null
-          ? String(suggestion.withholding_period_days)
+        c.withholding_period_days != null
+          ? String(c.withholding_period_days)
           : undefined,
       rei_hours:
-        suggestion.re_entry_period_hours != null
-          ? String(suggestion.re_entry_period_hours)
+        c.re_entry_period_hours != null
+          ? String(c.re_entry_period_hours)
           : undefined,
-      notes: suggestion.notes,
+      target: c.target,
+      notes: c.notes,
+    });
+  }
+
+  function applyExisting(item: ExistingLibraryItem) {
+    onApply({
+      existing_chemical_id: item.id,
+      name: item.name ?? undefined,
+      active_ingredient: item.active_ingredient ?? undefined,
     });
   }
 
@@ -129,55 +194,97 @@ export function ChemicalAILookup({ initialName = "", onApply }: Props) {
         </div>
       )}
 
-      {suggestion && (
-        <div className="space-y-2 rounded border bg-background p-2 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="font-medium">Suggested fields</span>
-            <span className="text-muted-foreground">
-              Confidence: {suggestion.confidence ?? "unknown"}
-            </span>
+      {existingMatches.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Already in your library
           </div>
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-            <Row label="Name" value={suggestion.product_name} />
-            <Row label="Category" value={suggestion.category} />
-            <Row label="Active ingredient" value={suggestion.active_ingredient} />
-            <Row label="Chemical group" value={suggestion.chemical_group} />
-            <Row label="Manufacturer" value={suggestion.manufacturer} />
-            <Row
-              label="Rate"
-              value={
-                suggestion.rate_per_ha != null
-                  ? `${suggestion.rate_per_ha}${suggestion.rate_unit ? ` ${suggestion.rate_unit}` : ""}`
-                  : undefined
-              }
-            />
-            <Row
-              label="WHP"
-              value={
-                suggestion.withholding_period_days != null
-                  ? `${suggestion.withholding_period_days} days`
-                  : undefined
-              }
-            />
-            <Row
-              label="REI"
-              value={
-                suggestion.re_entry_period_hours != null
-                  ? `${suggestion.re_entry_period_hours} hours`
-                  : undefined
-              }
-            />
-          </dl>
-          {suggestion.notes && (
-            <div>
-              <Label className="text-[10px] uppercase text-muted-foreground">Notes</Label>
-              <p className="text-xs">{suggestion.notes}</p>
-            </div>
-          )}
-          <Button type="button" size="sm" variant="outline" onClick={applyAll} className="w-full">
-            <Check className="h-3.5 w-3.5 mr-1" />
-            Apply suggestions to form
-          </Button>
+          {existingMatches.slice(0, 5).map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => applyExisting(m)}
+              className="w-full text-left rounded border bg-background p-2 hover:bg-muted/50 focus:outline-none focus:bg-muted/60"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Library className="h-3.5 w-3.5 text-primary" />
+                  {m.name ?? "Unnamed"}
+                </div>
+                <Badge variant="secondary" className="text-[10px]">Existing</Badge>
+              </div>
+              {m.active_ingredient && (
+                <div className="text-xs text-muted-foreground">{m.active_ingredient}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {candidates && candidates.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            AI candidates ({candidates.length})
+          </div>
+          {candidates.map((c, i) => {
+            const unit = c.unit ?? (normaliseUnit(c.unit) as ChemUnit | "");
+            const basis = c.rate_basis ?? inferRateBasis(unit ? `${unit}/${"ha"}` : null);
+            const productType = c.product_type ?? inferProductType(unit || undefined);
+            const rateText =
+              c.rate_per_unit != null
+                ? `${c.rate_per_unit} ${unit || ""}${basis === "per_100L" ? "/100L" : "/ha"}`
+                : "Rate varies — check label";
+            return (
+              <div key={i} className="rounded border bg-background p-2 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">
+                    {c.product_name || "Unnamed"}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    Confidence: {c.confidence ?? "unknown"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                  <Row label="Active" value={c.active_ingredient} />
+                  <Row label="Category" value={c.category} />
+                  <Row label="Manufacturer" value={c.manufacturer} />
+                  <Row label="Group" value={c.chemical_group} />
+                  <Row label="Type" value={productType} />
+                  <Row label="Rate" value={rateText} />
+                  <Row
+                    label="WHP"
+                    value={
+                      c.withholding_period_days != null
+                        ? `${c.withholding_period_days} days`
+                        : undefined
+                    }
+                  />
+                  <Row
+                    label="REI"
+                    value={
+                      c.re_entry_period_hours != null
+                        ? `${c.re_entry_period_hours} hours`
+                        : undefined
+                    }
+                  />
+                  {c.target && <Row label="Target" value={c.target} />}
+                </div>
+                {c.notes && (
+                  <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyCandidate(c)}
+                  className="w-full"
+                >
+                  <Check className="h-3.5 w-3.5 mr-1" />
+                  Apply this product
+                </Button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -191,8 +298,8 @@ export function ChemicalAILookup({ initialName = "", onApply }: Props) {
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
     <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={value ? "" : "text-muted-foreground italic"}>{value || "—"}</dd>
+      <span className="text-muted-foreground">{label}</span>
+      <span className={value ? "" : "text-muted-foreground italic"}>{value || "—"}</span>
     </>
   );
 }
