@@ -153,28 +153,6 @@ export default function DamageRecordsPage() {
       .sort((a, b) => (b.created_at ?? b.client_updated_at ?? "").localeCompare(a.created_at ?? a.client_updated_at ?? ""));
     return dated[0] ?? null;
   }, [records]);
-  const debugRecord = latestSavedRecord ?? latestRecord;
-  const compareOptions = useMemo(
-    () => records.filter((r) => r.id !== debugRecord?.id),
-    [records, debugRecord?.id],
-  );
-
-  useEffect(() => {
-    if (!compareOptions.length) {
-      setCompareRecordId(ANY);
-      return;
-    }
-    setCompareRecordId((current) => (
-      current !== ANY && compareOptions.some((r) => r.id === current)
-        ? current
-        : compareOptions[0].id
-    ));
-  }, [compareOptions]);
-
-  const compareRecord = compareRecordId === ANY
-    ? null
-    : compareOptions.find((r) => r.id === compareRecordId) ?? null;
-
   const observed = (r: DamageRecord) => r.date_observed ?? r.date ?? r.created_at ?? null;
 
   const rows = useMemo(() => {
