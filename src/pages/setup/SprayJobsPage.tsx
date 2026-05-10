@@ -660,6 +660,33 @@ function SprayJobSheet({
           </SheetTitle>
         </SheetHeader>
 
+        {!editing && !form.is_template && (
+          <StartFromTemplatePicker
+            vineyardId={vineyardId}
+            onUseTemplate={(t) => {
+              setForm((f) => ({
+                ...f,
+                name: t.name ? `${t.name} — ${new Date().toLocaleDateString()}` : f.name,
+                operation_type: t.operation_type ?? f.operation_type,
+                target: t.target ?? f.target,
+                chemical_lines: (t.chemical_lines ?? []).map((l) => ({ ...l })),
+                water_volume: t.water_volume ?? f.water_volume,
+                spray_rate_per_ha: t.spray_rate_per_ha ?? f.spray_rate_per_ha,
+                equipment_id: t.equipment_id ?? f.equipment_id,
+                tractor_id: t.tractor_id ?? f.tractor_id,
+                notes: t.notes ?? f.notes,
+                growth_stage_code: t.growth_stage_code ?? f.growth_stage_code,
+                vsp_canopy_size: t.vsp_canopy_size ?? f.vsp_canopy_size,
+                vsp_canopy_density: t.vsp_canopy_density ?? f.vsp_canopy_density,
+                row_spacing_metres: t.row_spacing_metres ?? f.row_spacing_metres,
+                concentration_factor: t.concentration_factor ?? f.concentration_factor,
+              }));
+              if (t.spray_rate_per_ha != null) setSprayRateOverridden(true);
+              if (t.row_spacing_metres != null) setRowSpacingOverridden(true);
+            }}
+          />
+        )}
+
         <fieldset disabled={!canEdit} className="mt-4 space-y-5 text-sm">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1 col-span-2">
