@@ -65,6 +65,7 @@ import {
 } from "@/lib/paddockGeometry";
 import { calculateDamageImpact } from "@/lib/damageImpact";
 import DamageMapView from "@/components/DamageMapView";
+import DamagePolygonEditor from "@/components/DamagePolygonEditor";
 
 const ANY = "__any__";
 
@@ -630,14 +631,30 @@ function DamageEditSheet({
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [polygon, setPolygon] = useState<LatLng[]>([]);
+  const [polygonOutside, setPolygonOutside] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setForm(record ? recordToForm(record) : emptyForm());
+    setPolygon(record ? parsePolygonPoints(record.polygon_points) : []);
+    setPolygonOutside(false);
   }, [open, record]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const selectedPaddock = paddocks.find((p) => p.id === form.paddock_id) ?? null;
+  const paddockPolygon = useMemo<LatLng[]>(
+    () => parsePolygonPoints(selectedPaddock?.polygon_points),
+    [selectedPaddock?.polygon_points],
+  );
+  const blockAreaHa = useMemo(() => polygonAreaHectares(paddockPolygon), [paddockPolygon]);
+  const damageAreaHa = useMemo(() => polygonAreaHectares(polygon), [polygon]);
+  const livePct = Number(form.damage_percent) || 0;
+  const liveDamagedAreaHa = polygon.length >= 3 ? damageAreaHa : blockAreaHa;
+  const liveEffectiveHa = (liveDamagedAreaHa * livePct) / 100;
+  const liveBlockLossPct = blockAreaHa > 0 ? (liveEffectiveHa / blockAreaHa) * 100 : 0;
 
   const buildPayload = (): DamageRecordWriteInput | null => {
     if (!vineyardId) return null;
@@ -661,6 +678,12 @@ function DamageEditSheet({
       notes: form.notes.trim() || null,
       latitude: numOrNull(form.latitude),
       longitude: numOrNull(form.longitude),
+      // iOS canonical shape: [{ latitude, longitude }, …]. Stored as-is when
+      // ≥3 vertices; cleared to null when the user removes the polygon.
+      polygon_points:
+        polygon.length >= 3
+          ? polygon.map((p) => ({ latitude: p.lat, longitude: p.lng }))
+          : null,
     };
   };
 
@@ -704,11 +727,47 @@ function DamageEditSheet({
             </Select>
           </Row>
 
-          <DamageEditMap
-            paddock={paddocks.find((p) => p.id === form.paddock_id) ?? null}
-            existingPolygon={record?.polygon_points}
-            damagePercent={form.damage_percent}
-          />
+          {selectedPaddock && (
+            <Section title="Damage area on map">
+              {paddockPolygon.length >= 3 ? (
+                <>
+                  <DamagePolygonEditor
+                    paddockPolygon={paddockPolygon}
+                    value={polygon}
+                    onChange={setPolygon}
+                    onOutsideChange={setPolygonOutside}
+                    height={300}
+                  />
+                  <div className="mt-3 grid gap-1 text-sm">
+                    <Field label="Block area" value={`${blockAreaHa.toFixed(2)} ha`} />
+                    {polygon.length >= 3 ? (
+                      <>
+                        <Field label="Damage polygon area" value={`${damageAreaHa.toFixed(2)} ha`} />
+                        <Field label="Effective loss (at this %)" value={`${liveEffectiveHa.toFixed(2)} ha`} />
+                        <Field
+                          label="Block yield impact"
+                          value={blockAreaHa > 0 ? `${liveBlockLossPct.toFixed(1)}%` : "—"}
+                        />
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No damage polygon yet — tap on the paddock to start drawing. Without a polygon we treat the whole block as damaged.
+                      </p>
+                    )}
+                    {polygonOutside && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Some vertices fall outside the paddock boundary. The polygon will still save, but the area calculation may be larger than the block.
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  This paddock has no mapped boundary, so we can't draw a damage polygon yet.
+                </p>
+              )}
+            </Section>
+          )}
 
           <Row label="Date observed">
             <Input type="date" value={form.date_observed} onChange={(e) => set("date_observed", e.target.value)} />
@@ -790,59 +849,6 @@ function DamageEditSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function DamageEditMap({
-  paddock, existingPolygon, damagePercent,
-}: {
-  paddock: PaddockGeo | null;
-  existingPolygon: any;
-  damagePercent: string;
-}) {
-  const paddockPolygon = useMemo<LatLng[]>(
-    () => parsePolygonPoints(paddock?.polygon_points),
-    [paddock?.polygon_points],
-  );
-  const damagePoly = useMemo<LatLng[]>(
-    () => parsePolygonPoints(existingPolygon),
-    [existingPolygon],
-  );
-  const blockArea = polygonAreaHectares(paddockPolygon);
-  const damageArea = polygonAreaHectares(damagePoly);
-  const pct = Number(damagePercent) || 0;
-  const effective = (damagePoly.length >= 3 ? damageArea : blockArea) * pct / 100;
-
-  if (!paddock) return null;
-  return (
-    <Section title="Damage area on map">
-      {paddockPolygon.length >= 3 ? (
-        <>
-          <DamageMapView
-            paddockPolygon={paddockPolygon}
-            damagePolygon={damagePoly}
-            height={240}
-          />
-          <div className="mt-2 grid gap-1 text-sm">
-            <Field label="Block area" value={`${blockArea.toFixed(2)} ha`} />
-            {damagePoly.length >= 3 ? (
-              <>
-                <Field label="Damage polygon area" value={`${damageArea.toFixed(2)} ha`} />
-                <Field label="Effective loss (at this %)" value={`${effective.toFixed(2)} ha`} />
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No damage polygon yet. Drawing in the portal is coming in the next phase — for now, draw the polygon in the iOS app and it will appear here after sync.
-              </p>
-            )}
-          </div>
-        </>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          This paddock has no mapped boundary, so we can't show the damage on a map yet.
-        </p>
-      )}
-    </Section>
   );
 }
 

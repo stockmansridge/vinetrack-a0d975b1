@@ -91,6 +91,7 @@ export type DamageRecordWriteInput = {
   longitude?: number | null;
   pin_id?: string | null;
   trip_id?: string | null;
+  polygon_points?: any;
 };
 
 export async function createDamageRecord(
