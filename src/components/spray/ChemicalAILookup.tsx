@@ -48,6 +48,8 @@ interface RawCandidate {
   target?: string;
   notes?: string;
   safety_note?: string;
+  country?: string;
+  country_confirmed?: boolean;
   confidence?: "high" | "medium" | "low" | "unknown";
 }
 
@@ -61,6 +63,8 @@ interface Props {
   initialName?: string;
   /** Existing chemicals already in the vineyard library. Used to flag duplicate hits. */
   existingLibrary?: ExistingLibraryItem[];
+  /** Vineyard country (e.g. "Australia", "New Zealand", "United States") used to bias results. */
+  country?: string | null;
   /** Apply a candidate (AI lookup OR existing library item). */
   onApply: (s: AppliedSuggestion) => void;
 }
@@ -69,7 +73,7 @@ function normalise(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApply }: Props) {
+export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   const [name, setName] = useState(initialName);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +102,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApp
 
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
-        body: { product_name: q },
+        body: { product_name: q, country: country ?? null },
       });
       if (fnErr) throw fnErr;
       const list: RawCandidate[] = Array.isArray(data?.candidates)
@@ -158,9 +162,16 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApp
 
   return (
     <div className="rounded-md border border-dashed p-3 space-y-2 bg-muted/30">
-      <div className="flex items-center gap-1.5 text-xs font-medium">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
-        AI Lookup (Australian labels)
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          AI Lookup {country ? `(${country} labels)` : "(country not set)"}
+        </div>
+        {!country && (
+          <span className="text-[10px] text-muted-foreground italic">
+            Set vineyard country to improve results
+          </span>
+        )}
       </div>
       <div className="flex gap-2">
         <Input
@@ -224,7 +235,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApp
       {candidates && candidates.length > 0 && (
         <div className="space-y-1">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            AI candidates ({candidates.length})
+            Lookup results ({candidates.length})
           </div>
           {candidates.map((c, i) => {
             const unit = c.unit ?? (normaliseUnit(c.unit) as ChemUnit | "");
@@ -240,9 +251,20 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApp
                   <div className="text-sm font-medium">
                     {c.product_name || "Unnamed"}
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    Confidence: {c.confidence ?? "unknown"}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    {c.country && (
+                      <Badge
+                        variant={c.country_confirmed === false ? "outline" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {c.country}
+                        {c.country_confirmed === false ? " (unverified)" : ""}
+                      </Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {c.confidence ?? "unknown"}
+                    </span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                   <Row label="Active" value={c.active_ingredient} />
@@ -289,7 +311,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], onApp
       )}
 
       <p className="text-[11px] text-muted-foreground leading-snug">
-        AI lookup is a starting point only. Always confirm against the product label before use.
+        Always confirm rates, withholding periods, re-entry intervals, and permitted uses against the current product label for your country.
       </p>
     </div>
   );

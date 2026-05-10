@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { useVineyard } from "@/context/VineyardContext";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
@@ -161,6 +162,7 @@ function NewChemicalDialog({
   onPickExisting: (c: SavedChemical) => void;
 }) {
   const { toast } = useToast();
+  const { currentCountry } = useVineyard();
   const [form, setForm] = useState({
     name: "",
     active_ingredient: "",
@@ -203,6 +205,7 @@ function NewChemicalDialog({
         <div className="space-y-3 text-sm max-h-[70vh] overflow-y-auto pr-1">
           <ChemicalAILookup
             initialName={form.name}
+            country={currentCountry}
             existingLibrary={existingLibrary.map((c) => ({
               id: c.id,
               name: c.name,

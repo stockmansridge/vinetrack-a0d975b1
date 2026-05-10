@@ -9,23 +9,23 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM = `You are an assistant helping Australian viticulture and vineyard managers fill in details about agricultural chemicals and products (fungicides, herbicides, insecticides, fertilisers, bio-stimulants, wetting agents, etc).
+const SYSTEM = `You are an assistant helping viticulture and vineyard managers fill in details about agricultural chemicals and products (fungicides, herbicides, insecticides, fertilisers, bio-stimulants, wetting agents, etc).
 
 Rules:
-- Bias strongly toward Australian product label information (APVMA registered products).
-- Return up to 5 likely candidate products that match the user's query.
-  - If the query is unambiguous (a single registered product), return one candidate.
-  - If the query is ambiguous (active ingredient, partial name, generic), return multiple candidates ordered by likelihood.
-- Never guess. If you are not confident about a field, leave it empty/null.
+- The user will provide the vineyard's COUNTRY. Strongly prioritise products registered or commonly used in that country and use that country's regulator (e.g. APVMA for Australia, ACVM/EPA for New Zealand, EPA for the United States, HSE for the UK).
+- Return up to 10 likely candidate products that match the user's query, ordered by likelihood and country relevance.
+  - Country-confirmed registered products first.
+  - If you must include results that are NOT confirmed for that country, set country_confirmed = false and add a note such as "Not confirmed for <country> — verify registration".
+- Never guess. If you are not confident about a field, leave it null.
 - For each candidate, infer:
     - product_type ("liquid" if the formulation is a liquid/EC/SC/SL, "solid" if WG/WP/granule/powder).
     - unit (one of "L", "mL", "kg", "g") matching the product_type.
     - rate_basis ("per_hectare" if label rate is per hectare, "per_100L" if per 100 litres of spray volume).
     - rate_per_unit numeric (e.g. 100 for "100 mL/100L", 1.5 for "1.5 L/ha").
-- If a rate varies by target/disease/crop, leave rate_per_unit null and put a note in "notes" such as "Rate varies by target — check label".
-- WHP (withholding period in days) and REI (re-entry interval in hours) only when confident from the Australian label. Otherwise null.
+- If a rate varies by target/disease/crop, leave rate_per_unit null and put a note such as "Rate varies by target — check label".
+- WHP (withholding period in days) and REI (re-entry interval in hours) only when confident from that country's label. Otherwise null.
 - Category MUST be one of: Fungicide, Herbicide, Insecticide, Fertiliser, Bio-stimulant, Wetting agent / adjuvant, Other.
-- Always include a short safety_note reminding the user to verify the suggestion against the actual product label.
+- Always include a short safety_note reminding the user to verify against the actual product label for their country.
 - Keep notes concise (under 240 characters).`;
 
 const tools = [
@@ -39,7 +39,7 @@ const tools = [
         properties: {
           candidates: {
             type: "array",
-            description: "Up to 5 candidate products ordered by likelihood.",
+            description: "Up to 10 candidate products ordered by likelihood and country relevance.",
             items: {
               type: "object",
               properties: {
@@ -68,6 +68,8 @@ const tools = [
                 target: { type: "string", description: "Typical target pest/disease/weed" },
                 notes: { type: "string" },
                 safety_note: { type: "string" },
+                country: { type: "string", description: "Primary country of registration for this product." },
+                country_confirmed: { type: "boolean", description: "True if confirmed registered in the user's vineyard country." },
                 confidence: { type: "string", enum: ["high", "medium", "low", "unknown"] },
               },
               required: ["product_name", "category", "confidence", "safety_note"],
@@ -86,7 +88,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { product_name } = await req.json();
+    const { product_name, country } = await req.json();
+    const countryStr = typeof country === "string" && country.trim() ? country.trim() : "";
     if (!product_name || typeof product_name !== "string" || !product_name.trim()) {
       return new Response(JSON.stringify({ error: "product_name is required" }), {
         status: 400,
@@ -114,7 +117,7 @@ Deno.serve(async (req) => {
           { role: "system", content: SYSTEM },
           {
             role: "user",
-            content: `Look up Australian vineyard product candidates matching: "${product_name.trim()}". Return up to 5 likely matches ordered by likelihood.`,
+            content: `Vineyard country: ${countryStr || "UNKNOWN"}.\nLook up vineyard product candidates matching: "${product_name.trim()}". Return up to 10 likely matches, ordered by likelihood and country relevance. Prefer products registered in ${countryStr || "the user's country"}; only include results from other regions if you have no good local match, and mark them with country_confirmed=false.`,
           },
         ],
         tools,
