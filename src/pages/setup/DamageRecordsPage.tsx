@@ -749,8 +749,7 @@ function DamageEditSheet({
       }
       return createDamageRecord(payload, userId);
     },
-    onSuccess: (savedRecord) => {
-      onSavedRecord(savedRecord);
+    onSuccess: () => {
       toast({ title: record ? "Damage record updated" : "Damage record created" });
       onSaved();
     },
