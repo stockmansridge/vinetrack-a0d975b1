@@ -471,6 +471,12 @@ function ChemicalEditor({
     setForm((p) => ({ ...p, [k]: v }));
 
   const applySuggestion = (s: AppliedSuggestion) => {
+    // Compose unit text from product type + chem unit + basis when AI gives
+    // structured fields; fall back to whatever rate_unit string was returned.
+    const basis = s.rate_basis ?? inferRateBasis(s.rate_unit);
+    const productType = s.product_type ?? inferProductType(s.unit ?? s.rate_unit);
+    const chemUnit = s.unit ?? (normaliseUnit(s.rate_unit) || defaultUnitFor(productType));
+    const composed = s.rate_unit ?? composeUnit(chemUnit, basis);
     setForm((p) => ({
       ...p,
       name: s.name ?? p.name ?? "",
@@ -478,7 +484,8 @@ function ChemicalEditor({
       use: s.category ?? p.use ?? "",
       chemical_group: s.chemical_group ?? p.chemical_group ?? "",
       manufacturer: s.manufacturer ?? p.manufacturer ?? "",
-      unit: s.rate_unit ?? p.unit ?? "",
+      problem: s.target ?? p.problem ?? "",
+      unit: composed,
       notes: s.notes ?? p.notes ?? "",
     }));
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
