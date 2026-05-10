@@ -282,7 +282,11 @@ function JobsTable({
   });
 
   const [search, setSearch] = useState("");
-  const allRows = data ?? [];
+  const allRows = useMemo(() => {
+    const base = data ?? [];
+    if (templatesOnly && mode === "archived") return base.filter((j) => !!j.is_template);
+    return base;
+  }, [data, templatesOnly, mode]);
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return allRows;
