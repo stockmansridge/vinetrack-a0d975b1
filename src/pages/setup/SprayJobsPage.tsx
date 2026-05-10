@@ -165,12 +165,12 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           </TabsContent>
         )}
         <TabsContent value="templates">
-          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps}
+          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
             onEdit={(job) => setEditing({ job, isTemplate: true })} />
         </TabsContent>
         <TabsContent value="archived">
-          <JobsTable mode="archived" canEdit={canEdit} maps={lookups.maps}
-            onEdit={(job) => setEditing({ job, isTemplate: !!job.is_template })} />
+          <JobsTable mode="archived" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
+            onEdit={(job) => setEditing({ job, isTemplate: templatesOnly ? true : !!job.is_template })} />
         </TabsContent>
       </Tabs>
 
