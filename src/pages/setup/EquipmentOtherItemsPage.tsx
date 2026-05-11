@@ -112,41 +112,53 @@ export default function EquipmentOtherItemsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Make / Model</TableHead>
+              <TableHead>Serial number</TableHead>
+              <TableHead>Notes</TableHead>
               <TableHead>Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-destructive py-6">
+                <TableCell colSpan={5} className="text-center text-destructive py-6">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No other equipment items yet. Add one with “New item”.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((c) => (
+            {rows.map((c) => {
+              const mm = [c.make, c.model].filter((x) => (x ?? "").trim().length > 0).join(" / ");
+              const notes = (c.notes ?? "").trim();
+              return (
               <TableRow
                 key={c.id}
                 className="cursor-pointer"
                 onClick={() => setEditing(c)}
               >
                 <TableCell className="font-medium">{fmt(c.name)}</TableCell>
+                <TableCell>{mm || "—"}</TableCell>
+                <TableCell>{fmt(c.serial_number)}</TableCell>
+                <TableCell className="max-w-[280px] truncate" title={notes || undefined}>
+                  {notes ? (notes.length > 80 ? notes.slice(0, 80) + "…" : notes) : "—"}
+                </TableCell>
                 <TableCell>{fmtDate(c.updated_at)}</TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
