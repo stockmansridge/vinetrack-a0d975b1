@@ -653,7 +653,7 @@ export default function VineyardOverviewMap({
               </PanelShell>
             ) : selectedPin ? (
               <PanelShell
-                title={selectedPin.title || pinStyle(selectedPin.mode, selectedPin.button_color, selectedPin.category).label}
+                title={pinDisplayTitle(selectedPin)}
                 subtitle="Pin details"
                 onClose={() => setSelection(null)}
               >
@@ -662,6 +662,11 @@ export default function VineyardOverviewMap({
                   paddockName={
                     selectedPin.paddock_id
                       ? paddockNameById.get(selectedPin.paddock_id) ?? null
+                      : null
+                  }
+                  paddockRowDirection={
+                    selectedPin.paddock_id
+                      ? paddockRowDirById.get(selectedPin.paddock_id) ?? null
                       : null
                   }
                 />
