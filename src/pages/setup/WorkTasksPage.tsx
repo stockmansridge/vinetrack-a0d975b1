@@ -710,10 +710,11 @@ function WorkTaskDrawer({
                           />
                           <span className="flex-1 text-sm">{p.name ?? p.id.slice(0, 8)}</span>
                           <span className="text-xs text-muted-foreground">
-                            {p.area_ha != null ? `${Number(p.area_ha).toFixed(2)} ha` : "—"}
+                            {ha > 0 ? `${ha.toFixed(2)} ha` : "—"}
                           </span>
                         </label>
-                      ))}
+                        );
+                      })}
                     </PopoverContent>
                   </Popover>
                 </Field>
