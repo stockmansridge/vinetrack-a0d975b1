@@ -542,6 +542,7 @@ interface DrawerProps {
   paddocks: PaddockLite[];
   existingPaddocks: WorkTaskPaddock[];
   categories: OperatorCategory[];
+  syncedTaskTypes: WorkTaskType[];
   labourLines: WorkTaskLabourLine[];
   canSoftDelete: boolean;
   userId: string | null;
@@ -550,7 +551,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
 
