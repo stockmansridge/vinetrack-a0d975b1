@@ -292,6 +292,111 @@ export async function updateLabourLine(input: UpsertLabourLineInput): Promise<Wo
   return data as WorkTaskLabourLine;
 }
 
+// ------------------- Work task paddocks (join table) -------------------
+
+export interface WorkTaskPaddock {
+  id: string;
+  work_task_id: string;
+  vineyard_id: string;
+  paddock_id: string;
+  area_ha?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  client_updated_at?: string | null;
+  sync_version?: number | null;
+  deleted_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+}
+
+export async function fetchWorkTaskPaddocksForVineyard(
+  vineyardId: string,
+): Promise<WorkTaskPaddock[]> {
+  const { data, error } = await supabase
+    .from("work_task_paddocks")
+    .select("*")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (data ?? []) as WorkTaskPaddock[];
+}
+
+export interface PaddockSelection {
+  paddock_id: string;
+  area_ha: number | null;
+}
+
+/**
+ * Reconciles the work_task_paddocks rows for a task to match the desired
+ * selection. New paddocks are inserted, removed paddocks are soft-deleted via
+ * RPC (falls back to UPDATE), and existing rows have their area refreshed.
+ */
+export async function syncWorkTaskPaddocks(params: {
+  workTaskId: string;
+  vineyardId: string;
+  selections: PaddockSelection[];
+  existing: WorkTaskPaddock[];
+  userId?: string | null;
+}): Promise<void> {
+  const { workTaskId, vineyardId, selections, existing, userId } = params;
+  const desired = new Map(selections.map((s) => [s.paddock_id, s]));
+  const existingByPaddock = new Map(existing.map((r) => [r.paddock_id, r]));
+
+  // Remove paddocks no longer selected (soft delete).
+  for (const row of existing) {
+    if (!desired.has(row.paddock_id)) {
+      const rpc = await supabase.rpc("soft_delete_work_task_paddock", { p_id: row.id });
+      if (rpc.error) {
+        const { error } = await supabase
+          .from("work_task_paddocks")
+          .update({
+            deleted_at: nowIso(),
+            client_updated_at: nowIso(),
+            sync_version: (row.sync_version ?? 0) + 1,
+            updated_by: userId ?? null,
+          })
+          .eq("id", row.id);
+        if (error) throw error;
+      }
+    }
+  }
+
+  // Insert new + update existing.
+  for (const sel of selections) {
+    const existingRow = existingByPaddock.get(sel.paddock_id);
+    if (existingRow) {
+      // Refresh area snapshot if changed.
+      if ((existingRow.area_ha ?? null) !== (sel.area_ha ?? null)) {
+        const { error } = await supabase
+          .from("work_task_paddocks")
+          .update({
+            area_ha: sel.area_ha,
+            client_updated_at: nowIso(),
+            sync_version: (existingRow.sync_version ?? 0) + 1,
+            updated_by: userId ?? null,
+          })
+          .eq("id", existingRow.id);
+        if (error) throw error;
+      }
+    } else {
+      const { error } = await supabase.from("work_task_paddocks").insert({
+        work_task_id: workTaskId,
+        vineyard_id: vineyardId,
+        paddock_id: sel.paddock_id,
+        area_ha: sel.area_ha,
+        deleted_at: null,
+        client_updated_at: nowIso(),
+        sync_version: 1,
+        created_by: userId ?? null,
+        updated_by: userId ?? null,
+      });
+      if (error) throw error;
+    }
+  }
+}
+
+// ------------------- Labour lines -------------------
+
 export async function softDeleteLabourLine(id: string, userId?: string | null): Promise<void> {
   // Prefer the dedicated RPC; fall back to a soft-delete UPDATE if it isn't deployed.
   const rpc = await supabase.rpc("soft_delete_work_task_labour_line", { p_id: id });
