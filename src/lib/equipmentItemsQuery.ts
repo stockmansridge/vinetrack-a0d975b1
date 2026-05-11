@@ -17,6 +17,10 @@ export interface EquipmentItem {
   vineyard_id: string;
   category: EquipmentCategory | string;
   name: string;
+  make?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  notes?: string | null;
   sort_order?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
