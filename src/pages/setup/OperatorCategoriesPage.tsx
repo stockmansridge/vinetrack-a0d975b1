@@ -387,7 +387,7 @@ function CategoryEditor({
               Cancel
             </Button>
             {canWrite && (
-              <Button onClick={submit} disabled={busy}>
+              <Button onClick={submit} disabled={busy || !name.trim()}>
                 {isNew ? "Create" : "Save"}
               </Button>
             )}
