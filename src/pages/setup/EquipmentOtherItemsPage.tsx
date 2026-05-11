@@ -339,6 +339,55 @@ function ItemEditor({
             )}
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ei-make">Make</Label>
+              <Input
+                id="ei-make"
+                value={make}
+                onChange={(e) => setMake(e.target.value)}
+                placeholder="e.g. John Deere"
+                maxLength={120}
+                disabled={!canWrite}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ei-model">Model</Label>
+              <Input
+                id="ei-model"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="e.g. 5075E"
+                maxLength={120}
+                disabled={!canWrite}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ei-serial">Serial number</Label>
+            <Input
+              id="ei-serial"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              placeholder="Optional"
+              maxLength={120}
+              disabled={!canWrite}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ei-notes">Notes</Label>
+            <Textarea
+              id="ei-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+              rows={4}
+              disabled={!canWrite}
+            />
+          </div>
+
           {!isNew && item && (
             <div className="rounded-md border bg-muted/30 p-3 space-y-1 text-xs text-muted-foreground">
               <div>Created: {fmtDate(item.created_at)}</div>
