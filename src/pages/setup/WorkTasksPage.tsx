@@ -60,8 +60,31 @@ import {
   mergeTaskTypeNames,
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
+import { deriveMetrics } from "@/lib/paddockGeometry";
 
-interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
+interface PaddockLite {
+  id: string;
+  name: string | null;
+  area_ha?: number | null;
+  // Full paddock row is loaded via fetchList("paddocks"); we keep extras as
+  // any-shaped so deriveMetrics() can read polygon_points / rows / overrides.
+  [key: string]: any;
+}
+
+/** Resolve the effective area (ha) for a paddock — prefer the stored
+ *  area_ha column, then fall back to polygon-derived area. Returns 0 when
+ *  neither source produces a positive area. */
+function paddockAreaHa(p: PaddockLite | undefined | null): number {
+  if (!p) return 0;
+  const stored = p.area_ha != null ? Number(p.area_ha) : NaN;
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  try {
+    const derived = deriveMetrics(p).areaHa;
+    return Number.isFinite(derived) && derived > 0 ? derived : 0;
+  } catch {
+    return 0;
+  }
+}
 
 const ANY = "__any__";
 const NONE = "__none__";
@@ -583,11 +606,12 @@ function WorkTaskDrawer({
     () => paddockIds.map((id) => paddocks.find((p) => p.id === id)).filter(Boolean) as PaddockLite[],
     [paddockIds, paddocks],
   );
-  const paddockMissingArea = selectedPaddocks.some((p) => p.area_ha == null);
-  const totalAreaHa = selectedPaddocks.reduce(
-    (sum, p) => sum + (p.area_ha != null ? Number(p.area_ha) || 0 : 0),
-    0,
+  const paddockAreas = useMemo(
+    () => selectedPaddocks.map((p) => ({ paddock: p, areaHa: paddockAreaHa(p) })),
+    [selectedPaddocks],
   );
+  const paddockMissingArea = paddockAreas.some(({ areaHa }) => !(areaHa > 0));
+  const totalAreaHa = paddockAreas.reduce((sum, x) => sum + x.areaHa, 0);
   const areaHaDisplay = selectedPaddocks.length
     ? Number(totalAreaHa.toFixed(4)).toString()
     : "";
@@ -621,9 +645,9 @@ function WorkTaskDrawer({
       await syncWorkTaskPaddocks({
         workTaskId: saved.id,
         vineyardId,
-        selections: selectedPaddocks.map((p) => ({
-          paddock_id: p.id,
-          area_ha: p.area_ha == null ? null : Number(p.area_ha),
+        selections: paddockAreas.map(({ paddock, areaHa }) => ({
+          paddock_id: paddock.id,
+          area_ha: areaHa > 0 ? areaHa : null,
         })),
         existing: existingPaddocks,
         userId,
@@ -644,7 +668,7 @@ function WorkTaskDrawer({
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
   const missingRate = visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
-  const areaNum = selectedPaddocks.length ? totalAreaHa : null;
+  const areaNum = totalAreaHa > 0 ? totalAreaHa : null;
   const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
 
   const paddocksLabel = paddockIds.length === 0
@@ -676,7 +700,9 @@ function WorkTaskDrawer({
                       {paddocks.length === 0 && (
                         <p className="text-sm text-muted-foreground p-2">No paddocks.</p>
                       )}
-                      {paddocks.map((p) => (
+                      {paddocks.map((p) => {
+                        const ha = paddockAreaHa(p);
+                        return (
                         <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded cursor-pointer">
                           <Checkbox
                             checked={paddockIds.includes(p.id)}
@@ -684,10 +710,11 @@ function WorkTaskDrawer({
                           />
                           <span className="flex-1 text-sm">{p.name ?? p.id.slice(0, 8)}</span>
                           <span className="text-xs text-muted-foreground">
-                            {p.area_ha != null ? `${Number(p.area_ha).toFixed(2)} ha` : "—"}
+                            {ha > 0 ? `${ha.toFixed(2)} ha` : "—"}
                           </span>
                         </label>
-                      ))}
+                        );
+                      })}
                     </PopoverContent>
                   </Popover>
                 </Field>
