@@ -20,6 +20,7 @@ interface Paddock {
   id: string;
   name: string | null;
   polygon_points: any;
+  row_direction?: number | null;
 }
 
 function makePinElement(hex: string) {
