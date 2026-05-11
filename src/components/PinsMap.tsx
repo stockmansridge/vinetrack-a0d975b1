@@ -201,6 +201,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
           <PinDetailPanel
             pin={selected}
             paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+            paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
             onClose={() => setSelectedId(null)}
           />
         ) : (
