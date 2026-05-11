@@ -163,7 +163,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
       const ann = new mapkit.Annotation(
         new mapkit.Coordinate(pin.latitude!, pin.longitude!),
         () => makePinElement(hex),
-        { title: pin.title ?? (pin as any).button_name ?? "" },
+        { title: pinDisplayTitle(pin as any) },
       );
       try {
         ann.addEventListener?.("select", () => setSelectedId(pin.id));
