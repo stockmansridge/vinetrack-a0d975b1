@@ -54,6 +54,12 @@ import {
   type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
+import {
+  fetchWorkTaskTypesForVineyard,
+  createWorkTaskType,
+  mergeTaskTypeNames,
+  type WorkTaskType,
+} from "@/lib/workTaskTypesQuery";
 
 interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
