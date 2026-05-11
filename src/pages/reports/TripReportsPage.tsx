@@ -103,6 +103,23 @@ export default function TripReportsPage() {
   const [operator, setOperator] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<string>("all");
+
+  const applyPeriod = (val: string) => {
+    setPeriod(val);
+    if (val === "all") { setFrom(""); setTo(""); return; }
+    if (val === "custom") return;
+    const today = new Date();
+    const end = format(today, "yyyy-MM-dd");
+    const start = new Date(today);
+    if (val === "day") start.setDate(today.getDate() - 1);
+    else if (val === "week") start.setDate(today.getDate() - 7);
+    else if (val === "month") start.setMonth(today.getMonth() - 1);
+    else if (val === "quarter") start.setMonth(today.getMonth() - 3);
+    else if (val === "year") start.setFullYear(today.getFullYear() - 1);
+    setFrom(format(start, "yyyy-MM-dd"));
+    setTo(end);
+  };
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
@@ -234,12 +251,27 @@ export default function TripReportsPage() {
       <Card className="p-4 space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Period</div>
+            <Select value={period} onValueChange={applyPeriod}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="day">Past day</SelectItem>
+                <SelectItem value="week">Past week</SelectItem>
+                <SelectItem value="month">Past month</SelectItem>
+                <SelectItem value="quarter">Past 3 months</SelectItem>
+                <SelectItem value="year">Past year</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
             <div className="text-xs text-muted-foreground">From</div>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+            <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPeriod("custom"); }} className="w-40" />
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">To</div>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+            <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPeriod("custom"); }} className="w-40" />
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Trip type</div>
