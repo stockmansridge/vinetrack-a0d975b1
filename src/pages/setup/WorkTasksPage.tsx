@@ -179,7 +179,23 @@ export default function WorkTasksPage() {
     queryFn: () => fetchLabourLinesForVineyard(selectedVineyardId!),
   });
 
+  const { data: taskPaddocks = [] } = useQuery({
+    queryKey: ["work_task_paddocks", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTaskPaddocksForVineyard(selectedVineyardId!),
+  });
+
   const tasks = data?.tasks ?? [];
+
+  const paddocksByTask = useMemo(() => {
+    const m = new Map<string, WorkTaskPaddock[]>();
+    taskPaddocks.forEach((p) => {
+      const arr = m.get(p.work_task_id) ?? [];
+      arr.push(p);
+      m.set(p.work_task_id, arr);
+    });
+    return m;
+  }, [taskPaddocks]);
 
   const linesByTask = useMemo(() => {
     const m = new Map<string, WorkTaskLabourLine[]>();
