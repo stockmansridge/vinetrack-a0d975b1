@@ -472,6 +472,7 @@ export default function WorkTasksPage() {
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
         paddocks={paddocks}
+        existingPaddocks={selected ? paddocksByTask.get(selected.id) ?? [] : []}
         categories={categories}
         labourLines={selected ? linesByTask.get(selected.id) ?? [] : []}
         canSoftDelete={canSoftDelete}
@@ -480,6 +481,7 @@ export default function WorkTasksPage() {
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
+          qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
         }}
       />
 
@@ -489,6 +491,7 @@ export default function WorkTasksPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         paddocks={paddocks}
+        existingPaddocks={[]}
         categories={categories}
         labourLines={[]}
         canSoftDelete={canSoftDelete}
@@ -497,6 +500,7 @@ export default function WorkTasksPage() {
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
+          qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
         }}
       />
     </div>
