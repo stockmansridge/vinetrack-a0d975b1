@@ -538,7 +538,15 @@ function WorkTaskDrawer({
                   </Select>
                 </Field>
                 <Field label="Task type">
-                  <Input value={taskType} onChange={(e) => setTaskType(e.target.value)} placeholder="Pruning, spraying…" />
+                  <Select value={taskType || NONE} onValueChange={(v) => setTaskType(v === NONE ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>—</SelectItem>
+                      {Array.from(new Set([...TASK_TYPE_OPTIONS, ...(taskType ? [taskType] : [])])).map((o) => (
+                        <SelectItem key={o} value={o}>{o}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field label="Status">
                   <Select value={status || NONE} onValueChange={(v) => setStatus(v === NONE ? "" : v)}>
