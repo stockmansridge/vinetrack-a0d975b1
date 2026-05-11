@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
 import {
@@ -111,41 +112,53 @@ export default function EquipmentOtherItemsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Make / Model</TableHead>
+              <TableHead>Serial number</TableHead>
+              <TableHead>Notes</TableHead>
               <TableHead>Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-destructive py-6">
+                <TableCell colSpan={5} className="text-center text-destructive py-6">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No other equipment items yet. Add one with “New item”.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((c) => (
+            {rows.map((c) => {
+              const mm = [c.make, c.model].filter((x) => (x ?? "").trim().length > 0).join(" / ");
+              const notes = (c.notes ?? "").trim();
+              return (
               <TableRow
                 key={c.id}
                 className="cursor-pointer"
                 onClick={() => setEditing(c)}
               >
                 <TableCell className="font-medium">{fmt(c.name)}</TableCell>
+                <TableCell>{mm || "—"}</TableCell>
+                <TableCell>{fmt(c.serial_number)}</TableCell>
+                <TableCell className="max-w-[280px] truncate" title={notes || undefined}>
+                  {notes ? (notes.length > 80 ? notes.slice(0, 80) + "…" : notes) : "—"}
+                </TableCell>
                 <TableCell>{fmtDate(c.updated_at)}</TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
@@ -200,9 +213,19 @@ function ItemEditor({
 }) {
   const isNew = !item;
   const [name, setName] = useState("");
+  const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    if (open) setName(item?.name ?? "");
+    if (open) {
+      setName(item?.name ?? "");
+      setMake(item?.make ?? "");
+      setModel(item?.model ?? "");
+      setSerialNumber(item?.serial_number ?? "");
+      setNotes(item?.notes ?? "");
+    }
   }, [open, item]);
 
   const createMut = useMutation({
@@ -211,6 +234,10 @@ function ItemEditor({
       return createEquipmentItem({
         vineyard_id: vineyardId,
         name: name.trim(),
+        make: make.trim() || null,
+        model: model.trim() || null,
+        serial_number: serialNumber.trim() || null,
+        notes: notes.trim() || null,
         category: "other",
         user_id: userId,
       });
@@ -234,6 +261,10 @@ function ItemEditor({
       return updateEquipmentItem({
         id: item.id,
         name: name.trim(),
+        make: make.trim() ? make.trim() : null,
+        model: model.trim() ? model.trim() : null,
+        serial_number: serialNumber.trim() ? serialNumber.trim() : null,
+        notes: notes.trim() ? notes.trim() : null,
         user_id: userId,
         current_sync_version: item.sync_version ?? 0,
       });
@@ -306,6 +337,55 @@ function ItemEditor({
             {!name.trim() && (
               <p className="text-xs text-muted-foreground">Name is required.</p>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ei-make">Make</Label>
+              <Input
+                id="ei-make"
+                value={make}
+                onChange={(e) => setMake(e.target.value)}
+                placeholder="e.g. John Deere"
+                maxLength={120}
+                disabled={!canWrite}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ei-model">Model</Label>
+              <Input
+                id="ei-model"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="e.g. 5075E"
+                maxLength={120}
+                disabled={!canWrite}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ei-serial">Serial number</Label>
+            <Input
+              id="ei-serial"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              placeholder="Optional"
+              maxLength={120}
+              disabled={!canWrite}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ei-notes">Notes</Label>
+            <Textarea
+              id="ei-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+              rows={4}
+              disabled={!canWrite}
+            />
           </div>
 
           {!isNew && item && (
