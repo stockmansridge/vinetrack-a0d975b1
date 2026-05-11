@@ -153,6 +153,32 @@ function titleCaseSide(side: AttachableSide): string | null {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+/**
+ * Customer-facing side wording — "Left hand side" / "Right hand side".
+ * Falls back to title-cased original for non-LR values (e.g. "North").
+ */
+function formatSideWording(side: AttachableSide): string | null {
+  if (!side) return null;
+  const s = String(side).trim().toLowerCase();
+  if (!s) return null;
+  if (s === "l" || s === "left") return "Left hand side";
+  if (s === "r" || s === "right") return "Right hand side";
+  return titleCaseSide(side);
+}
+
+/** Compass bearing in degrees → "facing North", "facing North-East", etc. */
+export function formatFacingFromBearing(deg: number | null | undefined): string | null {
+  if (deg == null) return null;
+  const n = Number(deg);
+  if (!Number.isFinite(n)) return null;
+  const compass = [
+    "North", "North-East", "East", "South-East",
+    "South", "South-West", "West", "North-West",
+  ];
+  const idx = Math.round(((n % 360) + 360) % 360 / 45) % 8;
+  return `facing ${compass[idx]}`;
+}
+
 export interface PinAttachmentLike {
   pin_row_number?: number | null;
   pin_side?: string | null;
