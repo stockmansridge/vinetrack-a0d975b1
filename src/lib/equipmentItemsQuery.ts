@@ -50,6 +50,10 @@ export async function fetchEquipmentItemsForVineyard(
 export interface CreateEquipmentItemInput {
   vineyard_id: string;
   name: string;
+  make?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  notes?: string | null;
   category?: EquipmentCategory;
   sort_order?: number | null;
   user_id: string | null;
@@ -62,6 +66,10 @@ export async function createEquipmentItem(
     vineyard_id: input.vineyard_id,
     category: input.category ?? "other",
     name: input.name,
+    make: input.make ?? null,
+    model: input.model ?? null,
+    serial_number: input.serial_number ?? null,
+    notes: input.notes ?? null,
     sort_order: input.sort_order ?? null,
     created_by: input.user_id,
     updated_by: input.user_id,
@@ -81,6 +89,10 @@ export async function createEquipmentItem(
 export interface UpdateEquipmentItemInput {
   id: string;
   name?: string;
+  make?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  notes?: string | null;
   sort_order?: number | null;
   user_id: string | null;
   current_sync_version?: number | null;
@@ -96,6 +108,10 @@ export async function updateEquipmentItem(
     sync_version: nextVersion,
   };
   if (input.name !== undefined) patch.name = input.name;
+  if (input.make !== undefined) patch.make = input.make;
+  if (input.model !== undefined) patch.model = input.model;
+  if (input.serial_number !== undefined) patch.serial_number = input.serial_number;
+  if (input.notes !== undefined) patch.notes = input.notes;
   if (input.sort_order !== undefined) patch.sort_order = input.sort_order;
 
   const { data, error } = await supabase
