@@ -251,12 +251,27 @@ export default function TripReportsPage() {
       <Card className="p-4 space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Period</div>
+            <Select value={period} onValueChange={applyPeriod}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="day">Past day</SelectItem>
+                <SelectItem value="week">Past week</SelectItem>
+                <SelectItem value="month">Past month</SelectItem>
+                <SelectItem value="quarter">Past 3 months</SelectItem>
+                <SelectItem value="year">Past year</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
             <div className="text-xs text-muted-foreground">From</div>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+            <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPeriod("custom"); }} className="w-40" />
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">To</div>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+            <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPeriod("custom"); }} className="w-40" />
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Trip type</div>
