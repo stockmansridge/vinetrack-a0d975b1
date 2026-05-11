@@ -272,6 +272,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
           <PinDetailPanel
             pin={selected}
             paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+            paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
             onClose={() => setSelectedId(null)}
           />
         ) : (
