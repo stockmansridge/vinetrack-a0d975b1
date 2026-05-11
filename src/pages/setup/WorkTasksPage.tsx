@@ -563,45 +563,19 @@ function WorkTaskDrawer({
           <div className="lg:col-span-2 space-y-4">
             <Section title="Task">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Paddocks">
-                  <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start font-normal">
-                        {selectedPaddocks.length === 0
-                          ? "Select paddocks…"
-                          : selectedPaddocks.length === 1
-                            ? (selectedPaddocks[0].name ?? selectedPaddocks[0].id.slice(0, 8))
-                            : `${selectedPaddocks.length} paddocks`}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-2 max-h-72 overflow-y-auto" align="start">
-                      {paddocks.length === 0 && (
-                        <div className="text-sm text-muted-foreground p-2">No paddocks</div>
-                      )}
-                      {paddocks.map((p) => {
-                        const checked = paddockIds.includes(p.id);
-                        return (
-                          <label
-                            key={p.id}
-                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(v) => {
-                                setPaddockIds((prev) =>
-                                  v ? Array.from(new Set([...prev, p.id])) : prev.filter((id) => id !== p.id),
-                                );
-                              }}
-                            />
-                            <span className="flex-1 truncate">{p.name ?? p.id.slice(0, 8)}</span>
-                            {p.area_ha != null && (
-                              <span className="text-xs text-muted-foreground">{Number(p.area_ha).toFixed(2)} ha</span>
-                            )}
-                          </label>
-                        );
-                      })}
-                    </PopoverContent>
-                  </Popover>
+                <Field label="Paddock">
+                  <Select value={paddockId || NONE} onValueChange={(v) => setPaddockIdLocal(v === NONE ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>—</SelectItem>
+                      {paddocks.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name ?? p.id.slice(0, 8)}
+                          {p.area_ha != null ? ` (${Number(p.area_ha).toFixed(2)} ha)` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field label="Task type">
                   <Select value={taskType || NONE} onValueChange={(v) => setTaskType(v === NONE ? "" : v)}>
@@ -623,9 +597,24 @@ function WorkTaskDrawer({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Area ha">
-                  <Input type="number" step="0.01" value={areaHa} onChange={(e) => setAreaHa(e.target.value)} />
+                <Field label="Area ha (auto)">
+                  <Input type="number" value={areaHa} readOnly disabled placeholder="—" />
                 </Field>
+                <Field label="Start date">
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                </Field>
+                <Field label="End date">
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                </Field>
+              </div>
+              {paddockMissingArea && (
+                <p className="text-xs text-destructive">
+                  Selected block is missing area data, so area totals may be incomplete.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Multi-paddock selection is disabled until iOS adds a <code>work_task_paddocks</code> join table. For now each work task links to one paddock.
+              </p>
                 <Field label="Start date">
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </Field>
