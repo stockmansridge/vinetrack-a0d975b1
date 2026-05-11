@@ -67,7 +67,8 @@ const ANY = "__any__";
 const NONE = "__none__";
 
 const STATUS_OPTIONS = ["planned", "in_progress", "completed", "on_hold", "cancelled"];
-const TASK_TYPE_OPTIONS = [
+// Fallback/seed list shown when no synced rows exist. Kept in sync with iOS defaults.
+const DEFAULT_TASK_TYPES = [
   "Pruning",
   "Spraying",
   "Mowing",
