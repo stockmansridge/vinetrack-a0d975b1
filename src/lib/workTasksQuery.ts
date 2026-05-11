@@ -1,15 +1,8 @@
-// READ-ONLY query helper for work_tasks. No writes.
+// Query + write helpers for work_tasks and work_task_labour_lines.
 //
-// Schema (docs/supabase-schema.md §3.13):
-//   work_tasks: paddock_id, paddock_name, date, task_type, duration_hours,
-//               resources jsonb, notes, is_archived, archived_at, archived_by,
-//               is_finalized, finalized_at, finalized_by, plus standard sync
-//               columns (id, vineyard_id, created_at, updated_at, deleted_at,
-//               created_by, updated_by, client_updated_at, sync_version).
-//
-//   No status / priority / due_date / assigned_user columns exist on this table.
-//
-// Safe fetch: vineyard_id primary, paddock_id fallback merge (mirrors Pins).
+// The portal authenticates against the iOS Supabase project, so writes go
+// through the same client used elsewhere. RLS on the iOS project is the
+// source of truth for permissions.
 import { supabase } from "@/integrations/ios-supabase/client";
 
 export interface WorkTask {
@@ -18,18 +11,44 @@ export interface WorkTask {
   paddock_id?: string | null;
   paddock_name?: string | null;
   date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  area_ha?: number | null;
+  description?: string | null;
+  status?: string | null;
   task_type?: string | null;
   duration_hours?: number | null;
   resources?: any;
   notes?: string | null;
   is_archived?: boolean | null;
-  archived_at?: string | null;
-  archived_by?: string | null;
   is_finalized?: boolean | null;
   finalized_at?: string | null;
-  finalized_by?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  client_updated_at?: string | null;
+  sync_version?: number | null;
+  deleted_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+}
+
+export interface WorkTaskLabourLine {
+  id: string;
+  work_task_id: string;
+  vineyard_id: string;
+  work_date?: string | null;
+  operator_category_id?: string | null;
+  worker_type?: string | null;
+  worker_count?: number | null;
+  hours_per_worker?: number | null;
+  hourly_rate?: number | null;
+  total_hours?: number | null;
+  total_cost?: number | null;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  client_updated_at?: string | null;
+  sync_version?: number | null;
   deleted_at?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
@@ -76,9 +95,6 @@ export async function fetchWorkTasksForVineyard(
         merged = primary.concat(extras);
         source = primary.length ? "merged" : "paddock_id";
       }
-    } else if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      if (import.meta.env.DEV) console.warn("[work_tasks] paddock_id fallback query failed:", byPaddock.error.message);
     }
   }
 
@@ -91,7 +107,202 @@ export async function fetchWorkTasksForVineyard(
     vineyardCount: primary.length,
     paddockFallbackCount,
     archivedExcluded: beforeArchive - tasks.length,
-    missingDate: tasks.filter((t) => !t.date).length,
+    missingDate: tasks.filter((t) => !t.date && !t.start_date).length,
     missingTaskType: tasks.filter((t) => !t.task_type).length,
   };
+}
+
+export async function fetchLabourLinesForVineyard(
+  vineyardId: string,
+): Promise<WorkTaskLabourLine[]> {
+  const { data, error } = await supabase
+    .from("work_task_labour_lines")
+    .select("*")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (data ?? []) as WorkTaskLabourLine[];
+}
+
+// ------------------- Writes -------------------
+
+const nowIso = () => new Date().toISOString();
+
+export interface UpsertWorkTaskInput {
+  id?: string;
+  vineyard_id: string;
+  paddock_id?: string | null;
+  paddock_name?: string | null;
+  task_type?: string | null;
+  status?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  date?: string | null;
+  area_ha?: number | null;
+  duration_hours?: number | null;
+  is_finalized?: boolean | null;
+  user_id?: string | null;
+  current_sync_version?: number | null;
+}
+
+export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTask> {
+  // Keep `date` populated as fallback for older iOS clients.
+  const fallbackDate = input.date ?? input.start_date ?? null;
+  const payload: any = {
+    vineyard_id: input.vineyard_id,
+    paddock_id: input.paddock_id ?? null,
+    paddock_name: input.paddock_name ?? null,
+    task_type: input.task_type ?? null,
+    status: input.status ?? null,
+    description: input.description ?? "",
+    notes: input.notes ?? "",
+    start_date: input.start_date ?? null,
+    end_date: input.end_date ?? null,
+    date: fallbackDate,
+    area_ha: input.area_ha ?? null,
+    duration_hours: input.duration_hours ?? null,
+    is_finalized: input.is_finalized ?? false,
+    is_archived: false,
+    deleted_at: null,
+    client_updated_at: nowIso(),
+    sync_version: 1,
+    created_by: input.user_id ?? null,
+    updated_by: input.user_id ?? null,
+  };
+  const { data, error } = await supabase
+    .from("work_tasks")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTask;
+}
+
+export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTask> {
+  if (!input.id) throw new Error("updateWorkTask requires an id");
+  const fallbackDate = input.date ?? input.start_date ?? null;
+  const nextVersion = (input.current_sync_version ?? 0) + 1;
+  const payload: any = {
+    paddock_id: input.paddock_id ?? null,
+    paddock_name: input.paddock_name ?? null,
+    task_type: input.task_type ?? null,
+    status: input.status ?? null,
+    description: input.description ?? "",
+    notes: input.notes ?? "",
+    start_date: input.start_date ?? null,
+    end_date: input.end_date ?? null,
+    date: fallbackDate,
+    area_ha: input.area_ha ?? null,
+    duration_hours: input.duration_hours ?? null,
+    is_finalized: input.is_finalized ?? false,
+    client_updated_at: nowIso(),
+    sync_version: nextVersion,
+    updated_by: input.user_id ?? null,
+  };
+  const { data, error } = await supabase
+    .from("work_tasks")
+    .update(payload)
+    .eq("id", input.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTask;
+}
+
+export interface UpsertLabourLineInput {
+  id?: string;
+  work_task_id: string;
+  vineyard_id: string;
+  work_date?: string | null;
+  operator_category_id?: string | null;
+  worker_type?: string | null;
+  worker_count?: number | null;
+  hours_per_worker?: number | null;
+  hourly_rate?: number | null;
+  notes?: string | null;
+  user_id?: string | null;
+  current_sync_version?: number | null;
+}
+
+const computeLineTotals = (i: UpsertLabourLineInput) => {
+  const wc = Number(i.worker_count ?? 0) || 0;
+  const hpw = Number(i.hours_per_worker ?? 0) || 0;
+  const rate = i.hourly_rate == null ? null : Number(i.hourly_rate);
+  const total_hours = wc * hpw;
+  const total_cost = rate == null ? null : total_hours * rate;
+  return { total_hours, total_cost };
+};
+
+export async function createLabourLine(input: UpsertLabourLineInput): Promise<WorkTaskLabourLine> {
+  const { total_hours, total_cost } = computeLineTotals(input);
+  const payload: any = {
+    work_task_id: input.work_task_id,
+    vineyard_id: input.vineyard_id,
+    work_date: input.work_date ?? null,
+    operator_category_id: input.operator_category_id ?? null,
+    worker_type: input.worker_type ?? null,
+    worker_count: input.worker_count ?? null,
+    hours_per_worker: input.hours_per_worker ?? null,
+    hourly_rate: input.hourly_rate ?? null,
+    total_hours,
+    total_cost,
+    notes: input.notes ?? "",
+    deleted_at: null,
+    client_updated_at: nowIso(),
+    sync_version: 1,
+    created_by: input.user_id ?? null,
+    updated_by: input.user_id ?? null,
+  };
+  const { data, error } = await supabase
+    .from("work_task_labour_lines")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTaskLabourLine;
+}
+
+export async function updateLabourLine(input: UpsertLabourLineInput): Promise<WorkTaskLabourLine> {
+  if (!input.id) throw new Error("updateLabourLine requires an id");
+  const { total_hours, total_cost } = computeLineTotals(input);
+  const nextVersion = (input.current_sync_version ?? 0) + 1;
+  const payload: any = {
+    work_date: input.work_date ?? null,
+    operator_category_id: input.operator_category_id ?? null,
+    worker_type: input.worker_type ?? null,
+    worker_count: input.worker_count ?? null,
+    hours_per_worker: input.hours_per_worker ?? null,
+    hourly_rate: input.hourly_rate ?? null,
+    total_hours,
+    total_cost,
+    notes: input.notes ?? "",
+    client_updated_at: nowIso(),
+    sync_version: nextVersion,
+    updated_by: input.user_id ?? null,
+  };
+  const { data, error } = await supabase
+    .from("work_task_labour_lines")
+    .update(payload)
+    .eq("id", input.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTaskLabourLine;
+}
+
+export async function softDeleteLabourLine(id: string, userId?: string | null): Promise<void> {
+  // Prefer the dedicated RPC; fall back to a soft-delete UPDATE if it isn't deployed.
+  const rpc = await supabase.rpc("soft_delete_work_task_labour_line", { p_id: id });
+  if (!rpc.error) return;
+  const { error } = await supabase
+    .from("work_task_labour_lines")
+    .update({
+      deleted_at: nowIso(),
+      client_updated_at: nowIso(),
+      updated_by: userId ?? null,
+    })
+    .eq("id", id);
+  if (error) throw error;
 }
