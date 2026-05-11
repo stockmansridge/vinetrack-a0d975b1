@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
+import { useAuth } from "@/context/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -14,11 +17,17 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { toast } from "@/hooks/use-toast";
+import { Plus, Trash2 } from "lucide-react";
 import {
   fetchOperatorCategoriesForVineyard,
+  createOperatorCategory,
+  updateOperatorCategory,
+  softDeleteOperatorCategory,
   type OperatorCategory,
 } from "@/lib/operatorCategoriesQuery";
 
@@ -30,20 +39,36 @@ const fmtDate = (v?: string | null) => {
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtMoney = (v?: number | null) =>
-  v == null ? "—" : `$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/h`;
+  v == null
+    ? "—"
+    : `$${Number(v).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}/h`;
 
 export default function OperatorCategoriesPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [filter, setFilter] = useState("");
-  const [selected, setSelected] = useState<OperatorCategory | null>(null);
+  const [editing, setEditing] = useState<OperatorCategory | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const canWrite =
+    currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["operator_categories", selectedVineyardId],
+    queryKey: ["operator-categories", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchOperatorCategoriesForVineyard(selectedVineyardId!),
   });
 
   const categories = data?.categories ?? [];
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["operator-categories"] });
+    qc.invalidateQueries({ queryKey: ["operator_categories"] });
+  };
 
   const rows = useMemo(() => {
     let list = categories.slice();
@@ -61,37 +86,33 @@ export default function OperatorCategoriesPage() {
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
-    console.debug("[OperatorCategoriesPage] diagnostics", {
+    console.debug("[OperatorCategoriesPage]", {
       selectedVineyardId,
-      operatorCategoriesCount: categories.length,
-      recordsBySource: data?.source ?? "n/a",
-      vineyardIdMatches: data?.vineyardCount ?? 0,
-      deletedExcluded: data?.deletedExcluded ?? 0,
-      missingDisplayFields: {
-        missingName: data?.missingName ?? 0,
-        missingCost: data?.missingCost ?? 0,
-      },
-      schemaGaps: [
-        "no global/shared category table (vineyard-scoped only)",
-        "no description / sort_order / colour / icon columns",
-        "no foreign key from operators to category — linked operator count not safely available",
-        "no archive/active flag (only deleted_at)",
-      ],
-      filtered: rows.length,
+      activeCount: categories.length,
+      rows: categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        cost_per_hour: c.cost_per_hour,
+        vineyard_id: c.vineyard_id,
+        deleted_at: c.deleted_at,
+      })),
     });
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Operator categories</h1>
-        <p className="text-sm text-muted-foreground">
-          Read-only. Soft-deleted records are excluded.
-        </p>
-      </div>
-
-      <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-        Production data — read-only view. No edits, archives, or deletions are possible from this page.
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Operator categories</h1>
+          <p className="text-sm text-muted-foreground">
+            Shared with iOS. Soft-deleted records are excluded.
+          </p>
+        </div>
+        {canWrite && (
+          <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!selectedVineyardId}>
+            <Plus className="h-4 w-4 mr-2" /> New category
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
@@ -117,20 +138,32 @@ export default function OperatorCategoriesPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                  Loading…
+                </TableCell>
+              </TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={3} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-destructive py-6">
+                  {(error as Error).message}
+                </TableCell>
+              </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                  No operator categories found for this vineyard.
+                  No operator categories yet. Add one with “New category”.
                 </TableCell>
               </TableRow>
             )}
             {rows.map((c) => (
-              <TableRow key={c.id} className="cursor-pointer" onClick={() => setSelected(c)}>
+              <TableRow
+                key={c.id}
+                className="cursor-pointer"
+                onClick={() => setEditing(c)}
+              >
                 <TableCell className="font-medium">{fmt(c.name)}</TableCell>
                 <TableCell>{fmtMoney(c.cost_per_hour)}</TableCell>
                 <TableCell>{fmtDate(c.updated_at)}</TableCell>
@@ -140,58 +173,220 @@ export default function OperatorCategoriesPage() {
         </Table>
       </Card>
 
-      <CategorySheet category={selected} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
+      <CategoryEditor
+        key={editing?.id ?? "new"}
+        category={editing}
+        open={!!editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+        vineyardId={selectedVineyardId}
+        userId={user?.id ?? null}
+        canWrite={canWrite}
+        onSaved={() => {
+          invalidate();
+          setEditing(null);
+        }}
+      />
+
+      <CategoryEditor
+        key={createOpen ? "create-open" : "create-closed"}
+        category={null}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        vineyardId={selectedVineyardId}
+        userId={user?.id ?? null}
+        canWrite={canWrite}
+        onSaved={() => {
+          invalidate();
+          setCreateOpen(false);
+        }}
+      />
     </div>
   );
 }
 
-function CategorySheet({
+function CategoryEditor({
   category,
   open,
   onOpenChange,
+  vineyardId,
+  userId,
+  canWrite,
+  onSaved,
 }: {
   category: OperatorCategory | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  vineyardId: string | null;
+  userId: string | null;
+  canWrite: boolean;
+  onSaved: () => void;
 }) {
+  const isNew = !category;
+  const [name, setName] = useState("");
+  const [cost, setCost] = useState<string>("");
+
+  useEffect(() => {
+    if (open) {
+      setName(category?.name ?? "");
+      setCost(
+        category?.cost_per_hour == null ? "" : String(category.cost_per_hour),
+      );
+    }
+  }, [open, category]);
+
+  const createMut = useMutation({
+    mutationFn: async () => {
+      if (!vineyardId) throw new Error("No vineyard selected");
+      return createOperatorCategory({
+        vineyard_id: vineyardId,
+        name: name.trim(),
+        cost_per_hour: cost === "" ? null : Number(cost),
+        user_id: userId,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Operator category created" });
+      onSaved();
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Could not create category",
+        description: e?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMut = useMutation({
+    mutationFn: async () => {
+      if (!category) throw new Error("Missing category");
+      return updateOperatorCategory({
+        id: category.id,
+        name: name.trim(),
+        cost_per_hour: cost === "" ? null : Number(cost),
+        user_id: userId,
+        current_sync_version: category.sync_version ?? 0,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Operator category updated" });
+      onSaved();
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Could not update category",
+        description: e?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async () => {
+      if (!category) throw new Error("Missing category");
+      return softDeleteOperatorCategory(
+        category.id,
+        userId,
+        category.sync_version ?? 0,
+      );
+    },
+    onSuccess: () => {
+      toast({ title: "Operator category archived" });
+      onSaved();
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Could not archive category",
+        description: e?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const submit = () => {
+    if (!name.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    if (cost !== "" && Number.isNaN(Number(cost))) {
+      toast({ title: "Cost per hour must be a number", variant: "destructive" });
+      return;
+    }
+    if (isNew) createMut.mutate();
+    else updateMut.mutate();
+  };
+
+  const busy = createMut.isPending || updateMut.isPending || deleteMut.isPending;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{category?.name ?? "Operator category"}</SheetTitle>
+          <SheetTitle>
+            {isNew ? "New operator category" : category?.name ?? "Operator category"}
+          </SheetTitle>
         </SheetHeader>
-        {category && (
-          <div className="mt-4 space-y-4 text-sm">
-            <Section title="Details">
-              <Field label="Name" value={fmt(category.name)} />
-              <Field label="Cost per hour" value={fmtMoney(category.cost_per_hour)} />
-            </Section>
-            <Section title="Meta">
-              <Field label="Created" value={fmtDate(category.created_at)} />
-              <Field label="Updated" value={fmtDate(category.updated_at)} />
-              <Field label="Record ID" value={category.id} mono />
-            </Section>
+
+        <div className="mt-4 space-y-4 text-sm">
+          <div className="space-y-1.5">
+            <Label htmlFor="oc-name">Name</Label>
+            <Input
+              id="oc-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Pruner"
+              disabled={!canWrite}
+            />
           </div>
-        )}
+          <div className="space-y-1.5">
+            <Label htmlFor="oc-cost">Cost per hour</Label>
+            <Input
+              id="oc-cost"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              placeholder="0.00"
+              disabled={!canWrite}
+            />
+          </div>
+
+          {!isNew && category && (
+            <div className="rounded-md border bg-muted/30 p-3 space-y-1 text-xs text-muted-foreground">
+              <div>Created: {fmtDate(category.created_at)}</div>
+              <div>Updated: {fmtDate(category.updated_at)}</div>
+              <div className="font-mono break-all">{category.id}</div>
+            </div>
+          )}
+        </div>
+
+        <SheetFooter className="mt-6 flex-col gap-2 sm:flex-row sm:justify-between">
+          {!isNew && canWrite ? (
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirm("Archive this operator category?")) deleteMut.mutate();
+              }}
+              disabled={busy}
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Archive
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+              Cancel
+            </Button>
+            {canWrite && (
+              <Button onClick={submit} disabled={busy}>
+                {isNew ? "Create" : "Save"}
+              </Button>
+            )}
+          </div>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{title}</div>
-      <div className="rounded-md border bg-card/50 p-3 space-y-1.5">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={mono ? "font-mono text-xs break-all text-right" : "text-right"}>{value}</span>
-    </div>
   );
 }
