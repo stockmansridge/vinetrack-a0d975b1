@@ -606,19 +606,6 @@ function WorkTaskDrawer({
     () => paddockIds.map((id) => paddocks.find((p) => p.id === id)).filter(Boolean) as PaddockLite[],
     [paddockIds, paddocks],
   );
-  const paddockMissingArea = selectedPaddocks.some((p) => p.area_ha == null);
-  const totalAreaHa = selectedPaddocks.reduce(
-    (sum, p) => sum + (p.area_ha != null ? Number(p.area_ha) || 0 : 0),
-    0,
-  );
-  const areaHaDisplay = selectedPaddocks.length
-    ? Number(totalAreaHa.toFixed(4)).toString()
-    : "";
-
-  const saveTask = useMutation({
-    mutationFn: async () => {
-      if (!vineyardId) throw new Error("No vineyard selected");
-      const padNames = selectedPaddocks.map((p) => p.name ?? p.id.slice(0, 8)).join(", ");
   const paddockAreas = useMemo(
     () => selectedPaddocks.map((p) => ({ paddock: p, areaHa: paddockAreaHa(p) })),
     [selectedPaddocks],
