@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Plus } from "lucide-react";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -29,6 +35,7 @@ import {
   fetchMaintenanceLogsForVineyard,
   type MaintenanceLog,
 } from "@/lib/maintenanceLogsQuery";
+import { fetchEquipmentSelectorOptions } from "@/lib/equipmentItemsQuery";
 
 const ANY = "__any__";
 
