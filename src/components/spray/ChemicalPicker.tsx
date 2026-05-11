@@ -61,11 +61,11 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
   }, [data, search]);
 
   const applyAIMut = useMutation({
-    mutationFn: async (s: AppliedSuggestion) => {
+    mutationFn: async (s: AppliedSuggestion): Promise<{ chem: SavedChemical; saved: boolean }> => {
       // If the AI hit matches an existing library item, just select it.
       if (s.existing_chemical_id) {
         const match = (data?.chemicals ?? []).find((c) => c.id === s.existing_chemical_id);
-        if (match) return match;
+        if (match) return { chem: match, saved: false };
       }
       const nextBasis = s.rate_basis ?? "per_hectare";
       const unit = s.unit ?? "L";
@@ -75,28 +75,59 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
         reiHours: s.rei_hours ?? "",
         rest: s.target ? `Target: ${s.target}` : "",
       });
-      return createSavedChemical(vineyardId, {
-        name: (s.name ?? "").trim() || "Unnamed product",
+      const name = (s.name ?? "").trim() || "Unnamed product";
+
+      // Only persist to the library if we have a valid rate (NOT NULL in DB).
+      if (s.rate_per_ha != null && !Number.isNaN(Number(s.rate_per_ha))) {
+        const created = await createSavedChemical(vineyardId, {
+          name,
+          active_ingredient: s.active_ingredient ?? null,
+          chemical_group: s.chemical_group ?? null,
+          use: (s.category as string) ?? null,
+          manufacturer: s.manufacturer ?? null,
+          rate_per_ha: s.rate_per_ha,
+          unit: composed,
+          restrictions: restrictions || null,
+          notes: s.notes ?? null,
+        });
+        return { chem: created, saved: true };
+      }
+
+      // No rate yet — build a synthetic chem to populate the spray line
+      // without touching saved_chemicals. The user can fill the rate in
+      // and save manually from the Chemicals page later.
+      const synthetic: SavedChemical = {
+        id: "",
+        vineyard_id: vineyardId,
+        name,
         active_ingredient: s.active_ingredient ?? null,
         chemical_group: s.chemical_group ?? null,
         use: (s.category as string) ?? null,
         manufacturer: s.manufacturer ?? null,
-        rate_per_ha: s.rate_per_ha ?? null,
+        rate_per_ha: null,
         unit: composed,
         restrictions: restrictions || null,
         notes: s.notes ?? null,
-      });
+      };
+      return { chem: synthetic, saved: false };
     },
-    onSuccess: (c) => {
-      qc.invalidateQueries({ queryKey: ["saved-chemicals-picker", vineyardId] });
-      qc.invalidateQueries({ queryKey: ["saved_chemicals", vineyardId] });
-      toast({ title: "Chemical added to library" });
-      onSelect(c);
+    onSuccess: ({ chem, saved }) => {
+      if (saved) {
+        qc.invalidateQueries({ queryKey: ["saved-chemicals-picker", vineyardId] });
+        qc.invalidateQueries({ queryKey: ["saved_chemicals", vineyardId] });
+        toast({ title: "Chemical added to library" });
+      } else if (!chem.id) {
+        toast({
+          title: "Rate required",
+          description: "Applied product details to the line. Enter a rate before saving this chemical to your library.",
+        });
+      }
+      onSelect(chem);
       setShowAI(false);
       onOpenChange(false);
     },
     onError: (e: any) =>
-      toast({ title: "Could not add chemical", description: e.message, variant: "destructive" }),
+      toast({ title: "Could not apply chemical", description: e.message, variant: "destructive" }),
   });
 
   return (
