@@ -192,6 +192,14 @@ export default function WorkTasksPage() {
     queryFn: () => fetchWorkTaskPaddocksForVineyard(selectedVineyardId!),
   });
 
+  const { data: syncedTaskTypes = [] } = useQuery({
+    queryKey: ["work_task_types", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTaskTypesForVineyard(selectedVineyardId!),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
   const tasks = data?.tasks ?? [];
 
   const paddocksByTask = useMemo(() => {
