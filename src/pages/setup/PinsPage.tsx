@@ -30,6 +30,7 @@ import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 interface PaddockLite {
   id: string;
   name: string | null;
+  row_direction?: number | null;
 }
 
 export default function PinsPage() {
