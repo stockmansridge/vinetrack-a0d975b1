@@ -103,6 +103,23 @@ export default function TripReportsPage() {
   const [operator, setOperator] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<string>("all");
+
+  const applyPeriod = (val: string) => {
+    setPeriod(val);
+    if (val === "all") { setFrom(""); setTo(""); return; }
+    if (val === "custom") return;
+    const today = new Date();
+    const end = format(today, "yyyy-MM-dd");
+    const start = new Date(today);
+    if (val === "day") start.setDate(today.getDate() - 1);
+    else if (val === "week") start.setDate(today.getDate() - 7);
+    else if (val === "month") start.setMonth(today.getMonth() - 1);
+    else if (val === "quarter") start.setMonth(today.getMonth() - 3);
+    else if (val === "year") start.setFullYear(today.getFullYear() - 1);
+    setFrom(format(start, "yyyy-MM-dd"));
+    setTo(end);
+  };
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
