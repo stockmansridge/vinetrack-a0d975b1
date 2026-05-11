@@ -225,6 +225,15 @@ export default function VineyardOverviewMap({
     return m;
   }, [paddocks]);
 
+  const paddockRowDirById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    paddocks.forEach((p: any) => {
+      const v = p?.row_direction;
+      m.set(p.id, v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    });
+    return m;
+  }, [paddocks]);
+
   const pinsWithCoords = useMemo(
     () =>
       pins
