@@ -54,6 +54,12 @@ import {
   type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
+import {
+  fetchWorkTaskTypesForVineyard,
+  createWorkTaskType,
+  mergeTaskTypeNames,
+  type WorkTaskType,
+} from "@/lib/workTaskTypesQuery";
 
 interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
@@ -61,7 +67,8 @@ const ANY = "__any__";
 const NONE = "__none__";
 
 const STATUS_OPTIONS = ["planned", "in_progress", "completed", "on_hold", "cancelled"];
-const TASK_TYPE_OPTIONS = [
+// Fallback/seed list shown when no synced rows exist. Kept in sync with iOS defaults.
+const DEFAULT_TASK_TYPES = [
   "Pruning",
   "Spraying",
   "Mowing",
@@ -183,6 +190,14 @@ export default function WorkTasksPage() {
     queryKey: ["work_task_paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchWorkTaskPaddocksForVineyard(selectedVineyardId!),
+  });
+
+  const { data: syncedTaskTypes = [] } = useQuery({
+    queryKey: ["work_task_types", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTaskTypesForVineyard(selectedVineyardId!),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const tasks = data?.tasks ?? [];
@@ -474,6 +489,7 @@ export default function WorkTasksPage() {
         paddocks={paddocks}
         existingPaddocks={selected ? paddocksByTask.get(selected.id) ?? [] : []}
         categories={categories}
+        syncedTaskTypes={syncedTaskTypes}
         labourLines={selected ? linesByTask.get(selected.id) ?? [] : []}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
@@ -482,6 +498,7 @@ export default function WorkTasksPage() {
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
+          qc.invalidateQueries({ queryKey: ["work_task_types"] });
         }}
       />
 
@@ -493,6 +510,7 @@ export default function WorkTasksPage() {
         paddocks={paddocks}
         existingPaddocks={[]}
         categories={categories}
+        syncedTaskTypes={syncedTaskTypes}
         labourLines={[]}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
@@ -501,6 +519,7 @@ export default function WorkTasksPage() {
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
+          qc.invalidateQueries({ queryKey: ["work_task_types"] });
         }}
       />
     </div>
@@ -523,6 +542,7 @@ interface DrawerProps {
   paddocks: PaddockLite[];
   existingPaddocks: WorkTaskPaddock[];
   categories: OperatorCategory[];
+  syncedTaskTypes: WorkTaskType[];
   labourLines: WorkTaskLabourLine[];
   canSoftDelete: boolean;
   userId: string | null;
@@ -531,7 +551,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
 
@@ -672,15 +692,14 @@ function WorkTaskDrawer({
                   </Popover>
                 </Field>
                 <Field label="Task type">
-                  <Select value={taskType || NONE} onValueChange={(v) => setTaskType(v === NONE ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>—</SelectItem>
-                      {Array.from(new Set([...TASK_TYPE_OPTIONS, ...(taskType ? [taskType] : [])])).map((o) => (
-                        <SelectItem key={o} value={o}>{o}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <TaskTypeSelect
+                    value={taskType}
+                    onChange={setTaskType}
+                    syncedTaskTypes={syncedTaskTypes}
+                    vineyardId={vineyardId}
+                    userId={userId}
+                    onCreated={onSaved}
+                  />
                 </Field>
                 <Field label="Status">
                   <Select value={status || NONE} onValueChange={(v) => setStatus(v === NONE ? "" : v)}>
@@ -999,6 +1018,109 @@ function Field(props: { label: string; value?: string; mono?: boolean; children?
     <div className="flex items-start justify-between gap-3 text-sm">
       <span className="text-muted-foreground">{props.label}</span>
       <span className={props.mono ? "font-mono text-xs break-all text-right" : "text-right"}>{props.value}</span>
+    </div>
+  );
+}
+
+function TaskTypeSelect({
+  value,
+  onChange,
+  syncedTaskTypes,
+  vineyardId,
+  userId,
+  onCreated,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  syncedTaskTypes: WorkTaskType[];
+  vineyardId: string | null;
+  userId: string | null;
+  onCreated: () => void;
+}) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const options = useMemo(
+    () => mergeTaskTypeNames(syncedTaskTypes, DEFAULT_TASK_TYPES, value ? [value] : []),
+    [syncedTaskTypes, value],
+  );
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!vineyardId) throw new Error("No vineyard selected");
+      const trimmed = newName.trim();
+      if (!trimmed) throw new Error("Name is required");
+      // Skip insert if a synced row already exists (case-insensitive).
+      const dup = syncedTaskTypes.find(
+        (t) => (t.name ?? "").trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (dup) return { name: dup.name ?? trimmed };
+      const created = await createWorkTaskType({
+        vineyard_id: vineyardId,
+        name: trimmed,
+        user_id: userId,
+      });
+      return { name: created.name };
+    },
+    onSuccess: (res) => {
+      onChange(res.name);
+      setNewName("");
+      setAdding(false);
+      qc.invalidateQueries({ queryKey: ["work_task_types"] });
+      onCreated();
+      toast({ title: "Task type added" });
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not add task type", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
+          <SelectTrigger className="flex-1"><SelectValue placeholder="—" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>—</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o} value={o}>{o}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          title="Add task type"
+          onClick={() => setAdding((v) => !v)}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {adding && (
+        <div className="flex gap-2">
+          <Input
+            placeholder="New task type name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newName.trim() && !create.isPending) {
+                e.preventDefault();
+                create.mutate();
+              }
+            }}
+            autoFocus
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => create.mutate()}
+            disabled={!newName.trim() || create.isPending || !vineyardId}
+          >
+            {create.isPending ? "Adding…" : "Add"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
