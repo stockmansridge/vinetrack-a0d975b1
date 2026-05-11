@@ -1021,3 +1021,106 @@ function Field(props: { label: string; value?: string; mono?: boolean; children?
     </div>
   );
 }
+
+function TaskTypeSelect({
+  value,
+  onChange,
+  syncedTaskTypes,
+  vineyardId,
+  userId,
+  onCreated,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  syncedTaskTypes: WorkTaskType[];
+  vineyardId: string | null;
+  userId: string | null;
+  onCreated: () => void;
+}) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const options = useMemo(
+    () => mergeTaskTypeNames(syncedTaskTypes, DEFAULT_TASK_TYPES, value ? [value] : []),
+    [syncedTaskTypes, value],
+  );
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!vineyardId) throw new Error("No vineyard selected");
+      const trimmed = newName.trim();
+      if (!trimmed) throw new Error("Name is required");
+      // Skip insert if a synced row already exists (case-insensitive).
+      const dup = syncedTaskTypes.find(
+        (t) => (t.name ?? "").trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (dup) return { name: dup.name ?? trimmed };
+      const created = await createWorkTaskType({
+        vineyard_id: vineyardId,
+        name: trimmed,
+        user_id: userId,
+      });
+      return { name: created.name };
+    },
+    onSuccess: (res) => {
+      onChange(res.name);
+      setNewName("");
+      setAdding(false);
+      qc.invalidateQueries({ queryKey: ["work_task_types"] });
+      onCreated();
+      toast({ title: "Task type added" });
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not add task type", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
+          <SelectTrigger className="flex-1"><SelectValue placeholder="—" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>—</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o} value={o}>{o}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          title="Add task type"
+          onClick={() => setAdding((v) => !v)}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {adding && (
+        <div className="flex gap-2">
+          <Input
+            placeholder="New task type name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newName.trim() && !create.isPending) {
+                e.preventDefault();
+                create.mutate();
+              }
+            }}
+            autoFocus
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => create.mutate()}
+            disabled={!newName.trim() || create.isPending || !vineyardId}
+          >
+            {create.isPending ? "Adding…" : "Add"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
