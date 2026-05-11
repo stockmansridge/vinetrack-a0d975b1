@@ -162,7 +162,7 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     end_date: input.end_date ?? null,
     date: fallbackDate,
     area_ha: input.area_ha ?? null,
-    duration_hours: input.duration_hours ?? null,
+    duration_hours: input.duration_hours ?? 0,
     is_finalized: input.is_finalized ?? false,
     is_archived: false,
     deleted_at: null,
