@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/sheet";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2, Download } from "lucide-react";
 import {
@@ -50,7 +52,7 @@ import {
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
 
-interface PaddockLite { id: string; name: string | null }
+interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
 const ANY = "__any__";
 const NONE = "__none__";
@@ -464,7 +466,9 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
-  const [paddockId, setPaddockId] = useState<string>(task?.paddock_id ?? NONE);
+  const initialPaddockIds = task?.paddock_id ? [task.paddock_id] : [];
+  const [paddockIds, setPaddockIds] = useState<string[]>(initialPaddockIds);
+  const [paddocksOpen, setPaddocksOpen] = useState(false);
   const [taskType, setTaskType] = useState<string>(task?.task_type ?? "");
   const [status, setStatus] = useState<string>(task?.status ?? "");
   const [startDate, setStartDate] = useState<string>(task?.start_date ?? task?.date ?? "");
@@ -477,14 +481,26 @@ function WorkTaskDrawer({
 
   useEffect(() => { setSavedTaskId(task?.id ?? null); }, [task?.id]);
 
+  // Auto-populate area_ha from sum of selected paddocks (always; user can edit after).
+  useEffect(() => {
+    const sum = paddockIds
+      .map((id) => paddocks.find((p) => p.id === id)?.area_ha)
+      .reduce((s: number, v) => s + (v == null ? 0 : Number(v) || 0), 0);
+    setAreaHa(sum > 0 ? String(Number(sum.toFixed(4))) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paddockIds.join("|")]);
+
+  const selectedPaddocks = paddocks.filter((p) => paddockIds.includes(p.id));
+
   const saveTask = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard selected");
-      const padName = paddockId !== NONE ? paddocks.find((p) => p.id === paddockId)?.name ?? null : null;
+      const padNames = selectedPaddocks.map((p) => p.name ?? p.id.slice(0, 8));
+      const padName = padNames.length ? padNames.join(", ") : null;
       const input = {
         id: task?.id,
         vineyard_id: vineyardId,
-        paddock_id: paddockId === NONE ? null : paddockId,
+        paddock_id: paddockIds[0] ?? null,
         paddock_name: padName,
         task_type: taskType.trim() || null,
         status: status || null,
@@ -528,14 +544,45 @@ function WorkTaskDrawer({
           <div className="lg:col-span-2 space-y-4">
             <Section title="Task">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Paddock">
-                  <Select value={paddockId} onValueChange={setPaddockId}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>None</SelectItem>
-                      {paddocks.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name ?? p.id.slice(0, 8)}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                <Field label="Paddocks">
+                  <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start font-normal">
+                        {selectedPaddocks.length === 0
+                          ? "Select paddocks…"
+                          : selectedPaddocks.length === 1
+                            ? (selectedPaddocks[0].name ?? selectedPaddocks[0].id.slice(0, 8))
+                            : `${selectedPaddocks.length} paddocks`}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-2 max-h-72 overflow-y-auto" align="start">
+                      {paddocks.length === 0 && (
+                        <div className="text-sm text-muted-foreground p-2">No paddocks</div>
+                      )}
+                      {paddocks.map((p) => {
+                        const checked = paddockIds.includes(p.id);
+                        return (
+                          <label
+                            key={p.id}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setPaddockIds((prev) =>
+                                  v ? Array.from(new Set([...prev, p.id])) : prev.filter((id) => id !== p.id),
+                                );
+                              }}
+                            />
+                            <span className="flex-1 truncate">{p.name ?? p.id.slice(0, 8)}</span>
+                            {p.area_ha != null && (
+                              <span className="text-xs text-muted-foreground">{Number(p.area_ha).toFixed(2)} ha</span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </PopoverContent>
+                  </Popover>
                 </Field>
                 <Field label="Task type">
                   <Select value={taskType || NONE} onValueChange={(v) => setTaskType(v === NONE ? "" : v)}>
