@@ -50,7 +50,7 @@ import {
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
 
-interface PaddockLite { id: string; name: string | null }
+interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
 const ANY = "__any__";
 const NONE = "__none__";
