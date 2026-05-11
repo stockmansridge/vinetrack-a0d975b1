@@ -67,6 +67,15 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
     return m;
   }, [paddocks]);
 
+  const paddockRowDirById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    paddocks.forEach((p) => {
+      const v = p.row_direction;
+      m.set(p.id, v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    });
+    return m;
+  }, [paddocks]);
+
   const paddockPolygons = useMemo(
     () =>
       paddocks
