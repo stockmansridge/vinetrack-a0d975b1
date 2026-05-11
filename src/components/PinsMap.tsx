@@ -175,6 +175,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
                     key={p.id}
                     position={[p.latitude!, p.longitude!]}
                     icon={pinIcon(pinStyle(p.mode, (p as any).button_color, (p as any).category).hex)}
+                    title={pinDisplayTitle(p as any)}
                     eventHandlers={{ click: () => setSelectedId(p.id) }}
                   />
                 ))}
