@@ -11,8 +11,7 @@ export const validCoord = (lat?: number | null, lng?: number | null) =>
   lng >= -180 &&
   lng <= 180;
 
-export const pinDisplayTitle = (p: Pick<PinRecord, "title" | "button_name" | "mode">) =>
-  (p.title?.trim() || p.button_name?.trim() || p.mode?.trim() || "Untitled pin");
+export { pinDisplayTitle } from "@/lib/pinStyle";
 
 export interface PinsDiagnostics {
   selectedVineyardId: string | null;

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow } from "@/lib/pinStyle";
+import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayTitle } from "@/lib/pinStyle";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -142,7 +142,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
       <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-2">
         <div className="space-y-1.5 min-w-0">
           <CardTitle className="text-base truncate">
-            {pin.title?.trim() || pin.button_name?.trim() || pin.mode?.trim() || "Untitled pin"}
+            {pinDisplayTitle(pin)}
           </CardTitle>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
@@ -181,8 +181,8 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
-          <Field label="Attached row" value={formatAttachedRow(pin)} />
-          <Field label="Driving path" value={formatDrivingPath(pin)} />
+          <Field label="On Row" value={formatAttachedRow(pin)} />
+          <Field label="Driving row" value={formatDrivingPath(pin)} />
           {!formatAttachedRow(pin) && !formatDrivingPath(pin) && (
             <>
               <Field label="Row" value={formatLegacyRow(pin)} />

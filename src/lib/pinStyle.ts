@@ -153,6 +153,32 @@ function titleCaseSide(side: AttachableSide): string | null {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+/**
+ * Customer-facing side wording — "Left hand side" / "Right hand side".
+ * Falls back to title-cased original for non-LR values (e.g. "North").
+ */
+function formatSideWording(side: AttachableSide): string | null {
+  if (!side) return null;
+  const s = String(side).trim().toLowerCase();
+  if (!s) return null;
+  if (s === "l" || s === "left") return "Left hand side";
+  if (s === "r" || s === "right") return "Right hand side";
+  return titleCaseSide(side);
+}
+
+/** Compass bearing in degrees → "facing North", "facing North-East", etc. */
+export function formatFacingFromBearing(deg: number | null | undefined): string | null {
+  if (deg == null) return null;
+  const n = Number(deg);
+  if (!Number.isFinite(n)) return null;
+  const compass = [
+    "North", "North-East", "East", "South-East",
+    "South", "South-West", "West", "North-West",
+  ];
+  const idx = Math.round(((n % 360) + 360) % 360 / 45) % 8;
+  return `facing ${compass[idx]}`;
+}
+
 export interface PinAttachmentLike {
   pin_row_number?: number | null;
   pin_side?: string | null;
@@ -173,23 +199,32 @@ export function formatAttachedRow(pin: PinAttachmentLike): string | null {
 }
 
 /**
- * Value-only: "14.5 — Right side" (or "14.5" when no side known).
- * Does NOT fall back to legacy row_number; legacy is handled by `formatLegacyRow`.
+ * Value-only customer-facing wording:
+ *   "Row 14.5 — Right hand side facing North"
+ *   "Row 14.5 — Right hand side"   (no facing supplied)
+ *   "Row 14.5"                     (no side known)
+ *
+ * `facing` is an optional compass bearing in degrees (e.g. paddock.row_direction).
  */
-export function formatDrivingPath(pin: PinAttachmentLike): string | null {
+export function formatDrivingPath(
+  pin: PinAttachmentLike,
+  facingDeg?: number | null,
+): string | null {
   const d = pin.driving_row_number;
   if (d == null || !Number.isFinite(Number(d))) return null;
   const n = Number(d);
   const num = Number.isInteger(n) ? `${n}.5` : `${n}`;
-  const side = titleCaseSide(pin.pin_side);
-  return side ? `${num} — ${side} side` : num;
+  const side = formatSideWording(pin.pin_side);
+  const facing = formatFacingFromBearing(facingDeg);
+  if (side && facing) return `Row ${num} — ${side} ${facing}`;
+  if (side) return `Row ${num} — ${side}`;
+  return `Row ${num}`;
 }
 
-/** Value-only: "Right side" — used when pin_side is known but no driving path. */
+/** Value-only: "Right hand side" — used when pin_side is known but no driving path. */
 export function formatPinSideOnly(pin: PinAttachmentLike): string | null {
   if (pin.driving_row_number != null && Number.isFinite(Number(pin.driving_row_number))) return null;
-  const side = titleCaseSide(pin.pin_side);
-  return side ? `${side} side` : null;
+  return formatSideWording(pin.pin_side);
 }
 
 /** Legacy value-only "14.5" — used when no new attachment fields exist. */
@@ -199,23 +234,50 @@ export function formatLegacyRow(pin: PinAttachmentLike): string | null {
 }
 
 /**
- * Compact summary for table cells / popups — combines labelled lines:
- *   "Attached row: Row 14"
- *   "Driving path: 14.5 — Right side"
+ * Compact summary for table cells / popups — combines labelled lines using
+ * the customer-facing wording.
  */
-export function formatPinRowSummary(pin: PinAttachmentLike): string | null {
+export function formatPinRowSummary(
+  pin: PinAttachmentLike,
+  facingDeg?: number | null,
+): string | null {
   const lines: string[] = [];
   const attached = formatAttachedRow(pin);
-  const driving = formatDrivingPath(pin);
+  const driving = formatDrivingPath(pin, facingDeg);
   const sideOnly = formatPinSideOnly(pin);
-  if (attached) lines.push(`Attached row: ${attached}`);
-  if (driving) lines.push(`Driving path: ${driving}`);
+  if (attached) lines.push(`On Row: ${attached}`);
+  if (driving) lines.push(`Driving row: ${driving}`);
   else if (sideOnly) lines.push(`Side: ${sideOnly}`);
   if (!lines.length) {
     const legacy = formatLegacyRow(pin);
     if (legacy) lines.push(`Row: ${legacy}`);
   }
   return lines.length ? lines.join("\n") : null;
+}
+
+/**
+ * Pin display title — prefer the most specific issue/type the user picked
+ * in iOS over the broad mode/category. Order:
+ *   button_name (iOS per-button label, e.g. "Broken Post", "Irrigation")
+ *   → title → category → mode → "Untitled pin".
+ */
+export function pinDisplayTitle(p: {
+  title?: string | null;
+  button_name?: string | null;
+  category?: string | null;
+  mode?: string | null;
+}): string {
+  const pick = (v?: string | null) => {
+    const s = (v ?? "").trim();
+    return s ? s : null;
+  };
+  return (
+    pick(p.button_name) ??
+    pick(p.title) ??
+    pick(p.category) ??
+    pick(p.mode) ??
+    "Untitled pin"
+  );
 }
 
 /**
