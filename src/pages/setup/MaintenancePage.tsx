@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Plus } from "lucide-react";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -29,6 +35,7 @@ import {
   fetchMaintenanceLogsForVineyard,
   type MaintenanceLog,
 } from "@/lib/maintenanceLogsQuery";
+import { fetchEquipmentSelectorOptions } from "@/lib/equipmentItemsQuery";
 
 const ANY = "__any__";
 
@@ -59,11 +66,35 @@ export default function MaintenancePage() {
 
   const logs = data?.logs ?? [];
 
-  const items = useMemo(() => {
+  const { data: equipmentGroups } = useQuery({
+    queryKey: ["equipment_selector_options", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchEquipmentSelectorOptions(selectedVineyardId!),
+  });
+
+  // Names actually used in historical records (free-text legacy values).
+  const legacyItemNames = useMemo(() => {
     const s = new Set<string>();
     logs.forEach((l) => l.item_name && s.add(l.item_name));
-    return Array.from(s).sort();
+    return s;
   }, [logs]);
+
+  // Names already covered by the equipment groups.
+  const groupedNames = useMemo(() => {
+    const s = new Set<string>();
+    equipmentGroups?.tractors.forEach((o) => s.add(o.name));
+    equipmentGroups?.sprayEquipment.forEach((o) => s.add(o.name));
+    equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
+    return s;
+  }, [equipmentGroups]);
+
+  const legacyOnly = useMemo(
+    () =>
+      Array.from(legacyItemNames)
+        .filter((n) => !groupedNames.has(n))
+        .sort((a, b) => a.localeCompare(b)),
+    [legacyItemNames, groupedNames],
+  );
 
   const rows = useMemo(() => {
     let list = logs.slice();
@@ -128,14 +159,60 @@ export default function MaintenancePage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Item</div>
-          <Select value={item} onValueChange={setItem}>
-            <SelectTrigger className="w-56"><SelectValue placeholder="Any" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY}>Any item</SelectItem>
-              {items.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
-            </SelectContent>
-          </Select>
+          <div className="text-xs text-muted-foreground">Item / Machine</div>
+          <div className="flex items-center gap-1">
+            <Select value={item} onValueChange={setItem}>
+              <SelectTrigger className="w-64"><SelectValue placeholder="Any" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>Any item</SelectItem>
+                {equipmentGroups?.tractors.length ? (
+                  <SelectGroup>
+                    <SelectLabel>Tractors</SelectLabel>
+                    {equipmentGroups.tractors.map((o) => (
+                      <SelectItem key={`t-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {equipmentGroups?.sprayEquipment.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Spray Equipment</SelectLabel>
+                    {equipmentGroups.sprayEquipment.map((o) => (
+                      <SelectItem key={`s-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {equipmentGroups?.otherItems.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Other Items</SelectLabel>
+                    {equipmentGroups.otherItems.map((o) => (
+                      <SelectItem key={`o-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {legacyOnly.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Historical (free text)</SelectLabel>
+                    {legacyOnly.map((n) => (
+                      <SelectItem key={`l-${n}`} value={n}>{n}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+              </SelectContent>
+            </Select>
+            <Button
+              asChild
+              size="icon"
+              variant="outline"
+              title="Manage Other Equipment Items"
+            >
+              <Link to="/setup/equipment-other">
+                <Plus className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Completion</div>

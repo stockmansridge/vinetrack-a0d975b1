@@ -79,6 +79,7 @@ const setup: NavItem[] = [
   { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
   { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
+  { title: "Other Equipment Items", url: "/setup/equipment-other", icon: Wrench },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
   { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
   { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
