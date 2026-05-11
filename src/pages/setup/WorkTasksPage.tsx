@@ -60,8 +60,31 @@ import {
   mergeTaskTypeNames,
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
+import { deriveMetrics } from "@/lib/paddockGeometry";
 
-interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
+interface PaddockLite {
+  id: string;
+  name: string | null;
+  area_ha?: number | null;
+  // Full paddock row is loaded via fetchList("paddocks"); we keep extras as
+  // any-shaped so deriveMetrics() can read polygon_points / rows / overrides.
+  [key: string]: any;
+}
+
+/** Resolve the effective area (ha) for a paddock — prefer the stored
+ *  area_ha column, then fall back to polygon-derived area. Returns 0 when
+ *  neither source produces a positive area. */
+function paddockAreaHa(p: PaddockLite | undefined | null): number {
+  if (!p) return 0;
+  const stored = p.area_ha != null ? Number(p.area_ha) : NaN;
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  try {
+    const derived = deriveMetrics(p).areaHa;
+    return Number.isFinite(derived) && derived > 0 ? derived : 0;
+  } catch {
+    return 0;
+  }
+}
 
 const ANY = "__any__";
 const NONE = "__none__";
