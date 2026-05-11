@@ -17,6 +17,7 @@ interface Paddock {
   id: string;
   name: string | null;
   polygon_points: any;
+  row_direction?: number | null;
 }
 
 const pinIcon = (hex: string) =>
