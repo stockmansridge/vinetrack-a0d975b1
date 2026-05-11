@@ -56,6 +56,27 @@ const ANY = "__any__";
 const NONE = "__none__";
 
 const STATUS_OPTIONS = ["planned", "in_progress", "completed", "on_hold", "cancelled"];
+const TASK_TYPE_OPTIONS = [
+  "Pruning",
+  "Spraying",
+  "Mowing",
+  "Slashing",
+  "Trimming",
+  "Leaf plucking",
+  "Shoot thinning",
+  "Wire lifting",
+  "Irrigation",
+  "Fertilising",
+  "Harvesting",
+  "Planting",
+  "Replanting",
+  "Trellis repair",
+  "Weeding",
+  "Mulching",
+  "Soil work",
+  "Inspection",
+  "Other",
+];
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
