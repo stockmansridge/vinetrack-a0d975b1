@@ -51,6 +51,8 @@ interface Props {
   pin: PinRecord;
   paddockName?: string | null;
   vineyardName?: string | null;
+  /** Paddock row_direction in degrees, used to render "facing North" wording. */
+  paddockRowDirection?: number | null;
   onClose: () => void;
 }
 
