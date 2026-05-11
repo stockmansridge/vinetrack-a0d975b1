@@ -244,7 +244,7 @@ export default function SprayEquipmentPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Spray equipment</h1>
           <p className="text-sm text-muted-foreground">
@@ -253,19 +253,19 @@ export default function SprayEquipmentPage() {
               : "Read-only view."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Filter…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-64"
-          />
-          {canEdit && (
-            <Button onClick={openCreate} size="sm">
-              <Plus className="h-4 w-4" /> New spray equipment
-            </Button>
-          )}
-        </div>
+        {canEdit && (
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" /> New spray equipment
+          </Button>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <Input
+          placeholder="Filter…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="w-64"
+        />
       </div>
       <Card>
         <Table>

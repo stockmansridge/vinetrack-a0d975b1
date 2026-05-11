@@ -132,7 +132,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col items-start gap-3">
         <div>
           <h1 className="text-2xl font-semibold">
             {templatesOnly ? "Spray Templates" : "Spray Jobs & Templates"}
