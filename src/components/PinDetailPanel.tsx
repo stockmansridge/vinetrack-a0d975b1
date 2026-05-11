@@ -86,7 +86,7 @@ function formatDateTime(v?: string | null): string | null {
   });
 }
 
-export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
+export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, onClose }: Props) {
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
