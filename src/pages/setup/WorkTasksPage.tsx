@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/sheet";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2, Download } from "lucide-react";
 import {
