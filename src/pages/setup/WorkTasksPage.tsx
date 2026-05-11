@@ -615,13 +615,6 @@ function WorkTaskDrawer({
               <p className="text-xs text-muted-foreground">
                 Multi-paddock selection is disabled until iOS adds a <code>work_task_paddocks</code> join table. For now each work task links to one paddock.
               </p>
-                <Field label="Start date">
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                </Field>
-                <Field label="End date">
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                </Field>
-              </div>
               <Field label="Description">
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
               </Field>
