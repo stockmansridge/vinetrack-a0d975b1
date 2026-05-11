@@ -42,6 +42,8 @@ import { Plus, Trash2, Download } from "lucide-react";
 import {
   fetchWorkTasksForVineyard,
   fetchLabourLinesForVineyard,
+  fetchWorkTaskPaddocksForVineyard,
+  syncWorkTaskPaddocks,
   createWorkTask,
   updateWorkTask,
   createLabourLine,
@@ -49,6 +51,7 @@ import {
   softDeleteLabourLine,
   type WorkTask,
   type WorkTaskLabourLine,
+  type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
 
