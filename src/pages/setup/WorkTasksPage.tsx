@@ -443,13 +443,13 @@ export default function WorkTasksPage() {
               </TableRow>
             )}
             {rows.map((t) => {
-              const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
+              const padName = taskPaddockNames(t.id) || "—";
               const tot = totalsByTask.get(t.id);
               const summary = (t.description ?? t.notes ?? "").trim();
               return (
                 <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
                   <TableCell>{dateRangeLabel(t)}</TableCell>
-                  <TableCell>{fmt(padName)}</TableCell>
+                  <TableCell>{padName}</TableCell>
                   <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>
                   <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>
                   <TableCell className="text-right">{num(t.area_ha)}</TableCell>
