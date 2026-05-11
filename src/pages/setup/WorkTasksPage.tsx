@@ -466,7 +466,9 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
-  const [paddockId, setPaddockId] = useState<string>(task?.paddock_id ?? NONE);
+  const initialPaddockIds = task?.paddock_id ? [task.paddock_id] : [];
+  const [paddockIds, setPaddockIds] = useState<string[]>(initialPaddockIds);
+  const [paddocksOpen, setPaddocksOpen] = useState(false);
   const [taskType, setTaskType] = useState<string>(task?.task_type ?? "");
   const [status, setStatus] = useState<string>(task?.status ?? "");
   const [startDate, setStartDate] = useState<string>(task?.start_date ?? task?.date ?? "");
