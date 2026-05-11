@@ -30,6 +30,7 @@ import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 interface PaddockLite {
   id: string;
   name: string | null;
+  row_direction?: number | null;
 }
 
 export default function PinsPage() {
@@ -70,6 +71,15 @@ export default function PinsPage() {
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
     paddocks.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [paddocks]);
+
+  const paddockRowDirById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    paddocks.forEach((p) => {
+      const v = p.row_direction;
+      m.set(p.id, v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    });
     return m;
   }, [paddocks]);
 
@@ -355,6 +365,7 @@ export default function PinsPage() {
               <PinDetailPanel
                 pin={selected}
                 paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+                paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
                 vineyardName={vineyardName}
                 onClose={() => setSelectedId(null)}
               />

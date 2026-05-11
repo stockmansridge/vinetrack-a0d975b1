@@ -225,6 +225,15 @@ export default function VineyardOverviewMap({
     return m;
   }, [paddocks]);
 
+  const paddockRowDirById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    paddocks.forEach((p: any) => {
+      const v = p?.row_direction;
+      m.set(p.id, v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    });
+    return m;
+  }, [paddocks]);
+
   const pinsWithCoords = useMemo(
     () =>
       pins
@@ -443,7 +452,7 @@ export default function VineyardOverviewMap({
             const el = document.createElement("div");
             const size = isSelected ? 16 : 12;
             el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${style.hex};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer;`;
-            el.title = pin.title ?? style.label;
+            el.title = pinDisplayTitle(pin);
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
               setSelection({ kind: "pin", id });
@@ -644,7 +653,7 @@ export default function VineyardOverviewMap({
               </PanelShell>
             ) : selectedPin ? (
               <PanelShell
-                title={selectedPin.title || pinStyle(selectedPin.mode, selectedPin.button_color, selectedPin.category).label}
+                title={pinDisplayTitle(selectedPin)}
                 subtitle="Pin details"
                 onClose={() => setSelection(null)}
               >
@@ -653,6 +662,11 @@ export default function VineyardOverviewMap({
                   paddockName={
                     selectedPin.paddock_id
                       ? paddockNameById.get(selectedPin.paddock_id) ?? null
+                      : null
+                  }
+                  paddockRowDirection={
+                    selectedPin.paddock_id
+                      ? paddockRowDirById.get(selectedPin.paddock_id) ?? null
                       : null
                   }
                 />
@@ -873,9 +887,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function PinPanelBody({
   pin,
   paddockName,
+  paddockRowDirection,
 }: {
   pin: PinRecord;
   paddockName: string | null;
+  paddockRowDirection?: number | null;
 }) {
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
@@ -925,10 +941,10 @@ function PinPanelBody({
       {formatAttachedRow(pin as any) && (
         <Row label="On Row" value={formatAttachedRow(pin as any)} />
       )}
-      {formatDrivingPath(pin as any) && (
-        <Row label="Driving row" value={formatDrivingPath(pin as any)} />
+      {formatDrivingPath(pin as any, paddockRowDirection) && (
+        <Row label="Driving row" value={formatDrivingPath(pin as any, paddockRowDirection)} />
       )}
-      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any) && (
+      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any, paddockRowDirection) && (
         <Row label="Row" value={formatLegacyRow(pin as any) ?? "—"} />
       )}
       <Row label="Created by" value={resolveName(pin.created_by) ?? "—"} />

@@ -51,6 +51,8 @@ interface Props {
   pin: PinRecord;
   paddockName?: string | null;
   vineyardName?: string | null;
+  /** Paddock row_direction in degrees, used to render "facing North" wording. */
+  paddockRowDirection?: number | null;
   onClose: () => void;
 }
 
@@ -84,7 +86,7 @@ function formatDateTime(v?: string | null): string | null {
   });
 }
 
-export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose }: Props) {
+export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, onClose }: Props) {
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
@@ -182,8 +184,8 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
           <Field label="On Row" value={formatAttachedRow(pin)} />
-          <Field label="Driving row" value={formatDrivingPath(pin)} />
-          {!formatAttachedRow(pin) && !formatDrivingPath(pin) && (
+          <Field label="Driving row" value={formatDrivingPath(pin, paddockRowDirection)} />
+          {!formatAttachedRow(pin) && !formatDrivingPath(pin, paddockRowDirection) && (
             <>
               <Field label="Row" value={formatLegacyRow(pin)} />
               <Field label="Side" value={pin.side} />

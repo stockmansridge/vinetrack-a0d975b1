@@ -4,7 +4,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
-import { pinStyle, pinDisplayCoords, applyPinStatusFilter } from "@/lib/pinStyle";
+import { pinStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -20,6 +20,7 @@ interface Paddock {
   id: string;
   name: string | null;
   polygon_points: any;
+  row_direction?: number | null;
 }
 
 function makePinElement(hex: string) {
@@ -64,6 +65,15 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
     paddocks.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [paddocks]);
+
+  const paddockRowDirById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    paddocks.forEach((p) => {
+      const v = p.row_direction;
+      m.set(p.id, v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    });
     return m;
   }, [paddocks]);
 
@@ -153,7 +163,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
       const ann = new mapkit.Annotation(
         new mapkit.Coordinate(pin.latitude!, pin.longitude!),
         () => makePinElement(hex),
-        { title: pin.title ?? (pin as any).button_name ?? "" },
+        { title: pinDisplayTitle(pin as any) },
       );
       try {
         ann.addEventListener?.("select", () => setSelectedId(pin.id));
@@ -262,6 +272,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
           <PinDetailPanel
             pin={selected}
             paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+            paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
             onClose={() => setSelectedId(null)}
           />
         ) : (
