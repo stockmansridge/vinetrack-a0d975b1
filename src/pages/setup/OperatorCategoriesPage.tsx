@@ -85,20 +85,49 @@ export default function OperatorCategoriesPage() {
     return list;
   }, [categories, filter]);
 
-  if (import.meta.env.DEV) {
+  // Diagnostic query: fetch ALL rows for this vineyard (including soft-deleted)
+  // so we can see exactly what the iOS Supabase project returns to this client.
+  const { data: diag, refetch: refetchDiag } = useQuery({
+    queryKey: ["operator-categories-diagnostic", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: async () => {
+      const res = await supabase
+        .from("operator_categories")
+        .select(
+          "id,vineyard_id,name,cost_per_hour,deleted_at,created_at,updated_at,client_updated_at,sync_version,created_by,updated_by",
+        )
+        .eq("vineyard_id", selectedVineyardId!);
+      if (res.error) throw res.error;
+      const all = (res.data ?? []) as OperatorCategory[];
+      const active = all.filter((r) => r.deleted_at == null);
+      const deleted = all.filter((r) => r.deleted_at != null);
+      return { all, active, deleted };
+    },
+  });
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !diag) return;
     // eslint-disable-next-line no-console
-    console.debug("[OperatorCategoriesPage]", {
-      selectedVineyardId,
-      activeCount: categories.length,
-      rows: categories.map((c) => ({
-        id: c.id,
-        name: c.name,
-        cost_per_hour: c.cost_per_hour,
-        vineyard_id: c.vineyard_id,
-        deleted_at: c.deleted_at,
-      })),
+    console.groupCollapsed(
+      `[operator_categories DIAG] vineyard=${selectedVineyardId} total=${diag.all.length} active=${diag.active.length} deleted=${diag.deleted.length}`,
+    );
+    diag.all.forEach((r) => {
+      // eslint-disable-next-line no-console
+      console.log({
+        id: r.id,
+        vineyard_id: r.vineyard_id,
+        name: r.name,
+        cost_per_hour: r.cost_per_hour,
+        deleted_at: r.deleted_at,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        client_updated_at: r.client_updated_at,
+        sync_version: r.sync_version,
+      });
     });
-  }
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  }, [diag, selectedVineyardId]);
 
   return (
     <div className="space-y-4">
