@@ -66,11 +66,35 @@ export default function MaintenancePage() {
 
   const logs = data?.logs ?? [];
 
-  const items = useMemo(() => {
+  const { data: equipmentGroups } = useQuery({
+    queryKey: ["equipment_selector_options", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchEquipmentSelectorOptions(selectedVineyardId!),
+  });
+
+  // Names actually used in historical records (free-text legacy values).
+  const legacyItemNames = useMemo(() => {
     const s = new Set<string>();
     logs.forEach((l) => l.item_name && s.add(l.item_name));
-    return Array.from(s).sort();
+    return s;
   }, [logs]);
+
+  // Names already covered by the equipment groups.
+  const groupedNames = useMemo(() => {
+    const s = new Set<string>();
+    equipmentGroups?.tractors.forEach((o) => s.add(o.name));
+    equipmentGroups?.sprayEquipment.forEach((o) => s.add(o.name));
+    equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
+    return s;
+  }, [equipmentGroups]);
+
+  const legacyOnly = useMemo(
+    () =>
+      Array.from(legacyItemNames)
+        .filter((n) => !groupedNames.has(n))
+        .sort((a, b) => a.localeCompare(b)),
+    [legacyItemNames, groupedNames],
+  );
 
   const rows = useMemo(() => {
     let list = logs.slice();
