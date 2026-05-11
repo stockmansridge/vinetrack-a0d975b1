@@ -208,7 +208,7 @@ export default function WorkTasksPage() {
     [paddockNameById, totalsByTask],
   );
 
-  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable(filtered, {
+  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(filtered, {
     accessors,
     initial: { key: "date", direction: "desc" },
   });
