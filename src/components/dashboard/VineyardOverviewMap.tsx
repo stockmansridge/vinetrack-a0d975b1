@@ -887,9 +887,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function PinPanelBody({
   pin,
   paddockName,
+  paddockRowDirection,
 }: {
   pin: PinRecord;
   paddockName: string | null;
+  paddockRowDirection?: number | null;
 }) {
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
