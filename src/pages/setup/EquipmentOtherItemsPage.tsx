@@ -213,9 +213,19 @@ function ItemEditor({
 }) {
   const isNew = !item;
   const [name, setName] = useState("");
+  const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    if (open) setName(item?.name ?? "");
+    if (open) {
+      setName(item?.name ?? "");
+      setMake(item?.make ?? "");
+      setModel(item?.model ?? "");
+      setSerialNumber(item?.serial_number ?? "");
+      setNotes(item?.notes ?? "");
+    }
   }, [open, item]);
 
   const createMut = useMutation({
@@ -224,6 +234,10 @@ function ItemEditor({
       return createEquipmentItem({
         vineyard_id: vineyardId,
         name: name.trim(),
+        make: make.trim() || null,
+        model: model.trim() || null,
+        serial_number: serialNumber.trim() || null,
+        notes: notes.trim() || null,
         category: "other",
         user_id: userId,
       });
@@ -247,6 +261,10 @@ function ItemEditor({
       return updateEquipmentItem({
         id: item.id,
         name: name.trim(),
+        make: make.trim() ? make.trim() : null,
+        model: model.trim() ? model.trim() : null,
+        serial_number: serialNumber.trim() ? serialNumber.trim() : null,
+        notes: notes.trim() ? notes.trim() : null,
         user_id: userId,
         current_sync_version: item.sync_version ?? 0,
       });
