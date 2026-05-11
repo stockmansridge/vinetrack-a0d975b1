@@ -329,14 +329,21 @@ function CategoryEditor({
 
         <div className="mt-4 space-y-4 text-sm">
           <div className="space-y-1.5">
-            <Label htmlFor="oc-name">Name</Label>
+          <Label htmlFor="oc-name">
+              Name <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="oc-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Pruner"
+              maxLength={100}
+              required
               disabled={!canWrite}
             />
+            {!name.trim() && (
+              <p className="text-xs text-muted-foreground">Name is required.</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="oc-cost">Cost per hour</Label>
