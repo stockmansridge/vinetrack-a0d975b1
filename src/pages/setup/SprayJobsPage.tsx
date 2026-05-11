@@ -1169,7 +1169,7 @@ function SprayJobSheet({
               const basis = inferRateBasis(c.unit);
               const cu = chemUnitOnly(c.unit ?? "") || "L";
               setLine(idx, {
-                chemical_id: c.id,
+                chemical_id: c.id || null,
                 name: c.name ?? "",
                 active_ingredient: c.active_ingredient ?? null,
                 rate: c.rate_per_ha ?? null,
