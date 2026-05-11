@@ -521,6 +521,7 @@ interface DrawerProps {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   paddocks: PaddockLite[];
+  existingPaddocks: WorkTaskPaddock[];
   categories: OperatorCategory[];
   labourLines: WorkTaskLabourLine[];
   canSoftDelete: boolean;
@@ -530,18 +531,23 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
-  // NOTE: iOS Supabase has no `work_task_paddocks` join table, and `work_tasks`
-  // only has a single `paddock_id` column. Until iOS adds a join table we keep
-  // selection limited to a single paddock so we don't fake multi-paddock data.
-  const [paddockId, setPaddockIdLocal] = useState<string>(task?.paddock_id ?? "");
+
+  // Initial selection: prefer join rows, fallback to legacy single paddock_id.
+  const initialPaddockIds = useMemo(() => {
+    if (existingPaddocks.length) return existingPaddocks.map((r) => r.paddock_id);
+    if (task?.paddock_id) return [task.paddock_id];
+    return [];
+  }, [existingPaddocks, task?.paddock_id]);
+
+  const [paddockIds, setPaddockIds] = useState<string[]>(initialPaddockIds);
+  const [paddocksOpen, setPaddocksOpen] = useState(false);
   const [taskType, setTaskType] = useState<string>(task?.task_type ?? "");
   const [status, setStatus] = useState<string>(task?.status ?? "");
   const [startDate, setStartDate] = useState<string>(task?.start_date ?? task?.date ?? "");
   const [endDate, setEndDate] = useState<string>(task?.end_date ?? "");
-  const [areaHa, setAreaHa] = useState<string>(task?.area_ha == null ? "" : String(task.area_ha));
   const [description, setDescription] = useState<string>(task?.description ?? "");
   const [notes, setNotes] = useState<string>(task?.notes ?? "");
   const [isFinalized, setIsFinalized] = useState<boolean>(!!task?.is_finalized);
@@ -549,31 +555,40 @@ function WorkTaskDrawer({
 
   useEffect(() => { setSavedTaskId(task?.id ?? null); }, [task?.id]);
 
-  const selectedPaddock = paddocks.find((p) => p.id === paddockId) ?? null;
-  const paddockMissingArea = !!selectedPaddock && (selectedPaddock.area_ha == null);
+  const togglePaddock = (id: string) => {
+    setPaddockIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
-  // Auto-populate area_ha from selected paddock (read-only).
-  useEffect(() => {
-    const a = selectedPaddock?.area_ha;
-    setAreaHa(a == null ? "" : String(Number(Number(a).toFixed(4))));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paddockId]);
+  const selectedPaddocks = useMemo(
+    () => paddockIds.map((id) => paddocks.find((p) => p.id === id)).filter(Boolean) as PaddockLite[],
+    [paddockIds, paddocks],
+  );
+  const paddockMissingArea = selectedPaddocks.some((p) => p.area_ha == null);
+  const totalAreaHa = selectedPaddocks.reduce(
+    (sum, p) => sum + (p.area_ha != null ? Number(p.area_ha) || 0 : 0),
+    0,
+  );
+  const areaHaDisplay = selectedPaddocks.length
+    ? Number(totalAreaHa.toFixed(4)).toString()
+    : "";
 
   const saveTask = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard selected");
-      const padName = selectedPaddock?.name ?? null;
+      const padNames = selectedPaddocks.map((p) => p.name ?? p.id.slice(0, 8)).join(", ");
       const input = {
         id: task?.id,
         vineyard_id: vineyardId,
-        paddock_id: paddockId || null,
-        paddock_name: padName,
+        // Keep first paddock id populated for backward compatibility with iOS
+        // clients that read work_tasks.paddock_id directly.
+        paddock_id: paddockIds[0] ?? null,
+        paddock_name: padNames || null,
         task_type: taskType.trim() || null,
         status: status || null,
         start_date: startDate || null,
         end_date: endDate || null,
         date: startDate || task?.date || null,
-        area_ha: areaHa === "" ? null : Number(areaHa),
+        area_ha: selectedPaddocks.length ? totalAreaHa : null,
         description,
         notes,
         is_finalized: isFinalized,
@@ -581,6 +596,19 @@ function WorkTaskDrawer({
         current_sync_version: task?.sync_version ?? 0,
       };
       const saved = isNew ? await createWorkTask(input) : await updateWorkTask(input);
+
+      // Reconcile join table.
+      await syncWorkTaskPaddocks({
+        workTaskId: saved.id,
+        vineyardId,
+        selections: selectedPaddocks.map((p) => ({
+          paddock_id: p.id,
+          area_ha: p.area_ha == null ? null : Number(p.area_ha),
+        })),
+        existing: existingPaddocks,
+        userId,
+      });
+
       return saved;
     },
     onSuccess: (saved) => {
@@ -596,8 +624,14 @@ function WorkTaskDrawer({
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
   const missingRate = visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
-  const areaNum = areaHa === "" ? null : Number(areaHa);
+  const areaNum = selectedPaddocks.length ? totalAreaHa : null;
   const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
+
+  const paddocksLabel = paddockIds.length === 0
+    ? "—"
+    : paddockIds.length === 1
+      ? selectedPaddocks[0]?.name ?? paddockIds[0].slice(0, 8)
+      : `${paddockIds.length} paddocks`;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -610,19 +644,32 @@ function WorkTaskDrawer({
           <div className="lg:col-span-2 space-y-4">
             <Section title="Task">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Paddock">
-                  <Select value={paddockId || NONE} onValueChange={(v) => setPaddockIdLocal(v === NONE ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>—</SelectItem>
+                <Field label="Paddocks">
+                  <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between font-normal">
+                        <span className="truncate">{paddocksLabel}</span>
+                        <span className="text-xs text-muted-foreground">{paddockIds.length}/{paddocks.length}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 max-h-80 overflow-y-auto p-2" align="start">
+                      {paddocks.length === 0 && (
+                        <p className="text-sm text-muted-foreground p-2">No paddocks.</p>
+                      )}
                       {paddocks.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name ?? p.id.slice(0, 8)}
-                          {p.area_ha != null ? ` (${Number(p.area_ha).toFixed(2)} ha)` : ""}
-                        </SelectItem>
+                        <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded cursor-pointer">
+                          <Checkbox
+                            checked={paddockIds.includes(p.id)}
+                            onCheckedChange={() => togglePaddock(p.id)}
+                          />
+                          <span className="flex-1 text-sm">{p.name ?? p.id.slice(0, 8)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {p.area_ha != null ? `${Number(p.area_ha).toFixed(2)} ha` : "—"}
+                          </span>
+                        </label>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </PopoverContent>
+                  </Popover>
                 </Field>
                 <Field label="Task type">
                   <Select value={taskType || NONE} onValueChange={(v) => setTaskType(v === NONE ? "" : v)}>
@@ -645,7 +692,7 @@ function WorkTaskDrawer({
                   </Select>
                 </Field>
                 <Field label="Area ha (auto)">
-                  <Input type="number" value={areaHa} readOnly disabled placeholder="—" />
+                  <Input type="number" value={areaHaDisplay} readOnly disabled placeholder="—" />
                 </Field>
                 <Field label="Start date">
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -656,11 +703,11 @@ function WorkTaskDrawer({
               </div>
               {paddockMissingArea && (
                 <p className="text-xs text-destructive">
-                  Selected block is missing area data, so area totals may be incomplete.
+                  One or more selected paddocks are missing area data, so the area total may be incomplete.
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                Multi-paddock selection is disabled until iOS adds a <code>work_task_paddocks</code> join table. For now each work task links to one paddock.
+                Multi-paddock selection writes to <code>work_task_paddocks</code>. The first selected paddock is also stored on <code>work_tasks.paddock_id</code> for backward compatibility.
               </p>
               <Field label="Description">
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
