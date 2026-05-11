@@ -36,8 +36,10 @@ interface Props {
 export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSelect }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { currentCountry } = useVineyard();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showAI, setShowAI] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["saved-chemicals-picker", vineyardId],
@@ -58,6 +60,45 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
     });
   }, [data, search]);
 
+  const applyAIMut = useMutation({
+    mutationFn: async (s: AppliedSuggestion) => {
+      // If the AI hit matches an existing library item, just select it.
+      if (s.existing_chemical_id) {
+        const match = (data?.chemicals ?? []).find((c) => c.id === s.existing_chemical_id);
+        if (match) return match;
+      }
+      const nextBasis = s.rate_basis ?? "per_hectare";
+      const unit = s.unit ?? "L";
+      const composed = s.rate_unit ?? `${unit}${nextBasis === "per_100L" ? "/100L" : "/ha"}`;
+      const restrictions = composeRestrictions({
+        whpDays: s.whp_days ?? "",
+        reiHours: s.rei_hours ?? "",
+        rest: s.target ? `Target: ${s.target}` : "",
+      });
+      return createSavedChemical(vineyardId, {
+        name: (s.name ?? "").trim() || "Unnamed product",
+        active_ingredient: s.active_ingredient ?? null,
+        chemical_group: s.chemical_group ?? null,
+        use: (s.category as string) ?? null,
+        manufacturer: s.manufacturer ?? null,
+        rate_per_ha: s.rate_per_ha ?? null,
+        unit: composed,
+        restrictions: restrictions || null,
+        notes: s.notes ?? null,
+      });
+    },
+    onSuccess: (c) => {
+      qc.invalidateQueries({ queryKey: ["saved-chemicals-picker", vineyardId] });
+      qc.invalidateQueries({ queryKey: ["saved_chemicals", vineyardId] });
+      toast({ title: "Chemical added to library" });
+      onSelect(c);
+      setShowAI(false);
+      onOpenChange(false);
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not add chemical", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,7 +106,7 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
           <DialogHeader>
             <DialogTitle>Select chemical</DialogTitle>
             <DialogDescription>
-              Pick a chemical from this vineyard's saved library, or add a new one.
+              Pick a chemical from this vineyard's saved library, run an AI lookup, or add a new one.
             </DialogDescription>
           </DialogHeader>
 
@@ -81,10 +122,25 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
               />
             </div>
 
-            <div className="rounded-md border max-h-[50vh] overflow-y-auto divide-y">
+            {showAI && (
+              <ChemicalAILookup
+                initialName={search}
+                country={currentCountry}
+                existingLibrary={(data?.chemicals ?? []).map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  active_ingredient: c.active_ingredient,
+                }))}
+                onApply={(s) => applyAIMut.mutate(s)}
+              />
+            )}
+
+            <div className="rounded-md border max-h-[40vh] overflow-y-auto divide-y">
               {isLoading && <div className="p-4 text-sm text-muted-foreground">Loading…</div>}
               {!isLoading && filtered.length === 0 && (
-                <div className="p-4 text-sm text-muted-foreground">No chemicals match.</div>
+                <div className="p-4 text-sm text-muted-foreground">
+                  No chemicals match. {canCreate && "Try AI Lookup or Add chemical below."}
+                </div>
               )}
               {filtered.map((c) => (
                 <button
@@ -111,9 +167,13 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
             <div className="flex items-center justify-end gap-2 pt-1 border-t">
               {canCreate && (
                 <>
-                  <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                  <Button
+                    size="sm"
+                    variant={showAI ? "default" : "outline"}
+                    onClick={() => setShowAI((v) => !v)}
+                  >
                     <Sparkles className="h-3.5 w-3.5 mr-1" />
-                    Look up chemical
+                    {showAI ? "Hide AI lookup" : "AI Lookup"}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
                     <Plus className="h-3.5 w-3.5 mr-1" />
