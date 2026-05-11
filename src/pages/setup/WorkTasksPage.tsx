@@ -510,6 +510,7 @@ export default function WorkTasksPage() {
         paddocks={paddocks}
         existingPaddocks={[]}
         categories={categories}
+        syncedTaskTypes={syncedTaskTypes}
         labourLines={[]}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
@@ -518,6 +519,7 @@ export default function WorkTasksPage() {
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
+          qc.invalidateQueries({ queryKey: ["work_task_types"] });
         }}
       />
     </div>
