@@ -700,7 +700,9 @@ function WorkTaskDrawer({
                       {paddocks.length === 0 && (
                         <p className="text-sm text-muted-foreground p-2">No paddocks.</p>
                       )}
-                      {paddocks.map((p) => (
+                      {paddocks.map((p) => {
+                        const ha = paddockAreaHa(p);
+                        return (
                         <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded cursor-pointer">
                           <Checkbox
                             checked={paddockIds.includes(p.id)}
