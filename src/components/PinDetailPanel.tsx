@@ -181,8 +181,8 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, onClose
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
           <Field label="Paddock" value={paddockName} />
-          <Field label="Attached row" value={formatAttachedRow(pin)} />
-          <Field label="Driving path" value={formatDrivingPath(pin)} />
+          <Field label="On Row" value={formatAttachedRow(pin)} />
+          <Field label="Driving row" value={formatDrivingPath(pin)} />
           {!formatAttachedRow(pin) && !formatDrivingPath(pin) && (
             <>
               <Field label="Row" value={formatLegacyRow(pin)} />
