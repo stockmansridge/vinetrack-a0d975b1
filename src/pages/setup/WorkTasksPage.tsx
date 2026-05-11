@@ -486,9 +486,10 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, categories, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
-  const initialPaddockIds = task?.paddock_id ? [task.paddock_id] : [];
-  const [paddockIds, setPaddockIds] = useState<string[]>(initialPaddockIds);
-  const [paddocksOpen, setPaddocksOpen] = useState(false);
+  // NOTE: iOS Supabase has no `work_task_paddocks` join table, and `work_tasks`
+  // only has a single `paddock_id` column. Until iOS adds a join table we keep
+  // selection limited to a single paddock so we don't fake multi-paddock data.
+  const [paddockId, setPaddockIdLocal] = useState<string>(task?.paddock_id ?? "");
   const [taskType, setTaskType] = useState<string>(task?.task_type ?? "");
   const [status, setStatus] = useState<string>(task?.status ?? "");
   const [startDate, setStartDate] = useState<string>(task?.start_date ?? task?.date ?? "");
