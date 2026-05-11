@@ -692,15 +692,14 @@ function WorkTaskDrawer({
                   </Popover>
                 </Field>
                 <Field label="Task type">
-                  <Select value={taskType || NONE} onValueChange={(v) => setTaskType(v === NONE ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>—</SelectItem>
-                      {Array.from(new Set([...TASK_TYPE_OPTIONS, ...(taskType ? [taskType] : [])])).map((o) => (
-                        <SelectItem key={o} value={o}>{o}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <TaskTypeSelect
+                    value={taskType}
+                    onChange={setTaskType}
+                    syncedTaskTypes={syncedTaskTypes}
+                    vineyardId={vineyardId}
+                    userId={userId}
+                    onCreated={onSaved}
+                  />
                 </Field>
                 <Field label="Status">
                   <Select value={status || NONE} onValueChange={(v) => setStatus(v === NONE ? "" : v)}>
