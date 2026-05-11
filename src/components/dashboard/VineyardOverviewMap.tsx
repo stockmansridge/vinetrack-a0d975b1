@@ -452,7 +452,7 @@ export default function VineyardOverviewMap({
             const el = document.createElement("div");
             const size = isSelected ? 16 : 12;
             el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${style.hex};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer;`;
-            el.title = pin.title ?? style.label;
+            el.title = pinDisplayTitle(pin);
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
               setSelection({ kind: "pin", id });
