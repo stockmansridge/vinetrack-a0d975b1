@@ -74,6 +74,15 @@ export default function PinsPage() {
     return m;
   }, [paddocks]);
 
+  const paddockRowDirById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    paddocks.forEach((p) => {
+      const v = p.row_direction;
+      m.set(p.id, v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    });
+    return m;
+  }, [paddocks]);
+
   const paddockPolygonCount = useMemo(
     () =>
       paddocks.reduce(
