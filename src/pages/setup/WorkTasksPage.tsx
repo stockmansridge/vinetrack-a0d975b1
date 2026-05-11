@@ -481,14 +481,26 @@ function WorkTaskDrawer({
 
   useEffect(() => { setSavedTaskId(task?.id ?? null); }, [task?.id]);
 
+  // Auto-populate area_ha from sum of selected paddocks (always; user can edit after).
+  useEffect(() => {
+    const sum = paddockIds
+      .map((id) => paddocks.find((p) => p.id === id)?.area_ha)
+      .reduce((s: number, v) => s + (v == null ? 0 : Number(v) || 0), 0);
+    setAreaHa(sum > 0 ? String(Number(sum.toFixed(4))) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paddockIds.join("|")]);
+
+  const selectedPaddocks = paddocks.filter((p) => paddockIds.includes(p.id));
+
   const saveTask = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard selected");
-      const padName = paddockId !== NONE ? paddocks.find((p) => p.id === paddockId)?.name ?? null : null;
+      const padNames = selectedPaddocks.map((p) => p.name ?? p.id.slice(0, 8));
+      const padName = padNames.length ? padNames.join(", ") : null;
       const input = {
         id: task?.id,
         vineyard_id: vineyardId,
-        paddock_id: paddockId === NONE ? null : paddockId,
+        paddock_id: paddockIds[0] ?? null,
         paddock_name: padName,
         task_type: taskType.trim() || null,
         status: status || null,
