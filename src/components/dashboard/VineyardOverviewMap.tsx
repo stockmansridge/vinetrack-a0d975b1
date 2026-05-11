@@ -941,10 +941,10 @@ function PinPanelBody({
       {formatAttachedRow(pin as any) && (
         <Row label="On Row" value={formatAttachedRow(pin as any)} />
       )}
-      {formatDrivingPath(pin as any) && (
-        <Row label="Driving row" value={formatDrivingPath(pin as any)} />
+      {formatDrivingPath(pin as any, paddockRowDirection) && (
+        <Row label="Driving row" value={formatDrivingPath(pin as any, paddockRowDirection)} />
       )}
-      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any) && (
+      {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any, paddockRowDirection) && (
         <Row label="Row" value={formatLegacyRow(pin as any) ?? "—"} />
       )}
       <Row label="Created by" value={resolveName(pin.created_by) ?? "—"} />
