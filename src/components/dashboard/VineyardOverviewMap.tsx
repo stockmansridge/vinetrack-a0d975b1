@@ -893,7 +893,8 @@ function PinPanelBody({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="text-sm font-semibold leading-tight">{pinDisplayTitle(pin)}</div>
+      <div className="flex items-center gap-2 flex-wrap">
         <span
           className="inline-block h-3 w-3 rounded-full border border-white shadow"
           style={{ background: style.hex }}
@@ -918,14 +919,14 @@ function PinPanelBody({
           }}
         />
       )}
-      <Row label="Type" value={pin.mode ?? pin.category ?? "—"} />
+      <Row label="Type" value={pin.button_name ?? pin.title ?? pin.mode ?? pin.category ?? "—"} />
       <Row label="Status" value={pin.status ?? (pin.is_completed ? "Completed" : "Open")} />
       <Row label="Block" value={paddockName ?? "—"} />
       {formatAttachedRow(pin as any) && (
-        <Row label="Attached row" value={formatAttachedRow(pin as any)} />
+        <Row label="On Row" value={formatAttachedRow(pin as any)} />
       )}
       {formatDrivingPath(pin as any) && (
-        <Row label="Driving path" value={formatDrivingPath(pin as any)} />
+        <Row label="Driving row" value={formatDrivingPath(pin as any)} />
       )}
       {!formatAttachedRow(pin as any) && !formatDrivingPath(pin as any) && (
         <Row label="Row" value={formatLegacyRow(pin as any) ?? "—"} />
