@@ -193,6 +193,7 @@ export default function WorkTasksPage() {
     return list;
   }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask]);
 
+  type SortKey = "date" | "paddock" | "task_type" | "status" | "area_ha" | "hours" | "cost" | "finalized";
   const accessors = useMemo(
     () => ({
       date: (r: WorkTask) => effectiveStart(r),
