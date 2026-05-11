@@ -233,11 +233,33 @@ export default function WorkTasksPage() {
     return Array.from(s).sort();
   }, [labourLines]);
 
+  // Selected paddock IDs per task (join rows preferred, fallback to task.paddock_id).
+  const taskPaddockIds = useMemo(() => {
+    const m = new Map<string, string[]>();
+    tasks.forEach((t) => {
+      const join = paddocksByTask.get(t.id);
+      if (join && join.length) m.set(t.id, join.map((j) => j.paddock_id));
+      else if (t.paddock_id) m.set(t.id, [t.paddock_id]);
+      else m.set(t.id, []);
+    });
+    return m;
+  }, [tasks, paddocksByTask]);
+
+  const taskPaddockNames = (taskId: string): string => {
+    const ids = taskPaddockIds.get(taskId) ?? [];
+    if (!ids.length) return "";
+    return ids
+      .map((id) => paddockNameById.get(id) ?? id.slice(0, 8))
+      .filter(Boolean)
+      .join(", ");
+  };
+
   const filtered = useMemo(() => {
     let list = tasks.slice();
     if (from) list = list.filter((t) => (effectiveEnd(t) ?? "") >= from);
     if (to) list = list.filter((t) => (effectiveStart(t) ?? "") <= to);
-    if (paddockId !== ANY) list = list.filter((t) => t.paddock_id === paddockId);
+    if (paddockId !== ANY)
+      list = list.filter((t) => (taskPaddockIds.get(t.id) ?? []).includes(paddockId));
     if (taskType !== ANY) list = list.filter((t) => t.task_type === taskType);
     if (status !== ANY) list = list.filter((t) => (t.status ?? "") === status);
     if (workerType !== ANY) {
@@ -248,18 +270,19 @@ export default function WorkTasksPage() {
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((t) =>
-        [t.task_type, t.paddock_name, t.notes, t.description, t.status, t.date]
+        [t.task_type, taskPaddockNames(t.id), t.notes, t.description, t.status, t.date]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
     return list;
-  }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
 
   type SortKey = "date" | "paddock" | "task_type" | "status" | "area_ha" | "hours" | "cost" | "finalized";
   const accessors = useMemo(
     () => ({
       date: (r: WorkTask) => effectiveStart(r),
-      paddock: (r: WorkTask) => r.paddock_name ?? (r.paddock_id ? paddockNameById.get(r.paddock_id) ?? "" : ""),
+      paddock: (r: WorkTask) => taskPaddockNames(r.id),
       task_type: (r: WorkTask) => r.task_type ?? "",
       status: (r: WorkTask) => r.status ?? "",
       area_ha: (r: WorkTask) => (r.area_ha == null ? null : Number(r.area_ha)),
@@ -267,7 +290,8 @@ export default function WorkTasksPage() {
       cost: (r: WorkTask) => totalsByTask.get(r.id)?.cost ?? 0,
       finalized: (r: WorkTask) => (r.is_finalized ? 1 : 0),
     }),
-    [paddockNameById, totalsByTask],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paddockNameById, totalsByTask, taskPaddockIds],
   );
 
   const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(filtered, {
@@ -277,19 +301,19 @@ export default function WorkTasksPage() {
 
   const exportCsv = () => {
     const headers = [
-      "Task ID","Start","End","Paddock","Task type","Status","Area ha",
+      "Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)",
       "Total hours","Total cost","Cost per ha","Worker types","Description","Notes",
     ];
     const lines = [headers.join(",")];
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
-      const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? "" : "");
+      const padNames = taskPaddockNames(t.id);
       const costPerHa = t.area_ha && tot?.cost ? (tot.cost / Number(t.area_ha)).toFixed(2) : "";
       const cells = [
         t.id,
         effectiveStart(t) ?? "",
         effectiveEnd(t) ?? "",
-        padName ?? "",
+        padNames,
         t.task_type ?? "",
         t.status ?? "",
         t.area_ha ?? "",
