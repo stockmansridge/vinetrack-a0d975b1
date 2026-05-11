@@ -159,14 +159,60 @@ export default function MaintenancePage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Item</div>
-          <Select value={item} onValueChange={setItem}>
-            <SelectTrigger className="w-56"><SelectValue placeholder="Any" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY}>Any item</SelectItem>
-              {items.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
-            </SelectContent>
-          </Select>
+          <div className="text-xs text-muted-foreground">Item / Machine</div>
+          <div className="flex items-center gap-1">
+            <Select value={item} onValueChange={setItem}>
+              <SelectTrigger className="w-64"><SelectValue placeholder="Any" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>Any item</SelectItem>
+                {equipmentGroups?.tractors.length ? (
+                  <SelectGroup>
+                    <SelectLabel>Tractors</SelectLabel>
+                    {equipmentGroups.tractors.map((o) => (
+                      <SelectItem key={`t-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {equipmentGroups?.sprayEquipment.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Spray Equipment</SelectLabel>
+                    {equipmentGroups.sprayEquipment.map((o) => (
+                      <SelectItem key={`s-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {equipmentGroups?.otherItems.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Other Items</SelectLabel>
+                    {equipmentGroups.otherItems.map((o) => (
+                      <SelectItem key={`o-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {legacyOnly.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Historical (free text)</SelectLabel>
+                    {legacyOnly.map((n) => (
+                      <SelectItem key={`l-${n}`} value={n}>{n}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+              </SelectContent>
+            </Select>
+            <Button
+              asChild
+              size="icon"
+              variant="outline"
+              title="Manage Other Equipment Items"
+            >
+              <Link to="/setup/equipment-other">
+                <Plus className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Completion</div>
