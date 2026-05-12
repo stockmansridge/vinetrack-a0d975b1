@@ -70,6 +70,7 @@ const reports: NavItem[] = [
   { title: "Trip Reports", url: "/reports/trips", icon: Route },
   { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
   { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
+  { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
   { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
 ];
 
