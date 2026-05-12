@@ -244,6 +244,7 @@ export default function MaintenancePage() {
               <TableHead>Item</TableHead>
               <TableHead>Work completed</TableHead>
               <TableHead>Hours</TableHead>
+              <TableHead>Machine hrs</TableHead>
               <TableHead>Cost</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
