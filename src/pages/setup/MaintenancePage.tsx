@@ -313,6 +313,9 @@ function MaintenanceSheet({
               <Field label="Date" value={fmtDate(log.date)} />
               <Field label="Item" value={fmt(log.item_name)} />
               <Field label="Hours" value={fmt(log.hours)} />
+              {log.machine_hours != null && (
+                <Field label="Machine hours" value={fmt(log.machine_hours)} />
+              )}
               <Field label="Finalized" value={log.is_finalized ? "Yes" : "No"} />
               <Field label="Finalized at" value={fmtDate(log.finalized_at)} />
             </Section>
