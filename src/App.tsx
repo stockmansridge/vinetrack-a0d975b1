@@ -39,6 +39,7 @@ import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import TripReportsPage from "./pages/reports/TripReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
+import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 
@@ -102,6 +103,7 @@ const App = () => (
                     <Route path="/reports/spray" element={<SprayReportsPage />} />
                     <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
                     <Route path="/reports/documents" element={<DocumentsPage />} />
+                    <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
                     <Route path="/tools/yield-estimation" element={<ToolPlaceholder title="Yield Estimation" />} />
