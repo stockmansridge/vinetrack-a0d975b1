@@ -19,6 +19,7 @@ export interface MaintenanceLog {
   vineyard_id: string;
   item_name?: string | null;
   hours?: number | null;
+  machine_hours?: number | null;
   work_completed?: string | null;
   parts_used?: string | null;
   parts_cost?: number | null;
