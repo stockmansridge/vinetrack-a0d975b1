@@ -103,6 +103,7 @@ const App = () => (
                     <Route path="/reports/spray" element={<SprayReportsPage />} />
                     <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
                     <Route path="/reports/documents" element={<DocumentsPage />} />
+                    <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
                     <Route path="/tools/yield-estimation" element={<ToolPlaceholder title="Yield Estimation" />} />
