@@ -1,12 +1,12 @@
 // READ-ONLY query helpers for Growth Stage Records.
 //
-// Source-of-truth on the iOS Supabase project: there is **no dedicated
-// growth-stage records table**. Growth observations are captured as
-// `pins` rows with `mode = 'Growth'` (or any growth_stage_code set) —
-// see docs/supabase-schema.md §3.7. Variety is held at the paddock
-// level via `paddocks.variety_allocations` (jsonb), not on the pin.
+// Primary source: the iOS Supabase view `v_growth_stage_observations`,
+// which unifies the new `growth_stage_records` table with legacy
+// `pins`-based growth observations and de-duplicates pins that have a
+// mirrored growth_stage_records row.
 //
-// Gaps for Rork are tracked in docs/growth-stage-records-contract.md.
+// Fallback: if the view is unavailable (older deployments), we read
+// directly from `pins` with `mode = 'Growth'` or any growth_stage_code.
 import { supabase } from "@/integrations/ios-supabase/client";
 
 export interface GrowthStageRecord {
@@ -16,14 +16,18 @@ export interface GrowthStageRecord {
   paddock_name?: string | null;
   variety?: string | null;
   growth_stage_code?: string | null;
+  growth_stage_label?: string | null;
   notes?: string | null;
-  date?: string | null; // derived from completed_at ?? created_at
+  date?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
   completed_at?: string | null;
+  /** Legacy single photo path (pins) or first photo from the array. */
   photo_path?: string | null;
+  /** All photo paths (new growth_stage_records may carry several). */
+  photo_paths?: string[];
   latitude?: number | null;
   longitude?: number | null;
   row_number?: number | null;
@@ -32,9 +36,11 @@ export interface GrowthStageRecord {
   category?: string | null;
   mode?: string | null;
   sync_version?: number | null;
+  /** 'record' | 'pin' — origin row this came from, when reported by the view. */
+  source?: string | null;
 }
 
-export interface PaddockLite {
+interface PaddockLite {
   id: string;
   name?: string | null;
   variety_allocations?: any;
@@ -46,56 +52,104 @@ const firstVariety = (p: PaddockLite | undefined): string | null => {
   return v ? String(v) : null;
 };
 
-export async function fetchGrowthStageRecords(
+const pickDate = (r: any): string | null =>
+  r.date ?? r.observed_at ?? r.completed_at ?? r.created_at ?? null;
+
+const pickStageCode = (r: any): string | null =>
+  r.el_stage_code ?? r.growth_stage_code ?? r.stage_code ?? null;
+
+const pickStageLabel = (r: any): string | null =>
+  r.el_stage_label ?? r.growth_stage_label ?? r.stage_label ?? null;
+
+const pickPhotoPaths = (r: any): string[] => {
+  if (Array.isArray(r.photo_paths) && r.photo_paths.length) return r.photo_paths.filter(Boolean);
+  if (r.photo_path) return [r.photo_path];
+  return [];
+};
+
+function mapRow(r: any, paddockMap: Map<string, PaddockLite>): GrowthStageRecord {
+  const pad = r.paddock_id ? paddockMap.get(r.paddock_id) : undefined;
+  const photos = pickPhotoPaths(r);
+  return {
+    id: r.id,
+    vineyard_id: r.vineyard_id,
+    paddock_id: r.paddock_id ?? null,
+    paddock_name: r.paddock_name ?? pad?.name ?? null,
+    variety: r.variety ?? firstVariety(pad),
+    growth_stage_code: pickStageCode(r),
+    growth_stage_label: pickStageLabel(r),
+    notes: r.notes ?? null,
+    date: pickDate(r),
+    created_at: r.created_at ?? null,
+    updated_at: r.updated_at ?? null,
+    created_by: r.created_by ?? null,
+    updated_by: r.updated_by ?? null,
+    completed_at: r.completed_at ?? null,
+    photo_path: photos[0] ?? null,
+    photo_paths: photos,
+    latitude: r.latitude ?? null,
+    longitude: r.longitude ?? null,
+    row_number: r.row_number ?? null,
+    side: r.side ?? null,
+    title: r.title ?? null,
+    category: r.category ?? null,
+    mode: r.mode ?? null,
+    sync_version: r.sync_version ?? null,
+    source: r.source ?? null,
+  };
+}
+
+async function fetchPaddockMap(vineyardId: string): Promise<Map<string, PaddockLite>> {
+  const { data, error } = await supabase
+    .from("paddocks")
+    .select("id,name,variety_allocations")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null);
+  if (error) throw error;
+  const map = new Map<string, PaddockLite>();
+  (data ?? []).forEach((p: any) => map.set(p.id, p));
+  return map;
+}
+
+async function fetchFromView(
   vineyardId: string,
+  paddockMap: Map<string, PaddockLite>,
+): Promise<GrowthStageRecord[] | null> {
+  const { data, error } = await supabase
+    .from("v_growth_stage_observations" as any)
+    .select("*")
+    .eq("vineyard_id", vineyardId);
+  if (error) {
+    // View missing or not exposed → caller should fall back.
+    if (/relation|does not exist|not found|schema cache/i.test(error.message)) {
+      return null;
+    }
+    throw error;
+  }
+  return (data ?? []).map((r: any) => mapRow(r, paddockMap));
+}
+
+async function fetchFromPins(
+  vineyardId: string,
+  paddockMap: Map<string, PaddockLite>,
 ): Promise<GrowthStageRecord[]> {
-  // Pins with growth context: either explicit Growth mode or any
-  // growth_stage_code set. `or` filter covers both.
-  const pinsRes = await supabase
+  const { data, error } = await supabase
     .from("pins")
     .select("*")
     .eq("vineyard_id", vineyardId)
     .is("deleted_at", null)
     .or("mode.eq.Growth,growth_stage_code.not.is.null");
-  if (pinsRes.error) throw pinsRes.error;
+  if (error) throw error;
+  return (data ?? []).map((r: any) => mapRow(r, paddockMap));
+}
 
-  const paddocksRes = await supabase
-    .from("paddocks")
-    .select("id,name,variety_allocations")
-    .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
-  if (paddocksRes.error) throw paddocksRes.error;
-
-  const paddockMap = new Map<string, PaddockLite>();
-  (paddocksRes.data ?? []).forEach((p: any) => paddockMap.set(p.id, p));
-
-  return ((pinsRes.data ?? []) as any[]).map((p) => {
-    const pad = p.paddock_id ? paddockMap.get(p.paddock_id) : undefined;
-    return {
-      id: p.id,
-      vineyard_id: p.vineyard_id,
-      paddock_id: p.paddock_id ?? null,
-      paddock_name: pad?.name ?? null,
-      variety: firstVariety(pad),
-      growth_stage_code: p.growth_stage_code ?? null,
-      notes: p.notes ?? null,
-      date: p.completed_at ?? p.created_at ?? null,
-      created_at: p.created_at ?? null,
-      updated_at: p.updated_at ?? null,
-      created_by: p.created_by ?? null,
-      updated_by: p.updated_by ?? null,
-      completed_at: p.completed_at ?? null,
-      photo_path: p.photo_path ?? null,
-      latitude: p.latitude ?? null,
-      longitude: p.longitude ?? null,
-      row_number: p.row_number ?? null,
-      side: p.side ?? null,
-      title: p.title ?? null,
-      category: p.category ?? null,
-      mode: p.mode ?? null,
-      sync_version: p.sync_version ?? null,
-    } as GrowthStageRecord;
-  });
+export async function fetchGrowthStageRecords(
+  vineyardId: string,
+): Promise<GrowthStageRecord[]> {
+  const paddockMap = await fetchPaddockMap(vineyardId);
+  const fromView = await fetchFromView(vineyardId, paddockMap);
+  if (fromView) return fromView;
+  return fetchFromPins(vineyardId, paddockMap);
 }
 
 export interface BlockSummaryRow {
@@ -134,7 +188,7 @@ export function summariseLatestByBlock(rows: GrowthStageRecord[]): BlockSummaryR
 }
 
 export function toCsv(rows: GrowthStageRecord[], operatorName: (id?: string | null) => string): string {
-  const headers = ["date", "block", "variety", "el_stage", "notes", "created_by"];
+  const headers = ["date", "block", "variety", "el_stage", "el_label", "notes", "created_by"];
   const esc = (v: any) => {
     const s = v == null ? "" : String(v);
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -146,6 +200,7 @@ export function toCsv(rows: GrowthStageRecord[], operatorName: (id?: string | nu
       r.paddock_name ?? "",
       r.variety ?? "",
       r.growth_stage_code ?? "",
+      r.growth_stage_label ?? "",
       r.notes ?? "",
       operatorName(r.created_by),
     ].map(esc).join(","));
