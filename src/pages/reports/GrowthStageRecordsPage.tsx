@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
-import { usePinPhoto } from "@/hooks/usePinPhoto";
+import { useGrowthStagePhoto } from "@/hooks/useGrowthStagePhoto";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -309,7 +309,7 @@ function DetailSheet({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const photoUrl = usePinPhoto(record?.photo_path);
+  const photos = record?.photo_paths?.length ? record.photo_paths : (record?.photo_path ? [record.photo_path] : []);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -323,24 +323,24 @@ function DetailSheet({
               <Field label="Block" value={fmt(record.paddock_name)} />
               <Field label="Variety" value={fmt(record.variety)} />
               <Field label="E-L stage" value={record.growth_stage_code ? `E-L ${record.growth_stage_code}` : "—"} />
+              {record.growth_stage_label && (
+                <Field label="Stage label" value={record.growth_stage_label} />
+              )}
               <Field label="Mode" value={fmt(record.mode)} />
+              {record.source && <Field label="Source" value={fmt(record.source)} />}
             </Section>
             {record.notes && (
               <Section title="Notes">
                 <p className="whitespace-pre-wrap">{record.notes}</p>
               </Section>
             )}
-            {record.photo_path && (
-              <Section title="Photo">
-                {photoUrl ? (
-                  <img
-                    src={photoUrl}
-                    alt="Growth stage observation"
-                    className="rounded-md border max-h-80 w-full object-contain bg-muted"
-                  />
-                ) : (
-                  <div className="text-muted-foreground text-xs">Photo unavailable.</div>
-                )}
+            {photos.length > 0 && (
+              <Section title={photos.length > 1 ? `Photos (${photos.length})` : "Photo"}>
+                <div className="grid grid-cols-1 gap-2">
+                  {photos.map((p) => (
+                    <PhotoTile key={p} path={p} />
+                  ))}
+                </div>
               </Section>
             )}
             <Section title="Location">
@@ -368,6 +368,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{title}</div>
       <div className="rounded-md border bg-card/50 p-3 space-y-1.5">{children}</div>
     </div>
+  );
+}
+
+function PhotoTile({ path }: { path: string }) {
+  const url = useGrowthStagePhoto(path);
+  if (!url) {
+    return <div className="text-muted-foreground text-xs">Photo unavailable.</div>;
+  }
+  return (
+    <img
+      src={url}
+      alt="Growth stage observation"
+      className="rounded-md border max-h-80 w-full object-contain bg-muted"
+    />
   );
 }
 
