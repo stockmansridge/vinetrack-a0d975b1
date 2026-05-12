@@ -244,20 +244,21 @@ export default function MaintenancePage() {
               <TableHead>Item</TableHead>
               <TableHead>Work completed</TableHead>
               <TableHead>Hours</TableHead>
+              <TableHead>Machine hrs</TableHead>
               <TableHead>Cost</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No maintenance records found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -270,6 +271,7 @@ export default function MaintenancePage() {
                   <TableCell>{fmt(l.item_name)}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>
                   <TableCell>{fmt(l.hours)}</TableCell>
+                  <TableCell>{fmt(l.machine_hours)}</TableCell>
                   <TableCell>{l.parts_cost == null && l.labour_cost == null ? "—" : fmtCost(cost)}</TableCell>
                   <TableCell>
                     {l.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}
@@ -311,6 +313,9 @@ function MaintenanceSheet({
               <Field label="Date" value={fmtDate(log.date)} />
               <Field label="Item" value={fmt(log.item_name)} />
               <Field label="Hours" value={fmt(log.hours)} />
+              {log.machine_hours != null && (
+                <Field label="Machine hours" value={fmt(log.machine_hours)} />
+              )}
               <Field label="Finalized" value={log.is_finalized ? "Yes" : "No"} />
               <Field label="Finalized at" value={fmtDate(log.finalized_at)} />
             </Section>
