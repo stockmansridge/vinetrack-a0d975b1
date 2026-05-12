@@ -347,7 +347,6 @@ function DetailSheet({
               <Field label="Latitude" value={fmt(record.latitude)} />
               <Field label="Longitude" value={fmt(record.longitude)} />
               <Field label="Row" value={fmt(record.row_number)} />
-              <Field label="Side" value={fmt(record.side)} />
             </Section>
             <Section title="Meta">
               <Field label="Created by" value={operatorName(record.created_by)} />
