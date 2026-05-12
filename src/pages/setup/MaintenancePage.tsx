@@ -251,14 +251,14 @@ export default function MaintenancePage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No maintenance records found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -271,6 +271,7 @@ export default function MaintenancePage() {
                   <TableCell>{fmt(l.item_name)}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>
                   <TableCell>{fmt(l.hours)}</TableCell>
+                  <TableCell>{fmt(l.machine_hours)}</TableCell>
                   <TableCell>{l.parts_cost == null && l.labour_cost == null ? "—" : fmtCost(cost)}</TableCell>
                   <TableCell>
                     {l.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}
