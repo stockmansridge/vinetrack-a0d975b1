@@ -1,1 +1,4 @@
 project_id = "qpgkkertfwdycjhcbnpf"
+
+[functions.submit-support-request]
+verify_jwt = false
