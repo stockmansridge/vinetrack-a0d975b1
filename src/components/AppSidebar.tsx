@@ -7,7 +7,6 @@ import {
   Tractor,
   Gauge,
   Users,
-  FileText,
   FileBarChart,
   CloudRain,
   FolderOpen,
@@ -22,15 +21,9 @@ import {
   Sprout,
   Database,
   Droplet,
-  Beaker as BeakerIcon,
   Grape,
-  Thermometer,
-  Sprout as SproutIcon,
-  Grid3x3,
-  Image as ImageIcon,
   AlertTriangle,
   Fuel,
-  LineChart,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -86,21 +79,13 @@ const setup: NavItem[] = [
   { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
 ];
 
-// "Tools" — calculators / helpers (most still in build)
+// "Tools" — calculators / helpers
 const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
-  { title: "Spray / Tank Mix Calculator", url: "/tools/spray-tank-mix", icon: BeakerIcon, soon: true },
-  { title: "Yield Estimation", url: "/tools/yield-estimation", icon: Grape, soon: true },
-  { title: "Degree Days / BEDD", url: "/tools/degree-days", icon: Thermometer, soon: true },
-  { title: "Seeding Mix Calculator", url: "/tools/seeding-mix", icon: SproutIcon, soon: true },
-  { title: "Block / Row Calculator", url: "/tools/block-row", icon: Grid3x3, soon: true },
 ];
 
-// iOS-synced data views — many are placeholders pending portal pages
+// iOS-synced data views
 const iosData: NavItem[] = [
-  { title: "Growth Stage Records", url: "/soon/growth-stage", icon: ImageIcon, soon: true },
-  { title: "Yield Estimation Sessions", url: "/soon/yield-estimation-sessions", icon: LineChart, soon: true },
-  { title: "Historical Yield", url: "/soon/historical-yield", icon: Grape, soon: true },
   { title: "Fuel Purchases", url: "/soon/fuel-purchases", icon: Fuel, soon: true },
 ];
 
