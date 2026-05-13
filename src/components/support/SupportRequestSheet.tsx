@@ -147,9 +147,9 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
         { body: payload },
       );
       if (error) throw error;
-      const result = data as { ok?: boolean; email_sent?: boolean; email_error?: string | null };
+      const result = data as { ok?: boolean; email_queued?: boolean; email_error?: string | null };
       if (!result?.ok) throw new Error("Submission failed");
-      if (result.email_sent === false) {
+      if (result.email_queued === false) {
         toast.success("Request received. Email delivery is pending — your message has been saved.");
       } else {
         toast.success("Thanks! Your message has been sent.");
