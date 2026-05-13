@@ -42,6 +42,7 @@ import DocumentsPage from "./pages/reports/DocumentsPage";
 import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
+import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +93,7 @@ const App = () => (
                     <Route path="/trips" element={<TripsPage />} />
                     <Route path="/yield" element={<YieldReportsPage />} />
                     <Route path="/damage-records" element={<DamageRecordsPage />} />
+                    <Route path="/fuel-purchases" element={<FuelPurchasesPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />

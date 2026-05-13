@@ -56,6 +56,7 @@ const work: NavItem[] = [
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yield", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
+  { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
 ];
 
 // "Reports" — exports & compliance
@@ -84,10 +85,8 @@ const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
 ];
 
-// iOS-synced data views
-const iosData: NavItem[] = [
-  { title: "Fuel Purchases", url: "/soon/fuel-purchases", icon: Fuel, soon: true },
-];
+
+
 
 const settings: NavItem[] = [
   { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
@@ -167,12 +166,6 @@ export function AppSidebar() {
           <SidebarGroupLabel>Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(tools)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>iOS Data (Coming Soon)</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(iosData)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         {isAdmin && (
