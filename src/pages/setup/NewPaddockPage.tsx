@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle } from "lucide-react";
+import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle, Info } from "lucide-react";
 
 import {
   generateRows,
@@ -588,6 +588,14 @@ function BoundaryStep({
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="lg:col-span-2">
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm flex items-start gap-2">
+          <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+          <span className="text-foreground/80">
+            <strong>Tip:</strong> Draw block boundaries through the middle of the row gaps where possible. This helps VineTrack calculate row positions, block area and coverage more accurately.
+          </span>
+        </div>
+      </div>
       <Card className="overflow-hidden">
         <div className="h-[520px]">
           <DrawMap polygon={polygon} setPolygon={setPolygon} />
