@@ -168,12 +168,6 @@ export function AppSidebar() {
             <SidebarMenu>{renderItems(tools)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>iOS Data (Coming Soon)</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(iosData)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
         {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
