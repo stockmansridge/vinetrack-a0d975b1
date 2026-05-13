@@ -7,7 +7,6 @@ import {
   Tractor,
   Gauge,
   Users,
-  FileText,
   FileBarChart,
   CloudRain,
   FolderOpen,
@@ -22,15 +21,8 @@ import {
   Sprout,
   Database,
   Droplet,
-  Beaker as BeakerIcon,
   Grape,
-  Thermometer,
-  Sprout as SproutIcon,
-  Grid3x3,
-  Image as ImageIcon,
-  AlertTriangle,
   Fuel,
-  LineChart,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
