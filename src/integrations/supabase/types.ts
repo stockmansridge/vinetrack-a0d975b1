@@ -14,7 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      support_requests: {
+        Row: {
+          attachment_paths: string[]
+          browser_info: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          message: string
+          page_path: string | null
+          request_type: string
+          status: string
+          subject: string
+          updated_at: string
+          user_email: string | null
+          user_id: string | null
+          user_name: string | null
+          user_role: string | null
+          vineyard_id: string | null
+          vineyard_name: string | null
+        }
+        Insert: {
+          attachment_paths?: string[]
+          browser_info?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          message: string
+          page_path?: string | null
+          request_type: string
+          status?: string
+          subject: string
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string | null
+          user_name?: string | null
+          user_role?: string | null
+          vineyard_id?: string | null
+          vineyard_name?: string | null
+        }
+        Update: {
+          attachment_paths?: string[]
+          browser_info?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          message?: string
+          page_path?: string | null
+          request_type?: string
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string | null
+          user_name?: string | null
+          user_role?: string | null
+          vineyard_id?: string | null
+          vineyard_name?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
