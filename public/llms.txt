@@ -1,0 +1,12 @@
+# VineTrack
+
+> VineTrack is a vineyard management portal for Australian wine grape growers. It covers paddocks, spray records, work tasks, equipment maintenance, fuel purchases, growth-stage observations and team management, and syncs with the VineTrack iOS field app.
+
+## Pages
+
+- [Sign in](/login): Sign in to the VineTrack portal with your vineyard account.
+- [Unsubscribe](/unsubscribe): Stop receiving notification emails from VineTrack.
+
+## Optional
+
+- [VineTrack website](https://vinetrack.com.au): Product information and contact details.

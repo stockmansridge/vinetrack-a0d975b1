@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
 import { BrandName } from "@/components/BrandName";
+import { PageHead } from "@/components/PageHead";
 
 export default function Login() {
   const { session, loading } = useAuth();
@@ -37,7 +38,13 @@ export default function Login() {
   };
 
   return (
-    <div
+    <>
+      <PageHead
+        title="Sign in to VineTrack"
+        description="Sign in to the VineTrack vineyard management portal to manage paddocks, spray records, work tasks and your team."
+        path="/login"
+      />
+      <div
       className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
       style={{
         background:
@@ -155,6 +162,7 @@ export default function Login() {
         </button>
       </div>
     </div>
+    </>
   );
 }
 

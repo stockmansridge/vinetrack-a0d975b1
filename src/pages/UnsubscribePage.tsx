@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { PageHead } from "@/components/PageHead";
 
 type State =
   | { phase: "validating" }
@@ -65,6 +66,13 @@ export default function UnsubscribePage() {
   };
 
   return (
+    <>
+      <PageHead
+        title="Unsubscribe from VineTrack emails"
+        description="Confirm you'd like to stop receiving notification emails from the VineTrack vineyard portal."
+        path="/unsubscribe"
+        noindex
+      />
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md rounded-xl border bg-card p-8 shadow-sm text-center">
         <h1 className="text-xl font-semibold mb-2">Unsubscribe</h1>
@@ -117,5 +125,6 @@ export default function UnsubscribePage() {
         )}
       </div>
     </main>
+    </>
   );
 }
