@@ -85,10 +85,8 @@ const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
 ];
 
-// iOS-synced data views
-const iosData: NavItem[] = [
-  { title: "Fuel Purchases", url: "/soon/fuel-purchases", icon: Fuel, soon: true },
-];
+
+
 
 const settings: NavItem[] = [
   { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
