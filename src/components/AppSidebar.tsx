@@ -56,6 +56,7 @@ const work: NavItem[] = [
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yield", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
+  { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
 ];
 
 // "Reports" — exports & compliance
