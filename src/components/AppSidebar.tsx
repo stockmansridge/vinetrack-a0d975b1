@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
 import {
@@ -24,6 +25,7 @@ import {
   Grape,
   AlertTriangle,
   Fuel,
+  LifeBuoy,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -38,7 +40,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
+import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 
 type NavItem = { title: string; url: string; icon: any; soon?: boolean };
 
@@ -94,6 +98,7 @@ const settings: NavItem[] = [
 
 export function AppSidebar() {
   const { pathname } = useLocation();
+  const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
@@ -177,6 +182,20 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
+      <SidebarFooter className="px-2 pb-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => setSupportOpen(true)}
+              className="rounded-xl hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
+            >
+              <LifeBuoy className="h-4 w-4" />
+              <span>Contact support</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SupportRequestSheet open={supportOpen} onOpenChange={setSupportOpen} />
     </Sidebar>
   );
 }
