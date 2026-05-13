@@ -66,6 +66,13 @@ export default function UnsubscribePage() {
   };
 
   return (
+    <>
+      <PageHead
+        title="Unsubscribe from VineTrack emails"
+        description="Confirm you'd like to stop receiving notification emails from the VineTrack vineyard portal."
+        path="/unsubscribe"
+        noindex
+      />
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md rounded-xl border bg-card p-8 shadow-sm text-center">
         <h1 className="text-xl font-semibold mb-2">Unsubscribe</h1>
