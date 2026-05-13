@@ -43,6 +43,7 @@ import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
+import UnsubscribePage from "./pages/UnsubscribePage";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/no-access" element={<NoAccess />} />
+              <Route path="/unsubscribe" element={<UnsubscribePage />} />
               <Route element={<RequireAuth />}>
                 <Route path="/select-vineyard" element={<SelectVineyard />} />
                 <Route element={<RequireVineyard />}>
