@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Fuel,
   LifeBuoy,
+  DollarSign,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
