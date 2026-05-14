@@ -19,6 +19,12 @@ import {
   downloadCsv,
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { computeTripCost, type TractorLite } from "@/lib/tripCosting";
+import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -147,6 +153,48 @@ export default function TripReportsPage() {
   });
   const trips = data?.trips ?? [];
 
+  // Cost inputs — fetched only for owners/managers.
+  const canSeeCosts = useCanSeeCosts();
+  const costEnabled = !!selectedVineyardId && canSeeCosts;
+  const { data: costCategories } = useQuery({
+    queryKey: ["cost-categories", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchOperatorCategoriesForVineyard(selectedVineyardId!),
+  });
+  const { data: costMembers } = useQuery({
+    queryKey: ["cost-members", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchVineyardMembersWithCategory(selectedVineyardId!),
+  });
+  const { data: costFuel } = useQuery({
+    queryKey: ["cost-fuel", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
+  });
+  const { data: costSpray } = useQuery({
+    queryKey: ["cost-spray", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSprayRecordsForVineyard(selectedVineyardId!),
+  });
+  const { data: costTractors } = useQuery({
+    queryKey: ["cost-tractors", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
+  });
+
+  const computeCostFor = (t: Trip) => {
+    if (!canSeeCosts) return null;
+    const tractor = t.tractor_id ? (costTractors ?? []).find((x) => x.id === t.tractor_id) ?? null : null;
+    return computeTripCost({
+      trip: t,
+      tractor,
+      operatorCategories: costCategories?.categories ?? [],
+      members: costMembers ?? [],
+      fuelPurchases: costFuel ?? [],
+      sprayRecords: costSpray?.records ?? [],
+    });
+  };
+
   const operators = useMemo(() => {
     const s = new Set<string>();
     trips.forEach((t) => t.person_name && s.add(t.person_name));
@@ -207,6 +255,7 @@ export default function TripReportsPage() {
         blockNames: blockNamesFor(t),
         pinCount,
         vineyardLogoUrl: vineyardLogoUrl ?? null,
+        cost: computeCostFor(t),
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
@@ -218,7 +267,13 @@ export default function TripReportsPage() {
   const handleExportCsv = () => {
     if (!rows.length) return;
     const csvRows = rows.map((t) =>
-      tripToCsvRow(t, padNameFor(t), tripDisplayName(t), tripFunctionLabel(t.trip_function)),
+      tripToCsvRow(
+        t,
+        padNameFor(t),
+        tripDisplayName(t),
+        tripFunctionLabel(t.trip_function),
+        computeCostFor(t),
+      ),
     );
     downloadCsv(`TripReports_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
   };

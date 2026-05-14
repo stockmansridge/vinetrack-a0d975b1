@@ -14,6 +14,8 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
+import type { TripCostBreakdown } from "./tripCosting";
+import { fmtCurrency, fmtHours } from "./tripCosting";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { composeSatelliteRouteImage } from "./satelliteRouteMap";
 
@@ -644,9 +646,10 @@ export function tripToCsvRow(
   paddockName: string | null,
   tripDisplay: string,
   tripFunctionLabel: string | null,
+  cost?: TripCostBreakdown | null,
 ): Record<string, string> {
   const cov = summarizeCoverage(t);
-  return {
+  const base: Record<string, string> = {
     id: t.id,
     title: t.trip_title ?? "",
     name: tripDisplay,
@@ -669,6 +672,22 @@ export function tripToCsvRow(
       : "",
     seeding_details: t.seeding_details ? JSON.stringify(t.seeding_details) : "",
   };
+  if (cost) {
+    const num = (n: number | null | undefined) => (n == null || !isFinite(n) ? "" : n.toFixed(2));
+    base.active_hours = num(cost.activeHours);
+    base.labour_category = cost.labour.categoryName ?? "";
+    base.labour_rate_per_hour = num(cost.labour.ratePerHour);
+    base.labour_cost = num(cost.labour.cost);
+    base.fuel_litres_estimated = num(cost.fuel.litres);
+    base.fuel_cost_per_litre = num(cost.fuel.costPerLitre);
+    base.fuel_cost = num(cost.fuel.cost);
+    base.chemical_cost = num(cost.chemicals.cost);
+    base.chemical_lines = String(cost.chemicals.lineCount);
+    base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
+    base.total_estimated_cost = num(cost.total);
+    base.costing_warnings = cost.warnings.join(" | ");
+  }
+  return base;
 }
 
 export function rowsToCsv(rows: Record<string, string>[]): string {
@@ -707,6 +726,8 @@ export interface TripPdfContext {
   vineyardLogoDataUrl?: string | null;
   /** Block id → name lookup for grouping rows by block. */
   paddockNameById?: Map<string, string | null | undefined>;
+  /** Owner/manager-only trip cost breakdown. Caller MUST gate on useCanSeeCosts(). */
+  cost?: TripCostBreakdown | null;
 }
 
 
@@ -1024,15 +1045,49 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
 
   // (Manual Corrections section intentionally removed from customer report.)
 
-  // 6. Costs — placeholder section (only render if trip carries cost data)
-  const costs = (t as any).costs ?? (t as any).cost_lines;
-  if (Array.isArray(costs) && costs.length > 0) {
-    y = sectionHeader(doc, "Costs", y);
-    y = renderFieldList(
-      doc,
-      costs.map((c: any) => [String(c.label ?? c.name ?? "—"), String(c.amount ?? c.value ?? "—")] as [string, string]),
-      y,
-    );
+  // 6. Estimated trip cost — owner/manager only (caller gates).
+  if (ctx.cost) {
+    const c = ctx.cost;
+    y = sectionHeader(doc, "Estimated trip cost", y);
+    const labourLabel = `Labour${c.labour.categoryName ? ` (${c.labour.categoryName})` : ""}`;
+    const labourValue =
+      c.labour.cost != null
+        ? `${fmtCurrency(c.labour.cost)}${c.labour.ratePerHour != null ? ` · ${fmtCurrency(c.labour.ratePerHour)}/h` : ""}`
+        : "—";
+    const fuelValue =
+      c.fuel.cost != null
+        ? `${fmtCurrency(c.fuel.cost)}${c.fuel.litres != null ? ` · ${c.fuel.litres.toFixed(1)} L` : ""}${c.fuel.costPerLitre != null ? ` @ ${fmtCurrency(c.fuel.costPerLitre)}/L` : ""}`
+        : c.fuel.litres != null
+          ? `${c.fuel.litres.toFixed(1)} L (no cost/L on file)`
+          : "—";
+    const chemLabel = `Chemicals${c.chemicals.lineCount ? ` (${c.chemicals.lineCount} line${c.chemicals.lineCount === 1 ? "" : "s"})` : ""}`;
+    const chemValue = c.chemicals.cost != null ? fmtCurrency(c.chemicals.cost) : "—";
+    const rows: [string, string][] = [
+      ["Active hours", fmtHours(c.activeHours)],
+      [labourLabel, labourValue],
+      ["Fuel", fuelValue],
+      [chemLabel, chemValue],
+      ["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"],
+    ];
+    y = renderFieldList(doc, rows, y);
+    if (c.warnings.length > 0) {
+      y = ensureSpace(doc, y, 20 + c.warnings.length * 12);
+      doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(120, 80, 20);
+      doc.text("Costing completeness", 40, y);
+      y += 12;
+      doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(110);
+      const pageW2 = doc.internal.pageSize.getWidth();
+      for (const w of c.warnings) {
+        const lines = doc.splitTextToSize(`• ${w}`, pageW2 - 80) as string[];
+        for (const line of lines) {
+          y = ensureSpace(doc, y, 12);
+          doc.text(line, 40, y);
+          y += 12;
+        }
+      }
+      doc.setTextColor(0);
+    }
+    y += 6;
   }
 
   // 7. Route Map — own page so it stays large and readable.

@@ -514,6 +514,7 @@ function TripSheet({
                     pinCount,
                     vineyardLogoUrl: vineyardLogoUrl ?? null,
                     paddockNameById,
+                    cost: canSeeCosts ? cost : null,
                   });
                 }}
               >

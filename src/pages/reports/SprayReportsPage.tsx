@@ -26,6 +26,12 @@ import {
   jobYear,
   type JobLookups,
 } from "@/lib/sprayJobsExport";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { computeTripCost, type TractorLite } from "@/lib/tripCosting";
+import { fetchTripsForVineyard } from "@/lib/tripsQuery";
+import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 
 function fmtRecordLabel(r: SprayRecord): string {
   const date = r.date ?? "Undated";
@@ -85,6 +91,30 @@ export default function SprayReportsPage() {
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const selectedRecord = records.find((r) => r.id === selectedRecordId) ?? null;
 
+  // ---- Cost inputs (owner/manager only) for linked-trip costing on PDF.
+  const canSeeCosts = useCanSeeCosts();
+  const costEnabled = !!selectedVineyardId && canSeeCosts;
+  const { data: costTrips } = useQuery({
+    queryKey: ["spray-cost-trips", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, []),
+  });
+  const { data: costCategories } = useQuery({
+    queryKey: ["spray-cost-categories", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchOperatorCategoriesForVineyard(selectedVineyardId!),
+  });
+  const { data: costMembers } = useQuery({
+    queryKey: ["spray-cost-members", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchVineyardMembersWithCategory(selectedVineyardId!),
+  });
+  const { data: costFuel } = useQuery({
+    queryKey: ["spray-cost-fuel", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
+  });
+
   // ---- Spray jobs (yearly program)
   const { data: jobs, isLoading: jobsLoading } = useQuery({
     queryKey: ["spray-jobs-program", selectedVineyardId],
@@ -114,10 +144,29 @@ export default function SprayReportsPage() {
   const handleExportRecord = () => {
     if (!selectedRecord) return;
     try {
+      // Build linked-trip cost (owner/manager only).
+      let cost = null as ReturnType<typeof computeTripCost> | null;
+      if (canSeeCosts && selectedRecord.trip_id) {
+        const trip = (costTrips?.trips ?? []).find((t) => t.id === selectedRecord.trip_id) ?? null;
+        if (trip) {
+          const tractor = trip.tractor_id
+            ? ((tractors ?? []) as TractorLite[]).find((x) => x.id === trip.tractor_id) ?? null
+            : null;
+          cost = computeTripCost({
+            trip,
+            tractor,
+            operatorCategories: costCategories?.categories ?? [],
+            members: costMembers ?? [],
+            fuelPurchases: costFuel ?? [],
+            sprayRecords: recordsResult?.records ?? [],
+          });
+        }
+      }
       exportSprayRecordPdf(selectedRecord, vineyardName, {
         // spray_records has no paddock_id — fall back to trip linkage label if any
         paddockName: null,
         operatorName: null,
+        cost,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
