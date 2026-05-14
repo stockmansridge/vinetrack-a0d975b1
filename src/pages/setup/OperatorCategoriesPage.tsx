@@ -367,19 +367,21 @@ function CategoryEditor({
               <p className="text-xs text-muted-foreground">Name is required.</p>
             )}
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="oc-cost">Cost per hour</Label>
-            <Input
-              id="oc-cost"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              placeholder="0.00"
-              disabled={!canWrite}
-            />
-          </div>
+          {canSeeCosts && (
+            <div className="space-y-1.5">
+              <Label htmlFor="oc-cost">Cost per hour</Label>
+              <Input
+                id="oc-cost"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="0.00"
+                disabled={!canWrite}
+              />
+            </div>
+          )}
 
           {!isNew && category && (
             <div className="rounded-md border bg-muted/30 p-3 space-y-1 text-xs text-muted-foreground">
