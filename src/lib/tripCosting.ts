@@ -57,6 +57,7 @@ export interface TripCostBreakdown {
   labour: { hours: number | null; ratePerHour: number | null; cost: number | null; categoryName: string | null };
   fuel: { hours: number | null; litresPerHour: number | null; costPerLitre: number | null; litres: number | null; cost: number | null };
   chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
+  inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
   warnings: string[];
 }
