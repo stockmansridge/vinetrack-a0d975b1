@@ -467,12 +467,14 @@ function MaintenanceEditor({
   editing,
   equipmentGroups,
   legacyOnly,
+  canSeeCosts,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing: MaintenanceLog | null;
   equipmentGroups?: EquipmentSelectorGroups;
   legacyOnly: string[];
+  canSeeCosts: boolean;
 }) {
   const { selectedVineyardId } = useVineyard();
   const { user } = useAuth();
