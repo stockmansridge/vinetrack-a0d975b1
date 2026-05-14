@@ -54,6 +54,13 @@ export interface TractorLite {
   fuel_usage_l_per_hour?: number | null;
 }
 
+/** Subset of paddocks used for treated-area resolution. */
+export interface PaddockGeoLite {
+  id: string;
+  name?: string | null;
+  polygon_points?: any;
+}
+
 export interface TripCostBreakdown {
   activeHours: number | null;
   labour: { hours: number | null; ratePerHour: number | null; cost: number | null; categoryName: string | null };
@@ -61,6 +68,18 @@ export interface TripCostBreakdown {
   chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
   inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
+  /** Treated hectares resolved from linked paddock polygons. null when unavailable. */
+  treatedAreaHa: number | null;
+  /** total / treatedAreaHa. null when either is unavailable. */
+  costPerHa: number | null;
+  /** Yield tonnes resolved from historical_yield_records.block_results. null when unavailable. */
+  yieldTonnes: number | null;
+  /** total / yieldTonnes. null when either is unavailable. */
+  costPerTonne: number | null;
+  /** Human-readable warning when treated area can't be resolved. */
+  areaWarning: string | null;
+  /** Human-readable warning when yield tonnes can't be resolved. */
+  yieldWarning: string | null;
   warnings: string[];
 }
 
