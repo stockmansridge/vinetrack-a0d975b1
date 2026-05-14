@@ -646,9 +646,10 @@ export function tripToCsvRow(
   paddockName: string | null,
   tripDisplay: string,
   tripFunctionLabel: string | null,
+  cost?: TripCostBreakdown | null,
 ): Record<string, string> {
   const cov = summarizeCoverage(t);
-  return {
+  const base: Record<string, string> = {
     id: t.id,
     title: t.trip_title ?? "",
     name: tripDisplay,
@@ -671,6 +672,22 @@ export function tripToCsvRow(
       : "",
     seeding_details: t.seeding_details ? JSON.stringify(t.seeding_details) : "",
   };
+  if (cost) {
+    const num = (n: number | null | undefined) => (n == null || !isFinite(n) ? "" : n.toFixed(2));
+    base.active_hours = num(cost.activeHours);
+    base.labour_category = cost.labour.categoryName ?? "";
+    base.labour_rate_per_hour = num(cost.labour.ratePerHour);
+    base.labour_cost = num(cost.labour.cost);
+    base.fuel_litres_estimated = num(cost.fuel.litres);
+    base.fuel_cost_per_litre = num(cost.fuel.costPerLitre);
+    base.fuel_cost = num(cost.fuel.cost);
+    base.chemical_cost = num(cost.chemicals.cost);
+    base.chemical_lines = String(cost.chemicals.lineCount);
+    base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
+    base.total_estimated_cost = num(cost.total);
+    base.costing_warnings = cost.warnings.join(" | ");
+  }
+  return base;
 }
 
 export function rowsToCsv(rows: Record<string, string>[]): string {
