@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
-import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -85,57 +84,22 @@ export default function OperatorCategoriesPage() {
     return list;
   }, [categories, filter]);
 
-  // Diagnostic query: fetch ALL rows for this vineyard (including soft-deleted)
-  // so we can see exactly what the iOS Supabase project returns to this client.
-  const { data: diag, refetch: refetchDiag } = useQuery({
-    queryKey: ["operator-categories-diagnostic", selectedVineyardId],
-    enabled: !!selectedVineyardId,
-    queryFn: async () => {
-      const res = await supabase
-        .from("operator_categories")
-        .select(
-          "id,vineyard_id,name,cost_per_hour,deleted_at,created_at,updated_at,client_updated_at,sync_version,created_by,updated_by",
-        )
-        .eq("vineyard_id", selectedVineyardId!);
-      if (res.error) throw res.error;
-      const all = (res.data ?? []) as OperatorCategory[];
-      const active = all.filter((r) => r.deleted_at == null);
-      const deleted = all.filter((r) => r.deleted_at != null);
-      return { all, active, deleted };
-    },
-  });
-
-  useEffect(() => {
-    if (!import.meta.env.DEV || !diag) return;
-    // eslint-disable-next-line no-console
-    console.groupCollapsed(
-      `[operator_categories DIAG] vineyard=${selectedVineyardId} total=${diag.all.length} active=${diag.active.length} deleted=${diag.deleted.length}`,
-    );
-    diag.all.forEach((r) => {
-      // eslint-disable-next-line no-console
-      console.log({
-        id: r.id,
-        vineyard_id: r.vineyard_id,
-        name: r.name,
-        cost_per_hour: r.cost_per_hour,
-        deleted_at: r.deleted_at,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        client_updated_at: r.client_updated_at,
-        sync_version: r.sync_version,
-      });
-    });
-    // eslint-disable-next-line no-console
-    console.groupEnd();
-  }, [diag, selectedVineyardId]);
+  const activeCount = rows.length;
+  const avgCost = useMemo(() => {
+    const vals = rows
+      .map((c) => Number(c.cost_per_hour))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }, [rows]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Operator categories</h1>
+          <h1 className="text-2xl font-semibold">Operator Categories</h1>
           <p className="text-sm text-muted-foreground">
-            Shared with iOS. Soft-deleted records are excluded.
+            Manage labour/operator categories used across work tasks and reporting. These sync with the iOS app.
           </p>
         </div>
         {canWrite && (
@@ -145,62 +109,24 @@ export default function OperatorCategoriesPage() {
         )}
       </div>
 
-      <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="font-medium">Diagnostic — direct iOS Supabase query</div>
-          <Button size="sm" variant="outline" onClick={() => refetchDiag()}>
-            Re-run
-          </Button>
+      {activeCount > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card>
+            <CardContent className="p-4 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Active categories</span>
+              <span className="text-2xl font-semibold">{activeCount}</span>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Average cost / hour</span>
+              <span className="text-2xl font-semibold">
+                {avgCost == null ? "—" : `$${avgCost.toFixed(2)}/h`}
+              </span>
+            </CardContent>
+          </Card>
         </div>
-        <div className="font-mono break-all">
-          selectedVineyardId: {selectedVineyardId ?? "—"}
-        </div>
-        {diag ? (
-          <>
-            <div>
-              total rows: <b>{diag.all.length}</b> · active (deleted_at is null):{" "}
-              <b>{diag.active.length}</b> · soft-deleted: <b>{diag.deleted.length}</b>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px] font-mono">
-                <thead className="text-muted-foreground">
-                  <tr>
-                    <th className="text-left pr-2">name</th>
-                    <th className="text-left pr-2">cost/h</th>
-                    <th className="text-left pr-2">vineyard_id</th>
-                    <th className="text-left pr-2">deleted_at</th>
-                    <th className="text-left pr-2">sync_v</th>
-                    <th className="text-left pr-2">client_updated_at</th>
-                    <th className="text-left pr-2">id</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {diag.all.map((r) => (
-                    <tr key={r.id} className={r.deleted_at ? "opacity-50" : ""}>
-                      <td className="pr-2">{r.name ?? "—"}</td>
-                      <td className="pr-2">{r.cost_per_hour ?? "—"}</td>
-                      <td className="pr-2">{r.vineyard_id}</td>
-                      <td className="pr-2">{r.deleted_at ?? "—"}</td>
-                      <td className="pr-2">{r.sync_version ?? "—"}</td>
-                      <td className="pr-2">{r.client_updated_at ?? "—"}</td>
-                      <td className="pr-2">{r.id}</td>
-                    </tr>
-                  ))}
-                  {diag.all.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="text-muted-foreground py-2">
-                        No operator_categories rows visible for this vineyard_id (including deleted).
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <div className="text-muted-foreground">Running diagnostic…</div>
-        )}
-      </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1 ml-auto">
@@ -416,7 +342,7 @@ function CategoryEditor({
 
         <div className="mt-4 space-y-4 text-sm">
           <div className="space-y-1.5">
-          <Label htmlFor="oc-name">
+            <Label htmlFor="oc-name">
               Name <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -450,7 +376,6 @@ function CategoryEditor({
             <div className="rounded-md border bg-muted/30 p-3 space-y-1 text-xs text-muted-foreground">
               <div>Created: {fmtDate(category.created_at)}</div>
               <div>Updated: {fmtDate(category.updated_at)}</div>
-              <div className="font-mono break-all">{category.id}</div>
             </div>
           )}
         </div>

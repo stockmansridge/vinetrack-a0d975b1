@@ -168,22 +168,6 @@ export default function WorkTasksPage() {
     refetchOnWindowFocus: true,
   });
 
-  // TEMP DEBUG — verify the labour-line dropdown sees the same list as the diagnostic.
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log(`[WorkTasks] Operator categories loaded: ${categories.length} (vineyard=${selectedVineyardId})`);
-    // eslint-disable-next-line no-console
-    console.log(
-      "[WorkTasks] Operator categories for dropdown:",
-      categories.map((c) => ({
-        id: c.id,
-        name: c.name,
-        vineyard_id: c.vineyard_id,
-        cost_per_hour: c.cost_per_hour,
-        deleted_at: c.deleted_at,
-      })),
-    );
-  }, [categories, selectedVineyardId]);
 
   const paddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
   const paddockNameById = useMemo(() => {
