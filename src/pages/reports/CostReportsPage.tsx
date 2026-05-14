@@ -7,12 +7,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Lock, Download, AlertTriangle, Info } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useCanSeeCosts } from "@/lib/permissions";
 import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import {
+  useGrapeVarieties,
+  buildVarietyMap,
+  primaryVarietyName,
+} from "@/lib/varietyResolver";
 import CostingSetupWizard, {
   useCostingSetupSummary,
 } from "@/components/cost/CostingSetupWizard";
