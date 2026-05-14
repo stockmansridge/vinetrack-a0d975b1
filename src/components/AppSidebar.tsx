@@ -73,6 +73,11 @@ const reports: NavItem[] = [
   { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
 ];
 
+// Owner/manager-only reports (financial)
+const reportsAdmin: NavItem[] = [
+  { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
+];
+
 // "Setup" — vineyard configuration
 const setup: NavItem[] = [
   { title: "Team", url: "/team", icon: Users },
