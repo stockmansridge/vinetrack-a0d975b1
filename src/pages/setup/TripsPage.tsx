@@ -471,6 +471,11 @@ function TripSheet({
     enabled: costEnabled,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
   });
+  const { data: costSavedInputs } = useQuery({
+    queryKey: ["cost-saved-inputs", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedInputsForVineyard(vineyardId!),
+  });
 
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
@@ -483,8 +488,9 @@ function TripSheet({
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
       savedChemicals: costSavedChemicals?.chemicals ?? [],
+      savedInputs: costSavedInputs?.inputs ?? [],
     });
-  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals]);
+  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals, costSavedInputs]);
 
   // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
   const blockNames: string[] = (() => {
