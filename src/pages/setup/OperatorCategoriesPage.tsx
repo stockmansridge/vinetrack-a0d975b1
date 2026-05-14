@@ -51,6 +51,7 @@ export default function OperatorCategoriesPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const canSeeCosts = useCanSeeCosts();
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<OperatorCategory | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
