@@ -160,6 +160,71 @@ function chemicalCostFromTanks(
   return { cost, lines, missing };
 }
 
+/**
+ * Resolve seed/input cost from a trip's seeding_details JSON.
+ * Looks for input lines (mix_lines, seeds, inputs, lines, etc.) carrying
+ * either an explicit costPerUnit, a savedInputId, or a name we can match
+ * against the saved_inputs library.
+ */
+function inputCostFromSeedingDetails(
+  seedingDetails: any,
+  savedInputs: SavedInputLite[] = [],
+): { cost: number; lines: number; missing: number } {
+  if (!seedingDetails) return { cost: 0, lines: 0, missing: 0 };
+  const collected: any[] = [];
+  const candidateKeys = ["mix_lines", "mixLines", "inputs", "input_lines", "inputLines", "seeds", "seed_lines", "lines", "items"];
+  const visit = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (typeof node !== "object") return;
+    for (const k of candidateKeys) {
+      if (Array.isArray(node[k])) node[k].forEach((l: any) => collected.push(l));
+    }
+  };
+  if (Array.isArray(seedingDetails)) seedingDetails.forEach(visit);
+  else visit(seedingDetails);
+  if (collected.length === 0) return { cost: 0, lines: 0, missing: 0 };
+
+  const byId = new Map(savedInputs.map((c) => [c.id, c] as const));
+  const byName = new Map(
+    savedInputs
+      .filter((c) => c.name)
+      .map((c) => [String(c.name).trim().toLowerCase(), c] as const),
+  );
+  const resolveCpu = (line: any): number | null => {
+    const raw = line?.costPerUnit ?? line?.cost_per_unit;
+    if (raw != null && raw !== "") {
+      const n = Number(raw);
+      if (isFinite(n) && n >= 0) return n;
+    }
+    const sid = line?.savedInputId ?? line?.saved_input_id ?? line?.input_id;
+    if (sid) {
+      const cpu = byId.get(String(sid))?.cost_per_unit;
+      if (cpu != null && isFinite(Number(cpu))) return Number(cpu);
+    }
+    const nm = (line?.name ?? line?.input_name ?? "").toString().trim().toLowerCase();
+    if (nm) {
+      const cpu = byName.get(nm)?.cost_per_unit;
+      if (cpu != null && isFinite(Number(cpu))) return Number(cpu);
+    }
+    return null;
+  };
+  let cost = 0;
+  let missing = 0;
+  for (const line of collected) {
+    const cpu = resolveCpu(line);
+    const amount = Number(
+      line?.amount ?? line?.totalAmount ?? line?.total_amount ?? line?.quantity ?? line?.qty ?? line?.kg ?? line?.kg_total,
+    );
+    if (cpu != null && isFinite(amount) && amount > 0) {
+      cost += cpu * amount;
+    } else {
+      missing++;
+    }
+  }
+  return { cost, lines: collected.length, missing };
+}
+
 export interface TripCostInputs {
   trip: Trip;
   tractor: TractorLite | null;
