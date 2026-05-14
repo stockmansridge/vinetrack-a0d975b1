@@ -1,4 +1,4 @@
-// Cost Reports — Block × Variety cost breakdown.
+// Cost Reports — aggregated Block × Variety cost breakdown.
 // Owner/manager only. Reads from trip_cost_allocations (iOS Supabase),
 // which is RLS-restricted to owner/manager. We additionally gate the
 // query and the entire page behind useCanSeeCosts().
@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/sheet";
 
 const ANY = "__any__";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function fmtMoney(v: number | null | undefined): string {
   if (v == null || !isFinite(v)) return "—";
@@ -56,6 +57,29 @@ function warningsList(w: any): string[] {
   if (typeof w === "string") return w ? [w] : [];
   if (typeof w === "object") return Object.values(w).map(String).filter(Boolean);
   return [];
+}
+
+interface GroupedRow {
+  key: string;
+  season_year: number | null;
+  paddock_id: string | null;
+  paddock_name: string | null;
+  variety: string | null;          // resolved name, null if unresolved
+  varietyResolved: boolean;
+  allocation_area_ha: number;
+  yield_tonnes: number;
+  labour_cost: number;
+  fuel_cost: number;
+  chemical_cost: number;
+  input_cost: number;
+  total_cost: number;
+  cost_per_ha: number | null;
+  cost_per_tonne: number | null;
+  trip_count: number;
+  warnings_count: number;
+  status: string | null;            // most-common / first non-null status
+  trip_functions: string[];         // distinct functions present
+  contributing: TripCostAllocation[];
 }
 
 function NoAccessCard() {
@@ -85,8 +109,6 @@ export default function CostReportsPage() {
     enabled: !!selectedVineyardId && canSeeCosts,
   });
 
-  // Resolve varieties from paddocks.variety_allocations + grape_varieties
-  // so rows whose snapshot variety is missing/UUID can still display a name.
   const { data: grapeVarieties } = useGrapeVarieties(canSeeCosts ? selectedVineyardId : null);
   const { data: paddockRows = [] } = useQuery({
     queryKey: ["paddocks-for-cost-reports", selectedVineyardId],
@@ -111,21 +133,16 @@ export default function CostReportsPage() {
     return m;
   }, [paddockRows]);
 
-  // UUID detector — trip_cost_allocations.variety sometimes stores a varietyId
-  // string snapshot rather than a name; resolve those here too.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   function resolveRowVariety(r: TripCostAllocation): string | null {
     const raw = (r.variety ?? "").toString().trim();
     if (raw && !/^unassigned/i.test(raw)) {
       if (UUID_RE.test(raw) && varietyMap.byId.has(raw)) return varietyMap.byId.get(raw)!;
-      // Case-insensitive name match → canonical capitalisation, else use as-is.
       const ci = varietyMap.byNameLower.get(raw.toLowerCase());
       if (ci) return ci;
       if (!UUID_RE.test(raw)) return raw;
     }
     if (r.paddock_id) {
-      const allocs = paddockAllocsById.get(r.paddock_id);
-      const name = primaryVarietyName(allocs, varietyMap);
+      const name = primaryVarietyName(paddockAllocsById.get(r.paddock_id), varietyMap);
       if (name) return name;
     }
     return null;
@@ -136,19 +153,89 @@ export default function CostReportsPage() {
   const [variety, setVariety] = useState<string>(ANY);
   const [tripFn, setTripFn] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
-  const [drill, setDrill] = useState<TripCostAllocation | null>(null);
+  const [drill, setDrill] = useState<GroupedRow | null>(null);
+
+  // First filter raw rows by trip-function/status (which apply at allocation level),
+  // then group by season × block × variety.
+  const prefiltered = useMemo(() => {
+    return rows.filter((r) => {
+      if (tripFn !== ANY && (r.trip_function ?? "") !== tripFn) return false;
+      if (status !== ANY && (r.costing_status ?? "") !== status) return false;
+      return true;
+    });
+  }, [rows, tripFn, status]);
+
+  const grouped: GroupedRow[] = useMemo(() => {
+    const map = new Map<string, GroupedRow>();
+    for (const r of prefiltered) {
+      const resolvedVariety = resolveRowVariety(r);
+      const pid = r.paddock_id ?? `name:${r.paddock_name ?? ""}`;
+      const key = `${r.season_year ?? ""}|${pid}|${resolvedVariety ?? ""}`;
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          key,
+          season_year: r.season_year ?? null,
+          paddock_id: r.paddock_id ?? null,
+          paddock_name: r.paddock_name ?? null,
+          variety: resolvedVariety,
+          varietyResolved: !!resolvedVariety,
+          allocation_area_ha: 0,
+          yield_tonnes: 0,
+          labour_cost: 0,
+          fuel_cost: 0,
+          chemical_cost: 0,
+          input_cost: 0,
+          total_cost: 0,
+          cost_per_ha: null,
+          cost_per_tonne: null,
+          trip_count: 0,
+          warnings_count: 0,
+          status: null,
+          trip_functions: [],
+          contributing: [],
+        };
+        map.set(key, g);
+      }
+      g.allocation_area_ha += Number(r.allocation_area_ha ?? 0);
+      g.yield_tonnes += Number(r.yield_tonnes ?? 0);
+      g.labour_cost += Number(r.labour_cost ?? 0);
+      g.fuel_cost += Number(r.fuel_cost ?? 0);
+      g.chemical_cost += Number(r.chemical_cost ?? 0);
+      g.input_cost += Number(r.input_cost ?? 0);
+      g.total_cost += Number(r.total_cost ?? 0);
+      g.warnings_count += warningsList(r.warnings).length;
+      if (r.trip_id) g.trip_count += 1;
+      if (!g.status && r.costing_status) g.status = r.costing_status;
+      if (r.trip_function && !g.trip_functions.includes(r.trip_function)) {
+        g.trip_functions.push(r.trip_function);
+      }
+      g.contributing.push(r);
+    }
+    for (const g of map.values()) {
+      g.cost_per_ha = g.allocation_area_ha > 0 ? g.total_cost / g.allocation_area_ha : null;
+      g.cost_per_tonne = g.yield_tonnes > 0 ? g.total_cost / g.yield_tonnes : null;
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      const sy = (b.season_year ?? 0) - (a.season_year ?? 0);
+      if (sy !== 0) return sy;
+      const pn = (a.paddock_name ?? "").localeCompare(b.paddock_name ?? "");
+      if (pn !== 0) return pn;
+      return (a.variety ?? "").localeCompare(b.variety ?? "");
+    });
+  }, [prefiltered, varietyMap, paddockAllocsById]);
 
   const seasons = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.season_year).filter((v): v is number => v != null))).sort((a, b) => b - a),
-    [rows],
+    () => Array.from(new Set(grouped.map((g) => g.season_year).filter((v): v is number => v != null))).sort((a, b) => b - a),
+    [grouped],
   );
   const paddocks = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.paddock_name).filter((v): v is string => !!v))).sort(),
-    [rows],
+    () => Array.from(new Set(grouped.map((g) => g.paddock_name).filter((v): v is string => !!v))).sort(),
+    [grouped],
   );
   const varieties = useMemo(
-    () => Array.from(new Set(rows.map((r) => resolveRowVariety(r)).filter((v): v is string => !!v))).sort(),
-    [rows, varietyMap, paddockAllocsById],
+    () => Array.from(new Set(grouped.map((g) => g.variety).filter((v): v is string => !!v))).sort(),
+    [grouped],
   );
   const tripFns = useMemo(
     () => Array.from(new Set(rows.map((r) => r.trip_function).filter((v): v is string => !!v))).sort(),
@@ -160,65 +247,60 @@ export default function CostReportsPage() {
   );
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      if (season !== ANY && String(r.season_year ?? "") !== season) return false;
-      if (paddock !== ANY && (r.paddock_name ?? "") !== paddock) return false;
-      if (variety !== ANY && (resolveRowVariety(r) ?? "") !== variety) return false;
-      if (tripFn !== ANY && (r.trip_function ?? "") !== tripFn) return false;
-      if (status !== ANY && (r.costing_status ?? "") !== status) return false;
+    return grouped.filter((g) => {
+      if (season !== ANY && String(g.season_year ?? "") !== season) return false;
+      if (paddock !== ANY && (g.paddock_name ?? "") !== paddock) return false;
+      if (variety !== ANY && (g.variety ?? "") !== variety) return false;
       return true;
     });
-  }, [rows, season, paddock, variety, tripFn, status, varietyMap, paddockAllocsById]);
+  }, [grouped, season, paddock, variety]);
 
   const summary = useMemo(() => {
-    let total = 0, area = 0, yieldT = 0, warns = 0;
-    const trips = new Set<string>();
-    for (const r of filtered) {
-      total += Number(r.total_cost ?? 0);
-      area += Number(r.allocation_area_ha ?? 0);
-      yieldT += Number(r.yield_tonnes ?? 0);
-      warns += warningsList(r.warnings).length;
-      if (r.trip_id) trips.add(r.trip_id);
+    let total = 0, area = 0, yieldT = 0, warns = 0, trips = 0;
+    for (const g of filtered) {
+      total += g.total_cost;
+      area += g.allocation_area_ha;
+      yieldT += g.yield_tonnes;
+      warns += g.warnings_count;
+      trips += g.trip_count;
     }
     return {
-      total,
-      area,
-      yieldT,
+      total, area, yieldT, warns, tripCount: trips,
       costPerHa: area > 0 ? total / area : null,
       costPerTonne: yieldT > 0 ? total / yieldT : null,
-      tripCount: trips.size,
-      warns,
     };
   }, [filtered]);
+
+  const unassignedCount = useMemo(
+    () => filtered.filter((g) => !g.varietyResolved).length,
+    [filtered],
+  );
 
   if (!canSeeCosts) return <NoAccessCard />;
 
   function exportCsv() {
     const headers = [
-      "season_year","paddock_name","variety","allocation_area_ha","yield_tonnes",
+      "season","block","variety","treated_area_ha","yield_tonnes",
       "labour_cost","fuel_cost","chemical_cost","input_cost","total_cost",
-      "cost_per_ha","cost_per_tonne","trip_function","costing_status","warnings",
-      "trip_id","calculated_at",
+      "cost_per_ha","cost_per_tonne","contributing_trips","warnings_count","status",
     ];
     const csv = [headers.join(",")].concat(
-      filtered.map((r) => [
-        r.season_year ?? "",
-        csvCell(r.paddock_name),
-        csvCell(resolveRowVariety(r) ?? r.variety),
-        r.allocation_area_ha ?? "",
-        r.yield_tonnes ?? "",
-        r.labour_cost ?? "",
-        r.fuel_cost ?? "",
-        r.chemical_cost ?? "",
-        r.input_cost ?? "",
-        r.total_cost ?? "",
-        r.cost_per_ha ?? "",
-        r.cost_per_tonne ?? "",
-        csvCell(r.trip_function),
-        csvCell(r.costing_status),
-        csvCell(warningsList(r.warnings).join("; ")),
-        csvCell(r.trip_id),
-        csvCell(r.calculated_at),
+      filtered.map((g) => [
+        g.season_year ?? "",
+        csvCell(g.paddock_name),
+        csvCell(g.variety ?? "Unassigned"),
+        g.allocation_area_ha,
+        g.yield_tonnes,
+        g.labour_cost,
+        g.fuel_cost,
+        g.chemical_cost,
+        g.input_cost,
+        g.total_cost,
+        g.cost_per_ha ?? "",
+        g.cost_per_tonne ?? "",
+        g.trip_count,
+        g.warnings_count,
+        csvCell(g.status),
       ].join(",")),
     ).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -231,9 +313,7 @@ export default function CostReportsPage() {
   }
 
   const setupSummary = useCostingSetupSummary(canSeeCosts ? selectedVineyardId : null);
-  const totalReportWarnings = summary.warns;
-  const showMissingBanner = canSeeCosts && (setupSummary.hasIssues || totalReportWarnings > 0);
-
+  const showMissingBanner = canSeeCosts && (setupSummary.hasIssues || summary.warns > 0);
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -242,8 +322,9 @@ export default function CostReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Block × variety cost breakdown from saved trip cost allocations.
-            Recalculations are currently performed in the iOS app.
+            Aggregated block × variety cost breakdown. Each row sums all
+            contributing trip allocations for the season. Recalculations are
+            currently performed in the iOS app.
           </p>
         </div>
         <Button onClick={exportCsv} variant="outline" size="sm" disabled={filtered.length === 0}>
@@ -251,24 +332,33 @@ export default function CostReportsPage() {
         </Button>
       </div>
 
-      {/* Costing Setup Wizard (owner/manager only) */}
       {selectedVineyardId && <CostingSetupWizard vineyardId={selectedVineyardId} />}
 
-      {/* Missing-data banner */}
       {showMissingBanner && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Some costing inputs are missing</AlertTitle>
           <AlertDescription>
             Complete the setup checklist above to improve cost/ha and cost/tonne accuracy.
-            {totalReportWarnings > 0 && (
-              <> {totalReportWarnings} allocation warning{totalReportWarnings === 1 ? "" : "s"} were flagged in the data below.</>
+            {summary.warns > 0 && (
+              <> {summary.warns} allocation warning{summary.warns === 1 ? "" : "s"} were flagged in the data below.</>
             )}
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Summary cards */}
+      {unassignedCount > 0 && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Some cost rows may need recalculating</AlertTitle>
+          <AlertDescription>
+            {unassignedCount} grouped row{unassignedCount === 1 ? "" : "s"} could not resolve a
+            variety. This usually means cost was calculated before block variety data was updated.
+            Open Cost Reports in the iOS app and tap <strong>Recalculate Costs</strong> to refresh.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <SummaryCard label="Total cost" value={fmtMoney(summary.total)} />
         <SummaryCard
@@ -287,7 +377,6 @@ export default function CostReportsPage() {
         <SummaryCard label="Warnings" value={String(summary.warns)} />
       </div>
 
-      {/* Filters */}
       <Card className="p-3 flex flex-wrap gap-2 items-center">
         <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
         <FilterSelect label="Block" value={paddock} onChange={setPaddock} options={paddocks} />
@@ -296,7 +385,6 @@ export default function CostReportsPage() {
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
       </Card>
 
-      {/* Table */}
       <Card>
         <Table>
           <TableHeader>
@@ -304,7 +392,7 @@ export default function CostReportsPage() {
               <TableHead>Season</TableHead>
               <TableHead>Block</TableHead>
               <TableHead>Variety</TableHead>
-              <TableHead className="text-right">Area (ha)</TableHead>
+              <TableHead className="text-right">Treated area (ha)</TableHead>
               <TableHead className="text-right">Yield (t)</TableHead>
               <TableHead className="text-right">Labour</TableHead>
               <TableHead className="text-right">Fuel</TableHead>
@@ -313,101 +401,88 @@ export default function CostReportsPage() {
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-right">Cost/ha</TableHead>
               <TableHead className="text-right">Cost/t</TableHead>
+              <TableHead className="text-right">Trips</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Warnings</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={14} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
             )}
             {!isLoading && filtered.length === 0 && (
-              <TableRow><TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+              <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground py-8">
                 No cost allocations match these filters.
               </TableCell></TableRow>
             )}
-            {filtered.map((r) => {
-              const warns = warningsList(r.warnings);
-              return (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => setDrill(r)}>
-                  <TableCell>{r.season_year ?? "—"}</TableCell>
-                  <TableCell className="max-w-[180px] truncate">{r.paddock_name ?? "—"}</TableCell>
-                  <TableCell>
-                    {(() => {
-                      const resolved = resolveRowVariety(r);
-                      if (resolved) return resolved;
-                      return (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1">
-                              <Badge variant="outline" className="text-amber-700 border-amber-400">
-                                Unassigned variety
-                              </Badge>
-                              <Info className="h-3 w-3 text-muted-foreground" />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            This block has no variety allocation, or the
-                            allocation could not be matched. Add or fix the
-                            variety allocation in{" "}
-                            <Link to="/setup/paddocks" className="underline">Block settings</Link>.
-                          </TooltipContent>
-                        </Tooltip>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell className="text-right">{fmtNum(r.allocation_area_ha)}</TableCell>
-                  <TableCell className="text-right">{fmtNum(r.yield_tonnes)}</TableCell>
-                  <TableCell className="text-right">{fmtMoney(r.labour_cost)}</TableCell>
-                  <TableCell className="text-right">{fmtMoney(r.fuel_cost)}</TableCell>
-                  <TableCell className="text-right">{fmtMoney(r.chemical_cost)}</TableCell>
-                  <TableCell className="text-right">{fmtMoney(r.input_cost)}</TableCell>
-                  <TableCell className="text-right font-medium">{fmtMoney(r.total_cost)}</TableCell>
-                  <TableCell className="text-right">{fmtMoney(r.cost_per_ha)}</TableCell>
-                  <TableCell className="text-right">{fmtMoney(r.cost_per_tonne)}</TableCell>
-                  <TableCell>
-                    {r.costing_status ? <Badge variant="outline">{r.costing_status}</Badge> : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {warns.length > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                        <AlertTriangle className="h-3 w-3" />{warns.length}
-                      </span>
-                    ) : "—"}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {filtered.map((g) => (
+              <TableRow key={g.key} className="cursor-pointer" onClick={() => setDrill(g)}>
+                <TableCell>{g.season_year ?? "—"}</TableCell>
+                <TableCell className="max-w-[180px] truncate">{g.paddock_name ?? "—"}</TableCell>
+                <TableCell>
+                  {g.variety ? g.variety : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1">
+                          <Badge variant="outline" className="text-amber-700 border-amber-400">
+                            Unassigned variety
+                          </Badge>
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        This block has no variety allocation, or the
+                        allocation could not be matched. Add or fix the
+                        variety allocation in{" "}
+                        <Link to="/setup/paddocks" className="underline">Block settings</Link>,
+                        then recalculate costs from the iOS app.
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">{fmtNum(g.allocation_area_ha)}</TableCell>
+                <TableCell className="text-right">{fmtNum(g.yield_tonnes)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(g.labour_cost)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(g.fuel_cost)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(g.chemical_cost)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(g.input_cost)}</TableCell>
+                <TableCell className="text-right font-medium">{fmtMoney(g.total_cost)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(g.cost_per_ha)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>
+                <TableCell className="text-right">{g.trip_count}</TableCell>
+                <TableCell>
+                  {g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}
+                </TableCell>
+                <TableCell>
+                  {g.warnings_count > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                      <AlertTriangle className="h-3 w-3" />{g.warnings_count}
+                    </span>
+                  ) : "—"}
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </Card>
 
-      {/* Drilldown */}
       <Sheet open={!!drill} onOpenChange={(o) => !o && setDrill(null)}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
           {drill && (
             <>
               <SheetHeader>
-                <SheetTitle>{drill.paddock_name ?? "Cost allocation"}{(() => { const v = resolveRowVariety(drill); return v ? ` · ${v}` : ""; })()}</SheetTitle>
+                <SheetTitle>
+                  {drill.paddock_name ?? "Block"}
+                  {drill.variety ? ` · ${drill.variety}` : ""}
+                </SheetTitle>
                 <SheetDescription>
-                  Season {drill.season_year ?? "—"} · {drill.trip_function ?? "trip"}
+                  Season {drill.season_year ?? "—"} · {drill.trip_count} contributing trip{drill.trip_count === 1 ? "" : "s"}
                 </SheetDescription>
               </SheetHeader>
-              <div className="mt-4 space-y-3 text-sm">
-                <DetailRow label="Trip ID" value={drill.trip_id ?? "—"} mono />
-                <DetailRow label="Calculated at" value={drill.calculated_at ? new Date(drill.calculated_at).toLocaleString() : "—"} />
-                {drill.trip_updated_at && (
-                  <DetailRow
-                    label="Source trip updated"
-                    value={new Date(drill.trip_updated_at).toLocaleString()}
-                    extra={drill.calculated_at && drill.trip_updated_at > drill.calculated_at
-                      ? <Badge variant="outline" className="ml-2">Stale</Badge>
-                      : null}
-                  />
-                )}
-                <DetailRow label="Area" value={`${fmtNum(drill.allocation_area_ha)} ha`} />
+
+              <div className="mt-4 space-y-2 text-sm">
+                <DetailRow label="Treated area" value={`${fmtNum(drill.allocation_area_ha)} ha`} />
                 <DetailRow label="Yield" value={`${fmtNum(drill.yield_tonnes)} t`} />
-                <hr />
                 <DetailRow label="Labour" value={fmtMoney(drill.labour_cost)} />
                 <DetailRow label="Fuel" value={fmtMoney(drill.fuel_cost)} />
                 <DetailRow label="Chemical" value={fmtMoney(drill.chemical_cost)} />
@@ -415,15 +490,42 @@ export default function CostReportsPage() {
                 <DetailRow label="Total" value={fmtMoney(drill.total_cost)} bold />
                 <DetailRow label="Cost / ha" value={fmtMoney(drill.cost_per_ha)} />
                 <DetailRow label="Cost / tonne" value={fmtMoney(drill.cost_per_tonne)} />
-                <DetailRow label="Status" value={drill.costing_status ?? "—"} />
-                {warningsList(drill.warnings).length > 0 && (
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground mt-3 mb-1">Warnings</div>
-                    <ul className="text-xs space-y-1 list-disc list-inside text-amber-700">
-                      {warningsList(drill.warnings).map((w, i) => <li key={i}>{w}</li>)}
-                    </ul>
-                  </div>
-                )}
+              </div>
+
+              <div className="mt-6">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                  Contributing trip allocations
+                </div>
+                <div className="space-y-3">
+                  {drill.contributing.map((r) => {
+                    const warns = warningsList(r.warnings);
+                    const stale = !!(r.calculated_at && r.trip_updated_at && r.trip_updated_at > r.calculated_at);
+                    return (
+                      <Card key={r.id} className="p-3 text-xs space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-mono text-[11px] truncate">{r.trip_id ?? "—"}</div>
+                          {stale && <Badge variant="outline">Stale</Badge>}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {r.trip_function ?? "trip"} · {r.calculated_at ? new Date(r.calculated_at).toLocaleString() : "—"}
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
+                          <DetailRow label="Area" value={`${fmtNum(r.allocation_area_ha)} ha`} small />
+                          <DetailRow label="Total" value={fmtMoney(r.total_cost)} small bold />
+                          <DetailRow label="Labour" value={fmtMoney(r.labour_cost)} small />
+                          <DetailRow label="Fuel" value={fmtMoney(r.fuel_cost)} small />
+                          <DetailRow label="Chemical" value={fmtMoney(r.chemical_cost)} small />
+                          <DetailRow label="Input" value={fmtMoney(r.input_cost)} small />
+                        </div>
+                        {warns.length > 0 && (
+                          <ul className="text-[11px] mt-1 space-y-0.5 list-disc list-inside text-amber-700">
+                            {warns.map((w, i) => <li key={i}>{w}</li>)}
+                          </ul>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -471,13 +573,13 @@ function FilterSelect({
 }
 
 function DetailRow({
-  label, value, mono, bold, extra,
-}: { label: string; value: string; mono?: boolean; bold?: boolean; extra?: React.ReactNode }) {
+  label, value, mono, bold, small,
+}: { label: string; value: string; mono?: boolean; bold?: boolean; small?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className={`flex items-center justify-between gap-3 ${small ? "text-[11px]" : ""}`}>
       <span className="text-muted-foreground">{label}</span>
       <span className={`${mono ? "font-mono text-xs" : ""} ${bold ? "font-semibold" : ""}`}>
-        {value}{extra}
+        {value}
       </span>
     </div>
   );
