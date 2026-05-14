@@ -16,6 +16,7 @@ import Team from "./pages/Team";
 import ComingSoon from "./pages/ComingSoon";
 import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
+import PaddockDetailPage from "./pages/setup/PaddockDetailPage";
 import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
 import PaddocksPage from "./pages/setup/PaddocksPage";
