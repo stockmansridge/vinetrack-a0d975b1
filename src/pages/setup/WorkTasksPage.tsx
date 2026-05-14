@@ -784,13 +784,19 @@ function WorkTaskDrawer({
           <div className="space-y-3">
             <Section title="Totals">
               <Field label="Total labour hours" value={num(totalHours)} />
-              <Field label="Total estimated cost" value={
-                totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
-              } />
+              {canSeeCostsFn(currentRole) && (
+                <Field label="Total estimated cost" value={
+                  totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
+                } />
+              )}
               <Field label="Area ha" value={areaNum == null ? "—" : num(areaNum)} />
-              <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
-              <Separator className="my-2" />
-              <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
+              {canSeeCostsFn(currentRole) && (
+                <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
+              )}
+              {canSeeCostsFn(currentRole) && <Separator className="my-2" />}
+              {canSeeCostsFn(currentRole) && (
+                <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
+              )}
             </Section>
             {!isNew && task && (
               <Section title="Meta">
