@@ -43,6 +43,12 @@ import {
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { countTripPins } from "@/lib/tripPinCount";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
+import { computeTripCost, fmtCurrency, fmtHours, type TractorLite } from "@/lib/tripCosting";
 
 
 interface PaddockLite {
@@ -393,6 +399,7 @@ export default function TripsPage() {
         trip={selected}
         paddockNameById={paddockNameById}
         vineyardName={vineyardName}
+        vineyardId={selectedVineyardId}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
@@ -408,16 +415,19 @@ function TripSheet({
   trip,
   paddockNameById,
   vineyardName,
+  vineyardId,
   open,
   onOpenChange,
 }: {
   trip: Trip | null;
   paddockNameById: Map<string, string | null>;
   vineyardName: string | null;
+  vineyardId: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const canSeeCosts = useCanSeeCosts();
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
   const completed = arrayLen(trip?.completed_paths);
@@ -426,6 +436,47 @@ function TripSheet({
   const corrections = trip ? parseCorrections(trip.manual_correction_events) : [];
   const seeding = trip ? parseSeeding(trip.seeding_details) : null;
   const cov = trip ? summarizeCoverage(trip) : null;
+
+  // Cost Summary inputs (owner/manager only) — only fetch when allowed.
+  const costEnabled = !!trip && canSeeCosts && !!vineyardId;
+  const { data: costCategories } = useQuery({
+    queryKey: ["cost-categories", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchOperatorCategoriesForVineyard(vineyardId!),
+  });
+  const { data: costMembers } = useQuery({
+    queryKey: ["cost-members", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchVineyardMembersWithCategory(vineyardId!),
+  });
+  const { data: costFuel } = useQuery({
+    queryKey: ["cost-fuel", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchFuelPurchasesForVineyard(vineyardId!),
+  });
+  const { data: costSpray } = useQuery({
+    queryKey: ["cost-spray", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSprayRecordsForVineyard(vineyardId!),
+  });
+  const { data: costTractors } = useQuery({
+    queryKey: ["cost-tractors", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchList<TractorLite>("tractors", vineyardId!),
+  });
+
+  const cost = useMemo(() => {
+    if (!trip || !canSeeCosts) return null;
+    const tractor = trip.tractor_id ? (costTractors ?? []).find((t) => t.id === trip.tractor_id) ?? null : null;
+    return computeTripCost({
+      trip,
+      tractor,
+      operatorCategories: costCategories?.categories ?? [],
+      members: costMembers ?? [],
+      fuelPurchases: costFuel ?? [],
+      sprayRecords: costSpray?.records ?? [],
+    });
+  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray]);
 
   // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
   const blockNames: string[] = (() => {
@@ -486,6 +537,41 @@ function TripSheet({
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
+            {canSeeCosts && cost && (
+              <Section title="Estimated trip cost">
+                <Field label="Active hours" value={fmtHours(cost.activeHours)} />
+                <Field
+                  label={`Labour${cost.labour.categoryName ? ` (${cost.labour.categoryName})` : ""}`}
+                  value={
+                    cost.labour.cost != null
+                      ? `${fmtCurrency(cost.labour.cost)}${cost.labour.ratePerHour != null ? ` · ${fmtCurrency(cost.labour.ratePerHour)}/h` : ""}`
+                      : "—"
+                  }
+                />
+                <Field
+                  label="Fuel"
+                  value={
+                    cost.fuel.cost != null
+                      ? `${fmtCurrency(cost.fuel.cost)}${cost.fuel.litres != null ? ` · ${cost.fuel.litres.toFixed(1)} L` : ""}${cost.fuel.costPerLitre != null ? ` @ ${fmtCurrency(cost.fuel.costPerLitre)}/L` : ""}`
+                      : "—"
+                  }
+                />
+                <Field
+                  label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
+                  value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
+                />
+                <div className="border-t my-2" />
+                <Field label="Estimated total" value={cost.total != null ? fmtCurrency(cost.total) : "—"} />
+                {cost.warnings.length > 0 && (
+                  <div className="mt-2 rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                    <div className="font-medium mb-1">Missing data</div>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {cost.warnings.map((w, i) => (<li key={i}>{w}</li>))}
+                    </ul>
+                  </div>
+                )}
+              </Section>
+            )}
             <Section title="Rows / paths">
               <Field label="Rows covered" value={String(cov?.rowsCovered ?? 0)} />
               <Field label="Completed" value={String(cov?.completed ?? completed)} />
