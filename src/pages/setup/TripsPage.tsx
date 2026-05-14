@@ -477,6 +477,16 @@ function TripSheet({
     enabled: costEnabled,
     queryFn: () => fetchSavedInputsForVineyard(vineyardId!),
   });
+  const { data: costPaddocks } = useQuery({
+    queryKey: ["cost-paddocks-geo", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchList<{ id: string; name: string | null; polygon_points?: any }>("paddocks", vineyardId!),
+  });
+  const { data: costYields } = useQuery({
+    queryKey: ["cost-yields", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchYieldReportsForVineyard(vineyardId!),
+  });
 
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
@@ -490,8 +500,10 @@ function TripSheet({
       sprayRecords: costSpray?.records ?? [],
       savedChemicals: costSavedChemicals?.chemicals ?? [],
       savedInputs: costSavedInputs?.inputs ?? [],
+      paddocks: costPaddocks ?? [],
+      historicalYields: costYields?.historical ?? [],
     });
-  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals, costSavedInputs]);
+  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals, costSavedInputs, costPaddocks, costYields]);
 
   // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
   const blockNames: string[] = (() => {
