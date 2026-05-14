@@ -480,9 +480,11 @@ export default function WorkTasksPage() {
                   <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>
                   <TableCell className="text-right">{num(t.area_ha)}</TableCell>
                   <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>
-                  <TableCell className="text-right">
-                    {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
-                  </TableCell>
+                  {canSeeCosts && (
+                    <TableCell className="text-right">
+                      {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
+                    </TableCell>
+                  )}
                   <TableCell>{t.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}</TableCell>
                   <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>
                 </TableRow>
