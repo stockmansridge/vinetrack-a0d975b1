@@ -234,6 +234,8 @@ export interface TripCostInputs {
   sprayRecords: Pick<SprayRecord, "trip_id" | "tanks">[];
   /** Optional saved-chemical library for cost fallback resolution. */
   savedChemicals?: SavedChemicalLite[];
+  /** Optional saved-input library for seed/fertiliser cost resolution. */
+  savedInputs?: SavedInputLite[];
 }
 
 export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
