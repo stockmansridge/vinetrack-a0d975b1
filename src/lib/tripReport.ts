@@ -684,6 +684,9 @@ export function tripToCsvRow(
     base.chemical_cost = num(cost.chemicals.cost);
     base.chemical_lines = String(cost.chemicals.lineCount);
     base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
+    base.input_cost = num(cost.inputs.cost);
+    base.input_lines = String(cost.inputs.lineCount);
+    base.input_lines_missing_cost = String(cost.inputs.missingCostLines);
     base.total_estimated_cost = num(cost.total);
     base.costing_warnings = cost.warnings.join(" | ");
   }
@@ -1067,8 +1070,14 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       [labourLabel, labourValue],
       ["Fuel", fuelValue],
       [chemLabel, chemValue],
-      ["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"],
     ];
+    if (c.inputs.lineCount > 0) {
+      rows.push([
+        `Seed / inputs (${c.inputs.lineCount} line${c.inputs.lineCount === 1 ? "" : "s"})`,
+        c.inputs.cost != null ? fmtCurrency(c.inputs.cost) : "—",
+      ]);
+    }
+    rows.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"]);
     y = renderFieldList(doc, rows, y);
     if (c.warnings.length > 0) {
       y = ensureSpace(doc, y, 20 + c.warnings.length * 12);

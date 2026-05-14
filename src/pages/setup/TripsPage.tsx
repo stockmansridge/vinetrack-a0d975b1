@@ -49,6 +49,7 @@ import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { computeTripCost, fmtCurrency, fmtHours, type TractorLite } from "@/lib/tripCosting";
 
 
@@ -470,6 +471,11 @@ function TripSheet({
     enabled: costEnabled,
     queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
   });
+  const { data: costSavedInputs } = useQuery({
+    queryKey: ["cost-saved-inputs", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedInputsForVineyard(vineyardId!),
+  });
 
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
@@ -482,8 +488,9 @@ function TripSheet({
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
       savedChemicals: costSavedChemicals?.chemicals ?? [],
+      savedInputs: costSavedInputs?.inputs ?? [],
     });
-  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals]);
+  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals, costSavedInputs]);
 
   // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
   const blockNames: string[] = (() => {
@@ -568,6 +575,12 @@ function TripSheet({
                   label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
                   value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
                 />
+                {cost.inputs.lineCount > 0 && (
+                  <Field
+                    label={`Seed / inputs (${cost.inputs.lineCount} line${cost.inputs.lineCount === 1 ? "" : "s"})`}
+                    value={cost.inputs.cost != null ? fmtCurrency(cost.inputs.cost) : "—"}
+                  />
+                )}
                 <div className="border-t my-2" />
                 <Field label="Estimated total" value={cost.total != null ? fmtCurrency(cost.total) : "—"} />
                 {cost.warnings.length > 0 && (

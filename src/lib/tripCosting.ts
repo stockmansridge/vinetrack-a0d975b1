@@ -26,9 +26,13 @@ import type { FuelPurchase } from "@/lib/fuelPurchasesQuery";
 import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
+import type { SavedInput } from "@/lib/savedInputsQuery";
 
 /** Subset of saved_chemicals used for cost fallback resolution. */
 export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
+
+/** Subset of saved_inputs used for cost fallback resolution. */
+export type SavedInputLite = Pick<SavedInput, "id" | "name" | "cost_per_unit">;
 
 /** Pull a cost-per-base-unit out of saved_chemicals.purchase JSON. */
 export function savedChemicalCostPerUnit(c: SavedChemicalLite | null | undefined): number | null {
@@ -53,6 +57,7 @@ export interface TripCostBreakdown {
   labour: { hours: number | null; ratePerHour: number | null; cost: number | null; categoryName: string | null };
   fuel: { hours: number | null; litresPerHour: number | null; costPerLitre: number | null; litres: number | null; cost: number | null };
   chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
+  inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
   warnings: string[];
 }
@@ -155,6 +160,71 @@ function chemicalCostFromTanks(
   return { cost, lines, missing };
 }
 
+/**
+ * Resolve seed/input cost from a trip's seeding_details JSON.
+ * Looks for input lines (mix_lines, seeds, inputs, lines, etc.) carrying
+ * either an explicit costPerUnit, a savedInputId, or a name we can match
+ * against the saved_inputs library.
+ */
+function inputCostFromSeedingDetails(
+  seedingDetails: any,
+  savedInputs: SavedInputLite[] = [],
+): { cost: number; lines: number; missing: number } {
+  if (!seedingDetails) return { cost: 0, lines: 0, missing: 0 };
+  const collected: any[] = [];
+  const candidateKeys = ["mix_lines", "mixLines", "inputs", "input_lines", "inputLines", "seeds", "seed_lines", "lines", "items"];
+  const visit = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (typeof node !== "object") return;
+    for (const k of candidateKeys) {
+      if (Array.isArray(node[k])) node[k].forEach((l: any) => collected.push(l));
+    }
+  };
+  if (Array.isArray(seedingDetails)) seedingDetails.forEach(visit);
+  else visit(seedingDetails);
+  if (collected.length === 0) return { cost: 0, lines: 0, missing: 0 };
+
+  const byId = new Map(savedInputs.map((c) => [c.id, c] as const));
+  const byName = new Map(
+    savedInputs
+      .filter((c) => c.name)
+      .map((c) => [String(c.name).trim().toLowerCase(), c] as const),
+  );
+  const resolveCpu = (line: any): number | null => {
+    const raw = line?.costPerUnit ?? line?.cost_per_unit;
+    if (raw != null && raw !== "") {
+      const n = Number(raw);
+      if (isFinite(n) && n >= 0) return n;
+    }
+    const sid = line?.savedInputId ?? line?.saved_input_id ?? line?.input_id;
+    if (sid) {
+      const cpu = byId.get(String(sid))?.cost_per_unit;
+      if (cpu != null && isFinite(Number(cpu))) return Number(cpu);
+    }
+    const nm = (line?.name ?? line?.input_name ?? "").toString().trim().toLowerCase();
+    if (nm) {
+      const cpu = byName.get(nm)?.cost_per_unit;
+      if (cpu != null && isFinite(Number(cpu))) return Number(cpu);
+    }
+    return null;
+  };
+  let cost = 0;
+  let missing = 0;
+  for (const line of collected) {
+    const cpu = resolveCpu(line);
+    const amount = Number(
+      line?.amount ?? line?.totalAmount ?? line?.total_amount ?? line?.quantity ?? line?.qty ?? line?.kg ?? line?.kg_total,
+    );
+    if (cpu != null && isFinite(amount) && amount > 0) {
+      cost += cpu * amount;
+    } else {
+      missing++;
+    }
+  }
+  return { cost, lines: collected.length, missing };
+}
+
 export interface TripCostInputs {
   trip: Trip;
   tractor: TractorLite | null;
@@ -164,6 +234,8 @@ export interface TripCostInputs {
   sprayRecords: Pick<SprayRecord, "trip_id" | "tanks">[];
   /** Optional saved-chemical library for cost fallback resolution. */
   savedChemicals?: SavedChemicalLite[];
+  /** Optional saved-input library for seed/fertiliser cost resolution. */
+  savedInputs?: SavedInputLite[];
 }
 
 export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
@@ -211,10 +283,18 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
     warnings.push("Some chemicals are missing a cost per unit.");
   }
 
+  // Seed / inputs — parsed from trip.seeding_details.
+  const inputAgg = inputCostFromSeedingDetails(inp.trip.seeding_details, inp.savedInputs ?? []);
+  const inputCostFinal = inputAgg.lines === 0 || inputAgg.missing > 0 ? null : inputAgg.cost;
+  if (inputAgg.missing > 0) {
+    warnings.push("Some seed/input lines are missing a cost per unit.");
+  }
+
   const parts: number[] = [];
   if (labourCost != null) parts.push(labourCost);
   if (fuelCost != null) parts.push(fuelCost);
   if (chemCostFinal != null) parts.push(chemCostFinal);
+  if (inputCostFinal != null) parts.push(inputCostFinal);
   const total = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 
   return {
@@ -222,6 +302,7 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
     labour: { hours, ratePerHour, cost: labourCost, categoryName: cat?.name ?? null },
     fuel: { hours, litresPerHour: lph, costPerLitre: cpl, litres, cost: fuelCost },
     chemicals: { cost: chemCostFinal, lineCount: chemLines, missingCostLines: chemMissing },
+    inputs: { cost: inputCostFinal, lineCount: inputAgg.lines, missingCostLines: inputAgg.missing },
     total,
     warnings,
   };

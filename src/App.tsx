@@ -32,6 +32,7 @@ import YieldReportsPage from "./pages/setup/YieldReportsPage";
 import SavedChemicalsPage from "./pages/setup/SavedChemicalsPage";
 import SprayJobsPage from "./pages/setup/SprayJobsPage";
 import OperatorCategoriesPage from "./pages/setup/OperatorCategoriesPage";
+import SavedInputsPage from "./pages/setup/SavedInputsPage";
 import EquipmentOtherItemsPage from "./pages/setup/EquipmentOtherItemsPage";
 import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
 import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
@@ -100,6 +101,7 @@ const App = () => (
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />
                     <Route path="/setup/operator-categories" element={<OperatorCategoriesPage />} />
+                    <Route path="/setup/saved-inputs" element={<SavedInputsPage />} />
                     <Route path="/setup/equipment-other" element={<EquipmentOtherItemsPage />} />
                     <Route path="/setup/weather" element={<WeatherStatusPage />} />
                     <Route path="/reports" element={<ReportsIndexPage />} />
