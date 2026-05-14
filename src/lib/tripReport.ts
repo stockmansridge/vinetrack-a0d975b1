@@ -1082,6 +1082,10 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       ]);
     }
     rows.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"]);
+    rows.push(["Treated area", c.treatedAreaHa != null ? fmtHa(c.treatedAreaHa) : "— (treated area missing)"]);
+    rows.push(["Cost per ha", c.costPerHa != null ? fmtCurrency(c.costPerHa) + " / ha" : "Unavailable"]);
+    rows.push(["Yield tonnes", c.yieldTonnes != null ? fmtTonnes(c.yieldTonnes) : "Unavailable"]);
+    rows.push(["Cost per tonne", c.costPerTonne != null ? fmtCurrency(c.costPerTonne) + " / t" : "Unavailable"]);
     y = renderFieldList(doc, rows, y);
     if (c.warnings.length > 0) {
       y = ensureSpace(doc, y, 20 + c.warnings.length * 12);
