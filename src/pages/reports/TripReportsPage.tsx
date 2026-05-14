@@ -40,7 +40,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 
-interface PaddockLite { id: string; name: string | null }
+interface PaddockLite { id: string; name: string | null; polygon_points?: any }
 
 const ANY = "__any__";
 const MAINT = "__maint__";
