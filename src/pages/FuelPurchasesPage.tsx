@@ -78,6 +78,7 @@ function csvEscape(v: unknown): string {
 export default function FuelPurchasesPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
+  const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
 
   const [filter, setFilter] = useState("");
