@@ -1,10 +1,18 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
-import { ChevronDown, ExternalLink } from "lucide-react";
+import { ChevronDown, ExternalLink, AlertTriangle } from "lucide-react";
 import type { DerivedMetrics } from "@/lib/paddockGeometry";
+import { useVineyard } from "@/context/VineyardContext";
+import {
+  useGrapeVarieties,
+  buildVarietyMap,
+  resolvePaddockAllocations,
+} from "@/lib/varietyResolver";
 
 const fmt = (n: any, d = 2) =>
   Number.isFinite(Number(n)) ? Number(n).toFixed(d) : "—";
