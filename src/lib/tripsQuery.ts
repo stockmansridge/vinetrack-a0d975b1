@@ -45,6 +45,10 @@ export interface Trip {
   is_filling_tank?: boolean | null;
   filling_tank_number?: number | null;
   person_name?: string | null;
+  // Phase 2 costing links (Rork):
+  tractor_id?: string | null;
+  operator_user_id?: string | null;
+  operator_category_id?: string | null;
   trip_function?: string | null;
   trip_title?: string | null;
   manual_correction_events?: string[] | null;
