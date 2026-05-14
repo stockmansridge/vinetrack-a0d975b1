@@ -688,6 +688,10 @@ export function tripToCsvRow(
     base.input_lines = String(cost.inputs.lineCount);
     base.input_lines_missing_cost = String(cost.inputs.missingCostLines);
     base.total_estimated_cost = num(cost.total);
+    base.treated_area_ha = num(cost.treatedAreaHa);
+    base.cost_per_ha = num(cost.costPerHa);
+    base.yield_tonnes = num(cost.yieldTonnes);
+    base.cost_per_tonne = num(cost.costPerTonne);
     base.costing_warnings = cost.warnings.join(" | ");
   }
   return base;
