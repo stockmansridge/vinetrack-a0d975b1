@@ -165,7 +165,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Reports</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(reports)}</SidebarMenu>
+            <SidebarMenu>{renderItems(isAdmin ? [...reports, ...reportsAdmin] : reports)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
