@@ -718,30 +718,32 @@ function MaintenanceEditor({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Parts cost</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={partsCost}
-                onChange={(e) => setPartsCost(e.target.value)}
-                placeholder="0.00"
-              />
+          {canSeeCosts && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Parts cost</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={partsCost}
+                  onChange={(e) => setPartsCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Labour cost</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={labourCost}
+                  onChange={(e) => setLabourCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Labour cost</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={labourCost}
-                onChange={(e) => setLabourCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         <SheetFooter className="mt-6 gap-2">
