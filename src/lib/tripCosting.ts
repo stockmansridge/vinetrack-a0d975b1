@@ -25,6 +25,22 @@ import type { OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import type { FuelPurchase } from "@/lib/fuelPurchasesQuery";
 import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
+import type { SavedChemical } from "@/lib/savedChemicalsQuery";
+
+/** Subset of saved_chemicals used for cost fallback resolution. */
+export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
+
+/** Pull a cost-per-base-unit out of saved_chemicals.purchase JSON. */
+export function savedChemicalCostPerUnit(c: SavedChemicalLite | null | undefined): number | null {
+  const p: any = c?.purchase;
+  if (!p) return null;
+  const candidates = [p.costPerBaseUnit, p.cost_per_base_unit, p.costPerUnit, p.cost_per_unit];
+  for (const v of candidates) {
+    const n = Number(v);
+    if (isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
 
 export interface TractorLite {
   id: string;
