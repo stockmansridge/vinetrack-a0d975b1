@@ -110,10 +110,6 @@ export function PaddockDetailContent({
   const mlPerHaHr = litresPerHaHr != null ? litresPerHaHr / 1_000_000 : null;
   const mmPerHr = mlPerHaHr != null ? mlPerHaHr * 100 : null;
 
-  const varieties = Array.isArray(paddock.variety_allocations)
-    ? paddock.variety_allocations
-    : [];
-
   const { selectedVineyardId } = useVineyard();
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const varietyMap = buildVarietyMap(grapeVarieties);
