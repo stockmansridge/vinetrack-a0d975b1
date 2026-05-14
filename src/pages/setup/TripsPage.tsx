@@ -537,7 +537,41 @@ function TripSheet({
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
-            <Section title="Rows / paths">
+            {canSeeCosts && cost && (
+              <Section title="Estimated trip cost">
+                <Field label="Active hours" value={fmtHours(cost.activeHours)} />
+                <Field
+                  label={`Labour${cost.labour.categoryName ? ` (${cost.labour.categoryName})` : ""}`}
+                  value={
+                    cost.labour.cost != null
+                      ? `${fmtCurrency(cost.labour.cost)}${cost.labour.ratePerHour != null ? ` · ${fmtCurrency(cost.labour.ratePerHour)}/h` : ""}`
+                      : "—"
+                  }
+                />
+                <Field
+                  label="Fuel"
+                  value={
+                    cost.fuel.cost != null
+                      ? `${fmtCurrency(cost.fuel.cost)}${cost.fuel.litres != null ? ` · ${cost.fuel.litres.toFixed(1)} L` : ""}${cost.fuel.costPerLitre != null ? ` @ ${fmtCurrency(cost.fuel.costPerLitre)}/L` : ""}`
+                      : "—"
+                  }
+                />
+                <Field
+                  label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
+                  value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
+                />
+                <div className="border-t my-2" />
+                <Field label="Estimated total" value={cost.total != null ? fmtCurrency(cost.total) : "—"} />
+                {cost.warnings.length > 0 && (
+                  <div className="mt-2 rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                    <div className="font-medium mb-1">Missing data</div>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {cost.warnings.map((w, i) => (<li key={i}>{w}</li>))}
+                    </ul>
+                  </div>
+                )}
+              </Section>
+            )}
               <Field label="Rows covered" value={String(cov?.rowsCovered ?? 0)} />
               <Field label="Completed" value={String(cov?.completed ?? completed)} />
               <Field label="Partial" value={String(cov?.partial ?? 0)} />
