@@ -394,18 +394,20 @@ function MaintenanceSheet({
                 )}
               </Section>
             )}
-            <Section title="Costs">
-              <Field label="Parts cost" value={fmtCost(log.parts_cost)} />
-              <Field label="Labour cost" value={fmtCost(log.labour_cost)} />
-              <Field
-                label="Total"
-                value={
-                  log.parts_cost == null && log.labour_cost == null
-                    ? "—"
-                    : fmtCost((log.parts_cost ?? 0) + (log.labour_cost ?? 0))
-                }
-              />
-            </Section>
+            {canSeeCosts && (
+              <Section title="Costs">
+                <Field label="Parts cost" value={fmtCost(log.parts_cost)} />
+                <Field label="Labour cost" value={fmtCost(log.labour_cost)} />
+                <Field
+                  label="Total"
+                  value={
+                    log.parts_cost == null && log.labour_cost == null
+                      ? "—"
+                      : fmtCost((log.parts_cost ?? 0) + (log.labour_cost ?? 0))
+                  }
+                />
+              </Section>
+            )}
             <Section title="Meta">
               <Field label="Photo path" value={fmt(log.photo_path)} mono />
               <Field label="Created" value={fmtDate(log.created_at)} />
