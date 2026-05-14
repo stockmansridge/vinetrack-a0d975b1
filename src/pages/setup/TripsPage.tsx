@@ -575,6 +575,12 @@ function TripSheet({
                   label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
                   value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
                 />
+                {cost.inputs.lineCount > 0 && (
+                  <Field
+                    label={`Seed / inputs (${cost.inputs.lineCount} line${cost.inputs.lineCount === 1 ? "" : "s"})`}
+                    value={cost.inputs.cost != null ? fmtCurrency(cost.inputs.cost) : "—"}
+                  />
+                )}
                 <div className="border-t my-2" />
                 <Field label="Estimated total" value={cost.total != null ? fmtCurrency(cost.total) : "—"} />
                 {cost.warnings.length > 0 && (
