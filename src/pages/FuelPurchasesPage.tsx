@@ -256,6 +256,7 @@ export default function FuelPurchasesPage() {
         record={selected}
         open={!!selected}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={openEdit}
         resolveUser={resolve}
