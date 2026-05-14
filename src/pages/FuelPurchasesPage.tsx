@@ -133,19 +133,18 @@ export default function FuelPurchasesPage() {
   };
 
   const exportCsv = () => {
-    const header = ["date", "volume_litres", "total_cost", "cost_per_litre", "created_by"];
+    const header = canSeeCosts
+      ? ["date", "volume_litres", "total_cost", "cost_per_litre", "created_by"]
+      : ["date", "volume_litres", "created_by"];
     const lines = [header.join(",")];
     for (const r of rows) {
       const cpl = r.total_cost != null && r.volume_litres && r.volume_litres > 0
         ? (r.total_cost / r.volume_litres).toFixed(4)
         : "";
-      lines.push([
-        r.date ?? "",
-        r.volume_litres ?? "",
-        r.total_cost ?? "",
-        cpl,
-        resolve(r.created_by) ?? "",
-      ].map(csvEscape).join(","));
+      const row = canSeeCosts
+        ? [r.date ?? "", r.volume_litres ?? "", r.total_cost ?? "", cpl, resolve(r.created_by) ?? ""]
+        : [r.date ?? "", r.volume_litres ?? "", resolve(r.created_by) ?? ""];
+      lines.push(row.map(csvEscape).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
