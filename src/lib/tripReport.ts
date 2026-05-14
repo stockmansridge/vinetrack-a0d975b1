@@ -14,6 +14,8 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
+import type { TripCostBreakdown } from "./tripCosting";
+import { fmtCurrency, fmtHours } from "./tripCosting";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { composeSatelliteRouteImage } from "./satelliteRouteMap";
 
