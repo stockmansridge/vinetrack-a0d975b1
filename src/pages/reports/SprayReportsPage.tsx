@@ -179,6 +179,8 @@ export default function SprayReportsPage() {
             sprayRecords: recordsResult?.records ?? [],
             savedChemicals: costSavedChemicals?.chemicals ?? [],
             savedInputs: costSavedInputs?.inputs ?? [],
+            paddocks: (paddocks ?? []) as any,
+            historicalYields: costYields?.historical ?? [],
           });
         }
       }
