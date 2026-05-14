@@ -283,10 +283,18 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
     warnings.push("Some chemicals are missing a cost per unit.");
   }
 
+  // Seed / inputs — parsed from trip.seeding_details.
+  const inputAgg = inputCostFromSeedingDetails(inp.trip.seeding_details, inp.savedInputs ?? []);
+  const inputCostFinal = inputAgg.lines === 0 || inputAgg.missing > 0 ? null : inputAgg.cost;
+  if (inputAgg.missing > 0) {
+    warnings.push("Some seed/input lines are missing a cost per unit.");
+  }
+
   const parts: number[] = [];
   if (labourCost != null) parts.push(labourCost);
   if (fuelCost != null) parts.push(fuelCost);
   if (chemCostFinal != null) parts.push(chemCostFinal);
+  if (inputCostFinal != null) parts.push(inputCostFinal);
   const total = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 
   return {
@@ -294,6 +302,7 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
     labour: { hours, ratePerHour, cost: labourCost, categoryName: cat?.name ?? null },
     fuel: { hours, litresPerHour: lph, costPerLitre: cpl, litres, cost: fuelCost },
     chemicals: { cost: chemCostFinal, lineCount: chemLines, missingCostLines: chemMissing },
+    inputs: { cost: inputCostFinal, lineCount: inputAgg.lines, missingCostLines: inputAgg.missing },
     total,
     warnings,
   };
