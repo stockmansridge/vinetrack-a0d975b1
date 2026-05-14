@@ -319,6 +319,7 @@ export default function MaintenancePage() {
         editing={editing}
         equipmentGroups={equipmentGroups}
         legacyOnly={legacyOnly}
+        canSeeCosts={canSeeCosts}
       />
     </div>
   );
