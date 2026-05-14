@@ -142,6 +142,7 @@ export default function WorkTasksPage() {
   const qc = useQueryClient();
 
   const canSoftDelete = currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
+  const canSeeCosts = useCanSeeCosts();
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
