@@ -684,6 +684,9 @@ export function tripToCsvRow(
     base.chemical_cost = num(cost.chemicals.cost);
     base.chemical_lines = String(cost.chemicals.lineCount);
     base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
+    base.input_cost = num(cost.inputs.cost);
+    base.input_lines = String(cost.inputs.lineCount);
+    base.input_lines_missing_cost = String(cost.inputs.missingCostLines);
     base.total_estimated_cost = num(cost.total);
     base.costing_warnings = cost.warnings.join(" | ");
   }
