@@ -19,6 +19,12 @@ import {
   downloadCsv,
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { computeTripCost, type TractorLite } from "@/lib/tripCosting";
+import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
