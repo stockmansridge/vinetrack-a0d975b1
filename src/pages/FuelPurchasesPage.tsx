@@ -284,6 +284,7 @@ function FuelSheet({
   record,
   open,
   canWrite,
+  canSeeCosts,
   onOpenChange,
   onEdit,
   resolveUser,
@@ -291,6 +292,7 @@ function FuelSheet({
   record: FuelPurchase | null;
   open: boolean;
   canWrite: boolean;
+  canSeeCosts: boolean;
   onOpenChange: (o: boolean) => void;
   onEdit: (r: FuelPurchase) => void;
   resolveUser: (id: string | null | undefined) => string | null;
