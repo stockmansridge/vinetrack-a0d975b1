@@ -72,7 +72,7 @@ const App = () => (
                     <Route path="/setup/paddocks/new" element={<NewPaddockPage />} />
                     <Route
                       path="/setup/paddocks/:id"
-                      element={<DetailPage table="paddocks" title="Paddock detail" basePath="/setup/paddocks" />}
+                      element={<PaddockDetailPage />}
                     />
                     <Route
                       path="/setup/tractors"
