@@ -596,6 +596,10 @@ function TripSheet({
                 )}
                 <div className="border-t my-2" />
                 <Field label="Estimated total" value={cost.total != null ? fmtCurrency(cost.total) : "—"} />
+                <Field label="Treated area" value={cost.treatedAreaHa != null ? fmtHa(cost.treatedAreaHa) : "—"} />
+                <Field label="Cost per ha" value={cost.costPerHa != null ? `${fmtCurrency(cost.costPerHa)} / ha` : "Unavailable"} />
+                <Field label="Yield tonnes" value={cost.yieldTonnes != null ? fmtTonnes(cost.yieldTonnes) : "Unavailable"} />
+                <Field label="Cost per tonne" value={cost.costPerTonne != null ? `${fmtCurrency(cost.costPerTonne)} / t` : "Unavailable"} />
                 {cost.warnings.length > 0 && (
                   <div className="mt-2 rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
                     <div className="font-medium mb-1">Missing data</div>
