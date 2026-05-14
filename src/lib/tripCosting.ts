@@ -201,14 +201,14 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
   let chemMissing = 0;
   const linked = inp.sprayRecords.filter((r) => r.trip_id === inp.trip.id);
   for (const rec of linked) {
-    const r = chemicalCostFromTanks(rec.tanks);
+    const r = chemicalCostFromTanks(rec.tanks, inp.savedChemicals ?? []);
     chemCost += r.cost;
     chemLines += r.lines;
     chemMissing += r.missing;
   }
-  const chemCostFinal = chemLines > 0 ? chemCost : null;
+  const chemCostFinal = chemLines > 0 && chemMissing < chemLines ? chemCost : (chemLines === 0 ? null : 0);
   if (chemMissing > 0) {
-    warnings.push(`${chemMissing} chemical line${chemMissing === 1 ? "" : "s"} missing cost/unit — excluded from total.`);
+    warnings.push("Some chemicals are missing a cost per unit.");
   }
 
   const parts: number[] = [];
