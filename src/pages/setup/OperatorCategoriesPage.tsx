@@ -282,10 +282,12 @@ function CategoryEditor({
   const updateMut = useMutation({
     mutationFn: async () => {
       if (!category) throw new Error("Missing category");
+      // Only owners/managers can change cost. For supervisors, omit the
+      // field so we don't wipe the existing rate.
       return updateOperatorCategory({
         id: category.id,
         name: name.trim(),
-        cost_per_hour: cost === "" ? null : Number(cost),
+        ...(canSeeCosts ? { cost_per_hour: cost === "" ? null : Number(cost) } : {}),
         user_id: userId,
         current_sync_version: category.sync_version ?? 0,
       });
