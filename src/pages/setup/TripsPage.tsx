@@ -48,6 +48,7 @@ import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuer
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { computeTripCost, fmtCurrency, fmtHours, type TractorLite } from "@/lib/tripCosting";
 
 
