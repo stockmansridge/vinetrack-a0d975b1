@@ -784,17 +784,17 @@ function WorkTaskDrawer({
           <div className="space-y-3">
             <Section title="Totals">
               <Field label="Total labour hours" value={num(totalHours)} />
-              {canSeeCostsFn(currentRole) && (
+              {drawerCanSeeCosts && (
                 <Field label="Total estimated cost" value={
                   totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
                 } />
               )}
               <Field label="Area ha" value={areaNum == null ? "—" : num(areaNum)} />
-              {canSeeCostsFn(currentRole) && (
+              {drawerCanSeeCosts && (
                 <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
               )}
-              {canSeeCostsFn(currentRole) && <Separator className="my-2" />}
-              {canSeeCostsFn(currentRole) && (
+              {drawerCanSeeCosts && <Separator className="my-2" />}
+              {drawerCanSeeCosts && (
                 <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
               )}
             </Section>
