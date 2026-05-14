@@ -657,6 +657,7 @@ function WorkTaskDrawer({
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
+  const drawerCanSeeCosts = useCanSeeCosts();
   const visibleLines = labourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
