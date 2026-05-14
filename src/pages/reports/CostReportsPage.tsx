@@ -88,7 +88,7 @@ export default function CostReportsPage() {
   // Resolve varieties from paddocks.variety_allocations + grape_varieties
   // so rows whose snapshot variety is missing/UUID can still display a name.
   const { data: grapeVarieties } = useGrapeVarieties(canSeeCosts ? selectedVineyardId : null);
-  const { data: paddocks = [] } = useQuery({
+  const { data: paddockRows = [] } = useQuery({
     queryKey: ["paddocks-for-cost-reports", selectedVineyardId],
     enabled: !!selectedVineyardId && canSeeCosts,
     staleTime: 5 * 60 * 1000,
@@ -107,9 +107,9 @@ export default function CostReportsPage() {
   const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties), [grapeVarieties]);
   const paddockAllocsById = useMemo(() => {
     const m = new Map<string, any>();
-    for (const p of paddocks) m.set(p.id, p.variety_allocations);
+    for (const p of paddockRows) m.set(p.id, p.variety_allocations);
     return m;
-  }, [paddocks]);
+  }, [paddockRows]);
 
   // UUID detector — trip_cost_allocations.variety sometimes stores a varietyId
   // string snapshot rather than a name; resolve those here too.
