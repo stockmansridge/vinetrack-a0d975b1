@@ -89,7 +89,10 @@ export function weightedFuelCostPerLitre(fuel: FuelPurchase[]): number | null {
   return totalLitres > 0 ? totalCost / totalLitres : null;
 }
 
-function chemicalCostFromTanks(tanks: any): { cost: number; lines: number; missing: number } {
+function chemicalCostFromTanks(
+  tanks: any,
+  savedChemicals: SavedChemicalLite[] = [],
+): { cost: number; lines: number; missing: number } {
   if (!tanks) return { cost: 0, lines: 0, missing: 0 };
   // tanks may be an array of tanks, each with `chemicals` / `chemicalLines`,
   // OR a flat array of chemical lines, OR a single tank object.
@@ -97,13 +100,40 @@ function chemicalCostFromTanks(tanks: any): { cost: number; lines: number; missi
   let cost = 0;
   let lines = 0;
   let missing = 0;
+  const byId = new Map(savedChemicals.map((c) => [c.id, c] as const));
+  const byName = new Map(
+    savedChemicals
+      .filter((c) => c.name)
+      .map((c) => [String(c.name).trim().toLowerCase(), c] as const),
+  );
+  const resolveCpu = (line: any): number | null => {
+    // 1) Snapshot on the line itself (incl. zero treated as genuine 0).
+    const raw = line?.costPerUnit ?? line?.cost_per_unit;
+    if (raw != null && raw !== "") {
+      const n = Number(raw);
+      if (isFinite(n) && n >= 0) return n;
+    }
+    // 2) savedChemicalId lookup.
+    const sid = line?.savedChemicalId ?? line?.saved_chemical_id ?? line?.chemical_id;
+    if (sid) {
+      const cpu = savedChemicalCostPerUnit(byId.get(String(sid)));
+      if (cpu != null) return cpu;
+    }
+    // 3) Case-insensitive name match fallback.
+    const nm = (line?.name ?? line?.chemical_name ?? "").toString().trim().toLowerCase();
+    if (nm) {
+      const cpu = savedChemicalCostPerUnit(byName.get(nm));
+      if (cpu != null) return cpu;
+    }
+    return null;
+  };
   const visitLine = (line: any) => {
     lines++;
-    const cpu = Number(line?.costPerUnit ?? line?.cost_per_unit);
+    const cpu = resolveCpu(line);
     const amount = Number(
       line?.amount ?? line?.totalAmount ?? line?.total_amount ?? line?.quantity ?? line?.qty,
     );
-    if (isFinite(cpu) && cpu > 0 && isFinite(amount) && amount > 0) {
+    if (cpu != null && isFinite(amount) && amount > 0) {
       cost += cpu * amount;
     } else {
       missing++;
@@ -114,7 +144,11 @@ function chemicalCostFromTanks(tanks: any): { cost: number; lines: number; missi
     const innerLines = item.chemicals ?? item.chemicalLines ?? item.chemical_lines;
     if (Array.isArray(innerLines)) {
       innerLines.forEach(visitLine);
-    } else if (item.costPerUnit != null || item.cost_per_unit != null) {
+    } else if (
+      item.costPerUnit != null || item.cost_per_unit != null ||
+      item.savedChemicalId != null || item.saved_chemical_id != null ||
+      item.chemical_id != null || item.name != null
+    ) {
       visitLine(item);
     }
   }
@@ -128,6 +162,8 @@ export interface TripCostInputs {
   members: Pick<VineyardMemberRow, "user_id" | "operator_category_id">[];
   fuelPurchases: FuelPurchase[];
   sprayRecords: Pick<SprayRecord, "trip_id" | "tanks">[];
+  /** Optional saved-chemical library for cost fallback resolution. */
+  savedChemicals?: SavedChemicalLite[];
 }
 
 export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
