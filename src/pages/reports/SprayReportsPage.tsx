@@ -115,6 +115,11 @@ export default function SprayReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
   });
+  const { data: costSavedChemicals } = useQuery({
+    queryKey: ["spray-cost-saved-chemicals", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
+  });
 
   // ---- Spray jobs (yearly program)
   const { data: jobs, isLoading: jobsLoading } = useQuery({
