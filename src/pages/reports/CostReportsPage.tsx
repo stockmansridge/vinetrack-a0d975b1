@@ -234,8 +234,6 @@ export default function CostReportsPage() {
   const totalReportWarnings = summary.warns;
   const showMissingBanner = canSeeCosts && (setupSummary.hasIssues || totalReportWarnings > 0);
 
-  const isUnassignedVariety = (v: string | null | undefined) =>
-    !v || /^unassigned/i.test(v);
 
   return (
     <TooltipProvider delayDuration={150}>
