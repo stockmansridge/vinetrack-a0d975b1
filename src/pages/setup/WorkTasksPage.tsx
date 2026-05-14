@@ -324,16 +324,15 @@ export default function WorkTasksPage() {
   });
 
   const exportCsv = () => {
-    const headers = [
-      "Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)",
-      "Total hours","Total cost","Cost per ha","Worker types","Description","Notes",
-    ];
+    const headers = canSeeCosts
+      ? ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
+      : ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
     const lines = [headers.join(",")];
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
       const padNames = taskPaddockNames(t.id);
       const costPerHa = t.area_ha && tot?.cost ? (tot.cost / Number(t.area_ha)).toFixed(2) : "";
-      const cells = [
+      const base = [
         t.id,
         effectiveStart(t) ?? "",
         effectiveEnd(t) ?? "",
@@ -342,12 +341,16 @@ export default function WorkTasksPage() {
         t.status ?? "",
         t.area_ha ?? "",
         tot?.hours?.toFixed(2) ?? "0",
-        tot?.cost?.toFixed(2) ?? "",
-        costPerHa,
+      ];
+      const tail = [
         Array.from(tot?.workerTypes ?? []).join("; "),
         (t.description ?? "").replace(/\s+/g, " "),
         (t.notes ?? "").replace(/\s+/g, " "),
-      ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
+      ];
+      const cells = (canSeeCosts
+        ? [...base, tot?.cost?.toFixed(2) ?? "", costPerHa, ...tail]
+        : [...base, ...tail]
+      ).map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
