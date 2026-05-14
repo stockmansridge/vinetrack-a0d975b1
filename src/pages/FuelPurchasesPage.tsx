@@ -438,7 +438,8 @@ function FuelEditor({
         vineyard_id: selectedVineyardId,
         date,
         volume_litres: litresNum,
-        total_cost: costNum,
+        // Supervisors don't enter cost — preserve null/0 default.
+        total_cost: canSeeCosts ? costNum : (Number.isFinite(costNum) ? costNum : 0),
         user_id: user?.id ?? null,
       });
     },
