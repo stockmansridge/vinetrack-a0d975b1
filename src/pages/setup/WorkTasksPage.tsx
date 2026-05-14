@@ -447,7 +447,9 @@ export default function WorkTasksPage() {
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
               <SortableTableHead active={getSortDirection("area_ha")} onSort={() => toggleSort("area_ha")} align="right">Area ha</SortableTableHead>
               <SortableTableHead active={getSortDirection("hours")} onSort={() => toggleSort("hours")} align="right">Hours</SortableTableHead>
-              <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
+              {canSeeCosts && (
+                <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
+              )}
               <SortableTableHead active={getSortDirection("finalized")} onSort={() => toggleSort("finalized")}>Finalized</SortableTableHead>
               <TableHead>Notes</TableHead>
             </TableRow>
