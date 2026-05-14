@@ -194,6 +194,11 @@ export default function TripReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchSavedInputsForVineyard(selectedVineyardId!),
   });
+  const { data: costYields } = useQuery({
+    queryKey: ["cost-yields", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchYieldReportsForVineyard(selectedVineyardId!),
+  });
 
   const computeCostFor = (t: Trip) => {
     if (!canSeeCosts) return null;
@@ -207,6 +212,8 @@ export default function TripReportsPage() {
       sprayRecords: costSpray?.records ?? [],
       savedChemicals: costSavedChemicals?.chemicals ?? [],
       savedInputs: costSavedInputs?.inputs ?? [],
+      paddocks,
+      historicalYields: costYields?.historical ?? [],
     });
   };
 
