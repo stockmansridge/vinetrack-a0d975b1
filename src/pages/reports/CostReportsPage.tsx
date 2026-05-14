@@ -204,7 +204,7 @@ export default function CostReportsPage() {
       filtered.map((r) => [
         r.season_year ?? "",
         csvCell(r.paddock_name),
-        csvCell(r.variety),
+        csvCell(resolveRowVariety(r) ?? r.variety),
         r.allocation_area_ha ?? "",
         r.yield_tonnes ?? "",
         r.labour_cost ?? "",
