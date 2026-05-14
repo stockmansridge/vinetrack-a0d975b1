@@ -172,6 +172,7 @@ export default function SprayReportsPage() {
             fuelPurchases: costFuel ?? [],
             sprayRecords: recordsResult?.records ?? [],
             savedChemicals: costSavedChemicals?.chemicals ?? [],
+            savedInputs: costSavedInputs?.inputs ?? [],
           });
         }
       }
