@@ -224,16 +224,23 @@ export function exportSprayRecordPdf(
         ? `${fmtCurrency(c.fuel.cost)}${c.fuel.litres != null ? ` · ${c.fuel.litres.toFixed(1)} L` : ""}${c.fuel.costPerLitre != null ? ` @ ${fmtCurrency(c.fuel.costPerLitre)}/L` : ""}`
         : NR;
     const chemLabel = `Chemicals${c.chemicals.lineCount ? ` (${c.chemicals.lineCount} line${c.chemicals.lineCount === 1 ? "" : "s"})` : ""}`;
+    const body: any[][] = [
+      ["Active hours", fmtHours(c.activeHours)],
+      [labourLabel, labourValue],
+      ["Fuel", fuelValue],
+      [chemLabel, c.chemicals.cost != null ? fmtCurrency(c.chemicals.cost) : NR],
+    ];
+    if (c.inputs.lineCount > 0) {
+      body.push([
+        `Seed / inputs (${c.inputs.lineCount} line${c.inputs.lineCount === 1 ? "" : "s"})`,
+        c.inputs.cost != null ? fmtCurrency(c.inputs.cost) : NR,
+      ]);
+    }
+    body.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : NR]);
     autoTable(doc, {
       startY: y + 6,
       head: [["Field", "Value"]],
-      body: [
-        ["Active hours", fmtHours(c.activeHours)],
-        [labourLabel, labourValue],
-        ["Fuel", fuelValue],
-        [chemLabel, c.chemicals.cost != null ? fmtCurrency(c.chemicals.cost) : NR],
-        ["Estimated total", c.total != null ? fmtCurrency(c.total) : NR],
-      ],
+      body,
       theme: "grid",
       styles: { fontSize: 9, cellPadding: 5, valign: "top" },
       headStyles: { fillColor: [60, 90, 60], textColor: 255 },
