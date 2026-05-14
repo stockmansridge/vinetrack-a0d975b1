@@ -4,6 +4,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
+import { useCanSeeCosts, canSeeCosts as canSeeCostsFn } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -141,6 +142,7 @@ export default function WorkTasksPage() {
   const qc = useQueryClient();
 
   const canSoftDelete = currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
+  const canSeeCosts = useCanSeeCosts();
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
@@ -322,16 +324,15 @@ export default function WorkTasksPage() {
   });
 
   const exportCsv = () => {
-    const headers = [
-      "Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)",
-      "Total hours","Total cost","Cost per ha","Worker types","Description","Notes",
-    ];
+    const headers = canSeeCosts
+      ? ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
+      : ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
     const lines = [headers.join(",")];
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
       const padNames = taskPaddockNames(t.id);
       const costPerHa = t.area_ha && tot?.cost ? (tot.cost / Number(t.area_ha)).toFixed(2) : "";
-      const cells = [
+      const base = [
         t.id,
         effectiveStart(t) ?? "",
         effectiveEnd(t) ?? "",
@@ -340,12 +341,16 @@ export default function WorkTasksPage() {
         t.status ?? "",
         t.area_ha ?? "",
         tot?.hours?.toFixed(2) ?? "0",
-        tot?.cost?.toFixed(2) ?? "",
-        costPerHa,
+      ];
+      const tail = [
         Array.from(tot?.workerTypes ?? []).join("; "),
         (t.description ?? "").replace(/\s+/g, " "),
         (t.notes ?? "").replace(/\s+/g, " "),
-      ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
+      ];
+      const cells = (canSeeCosts
+        ? [...base, tot?.cost?.toFixed(2) ?? "", costPerHa, ...tail]
+        : [...base, ...tail]
+      ).map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`);
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -445,21 +450,23 @@ export default function WorkTasksPage() {
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
               <SortableTableHead active={getSortDirection("area_ha")} onSort={() => toggleSort("area_ha")} align="right">Area ha</SortableTableHead>
               <SortableTableHead active={getSortDirection("hours")} onSort={() => toggleSort("hours")} align="right">Hours</SortableTableHead>
-              <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
+              {canSeeCosts && (
+                <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
+              )}
               <SortableTableHead active={getSortDirection("finalized")} onSort={() => toggleSort("finalized")}>Finalized</SortableTableHead>
               <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 9 : 8} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={9} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 9 : 8} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 9 : 8} className="text-center text-muted-foreground py-8">
                   No work tasks found.
                 </TableCell>
               </TableRow>
@@ -476,9 +483,11 @@ export default function WorkTasksPage() {
                   <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>
                   <TableCell className="text-right">{num(t.area_ha)}</TableCell>
                   <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>
-                  <TableCell className="text-right">
-                    {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
-                  </TableCell>
+                  {canSeeCosts && (
+                    <TableCell className="text-right">
+                      {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
+                    </TableCell>
+                  )}
                   <TableCell>{t.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}</TableCell>
                   <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>
                 </TableRow>
@@ -648,6 +657,7 @@ function WorkTaskDrawer({
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
+  const drawerCanSeeCosts = useCanSeeCosts();
   const visibleLines = labourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
@@ -775,13 +785,19 @@ function WorkTaskDrawer({
           <div className="space-y-3">
             <Section title="Totals">
               <Field label="Total labour hours" value={num(totalHours)} />
-              <Field label="Total estimated cost" value={
-                totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
-              } />
+              {drawerCanSeeCosts && (
+                <Field label="Total estimated cost" value={
+                  totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
+                } />
+              )}
               <Field label="Area ha" value={areaNum == null ? "—" : num(areaNum)} />
-              <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
-              <Separator className="my-2" />
-              <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
+              {drawerCanSeeCosts && (
+                <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
+              )}
+              {drawerCanSeeCosts && <Separator className="my-2" />}
+              {drawerCanSeeCosts && (
+                <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
+              )}
             </Section>
             {!isNew && task && (
               <Section title="Meta">

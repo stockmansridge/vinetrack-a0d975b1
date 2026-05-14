@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useCanSeeCosts } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,6 +77,7 @@ const fmtCost = (v?: number | null) =>
 export default function MaintenancePage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
+  const canSeeCosts = useCanSeeCosts();
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
@@ -264,20 +266,20 @@ export default function MaintenancePage() {
               <TableHead>Work completed</TableHead>
               <TableHead>Hours</TableHead>
               <TableHead>Machine hrs</TableHead>
-              <TableHead>Cost</TableHead>
+              {canSeeCosts && <TableHead>Cost</TableHead>}
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 7 : 6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 7 : 6} className="text-center text-muted-foreground py-8">
                   No maintenance records found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -291,7 +293,7 @@ export default function MaintenancePage() {
                   <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>
                   <TableCell>{fmt(l.hours)}</TableCell>
                   <TableCell>{fmt(l.machine_hours)}</TableCell>
-                  <TableCell>{l.parts_cost == null && l.labour_cost == null ? "—" : fmtCost(cost)}</TableCell>
+                  {canSeeCosts && <TableCell>{l.parts_cost == null && l.labour_cost == null ? "—" : fmtCost(cost)}</TableCell>}
                   <TableCell>
                     {l.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}
                   </TableCell>
@@ -306,6 +308,7 @@ export default function MaintenancePage() {
         log={selected}
         open={!!selected}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={openEdit}
       />
@@ -316,6 +319,7 @@ export default function MaintenancePage() {
         editing={editing}
         equipmentGroups={equipmentGroups}
         legacyOnly={legacyOnly}
+        canSeeCosts={canSeeCosts}
       />
     </div>
   );
@@ -325,12 +329,14 @@ function MaintenanceSheet({
   log,
   open,
   canWrite,
+  canSeeCosts,
   onOpenChange,
   onEdit,
 }: {
   log: MaintenanceLog | null;
   open: boolean;
   canWrite: boolean;
+  canSeeCosts: boolean;
   onOpenChange: (o: boolean) => void;
   onEdit: (l: MaintenanceLog) => void;
 }) {
@@ -389,18 +395,20 @@ function MaintenanceSheet({
                 )}
               </Section>
             )}
-            <Section title="Costs">
-              <Field label="Parts cost" value={fmtCost(log.parts_cost)} />
-              <Field label="Labour cost" value={fmtCost(log.labour_cost)} />
-              <Field
-                label="Total"
-                value={
-                  log.parts_cost == null && log.labour_cost == null
-                    ? "—"
-                    : fmtCost((log.parts_cost ?? 0) + (log.labour_cost ?? 0))
-                }
-              />
-            </Section>
+            {canSeeCosts && (
+              <Section title="Costs">
+                <Field label="Parts cost" value={fmtCost(log.parts_cost)} />
+                <Field label="Labour cost" value={fmtCost(log.labour_cost)} />
+                <Field
+                  label="Total"
+                  value={
+                    log.parts_cost == null && log.labour_cost == null
+                      ? "—"
+                      : fmtCost((log.parts_cost ?? 0) + (log.labour_cost ?? 0))
+                  }
+                />
+              </Section>
+            )}
             <Section title="Meta">
               <Field label="Photo path" value={fmt(log.photo_path)} mono />
               <Field label="Created" value={fmtDate(log.created_at)} />
@@ -459,12 +467,14 @@ function MaintenanceEditor({
   editing,
   equipmentGroups,
   legacyOnly,
+  canSeeCosts,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing: MaintenanceLog | null;
   equipmentGroups?: EquipmentSelectorGroups;
   legacyOnly: string[];
+  canSeeCosts: boolean;
 }) {
   const { selectedVineyardId } = useVineyard();
   const { user } = useAuth();
@@ -531,8 +541,8 @@ function MaintenanceEditor({
         machine_hours: numOrNull(machineHours),
         work_completed: workCompleted.trim() || null,
         parts_used: partsUsed.trim() || null,
-        parts_cost: numOrNull(partsCost),
-        labour_cost: numOrNull(labourCost),
+        parts_cost: canSeeCosts ? numOrNull(partsCost) : null,
+        labour_cost: canSeeCosts ? numOrNull(labourCost) : null,
         is_finalized: finalized,
         user_id: user?.id ?? null,
       });
@@ -561,8 +571,8 @@ function MaintenanceEditor({
         machine_hours: numOrNull(machineHours),
         work_completed: workCompleted.trim() || null,
         parts_used: partsUsed.trim() || null,
-        parts_cost: numOrNull(partsCost),
-        labour_cost: numOrNull(labourCost),
+        parts_cost: canSeeCosts ? numOrNull(partsCost) : (editing.parts_cost ?? null),
+        labour_cost: canSeeCosts ? numOrNull(labourCost) : (editing.labour_cost ?? null),
         is_finalized: finalized,
         was_finalized: !!editing.is_finalized,
         user_id: user?.id ?? null,
@@ -708,30 +718,32 @@ function MaintenanceEditor({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Parts cost</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={partsCost}
-                onChange={(e) => setPartsCost(e.target.value)}
-                placeholder="0.00"
-              />
+          {canSeeCosts && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Parts cost</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={partsCost}
+                  onChange={(e) => setPartsCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Labour cost</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={labourCost}
+                  onChange={(e) => setLabourCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Labour cost</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={labourCost}
-                onChange={(e) => setLabourCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         <SheetFooter className="mt-6 gap-2">

@@ -30,6 +30,7 @@ import {
   softDeleteOperatorCategory,
   type OperatorCategory,
 } from "@/lib/operatorCategoriesQuery";
+import { useCanSeeCosts } from "@/lib/permissions";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -50,6 +51,7 @@ export default function OperatorCategoriesPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const canSeeCosts = useCanSeeCosts();
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<OperatorCategory | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -110,21 +112,23 @@ export default function OperatorCategoriesPage() {
       </div>
 
       {activeCount > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className={`grid grid-cols-1 ${canSeeCosts ? "sm:grid-cols-2" : ""} gap-3`}>
           <Card>
             <CardContent className="p-4 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Active categories</span>
               <span className="text-2xl font-semibold">{activeCount}</span>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Average cost / hour</span>
-              <span className="text-2xl font-semibold">
-                {avgCost == null ? "—" : `$${avgCost.toFixed(2)}/h`}
-              </span>
-            </CardContent>
-          </Card>
+          {canSeeCosts && (
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Average cost / hour</span>
+                <span className="text-2xl font-semibold">
+                  {avgCost == null ? "—" : `$${avgCost.toFixed(2)}/h`}
+                </span>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -132,7 +136,7 @@ export default function OperatorCategoriesPage() {
         <div className="space-y-1 ml-auto">
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
-            placeholder="Name or cost…"
+            placeholder={canSeeCosts ? "Name or cost…" : "Name…"}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-72"
@@ -145,29 +149,29 @@ export default function OperatorCategoriesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Cost per hour</TableHead>
+              {canSeeCosts && <TableHead>Cost per hour</TableHead>}
               <TableHead>Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={canSeeCosts ? 3 : 2} className="text-center text-muted-foreground py-6">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-destructive py-6">
+                <TableCell colSpan={canSeeCosts ? 3 : 2} className="text-center text-destructive py-6">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                  No operator categories yet. Add one with “New category”.
+                <TableCell colSpan={canSeeCosts ? 3 : 2} className="text-center text-muted-foreground py-8">
+                  No operator categories yet. {canWrite ? "Add one with “New category”." : ""}
                 </TableCell>
               </TableRow>
             )}
@@ -178,13 +182,14 @@ export default function OperatorCategoriesPage() {
                 onClick={() => setEditing(c)}
               >
                 <TableCell className="font-medium">{fmt(c.name)}</TableCell>
-                <TableCell>{fmtMoney(c.cost_per_hour)}</TableCell>
+                {canSeeCosts && <TableCell>{fmtMoney(c.cost_per_hour)}</TableCell>}
                 <TableCell>{fmtDate(c.updated_at)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
+
 
       <CategoryEditor
         key={editing?.id ?? "new"}
@@ -194,6 +199,7 @@ export default function OperatorCategoriesPage() {
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setEditing(null);
@@ -208,6 +214,7 @@ export default function OperatorCategoriesPage() {
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setCreateOpen(false);
@@ -224,6 +231,7 @@ function CategoryEditor({
   vineyardId,
   userId,
   canWrite,
+  canSeeCosts,
   onSaved,
 }: {
   category: OperatorCategory | null;
@@ -232,6 +240,7 @@ function CategoryEditor({
   vineyardId: string | null;
   userId: string | null;
   canWrite: boolean;
+  canSeeCosts: boolean;
   onSaved: () => void;
 }) {
   const isNew = !category;
@@ -273,10 +282,12 @@ function CategoryEditor({
   const updateMut = useMutation({
     mutationFn: async () => {
       if (!category) throw new Error("Missing category");
+      // Only owners/managers can change cost. For supervisors, omit the
+      // field so we don't wipe the existing rate.
       return updateOperatorCategory({
         id: category.id,
         name: name.trim(),
-        cost_per_hour: cost === "" ? null : Number(cost),
+        ...(canSeeCosts ? { cost_per_hour: cost === "" ? null : Number(cost) } : {}),
         user_id: userId,
         current_sync_version: category.sync_version ?? 0,
       });
@@ -358,19 +369,21 @@ function CategoryEditor({
               <p className="text-xs text-muted-foreground">Name is required.</p>
             )}
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="oc-cost">Cost per hour</Label>
-            <Input
-              id="oc-cost"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              placeholder="0.00"
-              disabled={!canWrite}
-            />
-          </div>
+          {canSeeCosts && (
+            <div className="space-y-1.5">
+              <Label htmlFor="oc-cost">Cost per hour</Label>
+              <Input
+                id="oc-cost"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="0.00"
+                disabled={!canWrite}
+              />
+            </div>
+          )}
 
           {!isNew && category && (
             <div className="rounded-md border bg-muted/30 p-3 space-y-1 text-xs text-muted-foreground">

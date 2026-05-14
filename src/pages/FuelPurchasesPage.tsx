@@ -42,6 +42,7 @@ import {
   describeFuelWriteError,
   type FuelPurchase,
 } from "@/lib/fuelPurchasesQuery";
+import { useCanSeeCosts } from "@/lib/permissions";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
@@ -77,6 +78,7 @@ function csvEscape(v: unknown): string {
 export default function FuelPurchasesPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
+  const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
 
   const [filter, setFilter] = useState("");
@@ -131,19 +133,18 @@ export default function FuelPurchasesPage() {
   };
 
   const exportCsv = () => {
-    const header = ["date", "volume_litres", "total_cost", "cost_per_litre", "created_by"];
+    const header = canSeeCosts
+      ? ["date", "volume_litres", "total_cost", "cost_per_litre", "created_by"]
+      : ["date", "volume_litres", "created_by"];
     const lines = [header.join(",")];
     for (const r of rows) {
       const cpl = r.total_cost != null && r.volume_litres && r.volume_litres > 0
         ? (r.total_cost / r.volume_litres).toFixed(4)
         : "";
-      lines.push([
-        r.date ?? "",
-        r.volume_litres ?? "",
-        r.total_cost ?? "",
-        cpl,
-        resolve(r.created_by) ?? "",
-      ].map(csvEscape).join(","));
+      const row = canSeeCosts
+        ? [r.date ?? "", r.volume_litres ?? "", r.total_cost ?? "", cpl, resolve(r.created_by) ?? ""]
+        : [r.date ?? "", r.volume_litres ?? "", resolve(r.created_by) ?? ""];
+      lines.push(row.map(csvEscape).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -177,14 +178,18 @@ export default function FuelPurchasesPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-3 sm:grid-cols-2 ${canSeeCosts ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}>
         <SummaryCard label="Purchases" value={String(summary.count)} />
         <SummaryCard label="Total litres" value={fmtLitres(summary.totalLitres)} />
-        <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
-        <SummaryCard
-          label="Avg cost / litre"
-          value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
-        />
+        {canSeeCosts && (
+          <>
+            <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
+            <SummaryCard
+              label="Avg cost / litre"
+              value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
@@ -213,22 +218,22 @@ export default function FuelPurchasesPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead className="text-right">Volume (L)</TableHead>
-              <TableHead className="text-right">Total cost</TableHead>
-              <TableHead className="text-right">Cost / L</TableHead>
+              {canSeeCosts && <TableHead className="text-right">Total cost</TableHead>}
+              {canSeeCosts && <TableHead className="text-right">Cost / L</TableHead>}
               <TableHead>Entered by</TableHead>
               <TableHead>Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 6 : 4} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 6 : 4} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 6 : 4} className="text-center text-muted-foreground py-8">
                   No fuel purchases found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -237,8 +242,8 @@ export default function FuelPurchasesPage() {
               <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
                 <TableCell>{fmtDate(r.date)}</TableCell>
                 <TableCell className="text-right">{fmtLitres(r.volume_litres)}</TableCell>
-                <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>
-                <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>
+                {canSeeCosts && <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>}
+                {canSeeCosts && <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>}
                 <TableCell>{fmt(resolve(r.created_by))}</TableCell>
                 <TableCell>{fmtDate(r.updated_at)}</TableCell>
               </TableRow>
@@ -251,6 +256,7 @@ export default function FuelPurchasesPage() {
         record={selected}
         open={!!selected}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={openEdit}
         resolveUser={resolve}
@@ -260,6 +266,7 @@ export default function FuelPurchasesPage() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         editing={editing}
+        canSeeCosts={canSeeCosts}
       />
     </div>
   );
@@ -278,6 +285,7 @@ function FuelSheet({
   record,
   open,
   canWrite,
+  canSeeCosts,
   onOpenChange,
   onEdit,
   resolveUser,
@@ -285,6 +293,7 @@ function FuelSheet({
   record: FuelPurchase | null;
   open: boolean;
   canWrite: boolean;
+  canSeeCosts: boolean;
   onOpenChange: (o: boolean) => void;
   onEdit: (r: FuelPurchase) => void;
   resolveUser: (id: string | null | undefined) => string | null;
@@ -321,8 +330,8 @@ function FuelSheet({
             <Section title="Record">
               <Field label="Date" value={fmtDate(record.date)} />
               <Field label="Volume" value={fmtLitres(record.volume_litres)} />
-              <Field label="Total cost" value={fmtCost(record.total_cost)} />
-              <Field label="Cost / litre" value={fmtCpl(record.total_cost, record.volume_litres)} />
+              {canSeeCosts && <Field label="Total cost" value={fmtCost(record.total_cost)} />}
+              {canSeeCosts && <Field label="Cost / litre" value={fmtCpl(record.total_cost, record.volume_litres)} />}
             </Section>
             <Section title="Meta">
               <Field label="Entered by" value={fmt(resolveUser(record.created_by))} />
@@ -375,10 +384,12 @@ function FuelEditor({
   open,
   onOpenChange,
   editing,
+  canSeeCosts,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing: FuelPurchase | null;
+  canSeeCosts: boolean;
 }) {
   const { selectedVineyardId } = useVineyard();
   const { user } = useAuth();
@@ -412,7 +423,9 @@ function FuelEditor({
   const validate = (): string | null => {
     if (!date) return "Date is required";
     if (!Number.isFinite(litresNum) || litresNum <= 0) return "Volume (litres) must be greater than 0";
-    if (!Number.isFinite(costNum) || costNum < 0) return "Total cost must be 0 or greater";
+    if (canSeeCosts) {
+      if (!Number.isFinite(costNum) || costNum < 0) return "Total cost must be 0 or greater";
+    }
     return null;
   };
 
@@ -425,7 +438,8 @@ function FuelEditor({
         vineyard_id: selectedVineyardId,
         date,
         volume_litres: litresNum,
-        total_cost: costNum,
+        // Supervisors don't enter cost — preserve null/0 default.
+        total_cost: canSeeCosts ? costNum : (Number.isFinite(costNum) ? costNum : 0),
         user_id: user?.id ?? null,
       });
     },
@@ -448,7 +462,8 @@ function FuelEditor({
         id: editing.id,
         date,
         volume_litres: litresNum,
-        total_cost: costNum,
+        // Don't overwrite existing cost when supervisors edit.
+        total_cost: canSeeCosts ? costNum : (editing.total_cost ?? 0),
         user_id: user?.id ?? null,
         current_sync_version: editing.sync_version ?? 0,
       });
@@ -479,7 +494,7 @@ function FuelEditor({
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid ${canSeeCosts ? "grid-cols-2" : "grid-cols-1"} gap-3`}>
             <div className="space-y-1.5">
               <Label>Volume (litres) *</Label>
               <Input
@@ -492,24 +507,28 @@ function FuelEditor({
                 placeholder="0.00"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Total cost *</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={cost}
-                onChange={(e) => setCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
+            {canSeeCosts && (
+              <div className="space-y-1.5">
+                <Label>Total cost *</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
           </div>
 
-          <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
-            <span className="text-muted-foreground">Cost per litre</span>
-            <span className="font-medium">{previewCpl}</span>
-          </div>
+          {canSeeCosts && (
+            <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Cost per litre</span>
+              <span className="font-medium">{previewCpl}</span>
+            </div>
+          )}
         </div>
 
         <SheetFooter className="mt-6 gap-2">
