@@ -26,6 +26,12 @@ import {
   jobYear,
   type JobLookups,
 } from "@/lib/sprayJobsExport";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { computeTripCost, type TractorLite } from "@/lib/tripCosting";
+import { fetchTripsForVineyard } from "@/lib/tripsQuery";
+import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 
 function fmtRecordLabel(r: SprayRecord): string {
   const date = r.date ?? "Undated";
