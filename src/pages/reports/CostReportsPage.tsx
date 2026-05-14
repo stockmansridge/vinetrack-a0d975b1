@@ -147,8 +147,8 @@ export default function CostReportsPage() {
     [rows],
   );
   const varieties = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.variety).filter((v): v is string => !!v))).sort(),
-    [rows],
+    () => Array.from(new Set(rows.map((r) => resolveRowVariety(r)).filter((v): v is string => !!v))).sort(),
+    [rows, varietyMap, paddockAllocsById],
   );
   const tripFns = useMemo(
     () => Array.from(new Set(rows.map((r) => r.trip_function).filter((v): v is string => !!v))).sort(),
@@ -163,12 +163,12 @@ export default function CostReportsPage() {
     return rows.filter((r) => {
       if (season !== ANY && String(r.season_year ?? "") !== season) return false;
       if (paddock !== ANY && (r.paddock_name ?? "") !== paddock) return false;
-      if (variety !== ANY && (r.variety ?? "") !== variety) return false;
+      if (variety !== ANY && (resolveRowVariety(r) ?? "") !== variety) return false;
       if (tripFn !== ANY && (r.trip_function ?? "") !== tripFn) return false;
       if (status !== ANY && (r.costing_status ?? "") !== status) return false;
       return true;
     });
-  }, [rows, season, paddock, variety, tripFn, status]);
+  }, [rows, season, paddock, variety, tripFn, status, varietyMap, paddockAllocsById]);
 
   const summary = useMemo(() => {
     let total = 0, area = 0, yieldT = 0, warns = 0;
