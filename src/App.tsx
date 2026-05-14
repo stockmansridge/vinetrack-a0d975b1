@@ -38,6 +38,7 @@ import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
 import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import TripReportsPage from "./pages/reports/TripReportsPage";
+import CostReportsPage from "./pages/reports/CostReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
 import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
