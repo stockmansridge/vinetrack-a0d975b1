@@ -335,24 +335,28 @@ export default function CostReportsPage() {
                   <TableCell>{r.season_year ?? "—"}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{r.paddock_name ?? "—"}</TableCell>
                   <TableCell>
-                    {isUnassignedVariety(r.variety) ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-1">
-                            <Badge variant="outline" className="text-amber-700 border-amber-400">
-                              Unassigned variety
-                            </Badge>
-                            <Info className="h-3 w-3 text-muted-foreground" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          Unassigned variety means the block has no variety
-                          allocation, or the allocation could not be matched.
-                          Add or fix the variety allocation in{" "}
-                          <Link to="/setup/paddocks" className="underline">Block settings</Link>.
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : r.variety}
+                    {(() => {
+                      const resolved = resolveRowVariety(r);
+                      if (resolved) return resolved;
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1">
+                              <Badge variant="outline" className="text-amber-700 border-amber-400">
+                                Unassigned variety
+                              </Badge>
+                              <Info className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            This block has no variety allocation, or the
+                            allocation could not be matched. Add or fix the
+                            variety allocation in{" "}
+                            <Link to="/setup/paddocks" className="underline">Block settings</Link>.
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-right">{fmtNum(r.allocation_area_ha)}</TableCell>
                   <TableCell className="text-right">{fmtNum(r.yield_tonnes)}</TableCell>
