@@ -27,6 +27,8 @@ import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
 import type { SavedInput } from "@/lib/savedInputsQuery";
+import type { HistoricalYieldRecord } from "@/lib/yieldReportsQuery";
+import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
 
 /** Subset of saved_chemicals used for cost fallback resolution. */
 export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
