@@ -59,7 +59,7 @@ const work: NavItem[] = [
   { title: "Field Trips", url: "/trips", icon: Sprout },
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
-  { title: "Yield", url: "/yield", icon: Grape },
+  { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
   { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
 ];
