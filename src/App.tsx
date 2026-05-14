@@ -114,7 +114,15 @@ const App = () => (
                     <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
-                    <Route path="/tools/yield-estimation" element={<ToolPlaceholder title="Yield Estimation" />} />
+                    <Route
+                      path="/tools/yield-estimation"
+                      element={
+                        <ToolPlaceholder
+                          title="Yields"
+                          description="Forecasting, Sampling & Recording. Actual yield records are used by Cost Reports to calculate cost per tonne."
+                        />
+                      }
+                    />
                     <Route path="/tools/degree-days" element={<ToolPlaceholder title="Degree Days / BEDD" />} />
                     <Route path="/tools/seeding-mix" element={<ToolPlaceholder title="Seeding Mix Calculator" />} />
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
