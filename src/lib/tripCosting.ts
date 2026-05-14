@@ -489,5 +489,14 @@ export function fmtHours(h: number | null | undefined): string {
   const totalMin = Math.round(h * 60);
   const hh = Math.floor(totalMin / 60);
   const mm = totalMin % 60;
-  return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
+}
+
+export function fmtHa(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return "—";
+  return `${n.toFixed(2)} ha`;
+}
+
+export function fmtTonnes(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return "—";
+  return `${n.toFixed(2)} t`;
 }
