@@ -162,14 +162,23 @@ export default function YieldReportsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Yield reports</h1>
+        <h1 className="text-2xl font-semibold">Yields</h1>
         <p className="text-sm text-muted-foreground">
-          Read-only. Soft-deleted records are excluded.
+          Forecasting, Sampling &amp; Recording. Read-only in the portal —
+          soft-deleted records are excluded.
         </p>
       </div>
 
+      <div className="rounded-md border bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-900 dark:text-emerald-200">
+        <strong>Actual yield records</strong> (Historical tab) are used by
+        Cost Reports to calculate cost per tonne. Make sure each block has an
+        actual yield record for the relevant season.
+      </div>
+
       <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-        Production data — read-only view. No edits, archives, or deletions are possible from this page.
+        Production data — read-only view in the portal. Add or edit actual
+        yield records from the iOS app (table: <code>historical_yield_records</code>).
+        Estimation/sampling sessions are also captured on iOS.
       </div>
 
       <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
