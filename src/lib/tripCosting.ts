@@ -26,9 +26,13 @@ import type { FuelPurchase } from "@/lib/fuelPurchasesQuery";
 import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
+import type { SavedInput } from "@/lib/savedInputsQuery";
 
 /** Subset of saved_chemicals used for cost fallback resolution. */
 export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
+
+/** Subset of saved_inputs used for cost fallback resolution. */
+export type SavedInputLite = Pick<SavedInput, "id" | "name" | "cost_per_unit">;
 
 /** Pull a cost-per-base-unit out of saved_chemicals.purchase JSON. */
 export function savedChemicalCostPerUnit(c: SavedChemicalLite | null | undefined): number | null {
