@@ -42,6 +42,7 @@ import {
   describeFuelWriteError,
   type FuelPurchase,
 } from "@/lib/fuelPurchasesQuery";
+import { useCanSeeCosts } from "@/lib/permissions";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
