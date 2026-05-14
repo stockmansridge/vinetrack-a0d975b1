@@ -182,6 +182,11 @@ export default function TripReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
   });
+  const { data: costSavedChemicals } = useQuery({
+    queryKey: ["cost-saved-chemicals", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
+  });
 
   const computeCostFor = (t: Trip) => {
     if (!canSeeCosts) return null;
@@ -193,6 +198,7 @@ export default function TripReportsPage() {
       members: costMembers ?? [],
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
+      savedChemicals: costSavedChemicals?.chemicals ?? [],
     });
   };
 
