@@ -30,6 +30,7 @@ import {
   softDeleteOperatorCategory,
   type OperatorCategory,
 } from "@/lib/operatorCategoriesQuery";
+import { useCanSeeCosts } from "@/lib/permissions";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
