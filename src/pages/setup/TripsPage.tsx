@@ -415,16 +415,19 @@ function TripSheet({
   trip,
   paddockNameById,
   vineyardName,
+  vineyardId,
   open,
   onOpenChange,
 }: {
   trip: Trip | null;
   paddockNameById: Map<string, string | null>;
   vineyardName: string | null;
+  vineyardId: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const canSeeCosts = useCanSeeCosts();
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
   const completed = arrayLen(trip?.completed_paths);
