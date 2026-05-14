@@ -266,6 +266,7 @@ export default function FuelPurchasesPage() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         editing={editing}
+        canSeeCosts={canSeeCosts}
       />
     </div>
   );
