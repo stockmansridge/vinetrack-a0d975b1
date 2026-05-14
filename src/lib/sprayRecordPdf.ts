@@ -66,6 +66,8 @@ function chemicalSummary(tanks: any): { product: string; rate: string; water: st
 export interface SprayRecordPdfContext {
   paddockName?: string | null;
   operatorName?: string | null;
+  /** Owner/manager-only trip cost breakdown for the linked trip. Caller MUST gate. */
+  cost?: TripCostBreakdown | null;
 }
 
 export function exportSprayRecordPdf(
