@@ -572,6 +572,7 @@ function TripSheet({
                 )}
               </Section>
             )}
+            <Section title="Rows / paths">
               <Field label="Rows covered" value={String(cov?.rowsCovered ?? 0)} />
               <Field label="Completed" value={String(cov?.completed ?? completed)} />
               <Field label="Partial" value={String(cov?.partial ?? 0)} />
