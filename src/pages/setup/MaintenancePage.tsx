@@ -77,6 +77,7 @@ const fmtCost = (v?: number | null) =>
 export default function MaintenancePage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
+  const canSeeCosts = useCanSeeCosts();
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
