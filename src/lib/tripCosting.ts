@@ -206,7 +206,7 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
     chemLines += r.lines;
     chemMissing += r.missing;
   }
-  const chemCostFinal = chemLines > 0 && chemMissing < chemLines ? chemCost : (chemLines === 0 ? null : 0);
+  const chemCostFinal = chemLines === 0 || chemMissing > 0 ? null : chemCost;
   if (chemMissing > 0) {
     warnings.push("Some chemicals are missing a cost per unit.");
   }
