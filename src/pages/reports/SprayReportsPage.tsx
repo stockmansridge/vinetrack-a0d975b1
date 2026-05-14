@@ -32,6 +32,7 @@ import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 
 function fmtRecordLabel(r: SprayRecord): string {
   const date = r.date ?? "Undated";
