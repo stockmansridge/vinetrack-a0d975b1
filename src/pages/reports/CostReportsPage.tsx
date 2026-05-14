@@ -390,7 +390,7 @@ export default function CostReportsPage() {
           {drill && (
             <>
               <SheetHeader>
-                <SheetTitle>{drill.paddock_name ?? "Cost allocation"}{drill.variety ? ` · ${drill.variety}` : ""}</SheetTitle>
+                <SheetTitle>{drill.paddock_name ?? "Cost allocation"}{(() => { const v = resolveRowVariety(drill); return v ? ` · ${v}` : ""; })()}</SheetTitle>
                 <SheetDescription>
                   Season {drill.season_year ?? "—"} · {drill.trip_function ?? "trip"}
                 </SheetDescription>
