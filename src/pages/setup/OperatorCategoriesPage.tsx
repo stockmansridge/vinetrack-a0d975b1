@@ -199,6 +199,7 @@ export default function OperatorCategoriesPage() {
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setEditing(null);
@@ -213,11 +214,35 @@ export default function OperatorCategoriesPage() {
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
         canWrite={canWrite}
+        canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setCreateOpen(false);
         }}
       />
+    </div>
+  );
+}
+
+function CategoryEditor({
+  category,
+  open,
+  onOpenChange,
+  vineyardId,
+  userId,
+  canWrite,
+  canSeeCosts,
+  onSaved,
+}: {
+  category: OperatorCategory | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  vineyardId: string | null;
+  userId: string | null;
+  canWrite: boolean;
+  canSeeCosts: boolean;
+  onSaved: () => void;
+}) {
     </div>
   );
 }
