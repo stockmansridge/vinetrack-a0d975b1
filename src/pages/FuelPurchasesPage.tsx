@@ -218,22 +218,22 @@ export default function FuelPurchasesPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead className="text-right">Volume (L)</TableHead>
-              <TableHead className="text-right">Total cost</TableHead>
-              <TableHead className="text-right">Cost / L</TableHead>
+              {canSeeCosts && <TableHead className="text-right">Total cost</TableHead>}
+              {canSeeCosts && <TableHead className="text-right">Cost / L</TableHead>}
               <TableHead>Entered by</TableHead>
               <TableHead>Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 6 : 4} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 6 : 4} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 6 : 4} className="text-center text-muted-foreground py-8">
                   No fuel purchases found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -242,8 +242,8 @@ export default function FuelPurchasesPage() {
               <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
                 <TableCell>{fmtDate(r.date)}</TableCell>
                 <TableCell className="text-right">{fmtLitres(r.volume_litres)}</TableCell>
-                <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>
-                <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>
+                {canSeeCosts && <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>}
+                {canSeeCosts && <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>}
                 <TableCell>{fmt(resolve(r.created_by))}</TableCell>
                 <TableCell>{fmtDate(r.updated_at)}</TableCell>
               </TableRow>
