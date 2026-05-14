@@ -1070,8 +1070,14 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       [labourLabel, labourValue],
       ["Fuel", fuelValue],
       [chemLabel, chemValue],
-      ["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"],
     ];
+    if (c.inputs.lineCount > 0) {
+      rows.push([
+        `Seed / inputs (${c.inputs.lineCount} line${c.inputs.lineCount === 1 ? "" : "s"})`,
+        c.inputs.cost != null ? fmtCurrency(c.inputs.cost) : "—",
+      ]);
+    }
+    rows.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"]);
     y = renderFieldList(doc, rows, y);
     if (c.warnings.length > 0) {
       y = ensureSpace(doc, y, 20 + c.warnings.length * 12);
