@@ -26,6 +26,7 @@ import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
+import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
