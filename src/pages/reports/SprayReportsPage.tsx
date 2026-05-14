@@ -165,6 +165,7 @@ export default function SprayReportsPage() {
             members: costMembers ?? [],
             fuelPurchases: costFuel ?? [],
             sprayRecords: recordsResult?.records ?? [],
+            savedChemicals: costSavedChemicals?.chemicals ?? [],
           });
         }
       }
