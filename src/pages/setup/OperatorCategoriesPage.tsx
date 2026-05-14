@@ -243,27 +243,6 @@ function CategoryEditor({
   canSeeCosts: boolean;
   onSaved: () => void;
 }) {
-    </div>
-  );
-}
-
-function CategoryEditor({
-  category,
-  open,
-  onOpenChange,
-  vineyardId,
-  userId,
-  canWrite,
-  onSaved,
-}: {
-  category: OperatorCategory | null;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  vineyardId: string | null;
-  userId: string | null;
-  canWrite: boolean;
-  onSaved: () => void;
-}) {
   const isNew = !category;
   const [name, setName] = useState("");
   const [cost, setCost] = useState<string>("");
