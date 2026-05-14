@@ -204,6 +204,64 @@ export function exportSprayRecordPdf(
     y = (doc as any).lastAutoTable.finalY + 16;
   }
 
+  // Estimated trip cost — owner/manager only (caller gates).
+  if (context?.cost) {
+    const c = context.cost;
+    if (y > pageHeight - 200) {
+      doc.addPage();
+      y = 50;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Estimated trip cost", margin, y);
+    const labourLabel = `Labour${c.labour.categoryName ? ` (${c.labour.categoryName})` : ""}`;
+    const labourValue =
+      c.labour.cost != null
+        ? `${fmtCurrency(c.labour.cost)}${c.labour.ratePerHour != null ? ` · ${fmtCurrency(c.labour.ratePerHour)}/h` : ""}`
+        : NR;
+    const fuelValue =
+      c.fuel.cost != null
+        ? `${fmtCurrency(c.fuel.cost)}${c.fuel.litres != null ? ` · ${c.fuel.litres.toFixed(1)} L` : ""}${c.fuel.costPerLitre != null ? ` @ ${fmtCurrency(c.fuel.costPerLitre)}/L` : ""}`
+        : NR;
+    const chemLabel = `Chemicals${c.chemicals.lineCount ? ` (${c.chemicals.lineCount} line${c.chemicals.lineCount === 1 ? "" : "s"})` : ""}`;
+    autoTable(doc, {
+      startY: y + 6,
+      head: [["Field", "Value"]],
+      body: [
+        ["Active hours", fmtHours(c.activeHours)],
+        [labourLabel, labourValue],
+        ["Fuel", fuelValue],
+        [chemLabel, c.chemicals.cost != null ? fmtCurrency(c.chemicals.cost) : NR],
+        ["Estimated total", c.total != null ? fmtCurrency(c.total) : NR],
+      ],
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 5, valign: "top" },
+      headStyles: { fillColor: [60, 90, 60], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: 150, fontStyle: "bold" },
+        1: { cellWidth: "auto" },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+    if (c.warnings.length > 0) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(110);
+      const warnLines = doc.splitTextToSize(
+        `Costing completeness: ${c.warnings.join(" ")}`,
+        pageWidth - margin * 2,
+      );
+      if (y + warnLines.length * 11 > pageHeight - 80) {
+        doc.addPage();
+        y = 50;
+      }
+      doc.text(warnLines, margin, y);
+      y += warnLines.length * 11 + 6;
+      doc.setTextColor(0);
+    }
+  }
+
   // Meta
   if (y > pageHeight - 120) {
     doc.addPage();
