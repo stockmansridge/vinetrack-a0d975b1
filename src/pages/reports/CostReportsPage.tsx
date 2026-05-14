@@ -178,7 +178,15 @@ export default function CostReportsPage() {
     URL.revokeObjectURL(url);
   }
 
+  const setupSummary = useCostingSetupSummary(canSeeCosts ? selectedVineyardId : null);
+  const totalReportWarnings = summary.warns;
+  const showMissingBanner = canSeeCosts && (setupSummary.hasIssues || totalReportWarnings > 0);
+
+  const isUnassignedVariety = (v: string | null | undefined) =>
+    !v || /^unassigned/i.test(v);
+
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="p-6 space-y-6 max-w-7xl">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -193,11 +201,36 @@ export default function CostReportsPage() {
         </Button>
       </div>
 
+      {/* Costing Setup Wizard (owner/manager only) */}
+      {selectedVineyardId && <CostingSetupWizard vineyardId={selectedVineyardId} />}
+
+      {/* Missing-data banner */}
+      {showMissingBanner && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Some costing inputs are missing</AlertTitle>
+          <AlertDescription>
+            Complete the setup checklist above to improve cost/ha and cost/tonne accuracy.
+            {totalReportWarnings > 0 && (
+              <> {totalReportWarnings} allocation warning{totalReportWarnings === 1 ? "" : "s"} were flagged in the data below.</>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <SummaryCard label="Total cost" value={fmtMoney(summary.total)} />
-        <SummaryCard label="Total area" value={`${fmtNum(summary.area)} ha`} />
-        <SummaryCard label="Cost / ha" value={fmtMoney(summary.costPerHa)} />
+        <SummaryCard
+          label="Treated area"
+          value={`${fmtNum(summary.area)} ha`}
+          info="Treated area is the accumulated mapped block area from the jobs/trips included in this report. If the same block is treated multiple times, its area contributes once per job. Example: a 2 ha block treated 3 times contributes 6 treated ha."
+        />
+        <SummaryCard
+          label="Cost / ha"
+          value={fmtMoney(summary.costPerHa)}
+          info="Total cost divided by treated area (cumulative across jobs)."
+        />
         <SummaryCard label="Yield" value={`${fmtNum(summary.yieldT)} t`} />
         <SummaryCard label="Cost / tonne" value={fmtMoney(summary.costPerTonne)} />
         <SummaryCard label="Trips" value={String(summary.tripCount)} />
