@@ -376,13 +376,24 @@ export default function CostReportsPage() {
         </SheetContent>
       </Sheet>
     </div>
+    </TooltipProvider>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value, info }: { label: string; value: string; info?: string }) {
   return (
     <Card className="p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        {label}
+        {info && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3 w-3 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{info}</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       <div className="text-lg font-semibold mt-1">{value}</div>
     </Card>
   );
