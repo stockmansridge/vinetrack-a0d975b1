@@ -50,7 +50,8 @@ import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
-import { computeTripCost, fmtCurrency, fmtHours, type TractorLite } from "@/lib/tripCosting";
+import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
+import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
 
 
 interface PaddockLite {
