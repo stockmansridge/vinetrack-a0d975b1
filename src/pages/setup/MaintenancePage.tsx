@@ -328,12 +328,14 @@ function MaintenanceSheet({
   log,
   open,
   canWrite,
+  canSeeCosts,
   onOpenChange,
   onEdit,
 }: {
   log: MaintenanceLog | null;
   open: boolean;
   canWrite: boolean;
+  canSeeCosts: boolean;
   onOpenChange: (o: boolean) => void;
   onEdit: (l: MaintenanceLog) => void;
 }) {
