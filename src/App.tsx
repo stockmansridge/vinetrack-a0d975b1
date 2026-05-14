@@ -101,6 +101,7 @@ const App = () => (
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />
                     <Route path="/setup/operator-categories" element={<OperatorCategoriesPage />} />
+                    <Route path="/setup/saved-inputs" element={<SavedInputsPage />} />
                     <Route path="/setup/equipment-other" element={<EquipmentOtherItemsPage />} />
                     <Route path="/setup/weather" element={<WeatherStatusPage />} />
                     <Route path="/reports" element={<ReportsIndexPage />} />
