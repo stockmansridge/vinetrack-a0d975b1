@@ -43,6 +43,12 @@ import {
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { countTripPins } from "@/lib/tripPinCount";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
+import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
+import { computeTripCost, fmtCurrency, fmtHours, type TractorLite } from "@/lib/tripCosting";
 
 
 interface PaddockLite {
