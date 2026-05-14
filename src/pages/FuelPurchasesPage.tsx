@@ -423,7 +423,9 @@ function FuelEditor({
   const validate = (): string | null => {
     if (!date) return "Date is required";
     if (!Number.isFinite(litresNum) || litresNum <= 0) return "Volume (litres) must be greater than 0";
-    if (!Number.isFinite(costNum) || costNum < 0) return "Total cost must be 0 or greater";
+    if (canSeeCosts) {
+      if (!Number.isFinite(costNum) || costNum < 0) return "Total cost must be 0 or greater";
+    }
     return null;
   };
 
