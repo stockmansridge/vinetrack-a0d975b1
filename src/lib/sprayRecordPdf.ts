@@ -237,6 +237,10 @@ export function exportSprayRecordPdf(
       ]);
     }
     body.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : NR]);
+    body.push(["Treated area", c.treatedAreaHa != null ? fmtHa(c.treatedAreaHa) : "— (treated area missing)"]);
+    body.push(["Cost per ha", c.costPerHa != null ? `${fmtCurrency(c.costPerHa)} / ha` : "Unavailable"]);
+    body.push(["Yield tonnes", c.yieldTonnes != null ? fmtTonnes(c.yieldTonnes) : "Unavailable"]);
+    body.push(["Cost per tonne", c.costPerTonne != null ? `${fmtCurrency(c.costPerTonne)} / t` : "Unavailable"]);
     autoTable(doc, {
       startY: y + 6,
       head: [["Field", "Value"]],
