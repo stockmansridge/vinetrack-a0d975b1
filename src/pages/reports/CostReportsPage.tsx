@@ -4,7 +4,8 @@
 // query and the entire page behind useCanSeeCosts().
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock, Download, AlertTriangle } from "lucide-react";
+import { Lock, Download, AlertTriangle, Info } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useCanSeeCosts } from "@/lib/permissions";
@@ -12,10 +13,17 @@ import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import CostingSetupWizard, {
+  useCostingSetupSummary,
+} from "@/components/cost/CostingSetupWizard";
 
 import { Card } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -170,7 +178,15 @@ export default function CostReportsPage() {
     URL.revokeObjectURL(url);
   }
 
+  const setupSummary = useCostingSetupSummary(canSeeCosts ? selectedVineyardId : null);
+  const totalReportWarnings = summary.warns;
+  const showMissingBanner = canSeeCosts && (setupSummary.hasIssues || totalReportWarnings > 0);
+
+  const isUnassignedVariety = (v: string | null | undefined) =>
+    !v || /^unassigned/i.test(v);
+
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="p-6 space-y-6 max-w-7xl">
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -185,11 +201,36 @@ export default function CostReportsPage() {
         </Button>
       </div>
 
+      {/* Costing Setup Wizard (owner/manager only) */}
+      {selectedVineyardId && <CostingSetupWizard vineyardId={selectedVineyardId} />}
+
+      {/* Missing-data banner */}
+      {showMissingBanner && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Some costing inputs are missing</AlertTitle>
+          <AlertDescription>
+            Complete the setup checklist above to improve cost/ha and cost/tonne accuracy.
+            {totalReportWarnings > 0 && (
+              <> {totalReportWarnings} allocation warning{totalReportWarnings === 1 ? "" : "s"} were flagged in the data below.</>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <SummaryCard label="Total cost" value={fmtMoney(summary.total)} />
-        <SummaryCard label="Total area" value={`${fmtNum(summary.area)} ha`} />
-        <SummaryCard label="Cost / ha" value={fmtMoney(summary.costPerHa)} />
+        <SummaryCard
+          label="Treated area"
+          value={`${fmtNum(summary.area)} ha`}
+          info="Treated area is the accumulated mapped block area from the jobs/trips included in this report. If the same block is treated multiple times, its area contributes once per job. Example: a 2 ha block treated 3 times contributes 6 treated ha."
+        />
+        <SummaryCard
+          label="Cost / ha"
+          value={fmtMoney(summary.costPerHa)}
+          info="Total cost divided by treated area (cumulative across jobs)."
+        />
         <SummaryCard label="Yield" value={`${fmtNum(summary.yieldT)} t`} />
         <SummaryCard label="Cost / tonne" value={fmtMoney(summary.costPerTonne)} />
         <SummaryCard label="Trips" value={String(summary.tripCount)} />
@@ -241,7 +282,26 @@ export default function CostReportsPage() {
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setDrill(r)}>
                   <TableCell>{r.season_year ?? "—"}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{r.paddock_name ?? "—"}</TableCell>
-                  <TableCell>{r.variety ?? "—"}</TableCell>
+                  <TableCell>
+                    {isUnassignedVariety(r.variety) ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              Unassigned variety
+                            </Badge>
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          Unassigned variety means the block has no variety
+                          allocation, or the allocation could not be matched.
+                          Add or fix the variety allocation in{" "}
+                          <Link to="/setup/paddocks" className="underline">Block settings</Link>.
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : r.variety}
+                  </TableCell>
                   <TableCell className="text-right">{fmtNum(r.allocation_area_ha)}</TableCell>
                   <TableCell className="text-right">{fmtNum(r.yield_tonnes)}</TableCell>
                   <TableCell className="text-right">{fmtMoney(r.labour_cost)}</TableCell>
@@ -316,13 +376,24 @@ export default function CostReportsPage() {
         </SheetContent>
       </Sheet>
     </div>
+    </TooltipProvider>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value, info }: { label: string; value: string; info?: string }) {
   return (
     <Card className="p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        {label}
+        {info && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3 w-3 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{info}</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       <div className="text-lg font-semibold mt-1">{value}</div>
     </Card>
   );
