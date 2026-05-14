@@ -541,8 +541,8 @@ function MaintenanceEditor({
         machine_hours: numOrNull(machineHours),
         work_completed: workCompleted.trim() || null,
         parts_used: partsUsed.trim() || null,
-        parts_cost: numOrNull(partsCost),
-        labour_cost: numOrNull(labourCost),
+        parts_cost: canSeeCosts ? numOrNull(partsCost) : null,
+        labour_cost: canSeeCosts ? numOrNull(labourCost) : null,
         is_finalized: finalized,
         user_id: user?.id ?? null,
       });
