@@ -32,6 +32,7 @@ import YieldReportsPage from "./pages/setup/YieldReportsPage";
 import SavedChemicalsPage from "./pages/setup/SavedChemicalsPage";
 import SprayJobsPage from "./pages/setup/SprayJobsPage";
 import OperatorCategoriesPage from "./pages/setup/OperatorCategoriesPage";
+import SavedInputsPage from "./pages/setup/SavedInputsPage";
 import EquipmentOtherItemsPage from "./pages/setup/EquipmentOtherItemsPage";
 import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
 import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
