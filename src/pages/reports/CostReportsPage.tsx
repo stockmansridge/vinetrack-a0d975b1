@@ -7,12 +7,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Lock, Download, AlertTriangle, Info } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useCanSeeCosts } from "@/lib/permissions";
 import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import {
+  useGrapeVarieties,
+  buildVarietyMap,
+  primaryVarietyName,
+} from "@/lib/varietyResolver";
 import CostingSetupWizard, {
   useCostingSetupSummary,
 } from "@/components/cost/CostingSetupWizard";
@@ -79,6 +85,52 @@ export default function CostReportsPage() {
     enabled: !!selectedVineyardId && canSeeCosts,
   });
 
+  // Resolve varieties from paddocks.variety_allocations + grape_varieties
+  // so rows whose snapshot variety is missing/UUID can still display a name.
+  const { data: grapeVarieties } = useGrapeVarieties(canSeeCosts ? selectedVineyardId : null);
+  const { data: paddockRows = [] } = useQuery({
+    queryKey: ["paddocks-for-cost-reports", selectedVineyardId],
+    enabled: !!selectedVineyardId && canSeeCosts,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("paddocks")
+        .select("id,variety_allocations")
+        .eq("vineyard_id", selectedVineyardId);
+      if (error) {
+        console.warn("[paddocks] fetch failed:", error.message);
+        return [];
+      }
+      return (data ?? []) as Array<{ id: string; variety_allocations: any }>;
+    },
+  });
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties), [grapeVarieties]);
+  const paddockAllocsById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const p of paddockRows) m.set(p.id, p.variety_allocations);
+    return m;
+  }, [paddockRows]);
+
+  // UUID detector — trip_cost_allocations.variety sometimes stores a varietyId
+  // string snapshot rather than a name; resolve those here too.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function resolveRowVariety(r: TripCostAllocation): string | null {
+    const raw = (r.variety ?? "").toString().trim();
+    if (raw && !/^unassigned/i.test(raw)) {
+      if (UUID_RE.test(raw) && varietyMap.byId.has(raw)) return varietyMap.byId.get(raw)!;
+      // Case-insensitive name match → canonical capitalisation, else use as-is.
+      const ci = varietyMap.byNameLower.get(raw.toLowerCase());
+      if (ci) return ci;
+      if (!UUID_RE.test(raw)) return raw;
+    }
+    if (r.paddock_id) {
+      const allocs = paddockAllocsById.get(r.paddock_id);
+      const name = primaryVarietyName(allocs, varietyMap);
+      if (name) return name;
+    }
+    return null;
+  }
+
   const [season, setSeason] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
   const [variety, setVariety] = useState<string>(ANY);
@@ -95,8 +147,8 @@ export default function CostReportsPage() {
     [rows],
   );
   const varieties = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.variety).filter((v): v is string => !!v))).sort(),
-    [rows],
+    () => Array.from(new Set(rows.map((r) => resolveRowVariety(r)).filter((v): v is string => !!v))).sort(),
+    [rows, varietyMap, paddockAllocsById],
   );
   const tripFns = useMemo(
     () => Array.from(new Set(rows.map((r) => r.trip_function).filter((v): v is string => !!v))).sort(),
@@ -111,12 +163,12 @@ export default function CostReportsPage() {
     return rows.filter((r) => {
       if (season !== ANY && String(r.season_year ?? "") !== season) return false;
       if (paddock !== ANY && (r.paddock_name ?? "") !== paddock) return false;
-      if (variety !== ANY && (r.variety ?? "") !== variety) return false;
+      if (variety !== ANY && (resolveRowVariety(r) ?? "") !== variety) return false;
       if (tripFn !== ANY && (r.trip_function ?? "") !== tripFn) return false;
       if (status !== ANY && (r.costing_status ?? "") !== status) return false;
       return true;
     });
-  }, [rows, season, paddock, variety, tripFn, status]);
+  }, [rows, season, paddock, variety, tripFn, status, varietyMap, paddockAllocsById]);
 
   const summary = useMemo(() => {
     let total = 0, area = 0, yieldT = 0, warns = 0;
@@ -152,7 +204,7 @@ export default function CostReportsPage() {
       filtered.map((r) => [
         r.season_year ?? "",
         csvCell(r.paddock_name),
-        csvCell(r.variety),
+        csvCell(resolveRowVariety(r) ?? r.variety),
         r.allocation_area_ha ?? "",
         r.yield_tonnes ?? "",
         r.labour_cost ?? "",
@@ -182,8 +234,6 @@ export default function CostReportsPage() {
   const totalReportWarnings = summary.warns;
   const showMissingBanner = canSeeCosts && (setupSummary.hasIssues || totalReportWarnings > 0);
 
-  const isUnassignedVariety = (v: string | null | undefined) =>
-    !v || /^unassigned/i.test(v);
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -283,24 +333,28 @@ export default function CostReportsPage() {
                   <TableCell>{r.season_year ?? "—"}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{r.paddock_name ?? "—"}</TableCell>
                   <TableCell>
-                    {isUnassignedVariety(r.variety) ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-1">
-                            <Badge variant="outline" className="text-amber-700 border-amber-400">
-                              Unassigned variety
-                            </Badge>
-                            <Info className="h-3 w-3 text-muted-foreground" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          Unassigned variety means the block has no variety
-                          allocation, or the allocation could not be matched.
-                          Add or fix the variety allocation in{" "}
-                          <Link to="/setup/paddocks" className="underline">Block settings</Link>.
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : r.variety}
+                    {(() => {
+                      const resolved = resolveRowVariety(r);
+                      if (resolved) return resolved;
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1">
+                              <Badge variant="outline" className="text-amber-700 border-amber-400">
+                                Unassigned variety
+                              </Badge>
+                              <Info className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            This block has no variety allocation, or the
+                            allocation could not be matched. Add or fix the
+                            variety allocation in{" "}
+                            <Link to="/setup/paddocks" className="underline">Block settings</Link>.
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-right">{fmtNum(r.allocation_area_ha)}</TableCell>
                   <TableCell className="text-right">{fmtNum(r.yield_tonnes)}</TableCell>
@@ -334,7 +388,7 @@ export default function CostReportsPage() {
           {drill && (
             <>
               <SheetHeader>
-                <SheetTitle>{drill.paddock_name ?? "Cost allocation"}{drill.variety ? ` · ${drill.variety}` : ""}</SheetTitle>
+                <SheetTitle>{drill.paddock_name ?? "Cost allocation"}{(() => { const v = resolveRowVariety(drill); return v ? ` · ${v}` : ""; })()}</SheetTitle>
                 <SheetDescription>
                   Season {drill.season_year ?? "—"} · {drill.trip_function ?? "trip"}
                 </SheetDescription>
