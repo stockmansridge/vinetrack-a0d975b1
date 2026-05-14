@@ -399,6 +399,7 @@ export default function TripsPage() {
         trip={selected}
         paddockNameById={paddockNameById}
         vineyardName={vineyardName}
+        vineyardId={selectedVineyardId}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
