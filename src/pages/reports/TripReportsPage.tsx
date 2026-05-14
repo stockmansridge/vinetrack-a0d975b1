@@ -255,6 +255,7 @@ export default function TripReportsPage() {
         blockNames: blockNamesFor(t),
         pinCount,
         vineyardLogoUrl: vineyardLogoUrl ?? null,
+        cost: computeCostFor(t),
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
@@ -266,7 +267,13 @@ export default function TripReportsPage() {
   const handleExportCsv = () => {
     if (!rows.length) return;
     const csvRows = rows.map((t) =>
-      tripToCsvRow(t, padNameFor(t), tripDisplayName(t), tripFunctionLabel(t.trip_function)),
+      tripToCsvRow(
+        t,
+        padNameFor(t),
+        tripDisplayName(t),
+        tripFunctionLabel(t.trip_function),
+        computeCostFor(t),
+      ),
     );
     downloadCsv(`TripReports_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
   };
