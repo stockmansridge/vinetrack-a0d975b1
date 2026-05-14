@@ -462,7 +462,8 @@ function FuelEditor({
         id: editing.id,
         date,
         volume_litres: litresNum,
-        total_cost: costNum,
+        // Don't overwrite existing cost when supervisors edit.
+        total_cost: canSeeCosts ? costNum : (editing.total_cost ?? 0),
         user_id: user?.id ?? null,
         current_sync_version: editing.sync_version ?? 0,
       });
