@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Fuel,
   LifeBuoy,
+  DollarSign,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -70,6 +71,11 @@ const reports: NavItem[] = [
   { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
   { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
   { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
+];
+
+// Owner/manager-only reports (financial)
+const reportsAdmin: NavItem[] = [
+  { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
 ];
 
 // "Setup" — vineyard configuration
@@ -159,7 +165,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Reports</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(reports)}</SidebarMenu>
+            <SidebarMenu>{renderItems(isAdmin ? [...reports, ...reportsAdmin] : reports)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
