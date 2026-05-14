@@ -114,13 +114,33 @@ export function PaddockDetailContent({
     ? paddock.variety_allocations
     : [];
 
+  const { selectedVineyardId } = useVineyard();
+  const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
+  const varietyMap = buildVarietyMap(grapeVarieties);
+  const allocations = resolvePaddockAllocations(paddock.variety_allocations, varietyMap);
+  const polygonRaw = Array.isArray(paddock.polygon_points) ? paddock.polygon_points : [];
+
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-4 text-sm">
-      <Section title="Summary">
-        <Row label="Name" value={paddock.name ?? "Unnamed"} />
+      <Section title="Boundary / Area">
         <Row label="Area" value={`${fmt(metrics.areaHa, 3)} ha`} />
-        <Row label="Rows" value={String(metrics.rowCount)} />
+        <Row label="Boundary points" value={String(polygonPointCount || polygonRaw.length || 0)} />
+      </Section>
+
+      <Section title="Rows">
+        <Row label="Row count" value={String(metrics.rowCount)} />
+        <Row label="Row direction" value={paddock.row_direction != null ? `${fmt(paddock.row_direction, 1)}°` : "—"} />
+        <Row label="Row width" value={paddock.row_width ? `${paddock.row_width} m` : "—"} />
+        <Row label="Row offset" value={paddock.row_offset != null ? `${paddock.row_offset} m` : "—"} />
+        <Row label="Vine spacing" value={paddock.vine_spacing ? `${paddock.vine_spacing} m` : "—"} />
         <Row label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
+        <Row
+          label="Average row length"
+          value={metrics.rowCount > 0 ? `${fmt(metrics.totalRowLengthM / metrics.rowCount, 1)} m` : "—"}
+        />
+        <Row label="Row length override" value={paddock.row_length_override ? `${paddock.row_length_override} m` : "—"} />
+        <Row label="Vine count override" value={fmtInt(paddock.vine_count_override)} />
         <Row
           label="Vines"
           value={
@@ -129,25 +149,64 @@ export function PaddockDetailContent({
               : `${metrics.vineCount.toLocaleString()} (${metrics.vineCountSource})`
           }
         />
-        {varieties.length > 0 && (
-          <Row
-            label="Varieties"
-            value={
-              <span className="text-xs">
-                {varieties.length} alloc.
-              </span>
-            }
-          />
-        )}
       </Section>
 
-      <Section title="Row setup">
-        <Row label="Row direction" value={paddock.row_direction != null ? `${fmt(paddock.row_direction, 1)}°` : "—"} />
-        <Row label="Row width" value={paddock.row_width ? `${paddock.row_width} m` : "—"} />
-        <Row label="Row offset" value={paddock.row_offset != null ? `${paddock.row_offset} m` : "—"} />
-        <Row label="Vine spacing" value={paddock.vine_spacing ? `${paddock.vine_spacing} m` : "—"} />
-        <Row label="Row length override" value={paddock.row_length_override ? `${paddock.row_length_override} m` : "—"} />
-        <Row label="Vine count override" value={fmtInt(paddock.vine_count_override)} />
+      <Section title="Varieties">
+        {allocations.length === 0 ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-xs">
+                <Badge variant="outline" className="text-amber-700 border-amber-400">
+                  Unassigned variety
+                </Badge>
+                <AlertTriangle className="h-3 w-3 text-amber-600" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              This block has no variety allocation, or the allocation could not
+              be matched. Add or fix the variety allocation in Block Settings.
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className="space-y-1">
+            {allocations.map((a, i) => (
+              <div
+                key={a.id ?? i}
+                className="flex items-baseline justify-between gap-3 py-1"
+              >
+                <span className="font-medium">
+                  {a.resolved ? (
+                    a.name
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1">
+                          <Badge variant="outline" className="text-amber-700 border-amber-400">
+                            Unassigned variety
+                          </Badge>
+                          <AlertTriangle className="h-3 w-3 text-amber-600" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        This allocation could not be matched to a grape variety.
+                        Add or fix the variety allocation in Block Settings.
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground text-right">
+                  {a.percent != null ? `${fmt(a.percent, 1)}%` : "—"}
+                  {a.clone ? ` · clone ${a.clone}` : ""}
+                  {a.rootstock ? ` · ${a.rootstock}` : ""}
+                  {a.plantingYear ? ` · ${a.plantingYear}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {paddock.planting_year && (
+          <Row label="Planting year (block)" value={paddock.planting_year} />
+        )}
       </Section>
 
       <Section title="Irrigation">
@@ -172,17 +231,16 @@ export function PaddockDetailContent({
         <Row label="Planting year" value={paddock.planting_year ?? "—"} />
       </Section>
 
-      <Section title="Data quality / debug">
-        <Row label="Polygon points" value={polygonPointCount} />
-        <Row label="Rows raw / parsed" value={`${rawRowsCount} / ${parsedRowsCount}`} />
+      <Section title="Updated">
         <Row label="Updated" value={fmtDate(paddock.updated_at)} />
       </Section>
 
-      <div className="space-y-1">
-        <JsonBlock label="polygon_points" value={paddock.polygon_points} />
-        <JsonBlock label="rows" value={paddock.rows} />
-        <JsonBlock label="variety_allocations" value={paddock.variety_allocations} />
-      </div>
+      <AdvancedRawData
+        paddock={paddock}
+        parsedRowsCount={parsedRowsCount}
+        rawRowsCount={rawRowsCount}
+        polygonPointCount={polygonPointCount}
+      />
 
       <Button asChild variant="outline" size="sm" className="w-full">
         <Link to={`/setup/paddocks/${paddock.id}`}>
@@ -190,6 +248,43 @@ export function PaddockDetailContent({
         </Link>
       </Button>
     </div>
+    </TooltipProvider>
+  );
+}
+
+function AdvancedRawData({
+  paddock,
+  parsedRowsCount,
+  rawRowsCount,
+  polygonPointCount,
+}: {
+  paddock: any;
+  parsedRowsCount: number;
+  rawRowsCount: number;
+  polygonPointCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 rounded border bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+        >
+          <span>Advanced / raw data (debug)</span>
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-1">
+        <Row label="Polygon points" value={polygonPointCount} />
+        <Row label="Rows raw / parsed" value={`${rawRowsCount} / ${parsedRowsCount}`} />
+        <JsonBlock label="polygon_points" value={paddock.polygon_points} />
+        <JsonBlock label="rows" value={paddock.rows} />
+        <JsonBlock label="variety_allocations" value={paddock.variety_allocations} />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
