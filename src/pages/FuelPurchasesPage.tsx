@@ -494,7 +494,7 @@ function FuelEditor({
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid ${canSeeCosts ? "grid-cols-2" : "grid-cols-1"} gap-3`}>
             <div className="space-y-1.5">
               <Label>Volume (litres) *</Label>
               <Input
@@ -507,24 +507,28 @@ function FuelEditor({
                 placeholder="0.00"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Total cost *</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={cost}
-                onChange={(e) => setCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
+            {canSeeCosts && (
+              <div className="space-y-1.5">
+                <Label>Total cost *</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
           </div>
 
-          <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
-            <span className="text-muted-foreground">Cost per litre</span>
-            <span className="font-medium">{previewCpl}</span>
-          </div>
+          {canSeeCosts && (
+            <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
+              <span className="text-muted-foreground">Cost per litre</span>
+              <span className="font-medium">{previewCpl}</span>
+            </div>
+          )}
         </div>
 
         <SheetFooter className="mt-6 gap-2">
