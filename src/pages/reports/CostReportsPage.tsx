@@ -85,6 +85,52 @@ export default function CostReportsPage() {
     enabled: !!selectedVineyardId && canSeeCosts,
   });
 
+  // Resolve varieties from paddocks.variety_allocations + grape_varieties
+  // so rows whose snapshot variety is missing/UUID can still display a name.
+  const { data: grapeVarieties } = useGrapeVarieties(canSeeCosts ? selectedVineyardId : null);
+  const { data: paddocks = [] } = useQuery({
+    queryKey: ["paddocks-for-cost-reports", selectedVineyardId],
+    enabled: !!selectedVineyardId && canSeeCosts,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("paddocks")
+        .select("id,variety_allocations")
+        .eq("vineyard_id", selectedVineyardId);
+      if (error) {
+        console.warn("[paddocks] fetch failed:", error.message);
+        return [];
+      }
+      return (data ?? []) as Array<{ id: string; variety_allocations: any }>;
+    },
+  });
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties), [grapeVarieties]);
+  const paddockAllocsById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const p of paddocks) m.set(p.id, p.variety_allocations);
+    return m;
+  }, [paddocks]);
+
+  // UUID detector — trip_cost_allocations.variety sometimes stores a varietyId
+  // string snapshot rather than a name; resolve those here too.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function resolveRowVariety(r: TripCostAllocation): string | null {
+    const raw = (r.variety ?? "").toString().trim();
+    if (raw && !/^unassigned/i.test(raw)) {
+      if (UUID_RE.test(raw) && varietyMap.byId.has(raw)) return varietyMap.byId.get(raw)!;
+      // Case-insensitive name match → canonical capitalisation, else use as-is.
+      const ci = varietyMap.byNameLower.get(raw.toLowerCase());
+      if (ci) return ci;
+      if (!UUID_RE.test(raw)) return raw;
+    }
+    if (r.paddock_id) {
+      const allocs = paddockAllocsById.get(r.paddock_id);
+      const name = primaryVarietyName(allocs, varietyMap);
+      if (name) return name;
+    }
+    return null;
+  }
+
   const [season, setSeason] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
   const [variety, setVariety] = useState<string>(ANY);
