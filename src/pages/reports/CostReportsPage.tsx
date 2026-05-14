@@ -4,7 +4,8 @@
 // query and the entire page behind useCanSeeCosts().
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock, Download, AlertTriangle } from "lucide-react";
+import { Lock, Download, AlertTriangle, Info } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useCanSeeCosts } from "@/lib/permissions";
@@ -12,10 +13,17 @@ import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import CostingSetupWizard, {
+  useCostingSetupSummary,
+} from "@/components/cost/CostingSetupWizard";
 
 import { Card } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
