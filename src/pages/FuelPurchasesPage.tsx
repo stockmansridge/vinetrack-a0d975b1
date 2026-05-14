@@ -178,14 +178,18 @@ export default function FuelPurchasesPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-3 sm:grid-cols-2 ${canSeeCosts ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}>
         <SummaryCard label="Purchases" value={String(summary.count)} />
         <SummaryCard label="Total litres" value={fmtLitres(summary.totalLitres)} />
-        <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
-        <SummaryCard
-          label="Avg cost / litre"
-          value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
-        />
+        {canSeeCosts && (
+          <>
+            <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
+            <SummaryCard
+              label="Avg cost / litre"
+              value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
