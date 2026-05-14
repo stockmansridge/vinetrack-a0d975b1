@@ -127,6 +127,11 @@ export default function SprayReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchSavedInputsForVineyard(selectedVineyardId!),
   });
+  const { data: costYields } = useQuery({
+    queryKey: ["spray-cost-yields", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchYieldReportsForVineyard(selectedVineyardId!),
+  });
 
   // ---- Spray jobs (yearly program)
   const { data: jobs, isLoading: jobsLoading } = useQuery({
