@@ -384,10 +384,12 @@ function FuelEditor({
   open,
   onOpenChange,
   editing,
+  canSeeCosts,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing: FuelPurchase | null;
+  canSeeCosts: boolean;
 }) {
   const { selectedVineyardId } = useVineyard();
   const { user } = useAuth();
