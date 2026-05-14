@@ -27,6 +27,7 @@ import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
+import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 
-interface PaddockLite { id: string; name: string | null }
+interface PaddockLite { id: string; name: string | null; polygon_points?: any }
 
 const ANY = "__any__";
 const MAINT = "__maint__";
@@ -193,6 +194,11 @@ export default function TripReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchSavedInputsForVineyard(selectedVineyardId!),
   });
+  const { data: costYields } = useQuery({
+    queryKey: ["cost-yields", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchYieldReportsForVineyard(selectedVineyardId!),
+  });
 
   const computeCostFor = (t: Trip) => {
     if (!canSeeCosts) return null;
@@ -206,6 +212,8 @@ export default function TripReportsPage() {
       sprayRecords: costSpray?.records ?? [],
       savedChemicals: costSavedChemicals?.chemicals ?? [],
       savedInputs: costSavedInputs?.inputs ?? [],
+      paddocks,
+      historicalYields: costYields?.historical ?? [],
     });
   };
 

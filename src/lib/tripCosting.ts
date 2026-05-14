@@ -27,6 +27,8 @@ import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
 import type { SavedInput } from "@/lib/savedInputsQuery";
+import type { HistoricalYieldRecord } from "@/lib/yieldReportsQuery";
+import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
 
 /** Subset of saved_chemicals used for cost fallback resolution. */
 export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
@@ -52,6 +54,13 @@ export interface TractorLite {
   fuel_usage_l_per_hour?: number | null;
 }
 
+/** Subset of paddocks used for treated-area resolution. */
+export interface PaddockGeoLite {
+  id: string;
+  name?: string | null;
+  polygon_points?: any;
+}
+
 export interface TripCostBreakdown {
   activeHours: number | null;
   labour: { hours: number | null; ratePerHour: number | null; cost: number | null; categoryName: string | null };
@@ -59,6 +68,18 @@ export interface TripCostBreakdown {
   chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
   inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
+  /** Treated hectares resolved from linked paddock polygons. null when unavailable. */
+  treatedAreaHa: number | null;
+  /** total / treatedAreaHa. null when either is unavailable. */
+  costPerHa: number | null;
+  /** Yield tonnes resolved from historical_yield_records.block_results. null when unavailable. */
+  yieldTonnes: number | null;
+  /** total / yieldTonnes. null when either is unavailable. */
+  costPerTonne: number | null;
+  /** Human-readable warning when treated area can't be resolved. */
+  areaWarning: string | null;
+  /** Human-readable warning when yield tonnes can't be resolved. */
+  yieldWarning: string | null;
   warnings: string[];
 }
 
@@ -236,6 +257,124 @@ export interface TripCostInputs {
   savedChemicals?: SavedChemicalLite[];
   /** Optional saved-input library for seed/fertiliser cost resolution. */
   savedInputs?: SavedInputLite[];
+  /** Vineyard paddocks (id + polygon_points) for treated-area resolution. */
+  paddocks?: PaddockGeoLite[];
+  /** Historical yield records used to resolve yield tonnes per paddock. */
+  historicalYields?: Pick<HistoricalYieldRecord, "block_results" | "year" | "season" | "archived_at" | "created_at">[];
+}
+
+/** Collect linked paddock IDs for a trip. */
+function tripPaddockIds(trip: Trip): string[] {
+  const ids = new Set<string>();
+  if (Array.isArray(trip.paddock_ids)) {
+    for (const v of trip.paddock_ids as any[]) {
+      if (v != null && v !== "") ids.add(String(v));
+    }
+  }
+  if (trip.paddock_id) ids.add(String(trip.paddock_id));
+  return Array.from(ids);
+}
+
+/** Sum polygon area (ha) across the trip's linked paddocks. Returns null when none resolvable. */
+export function resolveTreatedAreaHa(
+  trip: Trip,
+  paddocks: PaddockGeoLite[],
+): { areaHa: number | null; matched: number; total: number; warning: string | null } {
+  const ids = tripPaddockIds(trip);
+  if (ids.length === 0) {
+    return { areaHa: null, matched: 0, total: 0, warning: "No paddock linked to this trip — treated area unknown." };
+  }
+  const byId = new Map(paddocks.map((p) => [p.id, p] as const));
+  let area = 0;
+  let matched = 0;
+  for (const id of ids) {
+    const p = byId.get(id);
+    if (!p) continue;
+    const a = polygonAreaHectares(parsePolygonPoints(p.polygon_points));
+    if (isFinite(a) && a > 0) {
+      area += a;
+      matched++;
+    }
+  }
+  if (matched === 0) {
+    return {
+      areaHa: null,
+      matched: 0,
+      total: ids.length,
+      warning: "Treated paddock polygons unavailable — treated area unknown.",
+    };
+  }
+  if (matched < ids.length) {
+    return {
+      areaHa: area,
+      matched,
+      total: ids.length,
+      warning: `Treated area derived from ${matched} of ${ids.length} linked paddocks (others missing geometry).`,
+    };
+  }
+  return { areaHa: area, matched, total: ids.length, warning: null };
+}
+
+/** Pull a per-paddock tonne value out of a single block_results entry. */
+function blockEntryTonnes(entry: any): number | null {
+  if (!entry || typeof entry !== "object") return null;
+  const candidates = [
+    entry.total_yield_tonnes, entry.totalYieldTonnes,
+    entry.yield_tonnes, entry.yieldTonnes,
+    entry.tonnes, entry.tonnage, entry.estimated_tonnes, entry.estimatedTonnes,
+    entry.actual_tonnes, entry.actualTonnes,
+  ];
+  for (const v of candidates) {
+    const n = Number(v);
+    if (isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function blockEntryPaddockId(entry: any): string | null {
+  if (!entry || typeof entry !== "object") return null;
+  const v =
+    entry.paddock_id ?? entry.paddockId ??
+    entry.block_id ?? entry.blockId ?? entry.id ?? null;
+  return v == null ? null : String(v);
+}
+
+/** Resolve trip yield tonnes from historical yield records. Conservative: only when all linked paddocks match. */
+export function resolveTripYieldTonnes(
+  trip: Trip,
+  records: Pick<HistoricalYieldRecord, "block_results" | "year" | "season" | "archived_at" | "created_at">[],
+): { tonnes: number | null; warning: string | null } {
+  const ids = tripPaddockIds(trip);
+  if (ids.length === 0) {
+    return { tonnes: null, warning: "Cost per tonne unavailable — yield data missing." };
+  }
+  if (!records || records.length === 0) {
+    return { tonnes: null, warning: "Cost per tonne unavailable — yield data missing." };
+  }
+  // Pick the most recent record (by archived_at / created_at / year) that
+  // contains entries for ALL linked paddocks. If none qualifies, return unavailable.
+  const sorted = [...records].sort((a, b) => {
+    const ka = (a.archived_at ?? a.created_at ?? (a.year != null ? `${a.year}-12-31` : "")) || "";
+    const kb = (b.archived_at ?? b.created_at ?? (b.year != null ? `${b.year}-12-31` : "")) || "";
+    return kb.localeCompare(ka);
+  });
+  for (const rec of sorted) {
+    const blocks = Array.isArray(rec.block_results) ? rec.block_results : null;
+    if (!blocks || blocks.length === 0) continue;
+    const tonnesByPaddock = new Map<string, number>();
+    for (const b of blocks) {
+      const pid = blockEntryPaddockId(b);
+      const t = blockEntryTonnes(b);
+      if (pid && t != null) tonnesByPaddock.set(pid, (tonnesByPaddock.get(pid) ?? 0) + t);
+    }
+    if (tonnesByPaddock.size === 0) continue;
+    const allMatch = ids.every((id) => tonnesByPaddock.has(id));
+    if (!allMatch) continue;
+    let total = 0;
+    for (const id of ids) total += tonnesByPaddock.get(id) ?? 0;
+    if (total > 0) return { tonnes: total, warning: null };
+  }
+  return { tonnes: null, warning: "Cost per tonne unavailable — yield data missing." };
 }
 
 export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
@@ -297,6 +436,28 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
   if (inputCostFinal != null) parts.push(inputCostFinal);
   const total = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 
+  // Treated area + cost per ha
+  const areaRes = resolveTreatedAreaHa(inp.trip, inp.paddocks ?? []);
+  const treatedAreaHa = areaRes.areaHa;
+  let areaWarning = areaRes.warning;
+  const costPerHa =
+    total != null && treatedAreaHa != null && treatedAreaHa > 0 ? total / treatedAreaHa : null;
+  if (costPerHa == null && total != null && treatedAreaHa == null && !areaWarning) {
+    areaWarning = "Cost per ha unavailable — treated area missing.";
+  }
+  if (areaWarning) warnings.push(areaWarning);
+
+  // Yield tonnes + cost per tonne
+  const yieldRes = resolveTripYieldTonnes(inp.trip, inp.historicalYields ?? []);
+  const yieldTonnes = yieldRes.tonnes;
+  let yieldWarning = yieldRes.warning;
+  const costPerTonne =
+    total != null && yieldTonnes != null && yieldTonnes > 0 ? total / yieldTonnes : null;
+  if (costPerTonne == null && total != null && yieldTonnes == null && !yieldWarning) {
+    yieldWarning = "Cost per tonne unavailable — yield data missing.";
+  }
+  if (yieldWarning) warnings.push(yieldWarning);
+
   return {
     activeHours: hours,
     labour: { hours, ratePerHour, cost: labourCost, categoryName: cat?.name ?? null },
@@ -304,6 +465,12 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
     chemicals: { cost: chemCostFinal, lineCount: chemLines, missingCostLines: chemMissing },
     inputs: { cost: inputCostFinal, lineCount: inputAgg.lines, missingCostLines: inputAgg.missing },
     total,
+    treatedAreaHa,
+    costPerHa,
+    yieldTonnes,
+    costPerTonne,
+    areaWarning,
+    yieldWarning,
     warnings,
   };
 }
@@ -322,5 +489,14 @@ export function fmtHours(h: number | null | undefined): string {
   const totalMin = Math.round(h * 60);
   const hh = Math.floor(totalMin / 60);
   const mm = totalMin % 60;
-  return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
+}
+
+export function fmtHa(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return "—";
+  return `${n.toFixed(2)} ha`;
+}
+
+export function fmtTonnes(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return "—";
+  return `${n.toFixed(2)} t`;
 }

@@ -15,7 +15,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Trip } from "./tripsQuery";
 import type { TripCostBreakdown } from "./tripCosting";
-import { fmtCurrency, fmtHours } from "./tripCosting";
+import { fmtCurrency, fmtHa, fmtHours, fmtTonnes } from "./tripCosting";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { composeSatelliteRouteImage } from "./satelliteRouteMap";
 
@@ -688,6 +688,10 @@ export function tripToCsvRow(
     base.input_lines = String(cost.inputs.lineCount);
     base.input_lines_missing_cost = String(cost.inputs.missingCostLines);
     base.total_estimated_cost = num(cost.total);
+    base.treated_area_ha = num(cost.treatedAreaHa);
+    base.cost_per_ha = num(cost.costPerHa);
+    base.yield_tonnes = num(cost.yieldTonnes);
+    base.cost_per_tonne = num(cost.costPerTonne);
     base.costing_warnings = cost.warnings.join(" | ");
   }
   return base;
@@ -1078,6 +1082,10 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
       ]);
     }
     rows.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"]);
+    rows.push(["Treated area", c.treatedAreaHa != null ? fmtHa(c.treatedAreaHa) : "— (treated area missing)"]);
+    rows.push(["Cost per ha", c.costPerHa != null ? fmtCurrency(c.costPerHa) + " / ha" : "Unavailable"]);
+    rows.push(["Yield tonnes", c.yieldTonnes != null ? fmtTonnes(c.yieldTonnes) : "Unavailable"]);
+    rows.push(["Cost per tonne", c.costPerTonne != null ? fmtCurrency(c.costPerTonne) + " / t" : "Unavailable"]);
     y = renderFieldList(doc, rows, y);
     if (c.warnings.length > 0) {
       y = ensureSpace(doc, y, 20 + c.warnings.length * 12);
