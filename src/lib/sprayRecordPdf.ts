@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { SprayRecord } from "./sprayRecordsQuery";
 import type { TripCostBreakdown } from "./tripCosting";
-import { fmtCurrency, fmtHours } from "./tripCosting";
+import { fmtCurrency, fmtHa, fmtHours, fmtTonnes } from "./tripCosting";
 
 const NR = "Not recorded";
 
