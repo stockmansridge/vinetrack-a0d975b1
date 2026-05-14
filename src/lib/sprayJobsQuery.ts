@@ -6,6 +6,12 @@ import { toIOSChemicalLineCompat, displayUnitText } from "@/lib/rateBasis";
 
 export interface SprayJobChemicalLine {
   chemical_id?: string | null;
+  /**
+   * Snapshot link to the source saved_chemicals row (preferred over the
+   * legacy `chemical_id`). iOS reads either field. Used by trip costing as
+   * a fallback when no per-line `costPerUnit` snapshot is present.
+   */
+  savedChemicalId?: string | null;
   name?: string | null;
   active_ingredient?: string | null;
   rate?: number | null;
@@ -28,6 +34,12 @@ export interface SprayJobChemicalLine {
   ratePerHa?: number | null;
   ratePer100L?: number | null;
   water_rate?: number | null;
+  /**
+   * Snapshot of the cost per base unit at the time this line was added,
+   * captured from saved_chemicals.purchase.costPerBaseUnit. Owner/manager
+   * only; supervisors/operators must never see or write this value.
+   */
+  costPerUnit?: number | null;
   notes?: string | null;
 }
 

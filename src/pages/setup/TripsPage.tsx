@@ -48,6 +48,7 @@ import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuer
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { computeTripCost, fmtCurrency, fmtHours, type TractorLite } from "@/lib/tripCosting";
 
 
@@ -464,6 +465,11 @@ function TripSheet({
     enabled: costEnabled,
     queryFn: () => fetchList<TractorLite>("tractors", vineyardId!),
   });
+  const { data: costSavedChemicals } = useQuery({
+    queryKey: ["cost-saved-chemicals", vineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedChemicalsForVineyard(vineyardId!),
+  });
 
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
@@ -475,8 +481,9 @@ function TripSheet({
       members: costMembers ?? [],
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
+      savedChemicals: costSavedChemicals?.chemicals ?? [],
     });
-  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray]);
+  }, [trip, canSeeCosts, costTractors, costCategories, costMembers, costFuel, costSpray, costSavedChemicals]);
 
   // Resolve block names from paddock_ids jsonb (if present) or scalar paddock_id
   const blockNames: string[] = (() => {

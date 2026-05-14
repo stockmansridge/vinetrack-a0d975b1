@@ -25,6 +25,7 @@ import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuer
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
 import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -181,6 +182,11 @@ export default function TripReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
   });
+  const { data: costSavedChemicals } = useQuery({
+    queryKey: ["cost-saved-chemicals", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
+  });
 
   const computeCostFor = (t: Trip) => {
     if (!canSeeCosts) return null;
@@ -192,6 +198,7 @@ export default function TripReportsPage() {
       members: costMembers ?? [],
       fuelPurchases: costFuel ?? [],
       sprayRecords: costSpray?.records ?? [],
+      savedChemicals: costSavedChemicals?.chemicals ?? [],
     });
   };
 

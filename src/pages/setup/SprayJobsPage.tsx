@@ -1168,13 +1168,20 @@ function SprayJobSheet({
               if (idx == null) return;
               const basis = inferRateBasis(c.unit);
               const cu = chemUnitOnly(c.unit ?? "") || "L";
+              // Snapshot saved-chemical link + cost/unit (from purchase JSON).
+              const purchase: any = (c as any).purchase;
+              const cpuRaw = purchase?.costPerBaseUnit ?? purchase?.cost_per_base_unit
+                ?? purchase?.costPerUnit ?? purchase?.cost_per_unit;
+              const cpu = Number(cpuRaw);
               setLine(idx, {
                 chemical_id: c.id || null,
+                savedChemicalId: c.id || null,
                 name: c.name ?? "",
                 active_ingredient: c.active_ingredient ?? null,
                 rate: c.rate_per_ha ?? null,
                 unit: composeUnit(cu, basis),
                 rate_basis: basis,
+                costPerUnit: Number.isFinite(cpu) && cpu >= 0 ? cpu : null,
                 notes: c.restrictions ?? null,
               });
               setPickerLineIndex(null);

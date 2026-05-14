@@ -32,6 +32,7 @@ import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
 import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
+import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 
 function fmtRecordLabel(r: SprayRecord): string {
   const date = r.date ?? "Undated";
@@ -114,6 +115,11 @@ export default function SprayReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchFuelPurchasesForVineyard(selectedVineyardId!),
   });
+  const { data: costSavedChemicals } = useQuery({
+    queryKey: ["spray-cost-saved-chemicals", selectedVineyardId],
+    enabled: costEnabled,
+    queryFn: () => fetchSavedChemicalsForVineyard(selectedVineyardId!),
+  });
 
   // ---- Spray jobs (yearly program)
   const { data: jobs, isLoading: jobsLoading } = useQuery({
@@ -159,6 +165,7 @@ export default function SprayReportsPage() {
             members: costMembers ?? [],
             fuelPurchases: costFuel ?? [],
             sprayRecords: recordsResult?.records ?? [],
+            savedChemicals: costSavedChemicals?.chemicals ?? [],
           });
         }
       }
