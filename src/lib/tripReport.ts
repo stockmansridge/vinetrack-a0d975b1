@@ -726,6 +726,8 @@ export interface TripPdfContext {
   vineyardLogoDataUrl?: string | null;
   /** Block id → name lookup for grouping rows by block. */
   paddockNameById?: Map<string, string | null | undefined>;
+  /** Owner/manager-only trip cost breakdown. Caller MUST gate on useCanSeeCosts(). */
+  cost?: TripCostBreakdown | null;
 }
 
 
