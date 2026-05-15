@@ -118,13 +118,23 @@ async function callProxy<T = any>(payload: Record<string, unknown>): Promise<
     body = null;
   }
   if (!resp.ok || body?.success === false) {
+    const upstream = body?.http_status ? ` (upstream HTTP ${body.http_status})` : "";
+    const detail = body?.message ?? body?.error ?? `HTTP ${resp.status}`;
+    // eslint-disable-next-line no-console
+    console.warn("[willyweather-proxy] error", {
+      status: resp.status,
+      payload,
+      body,
+    });
     return {
       ok: false,
       code: "unknown",
-      message: friendly("unknown", body?.message ?? body?.error ?? `HTTP ${resp.status}`),
+      message: friendly("unknown", `${detail}${upstream}`),
       status: resp.status,
     };
   }
+  // eslint-disable-next-line no-console
+  console.debug("[willyweather-proxy] ok", { payload, body });
   return { ok: true, data: body as T };
 }
 
