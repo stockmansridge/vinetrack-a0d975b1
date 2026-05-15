@@ -26,6 +26,7 @@ import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } f
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
+import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
 
 interface PaddockLite {
   id: string;
@@ -67,6 +68,12 @@ export default function PinsPage() {
     queryFn: () => fetchPinsForVineyard(selectedVineyardId!, paddockIds),
   });
   const pins = pinsResult?.pins ?? [];
+
+  const { data: rawCounts } = useQuery({
+    queryKey: ["pins-raw-counts", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPinsRawCounts(selectedVineyardId!, paddockIds),
+  });
 
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -208,6 +215,35 @@ export default function PinsPage() {
 
       <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
+      </div>
+
+      <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
+        <div className="font-semibold">Pins diagnostics (temporary)</div>
+        {!rawCounts ? (
+          <div className="text-muted-foreground">Loading raw counts…</div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-muted-foreground">
+            <div>Supabase total (vineyard_id): <span className="text-foreground font-mono">{rawCounts.totalRows}</span></div>
+            <div>Not deleted: <span className="text-foreground font-mono">{rawCounts.notDeleted}</span></div>
+            <div>Soft-deleted (deleted_at not null): <span className="text-foreground font-mono">{rawCounts.deleted}</span></div>
+            <div>Completed (is_completed=true): <span className="text-foreground font-mono">{rawCounts.completed}</span></div>
+            <div>Active (not completed): <span className="text-foreground font-mono">{rawCounts.active}</span></div>
+            <div>Missing paddock_id: <span className="text-foreground font-mono">{rawCounts.missingPaddock}</span></div>
+            <div>Missing all row fields: <span className="text-foreground font-mono">{rawCounts.missingRow}</span></div>
+            <div>Legacy (vineyard_id null, paddock match): <span className="text-foreground font-mono">{rawCounts.byVineyardIdNull}</span></div>
+            <div className="col-span-2 md:col-span-4 pt-1 border-t">
+              Portal loaded: <span className="text-foreground font-mono">{pins.length}</span>{" "}
+              (source: <span className="font-mono">{pinsResult?.source ?? "—"}</span>,
+              vineyard_id matches: <span className="font-mono">{pinsResult?.vineyardCount ?? 0}</span>,
+              paddock_id fallback added: <span className="font-mono">{pinsResult?.paddockFallbackCount ?? 0}</span>)
+              {rawCounts.notDeleted !== pins.length && (
+                <span className="ml-2 text-destructive font-semibold">
+                  Δ {rawCounts.notDeleted - pins.length} pin(s) in Supabase not loaded by portal
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
