@@ -238,7 +238,7 @@ export default function VineyardOverviewMap({
     () =>
       pins
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
-        .filter((x): x is { pin: typeof pins[number]; coords: { lat: number; lng: number } } => !!x.coords),
+        .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords),
     [pins],
   );
 
