@@ -122,11 +122,13 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         title: forecastUnavailableReason(forecast.reason, forecast.message),
       };
     }
+    const isWilly =
+      forecast.via === "willyweather" || isWillyWeatherSource(forecast.source);
     const sourceText =
-      forecast.via === "open_meteo"
-        ? "Forecast source: Open-Meteo"
-        : isWillyWeatherSource(forecast.source)
-          ? "Forecast source: WillyWeather"
+      isWilly
+        ? "Forecast source: WillyWeather"
+        : forecast.via === "open_meteo"
+          ? "Forecast source: Open-Meteo"
           : forecast.source
             ? `Forecast source: ${sourceLabel(forecast.source)}`
             : undefined;
@@ -134,7 +136,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
       label: forecastHeadline(summarizeForecast(forecast.days)),
       title: sourceText,
       sourceText,
-      isWilly: isWillyWeatherSource(forecast.source),
+      isWilly,
     };
   })();
   const forecastLabel = forecastInfo.label;

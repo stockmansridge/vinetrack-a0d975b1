@@ -9,6 +9,66 @@
 //      surface it (e.g. "Forecast unavailable — vineyard coordinates not set").
 import { supabase } from "@/integrations/ios-supabase/client";
 import { parsePolygonPoints, polygonCentroid } from "@/lib/paddockGeometry";
+import {
+  fetchWillyWeatherStatus,
+  getForecastProvider,
+} from "@/lib/willyWeatherProxy";
+
+const IOS_SUPABASE_URL = "https://tbafuqwruefgkbyxrxyb.supabase.co";
+const IOS_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiYWZ1cXdydWVmZ2tieXhyeHliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyOTY0NDcsImV4cCI6MjA5Mjg3MjQ0N30.tvOzn1ketbd0zYJWDujh_DGcWVDeitJaoVWw3aqtuRw";
+
+async function fetchWillyWeatherForecast(
+  vineyardId: string,
+  days: number,
+): Promise<RainForecastResult> {
+  let token: string | null = null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    token = data.session?.access_token ?? null;
+  } catch {
+    /* ignore */
+  }
+  if (!token) {
+    return { available: false, reason: "error", message: "Not signed in" };
+  }
+  try {
+    const resp = await fetch(`${IOS_SUPABASE_URL}/functions/v1/willyweather-proxy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: IOS_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ action: "fetch_forecast", vineyardId, days }),
+    });
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok || body?.success === false || body?.ok === false) {
+      // eslint-disable-next-line no-console
+      console.warn("[willyweather fetch_forecast] failed", { status: resp.status, body });
+      return {
+        available: false,
+        reason: "error",
+        message: body?.message ?? body?.error ?? `WillyWeather HTTP ${resp.status}`,
+      };
+    }
+    const raw: any[] = body?.days ?? body?.forecast ?? body?.daily ?? [];
+    const out: RainForecastDay[] = (Array.isArray(raw) ? raw : []).map((r: any) => ({
+      date: String(r.date ?? r.day ?? r.forecast_date ?? ""),
+      rainfall_mm: r.rainfall_mm ?? r.rain_mm ?? r.precip_mm ?? r.amount_mm ?? null,
+      probability_pct: r.probability_pct ?? r.pop ?? r.rain_probability ?? null,
+      temp_max_c: r.temp_max_c ?? r.temperature_max_c ?? r.max_temp_c ?? null,
+      temp_min_c: r.temp_min_c ?? r.temperature_min_c ?? r.min_temp_c ?? null,
+      wind_max_kmh: r.wind_max_kmh ?? r.wind_speed_max_kmh ?? r.max_wind_kmh ?? null,
+    }));
+    if (!out.length) {
+      return { available: false, reason: "no_data", message: "WillyWeather returned no days" };
+    }
+    return { available: true, days: out, source: "willyweather_forecast", via: "willyweather" };
+  } catch (e: any) {
+    return { available: false, reason: "error", message: e?.message ?? "network error" };
+  }
+}
 
 export interface RainForecastDay {
   date: string; // YYYY-MM-DD
@@ -26,7 +86,7 @@ export type RainForecastReason =
   | "error";
 
 export type RainForecastResult =
-  | { available: true; days: RainForecastDay[]; source: string | null; via: "rpc" | "open_meteo" }
+  | { available: true; days: RainForecastDay[]; source: string | null; via: "rpc" | "open_meteo" | "willyweather" }
   | { available: false; reason: RainForecastReason; message?: string };
 
 async function tryRpc(vineyardId: string, days: number): Promise<RainForecastResult | null> {
@@ -159,7 +219,38 @@ export async function fetchRainForecast(
   vineyardId: string,
   days = 7,
 ): Promise<RainForecastResult> {
-  // 1. Try server RPC first.
+  // 0. Honour the vineyard's forecast-provider preference.
+  let provider: "auto" | "open_meteo" | "willyweather" = "auto";
+  try {
+    provider = await getForecastProvider(vineyardId);
+  } catch {
+    /* ignore - default to auto */
+  }
+
+  const tryWilly = async (): Promise<RainForecastResult | null> => {
+    try {
+      const status = await fetchWillyWeatherStatus(vineyardId);
+      if (!status.configured || status.is_active === false) return null;
+    } catch {
+      return null;
+    }
+    const r = await fetchWillyWeatherForecast(vineyardId, days);
+    if (r.available) return r;
+    // eslint-disable-next-line no-console
+    console.warn("[rainForecast] WillyWeather fetch failed, falling back", r);
+    return null;
+  };
+
+  if (provider === "willyweather") {
+    const w = await tryWilly();
+    if (w) return w;
+    // explicit provider chosen — fall back to Open-Meteo but keep going
+  } else if (provider === "auto") {
+    const w = await tryWilly();
+    if (w) return w;
+  }
+
+  // 1. Try server RPC.
   const rpcResult = await tryRpc(vineyardId, days);
   if (rpcResult) return rpcResult;
 
