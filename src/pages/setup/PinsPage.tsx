@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
+import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
