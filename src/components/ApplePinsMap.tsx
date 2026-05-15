@@ -212,7 +212,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
         paddockPolygons.forEach((poly) => poly.forEach((pt) => pts.push(pt)));
         boundsSource = "paddocks";
       }
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && showMapPinDiagnostics) {
         // eslint-disable-next-line no-console
         console.debug("[ApplePinsMap] fit", {
           selectedVineyardId,
