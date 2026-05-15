@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
+import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -36,6 +37,8 @@ interface PaddockLite {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const { user } = useAuth();
+  const isDiagnosticsAdmin = (user?.email ?? "").toLowerCase() === "jonathan@stockmansridge.com.au";
   const queryClient = useQueryClient();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -217,6 +220,7 @@ export default function PinsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
+      {isDiagnosticsAdmin && (
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
         <div className="font-semibold">Pins diagnostics (temporary)</div>
         {!rawCounts ? (
@@ -245,6 +249,7 @@ export default function PinsPage() {
           </div>
         )}
       </div>
+      )}
 
       <div className="flex items-center gap-2">
         <div className="inline-flex rounded-md border bg-background p-0.5">
