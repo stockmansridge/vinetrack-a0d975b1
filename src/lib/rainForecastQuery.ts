@@ -219,7 +219,38 @@ export async function fetchRainForecast(
   vineyardId: string,
   days = 7,
 ): Promise<RainForecastResult> {
-  // 1. Try server RPC first.
+  // 0. Honour the vineyard's forecast-provider preference.
+  let provider: "auto" | "open_meteo" | "willyweather" = "auto";
+  try {
+    provider = await getForecastProvider(vineyardId);
+  } catch {
+    /* ignore - default to auto */
+  }
+
+  const tryWilly = async (): Promise<RainForecastResult | null> => {
+    try {
+      const status = await fetchWillyWeatherStatus(vineyardId);
+      if (!status.configured || status.is_active === false) return null;
+    } catch {
+      return null;
+    }
+    const r = await fetchWillyWeatherForecast(vineyardId, days);
+    if (r.available) return r;
+    // eslint-disable-next-line no-console
+    console.warn("[rainForecast] WillyWeather fetch failed, falling back", r);
+    return null;
+  };
+
+  if (provider === "willyweather") {
+    const w = await tryWilly();
+    if (w) return w;
+    // explicit provider chosen — fall back to Open-Meteo but keep going
+  } else if (provider === "auto") {
+    const w = await tryWilly();
+    if (w) return w;
+  }
+
+  // 1. Try server RPC.
   const rpcResult = await tryRpc(vineyardId, days);
   if (rpcResult) return rpcResult;
 
