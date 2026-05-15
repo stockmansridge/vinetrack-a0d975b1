@@ -152,7 +152,7 @@ export async function setForecastProvider(
     vineyardId,
     provider,
   });
-  if (!r.ok) return { ok: false, message: r.message };
+  if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
   return { ok: true };
 }
 
@@ -226,7 +226,7 @@ export async function searchWillyLocations(
     vineyardId,
     query,
   });
-  if (!r.ok) return r;
+  if (!r.ok) return r as WillyProxyError;
   return { ok: true, locations: r.data?.locations ?? [] };
 }
 
@@ -241,7 +241,7 @@ export async function searchNearestWillyLocation(
     lat,
     lon,
   });
-  if (!r.ok) return r;
+  if (!r.ok) return r as WillyProxyError;
   return { ok: true, locations: r.data?.locations ?? [] };
 }
 
@@ -257,7 +257,7 @@ export async function setWillyLocation(
     latitude: loc.latitude,
     longitude: loc.longitude,
   });
-  if (!r.ok) return { ok: false, message: r.message };
+  if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
   return { ok: true };
 }
 
@@ -265,7 +265,7 @@ export async function testWillyConnection(
   vineyardId: string,
 ): Promise<{ ok: boolean; message?: string }> {
   const r = await callProxy({ action: "test_connection", vineyardId });
-  if (!r.ok) return { ok: false, message: r.message };
+  if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
   return { ok: true };
 }
 
@@ -273,6 +273,6 @@ export async function deleteWillyIntegration(
   vineyardId: string,
 ): Promise<{ ok: boolean; message?: string }> {
   const r = await callProxy({ action: "delete", vineyardId });
-  if (!r.ok) return { ok: false, message: r.message };
+  if (!r.ok) return { ok: false, message: (r as WillyProxyError).message };
   return { ok: true };
 }
