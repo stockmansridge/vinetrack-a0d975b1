@@ -1057,6 +1057,45 @@ function WillyWeatherCard({
   };
 
   const configured = !!status?.configured && !!status?.station_id;
+  const providerEligible = provider === "willyweather" || provider === "auto" || provider == null;
+  const hasCenter = !!vineyardCenter;
+
+  // Auto-assign nearest WW location from vineyard centre coords.
+  useEffect(() => {
+    if (autoTriedRef.current) return;
+    if (!canEdit) return;
+    if (configured) return;
+    if (!providerEligible) return;
+    if (!vineyardCenter) return;
+    if (autoAssigning) return;
+    autoTriedRef.current = true;
+    (async () => {
+      setAutoAssigning(true);
+      try {
+        const r = await searchNearestWillyLocation(
+          vineyardId,
+          vineyardCenter.lat,
+          vineyardCenter.lon,
+        );
+        if (!r.ok) return;
+        const nearest = r.locations?.[0];
+        if (!nearest) return;
+        const s = await setWillyLocation(vineyardId, {
+          id: nearest.id,
+          name: nearest.name,
+          latitude: nearest.latitude,
+          longitude: nearest.longitude,
+        });
+        if (s.ok) {
+          setAutoAssigned(true);
+          toast.success(`WillyWeather location auto-matched: ${nearest.name}`);
+          refresh();
+        }
+      } finally {
+        setAutoAssigning(false);
+      }
+    })();
+  }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
     <Card className="p-4 space-y-4">
