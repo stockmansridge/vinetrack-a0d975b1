@@ -32,14 +32,21 @@ const SOURCE_LABELS: Record<string, string> = {
   davis: "Davis WeatherLink",
   wunderground: "Weather Underground",
   wunderground_pws: "Weather Underground",
-  open_meteo: "Open-Meteo fallback",
+  open_meteo: "Open-Meteo",
   open_meteo_fallback: "Open-Meteo fallback",
+  open_meteo_forecast: "Open-Meteo",
+  willyweather: "WillyWeather",
+  willyweather_forecast: "WillyWeather",
   manual: "Manual",
 };
 
 export function sourceLabel(s?: string | null): string {
   if (!s) return "—";
   return SOURCE_LABELS[s] ?? s;
+}
+
+export function isWillyWeatherSource(s?: string | null): boolean {
+  return !!s && s.toLowerCase().includes("willyweather");
 }
 
 const CARDINALS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
@@ -115,9 +122,19 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         title: forecastUnavailableReason(forecast.reason, forecast.message),
       };
     }
+    const sourceText =
+      forecast.via === "open_meteo"
+        ? "Forecast source: Open-Meteo"
+        : isWillyWeatherSource(forecast.source)
+          ? "Forecast source: WillyWeather"
+          : forecast.source
+            ? `Forecast source: ${sourceLabel(forecast.source)}`
+            : undefined;
     return {
       label: forecastHeadline(summarizeForecast(forecast.days)),
-      title: forecast.via === "open_meteo" ? "Source: Open-Meteo Forecast" : forecast.source ?? undefined,
+      title: sourceText,
+      sourceText,
+      isWilly: isWillyWeatherSource(forecast.source),
     };
   })();
   const forecastLabel = forecastInfo.label;
@@ -256,6 +273,22 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         loading={forecastQ.isLoading}
         unavailableLabel={forecastInfo.title ?? forecastLabel}
       />
+      {forecastInfo.sourceText && (
+        <div className="text-xs text-muted-foreground">{forecastInfo.sourceText}</div>
+      )}
+      {forecastInfo.isWilly && (
+        <div className="text-xs text-muted-foreground">
+          Weather forecast by{" "}
+          <a
+            href="https://www.willyweather.com.au"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            WillyWeather
+          </a>
+        </div>
+      )}
     </Card>
   );
 }

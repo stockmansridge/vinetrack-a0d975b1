@@ -45,6 +45,21 @@ import {
   type WeatherIntegrationStatus,
   type WeatherProvider,
 } from "@/lib/weatherStatusQuery";
+import {
+  fetchWillyWeatherStatus,
+  getForecastProvider,
+  setForecastProvider,
+  searchWillyLocations,
+  searchNearestWillyLocation,
+  setWillyLocation,
+  testWillyConnection,
+  deleteWillyIntegration,
+  type ForecastProvider,
+  type WillyLocation,
+  type WillyIntegrationStatus,
+} from "@/lib/willyWeatherProxy";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttribution";
 
 const DAVIS: WeatherProvider = "davis_weatherlink";
 
@@ -152,6 +167,16 @@ export default function WeatherStatusPage() {
               hint="Used when station data is unavailable."
             />
           </div>
+
+          <ForecastProviderCard
+            vineyardId={selectedVineyardId!}
+            canEdit={canEdit}
+          />
+
+          <WillyWeatherCard
+            vineyardId={selectedVineyardId!}
+            canEdit={canEdit}
+          />
 
           <LiveWeatherCard
             vineyardId={selectedVineyardId!}
@@ -805,5 +830,349 @@ function Reading({
       </div>
       <div className="text-base font-semibold">{value}</div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Forecast Provider preference (Auto / Open-Meteo / WillyWeather)
+// ---------------------------------------------------------------------------
+
+function ForecastProviderCard({
+  vineyardId,
+  canEdit,
+}: {
+  vineyardId: string;
+  canEdit: boolean;
+}) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["forecast_provider", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => getForecastProvider(vineyardId),
+  });
+  const [pending, setPending] = useState<ForecastProvider | null>(null);
+
+  const onChange = async (next: ForecastProvider) => {
+    if (!canEdit || pending) return;
+    setPending(next);
+    const r = await setForecastProvider(vineyardId, next);
+    setPending(null);
+    if (!r.ok) {
+      toast.error(r.message ?? "Could not save forecast provider");
+      return;
+    }
+    toast.success("Forecast provider updated");
+    qc.invalidateQueries({ queryKey: ["forecast_provider", vineyardId] });
+  };
+
+  const value: ForecastProvider = data ?? "auto";
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold">Forecast Provider</h2>
+          <p className="text-xs text-muted-foreground">
+            Which service provides 7-day forecasts. Auto uses WillyWeather when configured, otherwise Open-Meteo.
+          </p>
+        </div>
+        {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </div>
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : (
+        <RadioGroup
+          value={value}
+          onValueChange={(v) => onChange(v as ForecastProvider)}
+          className="grid gap-2 sm:grid-cols-3"
+        >
+          {(
+            [
+              { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
+              { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
+              { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
+            ] as { v: ForecastProvider; label: string; hint: string }[]
+          ).map((opt) => (
+            <label
+              key={opt.v}
+              htmlFor={`fp-${opt.v}`}
+              className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
+                canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
+              } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
+            >
+              <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
+              <div>
+                <div className="font-medium">{opt.label}</div>
+                <div className="text-xs text-muted-foreground">{opt.hint}</div>
+              </div>
+            </label>
+          ))}
+        </RadioGroup>
+      )}
+      {!canEdit && (
+        <div className="text-xs text-muted-foreground">
+          Only vineyard Owners and Managers can change the forecast provider.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WillyWeather setup (no API key — key is server-side only)
+// ---------------------------------------------------------------------------
+
+function WillyWeatherCard({
+  vineyardId,
+  canEdit,
+}: {
+  vineyardId: string;
+  canEdit: boolean;
+}) {
+  const qc = useQueryClient();
+  const { data: status, isLoading } = useQuery<WillyIntegrationStatus>({
+    queryKey: ["willyweather_status", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchWillyWeatherStatus(vineyardId),
+  });
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<WillyLocation[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const refresh = () =>
+    qc.invalidateQueries({ queryKey: ["willyweather_status", vineyardId] });
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    const r = await searchWillyLocations(vineyardId, query.trim());
+    setSearching(false);
+    if (!r.ok) {
+      toast.error((r as any).message);
+      setResults([]);
+      return;
+    }
+    setResults(r.locations);
+    if (r.locations.length === 0) toast.info("No locations matched that search.");
+  };
+
+  const handleNearest = async () => {
+    if (status?.station_latitude == null || status?.station_longitude == null) {
+      toast.error("Set a location first, or use search.");
+      return;
+    }
+    setSearching(true);
+    const r = await searchNearestWillyLocation(
+      vineyardId,
+      status.station_latitude,
+      status.station_longitude,
+    );
+    setSearching(false);
+    if (!r.ok) {
+      toast.error((r as any).message);
+      return;
+    }
+    setResults(r.locations);
+  };
+
+  const handleSelect = async (loc: WillyLocation) => {
+    setBusy("set");
+    const r = await setWillyLocation(vineyardId, {
+      id: loc.id,
+      name: loc.name,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+    });
+    setBusy(null);
+    if (!r.ok) {
+      toast.error(r.message ?? "Could not set location");
+      return;
+    }
+    toast.success(`Location set: ${loc.name}`);
+    setResults(null);
+    setQuery("");
+    refresh();
+  };
+
+  const handleTest = async () => {
+    setBusy("test");
+    const r = await testWillyConnection(vineyardId);
+    setBusy(null);
+    if (!r.ok) {
+      toast.error(r.message ?? "Test failed");
+    } else {
+      toast.success("WillyWeather connection OK");
+    }
+    refresh();
+  };
+
+  const handleDelete = async () => {
+    setBusy("delete");
+    const r = await deleteWillyIntegration(vineyardId);
+    setBusy(null);
+    setConfirmDelete(false);
+    if (!r.ok) {
+      toast.error(r.message ?? "Could not remove location");
+      return;
+    }
+    toast.success("WillyWeather location removed");
+    refresh();
+  };
+
+  const configured = !!status?.configured && !!status?.station_id;
+
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">WillyWeather</h2>
+        {configured ? (
+          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+            Configured
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
+      </p>
+
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 text-sm">
+          <Row label="Location" value={status?.station_name ?? "—"} />
+          <Row label="Location ID" value={status?.station_id ?? "—"} />
+          <Row
+            label="Coordinates"
+            value={
+              status?.station_latitude != null && status?.station_longitude != null
+                ? `${status.station_latitude.toFixed(3)}, ${status.station_longitude.toFixed(3)}`
+                : "—"
+            }
+          />
+          <Row label="Active" value={<YN v={status?.is_active ?? null} />} />
+          <Row label="Last test" value={fmtDate(status?.last_tested_at)} />
+          <Row label="Last test status" value={status?.last_test_status ?? "—"} />
+        </div>
+      )}
+
+      {canEdit ? (
+        <div className="space-y-3 border-t pt-4">
+          <div className="space-y-1">
+            <Label htmlFor="ww-query">Search location</Label>
+            <div className="flex gap-2">
+              <Input
+                id="ww-query"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g. Orange NSW"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
+              />
+              <Button onClick={handleSearch} disabled={searching || !query.trim()} className="gap-2">
+                {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Search
+              </Button>
+              {configured && (
+                <Button
+                  variant="outline"
+                  onClick={handleNearest}
+                  disabled={searching}
+                  title="Find locations nearest the current coordinates"
+                >
+                  Find nearest
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {results && results.length > 0 && (
+            <div className="rounded-md border divide-y max-h-72 overflow-auto">
+              {results.map((loc) => (
+                <button
+                  key={loc.id}
+                  type="button"
+                  onClick={() => handleSelect(loc)}
+                  disabled={busy === "set"}
+                  className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <div className="text-sm font-medium">{loc.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[loc.region, loc.state, loc.postcode].filter(Boolean).join(" · ") || `${loc.latitude}, ${loc.longitude}`}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {loc.distanceKm != null ? `${loc.distanceKm.toFixed(1)} km` : "Select"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={busy === "test" || !configured}
+              className="gap-2"
+              title={!configured ? "Set a location first" : "Test WillyWeather connection"}
+            >
+              {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+              Test connection
+            </Button>
+            <div className="ml-auto">
+              <Button
+                variant="destructive"
+                onClick={() => setConfirmDelete(true)}
+                disabled={!configured || busy === "delete"}
+                className="gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove location
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Only vineyard Owners and Managers can change the WillyWeather location.
+        </div>
+      )}
+
+      <WillyWeatherAttribution />
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove WillyWeather location?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The vineyard will fall back to Open-Meteo for forecasts (or whatever the Forecast Provider preference resolves to).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+              disabled={busy === "delete"}
+            >
+              {busy === "delete" ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
   );
 }
