@@ -273,6 +273,22 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         loading={forecastQ.isLoading}
         unavailableLabel={forecastInfo.title ?? forecastLabel}
       />
+      {forecastInfo.sourceText && (
+        <div className="text-xs text-muted-foreground">{forecastInfo.sourceText}</div>
+      )}
+      {forecastInfo.isWilly && (
+        <div className="text-xs text-muted-foreground">
+          Weather forecast by{" "}
+          <a
+            href="https://www.willyweather.com.au"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            WillyWeather
+          </a>
+        </div>
+      )}
     </Card>
   );
 }
