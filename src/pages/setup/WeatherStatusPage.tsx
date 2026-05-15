@@ -1160,6 +1160,11 @@ function WillyWeatherCard({
           Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
         </div>
       )}
+      {lastError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
+          <span className="font-medium">WillyWeather error:</span> {lastError}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
