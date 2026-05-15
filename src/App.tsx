@@ -143,7 +143,19 @@ const App = () => (
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
+                    <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                    <Route path="/admin/users" element={<AdminUsersPage />} />
+                    <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
+                    <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
+                    <Route path="/admin/vineyards/:id" element={<AdminVineyardDetailPage />} />
+                    <Route path="/admin/vineyards/:id/paddocks/:pid" element={<AdminPaddockDetailPage />} />
+                    <Route path="/admin/blocks" element={<AdminBlocksPage />} />
+                    <Route path="/admin/invitations" element={<AdminInvitationsPage />} />
+                    <Route path="/admin/pins" element={<AdminPinsPage />} />
+                    <Route path="/admin/spray-records" element={<AdminSprayRecordsPage />} />
+                    <Route path="/admin/work-tasks" element={<AdminWorkTasksPage />} />
+                    <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
