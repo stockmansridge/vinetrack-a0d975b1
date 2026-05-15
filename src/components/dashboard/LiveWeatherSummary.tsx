@@ -32,14 +32,21 @@ const SOURCE_LABELS: Record<string, string> = {
   davis: "Davis WeatherLink",
   wunderground: "Weather Underground",
   wunderground_pws: "Weather Underground",
-  open_meteo: "Open-Meteo fallback",
+  open_meteo: "Open-Meteo",
   open_meteo_fallback: "Open-Meteo fallback",
+  open_meteo_forecast: "Open-Meteo",
+  willyweather: "WillyWeather",
+  willyweather_forecast: "WillyWeather",
   manual: "Manual",
 };
 
 export function sourceLabel(s?: string | null): string {
   if (!s) return "—";
   return SOURCE_LABELS[s] ?? s;
+}
+
+export function isWillyWeatherSource(s?: string | null): boolean {
+  return !!s && s.toLowerCase().includes("willyweather");
 }
 
 const CARDINALS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
