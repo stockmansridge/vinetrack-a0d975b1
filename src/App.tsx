@@ -48,6 +48,8 @@ import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import UnsubscribePage from "./pages/UnsubscribePage";
 import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AppNoticesPage from "./pages/admin/AppNoticesPage";
 
 const queryClient = new QueryClient();
 
@@ -130,6 +132,8 @@ const App = () => (
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
+                    <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                    <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
                   </Route>

@@ -28,6 +28,9 @@ import {
   LifeBuoy,
   DollarSign,
   ShieldCheck,
+  LayoutDashboard as AdminDashIcon,
+  Bell,
+  Flag,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
@@ -106,7 +109,9 @@ const settings: NavItem[] = [
 ];
 
 const systemAdmin: NavItem[] = [
-  { title: "Feature Flags / Diagnostics", url: "/admin/feature-flags", icon: ShieldCheck },
+  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
+  { title: "App Notices", url: "/admin/notices", icon: Bell },
+  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
 ];
 
 export function AppSidebar() {
