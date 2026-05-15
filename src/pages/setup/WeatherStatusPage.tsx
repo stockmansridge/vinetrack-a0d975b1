@@ -965,6 +965,7 @@ function WillyWeatherCard({
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [autoAssigned, setAutoAssigned] = useState(false);
   const autoTriedRef = useRef(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: ["willyweather_status", vineyardId] });
