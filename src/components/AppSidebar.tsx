@@ -110,6 +110,7 @@ const settings: NavItem[] = [
 
 const systemAdmin: NavItem[] = [
   { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
+  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
   { title: "App Notices", url: "/admin/notices", icon: Bell },
   { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
 ];

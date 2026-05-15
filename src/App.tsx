@@ -50,6 +50,17 @@ import UnsubscribePage from "./pages/UnsubscribePage";
 import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AppNoticesPage from "./pages/admin/AppNoticesPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
+import AdminVineyardsPage from "./pages/admin/AdminVineyardsPage";
+import AdminVineyardDetailPage from "./pages/admin/AdminVineyardDetailPage";
+import AdminPaddockDetailPage from "./pages/admin/AdminPaddockDetailPage";
+import AdminBlocksPage from "./pages/admin/AdminBlocksPage";
+import AdminInvitationsPage from "./pages/admin/AdminInvitationsPage";
+import AdminPinsPage from "./pages/admin/AdminPinsPage";
+import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
+import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
+import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 
 const queryClient = new QueryClient();
 
@@ -132,7 +143,19 @@ const App = () => (
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
+                    <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                    <Route path="/admin/users" element={<AdminUsersPage />} />
+                    <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
+                    <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
+                    <Route path="/admin/vineyards/:id" element={<AdminVineyardDetailPage />} />
+                    <Route path="/admin/vineyards/:id/paddocks/:pid" element={<AdminPaddockDetailPage />} />
+                    <Route path="/admin/blocks" element={<AdminBlocksPage />} />
+                    <Route path="/admin/invitations" element={<AdminInvitationsPage />} />
+                    <Route path="/admin/pins" element={<AdminPinsPage />} />
+                    <Route path="/admin/spray-records" element={<AdminSprayRecordsPage />} />
+                    <Route path="/admin/work-tasks" element={<AdminWorkTasksPage />} />
+                    <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
