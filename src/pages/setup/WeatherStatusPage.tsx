@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import { getVineyardCoords } from "@/lib/rainForecastQuery";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
