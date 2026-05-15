@@ -937,11 +937,44 @@ function WillyWeatherCard({
     queryFn: () => fetchWillyWeatherStatus(vineyardId),
   });
 
+  // Forecast provider preference — shared cache key with ForecastProviderCard.
+  const { data: provider } = useQuery({
+    queryKey: ["forecast_provider", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => getForecastProvider(vineyardId),
+  });
+
+  // Vineyard centre coordinates (for auto-assignment of nearest WW location).
+  const { data: vineyardCenter } = useQuery<{ lat: number; lon: number } | null>({
+    queryKey: ["vineyard_center", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: async () => {
+      try {
+        const { data } = await iosSupabase
+          .from("vineyards")
+          .select("latitude, longitude")
+          .eq("id", vineyardId)
+          .maybeSingle();
+        const lat = (data as any)?.latitude;
+        const lon = (data as any)?.longitude;
+        if (typeof lat === "number" && typeof lon === "number" && !isNaN(lat) && !isNaN(lon)) {
+          return { lat, lon };
+        }
+      } catch {
+        // ignore — vineyards table may not expose coords to this caller
+      }
+      return null;
+    },
+  });
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WillyLocation[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoAssigned, setAutoAssigned] = useState(false);
+  const autoTriedRef = useRef(false);
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: ["willyweather_status", vineyardId] });
