@@ -37,6 +37,8 @@ interface PaddockLite {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const { user } = useAuth();
+  const isDiagnosticsAdmin = (user?.email ?? "").toLowerCase() === "jonathan@stockmansridge.com.au";
   const queryClient = useQueryClient();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
