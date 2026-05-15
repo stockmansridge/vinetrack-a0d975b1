@@ -972,10 +972,18 @@ function WillyWeatherCard({
   const handleSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
+    setLastError(null);
+    const payload = { action: "search_locations", vineyardId, query: query.trim() };
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search payload", payload);
     const r = await searchWillyLocations(vineyardId, query.trim());
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search response", r);
     setSearching(false);
     if (!r.ok) {
-      toast.error((r as any).message);
+      const msg = (r as any).message ?? "WillyWeather search failed";
+      setLastError(msg);
+      toast.error(msg);
       setResults([]);
       return;
     }
@@ -989,14 +997,27 @@ function WillyWeatherCard({
       return;
     }
     setSearching(true);
+    setLastError(null);
+    const payload = {
+      action: "search_locations",
+      vineyardId,
+      lat: status.station_latitude,
+      lon: status.station_longitude,
+    };
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search payload", payload);
     const r = await searchNearestWillyLocation(
       vineyardId,
       status.station_latitude,
       status.station_longitude,
     );
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search response", r);
     setSearching(false);
     if (!r.ok) {
-      toast.error((r as any).message);
+      const msg = (r as any).message ?? "WillyWeather search failed";
+      setLastError(msg);
+      toast.error(msg);
       return;
     }
     setResults(r.locations);
