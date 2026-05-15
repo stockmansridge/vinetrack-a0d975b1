@@ -946,24 +946,14 @@ function WillyWeatherCard({
   });
 
   // Vineyard centre coordinates (for auto-assignment of nearest WW location).
+  // Uses the same resolver as the rain forecast: weather-integration coords →
+  // vineyards table lat/lon (if present) → centroid of paddock polygons.
   const { data: vineyardCenter } = useQuery<{ lat: number; lon: number } | null>({
     queryKey: ["vineyard_center", vineyardId],
     enabled: !!vineyardId,
     queryFn: async () => {
-      try {
-        const { data } = await iosSupabase
-          .from("vineyards")
-          .select("latitude, longitude")
-          .eq("id", vineyardId)
-          .maybeSingle();
-        const lat = (data as any)?.latitude;
-        const lon = (data as any)?.longitude;
-        if (typeof lat === "number" && typeof lon === "number" && !isNaN(lat) && !isNaN(lon)) {
-          return { lat, lon };
-        }
-      } catch {
-        // ignore — vineyards table may not expose coords to this caller
-      }
+      const c = await getVineyardCoords(vineyardId);
+      if (c && isFinite(c.lat) && isFinite(c.lon)) return { lat: c.lat, lon: c.lon };
       return null;
     },
   });
