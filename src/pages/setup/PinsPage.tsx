@@ -217,6 +217,7 @@ export default function PinsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
+      {isDiagnosticsAdmin && (
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
         <div className="font-semibold">Pins diagnostics (temporary)</div>
         {!rawCounts ? (
