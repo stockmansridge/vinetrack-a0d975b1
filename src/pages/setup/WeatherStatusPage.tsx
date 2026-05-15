@@ -1105,7 +1105,18 @@ function WillyWeatherCard({
         }
         const nearest = r.locations?.[0];
         if (!nearest) {
-          setLastError("WillyWeather returned no nearby locations for this vineyard's GPS centre.");
+          const raw = (r as any).raw ?? {};
+          const meta = [
+            raw.mode ? `mode=${raw.mode}` : null,
+            raw.reason ? `reason=${raw.reason}` : null,
+            raw.fallback ? `fallback=${raw.fallback}` : null,
+            raw.PROXY_VERSION ? `proxy=${raw.PROXY_VERSION}` : null,
+          ].filter(Boolean).join(" · ");
+          // eslint-disable-next-line no-console
+          console.warn("WillyWeather nearest returned 0 locations", raw);
+          setLastError(
+            `WillyWeather returned no nearby locations for this vineyard's GPS centre${meta ? ` (${meta})` : ""}.`,
+          );
           return;
         }
         const s = await setWillyLocation(vineyardId, {
@@ -1116,7 +1127,7 @@ function WillyWeatherCard({
         });
         if (s.ok) {
           setAutoAssigned(true);
-          toast.success(`WillyWeather location auto-matched: ${nearest.name}`);
+          toast.success("Nearest WillyWeather forecast location matched from vineyard GPS centre.");
           refresh();
         } else {
           setLastError(s.message ?? "Could not save matched location");
