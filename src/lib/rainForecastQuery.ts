@@ -56,7 +56,7 @@ async function tryRpc(vineyardId: string, days: number): Promise<RainForecastRes
   return { available: true, days: out, source: raw[0]?.source ?? null, via: "rpc" };
 }
 
-async function getVineyardCoords(
+export async function getVineyardCoords(
   vineyardId: string,
 ): Promise<{ lat: number; lon: number; station: string | null } | null> {
   for (const provider of ["davis_weatherlink", "wunderground"]) {
