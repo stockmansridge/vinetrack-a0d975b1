@@ -951,7 +951,7 @@ function WillyWeatherCard({
     const r = await searchWillyLocations(vineyardId, query.trim());
     setSearching(false);
     if (!r.ok) {
-      toast.error(r.message);
+      toast.error((r as any).message);
       setResults([]);
       return;
     }
@@ -972,7 +972,7 @@ function WillyWeatherCard({
     );
     setSearching(false);
     if (!r.ok) {
-      toast.error(r.message);
+      toast.error((r as any).message);
       return;
     }
     setResults(r.locations);
