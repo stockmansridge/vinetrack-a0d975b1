@@ -1114,6 +1114,23 @@ function WillyWeatherCard({
         WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
       </p>
 
+      {autoAssigning && (
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Matching nearest WillyWeather location from vineyard GPS centre…
+        </div>
+      )}
+      {!autoAssigning && autoAssigned && configured && (
+        <div className="rounded-md border border-emerald-600/30 bg-emerald-600/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+          WillyWeather location automatically matched from this vineyard's GPS centre.
+        </div>
+      )}
+      {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
+        </div>
+      )}
+
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
       ) : (
