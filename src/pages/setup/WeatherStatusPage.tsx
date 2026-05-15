@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
+import { getVineyardCoords } from "@/lib/rainForecastQuery";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
@@ -945,24 +945,14 @@ function WillyWeatherCard({
   });
 
   // Vineyard centre coordinates (for auto-assignment of nearest WW location).
+  // Uses the same resolver as the rain forecast: weather-integration coords →
+  // vineyards table lat/lon (if present) → centroid of paddock polygons.
   const { data: vineyardCenter } = useQuery<{ lat: number; lon: number } | null>({
     queryKey: ["vineyard_center", vineyardId],
     enabled: !!vineyardId,
     queryFn: async () => {
-      try {
-        const { data } = await iosSupabase
-          .from("vineyards")
-          .select("latitude, longitude")
-          .eq("id", vineyardId)
-          .maybeSingle();
-        const lat = (data as any)?.latitude;
-        const lon = (data as any)?.longitude;
-        if (typeof lat === "number" && typeof lon === "number" && !isNaN(lat) && !isNaN(lon)) {
-          return { lat, lon };
-        }
-      } catch {
-        // ignore — vineyards table may not expose coords to this caller
-      }
+      const c = await getVineyardCoords(vineyardId);
+      if (c && isFinite(c.lat) && isFinite(c.lon)) return { lat: c.lat, lon: c.lon };
       return null;
     },
   });
@@ -975,6 +965,7 @@ function WillyWeatherCard({
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [autoAssigned, setAutoAssigned] = useState(false);
   const autoTriedRef = useRef(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: ["willyweather_status", vineyardId] });
@@ -982,10 +973,18 @@ function WillyWeatherCard({
   const handleSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
+    setLastError(null);
+    const payload = { action: "search_locations", vineyardId, query: query.trim() };
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search payload", payload);
     const r = await searchWillyLocations(vineyardId, query.trim());
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search response", r);
     setSearching(false);
     if (!r.ok) {
-      toast.error((r as any).message);
+      const msg = (r as any).message ?? "WillyWeather search failed";
+      setLastError(msg);
+      toast.error(msg);
       setResults([]);
       return;
     }
@@ -999,14 +998,27 @@ function WillyWeatherCard({
       return;
     }
     setSearching(true);
+    setLastError(null);
+    const payload = {
+      action: "search_locations",
+      vineyardId,
+      lat: status.station_latitude,
+      lon: status.station_longitude,
+    };
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search payload", payload);
     const r = await searchNearestWillyLocation(
       vineyardId,
       status.station_latitude,
       status.station_longitude,
     );
+    // eslint-disable-next-line no-console
+    console.log("WillyWeather search response", r);
     setSearching(false);
     if (!r.ok) {
-      toast.error((r as any).message);
+      const msg = (r as any).message ?? "WillyWeather search failed";
+      setLastError(msg);
+      toast.error(msg);
       return;
     }
     setResults(r.locations);
@@ -1072,14 +1084,30 @@ function WillyWeatherCard({
     (async () => {
       setAutoAssigning(true);
       try {
+        const payload = {
+          action: "search_locations",
+          vineyardId,
+          lat: vineyardCenter.lat,
+          lon: vineyardCenter.lon,
+        };
+        // eslint-disable-next-line no-console
+        console.log("WillyWeather search payload", payload);
         const r = await searchNearestWillyLocation(
           vineyardId,
           vineyardCenter.lat,
           vineyardCenter.lon,
         );
-        if (!r.ok) return;
+        // eslint-disable-next-line no-console
+        console.log("WillyWeather search response", r);
+        if (!r.ok) {
+          setLastError((r as any).message ?? "WillyWeather search failed");
+          return;
+        }
         const nearest = r.locations?.[0];
-        if (!nearest) return;
+        if (!nearest) {
+          setLastError("WillyWeather returned no nearby locations for this vineyard's GPS centre.");
+          return;
+        }
         const s = await setWillyLocation(vineyardId, {
           id: nearest.id,
           name: nearest.name,
@@ -1090,6 +1118,8 @@ function WillyWeatherCard({
           setAutoAssigned(true);
           toast.success(`WillyWeather location auto-matched: ${nearest.name}`);
           refresh();
+        } else {
+          setLastError(s.message ?? "Could not save matched location");
         }
       } finally {
         setAutoAssigning(false);
@@ -1128,6 +1158,11 @@ function WillyWeatherCard({
       {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
+        </div>
+      )}
+      {lastError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
+          <span className="font-medium">WillyWeather error:</span> {lastError}
         </div>
       )}
 
