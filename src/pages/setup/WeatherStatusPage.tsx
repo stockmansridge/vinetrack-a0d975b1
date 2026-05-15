@@ -45,6 +45,21 @@ import {
   type WeatherIntegrationStatus,
   type WeatherProvider,
 } from "@/lib/weatherStatusQuery";
+import {
+  fetchWillyWeatherStatus,
+  getForecastProvider,
+  setForecastProvider,
+  searchWillyLocations,
+  searchNearestWillyLocation,
+  setWillyLocation,
+  testWillyConnection,
+  deleteWillyIntegration,
+  type ForecastProvider,
+  type WillyLocation,
+  type WillyIntegrationStatus,
+} from "@/lib/willyWeatherProxy";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttribution";
 
 const DAVIS: WeatherProvider = "davis_weatherlink";
 
