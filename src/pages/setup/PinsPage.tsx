@@ -69,6 +69,12 @@ export default function PinsPage() {
   });
   const pins = pinsResult?.pins ?? [];
 
+  const { data: rawCounts } = useQuery({
+    queryKey: ["pins-raw-counts", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPinsRawCounts(selectedVineyardId!, paddockIds),
+  });
+
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string | null>();
     paddocks.forEach((p) => m.set(p.id, p.name));
