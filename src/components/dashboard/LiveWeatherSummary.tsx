@@ -136,7 +136,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
       label: forecastHeadline(summarizeForecast(forecast.days)),
       title: sourceText,
       sourceText,
-      isWilly: isWillyWeatherSource(forecast.source),
+      isWilly,
     };
   })();
   const forecastLabel = forecastInfo.label;
