@@ -37,6 +37,7 @@ function makePinElement(hex: string) {
 
 export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -95,7 +96,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
     [pins],
   );
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && showMapPinDiagnostics) {
     const renderedIds = new Set(withCoords.map((p) => p.id));
     // eslint-disable-next-line no-console
     console.table(
