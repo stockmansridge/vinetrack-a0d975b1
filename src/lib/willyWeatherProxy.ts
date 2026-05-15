@@ -230,29 +230,29 @@ export async function fetchWillyWeatherStatus(
 export async function searchWillyLocations(
   vineyardId: string,
   query: string,
-): Promise<{ ok: true; locations: WillyLocation[] } | WillyProxyError> {
-  const r = await callProxy<{ locations: WillyLocation[] }>({
+): Promise<{ ok: true; locations: WillyLocation[]; raw?: any } | WillyProxyError> {
+  const r = await callProxy<any>({
     action: "search_locations",
     vineyardId,
     query,
   });
   if (!r.ok) return r as WillyProxyError;
-  return { ok: true, locations: r.data?.locations ?? [] };
+  return { ok: true, locations: r.data?.locations ?? [], raw: r.data };
 }
 
 export async function searchNearestWillyLocation(
   vineyardId: string,
   lat: number,
   lon: number,
-): Promise<{ ok: true; locations: WillyLocation[] } | WillyProxyError> {
-  const r = await callProxy<{ locations: WillyLocation[] }>({
+): Promise<{ ok: true; locations: WillyLocation[]; raw?: any } | WillyProxyError> {
+  const r = await callProxy<any>({
     action: "search_locations",
     vineyardId,
     lat,
     lon,
   });
   if (!r.ok) return r as WillyProxyError;
-  return { ok: true, locations: r.data?.locations ?? [] };
+  return { ok: true, locations: r.data?.locations ?? [], raw: r.data };
 }
 
 export async function setWillyLocation(
