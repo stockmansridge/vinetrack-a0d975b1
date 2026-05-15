@@ -47,6 +47,7 @@ import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import UnsubscribePage from "./pages/UnsubscribePage";
+import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
 
 const queryClient = new QueryClient();
 
@@ -129,6 +130,7 @@ const App = () => (
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
+                    <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
                   </Route>
                 </Route>

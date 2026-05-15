@@ -3,6 +3,7 @@ import { getVineyardCoords } from "@/lib/rainForecastQuery";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
+import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ const fmtDate = (v?: string | null) => {
 
 export default function WeatherStatusPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
+  const showWeatherDiagnostics = useDiagnosticPanel("show_weather_diagnostics");
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["weather_status", selectedVineyardId],
@@ -96,7 +98,7 @@ export default function WeatherStatusPage() {
         ? "Weather Underground"
         : "Open-Meteo Archive (fallback)";
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && showWeatherDiagnostics) {
     // eslint-disable-next-line no-console
     console.debug("[WeatherStatusPage] diagnostics", {
       selectedVineyardId,

@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
+import { useDiagnosticPanel } from "@/lib/systemAdmin";
 
 interface Paddock {
   id: string;
@@ -43,6 +44,7 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
 
 export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "active" | "completed" | "all" } = {}) {
   const { selectedVineyardId } = useVineyard();
+  const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: paddocks = [] } = useQuery({
@@ -93,7 +95,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
     [pins],
   );
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && showMapPinDiagnostics) {
     const renderedIds = new Set(withCoords.map((p) => p.id));
     // eslint-disable-next-line no-console
     console.table(
@@ -128,7 +130,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
     return null;
   }, [withCoords, paddockPolygons]);
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && showMapPinDiagnostics) {
     // eslint-disable-next-line no-console
     console.debug("[PinsMap] diagnostics", {
       selectedVineyardId,

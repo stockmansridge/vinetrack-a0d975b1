@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
-import { useAuth } from "@/context/AuthContext";
+import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { fetchList } from "@/lib/queries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -37,8 +37,7 @@ interface PaddockLite {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
-  const { user } = useAuth();
-  const isDiagnosticsAdmin = (user?.email ?? "").toLowerCase() === "jonathan@stockmansridge.com.au";
+  const showPinDiagnostics = useDiagnosticPanel("show_pin_diagnostics");
   const queryClient = useQueryClient();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -113,10 +112,9 @@ export default function PinsPage() {
     }),
     [selectedVineyardId, pins, paddocks.length, paddockPolygonCount, pinsResult],
   );
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && showPinDiagnostics) {
     // eslint-disable-next-line no-console
     console.debug("[PinsPage] diagnostics", diag);
-    // Temporary inspection: distinct classifier values across loaded pins.
     const tally = (k: string) => {
       const m = new Map<string, number>();
       for (const p of pins) {
@@ -220,7 +218,7 @@ export default function PinsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
-      {isDiagnosticsAdmin && (
+      {showPinDiagnostics && (
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
         <div className="font-semibold">Pins diagnostics (temporary)</div>
         {!rawCounts ? (

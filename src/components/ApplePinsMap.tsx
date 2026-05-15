@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
+import { useDiagnosticPanel } from "@/lib/systemAdmin";
 
 interface Props {
   onUnavailable: (reason: string) => void;
@@ -36,6 +37,7 @@ function makePinElement(hex: string) {
 
 export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -94,7 +96,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
     [pins],
   );
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && showMapPinDiagnostics) {
     const renderedIds = new Set(withCoords.map((p) => p.id));
     // eslint-disable-next-line no-console
     console.table(
@@ -210,7 +212,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
         paddockPolygons.forEach((poly) => poly.forEach((pt) => pts.push(pt)));
         boundsSource = "paddocks";
       }
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && showMapPinDiagnostics) {
         // eslint-disable-next-line no-console
         console.debug("[ApplePinsMap] fit", {
           selectedVineyardId,

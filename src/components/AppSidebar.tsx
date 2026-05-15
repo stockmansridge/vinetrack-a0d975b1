@@ -27,8 +27,10 @@ import {
   Fuel,
   LifeBuoy,
   DollarSign,
+  ShieldCheck,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { BrandMark } from "@/components/BrandMark";
 import {
@@ -103,10 +105,15 @@ const settings: NavItem[] = [
   { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
 ];
 
+const systemAdmin: NavItem[] = [
+  { title: "Feature Flags / Diagnostics", url: "/admin/feature-flags", icon: ShieldCheck },
+];
+
 export function AppSidebar() {
   const { pathname } = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -185,6 +192,14 @@ export function AppSidebar() {
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>{renderItems(settings)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+        {isSystemAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>System Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{renderItems(systemAdmin)}</SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
