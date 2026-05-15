@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useVineyard } from "@/context/VineyardContext";
@@ -936,11 +937,44 @@ function WillyWeatherCard({
     queryFn: () => fetchWillyWeatherStatus(vineyardId),
   });
 
+  // Forecast provider preference — shared cache key with ForecastProviderCard.
+  const { data: provider } = useQuery({
+    queryKey: ["forecast_provider", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => getForecastProvider(vineyardId),
+  });
+
+  // Vineyard centre coordinates (for auto-assignment of nearest WW location).
+  const { data: vineyardCenter } = useQuery<{ lat: number; lon: number } | null>({
+    queryKey: ["vineyard_center", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: async () => {
+      try {
+        const { data } = await iosSupabase
+          .from("vineyards")
+          .select("latitude, longitude")
+          .eq("id", vineyardId)
+          .maybeSingle();
+        const lat = (data as any)?.latitude;
+        const lon = (data as any)?.longitude;
+        if (typeof lat === "number" && typeof lon === "number" && !isNaN(lat) && !isNaN(lon)) {
+          return { lat, lon };
+        }
+      } catch {
+        // ignore — vineyards table may not expose coords to this caller
+      }
+      return null;
+    },
+  });
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WillyLocation[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoAssigned, setAutoAssigned] = useState(false);
+  const autoTriedRef = useRef(false);
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: ["willyweather_status", vineyardId] });
@@ -1023,6 +1057,45 @@ function WillyWeatherCard({
   };
 
   const configured = !!status?.configured && !!status?.station_id;
+  const providerEligible = provider === "willyweather" || provider === "auto" || provider == null;
+  const hasCenter = !!vineyardCenter;
+
+  // Auto-assign nearest WW location from vineyard centre coords.
+  useEffect(() => {
+    if (autoTriedRef.current) return;
+    if (!canEdit) return;
+    if (configured) return;
+    if (!providerEligible) return;
+    if (!vineyardCenter) return;
+    if (autoAssigning) return;
+    autoTriedRef.current = true;
+    (async () => {
+      setAutoAssigning(true);
+      try {
+        const r = await searchNearestWillyLocation(
+          vineyardId,
+          vineyardCenter.lat,
+          vineyardCenter.lon,
+        );
+        if (!r.ok) return;
+        const nearest = r.locations?.[0];
+        if (!nearest) return;
+        const s = await setWillyLocation(vineyardId, {
+          id: nearest.id,
+          name: nearest.name,
+          latitude: nearest.latitude,
+          longitude: nearest.longitude,
+        });
+        if (s.ok) {
+          setAutoAssigned(true);
+          toast.success(`WillyWeather location auto-matched: ${nearest.name}`);
+          refresh();
+        }
+      } finally {
+        setAutoAssigning(false);
+      }
+    })();
+  }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
     <Card className="p-4 space-y-4">
@@ -1040,6 +1113,23 @@ function WillyWeatherCard({
       <p className="text-xs text-muted-foreground">
         WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
       </p>
+
+      {autoAssigning && (
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Matching nearest WillyWeather location from vineyard GPS centre…
+        </div>
+      )}
+      {!autoAssigning && autoAssigned && configured && (
+        <div className="rounded-md border border-emerald-600/30 bg-emerald-600/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+          WillyWeather location automatically matched from this vineyard's GPS centre.
+        </div>
+      )}
+      {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
