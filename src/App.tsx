@@ -50,6 +50,17 @@ import UnsubscribePage from "./pages/UnsubscribePage";
 import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AppNoticesPage from "./pages/admin/AppNoticesPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
+import AdminVineyardsPage from "./pages/admin/AdminVineyardsPage";
+import AdminVineyardDetailPage from "./pages/admin/AdminVineyardDetailPage";
+import AdminPaddockDetailPage from "./pages/admin/AdminPaddockDetailPage";
+import AdminBlocksPage from "./pages/admin/AdminBlocksPage";
+import AdminInvitationsPage from "./pages/admin/AdminInvitationsPage";
+import AdminPinsPage from "./pages/admin/AdminPinsPage";
+import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
+import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
+import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 
 const queryClient = new QueryClient();
 
