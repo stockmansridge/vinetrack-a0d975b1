@@ -280,19 +280,27 @@ export function pinDisplayTitle(p: {
   );
 }
 
+const inLatRange = (n: number) => Number.isFinite(n) && n >= -90 && n <= 90;
+const inLngRange = (n: number) => Number.isFinite(n) && n >= -180 && n <= 180;
+
 /**
  * Map placement coordinates — prefers snapped lat/lng (pin attached to
- * the actual vine row), falls back to raw GPS.
+ * the actual vine row), falls back to raw GPS. Validates lat/lng ranges
+ * so swapped or out-of-range snapped values don't put pins in the ocean.
  */
 export function pinDisplayCoords(
   pin: PinAttachmentLike,
-): { lat: number; lng: number } | null {
+): { lat: number; lng: number; source: "snapped" | "raw" } | null {
   const sLat = Number(pin.snapped_latitude);
   const sLng = Number(pin.snapped_longitude);
-  if (Number.isFinite(sLat) && Number.isFinite(sLng)) return { lat: sLat, lng: sLng };
+  if (inLatRange(sLat) && inLngRange(sLng) && (sLat !== 0 || sLng !== 0)) {
+    return { lat: sLat, lng: sLng, source: "snapped" };
+  }
   const lat = Number(pin.latitude);
   const lng = Number(pin.longitude);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  if (inLatRange(lat) && inLngRange(lng) && (lat !== 0 || lng !== 0)) {
+    return { lat, lng, source: "raw" };
+  }
   return null;
 }
 
