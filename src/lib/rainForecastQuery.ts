@@ -64,7 +64,7 @@ async function fetchWillyWeatherForecast(
     if (!out.length) {
       return { available: false, reason: "no_data", message: "WillyWeather returned no days" };
     }
-    return { available: true, days: out, source: "willyweather_forecast", via: "open_meteo" };
+    return { available: true, days: out, source: "willyweather_forecast", via: "willyweather" };
   } catch (e: any) {
     return { available: false, reason: "error", message: e?.message ?? "network error" };
   }
