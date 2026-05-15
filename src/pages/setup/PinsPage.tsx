@@ -26,6 +26,7 @@ import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } f
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
+import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
 
 interface PaddockLite {
   id: string;
