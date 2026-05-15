@@ -246,6 +246,7 @@ export default function PinsPage() {
           </div>
         )}
       </div>
+      )}
 
       <div className="flex items-center gap-2">
         <div className="inline-flex rounded-md border bg-background p-0.5">
