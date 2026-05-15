@@ -711,7 +711,11 @@ function Toggle({
 }) {
   return (
     <Label className="flex items-center gap-1.5 cursor-pointer text-xs font-normal">
-      <Switch checked={checked} onCheckedChange={onChange} className="h-4 w-7" />
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
+      />
       {label}
     </Label>
   );
