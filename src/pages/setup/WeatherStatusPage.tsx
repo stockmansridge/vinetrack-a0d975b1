@@ -1084,14 +1084,30 @@ function WillyWeatherCard({
     (async () => {
       setAutoAssigning(true);
       try {
+        const payload = {
+          action: "search_locations",
+          vineyardId,
+          lat: vineyardCenter.lat,
+          lon: vineyardCenter.lon,
+        };
+        // eslint-disable-next-line no-console
+        console.log("WillyWeather search payload", payload);
         const r = await searchNearestWillyLocation(
           vineyardId,
           vineyardCenter.lat,
           vineyardCenter.lon,
         );
-        if (!r.ok) return;
+        // eslint-disable-next-line no-console
+        console.log("WillyWeather search response", r);
+        if (!r.ok) {
+          setLastError((r as any).message ?? "WillyWeather search failed");
+          return;
+        }
         const nearest = r.locations?.[0];
-        if (!nearest) return;
+        if (!nearest) {
+          setLastError("WillyWeather returned no nearby locations for this vineyard's GPS centre.");
+          return;
+        }
         const s = await setWillyLocation(vineyardId, {
           id: nearest.id,
           name: nearest.name,
@@ -1102,6 +1118,8 @@ function WillyWeatherCard({
           setAutoAssigned(true);
           toast.success(`WillyWeather location auto-matched: ${nearest.name}`);
           refresh();
+        } else {
+          setLastError(s.message ?? "Could not save matched location");
         }
       } finally {
         setAutoAssigning(false);
