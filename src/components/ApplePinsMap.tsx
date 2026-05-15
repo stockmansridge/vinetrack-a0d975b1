@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
+import { useDiagnosticPanel } from "@/lib/systemAdmin";
 
 interface Props {
   onUnavailable: (reason: string) => void;
