@@ -89,10 +89,33 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
     () =>
       pins.flatMap((p) => {
         const c = pinDisplayCoords(p as any);
-        return c ? [{ ...p, latitude: c.lat, longitude: c.lng }] : [];
+        return c ? [{ ...p, latitude: c.lat, longitude: c.lng, _coordSource: c.source }] : [];
       }),
     [pins],
   );
+
+  if (import.meta.env.DEV) {
+    const renderedIds = new Set(withCoords.map((p) => p.id));
+    // eslint-disable-next-line no-console
+    console.table(
+      pins.map((p: any) => {
+        const c = pinDisplayCoords(p);
+        return {
+          id: p.id,
+          title: pinDisplayTitle(p),
+          latitude: p.latitude,
+          longitude: p.longitude,
+          snapped_latitude: p.snapped_latitude,
+          snapped_longitude: p.snapped_longitude,
+          markerLat: c?.lat ?? null,
+          markerLng: c?.lng ?? null,
+          coordSource: c?.source ?? null,
+          rendered: renderedIds.has(p.id),
+          skipReason: c ? "" : "no valid coords (snapped+raw both invalid/out-of-range)",
+        };
+      }),
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
