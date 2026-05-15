@@ -86,7 +86,7 @@ export type RainForecastReason =
   | "error";
 
 export type RainForecastResult =
-  | { available: true; days: RainForecastDay[]; source: string | null; via: "rpc" | "open_meteo" }
+  | { available: true; days: RainForecastDay[]; source: string | null; via: "rpc" | "open_meteo" | "willyweather" }
   | { available: false; reason: RainForecastReason; message?: string };
 
 async function tryRpc(vineyardId: string, days: number): Promise<RainForecastResult | null> {
