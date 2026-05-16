@@ -546,10 +546,6 @@ export default function IrrigationCalculatorPage() {
                   </SelectContent>
                 </Select>
               </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Lookback is session-only on the portal until the shared vineyard-level setting ships in Supabase.
-                </p>
-              </div>
             </div>
           }
           calculationAssumptions={
