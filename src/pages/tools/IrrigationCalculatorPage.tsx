@@ -50,6 +50,16 @@ import {
   type AdvisorStatus,
 } from "@/lib/calculations/irrigationAdvisor";
 import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
+import {
+  useVineyardSoilProfiles,
+  useVineyardDefaultSoilProfile,
+  deriveSoilBufferMm,
+  aggregateConservativeBuffer,
+} from "@/lib/soilProfiles";
+import { useGrapeVarieties } from "@/lib/varietyResolver";
+import { buildWizardItems } from "@/lib/irrigationWizard";
+import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
+import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 
 interface DayRow {
   id: string;
