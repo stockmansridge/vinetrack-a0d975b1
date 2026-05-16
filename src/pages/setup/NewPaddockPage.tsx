@@ -336,6 +336,18 @@ export default function NewPaddockPage() {
               <Input id="planting_year" type="number" min={1900} max={2100}
                 value={plantingYear} onChange={(e) => setPlantingYear(e.target.value)} />
             </div>
+            <div className="sm:col-span-2 space-y-2 border-t pt-4">
+              <Label>Grape varieties</Label>
+              <p className="text-xs text-muted-foreground">
+                Assign one or more grape varieties. Percentages must total 100%.
+                Search the list or add a custom variety if you can't find it.
+              </p>
+              <VarietyAllocationEditor
+                vineyardId={selectedVineyardId}
+                value={varietyAllocations}
+                onChange={setVarietyAllocations}
+              />
+            </div>
             <div className="sm:col-span-2 flex justify-end">
               <Button onClick={() => setStep("boundary")} disabled={!name.trim()}>Next: draw boundary</Button>
             </div>
