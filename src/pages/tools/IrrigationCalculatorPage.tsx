@@ -310,6 +310,7 @@ export default function IrrigationCalculatorPage() {
         areaHectares: p.areaHectares,
       })),
       grapeVarieties,
+      varietyCatalog,
       vineyardSoilProfile: vineyardDefaultSoil ?? null,
       forecastAvailable: !!forecastQuery.data?.available,
       forecastSource: forecastQuery.data?.available
@@ -324,6 +325,7 @@ export default function IrrigationCalculatorPage() {
     paddockOptions,
     soilByPaddock,
     grapeVarieties,
+    varietyCatalog,
     vineyardDefaultSoil,
     forecastQuery.data,
     recentRain,
