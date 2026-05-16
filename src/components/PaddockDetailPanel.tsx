@@ -153,19 +153,33 @@ export function PaddockDetailContent({
       </Section>
 
       <Section title="Varieties">
+        {canEdit && (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setEditVarietiesOpen(true)}
+            >
+              <Pencil className="h-3 w-3" />
+              {allocations.length === 0 ? "Assign varieties" : "Edit varieties"}
+            </Button>
+          </div>
+        )}
         {allocations.length === 0 ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex items-center gap-1 text-xs">
                 <Badge variant="outline" className="text-amber-700 border-amber-400">
-                  Unassigned variety
+                  No grape variety selected
                 </Badge>
                 <AlertTriangle className="h-3 w-3 text-amber-600" />
               </span>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
-              This block has no variety allocation, or the allocation could not
-              be matched. Add or fix the variety allocation in Block Settings.
+              This block has no variety allocation. Owners and managers can
+              assign one from the Edit varieties button.
             </TooltipContent>
           </Tooltip>
         ) : (
@@ -183,14 +197,14 @@ export function PaddockDetailContent({
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1">
                           <Badge variant="outline" className="text-amber-700 border-amber-400">
-                            Unassigned variety
+                            Unresolved grape variety
                           </Badge>
                           <AlertTriangle className="h-3 w-3 text-amber-600" />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        This allocation could not be matched to a grape variety.
-                        Add or fix the variety allocation in Block Settings.
+                        This allocation references a variety that isn't in the
+                        catalogue. Edit the variety allocation to fix it.
                       </TooltipContent>
                     </Tooltip>
                   )}
@@ -208,6 +222,14 @@ export function PaddockDetailContent({
         {paddock.planting_year && (
           <Row label="Planting year (block)" value={paddock.planting_year} />
         )}
+        <EditVarietiesDialog
+          open={editVarietiesOpen}
+          onOpenChange={setEditVarietiesOpen}
+          paddockId={paddock.id}
+          paddockName={paddock.name}
+          vineyardId={selectedVineyardId}
+          initialAllocations={paddock.variety_allocations}
+        />
       </Section>
 
       <Section title="Irrigation">
