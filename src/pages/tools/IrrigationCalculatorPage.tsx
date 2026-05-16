@@ -140,21 +140,12 @@ export default function IrrigationCalculatorPage() {
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
   const [recentRainUserEdited, setRecentRainUserEdited] = useState<boolean>(false);
-  const [recentRainLookbackHours, setRecentRainLookbackHours] = useState<number>(() => {
-    try {
-      const v = Number(localStorage.getItem("vt_recent_rain_lookback_hours"));
-      return [24, 48, 168, 336].includes(v) ? v : 48;
-    } catch {
-      return 48;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("vt_recent_rain_lookback_hours", String(recentRainLookbackHours));
-    } catch {}
-  }, [recentRainLookbackHours]);
+  // Shared vineyard-level lookback (SQL 75 contract).
+  const lookbackQuery = useRecentRainLookbackHours(selectedVineyardId);
+  const recentRainLookbackHours = lookbackQuery.data ?? 48;
+  const setLookbackMutation = useSetRecentRainLookbackHours(selectedVineyardId);
 
-  // Auto-resolve recent rain from rainfall_daily / get_daily_rainfall.
+  // Auto-resolve recent rain from shared get_vineyard_recent_rainfall RPC.
   const recentRainQuery = useRecentRainResolution(
     selectedVineyardId,
     recentRainLookbackHours,
