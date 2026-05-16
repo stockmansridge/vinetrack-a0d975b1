@@ -129,14 +129,28 @@ export function resolveBuiltinName(raw: string | null | undefined): string | nul
   return BUILTIN_BY_NORMAL_NAME.get(key) ?? null;
 }
 
-/** Fetch the grape varieties for a vineyard (used to resolve varietyId).
- *  Returns [] if the table is unreachable / RLS blocks it. */
+/** Fetch the grape varieties for a vineyard.
+ *  Now prefers the shared `list_vineyard_grape_varieties` RPC, falling back to a
+ *  direct `grape_varieties` table read if the RPC is unavailable. */
 export function useGrapeVarieties(vineyardId: string | null | undefined) {
   return useQuery({
     queryKey: ["grape_varieties", vineyardId],
     enabled: !!vineyardId,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<GrapeVariety[]> => {
+      // Prefer the shared RPC (returns built-ins + custom for this vineyard).
+      const rpc = await supabase.rpc("list_vineyard_grape_varieties", {
+        p_vineyard_id: vineyardId,
+      });
+      if (!rpc.error && Array.isArray(rpc.data)) {
+        return (rpc.data as any[])
+          .map((r) => ({
+            id: String(r?.id ?? r?.variety_key ?? r?.varietyKey ?? ""),
+            name: String(r?.display_name ?? r?.name ?? ""),
+          }))
+          .filter((v) => v.id && v.name);
+      }
+      // Fallback: direct table read (legacy).
       const { data, error } = await supabase
         .from("grape_varieties")
         .select("id,name")
