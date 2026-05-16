@@ -787,7 +787,7 @@ export default function IrrigationCalculatorPage() {
               type="number"
               step="0.1"
               value={recentRain}
-              onChange={(e) => setRecentRain(e.target.value)}
+              onChange={(e) => handleRecentRainChange(e.target.value)}
               className="h-9"
             />
           </div>
