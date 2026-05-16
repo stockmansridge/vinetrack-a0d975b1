@@ -263,6 +263,69 @@ export default function IrrigationCalculatorPage() {
     }
   }, [selectedVineyardId, selectedPaddockId, paddockOptions]);
 
+  // Soil profile lookups indexed by paddock id, plus auto-buffer derivation.
+  const soilByPaddock = useMemo(() => {
+    const m = new Map<string, typeof vineyardSoilProfiles[number]>();
+    for (const p of vineyardSoilProfiles) {
+      if (p?.paddock_id) m.set(p.paddock_id as string, p);
+    }
+    return m;
+  }, [vineyardSoilProfiles]);
+
+  useEffect(() => {
+    if (selectedPaddockId === "__vineyard__") {
+      const buf =
+        deriveSoilBufferMm(vineyardDefaultSoil ?? null) ??
+        aggregateConservativeBuffer(vineyardSoilProfiles);
+      if (buf != null && Number.isFinite(buf)) {
+        setSettings((s) => ({ ...s, soilMoistureBufferMm: Number(buf.toFixed(1)) }));
+      }
+    } else {
+      const profile = soilByPaddock.get(selectedPaddockId) ?? null;
+      const buf = deriveSoilBufferMm(profile);
+      if (buf != null && Number.isFinite(buf)) {
+        setSettings((s) => ({ ...s, soilMoistureBufferMm: Number(buf.toFixed(1)) }));
+      }
+    }
+  }, [selectedPaddockId, vineyardDefaultSoil, vineyardSoilProfiles, soilByPaddock]);
+
+  const wizardItems = useMemo(() => {
+    return buildWizardItems({
+      scope: selectedPaddockId === "__vineyard__" ? "vineyard" : "paddock",
+      selectedPaddockId: selectedPaddockId === "__vineyard__" ? null : selectedPaddockId,
+      paddocks: paddockOptions.map((p) => ({
+        id: p.id,
+        name: p.name,
+        variety_allocations: (p as any).variety_allocations,
+        infrastructure: {
+          rowSpacingMetres: p.row_width,
+          emitterSpacingMetres: p.emitter_spacing,
+          emitterFlowLitresPerHour: p.flow_per_emitter,
+        },
+        soilProfile: soilByPaddock.get(p.id) ?? null,
+        areaHectares: p.areaHectares,
+      })),
+      grapeVarieties,
+      vineyardSoilProfile: vineyardDefaultSoil ?? null,
+      forecastAvailable: !!forecastQuery.data?.available,
+      forecastSource: forecastQuery.data?.available
+        ? forecastQuery.data.forecast.source
+        : null,
+      hasRecentRainSet: parseFloat(recentRain) > 0,
+      hasGrowthStage: true, // growth stage UI is not yet on portal; treat as set
+      hasEfficiencySettings: true,
+    });
+  }, [
+    selectedPaddockId,
+    paddockOptions,
+    soilByPaddock,
+    grapeVarieties,
+    vineyardDefaultSoil,
+    forecastQuery.data,
+    recentRain,
+  ]);
+
+
   const updateSetting = <K extends keyof IrrigationSettings>(k: K, v: string) => {
     const num = parseFloat(v);
     setSettings((s) => ({ ...s, [k]: Number.isFinite(num) ? num : 0 }));
