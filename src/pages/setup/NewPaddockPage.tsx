@@ -35,6 +35,11 @@ import {
   polygonCentroid,
   haversineMeters,
 } from "@/lib/paddockGeometry";
+import VarietyAllocationEditor, {
+  isAllocationsValid,
+  serialiseAllocations,
+  type VarietyAllocationRow,
+} from "@/components/varieties/VarietyAllocationEditor";
 
 // ────────────────────────────────────────────────────────────────────────────
 // TEST FLAG — keep `false` until production save is approved.
@@ -88,6 +93,7 @@ export default function NewPaddockPage() {
   // Step 1 — basics
   const [name, setName] = useState("");
   const [plantingYear, setPlantingYear] = useState<string>("");
+  const [varietyAllocations, setVarietyAllocations] = useState<VarietyAllocationRow[]>([]);
 
   // Step 2 — boundary
   const [polygon, setPolygon] = useState<LatLng[]>([]);
@@ -185,8 +191,10 @@ export default function NewPaddockPage() {
     if (!(Number(vineSpacing) > 0)) errors.push("Vine spacing must be > 0.");
     if (!(Number(rowsCount) > 0)) errors.push("Row count must be > 0.");
     if (generated.length === 0 && polygon.length >= 3) errors.push("No rows generated — check direction/width/offset.");
+    if (varietyAllocations.length > 0 && !isAllocationsValid(varietyAllocations))
+      errors.push("Variety allocations must total 100% and have a selected variety.");
     return errors;
-  }, [selectedVineyardId, name, polygon, rowDirection, rowWidth, vineSpacing, rowsCount, generated.length]);
+  }, [selectedVineyardId, name, polygon, rowDirection, rowWidth, vineSpacing, rowsCount, generated.length, varietyAllocations]);
 
   const isValid = validation.length === 0;
 
@@ -202,7 +210,7 @@ export default function NewPaddockPage() {
       row_width: Number(rowWidth),
       row_offset: Number(rowOffset) || 0,
       vine_spacing: Number(vineSpacing),
-      variety_allocations: [],
+      variety_allocations: serialiseAllocations(varietyAllocations),
       created_by: user?.id ?? null,
       updated_by: user?.id ?? null,
       client_updated_at: new Date().toISOString(),
@@ -218,7 +226,7 @@ export default function NewPaddockPage() {
   }, [
     selectedVineyardId, name, polygon, generated, rowDirection, rowWidth, rowOffset,
     vineSpacing, user?.id, vineCountOverride, rowLengthOverride, flowPerEmitter,
-    emitterSpacing, intermediatePostSpacing, plantingYear,
+    emitterSpacing, intermediatePostSpacing, plantingYear, varietyAllocations,
   ]);
 
   // Strip server-managed fields before exposing payload (defensive — these
@@ -327,6 +335,18 @@ export default function NewPaddockPage() {
               <Label htmlFor="planting_year">Planting year</Label>
               <Input id="planting_year" type="number" min={1900} max={2100}
                 value={plantingYear} onChange={(e) => setPlantingYear(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2 space-y-2 border-t pt-4">
+              <Label>Grape varieties</Label>
+              <p className="text-xs text-muted-foreground">
+                Assign one or more grape varieties. Percentages must total 100%.
+                Search the list or add a custom variety if you can't find it.
+              </p>
+              <VarietyAllocationEditor
+                vineyardId={selectedVineyardId}
+                value={varietyAllocations}
+                onChange={setVarietyAllocations}
+              />
             </div>
             <div className="sm:col-span-2 flex justify-end">
               <Button onClick={() => setStep("boundary")} disabled={!name.trim()}>Next: draw boundary</Button>

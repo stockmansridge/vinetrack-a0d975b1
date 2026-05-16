@@ -62,6 +62,7 @@ import { buildWizardItems } from "@/lib/irrigationWizard";
 import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 interface DayRow {
   id: string;
@@ -151,6 +152,7 @@ export default function IrrigationCalculatorPage() {
   const { data: vineyardDefaultSoil } = useVineyardDefaultSoilProfile(selectedVineyardId);
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const { data: varietyCatalog } = useVineyardGrapeVarieties(selectedVineyardId);
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
@@ -531,16 +533,17 @@ export default function IrrigationCalculatorPage() {
       </div>
 
       <AdvisorWizard items={wizardItems} />
-      <VarietyResolverDiagnostics
-        paddocks={paddockOptions.map((p) => ({
-          id: p.id,
-          name: p.name,
-          variety_allocations: (p as any).variety_allocations,
-        }))}
-        grapeVarieties={grapeVarieties}
-        varietyCatalog={varietyCatalog}
-      />
-
+      {isSystemAdmin && (
+        <VarietyResolverDiagnostics
+          paddocks={paddockOptions.map((p) => ({
+            id: p.id,
+            name: p.name,
+            variety_allocations: (p as any).variety_allocations,
+          }))}
+          grapeVarieties={grapeVarieties}
+          varietyCatalog={varietyCatalog}
+        />
+      )}
       {/* Scope selector */}
       <Card>
         <CardHeader className="pb-3">
