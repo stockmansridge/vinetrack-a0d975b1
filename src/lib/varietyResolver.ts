@@ -17,6 +17,8 @@ export interface GrapeVariety {
 
 export interface VarietyAllocationLike {
   id?: string;
+  varietyKey?: string | null;
+  variety_key?: string | null;
   varietyId?: string | null;
   variety_id?: string | null;
   variety?: string | null;
@@ -31,11 +33,12 @@ export interface VarietyAllocationLike {
 }
 
 export type ResolverPath =
+  | "varietyKey"
   | "varietyId"
   | "builtinId"
   | "nameSnapshot"
   | "alias"
-  | "vineyardName"
+  | "custom"
   | "unresolved";
 
 export interface ResolvedAllocation {
@@ -56,37 +59,37 @@ export interface ResolvedAllocation {
 // Canonical name is the value we display. Aliases are matched case-insensitive
 // after stripping punctuation/whitespace.
 // ---------------------------------------------------------------------------
-const BUILTIN_VARIETIES: Array<{ name: string; aliases: string[] }> = [
-  { name: "Cabernet Sauvignon", aliases: ["cab sauv", "cabernet sauv", "cab", "cabernet"] },
-  { name: "Cabernet Franc", aliases: ["cab franc", "cab frnc", "cab fr", "cabernet fr"] },
-  { name: "Merlot", aliases: ["mer"] },
-  { name: "Shiraz", aliases: ["syrah"] },
-  { name: "Pinot Noir", aliases: ["pinot n", "p noir", "pn"] },
-  { name: "Pinot Gris", aliases: ["pinot grigio", "p gris", "pg"] },
-  { name: "Pinot Meunier", aliases: ["meunier"] },
-  { name: "Chardonnay", aliases: ["chard"] },
-  { name: "Sauvignon Blanc", aliases: ["sauv blanc", "savvy b", "sb", "sauvignon b"] },
-  { name: "Semillon", aliases: ["sem", "sémillon"] },
-  { name: "Riesling", aliases: ["ries"] },
-  { name: "Gruner Veltliner", aliases: ["grüner veltliner", "gruner", "grüner", "gv"] },
-  { name: "Tempranillo", aliases: ["temp"] },
-  { name: "Primitivo", aliases: ["zinfandel", "zin"] },
-  { name: "Nebbiolo", aliases: ["nebb"] },
-  { name: "Sangiovese", aliases: ["sangio"] },
-  { name: "Grenache", aliases: ["garnacha"] },
-  { name: "Mourvedre", aliases: ["mourvèdre", "monastrell", "mataro"] },
-  { name: "Viognier", aliases: ["vio"] },
-  { name: "Verdelho", aliases: [] },
-  { name: "Vermentino", aliases: [] },
-  { name: "Marsanne", aliases: [] },
-  { name: "Roussanne", aliases: [] },
-  { name: "Petit Verdot", aliases: ["pv"] },
-  { name: "Malbec", aliases: [] },
-  { name: "Barbera", aliases: [] },
-  { name: "Montepulciano", aliases: [] },
-  { name: "Fiano", aliases: [] },
-  { name: "Arneis", aliases: [] },
-  { name: "Gewurztraminer", aliases: ["gewürztraminer", "gewurz"] },
+const BUILTIN_VARIETIES: Array<{ key: string; name: string; aliases: string[] }> = [
+  { key: "cabernet_sauvignon", name: "Cabernet Sauvignon", aliases: ["cab sauv", "cabernet sauv", "cab", "cabernet"] },
+  { key: "cabernet_franc", name: "Cabernet Franc", aliases: ["cab franc", "cab frnc", "cab fr", "cabernet fr"] },
+  { key: "merlot", name: "Merlot", aliases: ["mer"] },
+  { key: "shiraz", name: "Shiraz", aliases: ["syrah"] },
+  { key: "pinot_noir", name: "Pinot Noir", aliases: ["pinot n", "p noir", "pn"] },
+  { key: "pinot_gris", name: "Pinot Gris", aliases: ["pinot grigio", "pinot gris grigio", "pinot gris / grigio", "p gris", "pg", "pinot_grigio"] },
+  { key: "pinot_meunier", name: "Pinot Meunier", aliases: ["meunier"] },
+  { key: "chardonnay", name: "Chardonnay", aliases: ["chard"] },
+  { key: "sauvignon_blanc", name: "Sauvignon Blanc", aliases: ["sauv blanc", "savvy b", "sb", "sauvignon b"] },
+  { key: "semillon", name: "Semillon", aliases: ["sem", "sémillon"] },
+  { key: "riesling", name: "Riesling", aliases: ["ries"] },
+  { key: "gruner_veltliner", name: "Gruner Veltliner", aliases: ["grüner veltliner", "gruner", "grüner", "gv"] },
+  { key: "tempranillo", name: "Tempranillo", aliases: ["temp"] },
+  { key: "primitivo", name: "Primitivo", aliases: ["zinfandel", "zin"] },
+  { key: "nebbiolo", name: "Nebbiolo", aliases: ["nebb"] },
+  { key: "sangiovese", name: "Sangiovese", aliases: ["sangio"] },
+  { key: "grenache", name: "Grenache", aliases: ["garnacha"] },
+  { key: "mourvedre", name: "Mourvedre", aliases: ["mourvèdre", "monastrell", "mataro"] },
+  { key: "viognier", name: "Viognier", aliases: ["vio"] },
+  { key: "verdelho", name: "Verdelho", aliases: [] },
+  { key: "vermentino", name: "Vermentino", aliases: [] },
+  { key: "marsanne", name: "Marsanne", aliases: [] },
+  { key: "roussanne", name: "Roussanne", aliases: [] },
+  { key: "petit_verdot", name: "Petit Verdot", aliases: ["pv"] },
+  { key: "malbec", name: "Malbec", aliases: [] },
+  { key: "barbera", name: "Barbera", aliases: [] },
+  { key: "montepulciano", name: "Montepulciano", aliases: [] },
+  { key: "fiano", name: "Fiano", aliases: [] },
+  { key: "arneis", name: "Arneis", aliases: [] },
+  { key: "gewurztraminer", name: "Gewurztraminer", aliases: ["gewürztraminer", "gewurz"] },
 ];
 
 function normaliseName(s: string): string {
@@ -98,25 +101,30 @@ function normaliseName(s: string): string {
     .trim();
 }
 
-// Deterministic UUID v5-ish derivation from canonical name. iOS uses a stable
-// hash → UUID; we mirror by deriving the same RFC-4122 v5 from name in a
-// "builtin.variety" namespace. We don't actually need to compute UUIDs here —
-// we just need a SET of strings to test allocation.varietyId against. Since
-// the iOS deterministic IDs are not transmitted to us, the practical path is
-// name-based: built-in IDs (if ever present) are caught by name match anyway.
+// Built-in lookup maps — by normalised name/alias AND by stable key.
 const BUILTIN_BY_NORMAL_NAME: Map<string, string> = (() => {
   const m = new Map<string, string>();
   for (const v of BUILTIN_VARIETIES) {
     m.set(normaliseName(v.name), v.name);
+    m.set(normaliseName(v.key), v.name); // "pinot_gris" → "Pinot Gris"
     for (const a of v.aliases) m.set(normaliseName(a), v.name);
   }
   return m;
 })();
 
-/** Resolve a free-text variety name against built-in canonical names + aliases. */
+const BUILTIN_BY_KEY: Map<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const v of BUILTIN_VARIETIES) m.set(v.key, v.name);
+  return m;
+})();
+
+/** Resolve a free-text variety name (or key) against built-in canonical names + aliases. */
 export function resolveBuiltinName(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  const key = normaliseName(raw);
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  if (BUILTIN_BY_KEY.has(trimmed)) return BUILTIN_BY_KEY.get(trimmed)!;
+  const key = normaliseName(trimmed);
   if (!key) return null;
   return BUILTIN_BY_NORMAL_NAME.get(key) ?? null;
 }
@@ -166,17 +174,32 @@ export function resolveAllocation(
   let name: string | null = null;
   let path: ResolverPath = "unresolved";
 
+  const key = (alloc.varietyKey ?? alloc.variety_key ?? null) as string | null;
   const id = alloc.varietyId ?? alloc.variety_id ?? null;
 
-  // 1. Exact varietyId against vineyard grape_varieties
-  if (id && typeof id === "string" && map.byId.has(id)) {
+  // 1. variety_key — built-in stable key (e.g. "pinot_gris")
+  if (key && typeof key === "string") {
+    const trimmedKey = key.trim();
+    if (BUILTIN_BY_KEY.has(trimmedKey)) {
+      name = BUILTIN_BY_KEY.get(trimmedKey)!;
+      path = "varietyKey";
+    } else {
+      // Also accept normalised form (e.g. "Pinot Grigio" passed as a key).
+      const fromKey = resolveBuiltinName(trimmedKey);
+      if (fromKey) {
+        name = fromKey;
+        path = "varietyKey";
+      }
+    }
+  }
+
+  // 2. variety_id against vineyard grape_varieties
+  if (!name && id && typeof id === "string" && map.byId.has(id)) {
     name = map.byId.get(id)!;
     path = "varietyId";
   }
 
-  // 2. Built-in deterministic ID — we don't have iOS's UUID derivation, but
-  //    if a varietyId happens to BE a canonical built-in name (some legacy
-  //    rows stored the name in varietyId), catch it here.
+  // 2b. Built-in match against the id itself (legacy rows where id is a name/key)
   if (!name && id && typeof id === "string") {
     const fromId = resolveBuiltinName(id);
     if (fromId) {
@@ -185,15 +208,14 @@ export function resolveAllocation(
     }
   }
 
-  // 3. Saved name snapshot (varietyName | name | variety)
+  // 3. Saved name snapshot (varietyName | variety_name | name | variety)
   const rawName =
     alloc.varietyName ?? alloc.variety_name ?? alloc.name ?? alloc.variety ?? null;
   const rawNameTrimmed = rawName != null ? String(rawName).trim() : "";
 
   if (!name && rawNameTrimmed) {
-    const key = normaliseName(rawNameTrimmed);
     // 3a. Snapshot resolves directly against vineyard varieties
-    const vineyardHit = map.byNameLower.get(key);
+    const vineyardHit = map.byNameLower.get(normaliseName(rawNameTrimmed));
     if (vineyardHit) {
       name = vineyardHit;
       path = "nameSnapshot";
@@ -209,13 +231,11 @@ export function resolveAllocation(
     }
   }
 
-  // 5. Last-ditch: use the raw snapshot as-is (treated as vineyard name);
-  //    marked as resolved=true only when the original casing exists in the
-  //    vineyard list. We otherwise leave name=null so the UI shows unresolved.
+  // 5. Custom variety: a name exists but isn't in vineyard list or built-ins.
+  //    Treat as a resolved CUSTOM variety — show the user's text, don't flag.
   if (!name && rawNameTrimmed) {
-    // Keep raw text visible to the user but flag as unresolved.
     name = rawNameTrimmed;
-    path = "unresolved";
+    path = "custom";
   }
 
   const resolved = path !== "unresolved";
