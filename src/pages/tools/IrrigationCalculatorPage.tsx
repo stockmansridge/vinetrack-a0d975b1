@@ -129,7 +129,25 @@ export default function IrrigationCalculatorPage() {
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
+  const [recentRainLookbackHours, setRecentRainLookbackHours] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem("vt_recent_rain_lookback_hours"));
+      return [24, 48, 168, 336].includes(v) ? v : 48;
+    } catch {
+      return 48;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("vt_recent_rain_lookback_hours", String(recentRainLookbackHours));
+    } catch {}
+  }, [recentRainLookbackHours]);
   const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
+
+  // Shared soil profiles (iOS Supabase)
+  const { data: vineyardSoilProfiles = [] } = useVineyardSoilProfiles(selectedVineyardId);
+  const { data: vineyardDefaultSoil } = useVineyardDefaultSoilProfile(selectedVineyardId);
+  const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
