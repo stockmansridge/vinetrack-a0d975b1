@@ -492,16 +492,48 @@ export default function IrrigationCalculatorPage() {
         </div>
         <AdvisorConfigSheet
           recentRain={
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+                <div>
+                  <span className="text-muted-foreground">Recent rain used:</span>{" "}
+                  <span className="font-medium">{fmt(parseFloat(recentRain) || 0)} mm</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Source:</span>{" "}
+                  <span>
+                    {recentRainUserEdited
+                      ? "Manual override"
+                      : recentRainResolution?.sourceLabel ?? "Loading…"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Lookback:</span>{" "}
+                  <span>{describeLookback(recentRainLookbackHours)}</span>
+                </div>
+                {recentRainResolution?.status === "error" && (
+                  <div className="text-amber-700 dark:text-amber-300 mt-1">
+                    Rainfall source query failed — using 0 mm fallback.
+                  </div>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs">Recent actual rain (mm)</Label>
                 <Input
                   type="number"
                   step="0.1"
                   value={recentRain}
-                  onChange={(e) => setRecentRain(e.target.value)}
+                  onChange={(e) => handleRecentRainChange(e.target.value)}
                   className="h-9"
                 />
+                {recentRainUserEdited && (
+                  <button
+                    type="button"
+                    className="text-[11px] text-primary underline"
+                    onClick={resetRecentRainToAuto}
+                  >
+                    Reset to auto-resolved value
+                  </button>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Lookback window</Label>
