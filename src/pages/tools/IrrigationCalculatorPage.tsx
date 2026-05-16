@@ -59,6 +59,7 @@ import {
 import { useGrapeVarieties } from "@/lib/varietyResolver";
 import { buildWizardItems } from "@/lib/irrigationWizard";
 import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
+import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 
 interface DayRow {
@@ -526,6 +527,14 @@ export default function IrrigationCalculatorPage() {
       </div>
 
       <AdvisorWizard items={wizardItems} />
+      <VarietyResolverDiagnostics
+        paddocks={paddockOptions.map((p) => ({
+          id: p.id,
+          name: p.name,
+          variety_allocations: (p as any).variety_allocations,
+        }))}
+        grapeVarieties={grapeVarieties}
+      />
 
       {/* Scope selector */}
       <Card>
