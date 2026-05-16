@@ -191,8 +191,10 @@ export default function NewPaddockPage() {
     if (!(Number(vineSpacing) > 0)) errors.push("Vine spacing must be > 0.");
     if (!(Number(rowsCount) > 0)) errors.push("Row count must be > 0.");
     if (generated.length === 0 && polygon.length >= 3) errors.push("No rows generated — check direction/width/offset.");
+    if (varietyAllocations.length > 0 && !isAllocationsValid(varietyAllocations))
+      errors.push("Variety allocations must total 100% and have a selected variety.");
     return errors;
-  }, [selectedVineyardId, name, polygon, rowDirection, rowWidth, vineSpacing, rowsCount, generated.length]);
+  }, [selectedVineyardId, name, polygon, rowDirection, rowWidth, vineSpacing, rowsCount, generated.length, varietyAllocations]);
 
   const isValid = validation.length === 0;
 
