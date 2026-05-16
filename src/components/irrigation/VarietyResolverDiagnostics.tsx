@@ -36,9 +36,11 @@ export default function VarietyResolverDiagnostics({
         allocations: arr.map((a: any, i) => ({
           index: i,
           id: a?.id ?? null,
+          varietyKey: a?.varietyKey ?? a?.variety_key ?? null,
           varietyId: a?.varietyId ?? a?.variety_id ?? null,
           name: a?.name ?? null,
           varietyName: a?.varietyName ?? a?.variety_name ?? null,
+          variety: a?.variety ?? null,
           resolvedName: resolved[i]?.name ?? null,
           resolverPath: resolved[i]?.resolverPath ?? "unresolved",
         })),
