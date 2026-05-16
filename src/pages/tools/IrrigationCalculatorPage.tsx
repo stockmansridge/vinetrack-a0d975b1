@@ -532,7 +532,8 @@ export default function IrrigationCalculatorPage() {
                 <Label className="text-xs">Lookback window</Label>
                 <Select
                   value={String(recentRainLookbackHours)}
-                  onValueChange={(v) => setRecentRainLookbackHours(Number(v))}
+                  onValueChange={(v) => setLookbackMutation.mutate(Number(v))}
+                  disabled={setLookbackMutation.isPending || !selectedVineyardId}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -544,6 +545,7 @@ export default function IrrigationCalculatorPage() {
                     <SelectItem value="336">14 days</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
                 <p className="text-[11px] text-muted-foreground">
                   Lookback is session-only on the portal until the shared vineyard-level setting ships in Supabase.
                 </p>
