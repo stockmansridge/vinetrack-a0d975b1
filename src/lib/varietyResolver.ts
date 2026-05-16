@@ -17,6 +17,8 @@ export interface GrapeVariety {
 
 export interface VarietyAllocationLike {
   id?: string;
+  varietyKey?: string | null;
+  variety_key?: string | null;
   varietyId?: string | null;
   variety_id?: string | null;
   variety?: string | null;
