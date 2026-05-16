@@ -538,6 +538,7 @@ export default function IrrigationCalculatorPage() {
           variety_allocations: (p as any).variety_allocations,
         }))}
         grapeVarieties={grapeVarieties}
+        varietyCatalog={varietyCatalog}
       />
 
       {/* Scope selector */}
