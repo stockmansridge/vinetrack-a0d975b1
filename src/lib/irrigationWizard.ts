@@ -4,6 +4,7 @@ import {
   buildVarietyMap,
   resolvePaddockAllocations,
   type GrapeVariety,
+  type CatalogVarietyLike,
 } from "@/lib/varietyResolver";
 import {
   calculateIrrigationRateFromInfrastructure,
