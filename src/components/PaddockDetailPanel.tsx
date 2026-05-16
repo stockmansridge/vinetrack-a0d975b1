@@ -229,6 +229,13 @@ export function PaddockDetailContent({
         <Row label="Planting year" value={paddock.planting_year ?? "—"} />
       </Section>
 
+      <SoilProfileSection
+        paddockId={paddock.id}
+        paddockName={paddock.name}
+        latitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lat}
+        longitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lng}
+      />
+
       <Section title="Updated">
         <Row label="Updated" value={fmtDate(paddock.updated_at)} />
       </Section>
