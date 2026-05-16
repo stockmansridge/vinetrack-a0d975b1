@@ -65,6 +65,8 @@ import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import {
   useRecentRainResolution,
+  useRecentRainLookbackHours,
+  useSetRecentRainLookbackHours,
   describeLookback,
   type RecentRainResolution,
 } from "@/lib/recentRainResolver";
