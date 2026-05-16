@@ -57,6 +57,7 @@ import {
   aggregateConservativeBuffer,
 } from "@/lib/soilProfiles";
 import { useGrapeVarieties } from "@/lib/varietyResolver";
+import { useVineyardGrapeVarieties } from "@/lib/varietyCatalog";
 import { buildWizardItems } from "@/lib/irrigationWizard";
 import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
