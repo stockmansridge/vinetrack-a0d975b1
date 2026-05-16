@@ -62,6 +62,7 @@ import { buildWizardItems } from "@/lib/irrigationWizard";
 import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 interface DayRow {
   id: string;
