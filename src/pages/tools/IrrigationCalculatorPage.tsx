@@ -346,7 +346,7 @@ export default function IrrigationCalculatorPage() {
       forecastSource: forecastQuery.data?.available
         ? forecastQuery.data.forecast.source
         : null,
-      hasRecentRainSet: parseFloat(recentRain) > 0,
+      hasRecentRainSet: true, // resolved automatically — never a wizard blocker
       hasGrowthStage: true, // growth stage UI is not yet on portal; treat as set
       hasEfficiencySettings: true,
     });
