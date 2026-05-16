@@ -129,14 +129,28 @@ export function resolveBuiltinName(raw: string | null | undefined): string | nul
   return BUILTIN_BY_NORMAL_NAME.get(key) ?? null;
 }
 
-/** Fetch the grape varieties for a vineyard (used to resolve varietyId).
- *  Returns [] if the table is unreachable / RLS blocks it. */
+/** Fetch the grape varieties for a vineyard.
+ *  Now prefers the shared `list_vineyard_grape_varieties` RPC, falling back to a
+ *  direct `grape_varieties` table read if the RPC is unavailable. */
 export function useGrapeVarieties(vineyardId: string | null | undefined) {
   return useQuery({
     queryKey: ["grape_varieties", vineyardId],
     enabled: !!vineyardId,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<GrapeVariety[]> => {
+      // Prefer the shared RPC (returns built-ins + custom for this vineyard).
+      const rpc = await supabase.rpc("list_vineyard_grape_varieties", {
+        p_vineyard_id: vineyardId,
+      });
+      if (!rpc.error && Array.isArray(rpc.data)) {
+        return (rpc.data as any[])
+          .map((r) => ({
+            id: String(r?.id ?? r?.variety_key ?? r?.varietyKey ?? ""),
+            name: String(r?.display_name ?? r?.name ?? ""),
+          }))
+          .filter((v) => v.id && v.name);
+      }
+      // Fallback: direct table read (legacy).
       const { data, error } = await supabase
         .from("grape_varieties")
         .select("id,name")
@@ -153,16 +167,39 @@ export function useGrapeVarieties(vineyardId: string | null | undefined) {
 export type GrapeVarietyMap = {
   byId: Map<string, string>;
   byNameLower: Map<string, string>;
+  /** Stable variety_key → display_name, sourced from the shared Supabase catalogue.
+   *  Takes precedence over the local BUILTIN_BY_KEY fallback during resolution. */
+  byKey: Map<string, string>;
 };
 
-export function buildVarietyMap(varieties: GrapeVariety[] | undefined): GrapeVarietyMap {
+/** Lightweight catalogue row accepted by buildVarietyMap (from useVineyardGrapeVarieties
+ *  or useGrapeVarietyCatalog). Kept loose to avoid an import cycle. */
+export interface CatalogVarietyLike {
+  id?: string | null;
+  variety_key?: string | null;
+  display_name?: string | null;
+  name?: string | null;
+}
+
+export function buildVarietyMap(
+  varieties: GrapeVariety[] | undefined,
+  catalog?: CatalogVarietyLike[] | undefined,
+): GrapeVarietyMap {
   const byId = new Map<string, string>();
   const byNameLower = new Map<string, string>();
+  const byKey = new Map<string, string>();
   for (const v of varieties ?? []) {
     if (v?.id && v?.name) byId.set(v.id, v.name);
     if (v?.name) byNameLower.set(normaliseName(v.name), v.name);
   }
-  return { byId, byNameLower };
+  for (const c of catalog ?? []) {
+    const k = c?.variety_key ? String(c.variety_key).trim() : "";
+    const n = (c?.display_name ?? c?.name) ? String(c.display_name ?? c.name).trim() : "";
+    if (k && n) byKey.set(k, n);
+    if (c?.id && n) byId.set(String(c.id), n);
+    if (n) byNameLower.set(normaliseName(n), n);
+  }
+  return { byId, byNameLower, byKey };
 }
 
 /** Resolve a single allocation against the variety map.
@@ -177,12 +214,17 @@ export function resolveAllocation(
   const key = (alloc.varietyKey ?? alloc.variety_key ?? null) as string | null;
   const id = alloc.varietyId ?? alloc.variety_id ?? null;
 
-  // 1. variety_key — built-in stable key (e.g. "pinot_gris")
+  // 1. variety_key — prefer shared Supabase catalogue, then local built-in fallback.
   if (key && typeof key === "string") {
     const trimmedKey = key.trim();
-    if (BUILTIN_BY_KEY.has(trimmedKey)) {
+    if (map.byKey.has(trimmedKey)) {
+      name = map.byKey.get(trimmedKey)!;
+      path = "varietyKey";
+    } else if (BUILTIN_BY_KEY.has(trimmedKey)) {
       name = BUILTIN_BY_KEY.get(trimmedKey)!;
       path = "varietyKey";
+    } else if (trimmedKey.startsWith("custom:")) {
+      // Custom key but catalogue hasn't loaded yet — fall through to name snapshot.
     } else {
       // Also accept normalised form (e.g. "Pinot Grigio" passed as a key).
       const fromKey = resolveBuiltinName(trimmedKey);

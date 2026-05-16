@@ -4,6 +4,7 @@ import {
   buildVarietyMap,
   resolvePaddockAllocations,
   type GrapeVariety,
+  type CatalogVarietyLike,
 } from "@/lib/varietyResolver";
 import {
   calculateIrrigationRateFromInfrastructure,
@@ -34,6 +35,7 @@ export interface BuildWizardInput {
   selectedPaddockId: string | null;
   paddocks: WizardPaddock[];
   grapeVarieties: GrapeVariety[] | undefined;
+  varietyCatalog?: CatalogVarietyLike[] | undefined;
   vineyardSoilProfile: PaddockSoilProfile | null;
   forecastAvailable: boolean;
   forecastSource?: string | null;
@@ -45,7 +47,7 @@ export interface BuildWizardInput {
 /** Build wizard items. Returns only items with severity != "ok". */
 export function buildWizardItems(input: BuildWizardInput): WizardItem[] {
   const items: WizardItem[] = [];
-  const varietyMap = buildVarietyMap(input.grapeVarieties);
+  const varietyMap = buildVarietyMap(input.grapeVarieties, input.varietyCatalog);
 
   if (!input.forecastAvailable) {
     items.push({

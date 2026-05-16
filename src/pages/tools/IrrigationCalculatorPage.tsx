@@ -57,6 +57,7 @@ import {
   aggregateConservativeBuffer,
 } from "@/lib/soilProfiles";
 import { useGrapeVarieties } from "@/lib/varietyResolver";
+import { useVineyardGrapeVarieties } from "@/lib/varietyCatalog";
 import { buildWizardItems } from "@/lib/irrigationWizard";
 import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
@@ -149,6 +150,7 @@ export default function IrrigationCalculatorPage() {
   const { data: vineyardSoilProfiles = [] } = useVineyardSoilProfiles(selectedVineyardId);
   const { data: vineyardDefaultSoil } = useVineyardDefaultSoilProfile(selectedVineyardId);
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
+  const { data: varietyCatalog } = useVineyardGrapeVarieties(selectedVineyardId);
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
@@ -308,6 +310,7 @@ export default function IrrigationCalculatorPage() {
         areaHectares: p.areaHectares,
       })),
       grapeVarieties,
+      varietyCatalog,
       vineyardSoilProfile: vineyardDefaultSoil ?? null,
       forecastAvailable: !!forecastQuery.data?.available,
       forecastSource: forecastQuery.data?.available
@@ -322,6 +325,7 @@ export default function IrrigationCalculatorPage() {
     paddockOptions,
     soilByPaddock,
     grapeVarieties,
+    varietyCatalog,
     vineyardDefaultSoil,
     forecastQuery.data,
     recentRain,
@@ -534,6 +538,7 @@ export default function IrrigationCalculatorPage() {
           variety_allocations: (p as any).variety_allocations,
         }))}
         grapeVarieties={grapeVarieties}
+        varietyCatalog={varietyCatalog}
       />
 
       {/* Scope selector */}
