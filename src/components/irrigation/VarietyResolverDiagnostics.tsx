@@ -49,7 +49,7 @@ export default function VarietyResolverDiagnostics({
         })),
       };
     });
-  }, [paddocks, grapeVarieties]);
+  }, [paddocks, grapeVarieties, varietyCatalog]);
 
   if (!show) return null;
 
