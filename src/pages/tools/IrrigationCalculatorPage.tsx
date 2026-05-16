@@ -447,13 +447,85 @@ export default function IrrigationCalculatorPage() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Irrigation Advisor</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Irrigation Advisor estimates irrigation requirements from forecast ETo, rainfall, crop
-          coefficient, irrigation efficiency, and your irrigation application rate.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Irrigation Advisor</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Irrigation Advisor estimates irrigation requirements from forecast ETo, rainfall, crop
+            coefficient, irrigation efficiency, and your irrigation application rate.
+          </p>
+        </div>
+        <AdvisorConfigSheet
+          recentRain={
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Recent actual rain (mm)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={recentRain}
+                  onChange={(e) => setRecentRain(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Lookback window</Label>
+                <Select
+                  value={String(recentRainLookbackHours)}
+                  onValueChange={(v) => setRecentRainLookbackHours(Number(v))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="24">24 hr</SelectItem>
+                    <SelectItem value="48">48 hr</SelectItem>
+                    <SelectItem value="168">7 days</SelectItem>
+                    <SelectItem value="336">14 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Lookback is session-only on the portal until the shared vineyard-level setting ships in Supabase.
+                </p>
+              </div>
+            </div>
+          }
+          calculationAssumptions={
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                { k: "cropCoefficientKc", label: "Crop coefficient Kc", step: "0.01" },
+                { k: "irrigationEfficiencyPercent", label: "Irrigation efficiency (%)", step: "1" },
+                { k: "rainfallEffectivenessPercent", label: "Rainfall effectiveness (%)", step: "1" },
+                { k: "replacementPercent", label: "Replacement (%)", step: "1" },
+                { k: "soilMoistureBufferMm", label: "Soil moisture buffer (mm)", step: "0.1" },
+              ].map((f) => (
+                <div key={f.k} className="space-y-1">
+                  <Label className="text-xs">{f.label}</Label>
+                  <Input
+                    type="number"
+                    step={f.step}
+                    value={String(settings[f.k as keyof IrrigationSettings])}
+                    onChange={(e) => updateSetting(f.k as keyof IrrigationSettings, e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              ))}
+            </div>
+          }
+          blockSettings={
+            <p className="text-xs text-muted-foreground">
+              Application rates and emitter details are managed per block on the Block detail page.
+            </p>
+          }
+          soilProfile={
+            <p className="text-xs text-muted-foreground">
+              Soil profiles are managed per block in the Soil section of each Block detail page.
+            </p>
+          }
+        />
       </div>
+
+      <AdvisorWizard items={wizardItems} />
 
       {/* Scope selector */}
       <Card>
