@@ -98,25 +98,30 @@ function normaliseName(s: string): string {
     .trim();
 }
 
-// Deterministic UUID v5-ish derivation from canonical name. iOS uses a stable
-// hash → UUID; we mirror by deriving the same RFC-4122 v5 from name in a
-// "builtin.variety" namespace. We don't actually need to compute UUIDs here —
-// we just need a SET of strings to test allocation.varietyId against. Since
-// the iOS deterministic IDs are not transmitted to us, the practical path is
-// name-based: built-in IDs (if ever present) are caught by name match anyway.
+// Built-in lookup maps — by normalised name/alias AND by stable key.
 const BUILTIN_BY_NORMAL_NAME: Map<string, string> = (() => {
   const m = new Map<string, string>();
   for (const v of BUILTIN_VARIETIES) {
     m.set(normaliseName(v.name), v.name);
+    m.set(normaliseName(v.key), v.name); // "pinot_gris" → "Pinot Gris"
     for (const a of v.aliases) m.set(normaliseName(a), v.name);
   }
   return m;
 })();
 
-/** Resolve a free-text variety name against built-in canonical names + aliases. */
+const BUILTIN_BY_KEY: Map<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const v of BUILTIN_VARIETIES) m.set(v.key, v.name);
+  return m;
+})();
+
+/** Resolve a free-text variety name (or key) against built-in canonical names + aliases. */
 export function resolveBuiltinName(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  const key = normaliseName(raw);
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  if (BUILTIN_BY_KEY.has(trimmed)) return BUILTIN_BY_KEY.get(trimmed)!;
+  const key = normaliseName(trimmed);
   if (!key) return null;
   return BUILTIN_BY_NORMAL_NAME.get(key) ?? null;
 }
