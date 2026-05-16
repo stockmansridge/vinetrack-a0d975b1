@@ -33,11 +33,12 @@ export interface VarietyAllocationLike {
 }
 
 export type ResolverPath =
+  | "varietyKey"
   | "varietyId"
   | "builtinId"
   | "nameSnapshot"
   | "alias"
-  | "vineyardName"
+  | "custom"
   | "unresolved";
 
 export interface ResolvedAllocation {
