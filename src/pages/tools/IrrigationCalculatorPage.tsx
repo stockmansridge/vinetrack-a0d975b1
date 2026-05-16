@@ -603,6 +603,11 @@ export default function IrrigationCalculatorPage() {
               {interpretation.label}
             </Badge>
           </div>
+          {selectedPaddockId === "__vineyard__" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Runtime is estimated per block using the vineyard average rate. Select an individual block for a more accurate runtime.
+            </p>
+          )}
         </CardHeader>
         {preview && (
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
