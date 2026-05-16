@@ -63,7 +63,7 @@ export async function resolveRecentRain(
       sources: [],
       sourceLabel: "fallback / rainfall source unavailable",
       rowCount: 0,
-      errorMessage: res.message,
+      errorMessage: (res as { message?: string }).message,
     };
   }
 
