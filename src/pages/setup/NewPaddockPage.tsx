@@ -35,6 +35,11 @@ import {
   polygonCentroid,
   haversineMeters,
 } from "@/lib/paddockGeometry";
+import VarietyAllocationEditor, {
+  isAllocationsValid,
+  serialiseAllocations,
+  type VarietyAllocationRow,
+} from "@/components/varieties/VarietyAllocationEditor";
 
 // ────────────────────────────────────────────────────────────────────────────
 // TEST FLAG — keep `false` until production save is approved.
