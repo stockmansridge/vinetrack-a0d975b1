@@ -153,16 +153,39 @@ export function useGrapeVarieties(vineyardId: string | null | undefined) {
 export type GrapeVarietyMap = {
   byId: Map<string, string>;
   byNameLower: Map<string, string>;
+  /** Stable variety_key → display_name, sourced from the shared Supabase catalogue.
+   *  Takes precedence over the local BUILTIN_BY_KEY fallback during resolution. */
+  byKey: Map<string, string>;
 };
 
-export function buildVarietyMap(varieties: GrapeVariety[] | undefined): GrapeVarietyMap {
+/** Lightweight catalogue row accepted by buildVarietyMap (from useVineyardGrapeVarieties
+ *  or useGrapeVarietyCatalog). Kept loose to avoid an import cycle. */
+export interface CatalogVarietyLike {
+  id?: string | null;
+  variety_key?: string | null;
+  display_name?: string | null;
+  name?: string | null;
+}
+
+export function buildVarietyMap(
+  varieties: GrapeVariety[] | undefined,
+  catalog?: CatalogVarietyLike[] | undefined,
+): GrapeVarietyMap {
   const byId = new Map<string, string>();
   const byNameLower = new Map<string, string>();
+  const byKey = new Map<string, string>();
   for (const v of varieties ?? []) {
     if (v?.id && v?.name) byId.set(v.id, v.name);
     if (v?.name) byNameLower.set(normaliseName(v.name), v.name);
   }
-  return { byId, byNameLower };
+  for (const c of catalog ?? []) {
+    const k = c?.variety_key ? String(c.variety_key).trim() : "";
+    const n = (c?.display_name ?? c?.name) ? String(c.display_name ?? c.name).trim() : "";
+    if (k && n) byKey.set(k, n);
+    if (c?.id && n) byId.set(String(c.id), n);
+    if (n) byNameLower.set(normaliseName(n), n);
+  }
+  return { byId, byNameLower, byKey };
 }
 
 /** Resolve a single allocation against the variety map.
