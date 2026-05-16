@@ -210,7 +210,7 @@ export default function NewPaddockPage() {
       row_width: Number(rowWidth),
       row_offset: Number(rowOffset) || 0,
       vine_spacing: Number(vineSpacing),
-      variety_allocations: [],
+      variety_allocations: serialiseAllocations(varietyAllocations),
       created_by: user?.id ?? null,
       updated_by: user?.id ?? null,
       client_updated_at: new Date().toISOString(),
@@ -226,7 +226,7 @@ export default function NewPaddockPage() {
   }, [
     selectedVineyardId, name, polygon, generated, rowDirection, rowWidth, rowOffset,
     vineSpacing, user?.id, vineCountOverride, rowLengthOverride, flowPerEmitter,
-    emitterSpacing, intermediatePostSpacing, plantingYear,
+    emitterSpacing, intermediatePostSpacing, plantingYear, varietyAllocations,
   ]);
 
   // Strip server-managed fields before exposing payload (defensive — these
