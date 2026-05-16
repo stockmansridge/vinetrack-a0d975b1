@@ -178,7 +178,7 @@ export default function IrrigationCalculatorPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("paddocks")
-        .select("id, name, row_width, emitter_spacing, flow_per_emitter, polygon_points")
+        .select("id, name, row_width, emitter_spacing, flow_per_emitter, polygon_points, variety_allocations")
         .eq("vineyard_id", selectedVineyardId!)
         .is("deleted_at", null)
         .order("name");
@@ -190,6 +190,7 @@ export default function IrrigationCalculatorPage() {
         emitter_spacing: number | null;
         flow_per_emitter: number | null;
         polygon_points: unknown;
+        variety_allocations: unknown;
       }>;
     },
   });
