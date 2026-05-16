@@ -7,7 +7,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Link } from "react-router-dom";
 import { ChevronDown, ExternalLink, AlertTriangle } from "lucide-react";
 import type { DerivedMetrics } from "@/lib/paddockGeometry";
+import { parsePolygonPoints, polygonCentroid } from "@/lib/paddockGeometry";
 import { useVineyard } from "@/context/VineyardContext";
+import SoilProfileSection from "@/components/soil/SoilProfileSection";
 import {
   useGrapeVarieties,
   buildVarietyMap,
@@ -226,6 +228,13 @@ export function PaddockDetailContent({
         <Row label="Harvest" value={fmtDate(paddock.harvest_date)} />
         <Row label="Planting year" value={paddock.planting_year ?? "—"} />
       </Section>
+
+      <SoilProfileSection
+        paddockId={paddock.id}
+        paddockName={paddock.name}
+        latitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lat}
+        longitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lng}
+      />
 
       <Section title="Updated">
         <Row label="Updated" value={fmtDate(paddock.updated_at)} />

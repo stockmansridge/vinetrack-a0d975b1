@@ -50,6 +50,16 @@ import {
   type AdvisorStatus,
 } from "@/lib/calculations/irrigationAdvisor";
 import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
+import {
+  useVineyardSoilProfiles,
+  useVineyardDefaultSoilProfile,
+  deriveSoilBufferMm,
+  aggregateConservativeBuffer,
+} from "@/lib/soilProfiles";
+import { useGrapeVarieties } from "@/lib/varietyResolver";
+import { buildWizardItems } from "@/lib/irrigationWizard";
+import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
+import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 
 interface DayRow {
   id: string;
@@ -119,7 +129,25 @@ export default function IrrigationCalculatorPage() {
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
+  const [recentRainLookbackHours, setRecentRainLookbackHours] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem("vt_recent_rain_lookback_hours"));
+      return [24, 48, 168, 336].includes(v) ? v : 48;
+    } catch {
+      return 48;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("vt_recent_rain_lookback_hours", String(recentRainLookbackHours));
+    } catch {}
+  }, [recentRainLookbackHours]);
   const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
+
+  // Shared soil profiles (iOS Supabase)
+  const { data: vineyardSoilProfiles = [] } = useVineyardSoilProfiles(selectedVineyardId);
+  const { data: vineyardDefaultSoil } = useVineyardDefaultSoilProfile(selectedVineyardId);
+  const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
@@ -150,7 +178,7 @@ export default function IrrigationCalculatorPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("paddocks")
-        .select("id, name, row_width, emitter_spacing, flow_per_emitter, polygon_points")
+        .select("id, name, row_width, emitter_spacing, flow_per_emitter, polygon_points, variety_allocations")
         .eq("vineyard_id", selectedVineyardId!)
         .is("deleted_at", null)
         .order("name");
@@ -162,6 +190,7 @@ export default function IrrigationCalculatorPage() {
         emitter_spacing: number | null;
         flow_per_emitter: number | null;
         polygon_points: unknown;
+        variety_allocations: unknown;
       }>;
     },
   });
@@ -234,6 +263,69 @@ export default function IrrigationCalculatorPage() {
       setRateSource("none");
     }
   }, [selectedVineyardId, selectedPaddockId, paddockOptions]);
+
+  // Soil profile lookups indexed by paddock id, plus auto-buffer derivation.
+  const soilByPaddock = useMemo(() => {
+    const m = new Map<string, typeof vineyardSoilProfiles[number]>();
+    for (const p of vineyardSoilProfiles) {
+      if (p?.paddock_id) m.set(p.paddock_id as string, p);
+    }
+    return m;
+  }, [vineyardSoilProfiles]);
+
+  useEffect(() => {
+    if (selectedPaddockId === "__vineyard__") {
+      const buf =
+        deriveSoilBufferMm(vineyardDefaultSoil ?? null) ??
+        aggregateConservativeBuffer(vineyardSoilProfiles);
+      if (buf != null && Number.isFinite(buf)) {
+        setSettings((s) => ({ ...s, soilMoistureBufferMm: Number(buf.toFixed(1)) }));
+      }
+    } else {
+      const profile = soilByPaddock.get(selectedPaddockId) ?? null;
+      const buf = deriveSoilBufferMm(profile);
+      if (buf != null && Number.isFinite(buf)) {
+        setSettings((s) => ({ ...s, soilMoistureBufferMm: Number(buf.toFixed(1)) }));
+      }
+    }
+  }, [selectedPaddockId, vineyardDefaultSoil, vineyardSoilProfiles, soilByPaddock]);
+
+  const wizardItems = useMemo(() => {
+    return buildWizardItems({
+      scope: selectedPaddockId === "__vineyard__" ? "vineyard" : "paddock",
+      selectedPaddockId: selectedPaddockId === "__vineyard__" ? null : selectedPaddockId,
+      paddocks: paddockOptions.map((p) => ({
+        id: p.id,
+        name: p.name,
+        variety_allocations: (p as any).variety_allocations,
+        infrastructure: {
+          rowSpacingMetres: p.row_width,
+          emitterSpacingMetres: p.emitter_spacing,
+          emitterFlowLitresPerHour: p.flow_per_emitter,
+        },
+        soilProfile: soilByPaddock.get(p.id) ?? null,
+        areaHectares: p.areaHectares,
+      })),
+      grapeVarieties,
+      vineyardSoilProfile: vineyardDefaultSoil ?? null,
+      forecastAvailable: !!forecastQuery.data?.available,
+      forecastSource: forecastQuery.data?.available
+        ? forecastQuery.data.forecast.source
+        : null,
+      hasRecentRainSet: parseFloat(recentRain) > 0,
+      hasGrowthStage: true, // growth stage UI is not yet on portal; treat as set
+      hasEfficiencySettings: true,
+    });
+  }, [
+    selectedPaddockId,
+    paddockOptions,
+    soilByPaddock,
+    grapeVarieties,
+    vineyardDefaultSoil,
+    forecastQuery.data,
+    recentRain,
+  ]);
+
 
   const updateSetting = <K extends keyof IrrigationSettings>(k: K, v: string) => {
     const num = parseFloat(v);
@@ -355,13 +447,85 @@ export default function IrrigationCalculatorPage() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Irrigation Advisor</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Irrigation Advisor estimates irrigation requirements from forecast ETo, rainfall, crop
-          coefficient, irrigation efficiency, and your irrigation application rate.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Irrigation Advisor</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Irrigation Advisor estimates irrigation requirements from forecast ETo, rainfall, crop
+            coefficient, irrigation efficiency, and your irrigation application rate.
+          </p>
+        </div>
+        <AdvisorConfigSheet
+          recentRain={
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Recent actual rain (mm)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={recentRain}
+                  onChange={(e) => setRecentRain(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Lookback window</Label>
+                <Select
+                  value={String(recentRainLookbackHours)}
+                  onValueChange={(v) => setRecentRainLookbackHours(Number(v))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="24">24 hr</SelectItem>
+                    <SelectItem value="48">48 hr</SelectItem>
+                    <SelectItem value="168">7 days</SelectItem>
+                    <SelectItem value="336">14 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Lookback is session-only on the portal until the shared vineyard-level setting ships in Supabase.
+                </p>
+              </div>
+            </div>
+          }
+          calculationAssumptions={
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                { k: "cropCoefficientKc", label: "Crop coefficient Kc", step: "0.01" },
+                { k: "irrigationEfficiencyPercent", label: "Irrigation efficiency (%)", step: "1" },
+                { k: "rainfallEffectivenessPercent", label: "Rainfall effectiveness (%)", step: "1" },
+                { k: "replacementPercent", label: "Replacement (%)", step: "1" },
+                { k: "soilMoistureBufferMm", label: "Soil moisture buffer (mm)", step: "0.1" },
+              ].map((f) => (
+                <div key={f.k} className="space-y-1">
+                  <Label className="text-xs">{f.label}</Label>
+                  <Input
+                    type="number"
+                    step={f.step}
+                    value={String(settings[f.k as keyof IrrigationSettings])}
+                    onChange={(e) => updateSetting(f.k as keyof IrrigationSettings, e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              ))}
+            </div>
+          }
+          blockSettings={
+            <p className="text-xs text-muted-foreground">
+              Application rates and emitter details are managed per block on the Block detail page.
+            </p>
+          }
+          soilProfile={
+            <p className="text-xs text-muted-foreground">
+              Soil profiles are managed per block in the Soil section of each Block detail page.
+            </p>
+          }
+        />
       </div>
+
+      <AdvisorWizard items={wizardItems} />
 
       {/* Scope selector */}
       <Card>
@@ -439,6 +603,11 @@ export default function IrrigationCalculatorPage() {
               {interpretation.label}
             </Badge>
           </div>
+          {selectedPaddockId === "__vineyard__" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Runtime is estimated per block using the vineyard average rate. Select an individual block for a more accurate runtime.
+            </p>
+          )}
         </CardHeader>
         {preview && (
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
