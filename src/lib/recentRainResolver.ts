@@ -1,37 +1,29 @@
 // Resolves "recent rain" mm for the Irrigation Advisor.
 //
-// Resolution order:
-//   1. Davis WeatherLink / station data via `get_daily_rainfall` RPC
-//      (which Rork backs with rainfall_daily — Davis preferred, then PWS,
-//      then Open-Meteo archive fallback at the DB level).
-//   2. 0 mm soft fallback if nothing is available.
+// Source of truth is the shared Supabase contract added in SQL 75:
 //
-// We never query rainfall_daily directly or call Davis from the browser.
-import { useQuery } from "@tanstack/react-query";
-import { fetchDailyRainfall, sourceLabel } from "@/lib/rainfallQuery";
+//   get_vineyard_recent_rainfall(p_vineyard_id, p_lookback_hours)
+//     → { recent_rain_mm, fallback_used, source_label, lookback_hours, ... }
+//   get_vineyard_recent_rain_lookback_hours(p_vineyard_id)  -> integer
+//   set_vineyard_recent_rain_lookback_hours(p_vineyard_id, p_hours)
+//
+// The portal never queries rainfall_daily directly and never calls Davis from
+// the browser. If `fallback_used = true` and `recent_rain_mm = 0`, this is a
+// soft fallback — recommendations still run, with the source label shown.
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 
-export type RecentRainStatus =
-  | "resolved" // got at least one row with a numeric rainfall value
-  | "fallback" // RPC ok but no rows / all null → 0 mm fallback
-  | "error"; // RPC missing/forbidden/failed → 0 mm fallback
+export type RecentRainStatus = "resolved" | "fallback" | "error";
 
 export interface RecentRainResolution {
   totalMm: number;
   status: RecentRainStatus;
   lookbackHours: number;
-  fromDate: string; // ISO
-  toDate: string; // ISO
-  sources: string[]; // raw source codes
-  sourceLabel: string; // human-readable
-  rowCount: number;
+  fromDate?: string;
+  toDate?: string;
+  sourceLabel: string;
+  fallbackUsed: boolean;
   errorMessage?: string;
-}
-
-function isoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 export function describeLookback(hours: number): string {
@@ -42,72 +34,48 @@ export function describeLookback(hours: number): string {
   return `${Math.round(hours / 24)} d`;
 }
 
+function pickRow(data: unknown): Record<string, unknown> | null {
+  if (Array.isArray(data)) return (data[0] as Record<string, unknown>) ?? null;
+  if (data && typeof data === "object") return data as Record<string, unknown>;
+  return null;
+}
+
 export async function resolveRecentRain(
   vineyardId: string,
   lookbackHours: number,
 ): Promise<RecentRainResolution> {
-  const to = new Date();
-  const from = new Date(to.getTime() - lookbackHours * 3600 * 1000);
-  const fromDate = isoDate(from);
-  const toDate = isoDate(to);
+  const { data, error } = await iosSupabase.rpc("get_vineyard_recent_rainfall", {
+    p_vineyard_id: vineyardId,
+    p_lookback_hours: lookbackHours,
+  });
 
-  const res = await fetchDailyRainfall(vineyardId, from, to);
-
-  if (!res.ok) {
+  if (error) {
     return {
       totalMm: 0,
       status: "error",
       lookbackHours,
-      fromDate,
-      toDate,
-      sources: [],
       sourceLabel: "fallback / rainfall source unavailable",
-      rowCount: 0,
-      errorMessage: (res as { message?: string }).message,
+      fallbackUsed: true,
+      errorMessage: error.message,
     };
   }
 
-  let total = 0;
-  let hasNumeric = false;
-  const sources = new Set<string>();
-  for (const r of res.rows) {
-    if (typeof r.rainfall_mm === "number" && Number.isFinite(r.rainfall_mm)) {
-      total += r.rainfall_mm;
-      hasNumeric = true;
-    }
-    if (r.source) sources.add(r.source);
-  }
-
-  if (!hasNumeric) {
-    return {
-      totalMm: 0,
-      status: "fallback",
-      lookbackHours,
-      fromDate,
-      toDate,
-      sources: [],
-      sourceLabel: "fallback / no recent actual rain found",
-      rowCount: res.rows.length,
-    };
-  }
-
-  const list = Array.from(sources);
+  const row = pickRow(data);
+  const mm = Number(row?.recent_rain_mm ?? 0) || 0;
+  const fallbackUsed = Boolean(row?.fallback_used);
   const label =
-    list.length === 0
-      ? "rainfall_daily"
-      : list.length === 1
-        ? sourceLabel(list[0])
-        : `Mixed (${list.map(sourceLabel).join(", ")})`;
+    (row?.source_label as string | undefined) ??
+    (fallbackUsed ? "fallback / no recent actual rain found" : "rainfall_daily");
+  const returnedHours = Number(row?.lookback_hours ?? lookbackHours) || lookbackHours;
 
   return {
-    totalMm: Math.round(total * 10) / 10,
-    status: "resolved",
-    lookbackHours,
-    fromDate,
-    toDate,
-    sources: list,
+    totalMm: Math.round(mm * 10) / 10,
+    status: fallbackUsed && mm === 0 ? "fallback" : "resolved",
+    lookbackHours: returnedHours,
+    fromDate: row?.from_date as string | undefined,
+    toDate: row?.to_date as string | undefined,
     sourceLabel: label,
-    rowCount: res.rows.length,
+    fallbackUsed,
   };
 }
 
@@ -117,8 +85,50 @@ export function useRecentRainResolution(
 ) {
   return useQuery<RecentRainResolution>({
     queryKey: ["recent-rain-resolution", vineyardId, lookbackHours],
-    enabled: !!vineyardId,
+    enabled: !!vineyardId && Number.isFinite(lookbackHours) && lookbackHours > 0,
     queryFn: () => resolveRecentRain(vineyardId!, lookbackHours),
     staleTime: 1000 * 60 * 15,
+  });
+}
+
+// ---------- Shared vineyard-level lookback setting ----------
+
+const LOOKBACK_DEFAULT = 48;
+const LOOKBACK_ALLOWED = [24, 48, 168, 336];
+
+export function useRecentRainLookbackHours(vineyardId: string | null | undefined) {
+  return useQuery<number>({
+    queryKey: ["recent-rain-lookback", vineyardId],
+    enabled: !!vineyardId,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const { data, error } = await iosSupabase.rpc(
+        "get_vineyard_recent_rain_lookback_hours",
+        { p_vineyard_id: vineyardId! },
+      );
+      if (error) return LOOKBACK_DEFAULT;
+      const n = Number(data);
+      return Number.isFinite(n) && n > 0 ? n : LOOKBACK_DEFAULT;
+    },
+  });
+}
+
+export function useSetRecentRainLookbackHours(vineyardId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (hours: number) => {
+      if (!vineyardId) throw new Error("No vineyard selected");
+      const safe = LOOKBACK_ALLOWED.includes(hours) ? hours : LOOKBACK_DEFAULT;
+      const { error } = await iosSupabase.rpc(
+        "set_vineyard_recent_rain_lookback_hours",
+        { p_vineyard_id: vineyardId, p_hours: safe },
+      );
+      if (error) throw error;
+      return safe;
+    },
+    onSuccess: (hours) => {
+      qc.setQueryData(["recent-rain-lookback", vineyardId], hours);
+      qc.invalidateQueries({ queryKey: ["recent-rain-resolution", vineyardId] });
+    },
   });
 }

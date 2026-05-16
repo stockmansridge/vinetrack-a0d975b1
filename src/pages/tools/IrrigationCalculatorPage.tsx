@@ -65,6 +65,8 @@ import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import {
   useRecentRainResolution,
+  useRecentRainLookbackHours,
+  useSetRecentRainLookbackHours,
   describeLookback,
   type RecentRainResolution,
 } from "@/lib/recentRainResolver";
@@ -138,21 +140,12 @@ export default function IrrigationCalculatorPage() {
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
   const [recentRainUserEdited, setRecentRainUserEdited] = useState<boolean>(false);
-  const [recentRainLookbackHours, setRecentRainLookbackHours] = useState<number>(() => {
-    try {
-      const v = Number(localStorage.getItem("vt_recent_rain_lookback_hours"));
-      return [24, 48, 168, 336].includes(v) ? v : 48;
-    } catch {
-      return 48;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("vt_recent_rain_lookback_hours", String(recentRainLookbackHours));
-    } catch {}
-  }, [recentRainLookbackHours]);
+  // Shared vineyard-level lookback (SQL 75 contract).
+  const lookbackQuery = useRecentRainLookbackHours(selectedVineyardId);
+  const recentRainLookbackHours = lookbackQuery.data ?? 48;
+  const setLookbackMutation = useSetRecentRainLookbackHours(selectedVineyardId);
 
-  // Auto-resolve recent rain from rainfall_daily / get_daily_rainfall.
+  // Auto-resolve recent rain from shared get_vineyard_recent_rainfall RPC.
   const recentRainQuery = useRecentRainResolution(
     selectedVineyardId,
     recentRainLookbackHours,
@@ -539,7 +532,8 @@ export default function IrrigationCalculatorPage() {
                 <Label className="text-xs">Lookback window</Label>
                 <Select
                   value={String(recentRainLookbackHours)}
-                  onValueChange={(v) => setRecentRainLookbackHours(Number(v))}
+                  onValueChange={(v) => setLookbackMutation.mutate(Number(v))}
+                  disabled={setLookbackMutation.isPending || !selectedVineyardId}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -551,9 +545,6 @@ export default function IrrigationCalculatorPage() {
                     <SelectItem value="336">14 days</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Lookback is session-only on the portal until the shared vineyard-level setting ships in Supabase.
-                </p>
               </div>
             </div>
           }
