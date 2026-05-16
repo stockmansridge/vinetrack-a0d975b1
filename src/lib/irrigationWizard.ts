@@ -39,7 +39,12 @@ export interface BuildWizardInput {
   vineyardSoilProfile: PaddockSoilProfile | null;
   forecastAvailable: boolean;
   forecastSource?: string | null;
-  hasRecentRainSet: boolean;
+  /**
+   * @deprecated Recent rain now resolves automatically via rainfall_daily and
+   * falls back to 0 mm. It is no longer surfaced as a wizard item — soft
+   * warnings are shown in the recommendation/config area instead.
+   */
+  hasRecentRainSet?: boolean;
   hasGrowthStage: boolean;
   hasEfficiencySettings: boolean; // rainfall + irrigation efficiency
 }
