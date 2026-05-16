@@ -94,20 +94,25 @@ export function buildWizardItems(input: BuildWizardInput): WizardItem[] {
         });
       }
       const allocs = resolvePaddockAllocations(p.variety_allocations, varietyMap);
-      const hasUnknown =
-        allocs.length === 0 ||
-        allocs.some((a) => !a.resolved) ||
-        allocs.some((a) => {
-          const id = (a.raw.varietyId ?? a.raw.variety_id) as string | null | undefined;
-          return id && !varietyMap.byId.has(id);
-        });
-      if (hasUnknown) {
+      if (allocs.length === 0) {
         items.push({
           id: `variety-${p.id}`,
           severity: "missing",
-          title: "Grape variety",
-          detail: `${p.name || "Block"}: unknown or unset variety — select a grape variety in Block Settings.`,
+          title: "No grape variety selected",
+          detail: `${p.name || "Block"}: no grape variety set — select one in Block Settings.`,
         });
+      } else {
+        const unresolved = allocs.filter((a) => !a.resolved);
+        if (unresolved.length) {
+          items.push({
+            id: `variety-${p.id}`,
+            severity: "warning",
+            title: "Unresolved grape variety",
+            detail: `${p.name || "Block"}: ${unresolved
+              .map((a) => a.name || a.raw.varietyName || a.raw.name || a.raw.variety || "(blank)")
+              .join(", ")} — does not match a known grape variety.`,
+          });
+        }
       }
     }
   } else {
