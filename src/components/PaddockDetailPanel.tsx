@@ -113,7 +113,9 @@ export function PaddockDetailContent({
   const mlPerHaHr = litresPerHaHr != null ? litresPerHaHr / 1_000_000 : null;
   const mmPerHr = mlPerHaHr != null ? mlPerHaHr * 100 : null;
 
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
+  const canEdit = currentRole === "owner" || currentRole === "manager";
+  const [editVarietiesOpen, setEditVarietiesOpen] = useState(false);
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const varietyMap = buildVarietyMap(grapeVarieties);
   const allocations = resolvePaddockAllocations(paddock.variety_allocations, varietyMap);
