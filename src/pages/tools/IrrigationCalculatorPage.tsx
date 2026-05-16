@@ -63,6 +63,11 @@ import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  useRecentRainResolution,
+  describeLookback,
+  type RecentRainResolution,
+} from "@/lib/recentRainResolver";
 
 interface DayRow {
   id: string;
@@ -132,6 +137,7 @@ export default function IrrigationCalculatorPage() {
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
+  const [recentRainUserEdited, setRecentRainUserEdited] = useState<boolean>(false);
   const [recentRainLookbackHours, setRecentRainLookbackHours] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("vt_recent_rain_lookback_hours"));
@@ -145,6 +151,28 @@ export default function IrrigationCalculatorPage() {
       localStorage.setItem("vt_recent_rain_lookback_hours", String(recentRainLookbackHours));
     } catch {}
   }, [recentRainLookbackHours]);
+
+  // Auto-resolve recent rain from rainfall_daily / get_daily_rainfall.
+  const recentRainQuery = useRecentRainResolution(
+    selectedVineyardId,
+    recentRainLookbackHours,
+  );
+  const recentRainResolution: RecentRainResolution | undefined = recentRainQuery.data;
+  // Auto-fill the input from the resolver unless the user has edited it manually.
+  useEffect(() => {
+    if (recentRainUserEdited) return;
+    if (!recentRainResolution) return;
+    setRecentRain(String(recentRainResolution.totalMm));
+  }, [recentRainResolution, recentRainUserEdited]);
+
+  const handleRecentRainChange = (v: string) => {
+    setRecentRainUserEdited(true);
+    setRecentRain(v);
+  };
+  const resetRecentRainToAuto = () => {
+    setRecentRainUserEdited(false);
+    if (recentRainResolution) setRecentRain(String(recentRainResolution.totalMm));
+  };
   const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
 
   // Shared soil profiles (iOS Supabase)
@@ -318,7 +346,7 @@ export default function IrrigationCalculatorPage() {
       forecastSource: forecastQuery.data?.available
         ? forecastQuery.data.forecast.source
         : null,
-      hasRecentRainSet: parseFloat(recentRain) > 0,
+      hasRecentRainSet: true, // resolved automatically — never a wizard blocker
       hasGrowthStage: true, // growth stage UI is not yet on portal; treat as set
       hasEfficiencySettings: true,
     });
@@ -464,16 +492,48 @@ export default function IrrigationCalculatorPage() {
         </div>
         <AdvisorConfigSheet
           recentRain={
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+                <div>
+                  <span className="text-muted-foreground">Recent rain used:</span>{" "}
+                  <span className="font-medium">{fmt(parseFloat(recentRain) || 0)} mm</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Source:</span>{" "}
+                  <span>
+                    {recentRainUserEdited
+                      ? "Manual override"
+                      : recentRainResolution?.sourceLabel ?? "Loading…"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Lookback:</span>{" "}
+                  <span>{describeLookback(recentRainLookbackHours)}</span>
+                </div>
+                {recentRainResolution?.status === "error" && (
+                  <div className="text-amber-700 dark:text-amber-300 mt-1">
+                    Rainfall source query failed — using 0 mm fallback.
+                  </div>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs">Recent actual rain (mm)</Label>
                 <Input
                   type="number"
                   step="0.1"
                   value={recentRain}
-                  onChange={(e) => setRecentRain(e.target.value)}
+                  onChange={(e) => handleRecentRainChange(e.target.value)}
                   className="h-9"
                 />
+                {recentRainUserEdited && (
+                  <button
+                    type="button"
+                    className="text-[11px] text-primary underline"
+                    onClick={resetRecentRainToAuto}
+                  >
+                    Reset to auto-resolved value
+                  </button>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Lookback window</Label>
@@ -625,6 +685,14 @@ export default function IrrigationCalculatorPage() {
               Runtime is estimated per block using the vineyard average rate. Select an individual block for a more accurate runtime.
             </p>
           )}
+          {!recentRainUserEdited &&
+            recentRainResolution &&
+            recentRainResolution.status !== "resolved" && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No recent rain data was available for the selected lookback period
+                ({describeLookback(recentRainLookbackHours)}), so 0 mm was used.
+              </p>
+            )}
         </CardHeader>
         {preview && (
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
@@ -727,7 +795,7 @@ export default function IrrigationCalculatorPage() {
               type="number"
               step="0.1"
               value={recentRain}
-              onChange={(e) => setRecentRain(e.target.value)}
+              onChange={(e) => handleRecentRainChange(e.target.value)}
               className="h-9"
             />
           </div>
