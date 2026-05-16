@@ -7,7 +7,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Link } from "react-router-dom";
 import { ChevronDown, ExternalLink, AlertTriangle } from "lucide-react";
 import type { DerivedMetrics } from "@/lib/paddockGeometry";
+import { parsePolygonPoints, polygonCentroid } from "@/lib/paddockGeometry";
 import { useVineyard } from "@/context/VineyardContext";
+import SoilProfileSection from "@/components/soil/SoilProfileSection";
 import {
   useGrapeVarieties,
   buildVarietyMap,
