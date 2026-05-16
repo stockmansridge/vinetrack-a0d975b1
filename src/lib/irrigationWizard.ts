@@ -71,14 +71,10 @@ export function buildWizardItems(input: BuildWizardInput): WizardItem[] {
     });
   }
 
-  if (!input.hasRecentRainSet) {
-    items.push({
-      id: "recent-rain",
-      severity: "warning",
-      title: "Recent rain",
-      detail: "No recent rain value supplied — assuming 0 mm.",
-    });
-  }
+  // Recent rain is no longer a wizard item — it auto-resolves from
+  // rainfall_daily / get_daily_rainfall with a 0 mm soft fallback.
+  // Soft warnings about fallback usage are shown in the recommendation
+  // and config sheet, not the setup wizard.
 
   if (input.scope === "paddock") {
     const p = input.paddocks.find((x) => x.id === input.selectedPaddockId);
