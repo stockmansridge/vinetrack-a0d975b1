@@ -6,6 +6,7 @@ import {
   buildVarietyMap,
   resolvePaddockAllocations,
   type GrapeVariety,
+  type CatalogVarietyLike,
 } from "@/lib/varietyResolver";
 
 interface PaddockLike {
@@ -17,13 +18,15 @@ interface PaddockLike {
 export default function VarietyResolverDiagnostics({
   paddocks,
   grapeVarieties,
+  varietyCatalog,
 }: {
   paddocks: PaddockLike[];
   grapeVarieties: GrapeVariety[] | undefined;
+  varietyCatalog?: CatalogVarietyLike[] | undefined;
 }) {
   const show = useDiagnosticPanel("show_raw_json_panels");
   const rows = useMemo(() => {
-    const map = buildVarietyMap(grapeVarieties);
+    const map = buildVarietyMap(grapeVarieties, varietyCatalog);
     return paddocks.map((p) => {
       const arr = Array.isArray(p.variety_allocations)
         ? (p.variety_allocations as any[])
