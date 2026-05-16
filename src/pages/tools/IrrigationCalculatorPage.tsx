@@ -150,6 +150,7 @@ export default function IrrigationCalculatorPage() {
   const { data: vineyardSoilProfiles = [] } = useVineyardSoilProfiles(selectedVineyardId);
   const { data: vineyardDefaultSoil } = useVineyardDefaultSoilProfile(selectedVineyardId);
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
+  const { data: varietyCatalog } = useVineyardGrapeVarieties(selectedVineyardId);
 
   // Forecast mode: per-day overrides keyed by date
   const [etoOverrides, setEtoOverrides] = useState<Record<string, string>>({});
