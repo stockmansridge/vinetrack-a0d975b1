@@ -174,17 +174,32 @@ export function resolveAllocation(
   let name: string | null = null;
   let path: ResolverPath = "unresolved";
 
+  const key = (alloc.varietyKey ?? alloc.variety_key ?? null) as string | null;
   const id = alloc.varietyId ?? alloc.variety_id ?? null;
 
-  // 1. Exact varietyId against vineyard grape_varieties
-  if (id && typeof id === "string" && map.byId.has(id)) {
+  // 1. variety_key — built-in stable key (e.g. "pinot_gris")
+  if (key && typeof key === "string") {
+    const trimmedKey = key.trim();
+    if (BUILTIN_BY_KEY.has(trimmedKey)) {
+      name = BUILTIN_BY_KEY.get(trimmedKey)!;
+      path = "varietyKey";
+    } else {
+      // Also accept normalised form (e.g. "Pinot Grigio" passed as a key).
+      const fromKey = resolveBuiltinName(trimmedKey);
+      if (fromKey) {
+        name = fromKey;
+        path = "varietyKey";
+      }
+    }
+  }
+
+  // 2. variety_id against vineyard grape_varieties
+  if (!name && id && typeof id === "string" && map.byId.has(id)) {
     name = map.byId.get(id)!;
     path = "varietyId";
   }
 
-  // 2. Built-in deterministic ID — we don't have iOS's UUID derivation, but
-  //    if a varietyId happens to BE a canonical built-in name (some legacy
-  //    rows stored the name in varietyId), catch it here.
+  // 2b. Built-in match against the id itself (legacy rows where id is a name/key)
   if (!name && id && typeof id === "string") {
     const fromId = resolveBuiltinName(id);
     if (fromId) {
@@ -193,15 +208,14 @@ export function resolveAllocation(
     }
   }
 
-  // 3. Saved name snapshot (varietyName | name | variety)
+  // 3. Saved name snapshot (varietyName | variety_name | name | variety)
   const rawName =
     alloc.varietyName ?? alloc.variety_name ?? alloc.name ?? alloc.variety ?? null;
   const rawNameTrimmed = rawName != null ? String(rawName).trim() : "";
 
   if (!name && rawNameTrimmed) {
-    const key = normaliseName(rawNameTrimmed);
     // 3a. Snapshot resolves directly against vineyard varieties
-    const vineyardHit = map.byNameLower.get(key);
+    const vineyardHit = map.byNameLower.get(normaliseName(rawNameTrimmed));
     if (vineyardHit) {
       name = vineyardHit;
       path = "nameSnapshot";
@@ -217,13 +231,11 @@ export function resolveAllocation(
     }
   }
 
-  // 5. Last-ditch: use the raw snapshot as-is (treated as vineyard name);
-  //    marked as resolved=true only when the original casing exists in the
-  //    vineyard list. We otherwise leave name=null so the UI shows unresolved.
+  // 5. Custom variety: a name exists but isn't in vineyard list or built-ins.
+  //    Treat as a resolved CUSTOM variety — show the user's text, don't flag.
   if (!name && rawNameTrimmed) {
-    // Keep raw text visible to the user but flag as unresolved.
     name = rawNameTrimmed;
-    path = "unresolved";
+    path = "custom";
   }
 
   const resolved = path !== "unresolved";
