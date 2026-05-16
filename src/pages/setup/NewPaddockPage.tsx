@@ -93,6 +93,7 @@ export default function NewPaddockPage() {
   // Step 1 — basics
   const [name, setName] = useState("");
   const [plantingYear, setPlantingYear] = useState<string>("");
+  const [varietyAllocations, setVarietyAllocations] = useState<VarietyAllocationRow[]>([]);
 
   // Step 2 — boundary
   const [polygon, setPolygon] = useState<LatLng[]>([]);
