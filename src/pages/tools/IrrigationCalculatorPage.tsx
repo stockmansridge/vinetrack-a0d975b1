@@ -137,6 +137,7 @@ export default function IrrigationCalculatorPage() {
   // Settings (shared between modes)
   const [settings, setSettings] = useState<IrrigationSettings>(DEFAULT_IRRIGATION_SETTINGS);
   const [recentRain, setRecentRain] = useState<string>("0");
+  const [recentRainUserEdited, setRecentRainUserEdited] = useState<boolean>(false);
   const [recentRainLookbackHours, setRecentRainLookbackHours] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("vt_recent_rain_lookback_hours"));
@@ -150,6 +151,28 @@ export default function IrrigationCalculatorPage() {
       localStorage.setItem("vt_recent_rain_lookback_hours", String(recentRainLookbackHours));
     } catch {}
   }, [recentRainLookbackHours]);
+
+  // Auto-resolve recent rain from rainfall_daily / get_daily_rainfall.
+  const recentRainQuery = useRecentRainResolution(
+    selectedVineyardId,
+    recentRainLookbackHours,
+  );
+  const recentRainResolution: RecentRainResolution | undefined = recentRainQuery.data;
+  // Auto-fill the input from the resolver unless the user has edited it manually.
+  useEffect(() => {
+    if (recentRainUserEdited) return;
+    if (!recentRainResolution) return;
+    setRecentRain(String(recentRainResolution.totalMm));
+  }, [recentRainResolution, recentRainUserEdited]);
+
+  const handleRecentRainChange = (v: string) => {
+    setRecentRainUserEdited(true);
+    setRecentRain(v);
+  };
+  const resetRecentRainToAuto = () => {
+    setRecentRainUserEdited(false);
+    if (recentRainResolution) setRecentRain(String(recentRainResolution.totalMm));
+  };
   const [rateSource, setRateSource] = useState<IrrigationRateSource>("none");
 
   // Shared soil profiles (iOS Supabase)
