@@ -59,6 +59,7 @@ import {
 import { useGrapeVarieties } from "@/lib/varietyResolver";
 import { buildWizardItems } from "@/lib/irrigationWizard";
 import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
+import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 
 interface DayRow {
