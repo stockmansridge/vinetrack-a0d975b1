@@ -63,6 +63,11 @@ import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import {
+  useRecentRainResolution,
+  describeLookback,
+  type RecentRainResolution,
+} from "@/lib/recentRainResolver";
 
 interface DayRow {
   id: string;
