@@ -526,6 +526,14 @@ export default function IrrigationCalculatorPage() {
       </div>
 
       <AdvisorWizard items={wizardItems} />
+      <VarietyResolverDiagnostics
+        paddocks={paddockOptions.map((p) => ({
+          id: p.id,
+          name: p.name,
+          variety_allocations: (p as any).variety_allocations,
+        }))}
+        grapeVarieties={grapeVarieties}
+      />
 
       {/* Scope selector */}
       <Card>
