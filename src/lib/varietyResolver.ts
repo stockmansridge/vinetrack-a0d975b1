@@ -200,12 +200,17 @@ export function resolveAllocation(
   const key = (alloc.varietyKey ?? alloc.variety_key ?? null) as string | null;
   const id = alloc.varietyId ?? alloc.variety_id ?? null;
 
-  // 1. variety_key — built-in stable key (e.g. "pinot_gris")
+  // 1. variety_key — prefer shared Supabase catalogue, then local built-in fallback.
   if (key && typeof key === "string") {
     const trimmedKey = key.trim();
-    if (BUILTIN_BY_KEY.has(trimmedKey)) {
+    if (map.byKey.has(trimmedKey)) {
+      name = map.byKey.get(trimmedKey)!;
+      path = "varietyKey";
+    } else if (BUILTIN_BY_KEY.has(trimmedKey)) {
       name = BUILTIN_BY_KEY.get(trimmedKey)!;
       path = "varietyKey";
+    } else if (trimmedKey.startsWith("custom:")) {
+      // Custom key but catalogue hasn't loaded yet — fall through to name snapshot.
     } else {
       // Also accept normalised form (e.g. "Pinot Grigio" passed as a key).
       const fromKey = resolveBuiltinName(trimmedKey);
