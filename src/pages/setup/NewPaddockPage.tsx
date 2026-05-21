@@ -385,7 +385,7 @@ export default function NewPaddockPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={1} min={0} max={360} />
+              <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={0.5} min={0} max={360} />
               <StepperField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step={0.1} min={0.1} />
               <StepperField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step={0.1} />
               <StepperField label="Rows count" value={rowsCount} onChange={setRowsCount} step={1} min={1} />
