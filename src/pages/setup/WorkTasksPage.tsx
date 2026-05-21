@@ -183,7 +183,7 @@ export default function WorkTasksPage() {
   }, [paddocks]);
   const categoryById = useMemo(() => {
     const m = new Map<string, OperatorCategory>();
-    categories.forEach((c) => m.set(c.id, c));
+    (Array.isArray(categories) ? categories : []).forEach((c) => m.set(c.id, c));
     return m;
   }, [categories]);
 
