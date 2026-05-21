@@ -17,7 +17,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+
 import { Plus, Loader2, X, RefreshCw, Trash2 } from "lucide-react";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
@@ -514,11 +514,10 @@ function InviteDialog({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitationRole>("operator");
   const [categoryId, setCategoryId] = useState<string>(NONE);
-  const [message, setMessage] = useState("");
   const [expiresInDays, setExpiresInDays] = useState<string>("14");
 
   const reset = () => {
-    setEmail(""); setRole("operator"); setCategoryId(NONE); setMessage(""); setExpiresInDays("14");
+    setEmail(""); setRole("operator"); setCategoryId(NONE); setExpiresInDays("14");
   };
 
   const mut = useMutation({
@@ -530,14 +529,13 @@ function InviteDialog({
         email,
         role,
         operator_category_id: categoryId === NONE ? null : categoryId,
-        message: message.trim() || null,
         expires_in_days: days,
       });
     },
     onSuccess: () => {
       toast({
-        title: "Invite created",
-        description: "The user will see this invitation when they sign in with the invited email address.",
+        title: "Invitation created",
+        description: "The user will see it when they sign in with this email.",
       });
       reset();
       onCreated();
@@ -610,17 +608,7 @@ function InviteDialog({
               onChange={(e) => setExpiresInDays(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="invite-message">Message (optional)</Label>
-            <Textarea
-              id="invite-message"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Add a short note for the invitee."
-              maxLength={500}
-              rows={3}
-            />
-          </div>
+          {/* Message field hidden until backend supports it (SQL 79 has no p_message). */}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mut.isPending}>

@@ -41,23 +41,26 @@ export interface CreateInvitationInput {
   email: string;
   role: InvitationRole;
   operator_category_id?: string | null;
-  message?: string | null;
   expires_in_days?: number;
 }
 
 export async function createInvitation(
   input: CreateInvitationInput,
 ): Promise<VineyardInvitation> {
+  // SQL 79 signature: (p_vineyard_id, p_email, p_role,
+  // p_operator_category_id default null, p_expires_at default null).
+  // No p_message / p_expires_in_days yet.
+  const days = input.expires_in_days ?? 14;
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + days);
   const { data, error } = await supabase.rpc("create_invitation", {
     p_vineyard_id: input.vineyard_id,
     p_email: input.email.trim().toLowerCase(),
     p_role: input.role,
     p_operator_category_id: input.operator_category_id ?? null,
-    p_message: input.message ?? null,
-    p_expires_in_days: input.expires_in_days ?? 14,
+    p_expires_at: expiresAt.toISOString(),
   });
   if (error) throw error;
-  // RPC returns the row; supabase-js wraps single returns as either object or array.
   const row = Array.isArray(data) ? data[0] : data;
   return row as VineyardInvitation;
 }
