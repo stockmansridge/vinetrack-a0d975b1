@@ -24,6 +24,7 @@ interface Props {
   paddockId: string;
   latitude: number | null | undefined;
   longitude: number | null | undefined;
+  vineyardId?: string | null;
   current: PaddockSoilProfile | null;
 }
 
@@ -31,12 +32,14 @@ export default function NswSeedLookupButton({
   paddockId,
   latitude,
   longitude,
+  vineyardId,
   current,
 }: Props) {
   const { toast } = useToast();
   const lookup = useNswSeedLookup();
   const upsert = useUpsertPaddockSoilProfile();
   const [open, setOpen] = useState(false);
+
 
   const hasCoords = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
   const hasProfile = !!current;
