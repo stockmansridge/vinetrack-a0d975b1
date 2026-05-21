@@ -105,21 +105,36 @@ export default function VineyardVarietiesPage() {
     [paddockUsage.data],
   );
 
-  // Combine vineyard list (built-ins + custom) with the global catalogue so
-  // built-ins always appear even when not yet "activated" for the vineyard.
-  // Vineyard rows win for built-ins (so GDD overrides apply), but we never let
-  // an `is_active === false` vineyard row hide an active variety from view.
+  // Combine vineyard list (built-ins + custom) with the global catalogue.
+  //  - Built-in catalogue is the source of truth for built-in `optimal_gdd`.
+  //  - Vineyard row contributes `optimal_gdd_override` (and id/is_active) without
+  //    clobbering the catalogue GDD.
+  //  - Custom rows live only on the vineyard list; their GDD comes from override.
+  //  - Archived custom rows are kept in the list (faded) but never replace an
+  //    active built-in with the same key.
   const combined = useMemo<CatalogVariety[]>(() => {
     const byKey = new Map<string, CatalogVariety>();
-    for (const v of catalog.data ?? []) byKey.set(v.variety_key, { ...v, is_custom: false });
+    for (const v of catalog.data ?? []) {
+      byKey.set(v.variety_key, { ...v, is_custom: false });
+    }
     for (const v of vineyardList.data ?? []) {
-      // Always include custom rows (even archived — shown faded).
-      // For built-ins, only override the catalogue entry when the vineyard row is active.
       const isCustom = v.is_custom === true || v.variety_key.startsWith("custom:");
       if (isCustom) {
+        // Custom: take the row as-is. Effective GDD = override (already in optimal_gdd).
         byKey.set(v.variety_key, v);
-      } else if (v.is_active !== false && !v.archived_at) {
-        byKey.set(v.variety_key, { ...byKey.get(v.variety_key), ...v });
+      } else {
+        const base = byKey.get(v.variety_key);
+        const catalogueGdd = base?.optimal_gdd ?? null;
+        const override = v.optimal_gdd_override ?? null;
+        const merged: CatalogVariety = {
+          ...(base ?? {}),
+          ...v,
+          is_custom: false,
+          // Preserve catalogue GDD; apply override on top if present.
+          optimal_gdd: override != null ? override : catalogueGdd,
+          optimal_gdd_override: override,
+        };
+        byKey.set(v.variety_key, merged);
       }
     }
     const list = Array.from(byKey.values());

@@ -32,7 +32,12 @@ export interface CatalogVariety {
   [k: string]: any;
 }
 
-/** Normalise rpc rows into CatalogVariety, tolerating minor field differences. */
+/** Normalise rpc rows into CatalogVariety, tolerating minor field differences.
+ *  NOTE on GDD: `optimal_gdd` here represents what THIS row knows about GDD only.
+ *  - Built-in catalogue row (get_grape_variety_catalog): catalogue value, override=null
+ *  - Vineyard row built-in (list_vineyard_grape_varieties): RPC omits gdd → null + maybe override
+ *  - Vineyard row custom: only `optimal_gdd_override` is the source of truth
+ *  Effective GDD is computed in `combined()` as override ?? catalogue. */
 function normaliseRow(r: any): CatalogVariety | null {
   if (!r || typeof r !== "object") return null;
   const variety_key =
@@ -46,7 +51,11 @@ function normaliseRow(r: any): CatalogVariety | null {
   const isBuiltin = r.is_builtin ?? r.isBuiltin ?? null;
   const isCustom =
     r.is_custom ?? r.isCustom ?? (isBuiltin === false ? true : isBuiltin === true ? false : null);
+  // Effective for this row alone (override wins, else catalogue value if present, else null)
+  const effective =
+    override != null ? Number(override) : catalogGdd != null ? Number(catalogGdd) : null;
   return {
+    ...r,
     id: r.id ?? null,
     variety_key: String(variety_key),
     display_name: String(display_name),
@@ -54,10 +63,8 @@ function normaliseRow(r: any): CatalogVariety | null {
     is_custom: isCustom,
     is_active: r.is_active ?? r.isActive ?? null,
     archived_at: r.archived_at ?? r.archivedAt ?? null,
-    optimal_gdd:
-      override != null ? Number(override) : catalogGdd != null ? Number(catalogGdd) : null,
+    optimal_gdd: effective,
     optimal_gdd_override: override != null ? Number(override) : null,
-    ...r,
   };
 }
 
