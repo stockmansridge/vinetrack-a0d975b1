@@ -434,7 +434,7 @@ export default function NewPaddockPage() {
           <CardHeader>
             <CardTitle>Review</CardTitle>
             <CardDescription>
-              Confirm the paddock details. This will write to the production database when enabled.
+              Confirm the paddock details before saving.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
