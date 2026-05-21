@@ -495,9 +495,10 @@ function AppleDrawMap({
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
-  centre, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
 }: {
   centre: LatLng;
+  initialBBox: { sw: LatLng; ne: LatLng } | null;
   polygon: LatLng[];
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
@@ -506,6 +507,7 @@ function LeafletSatelliteDraw({
 }) {
   return (
     <MapContainer center={[centre.lat, centre.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
+      {initialBBox && <FitBoundsOnce bbox={initialBBox} />}
       <TileLayer
         attribution='Tiles &copy; Esri'
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
