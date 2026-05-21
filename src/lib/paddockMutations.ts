@@ -92,13 +92,16 @@ export async function hardDeletePaddock(paddockId: string) {
   const missingRpc = rpc.error?.code === "42883" || message.includes("hard_delete_paddock");
   if (!missingRpc) throw rpc.error;
 
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from("paddocks")
     .delete()
     .eq("id", paddockId)
     .select("id")
     .maybeSingle();
   if (error) throw error;
+  if (!data?.id) {
+    throw new Error("Permanent delete was blocked by backend permissions or the paddock no longer exists.");
+  }
 }
 
 // Archive = soft-delete (deleted_at). Hides from active selectors but
@@ -113,14 +116,19 @@ export async function archivePaddock(paddockId: string) {
   const missingRpc = rpc.error?.code === "42883" || message.includes("soft_delete_paddock");
   if (!missingRpc) throw rpc.error;
 
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from("paddocks")
     .update({
       deleted_at: new Date().toISOString(),
       client_updated_at: new Date().toISOString(),
     })
-    .eq("id", paddockId);
+    .eq("id", paddockId)
+    .select("id,deleted_at")
+    .maybeSingle();
   if (error) throw error;
+  if (!data?.id || !data?.deleted_at) {
+    throw new Error("Archive was blocked by backend permissions or the paddock could not be updated.");
+  }
 }
 
 export async function restorePaddock(paddockId: string) {
@@ -131,12 +139,17 @@ export async function restorePaddock(paddockId: string) {
   const missingRpc = rpc.error?.code === "42883" || message.includes("restore_paddock");
   if (!missingRpc) throw rpc.error;
 
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from("paddocks")
     .update({
       deleted_at: null,
       client_updated_at: new Date().toISOString(),
     })
-    .eq("id", paddockId);
+    .eq("id", paddockId)
+    .select("id,deleted_at")
+    .maybeSingle();
   if (error) throw error;
+  if (!data?.id || data.deleted_at != null) {
+    throw new Error("Restore was blocked by backend permissions or the paddock could not be updated.");
+  }
 }
