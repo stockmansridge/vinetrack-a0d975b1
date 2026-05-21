@@ -8,8 +8,8 @@
 // Custom varieties added here are immediately available to every block in the
 // vineyard and round-trip into iOS.
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Archive, AlertTriangle, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Plus, Archive, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -85,6 +85,7 @@ function buildUsageMap(paddocks: PaddockRow[]): Map<string, string[]> {
 
 export default function VineyardVarietiesPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
 
@@ -95,6 +96,7 @@ export default function VineyardVarietiesPage() {
   const archive = useArchiveVineyardGrapeVariety();
 
   const [newName, setNewName] = useState("");
+  const [newGdd, setNewGdd] = useState("");
   const [filter, setFilter] = useState("");
   const [pendingArchive, setPendingArchive] = useState<CatalogVariety | null>(null);
 
@@ -105,10 +107,21 @@ export default function VineyardVarietiesPage() {
 
   // Combine vineyard list (built-ins + custom) with the global catalogue so
   // built-ins always appear even when not yet "activated" for the vineyard.
+  // Vineyard rows win for built-ins (so GDD overrides apply), but we never let
+  // an `is_active === false` vineyard row hide an active variety from view.
   const combined = useMemo<CatalogVariety[]>(() => {
     const byKey = new Map<string, CatalogVariety>();
     for (const v of catalog.data ?? []) byKey.set(v.variety_key, { ...v, is_custom: false });
-    for (const v of vineyardList.data ?? []) byKey.set(v.variety_key, v);
+    for (const v of vineyardList.data ?? []) {
+      // Always include custom rows (even archived — shown faded).
+      // For built-ins, only override the catalogue entry when the vineyard row is active.
+      const isCustom = v.is_custom === true || v.variety_key.startsWith("custom:");
+      if (isCustom) {
+        byKey.set(v.variety_key, v);
+      } else if (v.is_active !== false && !v.archived_at) {
+        byKey.set(v.variety_key, { ...byKey.get(v.variety_key), ...v });
+      }
+    }
     const list = Array.from(byKey.values());
     list.sort((a, b) => a.display_name.localeCompare(b.display_name));
     return list;
@@ -123,15 +136,26 @@ export default function VineyardVarietiesPage() {
   const handleAddCustom = async () => {
     const name = newName.trim();
     if (!name || !selectedVineyardId) return;
+    const gddNum = newGdd.trim() === "" ? null : Number(newGdd);
+    if (gddNum !== null && (!Number.isFinite(gddNum) || gddNum <= 0)) {
+      toast({
+        title: "Invalid GDD value",
+        description: "Optimal GDD must be a positive number.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const row = await upsert.mutateAsync({
         vineyardId: selectedVineyardId,
         varietyKey: null,
         displayName: name,
+        optimalGddOverride: gddNum,
       });
       if (!row) throw new Error("No row returned");
       toast({ title: "Custom variety added", description: row.display_name });
       setNewName("");
+      setNewGdd("");
     } catch (err: any) {
       toast({
         title: "Could not add variety",
@@ -140,6 +164,13 @@ export default function VineyardVarietiesPage() {
       });
     }
   };
+
+  const handleRefresh = () => {
+    qc.invalidateQueries({ queryKey: ["vineyard_grape_varieties", selectedVineyardId] });
+    qc.invalidateQueries({ queryKey: ["grape_variety_catalog"] });
+    qc.invalidateQueries({ queryKey: ["vineyard_variety_usage", selectedVineyardId] });
+  };
+
 
   const confirmArchive = async () => {
     if (!pendingArchive?.id) return;
@@ -197,13 +228,32 @@ export default function VineyardVarietiesPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[240px] space-y-1">
+              <div className="flex-1 min-w-[220px] space-y-1">
                 <Label htmlFor="newVariety">Variety name</Label>
                 <Input
                   id="newVariety"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g. Aglianico"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustom();
+                    }
+                  }}
+                />
+              </div>
+              <div className="w-[200px] space-y-1">
+                <Label htmlFor="newGdd">Optimal GDD (ripeness target)</Label>
+                <Input
+                  id="newGdd"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={10}
+                  value={newGdd}
+                  onChange={(e) => setNewGdd(e.target.value)}
+                  placeholder="e.g. 1400"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -225,6 +275,9 @@ export default function VineyardVarietiesPage() {
                 Add variety
               </Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Optimal GDD is optional. Leave blank to use the catalogue default.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -237,12 +290,25 @@ export default function VineyardVarietiesPage() {
               Built-in catalogue plus this vineyard's custom varieties.
             </CardDescription>
           </div>
-          <Input
-            placeholder="Filter…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="max-w-[220px]"
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Filter…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="max-w-[220px]"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={vineyardList.isFetching}
+              className="gap-1"
+              title="Refresh from server (pulls latest custom varieties from iOS)"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${vineyardList.isFetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -255,6 +321,7 @@ export default function VineyardVarietiesPage() {
                 <TableRow>
                   <TableHead>Variety</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Optimal GDD</TableHead>
                   <TableHead>Used by blocks</TableHead>
                   {canEdit && <TableHead className="w-[120px]" />}
                 </TableRow>
@@ -263,7 +330,9 @@ export default function VineyardVarietiesPage() {
                 {filtered.map((v) => {
                   const usage = usageMap.get(v.variety_key) ?? [];
                   const isCustom = v.is_custom === true || v.variety_key.startsWith("custom:");
-                  const isArchived = !!v.archived_at;
+                  const isArchived = !!v.archived_at || v.is_active === false;
+                  const gdd = v.optimal_gdd;
+                  const hasOverride = v.optimal_gdd_override != null;
                   return (
                     <TableRow key={v.variety_key} className={isArchived ? "opacity-60" : ""}>
                       <TableCell className="font-medium">
@@ -277,6 +346,18 @@ export default function VineyardVarietiesPage() {
                           <Badge variant="secondary">Custom</Badge>
                         ) : (
                           <Badge variant="outline">Built-in</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {gdd != null ? (
+                          <span>
+                            {gdd} GDD
+                            {hasOverride && !isCustom && (
+                              <Badge variant="outline" className="ml-2 text-[10px]">override</Badge>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -307,7 +388,7 @@ export default function VineyardVarietiesPage() {
                 })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 4 : 3} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={canEdit ? 5 : 4} className="text-center text-sm text-muted-foreground py-8">
                       No varieties match your filter.
                     </TableCell>
                   </TableRow>
