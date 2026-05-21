@@ -563,9 +563,11 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               <SoilProfileSection
                 paddockId={paddock.id}
                 paddockName={paddock.name}
+                vineyardId={vineyardId ?? paddock.vineyard_id ?? null}
                 latitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lat}
                 longitude={polygonCentroid(parsePolygonPoints(paddock.polygon_points))?.lng}
               />
+
             </CardContent>
           </Card>
         </TabsContent>
