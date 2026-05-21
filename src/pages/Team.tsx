@@ -19,6 +19,7 @@ import {
   describeMemberWriteError,
 } from "@/lib/teamMembersQuery";
 import { useToast } from "@/hooks/use-toast";
+import { dedupeOperatorCategories } from "@/lib/operatorCategoryDedupe";
 
 interface TeamMember {
   membership_id: string;
@@ -86,7 +87,11 @@ export default function Team() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchOperatorCategoriesForVineyard(selectedVineyardId!),
   });
-  const categories = categoriesRes?.categories ?? [];
+  const rawCategories = categoriesRes?.categories ?? [];
+  const { unique: categories, idToKeptId: categoryIdToKeptId } = useMemo(
+    () => dedupeOperatorCategories(rawCategories),
+    [rawCategories],
+  );
 
   const categoryByMembership = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -130,6 +135,12 @@ export default function Team() {
         </div>
       )}
 
+      {rawCategories.length > categories.length && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200">
+          Duplicate operator categories detected — hiding {rawCategories.length - categories.length} from the dropdown so each appears once. Backend cleanup is pending.
+        </div>
+      )}
+
       {data?.forbidden && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           You don’t have permission to view this vineyard team.
@@ -160,7 +171,10 @@ export default function Team() {
               const primary = m.display_name?.trim() || "Unknown member";
               const secondary = m.email && m.email.trim() && m.email.trim() !== primary ? m.email.trim() : null;
               const membershipId = membershipIdByUserId.get(m.user_id) ?? null;
-              const currentCatId = membershipId ? categoryByMembership.get(membershipId) ?? null : null;
+              const rawCatId = membershipId ? categoryByMembership.get(membershipId) ?? null : null;
+              // Map any duplicate category id to the canonical kept id so the
+              // Select can match an option even when the stored id is a dupe.
+              const currentCatId = rawCatId ? categoryIdToKeptId.get(rawCatId) ?? rawCatId : null;
               const currentCat = currentCatId ? categories.find((c) => c.id === currentCatId) : null;
               return (
                 <TableRow key={m.membership_id}>
