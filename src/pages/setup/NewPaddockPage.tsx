@@ -9,9 +9,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
 
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
@@ -610,13 +611,13 @@ function BoundaryStep({
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm flex items-start gap-2">
           <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <span className="text-foreground/80">
-            <strong>Tip:</strong> Draw block boundaries through the middle of the row gaps where possible. This helps VineTrack calculate row positions, block area and coverage more accurately.
+            <strong>Tip:</strong> Draw the block boundary around the outside of the planted area. Use satellite view to follow row ends, headlands and block edges.
           </span>
         </div>
       </div>
       <Card className="overflow-hidden">
         <div className="h-[520px]">
-          <DrawMap polygon={polygon} setPolygon={setPolygon} />
+          <BoundaryDrawMap polygon={polygon} setPolygon={setPolygon} />
         </div>
       </Card>
       <Card>
@@ -625,8 +626,9 @@ function BoundaryStep({
             <MapPin className="h-4 w-4" /> Draw boundary
           </CardTitle>
           <CardDescription>
-            Click the map to drop boundary points. Add at least 3 points to form
-            a polygon. The polygon is stored open (first point is not repeated).
+            Tap the map to drop boundary points. Add at least 3 points to form
+            a polygon. The polygon is stored open (first point is not repeated),
+            matching the iOS save model.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -650,54 +652,6 @@ function BoundaryStep({
   );
 }
 
-function DrawMap({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: (p: LatLng[]) => void }) {
-  return (
-    <MapContainer center={[-34.5, 138.7]} zoom={16} scrollWheelZoom className="h-full w-full">
-      <TileLayer
-        attribution='&copy; OpenStreetMap'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
-      />
-      <ClickHandler polygon={polygon} setPolygon={setPolygon} />
-      {polygon.length >= 3 && (
-        <Polygon
-          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
-          pathOptions={{ color: "hsl(145 42% 28%)", weight: 2.5, fillOpacity: 0.25 }}
-        />
-      )}
-      {polygon.length === 2 && (
-        <Polyline
-          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
-          pathOptions={{ color: "hsl(145 42% 28%)", weight: 2 }}
-        />
-      )}
-      {polygon.map((p, i) => (
-        <Marker
-          key={i}
-          position={[p.lat, p.lng]}
-          icon={vertexIcon(i + 1)}
-        />
-      ))}
-    </MapContainer>
-  );
-}
-
-function ClickHandler({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: (p: LatLng[]) => void }) {
-  useMapEvents({
-    click(e) {
-      setPolygon([...polygon, { lat: e.latlng.lat, lng: e.latlng.lng }]);
-    },
-  });
-  return null;
-}
-
-function vertexIcon(n: number) {
-  return L.divIcon({
-    className: "",
-    html: `<div style="background:hsl(145 42% 28%);color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.3);transform:translate(-50%,-50%)">${n}</div>`,
-    iconSize: [0, 0],
-  });
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Preview map (rows + polygon, fits bounds)
