@@ -90,7 +90,11 @@ function paddockAreaHa(p: PaddockLite | undefined | null): number {
 const ANY = "__any__";
 const NONE = "__none__";
 
-const STATUS_OPTIONS = ["planned", "in_progress", "completed", "on_hold", "cancelled"];
+// Aligned with iOS Task Log model: Task Log entries are historical records of
+// completed work. "planned" is intentionally omitted so new entries do not
+// trigger iOS overdue alerts. Scheduling statuses can be re-introduced once
+// iOS exposes a scheduled-task workflow.
+const STATUS_OPTIONS = ["completed", "in_progress", "on_hold", "cancelled"];
 // Fallback/seed list shown when no synced rows exist. Kept in sync with iOS defaults.
 const DEFAULT_TASK_TYPES = [
   "Pruning",
