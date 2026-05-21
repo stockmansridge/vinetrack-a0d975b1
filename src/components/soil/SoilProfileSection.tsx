@@ -18,9 +18,11 @@ interface Props {
   paddockName?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  vineyardId?: string | null;
   /** Owners/managers can edit. If unknown, pass undefined to allow. */
   canEdit?: boolean;
 }
+
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -39,9 +41,11 @@ export default function SoilProfileSection({
   paddockName,
   latitude,
   longitude,
+  vineyardId,
   canEdit = true,
 }: Props) {
   const { data: profile, isLoading } = usePaddockSoilProfile(paddockId);
+
   const showRawDiagnostics = useDiagnosticPanel("show_raw_json_panels");
   const [rawOpen, setRawOpen] = useState(false);
 
@@ -64,9 +68,11 @@ export default function SoilProfileSection({
               paddockId={paddockId}
               latitude={latitude}
               longitude={longitude}
+              vineyardId={vineyardId ?? null}
               current={profile ?? null}
             />
           )}
+
           {canEdit && (
             <SoilProfileEditDialog
               paddockId={paddockId}

@@ -24,6 +24,7 @@ interface Props {
   paddockId: string;
   latitude: number | null | undefined;
   longitude: number | null | undefined;
+  vineyardId?: string | null;
   current: PaddockSoilProfile | null;
 }
 
@@ -31,12 +32,14 @@ export default function NswSeedLookupButton({
   paddockId,
   latitude,
   longitude,
+  vineyardId,
   current,
 }: Props) {
   const { toast } = useToast();
   const lookup = useNswSeedLookup();
   const upsert = useUpsertPaddockSoilProfile();
   const [open, setOpen] = useState(false);
+
 
   const hasCoords = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
   const hasProfile = !!current;
@@ -55,7 +58,10 @@ export default function NswSeedLookupButton({
       const seed = await lookup.mutateAsync({
         latitude: Number(latitude),
         longitude: Number(longitude),
+        vineyardId: vineyardId ?? null,
+        paddockId,
       });
+
       await upsert.mutateAsync({
         paddockId,
         irrigationSoilClass: (seed.irrigation_soil_class as string) ?? null,
@@ -81,10 +87,11 @@ export default function NswSeedLookupButton({
     } catch (e: any) {
       toast({
         title: "NSW SEED lookup failed",
-        description: e?.message ?? String(e),
+        description: `${e?.message ?? String(e)} — you can still enter soil details manually with the Edit button.`,
         variant: "destructive",
       });
     }
+
   }
 
   if (!hasProfile) {
