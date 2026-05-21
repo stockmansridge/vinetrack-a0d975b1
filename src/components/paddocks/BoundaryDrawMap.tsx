@@ -285,6 +285,7 @@ function AppleDrawMap({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
+  const [mapReady, setMapReady] = useState(false);
   const overlayRef = useRef<any>(null);
   const lineRef = useRef<any>(null);
   const vertexAnnsRef = useRef<any[]>([]);
@@ -312,6 +313,7 @@ function AppleDrawMap({
         showsZoomControl: true,
       });
       mapRef.current = map;
+      setMapReady(true);
       try {
         if (initialBBox) {
           const latSpan = Math.max(0.0008, (initialBBox.ne.lat - initialBBox.sw.lat) * 1.6);
@@ -349,6 +351,7 @@ function AppleDrawMap({
     }).catch(() => { /* parent already handled unavailable */ });
     return () => {
       cancelled = true;
+      setMapReady(false);
       try { mapRef.current?.destroy?.(); } catch { /* noop */ }
       mapRef.current = null;
     };
@@ -359,7 +362,7 @@ function AppleDrawMap({
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
-    if (!map || !mapkit) return;
+    if (!mapReady || !map || !mapkit) return;
     if (existingOverlaysRef.current.length) {
       try { for (const o of existingOverlaysRef.current) map.removeOverlay(o); } catch { /* noop */ }
       existingOverlaysRef.current = [];
@@ -381,13 +384,13 @@ function AppleDrawMap({
       next.push(overlay);
     }
     existingOverlaysRef.current = next;
-  }, [existingPolygons]);
+  }, [existingPolygons, mapReady]);
 
   // Row overlay polylines.
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
-    if (!map || !mapkit) return;
+    if (!mapReady || !map || !mapkit) return;
     if (rowOverlaysRef.current.length) {
       try { for (const o of rowOverlaysRef.current) map.removeOverlay(o); } catch { /* noop */ }
       rowOverlaysRef.current = [];
@@ -406,13 +409,13 @@ function AppleDrawMap({
       next.push(line);
     }
     rowOverlaysRef.current = next;
-  }, [rows]);
+  }, [rows, mapReady]);
 
   // First/last row number labels.
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
-    if (!map || !mapkit) return;
+    if (!mapReady || !map || !mapkit) return;
     if (rowLabelAnnsRef.current.length) {
       try { map.removeAnnotations(rowLabelAnnsRef.current); } catch { /* noop */ }
       rowLabelAnnsRef.current = [];
@@ -436,14 +439,14 @@ function AppleDrawMap({
       map.addAnnotations(next);
       rowLabelAnnsRef.current = next;
     }
-  }, [rowLabels]);
+  }, [rowLabels, mapReady]);
 
 
   // Re-render polygon overlay + vertex + midpoint annotations.
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
-    if (!map || !mapkit) return;
+    if (!mapReady || !map || !mapkit) return;
 
     if (overlayRef.current) { try { map.removeOverlay(overlayRef.current); } catch { /* noop */ } overlayRef.current = null; }
     if (lineRef.current) { try { map.removeOverlay(lineRef.current); } catch { /* noop */ } lineRef.current = null; }
@@ -548,7 +551,7 @@ function AppleDrawMap({
         midAnnsRef.current = midAnns;
       }
     }
-  }, [polygon, readonly]);
+  }, [polygon, readonly, mapReady]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
