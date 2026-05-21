@@ -526,7 +526,7 @@ function AppleDrawMap({
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
-  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons,
 }: {
   centre: LatLng;
   initialBBox: { sw: LatLng; ne: LatLng } | null;
@@ -534,6 +534,7 @@ function LeafletSatelliteDraw({
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
   rows: RowOverlay[];
+  rowLabels: { n: number; lat: number; lng: number }[];
   existingPolygons: LatLng[][];
 }) {
   return (
