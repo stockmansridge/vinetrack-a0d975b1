@@ -225,12 +225,8 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
   const litresPerHaHr = emittersPerHa != null && feNum > 0 ? emittersPerHa * feNum : null;
   const mmPerHr = litresPerHaHr != null ? (litresPerHaHr / 1_000_000) * 100 : null;
 
-  const buildPatch = (opts: { includeBoundary?: boolean; includeRowsGeometry?: boolean }) => {
-    const patch: Record<string, any> = {
-      updated_by: userId,
-    };
-    return { patch, opts };
-  };
+
+
 
   const onSaveOverview = async () => {
     if (!name.trim()) return toast({ title: "Name required", variant: "destructive" });
