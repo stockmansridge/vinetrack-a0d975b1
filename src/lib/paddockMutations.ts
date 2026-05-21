@@ -1,15 +1,7 @@
-// Paddock update + hard delete helpers.
+// Paddock update + archive/delete helpers.
 //
-// Hard delete is owner/manager only and is intended for paddocks created
-// in error or for test purposes. Before deleting we attempt to count any
-// rows linked to the paddock. If linked records exist, the caller should
-// surface a strong warning (or block) rather than silently cascade.
-//
-// Tables checked (best-effort — non-existing tables are ignored):
-//   trips, pins, spray_records, spray_job_paddocks, work_task_paddocks,
-//   damage_records, historical_yield_records, yield_estimation_sessions.
-// Soil profiles are stored via RPC (paddock_soil_profiles) and are
-// considered setup, not historical data.
+// Delete/archive/restore and reference counts must go through the shared
+// backend RPCs so Lovable and iOS follow the same permissions and rules.
 
 import { supabase } from "@/integrations/ios-supabase/client";
 
@@ -24,19 +16,6 @@ export interface LinkedCounts {
   yieldSessions: number;
   total: number;
   errors: string[];
-}
-
-async function countTable(table: string, column: string, paddockId: string): Promise<number> {
-  try {
-    const { count, error } = await (supabase as any)
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq(column, paddockId);
-    if (error) throw error;
-    return count ?? 0;
-  } catch {
-    return 0;
-  }
 }
 
 export async function fetchLinkedRecordCounts(paddockId: string): Promise<LinkedCounts> {
