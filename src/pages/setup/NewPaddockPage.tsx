@@ -600,7 +600,7 @@ export default function NewPaddockPage() {
             )}
 
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("rows")} disabled={saving}>Back</Button>
+              <Button variant="ghost" onClick={() => setStep("soil")} disabled={saving}>Back</Button>
               <Button
                 onClick={onSavePressed}
                 disabled={!isValid || saving}
