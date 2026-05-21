@@ -609,17 +609,10 @@ export async function applyImport(
 
   // Archive (soft delete) for replace-all — never hard delete.
   for (const a of plan.toArchive) {
-    const { error } = await (supabase.rpc as any)("soft_delete_paddock", { p_id: a.id });
+    const { error } = await (supabase.rpc as any)("soft_delete_paddock", { p_paddock_id: a.id });
     if (error) {
-      // Fallback: write deleted_at directly if RPC unavailable.
-      const fallback = await supabase
-        .from("paddocks")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", a.id);
-      if (fallback.error) {
-        result.errors.push(`Archive ${a.name}: ${fallback.error.message}`);
-        continue;
-      }
+      result.errors.push(`Archive ${a.name}: ${error.message}`);
+      continue;
     }
     result.archived++;
   }
