@@ -60,7 +60,7 @@ const dashboard: NavItem[] = [
 // "Work" — day-to-day operational records
 const work: NavItem[] = [
   { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
-  { title: "Work Tasks", url: "/work-tasks", icon: ClipboardList },
+  { title: "Task Log", url: "/work-tasks", icon: ClipboardList },
   { title: "Field Trips", url: "/trips", icon: Sprout },
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
