@@ -17,7 +17,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+
 import { Plus, Loader2, X, RefreshCw, Trash2 } from "lucide-react";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
