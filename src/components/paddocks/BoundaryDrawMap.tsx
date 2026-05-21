@@ -587,6 +587,15 @@ function LeafletSatelliteDraw({
           interactive={false}
         />
       ))}
+      {/* First/last row number labels */}
+      {rowLabels.map((lbl) => (
+        <Marker
+          key={`rownum-${lbl.n}`}
+          position={[lbl.lat, lbl.lng]}
+          icon={rowLabelIcon(lbl.n)}
+          interactive={false}
+        />
+      ))}
       {/* Midpoint insert handles */}
       {!readonly && polygon.length >= 2 &&
         (() => {
