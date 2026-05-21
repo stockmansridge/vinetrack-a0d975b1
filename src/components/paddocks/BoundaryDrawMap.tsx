@@ -200,6 +200,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
       {mode === "apple" ? (
         <AppleDrawMap
           centre={centre}
+          initialBBox={initialBBox}
           polygon={polygon}
           setPolygon={setPoly}
           readonly={readonly}
@@ -209,6 +210,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
       ) : (
         <LeafletSatelliteDraw
           centre={centre}
+          initialBBox={initialBBox}
           polygon={polygon}
           setPolygon={setPoly}
           readonly={readonly}
