@@ -73,6 +73,9 @@ export default function PaddocksPage() {
           columns={paddockCols}
           basePath="/setup/paddocks"
         />
+        <div className="mt-4">
+          <ArchivedPaddocksSection />
+        </div>
       </TabsContent>
       <TabsContent value="map" className="mt-0">
         <PaddockMapView />
