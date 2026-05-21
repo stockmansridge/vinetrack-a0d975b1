@@ -16,7 +16,7 @@
 //     iOS-canonical contract.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -56,10 +56,36 @@ interface Props {
 }
 
 
-// Resolve initial centre: browser geolocation → vineyard.lat/lng →
-// centroid of existing paddocks → safe default.
-function useInitialCentre(vineyardId: string | null, paddocks: any[] | undefined, loc: any): LatLng | null {
-  const [centre, setCentre] = useState<LatLng | null>(null);
+// Compute axis-aligned bounding box for a polygon.
+function polygonBBox(pts: LatLng[]): { sw: LatLng; ne: LatLng } | null {
+  if (!pts.length) return null;
+  let minLat = pts[0].lat, maxLat = pts[0].lat;
+  let minLng = pts[0].lng, maxLng = pts[0].lng;
+  for (const p of pts) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  return { sw: { lat: minLat, lng: minLng }, ne: { lat: maxLat, lng: maxLng } };
+}
+
+// Resolve initial centre. Priority (matches iOS):
+//   1. Existing paddock polygon (if we're editing one) → instant focus.
+//   2. Browser geolocation.
+//   3. Shared vineyard location (SQL 80).
+//   4. Centroid of other paddocks.
+//   5. Safe default.
+function useInitialCentre(
+  vineyardId: string | null,
+  paddocks: any[] | undefined,
+  loc: any,
+  initialPolygon: LatLng[],
+): LatLng | null {
+  const [centre, setCentre] = useState<LatLng | null>(() => {
+    const c = polygonCentroid(initialPolygon);
+    return c ?? null;
+  });
 
   useEffect(() => {
     if (centre) return;
@@ -127,7 +153,11 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
     staleTime: 5 * 60_000,
   });
 
-  const centre = useInitialCentre(selectedVineyardId, paddocks, loc);
+  // Capture the polygon snapshot at mount so we focus on the existing
+  // boundary immediately, not on every edit.
+  const initialPolygonRef = useRef<LatLng[]>(polygon);
+  const centre = useInitialCentre(selectedVineyardId, paddocks, loc, initialPolygonRef.current);
+  const initialBBox = useMemo(() => polygonBBox(initialPolygonRef.current), []);
 
   // Existing paddock polygons (reference outlines) — excluding the
   // currently-edited paddock so it doesn't overlap its own editable polygon.
@@ -170,6 +200,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
       {mode === "apple" ? (
         <AppleDrawMap
           centre={centre}
+          initialBBox={initialBBox}
           polygon={polygon}
           setPolygon={setPoly}
           readonly={readonly}
@@ -179,6 +210,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
       ) : (
         <LeafletSatelliteDraw
           centre={centre}
+          initialBBox={initialBBox}
           polygon={polygon}
           setPolygon={setPoly}
           readonly={readonly}
@@ -210,9 +242,10 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
-  centre, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
 }: {
   centre: LatLng;
+  initialBBox: { sw: LatLng; ne: LatLng } | null;
   polygon: LatLng[];
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
@@ -248,10 +281,21 @@ function AppleDrawMap({
       });
       mapRef.current = map;
       try {
-        map.region = new mapkit.CoordinateRegion(
-          new mapkit.Coordinate(centre.lat, centre.lng),
-          new mapkit.CoordinateSpan(0.004, 0.004),
-        );
+        if (initialBBox) {
+          const latSpan = Math.max(0.0008, (initialBBox.ne.lat - initialBBox.sw.lat) * 1.6);
+          const lngSpan = Math.max(0.0008, (initialBBox.ne.lng - initialBBox.sw.lng) * 1.6);
+          const cLat = (initialBBox.ne.lat + initialBBox.sw.lat) / 2;
+          const cLng = (initialBBox.ne.lng + initialBBox.sw.lng) / 2;
+          map.region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(cLat, cLng),
+            new mapkit.CoordinateSpan(latSpan, lngSpan),
+          );
+        } else {
+          map.region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(centre.lat, centre.lng),
+            new mapkit.CoordinateSpan(0.004, 0.004),
+          );
+        }
       } catch { /* noop */ }
 
       const onTap = (e: any) => {
@@ -451,9 +495,10 @@ function AppleDrawMap({
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
-  centre, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
 }: {
   centre: LatLng;
+  initialBBox: { sw: LatLng; ne: LatLng } | null;
   polygon: LatLng[];
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
@@ -462,6 +507,7 @@ function LeafletSatelliteDraw({
 }) {
   return (
     <MapContainer center={[centre.lat, centre.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
+      {initialBBox && <FitBoundsOnce bbox={initialBBox} />}
       <TileLayer
         attribution='Tiles &copy; Esri'
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -570,6 +616,24 @@ function ClickHandler({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: 
       setPolygon([...polygon, { lat: e.latlng.lat, lng: e.latlng.lng }]);
     },
   });
+  return null;
+}
+
+// Fit the map to the existing paddock bounds once on mount so the
+// boundary is visible immediately without requiring user interaction.
+function FitBoundsOnce({ bbox }: { bbox: { sw: LatLng; ne: LatLng } }) {
+  const map = useMap();
+  const did = useRef(false);
+  useEffect(() => {
+    if (did.current) return;
+    did.current = true;
+    try {
+      map.fitBounds(
+        L.latLngBounds([bbox.sw.lat, bbox.sw.lng], [bbox.ne.lat, bbox.ne.lng]),
+        { padding: [40, 40], maxZoom: 19 },
+      );
+    } catch { /* noop */ }
+  }, [map, bbox]);
   return null;
 }
 

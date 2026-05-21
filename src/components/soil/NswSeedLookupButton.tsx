@@ -48,8 +48,8 @@ export default function NswSeedLookupButton({
   async function runLookup() {
     if (!hasCoords) {
       toast({
-        title: "No coordinates",
-        description: "This block has no location to look up.",
+        title: "Add a paddock boundary first",
+        description: "Draw the paddock boundary before fetching NSW SEED soil data — the lookup uses the boundary centroid.",
         variant: "destructive",
       });
       return;
