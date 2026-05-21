@@ -136,15 +136,26 @@ export default function VineyardVarietiesPage() {
   const handleAddCustom = async () => {
     const name = newName.trim();
     if (!name || !selectedVineyardId) return;
+    const gddNum = newGdd.trim() === "" ? null : Number(newGdd);
+    if (gddNum !== null && (!Number.isFinite(gddNum) || gddNum <= 0)) {
+      toast({
+        title: "Invalid GDD value",
+        description: "Optimal GDD must be a positive number.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const row = await upsert.mutateAsync({
         vineyardId: selectedVineyardId,
         varietyKey: null,
         displayName: name,
+        optimalGddOverride: gddNum,
       });
       if (!row) throw new Error("No row returned");
       toast({ title: "Custom variety added", description: row.display_name });
       setNewName("");
+      setNewGdd("");
     } catch (err: any) {
       toast({
         title: "Could not add variety",
@@ -153,6 +164,13 @@ export default function VineyardVarietiesPage() {
       });
     }
   };
+
+  const handleRefresh = () => {
+    qc.invalidateQueries({ queryKey: ["vineyard_grape_varieties", selectedVineyardId] });
+    qc.invalidateQueries({ queryKey: ["grape_variety_catalog"] });
+    qc.invalidateQueries({ queryKey: ["vineyard_variety_usage", selectedVineyardId] });
+  };
+
 
   const confirmArchive = async () => {
     if (!pendingArchive?.id) return;
