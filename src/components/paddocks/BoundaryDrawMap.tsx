@@ -1,16 +1,20 @@
-// Boundary draw map for the New Paddock wizard.
+// Boundary draw map for the New Paddock wizard (also reused as a
+// read-only satellite preview on the Rows step).
 //
 // Parity goal with iOS:
 //   - Apple-style satellite/hybrid imagery (MapKit JS when available,
 //     Esri World Imagery tiles via Leaflet as a fallback).
 //   - Centre on user → vineyard shared location → existing paddock
 //     centroid → safe default.
-//   - Editable polygon: tap empty map to append a vertex, drag a vertex
-//     to reposition, tap a midpoint handle to insert a vertex between
-//     two existing points, tap a vertex (with ≥4 pts) to delete it.
+//   - Existing paddocks rendered as semi-transparent shaded outlines
+//     for reference (never editable from this flow).
+//   - Editable polygon (when not readonly): tap empty map to append,
+//     drag a vertex to reposition, tap a midpoint handle to insert,
+//     tap a vertex (with ≥4 pts) to delete.
+//   - Optional row overlay (used by the Rows step preview).
 //   - Polygon stored open (first vertex not repeated) per the
 //     iOS-canonical contract.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
@@ -26,31 +30,34 @@ import {
   type LatLng,
 } from "@/lib/paddockGeometry";
 
+// New (in-progress) paddock styling — bright, high-contrast.
 const POLY_STROKE = "#34C759";
 const POLY_FILL = "#34C759";
+// Existing paddocks — muted, semi-transparent reference outlines.
+const EXISTING_STROKE = "#E5E7EB";
+const EXISTING_FILL = "#9CA3AF";
+// Row preview styling — matches iOS yellow lines on satellite.
+const ROW_STROKE = "#FFD60A";
 const DEFAULT_CENTER: LatLng = { lat: -34.5, lng: 138.7 };
+
+export interface RowOverlay {
+  id?: string;
+  number?: number;
+  startPoint: { latitude: number; longitude: number };
+  endPoint: { latitude: number; longitude: number };
+}
 
 interface Props {
   polygon: LatLng[];
-  setPolygon: (p: LatLng[]) => void;
+  setPolygon?: (p: LatLng[]) => void;
+  readonly?: boolean;
+  rows?: RowOverlay[];
 }
 
 // Resolve initial centre: browser geolocation → vineyard.lat/lng →
 // centroid of existing paddocks → safe default.
-function useInitialCentre(vineyardId: string | null): LatLng | null {
+function useInitialCentre(vineyardId: string | null, paddocks: any[] | undefined, loc: any): LatLng | null {
   const [centre, setCentre] = useState<LatLng | null>(null);
-  const { data: loc } = useQuery({
-    queryKey: ["vineyard-location-centre", vineyardId],
-    enabled: !!vineyardId,
-    queryFn: () => fetchVineyardLocation(vineyardId!),
-    staleTime: 5 * 60_000,
-  });
-  const { data: paddocks } = useQuery({
-    queryKey: ["paddocks", vineyardId],
-    enabled: !!vineyardId,
-    queryFn: () => fetchList<any>("paddocks", vineyardId!),
-    staleTime: 5 * 60_000,
-  });
 
   useEffect(() => {
     if (centre) return;
@@ -103,9 +110,33 @@ function useInitialCentre(vineyardId: string | null): LatLng | null {
   return centre;
 }
 
-export default function BoundaryDrawMap({ polygon, setPolygon }: Props) {
+export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false, rows = [] }: Props) {
   const { selectedVineyardId } = useVineyard();
-  const centre = useInitialCentre(selectedVineyardId);
+  const { data: loc } = useQuery({
+    queryKey: ["vineyard-location-centre", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyardLocation(selectedVineyardId!),
+    staleTime: 5 * 60_000,
+  });
+  const { data: paddocks } = useQuery({
+    queryKey: ["paddocks", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<any>("paddocks", selectedVineyardId!),
+    staleTime: 5 * 60_000,
+  });
+
+  const centre = useInitialCentre(selectedVineyardId, paddocks, loc);
+
+  // Existing paddock polygons (reference outlines).
+  const existingPolygons = useMemo<LatLng[][]>(() => {
+    const out: LatLng[][] = [];
+    for (const p of paddocks ?? []) {
+      const pts = parsePolygonPoints(p?.polygon_points);
+      if (pts.length >= 3) out.push(pts);
+    }
+    return out;
+  }, [paddocks]);
+
   const [mode, setMode] = useState<"checking" | "apple" | "fallback">("checking");
   const [reason, setReason] = useState<string | null>(null);
 
@@ -127,20 +158,39 @@ export default function BoundaryDrawMap({ polygon, setPolygon }: Props) {
     return <div className="h-full w-full bg-muted animate-pulse" />;
   }
 
+  const setPoly = setPolygon ?? (() => {});
+
   return (
     <div className="relative h-full w-full">
       {mode === "apple" ? (
-        <AppleDrawMap centre={centre} polygon={polygon} setPolygon={setPolygon} />
+        <AppleDrawMap
+          centre={centre}
+          polygon={polygon}
+          setPolygon={setPoly}
+          readonly={readonly}
+          rows={rows}
+          existingPolygons={existingPolygons}
+        />
       ) : (
-        <LeafletSatelliteDraw centre={centre} polygon={polygon} setPolygon={setPolygon} />
+        <LeafletSatelliteDraw
+          centre={centre}
+          polygon={polygon}
+          setPolygon={setPoly}
+          readonly={readonly}
+          rows={rows}
+          existingPolygons={existingPolygons}
+        />
       )}
       <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
         {mode === "apple" ? "Apple Maps · Hybrid" : "Satellite (Esri)"}
         {polygon.length > 0 && ` · ${polygon.length} pts`}
+        {rows.length > 0 && ` · ${rows.length} rows`}
       </div>
-      <div className="pointer-events-none absolute left-2 bottom-2 right-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow">
-        Tap empty map to add a point · drag a point to move · tap a small <span className="inline-block w-2 h-2 rounded-full bg-white border border-[color:hsl(145_42%_28%)] align-middle" /> midpoint to insert · tap a numbered point to delete (needs ≥4)
-      </div>
+      {!readonly && (
+        <div className="pointer-events-none absolute left-2 bottom-2 right-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow">
+          Tap empty map to add a point · <strong>click and hold (~1s) then drag</strong> a point to move it · tap a small <span className="inline-block w-2 h-2 rounded-full bg-white border border-[color:hsl(145_42%_28%)] align-middle" /> midpoint to insert · tap a numbered point to delete (needs ≥4)
+        </div>
+      )}
       {mode === "fallback" && reason && (
         <div className="pointer-events-none absolute right-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow" title={reason}>
           Apple Maps unavailable — using satellite fallback
@@ -155,18 +205,29 @@ export default function BoundaryDrawMap({ polygon, setPolygon }: Props) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
-  centre, polygon, setPolygon,
-}: { centre: LatLng; polygon: LatLng[]; setPolygon: (p: LatLng[]) => void }) {
+  centre, polygon, setPolygon, readonly, rows, existingPolygons,
+}: {
+  centre: LatLng;
+  polygon: LatLng[];
+  setPolygon: (p: LatLng[]) => void;
+  readonly: boolean;
+  rows: RowOverlay[];
+  existingPolygons: LatLng[][];
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const overlayRef = useRef<any>(null);
   const lineRef = useRef<any>(null);
   const vertexAnnsRef = useRef<any[]>([]);
   const midAnnsRef = useRef<any[]>([]);
+  const existingOverlaysRef = useRef<any[]>([]);
+  const rowOverlaysRef = useRef<any[]>([]);
   const polygonRef = useRef<LatLng[]>(polygon);
   polygonRef.current = polygon;
   const setPolygonRef = useRef(setPolygon);
   setPolygonRef.current = setPolygon;
+  const readonlyRef = useRef(readonly);
+  readonlyRef.current = readonly;
 
   // Init once.
   useEffect(() => {
@@ -189,6 +250,7 @@ function AppleDrawMap({
       } catch { /* noop */ }
 
       const onTap = (e: any) => {
+        if (readonlyRef.current) return;
         try {
           let coord: any = e?.coordinate ?? null;
           if (!coord) {
@@ -211,6 +273,59 @@ function AppleDrawMap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Existing paddock overlays (reference outlines).
+  useEffect(() => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!map || !mapkit) return;
+    if (existingOverlaysRef.current.length) {
+      try { for (const o of existingOverlaysRef.current) map.removeOverlay(o); } catch { /* noop */ }
+      existingOverlaysRef.current = [];
+    }
+    const next: any[] = [];
+    for (const pts of existingPolygons) {
+      const coords = pts.map((p) => new mapkit.Coordinate(p.lat, p.lng));
+      const overlay = new mapkit.PolygonOverlay(coords, {
+        style: new mapkit.Style({
+          strokeColor: EXISTING_STROKE,
+          fillColor: EXISTING_FILL,
+          fillOpacity: 0.18,
+          strokeOpacity: 0.7,
+          lineWidth: 1,
+        }),
+      });
+      try { overlay.enabled = false; } catch { /* noop */ }
+      map.addOverlay(overlay);
+      next.push(overlay);
+    }
+    existingOverlaysRef.current = next;
+  }, [existingPolygons]);
+
+  // Row overlay polylines.
+  useEffect(() => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!map || !mapkit) return;
+    if (rowOverlaysRef.current.length) {
+      try { for (const o of rowOverlaysRef.current) map.removeOverlay(o); } catch { /* noop */ }
+      rowOverlaysRef.current = [];
+    }
+    const next: any[] = [];
+    for (const r of rows) {
+      const line = new mapkit.PolylineOverlay(
+        [
+          new mapkit.Coordinate(r.startPoint.latitude, r.startPoint.longitude),
+          new mapkit.Coordinate(r.endPoint.latitude, r.endPoint.longitude),
+        ],
+        { style: new mapkit.Style({ strokeColor: ROW_STROKE, lineWidth: 1.75, strokeOpacity: 0.95 }) },
+      );
+      try { line.enabled = false; } catch { /* noop */ }
+      map.addOverlay(line);
+      next.push(line);
+    }
+    rowOverlaysRef.current = next;
+  }, [rows]);
 
   // Re-render polygon overlay + vertex + midpoint annotations.
   useEffect(() => {
@@ -254,6 +369,8 @@ function AppleDrawMap({
       lineRef.current = line;
     }
 
+    if (readonly) return; // no editable handles
+
     // Vertex annotations — draggable; tap deletes when ≥4 pts.
     const vertexAnns = polygon.map((p, i) => {
       const ann = new mapkit.Annotation(
@@ -276,7 +393,6 @@ function AppleDrawMap({
         } catch { /* noop */ }
       });
       ann.addEventListener("select", () => {
-        // Delete on select when we have enough vertices.
         if (polygonRef.current.length <= 3) return;
         const next = polygonRef.current.slice();
         next.splice(i, 1);
@@ -293,7 +409,7 @@ function AppleDrawMap({
     if (polygon.length >= 2) {
       const midAnns: any[] = [];
       const n = polygon.length;
-      const segCount = n >= 3 ? n : 1; // open segment for 2 pts
+      const segCount = n >= 3 ? n : 1;
       for (let i = 0; i < segCount; i++) {
         const a = polygon[i];
         const b = polygon[(i + 1) % n];
@@ -320,18 +436,25 @@ function AppleDrawMap({
         midAnnsRef.current = midAnns;
       }
     }
-  }, [polygon]);
+  }, [polygon, readonly]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Leaflet satellite fallback (Esri World Imagery) — editable polygon
+// Leaflet satellite fallback (Esri World Imagery)
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
-  centre, polygon, setPolygon,
-}: { centre: LatLng; polygon: LatLng[]; setPolygon: (p: LatLng[]) => void }) {
+  centre, polygon, setPolygon, readonly, rows, existingPolygons,
+}: {
+  centre: LatLng;
+  polygon: LatLng[];
+  setPolygon: (p: LatLng[]) => void;
+  readonly: boolean;
+  rows: RowOverlay[];
+  existingPolygons: LatLng[][];
+}) {
   return (
     <MapContainer center={[centre.lat, centre.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
       <TileLayer
@@ -345,7 +468,16 @@ function LeafletSatelliteDraw({
         maxZoom={19}
         opacity={0.85}
       />
-      <ClickHandler polygon={polygon} setPolygon={setPolygon} />
+      {/* Existing paddocks — reference outlines */}
+      {existingPolygons.map((pts, i) => (
+        <Polygon
+          key={`existing-${i}`}
+          positions={pts.map((p) => [p.lat, p.lng] as [number, number])}
+          pathOptions={{ color: EXISTING_STROKE, weight: 1, fillColor: EXISTING_FILL, fillOpacity: 0.18, opacity: 0.7 }}
+          interactive={false}
+        />
+      ))}
+      {!readonly && <ClickHandler polygon={polygon} setPolygon={setPolygon} />}
       {polygon.length >= 3 && (
         <Polygon
           positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
@@ -360,8 +492,20 @@ function LeafletSatelliteDraw({
           interactive={false}
         />
       )}
+      {/* Row overlay */}
+      {rows.map((r, i) => (
+        <Polyline
+          key={`row-${r.id ?? i}`}
+          positions={[
+            [r.startPoint.latitude, r.startPoint.longitude],
+            [r.endPoint.latitude, r.endPoint.longitude],
+          ]}
+          pathOptions={{ color: ROW_STROKE, weight: 1.75, opacity: 0.95 }}
+          interactive={false}
+        />
+      ))}
       {/* Midpoint insert handles */}
-      {polygon.length >= 2 &&
+      {!readonly && polygon.length >= 2 &&
         (() => {
           const n = polygon.length;
           const segCount = n >= 3 ? n : 1;
@@ -389,7 +533,7 @@ function LeafletSatelliteDraw({
           return items;
         })()}
       {/* Vertex handles — draggable + click-to-delete */}
-      {polygon.map((p, i) => (
+      {!readonly && polygon.map((p, i) => (
         <Marker
           key={`v-${i}`}
           position={[p.lat, p.lng]}
