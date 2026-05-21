@@ -48,7 +48,15 @@ import VarietyAllocationEditor, {
 const ENABLE_PRODUCTION_SAVE = true;
 // ────────────────────────────────────────────────────────────────────────────
 
-type Step = "details" | "boundary" | "rows" | "review";
+type Step =
+  | "details"
+  | "boundary"
+  | "rows"
+  | "varieties"
+  | "trellis"
+  | "irrigation"
+  | "soil"
+  | "review";
 
 const fmt = (n: number, d = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
@@ -352,18 +360,6 @@ export default function NewPaddockPage() {
               <Input id="planting_year" type="number" min={1900} max={2100}
                 value={plantingYear} onChange={(e) => setPlantingYear(e.target.value)} />
             </div>
-            <div className="sm:col-span-2 space-y-2 border-t pt-4">
-              <Label>Grape varieties</Label>
-              <p className="text-xs text-muted-foreground">
-                Assign one or more grape varieties. Percentages must total 100%.
-                Search the list or add a custom variety if you can't find it.
-              </p>
-              <VarietyAllocationEditor
-                vineyardId={selectedVineyardId}
-                value={varietyAllocations}
-                onChange={setVarietyAllocations}
-              />
-            </div>
             <div className="sm:col-span-2 flex justify-end">
               <Button onClick={() => setStep("boundary")} disabled={!name.trim()}>Next: draw boundary</Button>
             </div>
@@ -410,13 +406,10 @@ export default function NewPaddockPage() {
               </div>
               <NumberField label="Vine spacing (m)" value={vineSpacing} onChange={setVineSpacing} step="0.1" />
               <details className="text-sm">
-                <summary className="cursor-pointer text-muted-foreground">Optional fields</summary>
+                <summary className="cursor-pointer text-muted-foreground">Optional overrides</summary>
                 <div className="mt-3 space-y-3">
                   <NumberField label="Vine count override" value={vineCountOverride} onChange={setVineCountOverride} step="1" />
                   <NumberField label="Row length override (m)" value={rowLengthOverride} onChange={setRowLengthOverride} step="1" />
-                  <NumberField label="Intermediate post spacing (m)" value={intermediatePostSpacing} onChange={setIntermediatePostSpacing} step="0.1" />
-                  <NumberField label="Flow per emitter (L/hr)" value={flowPerEmitter} onChange={setFlowPerEmitter} step="0.1" />
-                  <NumberField label="Emitter spacing (m)" value={emitterSpacing} onChange={setEmitterSpacing} step="0.1" />
                 </div>
               </details>
 
@@ -425,18 +418,117 @@ export default function NewPaddockPage() {
                 <Metric label="Rows generated" value={fmt(generated.length, 0)} />
                 <Metric label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
                 {effectiveVineCount != null && <Metric label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
-                {intermediatePostCount != null && <Metric label="Intermediate posts" value={fmt(intermediatePostCount, 0)} />}
-                {totalEmitters != null && <Metric label="Emitters" value={fmt(totalEmitters, 0)} />}
-                {mmPerHr != null && <Metric label="Irrigation" value={`${fmt(mmPerHr, 2)} mm/hr`} />}
               </div>
 
               <div className="flex justify-between gap-2 pt-2">
                 <Button variant="ghost" onClick={() => setStep("boundary")}>Back</Button>
-                <Button onClick={() => setStep("review")} disabled={generated.length === 0}>Review</Button>
+                <Button onClick={() => setStep("varieties")} disabled={generated.length === 0}>Next: varieties</Button>
               </div>
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {step === "varieties" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Grape varieties</CardTitle>
+            <CardDescription>
+              Assign one or more grape varieties. Percentages must total 100%.
+              Search the list or add a custom variety if you can't find it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <VarietyAllocationEditor
+              vineyardId={selectedVineyardId}
+              value={varietyAllocations}
+              onChange={setVarietyAllocations}
+            />
+            <div className="flex justify-between gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setStep("rows")}>Back</Button>
+              <Button onClick={() => setStep("trellis")}>Next: trellis</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "trellis" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Trellis</CardTitle>
+            <CardDescription>
+              Optional. Intermediate post spacing is used to estimate the number of posts per row.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 max-w-md">
+            <NumberField
+              label="Intermediate post spacing (m)"
+              value={intermediatePostSpacing}
+              onChange={setIntermediatePostSpacing}
+              step="0.1"
+            />
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+              {intermediatePostCount != null
+                ? <Metric label="Intermediate posts" value={fmt(intermediatePostCount, 0)} />
+                : <p className="text-xs text-muted-foreground">Enter post spacing to estimate post count.</p>}
+            </div>
+            <div className="flex justify-between gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setStep("varieties")}>Back</Button>
+              <Button onClick={() => setStep("irrigation")}>Next: irrigation</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "irrigation" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Irrigation</CardTitle>
+            <CardDescription>
+              Optional. Used to estimate emitter count and application rate (mm/hr).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 max-w-md">
+            <NumberField label="Flow per emitter (L/hr)" value={flowPerEmitter} onChange={setFlowPerEmitter} step="0.1" />
+            <NumberField label="Emitter spacing (m)" value={emitterSpacing} onChange={setEmitterSpacing} step="0.1" />
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+              {totalEmitters != null && <Metric label="Emitters" value={fmt(totalEmitters, 0)} />}
+              {mmPerHr != null && <Metric label="Application rate" value={`${fmt(mmPerHr, 2)} mm/hr`} />}
+              {totalEmitters == null && mmPerHr == null && (
+                <p className="text-xs text-muted-foreground">Enter flow and spacing to estimate output.</p>
+              )}
+            </div>
+            <div className="flex justify-between gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setStep("trellis")}>Back</Button>
+              <Button onClick={() => setStep("soil")}>Next: soil</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "soil" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Soil</CardTitle>
+            <CardDescription>
+              Soil profile is configured after the paddock is saved.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Available after save</AlertTitle>
+              <AlertDescription className="text-xs">
+                Once the paddock has been saved, open it from the Paddocks list and use the Soil tab
+                to fetch NSW SEED soil data automatically (requires a boundary) or enter values manually.
+              </AlertDescription>
+            </Alert>
+            <div className="flex justify-between gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setStep("irrigation")}>Back</Button>
+              <Button onClick={() => setStep("review")}>Next: review</Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {step === "review" && (
@@ -508,7 +600,7 @@ export default function NewPaddockPage() {
             )}
 
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("rows")} disabled={saving}>Back</Button>
+              <Button variant="ghost" onClick={() => setStep("soil")} disabled={saving}>Back</Button>
               <Button
                 onClick={onSavePressed}
                 disabled={!isValid || saving}
@@ -529,10 +621,14 @@ function StepNav({
   step, setStep, hasPolygon, hasRows,
 }: { step: Step; setStep: (s: Step) => void; hasPolygon: boolean; hasRows: boolean }) {
   const items: { id: Step; label: string; sub: string; enabled: boolean }[] = [
-    { id: "details", label: "1. Details", sub: "Name · Varieties · Planting year", enabled: true },
+    { id: "details", label: "1. Details", sub: "Name · Planting year", enabled: true },
     { id: "boundary", label: "2. Boundary", sub: "Block outline", enabled: true },
-    { id: "rows", label: "3. Rows", sub: "Direction · Width · Count · Trellis · Irrigation", enabled: hasPolygon },
-    { id: "review", label: "4. Review", sub: "Confirm & save", enabled: hasPolygon && hasRows },
+    { id: "rows", label: "3. Rows", sub: "Direction · Width · Count", enabled: hasPolygon },
+    { id: "varieties", label: "4. Varieties", sub: "Allocations", enabled: hasPolygon && hasRows },
+    { id: "trellis", label: "5. Trellis", sub: "Post spacing", enabled: hasPolygon && hasRows },
+    { id: "irrigation", label: "6. Irrigation", sub: "Emitters · Flow", enabled: hasPolygon && hasRows },
+    { id: "soil", label: "7. Soil", sub: "After save", enabled: hasPolygon && hasRows },
+    { id: "review", label: "8. Review", sub: "Confirm & save", enabled: hasPolygon && hasRows },
   ];
   return (
     <div className="space-y-2">
