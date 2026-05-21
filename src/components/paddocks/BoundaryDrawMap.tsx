@@ -286,7 +286,7 @@ function AppleDrawMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
-  const didInitialFitRef = useRef(false);
+  const lastInitialFitKeyRef = useRef<string | null>(null);
   const overlayRef = useRef<any>(null);
   const lineRef = useRef<any>(null);
   const vertexAnnsRef = useRef<any[]>([]);
@@ -362,7 +362,11 @@ function AppleDrawMap({
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
-    if (!mapReady || !map || !mapkit || didInitialFitRef.current) return;
+    if (!mapReady || !map || !mapkit) return;
+    const fitKey = initialBBox
+      ? `bbox:${initialBBox.sw.lat},${initialBBox.sw.lng}:${initialBBox.ne.lat},${initialBBox.ne.lng}`
+      : `centre:${centre.lat},${centre.lng}`;
+    if (lastInitialFitKeyRef.current === fitKey) return;
     try {
       if (initialBBox) {
         const latSpan = Math.max(0.0008, (initialBBox.ne.lat - initialBBox.sw.lat) * 1.6);
@@ -379,7 +383,7 @@ function AppleDrawMap({
           new mapkit.CoordinateSpan(0.004, 0.004),
         );
       }
-      didInitialFitRef.current = true;
+      lastInitialFitKeyRef.current = fitKey;
     } catch {
       /* noop */
     }
