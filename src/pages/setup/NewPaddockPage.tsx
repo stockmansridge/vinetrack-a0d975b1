@@ -451,7 +451,7 @@ export default function NewPaddockPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <SummaryRow label="Name" value={name} />
-              <SummaryRow label="Vineyard" value={selectedVineyardId ?? "—"} />
+              <SummaryRow label="Vineyard" value={vineyardName ?? selectedVineyardId ?? "—"} />
               <SummaryRow label="Boundary points" value={String(polygon.length)} />
               <SummaryRow label="Rows" value={String(generated.length)} />
               <SummaryRow label="Area" value={`${fmt(areaHa, 2)} ha`} />
@@ -462,25 +462,6 @@ export default function NewPaddockPage() {
               {plantingYear && <SummaryRow label="Planting year" value={plantingYear} />}
               {effectiveVineCount != null && <SummaryRow label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
             </div>
-
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Production write — handle with care</AlertTitle>
-              <AlertDescription className="text-xs space-y-1">
-                <div>Paddock creation affects maps, rows, irrigation, yield and field records. Test carefully before saving to production.</div>
-                <div className="opacity-90">Recommended: verify this payload in a test vineyard before enabling production save.</div>
-              </AlertDescription>
-            </Alert>
-
-            {(!intermediatePostSpacing || !flowPerEmitter || !emitterSpacing) && (
-              <Alert>
-                <AlertTitle>Optional fields missing</AlertTitle>
-                <AlertDescription className="text-xs">
-                  {!intermediatePostSpacing && <div>• Intermediate post spacing not set — post count won't be derived.</div>}
-                  {(!flowPerEmitter || !emitterSpacing) && <div>• Emitter spacing / flow not set — irrigation rate won't be derived.</div>}
-                </AlertDescription>
-              </Alert>
-            )}
 
             {warnings.length > 0 && (
               <Alert>
@@ -494,25 +475,27 @@ export default function NewPaddockPage() {
               </Alert>
             )}
 
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground underline"
-                  onClick={() => setShowRawPayload((v) => !v)}
-                >
-                  {showRawPayload ? "Hide" : "Show"} raw payload
-                </button>
-                <Button type="button" variant="outline" size="sm" onClick={copyPayloadToClipboard} className="gap-1">
-                  <Copy className="h-3.5 w-3.5" /> Copy payload
-                </Button>
+            {import.meta.env.DEV && (
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => setShowRawPayload((v) => !v)}
+                  >
+                    {showRawPayload ? "Hide" : "Show"} raw payload (dev only)
+                  </button>
+                  <Button type="button" variant="outline" size="sm" onClick={copyPayloadToClipboard} className="gap-1">
+                    <Copy className="h-3.5 w-3.5" /> Copy payload
+                  </Button>
+                </div>
+                {showRawPayload && (
+                  <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
+                    {JSON.stringify(exportablePayload, null, 2)}
+                  </pre>
+                )}
               </div>
-              {showRawPayload && (
-                <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
-                  {JSON.stringify(exportablePayload, null, 2)}
-                </pre>
-              )}
-            </div>
+            )}
 
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStep("rows")} disabled={saving}>Back</Button>
