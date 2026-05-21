@@ -156,7 +156,8 @@ export default function VineyardOverviewMap({
   const [selection, setSelection] = useState<Selection>(null);
   const [showPaddocks, setShowPaddocks] = useState(true);
   const [showTrips, setShowTrips] = useState(true);
-  const [showPins, setShowPins] = useState(true);
+  const [pinFilter, setPinFilter] = useState<"active" | "completed" | "all" | "hidden">("active");
+  const showPins = pinFilter !== "hidden";
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -235,11 +236,18 @@ export default function VineyardOverviewMap({
   }, [paddocks]);
 
   const pinsWithCoords = useMemo(
-    () =>
-      pins
+    () => {
+      const filtered =
+        pinFilter === "all" || pinFilter === "hidden"
+          ? pins
+          : pinFilter === "completed"
+            ? pins.filter((p: any) => p?.is_completed === true)
+            : pins.filter((p: any) => p?.is_completed !== true);
+      return filtered
         .map((p) => ({ pin: p, coords: pinDisplayCoords(p as any) }))
-        .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords),
-    [pins],
+        .filter((x): x is { pin: typeof pins[number]; coords: NonNullable<ReturnType<typeof pinDisplayCoords>> } => !!x.coords);
+    },
+    [pins, pinFilter],
   );
 
   // Pre-parse trip paths once per recentTrips; sort newest first.
@@ -555,8 +563,18 @@ export default function VineyardOverviewMap({
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <Toggle label="Blocks" checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
-            <Toggle label="Pins" checked={showPins} onChange={setShowPins} />
           </div>
+          <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Pins: Open</SelectItem>
+              <SelectItem value="completed">Pins: Completed</SelectItem>
+              <SelectItem value="all">Pins: All</SelectItem>
+              <SelectItem value="hidden">Pins: Hide</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue />
