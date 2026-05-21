@@ -87,10 +87,11 @@ export default function NswSeedLookupButton({
     } catch (e: any) {
       toast({
         title: "NSW SEED lookup failed",
-        description: e?.message ?? String(e),
+        description: `${e?.message ?? String(e)} — you can still enter soil details manually with the Edit button.`,
         variant: "destructive",
       });
     }
+
   }
 
   if (!hasProfile) {
