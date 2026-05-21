@@ -723,44 +723,56 @@ function BoundaryStep({
 function PreviewMap({ polygon, rows }: { polygon: LatLng[]; rows: GeneratedRow[] }) {
   const center = polygonCentroid(polygon) ?? { lat: -34.5, lng: 138.7 };
   return (
-    <MapContainer center={[center.lat, center.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
-      <TileLayer
-        attribution='&copy; OpenStreetMap'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
-      />
-      <FitToPolygon polygon={polygon} />
-      {polygon.length >= 3 && (
-        <Polygon
-          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
-          pathOptions={{ color: "hsl(145 42% 28%)", weight: 2.5, fillOpacity: 0.2 }}
+    <div className="relative h-full w-full">
+      <MapContainer center={[center.lat, center.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
+        <TileLayer
+          attribution='Tiles &copy; Esri'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
         />
-      )}
-      {rows.map((r, i) => (
-        <Polyline
-          key={r.id}
-          positions={[
-            [r.startPoint.latitude, r.startPoint.longitude],
-            [r.endPoint.latitude, r.endPoint.longitude],
-          ]}
-          pathOptions={{ color: "#34C759", weight: 1.5, opacity: 0.9 }}
+        <TileLayer
+          attribution=""
+          url="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
+          opacity={0.85}
         />
-      ))}
-      {rows.length > 0 && (
-        <Marker
-          position={[rows[0].startPoint.latitude, rows[0].startPoint.longitude]}
-          icon={rowChip(rows[0].number)}
-          interactive={false}
-        />
-      )}
-      {rows.length > 1 && (
-        <Marker
-          position={[rows[rows.length - 1].startPoint.latitude, rows[rows.length - 1].startPoint.longitude]}
-          icon={rowChip(rows[rows.length - 1].number)}
-          interactive={false}
-        />
-      )}
-    </MapContainer>
+        <FitToPolygon polygon={polygon} />
+        {polygon.length >= 3 && (
+          <Polygon
+            positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
+            pathOptions={{ color: "#34C759", weight: 2.5, fillOpacity: 0.18 }}
+            interactive={false}
+          />
+        )}
+        {rows.map((r) => (
+          <Polyline
+            key={r.id}
+            positions={[
+              [r.startPoint.latitude, r.startPoint.longitude],
+              [r.endPoint.latitude, r.endPoint.longitude],
+            ]}
+            pathOptions={{ color: "#FFD60A", weight: 1.75, opacity: 0.95 }}
+          />
+        ))}
+        {rows.length > 0 && (
+          <Marker
+            position={[rows[0].startPoint.latitude, rows[0].startPoint.longitude]}
+            icon={rowChip(rows[0].number)}
+            interactive={false}
+          />
+        )}
+        {rows.length > 1 && (
+          <Marker
+            position={[rows[rows.length - 1].startPoint.latitude, rows[rows.length - 1].startPoint.longitude]}
+            icon={rowChip(rows[rows.length - 1].number)}
+            interactive={false}
+          />
+        )}
+      </MapContainer>
+      <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
+        Satellite · {rows.length} rows
+      </div>
+    </div>
   );
 }
 
