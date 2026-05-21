@@ -621,10 +621,14 @@ function StepNav({
   step, setStep, hasPolygon, hasRows,
 }: { step: Step; setStep: (s: Step) => void; hasPolygon: boolean; hasRows: boolean }) {
   const items: { id: Step; label: string; sub: string; enabled: boolean }[] = [
-    { id: "details", label: "1. Details", sub: "Name · Varieties · Planting year", enabled: true },
+    { id: "details", label: "1. Details", sub: "Name · Planting year", enabled: true },
     { id: "boundary", label: "2. Boundary", sub: "Block outline", enabled: true },
-    { id: "rows", label: "3. Rows", sub: "Direction · Width · Count · Trellis · Irrigation", enabled: hasPolygon },
-    { id: "review", label: "4. Review", sub: "Confirm & save", enabled: hasPolygon && hasRows },
+    { id: "rows", label: "3. Rows", sub: "Direction · Width · Count", enabled: hasPolygon },
+    { id: "varieties", label: "4. Varieties", sub: "Allocations", enabled: hasPolygon && hasRows },
+    { id: "trellis", label: "5. Trellis", sub: "Post spacing", enabled: hasPolygon && hasRows },
+    { id: "irrigation", label: "6. Irrigation", sub: "Emitters · Flow", enabled: hasPolygon && hasRows },
+    { id: "soil", label: "7. Soil", sub: "After save", enabled: hasPolygon && hasRows },
+    { id: "review", label: "8. Review", sub: "Confirm & save", enabled: hasPolygon && hasRows },
   ];
   return (
     <div className="space-y-2">
