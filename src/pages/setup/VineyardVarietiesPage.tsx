@@ -228,13 +228,32 @@ export default function VineyardVarietiesPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[240px] space-y-1">
+              <div className="flex-1 min-w-[220px] space-y-1">
                 <Label htmlFor="newVariety">Variety name</Label>
                 <Input
                   id="newVariety"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g. Aglianico"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustom();
+                    }
+                  }}
+                />
+              </div>
+              <div className="w-[200px] space-y-1">
+                <Label htmlFor="newGdd">Optimal GDD (ripeness target)</Label>
+                <Input
+                  id="newGdd"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={10}
+                  value={newGdd}
+                  onChange={(e) => setNewGdd(e.target.value)}
+                  placeholder="e.g. 1400"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -256,6 +275,9 @@ export default function VineyardVarietiesPage() {
                 Add variety
               </Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Optimal GDD is optional. Leave blank to use the catalogue default.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -268,12 +290,25 @@ export default function VineyardVarietiesPage() {
               Built-in catalogue plus this vineyard's custom varieties.
             </CardDescription>
           </div>
-          <Input
-            placeholder="Filter…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="max-w-[220px]"
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Filter…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="max-w-[220px]"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={vineyardList.isFetching}
+              className="gap-1"
+              title="Refresh from server (pulls latest custom varieties from iOS)"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${vineyardList.isFetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
