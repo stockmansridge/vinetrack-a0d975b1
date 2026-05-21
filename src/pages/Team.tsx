@@ -534,8 +534,8 @@ function InviteDialog({
     },
     onSuccess: () => {
       toast({
-        title: "Invite created",
-        description: "The user will see this invitation when they sign in with the invited email address.",
+        title: "Invitation created",
+        description: "The user will see it when they sign in with this email.",
       });
       reset();
       onCreated();
