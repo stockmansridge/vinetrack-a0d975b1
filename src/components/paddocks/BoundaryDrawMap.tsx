@@ -272,7 +272,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
-  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons,
 }: {
   centre: LatLng;
   initialBBox: { sw: LatLng; ne: LatLng } | null;
@@ -280,6 +280,7 @@ function AppleDrawMap({
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
   rows: RowOverlay[];
+  rowLabels: { n: number; lat: number; lng: number }[];
   existingPolygons: LatLng[][];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
