@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info } from "lucide-react";
+import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info, Archive } from "lucide-react";
 
 import { fetchOne } from "@/lib/queries";
 import {
