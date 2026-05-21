@@ -278,8 +278,10 @@ export function useNswSeedLookup() {
       vineyardId?: string | null;
       paddockId?: string | null;
     }): Promise<NswSeedLookupResult> => {
+      // Edge function contract (see iOS app): expects vineyardId + coords,
+      // with NO `action` field. Sending action: "lookup" returns
+      // "Unknown action: lookup".
       const body: Record<string, unknown> = {
-        action: "lookup",
         latitude: args.latitude,
         longitude: args.longitude,
       };

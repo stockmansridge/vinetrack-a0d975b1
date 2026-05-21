@@ -157,7 +157,6 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
   // boundary immediately, not on every edit.
   const initialPolygonRef = useRef<LatLng[]>(polygon);
   const centre = useInitialCentre(selectedVineyardId, paddocks, loc, initialPolygonRef.current);
-  const initialBBox = useMemo(() => polygonBBox(initialPolygonRef.current), []);
 
   // Existing paddock polygons (reference outlines) — excluding the
   // currently-edited paddock so it doesn't overlap its own editable polygon.
@@ -170,6 +169,35 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
     }
     return out;
   }, [paddocks, excludePaddockId]);
+
+  // BBox to fit on initial render: prefer the polygon being edited, else
+  // the union of existing paddocks so reference outlines are immediately
+  // visible on a fresh New Paddock map.
+  const initialBBox = useMemo(() => {
+    const own = polygonBBox(initialPolygonRef.current);
+    if (own) return own;
+    const all: LatLng[] = [];
+    for (const pts of existingPolygons) all.push(...pts);
+    return polygonBBox(all);
+  }, [existingPolygons]);
+
+  // First / last row labels for the readonly preview map.
+  const rowLabels = useMemo(() => {
+    if (!rows.length) return [] as Array<{ n: number; lat: number; lng: number }>;
+    const numbered = rows
+      .map((r, i) => ({ n: typeof r.number === "number" ? r.number : i + 1, r }))
+      .sort((a, b) => a.n - b.n);
+    const first = numbered[0];
+    const last = numbered[numbered.length - 1];
+    const pick = first === last ? [first] : [first, last];
+    return pick.map(({ n, r }) => ({
+      n,
+      lat: r.startPoint.latitude,
+      lng: r.startPoint.longitude,
+    }));
+  }, [rows]);
+
+
 
 
   const [mode, setMode] = useState<"checking" | "apple" | "fallback">("checking");
@@ -205,6 +233,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
           setPolygon={setPoly}
           readonly={readonly}
           rows={rows}
+          rowLabels={rowLabels}
           existingPolygons={existingPolygons}
         />
       ) : (
@@ -215,6 +244,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
           setPolygon={setPoly}
           readonly={readonly}
           rows={rows}
+          rowLabels={rowLabels}
           existingPolygons={existingPolygons}
         />
       )}
@@ -242,7 +272,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
-  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons,
 }: {
   centre: LatLng;
   initialBBox: { sw: LatLng; ne: LatLng } | null;
@@ -250,6 +280,7 @@ function AppleDrawMap({
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
   rows: RowOverlay[];
+  rowLabels: { n: number; lat: number; lng: number }[];
   existingPolygons: LatLng[][];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -260,6 +291,7 @@ function AppleDrawMap({
   const midAnnsRef = useRef<any[]>([]);
   const existingOverlaysRef = useRef<any[]>([]);
   const rowOverlaysRef = useRef<any[]>([]);
+  const rowLabelAnnsRef = useRef<any[]>([]);
   const polygonRef = useRef<LatLng[]>(polygon);
   polygonRef.current = polygon;
   const setPolygonRef = useRef(setPolygon);
@@ -375,6 +407,37 @@ function AppleDrawMap({
     }
     rowOverlaysRef.current = next;
   }, [rows]);
+
+  // First/last row number labels.
+  useEffect(() => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!map || !mapkit) return;
+    if (rowLabelAnnsRef.current.length) {
+      try { map.removeAnnotations(rowLabelAnnsRef.current); } catch { /* noop */ }
+      rowLabelAnnsRef.current = [];
+    }
+    const next: any[] = [];
+    for (const lbl of rowLabels) {
+      const ann = new mapkit.Annotation(
+        new mapkit.Coordinate(lbl.lat, lbl.lng),
+        () => {
+          const el = document.createElement("div");
+          el.style.cssText =
+            "background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.5);transform:translate(-50%,-50%);white-space:nowrap;border:1px solid rgba(0,0,0,.25)";
+          el.textContent = `Row ${lbl.n}`;
+          return el;
+        },
+      );
+      try { (ann as any).selectable = false; } catch { /* noop */ }
+      next.push(ann);
+    }
+    if (next.length) {
+      map.addAnnotations(next);
+      rowLabelAnnsRef.current = next;
+    }
+  }, [rowLabels]);
+
 
   // Re-render polygon overlay + vertex + midpoint annotations.
   useEffect(() => {
@@ -495,7 +558,7 @@ function AppleDrawMap({
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
-  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, rowLabels, existingPolygons,
 }: {
   centre: LatLng;
   initialBBox: { sw: LatLng; ne: LatLng } | null;
@@ -503,6 +566,7 @@ function LeafletSatelliteDraw({
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
   rows: RowOverlay[];
+  rowLabels: { n: number; lat: number; lng: number }[];
   existingPolygons: LatLng[][];
 }) {
   return (
@@ -552,6 +616,15 @@ function LeafletSatelliteDraw({
             [r.endPoint.latitude, r.endPoint.longitude],
           ]}
           pathOptions={{ color: ROW_STROKE, weight: 1.75, opacity: 0.95 }}
+          interactive={false}
+        />
+      ))}
+      {/* First/last row number labels */}
+      {rowLabels.map((lbl) => (
+        <Marker
+          key={`rownum-${lbl.n}`}
+          position={[lbl.lat, lbl.lng]}
+          icon={rowLabelIcon(lbl.n)}
           interactive={false}
         />
       ))}
@@ -649,6 +722,14 @@ function midIcon() {
   return L.divIcon({
     className: "",
     html: `<div style="width:10px;height:10px;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:pointer;opacity:.85"></div>`,
+    iconSize: [0, 0],
+  });
+}
+
+function rowLabelIcon(n: number) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.5);transform:translate(-50%,-50%);white-space:nowrap;border:1px solid rgba(0,0,0,.25)">Row ${n}</div>`,
     iconSize: [0, 0],
   });
 }
