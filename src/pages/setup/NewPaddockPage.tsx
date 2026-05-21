@@ -48,7 +48,15 @@ import VarietyAllocationEditor, {
 const ENABLE_PRODUCTION_SAVE = true;
 // ────────────────────────────────────────────────────────────────────────────
 
-type Step = "details" | "boundary" | "rows" | "review";
+type Step =
+  | "details"
+  | "boundary"
+  | "rows"
+  | "varieties"
+  | "trellis"
+  | "irrigation"
+  | "soil"
+  | "review";
 
 const fmt = (n: number, d = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
