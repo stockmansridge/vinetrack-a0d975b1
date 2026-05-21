@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Pencil, ChevronDown } from "lucide-react";
 import { useState } from "react";
@@ -48,6 +49,8 @@ export default function SoilProfileSection({
 
   const showRawDiagnostics = useDiagnosticPanel("show_raw_json_panels");
   const [rawOpen, setRawOpen] = useState(false);
+  const hasCoords = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+  const hasVineyardId = typeof vineyardId === "string" && vineyardId.trim().length > 0;
 
   const cap = computeRootZoneCapacityMm(
     profile?.awc_mm_per_m as number | null,
@@ -97,6 +100,22 @@ export default function SoilProfileSection({
           No soil profile set.{" "}
           {canEdit ? "Fetch from NSW SEED or enter manually." : ""}
         </div>
+      )}
+
+      {canEdit && !hasCoords && (
+        <Alert>
+          <AlertDescription className="text-xs">
+            Add a paddock boundary before fetching NSW SEED soil data.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {canEdit && hasCoords && !hasVineyardId && (
+        <Alert>
+          <AlertDescription className="text-xs">
+            NSW SEED lookup is unavailable because this paddock is missing a vineyard reference. Manual soil entry is still available.
+          </AlertDescription>
+        </Alert>
       )}
 
       {profile && (
