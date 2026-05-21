@@ -619,6 +619,24 @@ function ClickHandler({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: 
   return null;
 }
 
+// Fit the map to the existing paddock bounds once on mount so the
+// boundary is visible immediately without requiring user interaction.
+function FitBoundsOnce({ bbox }: { bbox: { sw: LatLng; ne: LatLng } }) {
+  const map = useMap();
+  const did = useRef(false);
+  useEffect(() => {
+    if (did.current) return;
+    did.current = true;
+    try {
+      map.fitBounds(
+        L.latLngBounds([bbox.sw.lat, bbox.sw.lng], [bbox.ne.lat, bbox.ne.lng]),
+        { padding: [40, 40], maxZoom: 19 },
+      );
+    } catch { /* noop */ }
+  }, [map, bbox]);
+  return null;
+}
+
 function vertexIcon(n: number) {
   return L.divIcon({
     className: "",
