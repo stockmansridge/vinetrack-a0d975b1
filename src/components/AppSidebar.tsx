@@ -86,6 +86,7 @@ const reportsAdmin: NavItem[] = [
 // "Setup" — vineyard configuration
 const setup: NavItem[] = [
   { title: "Team", url: "/team", icon: Users },
+  { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
   { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
