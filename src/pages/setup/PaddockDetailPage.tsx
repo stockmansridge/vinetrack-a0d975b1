@@ -625,40 +625,56 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Danger zone — hard delete with linked-record safety check.
+// Manage paddock — archive (default) or hard delete (only when no linked records).
 // ────────────────────────────────────────────────────────────────────────────
 
 function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [confirmName, setConfirmName] = useState("");
-  const [deleting, setDeleting] = useState(false);
   const [counts, setCounts] = useState<LinkedCounts | null>(null);
-  const [loadingCounts, setLoadingCounts] = useState(false);
+  const [loadingCounts, setLoadingCounts] = useState(true);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
     setLoadingCounts(true);
-    setConfirmName("");
     fetchLinkedRecordCounts(paddock.id)
       .then(setCounts)
       .finally(() => setLoadingCounts(false));
-  }, [open, paddock.id]);
+  }, [paddock.id]);
 
   const hasLinked = !!counts && counts.total > 0;
-  const nameMatches = confirmName.trim() === (paddock.name ?? "").trim() && confirmName.length > 0;
-  const canDelete = !loadingCounts && nameMatches && !deleting;
+  const nameMatches =
+    confirmName.trim() === (paddock.name ?? "").trim() && confirmName.length > 0;
+
+  const handleArchive = async () => {
+    setBusy(true);
+    try {
+      await archivePaddock(paddock.id);
+      toast({
+        title: "Paddock archived",
+        description: `${paddock.name} is hidden from active lists. Historical records remain intact.`,
+      });
+      setArchiveOpen(false);
+      onDeleted();
+    } catch (err: any) {
+      toast({ title: "Archive failed", description: err?.message ?? String(err), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleDelete = async () => {
-    setDeleting(true);
+    setBusy(true);
     try {
       await hardDeletePaddock(paddock.id);
-      toast({ title: "Paddock deleted", description: paddock.name });
-      setOpen(false);
+      toast({ title: "Paddock permanently deleted", description: paddock.name });
+      setDeleteOpen(false);
       onDeleted();
     } catch (err: any) {
       toast({ title: "Delete failed", description: err?.message ?? String(err), variant: "destructive" });
     } finally {
-      setDeleting(false);
+      setBusy(false);
     }
   };
 
@@ -669,76 +685,114 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
           <AlertTriangle className="h-5 w-5" /> Danger zone
         </CardTitle>
         <CardDescription>
-          Permanently deletes this paddock. Use only for test paddocks or paddocks created in error.
+          Archive paddocks you no longer use. Permanent delete is only available for paddocks with no
+          linked records (e.g. test paddocks or those created in error).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>This action cannot be undone</AlertTitle>
-          <AlertDescription className="text-xs">
-            Deleted paddocks are removed from both Lovable and iOS. For active blocks with historical
-            data, prefer archiving (coming soon) instead of hard delete.
-          </AlertDescription>
-        </Alert>
-        <Button variant="destructive" className="gap-1" onClick={() => setOpen(true)}>
-          <Trash2 className="h-4 w-4" /> Delete paddock permanently
-        </Button>
+        {loadingCounts && (
+          <div className="text-sm text-muted-foreground">Checking linked records…</div>
+        )}
+
+        {!loadingCounts && counts && (
+          <>
+            {hasLinked ? (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Linked records found ({counts.total})</AlertTitle>
+                <AlertDescription>
+                  This paddock has linked records, so it cannot be permanently deleted. You can archive
+                  it instead so historical records remain intact.
+                  <ul className="text-xs list-disc pl-5 mt-2 space-y-0.5">
+                    <CountLine label="Trips" n={counts.trips} />
+                    <CountLine label="Pins" n={counts.pins} />
+                    <CountLine label="Spray records" n={counts.sprayRecords} />
+                    <CountLine label="Spray jobs" n={counts.sprayJobs} />
+                    <CountLine label="Work tasks" n={counts.workTasks} />
+                    <CountLine label="Damage records" n={counts.damageRecords} />
+                    <CountLine label="Yield records" n={counts.yieldRecords} />
+                    <CountLine label="Yield sessions" n={counts.yieldSessions} />
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>No linked records</AlertTitle>
+                <AlertDescription>
+                  This paddock has no trips, pins, spray, task, yield or other linked records, so it
+                  can be permanently deleted. You can also archive it if you'd prefer to keep the
+                  record.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="gap-1" onClick={() => setArchiveOpen(true)}>
+                <Archive className="h-4 w-4" /> Archive paddock
+              </Button>
+              {!hasLinked && (
+                <Button variant="destructive" className="gap-1" onClick={() => { setConfirmName(""); setDeleteOpen(true); }}>
+                  <Trash2 className="h-4 w-4" /> Delete permanently
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </CardContent>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Archive confirmation */}
+      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive this paddock?</DialogTitle>
+            <DialogDescription>
+              {paddock.name} will be hidden from active paddock pickers and new jobs. Historical reports,
+              trips, pins and other linked records will continue to display correctly. You can restore it
+              later from the Archived paddocks list.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArchiveOpen(false)} disabled={busy}>Cancel</Button>
+            <Button onClick={handleArchive} disabled={busy} className="gap-1">
+              <Archive className="h-4 w-4" />
+              {busy ? "Archiving…" : "Archive paddock"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard delete confirmation (only reachable when no linked records) */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete paddock permanently?</DialogTitle>
             <DialogDescription>
-              This will permanently delete the paddock/block. This action cannot be undone. Only delete
-              paddocks created in error or test paddocks that are not needed.
+              This permanently removes {paddock.name} from both Lovable and iOS. This action cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
-
-          {loadingCounts && <div className="text-sm text-muted-foreground">Checking linked records…</div>}
-
-          {counts && (
-            <div className="space-y-2">
-              {hasLinked ? (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Linked records found ({counts.total})</AlertTitle>
-                  <AlertDescription>
-                    <ul className="text-xs list-disc pl-5 mt-1 space-y-0.5">
-                      <CountLine label="Trips" n={counts.trips} />
-                      <CountLine label="Pins" n={counts.pins} />
-                      <CountLine label="Spray records" n={counts.sprayRecords} />
-                      <CountLine label="Spray jobs" n={counts.sprayJobs} />
-                      <CountLine label="Work tasks" n={counts.workTasks} />
-                      <CountLine label="Damage records" n={counts.damageRecords} />
-                      <CountLine label="Yield records" n={counts.yieldRecords} />
-                      <CountLine label="Yield sessions" n={counts.yieldSessions} />
-                    </ul>
-                    <p className="text-xs mt-2">
-                      Deleting will remove this paddock's reference from these records. Strongly
-                      recommended for newly-created or test paddocks only.
-                    </p>
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <div className="text-xs text-muted-foreground">
-                  No linked trips, pins, spray, irrigation, yield or task records found.
-                </div>
-              )}
-
-              <Label className="text-xs">
-                Type the paddock name <span className="font-mono">{paddock.name}</span> to confirm:
-              </Label>
-              <Input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={paddock.name ?? ""} />
-            </div>
-          )}
-
+          <div className="space-y-2">
+            <Label className="text-xs">
+              Type the paddock name <span className="font-mono">{paddock.name}</span> to confirm:
+            </Label>
+            <Input
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              placeholder={paddock.name ?? ""}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={deleting}>Cancel</Button>
-            <Button variant="destructive" disabled={!canDelete} onClick={handleDelete} className="gap-1">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={busy}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={!nameMatches || busy}
+              onClick={handleDelete}
+              className="gap-1"
+            >
               <Trash2 className="h-4 w-4" />
-              {deleting ? "Deleting…" : "Delete permanently"}
+              {busy ? "Deleting…" : "Delete permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -751,3 +805,4 @@ function CountLine({ label, n }: { label: string; n: number }) {
   if (!n) return null;
   return <li>{label}: <span className="font-medium">{n}</span></li>;
 }
+
