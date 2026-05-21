@@ -278,20 +278,27 @@ export function useNswSeedLookup() {
       vineyardId?: string | null;
       paddockId?: string | null;
     }): Promise<NswSeedLookupResult> => {
-      // Edge function contract (see iOS app): expects vineyardId + coords,
-      // with NO `action` field. Sending action: "lookup" returns
-      // "Unknown action: lookup".
-      const body: Record<string, unknown> = {
+      const payload: Record<string, unknown> = {
         latitude: args.latitude,
         longitude: args.longitude,
       };
-      if (args.vineyardId) body.vineyardId = args.vineyardId;
-      if (args.paddockId) body.paddockId = args.paddockId;
+      if (args.vineyardId) payload.vineyardId = args.vineyardId;
+      if (args.paddockId) payload.paddockId = args.paddockId;
+      console.log("NSW SEED request payload", payload);
+      console.log("supabase.functions.invoke call", {
+        functionName: "nsw-seed-soil-lookup",
+        options: { body: payload },
+      });
       const { data, error } = await (supabase as any).functions.invoke(
         "nsw-seed-soil-lookup",
-        { body },
+        { body: payload },
       );
       if (error) {
+        console.warn("NSW SEED invoke error", {
+          message: (error as any)?.message,
+          name: (error as any)?.name,
+          context: (error as any)?.context,
+        });
         // Surface structured error from the edge function body when available.
         const ctx: any = (error as any)?.context;
         try {
