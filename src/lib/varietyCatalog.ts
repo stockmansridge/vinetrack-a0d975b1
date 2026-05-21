@@ -83,7 +83,9 @@ export function useVineyardGrapeVarieties(vineyardId: string | null | undefined)
   return useQuery({
     queryKey: ["vineyard_grape_varieties", vineyardId],
     enabled: !!vineyardId,
-    staleTime: 5 * 60 * 1000,
+    // Short stale time so customs created in iOS appear quickly after a refocus.
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<CatalogVariety[]> => {
       const { data, error } = await supabase.rpc("list_vineyard_grape_varieties", {
         p_vineyard_id: vineyardId,
@@ -98,7 +100,8 @@ export function useVineyardGrapeVarieties(vineyardId: string | null | undefined)
 }
 
 /** Upsert a vineyard variety. Pass `variety_key = null` to create a CUSTOM variety —
- *  the server returns the stable `custom:<vineyard_id>:<slug>` key. */
+ *  the server returns the stable `custom:<vineyard_id>:<slug>` key.
+ *  `optimalGddOverride` sets the vineyard-specific ripeness target (matches iOS field). */
 export function useUpsertVineyardGrapeVariety() {
   const qc = useQueryClient();
   return useMutation({
@@ -106,11 +109,16 @@ export function useUpsertVineyardGrapeVariety() {
       vineyardId: string;
       varietyKey?: string | null;
       displayName: string;
+      optimalGddOverride?: number | null;
+      isActive?: boolean;
     }): Promise<CatalogVariety | null> => {
       const { data, error } = await supabase.rpc("upsert_vineyard_grape_variety", {
         p_vineyard_id: input.vineyardId,
         p_variety_key: input.varietyKey ?? null,
         p_display_name: input.displayName,
+        p_optimal_gdd_override:
+          input.optimalGddOverride == null ? null : Number(input.optimalGddOverride),
+        p_is_active: input.isActive ?? true,
       });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
