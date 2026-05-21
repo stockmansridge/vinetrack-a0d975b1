@@ -514,11 +514,10 @@ function InviteDialog({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitationRole>("operator");
   const [categoryId, setCategoryId] = useState<string>(NONE);
-  const [message, setMessage] = useState("");
   const [expiresInDays, setExpiresInDays] = useState<string>("14");
 
   const reset = () => {
-    setEmail(""); setRole("operator"); setCategoryId(NONE); setMessage(""); setExpiresInDays("14");
+    setEmail(""); setRole("operator"); setCategoryId(NONE); setExpiresInDays("14");
   };
 
   const mut = useMutation({
@@ -530,7 +529,6 @@ function InviteDialog({
         email,
         role,
         operator_category_id: categoryId === NONE ? null : categoryId,
-        message: message.trim() || null,
         expires_in_days: days,
       });
     },
