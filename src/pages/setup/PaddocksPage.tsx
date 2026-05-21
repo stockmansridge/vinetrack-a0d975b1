@@ -60,9 +60,6 @@ export default function PaddocksPage() {
             <Button asChild size="sm" className="gap-1">
               <Link to="/setup/paddocks/new">
                 <Plus className="h-4 w-4" /> New paddock
-                <span className="ml-1 rounded-full bg-warning/20 px-1.5 text-[10px] font-medium text-warning-foreground/90">
-                  test
-                </span>
               </Link>
             </Button>
           )}

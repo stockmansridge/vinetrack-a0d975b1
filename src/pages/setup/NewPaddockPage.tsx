@@ -6,12 +6,9 @@
 //
 // Spec: docs/paddock-geometry-writer-spec.md
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
 
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -86,7 +83,9 @@ function polygonHasSelfIntersection(pts: LatLng[]): boolean {
 export default function NewPaddockPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { selectedVineyardId, currentRole } = useVineyard();
+  const { selectedVineyardId, currentRole, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const [saving, setSaving] = useState(false);
@@ -256,10 +255,8 @@ export default function NewPaddockPage() {
     if (polygon.length >= 4 && polygonHasSelfIntersection(polygon)) {
       w.push("Polygon appears to self-intersect — boundary edges cross.");
     }
-    if (!intermediatePostSpacing) w.push("Intermediate post spacing not provided — post count won't be derived.");
-    if (!flowPerEmitter || !emitterSpacing) w.push("Irrigation inputs missing (flow per emitter / emitter spacing) — irrigation rate won't be derived.");
     return w;
-  }, [areaHa, rowsCount, generated.length, totalRowLengthM, polygon, intermediatePostSpacing, flowPerEmitter, emitterSpacing]);
+  }, [areaHa, rowsCount, generated.length, totalRowLengthM, polygon]);
 
   const copyPayloadToClipboard = async () => {
     try {
@@ -388,7 +385,7 @@ export default function NewPaddockPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={1} min={0} max={360} />
+              <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={0.5} min={0} max={360} />
               <StepperField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step={0.1} min={0.1} />
               <StepperField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step={0.1} />
               <StepperField label="Rows count" value={rowsCount} onChange={setRowsCount} step={1} min={1} />
@@ -437,7 +434,7 @@ export default function NewPaddockPage() {
           <CardHeader>
             <CardTitle>Review</CardTitle>
             <CardDescription>
-              Confirm the paddock details. This will write to the production database when enabled.
+              Confirm the paddock details before saving.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -454,7 +451,7 @@ export default function NewPaddockPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <SummaryRow label="Name" value={name} />
-              <SummaryRow label="Vineyard" value={selectedVineyardId ?? "—"} />
+              <SummaryRow label="Vineyard" value={vineyardName ?? selectedVineyardId ?? "—"} />
               <SummaryRow label="Boundary points" value={String(polygon.length)} />
               <SummaryRow label="Rows" value={String(generated.length)} />
               <SummaryRow label="Area" value={`${fmt(areaHa, 2)} ha`} />
@@ -465,25 +462,6 @@ export default function NewPaddockPage() {
               {plantingYear && <SummaryRow label="Planting year" value={plantingYear} />}
               {effectiveVineCount != null && <SummaryRow label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
             </div>
-
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Production write — handle with care</AlertTitle>
-              <AlertDescription className="text-xs space-y-1">
-                <div>Paddock creation affects maps, rows, irrigation, yield and field records. Test carefully before saving to production.</div>
-                <div className="opacity-90">Recommended: verify this payload in a test vineyard before enabling production save.</div>
-              </AlertDescription>
-            </Alert>
-
-            {(!intermediatePostSpacing || !flowPerEmitter || !emitterSpacing) && (
-              <Alert>
-                <AlertTitle>Optional fields missing</AlertTitle>
-                <AlertDescription className="text-xs">
-                  {!intermediatePostSpacing && <div>• Intermediate post spacing not set — post count won't be derived.</div>}
-                  {(!flowPerEmitter || !emitterSpacing) && <div>• Emitter spacing / flow not set — irrigation rate won't be derived.</div>}
-                </AlertDescription>
-              </Alert>
-            )}
 
             {warnings.length > 0 && (
               <Alert>
@@ -497,25 +475,27 @@ export default function NewPaddockPage() {
               </Alert>
             )}
 
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground underline"
-                  onClick={() => setShowRawPayload((v) => !v)}
-                >
-                  {showRawPayload ? "Hide" : "Show"} raw payload
-                </button>
-                <Button type="button" variant="outline" size="sm" onClick={copyPayloadToClipboard} className="gap-1">
-                  <Copy className="h-3.5 w-3.5" /> Copy payload
-                </Button>
+            {import.meta.env.DEV && (
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => setShowRawPayload((v) => !v)}
+                  >
+                    {showRawPayload ? "Hide" : "Show"} raw payload (dev only)
+                  </button>
+                  <Button type="button" variant="outline" size="sm" onClick={copyPayloadToClipboard} className="gap-1">
+                    <Copy className="h-3.5 w-3.5" /> Copy payload
+                  </Button>
+                </div>
+                {showRawPayload && (
+                  <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
+                    {JSON.stringify(exportablePayload, null, 2)}
+                  </pre>
+                )}
               </div>
-              {showRawPayload && (
-                <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-tight">
-                  {JSON.stringify(exportablePayload, null, 2)}
-                </pre>
-              )}
-            </div>
+            )}
 
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStep("rows")} disabled={saving}>Back</Button>
@@ -715,81 +695,13 @@ function BoundaryStep({
   );
 }
 
-
 // ────────────────────────────────────────────────────────────────────────────
-// Preview map (rows + polygon, fits bounds)
+// Preview map (rows + polygon) — reuses the BoundaryDrawMap in readonly mode
+// so the Rows step uses the same Apple Maps / satellite experience as the
+// Boundary step (existing paddocks shown as reference outlines).
 // ────────────────────────────────────────────────────────────────────────────
 
 function PreviewMap({ polygon, rows }: { polygon: LatLng[]; rows: GeneratedRow[] }) {
-  const center = polygonCentroid(polygon) ?? { lat: -34.5, lng: 138.7 };
-  return (
-    <div className="relative h-full w-full">
-      <MapContainer center={[center.lat, center.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
-        <TileLayer
-          attribution='Tiles &copy; Esri'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
-        <TileLayer
-          attribution=""
-          url="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-          opacity={0.85}
-        />
-        <FitToPolygon polygon={polygon} />
-        {polygon.length >= 3 && (
-          <Polygon
-            positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
-            pathOptions={{ color: "#34C759", weight: 2.5, fillOpacity: 0.18 }}
-            interactive={false}
-          />
-        )}
-        {rows.map((r) => (
-          <Polyline
-            key={r.id}
-            positions={[
-              [r.startPoint.latitude, r.startPoint.longitude],
-              [r.endPoint.latitude, r.endPoint.longitude],
-            ]}
-            pathOptions={{ color: "#FFD60A", weight: 1.75, opacity: 0.95 }}
-          />
-        ))}
-        {rows.length > 0 && (
-          <Marker
-            position={[rows[0].startPoint.latitude, rows[0].startPoint.longitude]}
-            icon={rowChip(rows[0].number)}
-            interactive={false}
-          />
-        )}
-        {rows.length > 1 && (
-          <Marker
-            position={[rows[rows.length - 1].startPoint.latitude, rows[rows.length - 1].startPoint.longitude]}
-            icon={rowChip(rows[rows.length - 1].number)}
-            interactive={false}
-          />
-        )}
-      </MapContainer>
-      <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
-        Satellite · {rows.length} rows
-      </div>
-    </div>
-  );
+  return <BoundaryDrawMap polygon={polygon} readonly rows={rows} />;
 }
 
-function FitToPolygon({ polygon }: { polygon: LatLng[] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (polygon.length < 2) return;
-    const b = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
-    map.fitBounds(b.pad(0.2), { padding: [16, 16] });
-  }, [polygon, map]);
-  return null;
-}
-
-function rowChip(n: number) {
-  return L.divIcon({
-    className: "",
-    html: `<div class="vt-row-chip">${n}</div>`,
-    iconSize: [0, 0],
-  });
-}
