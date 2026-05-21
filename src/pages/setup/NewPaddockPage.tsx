@@ -253,10 +253,8 @@ export default function NewPaddockPage() {
     if (polygon.length >= 4 && polygonHasSelfIntersection(polygon)) {
       w.push("Polygon appears to self-intersect — boundary edges cross.");
     }
-    if (!intermediatePostSpacing) w.push("Intermediate post spacing not provided — post count won't be derived.");
-    if (!flowPerEmitter || !emitterSpacing) w.push("Irrigation inputs missing (flow per emitter / emitter spacing) — irrigation rate won't be derived.");
     return w;
-  }, [areaHa, rowsCount, generated.length, totalRowLengthM, polygon, intermediatePostSpacing, flowPerEmitter, emitterSpacing]);
+  }, [areaHa, rowsCount, generated.length, totalRowLengthM, polygon]);
 
   const copyPayloadToClipboard = async () => {
     try {
