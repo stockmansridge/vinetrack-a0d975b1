@@ -20,6 +20,7 @@ import { ArrowLeft, Save, AlertTriangle, Trash2, Pencil, Info } from "lucide-rea
 
 import { fetchOne } from "@/lib/queries";
 import {
+  archivePaddock,
   fetchLinkedRecordCounts,
   hardDeletePaddock,
   updatePaddock,
