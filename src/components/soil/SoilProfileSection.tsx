@@ -68,9 +68,11 @@ export default function SoilProfileSection({
               paddockId={paddockId}
               latitude={latitude}
               longitude={longitude}
+              vineyardId={vineyardId ?? null}
               current={profile ?? null}
             />
           )}
+
           {canEdit && (
             <SoilProfileEditDialog
               paddockId={paddockId}
