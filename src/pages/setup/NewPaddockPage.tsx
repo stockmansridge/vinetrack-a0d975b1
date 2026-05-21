@@ -324,9 +324,6 @@ export default function NewPaddockPage() {
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">New paddock</h1>
         </div>
-        <Badge variant="outline" className="border-warning/50 text-warning-foreground/90 bg-warning/10">
-          Test mode — save disabled
-        </Badge>
       </div>
 
       <StepNav step={step} setStep={setStep} hasPolygon={polygon.length >= 3} hasRows={generated.length > 0} />
