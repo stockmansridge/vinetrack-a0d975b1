@@ -157,7 +157,6 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
   // boundary immediately, not on every edit.
   const initialPolygonRef = useRef<LatLng[]>(polygon);
   const centre = useInitialCentre(selectedVineyardId, paddocks, loc, initialPolygonRef.current);
-  const initialBBox = useMemo(() => polygonBBox(initialPolygonRef.current), []);
 
   // Existing paddock polygons (reference outlines) — excluding the
   // currently-edited paddock so it doesn't overlap its own editable polygon.
@@ -170,6 +169,35 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
     }
     return out;
   }, [paddocks, excludePaddockId]);
+
+  // BBox to fit on initial render: prefer the polygon being edited, else
+  // the union of existing paddocks so reference outlines are immediately
+  // visible on a fresh New Paddock map.
+  const initialBBox = useMemo(() => {
+    const own = polygonBBox(initialPolygonRef.current);
+    if (own) return own;
+    const all: LatLng[] = [];
+    for (const pts of existingPolygons) all.push(...pts);
+    return polygonBBox(all);
+  }, [existingPolygons]);
+
+  // First / last row labels for the readonly preview map.
+  const rowLabels = useMemo(() => {
+    if (!rows.length) return [] as Array<{ n: number; lat: number; lng: number }>;
+    const numbered = rows
+      .map((r, i) => ({ n: typeof r.number === "number" ? r.number : i + 1, r }))
+      .sort((a, b) => a.n - b.n);
+    const first = numbered[0];
+    const last = numbered[numbered.length - 1];
+    const pick = first === last ? [first] : [first, last];
+    return pick.map(({ n, r }) => ({
+      n,
+      lat: r.startPoint.latitude,
+      lng: r.startPoint.longitude,
+    }));
+  }, [rows]);
+
+
 
 
   const [mode, setMode] = useState<"checking" | "apple" | "fallback">("checking");
