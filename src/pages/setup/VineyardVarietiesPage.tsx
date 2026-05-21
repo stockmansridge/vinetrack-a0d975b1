@@ -85,6 +85,7 @@ function buildUsageMap(paddocks: PaddockRow[]): Map<string, string[]> {
 
 export default function VineyardVarietiesPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
 
@@ -95,6 +96,7 @@ export default function VineyardVarietiesPage() {
   const archive = useArchiveVineyardGrapeVariety();
 
   const [newName, setNewName] = useState("");
+  const [newGdd, setNewGdd] = useState("");
   const [filter, setFilter] = useState("");
   const [pendingArchive, setPendingArchive] = useState<CatalogVariety | null>(null);
 
@@ -105,10 +107,21 @@ export default function VineyardVarietiesPage() {
 
   // Combine vineyard list (built-ins + custom) with the global catalogue so
   // built-ins always appear even when not yet "activated" for the vineyard.
+  // Vineyard rows win for built-ins (so GDD overrides apply), but we never let
+  // an `is_active === false` vineyard row hide an active variety from view.
   const combined = useMemo<CatalogVariety[]>(() => {
     const byKey = new Map<string, CatalogVariety>();
     for (const v of catalog.data ?? []) byKey.set(v.variety_key, { ...v, is_custom: false });
-    for (const v of vineyardList.data ?? []) byKey.set(v.variety_key, v);
+    for (const v of vineyardList.data ?? []) {
+      // Always include custom rows (even archived — shown faded).
+      // For built-ins, only override the catalogue entry when the vineyard row is active.
+      const isCustom = v.is_custom === true || v.variety_key.startsWith("custom:");
+      if (isCustom) {
+        byKey.set(v.variety_key, v);
+      } else if (v.is_active !== false && !v.archived_at) {
+        byKey.set(v.variety_key, { ...byKey.get(v.variety_key), ...v });
+      }
+    }
     const list = Array.from(byKey.values());
     list.sort((a, b) => a.display_name.localeCompare(b.display_name));
     return list;
