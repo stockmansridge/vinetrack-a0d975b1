@@ -69,6 +69,7 @@ import VarietyAllocationEditor, {
   type VarietyAllocationRow,
 } from "@/components/varieties/VarietyAllocationEditor";
 import SoilProfileSection from "@/components/soil/SoilProfileSection";
+import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
 
 const fmt = (n: any, d = 2) =>
   Number.isFinite(Number(n)) ? Number(n).toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
@@ -629,6 +630,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => void }) {
+  const qc = useQueryClient();
   const [counts, setCounts] = useState<LinkedCounts | null>(null);
   const [loadingCounts, setLoadingCounts] = useState(true);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -651,6 +653,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
     setBusy(true);
     try {
       await archivePaddock(paddock.id);
+      await refreshPaddockQueries(qc, paddock.vineyard_id ?? null);
       toast({
         title: "Paddock archived",
         description: `${paddock.name} is hidden from active lists. Historical records remain intact.`,
@@ -668,6 +671,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
     setBusy(true);
     try {
       await hardDeletePaddock(paddock.id);
+      await refreshPaddockQueries(qc, paddock.vineyard_id ?? null);
       toast({ title: "Paddock permanently deleted", description: paddock.name });
       setDeleteOpen(false);
       onDeleted();
