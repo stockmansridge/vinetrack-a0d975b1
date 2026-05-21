@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle, Info, Minus, Plus } from "lucide-react";
 
 import {
   generateRows,
