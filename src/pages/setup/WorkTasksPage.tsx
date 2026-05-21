@@ -679,7 +679,7 @@ function WorkTaskDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isNew ? "New work task" : `Work task — ${dateRangeLabel(task!)}`}</SheetTitle>
+          <SheetTitle>{isNew ? "New task log" : `Task log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -726,23 +726,11 @@ function WorkTaskDrawer({
                     onCreated={onSaved}
                   />
                 </Field>
-                <Field label="Status">
-                  <Select value={status || NONE} onValueChange={(v) => setStatus(v === NONE ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>—</SelectItem>
-                      {STATUS_OPTIONS.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                <Field label="Date">
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </Field>
                 <Field label="Area ha (auto)">
                   <Input type="number" value={areaHaDisplay} readOnly disabled placeholder="—" />
-                </Field>
-                <Field label="Start date">
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                </Field>
-                <Field label="End date">
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </Field>
               </div>
               {paddockMissingArea && (
@@ -750,25 +738,18 @@ function WorkTaskDrawer({
                   One or more selected paddocks are missing area data, so the area total may be incomplete.
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                Multi-paddock selection writes to <code>work_task_paddocks</code>. The first selected paddock is also stored on <code>work_tasks.paddock_id</code> for backward compatibility.
-              </p>
               <Field label="Description">
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
               </Field>
               <Field label="Notes">
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
               </Field>
-              {/* Finalized flag intentionally hidden: iOS Task Log has no
-                  equivalent UI yet. We keep is_finalized at its current value
-                  on existing rows and default new entries to false to avoid
-                  divergence between platforms. */}
-              {!task?.start_date && !task?.end_date && task?.date && (
-                <p className="text-xs text-muted-foreground">
-                  Originally a single-day task ({fmtDate(task.date)}). Saving will populate start/end dates from the values above and keep the legacy date field in sync.
-                </p>
-              )}
+              {/* Status and Finalized intentionally hidden: iOS Task Log treats
+                  entries as historical records of completed work. Exposing
+                  scheduling fields here causes drift with iOS and can trigger
+                  overdue alerts. Existing values are preserved on save. */}
             </Section>
+
 
             <LabourLinesSection
               taskId={savedTaskId}
