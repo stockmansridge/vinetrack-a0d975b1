@@ -321,6 +321,7 @@ export default function VineyardVarietiesPage() {
                 <TableRow>
                   <TableHead>Variety</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Optimal GDD</TableHead>
                   <TableHead>Used by blocks</TableHead>
                   {canEdit && <TableHead className="w-[120px]" />}
                 </TableRow>
@@ -329,7 +330,9 @@ export default function VineyardVarietiesPage() {
                 {filtered.map((v) => {
                   const usage = usageMap.get(v.variety_key) ?? [];
                   const isCustom = v.is_custom === true || v.variety_key.startsWith("custom:");
-                  const isArchived = !!v.archived_at;
+                  const isArchived = !!v.archived_at || v.is_active === false;
+                  const gdd = v.optimal_gdd;
+                  const hasOverride = v.optimal_gdd_override != null;
                   return (
                     <TableRow key={v.variety_key} className={isArchived ? "opacity-60" : ""}>
                       <TableCell className="font-medium">
@@ -343,6 +346,18 @@ export default function VineyardVarietiesPage() {
                           <Badge variant="secondary">Custom</Badge>
                         ) : (
                           <Badge variant="outline">Built-in</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {gdd != null ? (
+                          <span>
+                            {gdd} GDD
+                            {hasOverride && !isCustom && (
+                              <Badge variant="outline" className="ml-2 text-[10px]">override</Badge>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -373,7 +388,7 @@ export default function VineyardVarietiesPage() {
                 })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 4 : 3} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={canEdit ? 5 : 4} className="text-center text-sm text-muted-foreground py-8">
                       No varieties match your filter.
                     </TableCell>
                   </TableRow>
