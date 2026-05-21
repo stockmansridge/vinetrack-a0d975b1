@@ -41,9 +41,11 @@ export default function SoilProfileSection({
   paddockName,
   latitude,
   longitude,
+  vineyardId,
   canEdit = true,
 }: Props) {
   const { data: profile, isLoading } = usePaddockSoilProfile(paddockId);
+
   const showRawDiagnostics = useDiagnosticPanel("show_raw_json_panels");
   const [rawOpen, setRawOpen] = useState(false);
 
