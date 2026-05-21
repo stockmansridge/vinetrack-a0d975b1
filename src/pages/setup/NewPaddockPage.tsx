@@ -712,81 +712,13 @@ function BoundaryStep({
   );
 }
 
-
 // ────────────────────────────────────────────────────────────────────────────
-// Preview map (rows + polygon, fits bounds)
+// Preview map (rows + polygon) — reuses the BoundaryDrawMap in readonly mode
+// so the Rows step uses the same Apple Maps / satellite experience as the
+// Boundary step (existing paddocks shown as reference outlines).
 // ────────────────────────────────────────────────────────────────────────────
 
 function PreviewMap({ polygon, rows }: { polygon: LatLng[]; rows: GeneratedRow[] }) {
-  const center = polygonCentroid(polygon) ?? { lat: -34.5, lng: 138.7 };
-  return (
-    <div className="relative h-full w-full">
-      <MapContainer center={[center.lat, center.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
-        <TileLayer
-          attribution='Tiles &copy; Esri'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
-        <TileLayer
-          attribution=""
-          url="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-          opacity={0.85}
-        />
-        <FitToPolygon polygon={polygon} />
-        {polygon.length >= 3 && (
-          <Polygon
-            positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
-            pathOptions={{ color: "#34C759", weight: 2.5, fillOpacity: 0.18 }}
-            interactive={false}
-          />
-        )}
-        {rows.map((r) => (
-          <Polyline
-            key={r.id}
-            positions={[
-              [r.startPoint.latitude, r.startPoint.longitude],
-              [r.endPoint.latitude, r.endPoint.longitude],
-            ]}
-            pathOptions={{ color: "#FFD60A", weight: 1.75, opacity: 0.95 }}
-          />
-        ))}
-        {rows.length > 0 && (
-          <Marker
-            position={[rows[0].startPoint.latitude, rows[0].startPoint.longitude]}
-            icon={rowChip(rows[0].number)}
-            interactive={false}
-          />
-        )}
-        {rows.length > 1 && (
-          <Marker
-            position={[rows[rows.length - 1].startPoint.latitude, rows[rows.length - 1].startPoint.longitude]}
-            icon={rowChip(rows[rows.length - 1].number)}
-            interactive={false}
-          />
-        )}
-      </MapContainer>
-      <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
-        Satellite · {rows.length} rows
-      </div>
-    </div>
-  );
+  return <BoundaryDrawMap polygon={polygon} readonly rows={rows} />;
 }
 
-function FitToPolygon({ polygon }: { polygon: LatLng[] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (polygon.length < 2) return;
-    const b = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
-    map.fitBounds(b.pad(0.2), { padding: [16, 16] });
-  }, [polygon, map]);
-  return null;
-}
-
-function rowChip(n: number) {
-  return L.divIcon({
-    className: "",
-    html: `<div class="vt-row-chip">${n}</div>`,
-    iconSize: [0, 0],
-  });
-}
