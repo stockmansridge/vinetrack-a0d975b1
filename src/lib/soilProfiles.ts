@@ -278,7 +278,7 @@ export function useNswSeedLookup() {
     }): Promise<NswSeedLookupResult> => {
       const { data, error } = await (supabase as any).functions.invoke(
         "nsw-seed-soil-lookup",
-        { body: { latitude: args.latitude, longitude: args.longitude } },
+        { body: { action: "lookup", latitude: args.latitude, longitude: args.longitude } },
       );
       if (error) throw error;
       return (data ?? {}) as NswSeedLookupResult;
