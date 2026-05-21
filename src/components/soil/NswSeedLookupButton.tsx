@@ -42,6 +42,7 @@ export default function NswSeedLookupButton({
 
 
   const hasCoords = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+  const hasVineyardId = typeof vineyardId === "string" && vineyardId.trim().length > 0;
   const hasProfile = !!current;
   const isOverride = !!current?.manual_override;
 
@@ -54,11 +55,19 @@ export default function NswSeedLookupButton({
       });
       return;
     }
+    if (!hasVineyardId) {
+      toast({
+        title: "Vineyard not available",
+        description: "This paddock is missing a vineyard reference, so NSW SEED cannot run yet. You can still enter soil details manually with the Edit button.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const seed = await lookup.mutateAsync({
         latitude: Number(latitude),
         longitude: Number(longitude),
-        vineyardId: vineyardId ?? null,
+        vineyardId: vineyardId!.trim(),
         paddockId,
       });
 
@@ -100,7 +109,7 @@ export default function NswSeedLookupButton({
         variant="outline"
         size="sm"
         onClick={runLookup}
-        disabled={!hasCoords || lookup.isPending || upsert.isPending}
+        disabled={!hasCoords || !hasVineyardId || lookup.isPending || upsert.isPending}
       >
         <Sprout className="h-4 w-4 mr-1" />
         Fetch soil from NSW SEED
@@ -111,7 +120,7 @@ export default function NswSeedLookupButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={!hasCoords}>
+        <Button variant="outline" size="sm" disabled={!hasCoords || !hasVineyardId}>
           <Sprout className="h-4 w-4 mr-1" />
           Re-fetch from NSW SEED
         </Button>
