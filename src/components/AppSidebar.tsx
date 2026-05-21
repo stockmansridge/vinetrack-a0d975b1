@@ -178,6 +178,12 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(tools)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
           <SidebarGroupLabel>Reports</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(isAdmin ? [...reports, ...reportsAdmin] : reports)}</SidebarMenu>
@@ -189,12 +195,7 @@ export function AppSidebar() {
             <SidebarMenu>{renderItems(setup)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(tools)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+
         {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>Settings</SidebarGroupLabel>
