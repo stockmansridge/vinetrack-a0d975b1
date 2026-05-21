@@ -408,6 +408,37 @@ function AppleDrawMap({
     rowOverlaysRef.current = next;
   }, [rows]);
 
+  // First/last row number labels.
+  useEffect(() => {
+    const map = mapRef.current;
+    const mapkit = (window as any).mapkit;
+    if (!map || !mapkit) return;
+    if (rowLabelAnnsRef.current.length) {
+      try { map.removeAnnotations(rowLabelAnnsRef.current); } catch { /* noop */ }
+      rowLabelAnnsRef.current = [];
+    }
+    const next: any[] = [];
+    for (const lbl of rowLabels) {
+      const ann = new mapkit.Annotation(
+        new mapkit.Coordinate(lbl.lat, lbl.lng),
+        () => {
+          const el = document.createElement("div");
+          el.style.cssText =
+            "background:#FFD60A;color:#1f1f1f;font-size:11px;font-weight:700;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.5);transform:translate(-50%,-50%);white-space:nowrap;border:1px solid rgba(0,0,0,.25)";
+          el.textContent = `Row ${lbl.n}`;
+          return el;
+        },
+      );
+      try { (ann as any).selectable = false; } catch { /* noop */ }
+      next.push(ann);
+    }
+    if (next.length) {
+      map.addAnnotations(next);
+      rowLabelAnnsRef.current = next;
+    }
+  }, [rowLabels]);
+
+
   // Re-render polygon overlay + vertex + midpoint annotations.
   useEffect(() => {
     const map = mapRef.current;
