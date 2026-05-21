@@ -370,9 +370,9 @@ export default function WorkTasksPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Work tasks</h1>
+          <h1 className="text-2xl font-semibold">Task Log</h1>
           <p className="text-sm text-muted-foreground">
-            Active tasks across this vineyard. Archived and soft-deleted tasks are excluded.
+            Historical record of work performed across this vineyard. Matches the iOS Task Log. Archived and soft-deleted entries are excluded.
           </p>
         </div>
         <div className="flex gap-2">
