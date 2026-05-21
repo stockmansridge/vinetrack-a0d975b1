@@ -8,8 +8,8 @@
 // Custom varieties added here are immediately available to every block in the
 // vineyard and round-trip into iOS.
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Archive, AlertTriangle, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Plus, Archive, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useVineyard } from "@/context/VineyardContext";
