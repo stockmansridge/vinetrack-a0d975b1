@@ -44,11 +44,10 @@ import VarietyAllocationEditor, {
 } from "@/components/varieties/VarietyAllocationEditor";
 
 // ────────────────────────────────────────────────────────────────────────────
-// TEST FLAG — keep `false` until production save is approved.
-// When false, "Save paddock" is disabled and clicking the (disabled) button
-// will only log the prepared payload. Flip to true ONLY after the iOS team
-// has verified a test paddock round-trips correctly.
-const ENABLE_PRODUCTION_SAVE = false;
+// Production save is enabled — paddocks are inserted into the shared
+// `paddocks` table using the canonical payload shape defined in
+// docs/paddock-geometry-writer-spec.md. Round-trips into the iOS app.
+const ENABLE_PRODUCTION_SAVE = true;
 // ────────────────────────────────────────────────────────────────────────────
 
 type Step = "details" | "boundary" | "rows" | "review";
