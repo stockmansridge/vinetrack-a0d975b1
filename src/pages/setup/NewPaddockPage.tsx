@@ -575,6 +575,69 @@ function NumberField({
   );
 }
 
+// Stepper field with always-visible +/- buttons. Used for the primary
+// row-alignment controls (Direction, Width, Offset, Count) so users can
+// nudge values while watching the satellite preview update.
+function StepperField({
+  label, value, onChange, step = 1, min, max,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  const clamp = (n: number) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const decimals = step.toString().split(".")[1]?.length ?? 0;
+  const format = (n: number) => (decimals > 0 ? n.toFixed(decimals) : String(Math.round(n)));
+  const bump = (delta: number) => {
+    const current = Number(value);
+    const base = Number.isFinite(current) ? current : 0;
+    onChange(format(clamp(base + delta)));
+  };
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex items-stretch gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={() => bump(-step)}
+          aria-label={`Decrease ${label}`}
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+        <Input
+          type="number"
+          step={step}
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 text-center"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={() => bump(step)}
+          aria-label={`Increase ${label}`}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
