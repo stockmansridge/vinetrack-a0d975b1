@@ -85,11 +85,23 @@ export async function hardDeletePaddock(paddockId: string) {
       "This paddock has linked records and cannot be permanently deleted. Archive it instead."
     );
   }
-  const { error } = await (supabase as any)
+  const rpc = await (supabase as any).rpc("hard_delete_paddock", { p_id: paddockId });
+  if (!rpc?.error) return;
+
+  const message = String(rpc.error?.message ?? "").toLowerCase();
+  const missingRpc = rpc.error?.code === "42883" || message.includes("hard_delete_paddock");
+  if (!missingRpc) throw rpc.error;
+
+  const { data, error } = await (supabase as any)
     .from("paddocks")
     .delete()
-    .eq("id", paddockId);
+    .eq("id", paddockId)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data?.id) {
+    throw new Error("Permanent delete was blocked by backend permissions or the paddock no longer exists.");
+  }
 }
 
 // Archive = soft-delete (deleted_at). Hides from active selectors but
@@ -97,23 +109,47 @@ export async function hardDeletePaddock(paddockId: string) {
 // reference so reports continue to render correctly. iOS reads the same
 // soft-delete flag.
 export async function archivePaddock(paddockId: string) {
-  const { error } = await (supabase as any)
+  const rpc = await (supabase as any).rpc("soft_delete_paddock", { p_id: paddockId });
+  if (!rpc?.error) return;
+
+  const message = String(rpc.error?.message ?? "").toLowerCase();
+  const missingRpc = rpc.error?.code === "42883" || message.includes("soft_delete_paddock");
+  if (!missingRpc) throw rpc.error;
+
+  const { data, error } = await (supabase as any)
     .from("paddocks")
     .update({
       deleted_at: new Date().toISOString(),
       client_updated_at: new Date().toISOString(),
     })
-    .eq("id", paddockId);
+    .eq("id", paddockId)
+    .select("id,deleted_at")
+    .maybeSingle();
   if (error) throw error;
+  if (!data?.id || !data?.deleted_at) {
+    throw new Error("Archive was blocked by backend permissions or the paddock could not be updated.");
+  }
 }
 
 export async function restorePaddock(paddockId: string) {
-  const { error } = await (supabase as any)
+  const rpc = await (supabase as any).rpc("restore_paddock", { p_id: paddockId });
+  if (!rpc?.error) return;
+
+  const message = String(rpc.error?.message ?? "").toLowerCase();
+  const missingRpc = rpc.error?.code === "42883" || message.includes("restore_paddock");
+  if (!missingRpc) throw rpc.error;
+
+  const { data, error } = await (supabase as any)
     .from("paddocks")
     .update({
       deleted_at: null,
       client_updated_at: new Date().toISOString(),
     })
-    .eq("id", paddockId);
+    .eq("id", paddockId)
+    .select("id,deleted_at")
+    .maybeSingle();
   if (error) throw error;
+  if (!data?.id || data.deleted_at != null) {
+    throw new Error("Restore was blocked by backend permissions or the paddock could not be updated.");
+  }
 }
