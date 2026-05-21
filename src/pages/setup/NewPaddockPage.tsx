@@ -8,10 +8,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -42,11 +44,10 @@ import VarietyAllocationEditor, {
 } from "@/components/varieties/VarietyAllocationEditor";
 
 // ────────────────────────────────────────────────────────────────────────────
-// TEST FLAG — keep `false` until production save is approved.
-// When false, "Save paddock" is disabled and clicking the (disabled) button
-// will only log the prepared payload. Flip to true ONLY after the iOS team
-// has verified a test paddock round-trips correctly.
-const ENABLE_PRODUCTION_SAVE = false;
+// Production save is enabled — paddocks are inserted into the shared
+// `paddocks` table using the canonical payload shape defined in
+// docs/paddock-geometry-writer-spec.md. Round-trips into the iOS app.
+const ENABLE_PRODUCTION_SAVE = true;
 // ────────────────────────────────────────────────────────────────────────────
 
 type Step = "details" | "boundary" | "rows" | "review";
@@ -83,10 +84,11 @@ function polygonHasSelfIntersection(pts: LatLng[]): boolean {
 
 export default function NewPaddockPage() {
   const navigate = useNavigate();
-  // qc reserved for future use after production save is enabled.
+  const qc = useQueryClient();
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const [saving, setSaving] = useState(false);
 
   const [step, setStep] = useState<Step>("details");
 
@@ -284,24 +286,33 @@ export default function NewPaddockPage() {
     );
   }
 
-  const onSavePressed = () => {
+  const onSavePressed = async () => {
     if (!isValid) {
       toast({ title: "Cannot save", description: validation[0], variant: "destructive" });
       return;
     }
     if (!ENABLE_PRODUCTION_SAVE) {
-      if (import.meta.env.DEV) {
-        console.warn("[NewPaddock] Production save is DISABLED (ENABLE_PRODUCTION_SAVE = false).");
-        console.log("[NewPaddock] Prepared insert payload:", payload);
-      }
-      toast({
-        title: "Test mode — save disabled",
-        description: "Payload logged to console. Production save is gated by a test flag pending iOS round-trip approval.",
-      });
+      if (import.meta.env.DEV) console.log("[NewPaddock] payload (test mode):", payload);
+      toast({ title: "Test mode — save disabled" });
       return;
     }
-    // Production save path is not enabled in this scaffold.
-    toast({ title: "Save not implemented", variant: "destructive" });
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("paddocks").insert(payload as any);
+      if (error) throw error;
+      toast({ title: "Paddock created", description: payload.name });
+      qc.invalidateQueries({ queryKey: ["paddocks"] });
+      qc.invalidateQueries({ queryKey: ["vineyard_variety_usage"] });
+      navigate("/setup/paddocks");
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err?.message ?? String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -313,9 +324,6 @@ export default function NewPaddockPage() {
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">New paddock</h1>
         </div>
-        <Badge variant="outline" className="border-warning/50 text-warning-foreground/90 bg-warning/10">
-          Test mode — save disabled
-        </Badge>
       </div>
 
       <StepNav step={step} setStep={setStep} hasPolygon={polygon.length >= 3} hasRows={generated.length > 0} />
@@ -508,23 +516,13 @@ export default function NewPaddockPage() {
               )}
             </div>
 
-            <Alert variant="destructive">
-              <AlertTitle>Production save is gated</AlertTitle>
-              <AlertDescription className="text-xs">
-                The Save button is disabled by a test flag (<code>ENABLE_PRODUCTION_SAVE</code>) until the
-                payload and row-generation logic are confirmed to round-trip cleanly with iOS. Pressing
-                Save in test mode logs the payload to the console only.
-              </AlertDescription>
-            </Alert>
-
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("rows")}>Back</Button>
+              <Button variant="ghost" onClick={() => setStep("rows")} disabled={saving}>Back</Button>
               <Button
                 onClick={onSavePressed}
-                disabled={!ENABLE_PRODUCTION_SAVE || !isValid}
-                title={!ENABLE_PRODUCTION_SAVE ? "Save disabled — test flag off" : ""}
+                disabled={!isValid || saving}
               >
-                {ENABLE_PRODUCTION_SAVE ? "Save paddock" : "Save paddock (test mode — disabled)"}
+                {saving ? "Saving…" : "Save paddock"}
               </Button>
             </div>
           </CardContent>
