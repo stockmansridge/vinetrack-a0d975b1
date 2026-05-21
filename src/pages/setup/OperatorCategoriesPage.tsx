@@ -113,6 +113,15 @@ export default function OperatorCategoriesPage() {
         )}
       </div>
 
+      {dedupe.duplicateCount > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200">
+          <strong>Duplicate categories detected ({dedupe.duplicateCount}).</strong>{" "}
+          Showing unique categories in assignment dropdowns. A backend cleanup
+          to merge duplicates and prevent new ones is pending — see
+          <code className="mx-1">docs/team-and-invitations-rpc-contract.md</code>.
+        </div>
+      )}
+
       {activeCount > 0 && (
         <div className={`grid grid-cols-1 ${canSeeCosts ? "sm:grid-cols-2" : ""} gap-3`}>
           <Card>
