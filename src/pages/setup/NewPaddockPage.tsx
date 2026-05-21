@@ -388,10 +388,10 @@ export default function NewPaddockPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <NumberField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step="1" />
-              <NumberField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step="0.1" />
-              <NumberField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step="0.1" />
-              <NumberField label="Rows count" value={rowsCount} onChange={setRowsCount} step="1" />
+              <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={1} min={0} max={360} />
+              <StepperField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step={0.1} min={0.1} />
+              <StepperField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step={0.1} />
+              <StepperField label="Rows count" value={rowsCount} onChange={setRowsCount} step={1} min={1} />
               <div className="grid grid-cols-2 gap-3">
                 <NumberField label="Start row #" value={rowStartNumber} onChange={setRowStartNumber} step="1" />
                 <div className="space-y-2">
