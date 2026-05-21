@@ -84,10 +84,11 @@ function polygonHasSelfIntersection(pts: LatLng[]): boolean {
 
 export default function NewPaddockPage() {
   const navigate = useNavigate();
-  // qc reserved for future use after production save is enabled.
+  const qc = useQueryClient();
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const [saving, setSaving] = useState(false);
 
   const [step, setStep] = useState<Step>("details");
 
