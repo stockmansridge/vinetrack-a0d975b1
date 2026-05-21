@@ -324,6 +324,16 @@ export default function NewPaddockPage() {
         </div>
       </div>
 
+      <Alert className="border-primary/30 bg-primary/5">
+        <Info className="h-4 w-4 text-primary" />
+        <AlertTitle>Recommended: one paddock per variety</AlertTitle>
+        <AlertDescription className="text-xs">
+          For best accuracy, create a separate paddock/block for each grape variety where practical.
+          Mixed-variety blocks are supported, but costing, yield and row-based calculations are
+          currently most reliable with one variety per paddock.
+        </AlertDescription>
+      </Alert>
+
       <StepNav step={step} setStep={setStep} hasPolygon={polygon.length >= 3} hasRows={generated.length > 0} />
 
       {step === "details" && (
