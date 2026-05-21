@@ -242,9 +242,10 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
-  centre, polygon, setPolygon, readonly, rows, existingPolygons,
+  centre, initialBBox, polygon, setPolygon, readonly, rows, existingPolygons,
 }: {
   centre: LatLng;
+  initialBBox: { sw: LatLng; ne: LatLng } | null;
   polygon: LatLng[];
   setPolygon: (p: LatLng[]) => void;
   readonly: boolean;
@@ -280,10 +281,21 @@ function AppleDrawMap({
       });
       mapRef.current = map;
       try {
-        map.region = new mapkit.CoordinateRegion(
-          new mapkit.Coordinate(centre.lat, centre.lng),
-          new mapkit.CoordinateSpan(0.004, 0.004),
-        );
+        if (initialBBox) {
+          const latSpan = Math.max(0.0008, (initialBBox.ne.lat - initialBBox.sw.lat) * 1.6);
+          const lngSpan = Math.max(0.0008, (initialBBox.ne.lng - initialBBox.sw.lng) * 1.6);
+          const cLat = (initialBBox.ne.lat + initialBBox.sw.lat) / 2;
+          const cLng = (initialBBox.ne.lng + initialBBox.sw.lng) / 2;
+          map.region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(cLat, cLng),
+            new mapkit.CoordinateSpan(latSpan, lngSpan),
+          );
+        } else {
+          map.region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(centre.lat, centre.lng),
+            new mapkit.CoordinateSpan(0.004, 0.004),
+          );
+        }
       } catch { /* noop */ }
 
       const onTap = (e: any) => {
