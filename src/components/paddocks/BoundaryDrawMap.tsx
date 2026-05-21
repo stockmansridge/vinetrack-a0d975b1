@@ -153,7 +153,11 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
     staleTime: 5 * 60_000,
   });
 
-  const centre = useInitialCentre(selectedVineyardId, paddocks, loc);
+  // Capture the polygon snapshot at mount so we focus on the existing
+  // boundary immediately, not on every edit.
+  const initialPolygonRef = useRef<LatLng[]>(polygon);
+  const centre = useInitialCentre(selectedVineyardId, paddocks, loc, initialPolygonRef.current);
+  const initialBBox = useMemo(() => polygonBBox(initialPolygonRef.current), []);
 
   // Existing paddock polygons (reference outlines) — excluding the
   // currently-edited paddock so it doesn't overlap its own editable polygon.
