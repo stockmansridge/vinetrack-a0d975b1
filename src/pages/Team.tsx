@@ -135,6 +135,12 @@ export default function Team() {
         </div>
       )}
 
+      {rawCategories.length > categories.length && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200">
+          Duplicate operator categories detected — hiding {rawCategories.length - categories.length} from the dropdown so each appears once. Backend cleanup is pending.
+        </div>
+      )}
+
       {data?.forbidden && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           You don’t have permission to view this vineyard team.
