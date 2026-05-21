@@ -233,6 +233,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
           setPolygon={setPoly}
           readonly={readonly}
           rows={rows}
+          rowLabels={rowLabels}
           existingPolygons={existingPolygons}
         />
       ) : (
@@ -243,6 +244,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
           setPolygon={setPoly}
           readonly={readonly}
           rows={rows}
+          rowLabels={rowLabels}
           existingPolygons={existingPolygons}
         />
       )}
