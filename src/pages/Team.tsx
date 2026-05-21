@@ -165,7 +165,10 @@ export default function Team() {
               const primary = m.display_name?.trim() || "Unknown member";
               const secondary = m.email && m.email.trim() && m.email.trim() !== primary ? m.email.trim() : null;
               const membershipId = membershipIdByUserId.get(m.user_id) ?? null;
-              const currentCatId = membershipId ? categoryByMembership.get(membershipId) ?? null : null;
+              const rawCatId = membershipId ? categoryByMembership.get(membershipId) ?? null : null;
+              // Map any duplicate category id to the canonical kept id so the
+              // Select can match an option even when the stored id is a dupe.
+              const currentCatId = rawCatId ? categoryIdToKeptId.get(rawCatId) ?? rawCatId : null;
               const currentCat = currentCatId ? categories.find((c) => c.id === currentCatId) : null;
               return (
                 <TableRow key={m.membership_id}>
