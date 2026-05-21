@@ -29,15 +29,20 @@ function normalise(row: any): VineyardLocation {
 export async function fetchVineyardLocation(
   vineyardId: string,
 ): Promise<VineyardLocation> {
-  const { data, error } = await supabase.rpc("get_vineyard_location", {
-    p_vineyard_id: vineyardId,
-  });
+  // Read directly from the vineyards table. The shared
+  // get_vineyard_location RPC in SQL 80 currently raises
+  // `column reference "vineyard_id" is ambiguous`, so we bypass it for
+  // reads. Writes still go through set_vineyard_location, which works.
+  const { data, error } = await supabase
+    .from("vineyards")
+    .select("latitude, longitude, elevation_metres, timezone")
+    .eq("id", vineyardId)
+    .maybeSingle();
   if (error) {
     if ((error as { code?: string }).code === "42501") return { ...EMPTY };
     throw error;
   }
-  const row = Array.isArray(data) ? data[0] : data;
-  return normalise(row);
+  return normalise(data);
 }
 
 export interface SetVineyardLocationInput {
