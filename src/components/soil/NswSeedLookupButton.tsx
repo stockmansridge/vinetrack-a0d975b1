@@ -58,7 +58,10 @@ export default function NswSeedLookupButton({
       const seed = await lookup.mutateAsync({
         latitude: Number(latitude),
         longitude: Number(longitude),
+        vineyardId: vineyardId ?? null,
+        paddockId,
       });
+
       await upsert.mutateAsync({
         paddockId,
         irrigationSoilClass: (seed.irrigation_soil_class as string) ?? null,
