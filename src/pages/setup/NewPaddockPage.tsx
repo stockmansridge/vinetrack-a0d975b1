@@ -286,24 +286,33 @@ export default function NewPaddockPage() {
     );
   }
 
-  const onSavePressed = () => {
+  const onSavePressed = async () => {
     if (!isValid) {
       toast({ title: "Cannot save", description: validation[0], variant: "destructive" });
       return;
     }
     if (!ENABLE_PRODUCTION_SAVE) {
-      if (import.meta.env.DEV) {
-        console.warn("[NewPaddock] Production save is DISABLED (ENABLE_PRODUCTION_SAVE = false).");
-        console.log("[NewPaddock] Prepared insert payload:", payload);
-      }
-      toast({
-        title: "Test mode — save disabled",
-        description: "Payload logged to console. Production save is gated by a test flag pending iOS round-trip approval.",
-      });
+      if (import.meta.env.DEV) console.log("[NewPaddock] payload (test mode):", payload);
+      toast({ title: "Test mode — save disabled" });
       return;
     }
-    // Production save path is not enabled in this scaffold.
-    toast({ title: "Save not implemented", variant: "destructive" });
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("paddocks").insert(payload as any);
+      if (error) throw error;
+      toast({ title: "Paddock created", description: payload.name });
+      qc.invalidateQueries({ queryKey: ["paddocks"] });
+      qc.invalidateQueries({ queryKey: ["vineyard_variety_usage"] });
+      navigate("/setup/paddocks");
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err?.message ?? String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
