@@ -575,8 +575,6 @@ export default function VineyardOverviewMap({
               <SelectItem value="hidden">Pins: Hide</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex items-center gap-2 text-xs">
-          </div>
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue />
