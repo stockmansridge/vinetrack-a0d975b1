@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle, Info, Minus, Plus } from "lucide-react";
 
 import {
   generateRows,
@@ -388,10 +388,10 @@ export default function NewPaddockPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <NumberField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step="1" />
-              <NumberField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step="0.1" />
-              <NumberField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step="0.1" />
-              <NumberField label="Rows count" value={rowsCount} onChange={setRowsCount} step="1" />
+              <StepperField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step={1} min={0} max={360} />
+              <StepperField label="Row width (m)" value={rowWidth} onChange={setRowWidth} step={0.1} min={0.1} />
+              <StepperField label="Row offset (m)" value={rowOffset} onChange={setRowOffset} step={0.1} />
+              <StepperField label="Rows count" value={rowsCount} onChange={setRowsCount} step={1} min={1} />
               <div className="grid grid-cols-2 gap-3">
                 <NumberField label="Start row #" value={rowStartNumber} onChange={setRowStartNumber} step="1" />
                 <div className="space-y-2">
@@ -575,6 +575,69 @@ function NumberField({
   );
 }
 
+// Stepper field with always-visible +/- buttons. Used for the primary
+// row-alignment controls (Direction, Width, Offset, Count) so users can
+// nudge values while watching the satellite preview update.
+function StepperField({
+  label, value, onChange, step = 1, min, max,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  const clamp = (n: number) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const decimals = step.toString().split(".")[1]?.length ?? 0;
+  const format = (n: number) => (decimals > 0 ? n.toFixed(decimals) : String(Math.round(n)));
+  const bump = (delta: number) => {
+    const current = Number(value);
+    const base = Number.isFinite(current) ? current : 0;
+    onChange(format(clamp(base + delta)));
+  };
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex items-stretch gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={() => bump(-step)}
+          aria-label={`Decrease ${label}`}
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+        <Input
+          type="number"
+          step={step}
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 text-center"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={() => bump(step)}
+          aria-label={`Increase ${label}`}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
@@ -660,44 +723,56 @@ function BoundaryStep({
 function PreviewMap({ polygon, rows }: { polygon: LatLng[]; rows: GeneratedRow[] }) {
   const center = polygonCentroid(polygon) ?? { lat: -34.5, lng: 138.7 };
   return (
-    <MapContainer center={[center.lat, center.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
-      <TileLayer
-        attribution='&copy; OpenStreetMap'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
-      />
-      <FitToPolygon polygon={polygon} />
-      {polygon.length >= 3 && (
-        <Polygon
-          positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
-          pathOptions={{ color: "hsl(145 42% 28%)", weight: 2.5, fillOpacity: 0.2 }}
+    <div className="relative h-full w-full">
+      <MapContainer center={[center.lat, center.lng]} zoom={17} scrollWheelZoom className="h-full w-full">
+        <TileLayer
+          attribution='Tiles &copy; Esri'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
         />
-      )}
-      {rows.map((r, i) => (
-        <Polyline
-          key={r.id}
-          positions={[
-            [r.startPoint.latitude, r.startPoint.longitude],
-            [r.endPoint.latitude, r.endPoint.longitude],
-          ]}
-          pathOptions={{ color: "#34C759", weight: 1.5, opacity: 0.9 }}
+        <TileLayer
+          attribution=""
+          url="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
+          opacity={0.85}
         />
-      ))}
-      {rows.length > 0 && (
-        <Marker
-          position={[rows[0].startPoint.latitude, rows[0].startPoint.longitude]}
-          icon={rowChip(rows[0].number)}
-          interactive={false}
-        />
-      )}
-      {rows.length > 1 && (
-        <Marker
-          position={[rows[rows.length - 1].startPoint.latitude, rows[rows.length - 1].startPoint.longitude]}
-          icon={rowChip(rows[rows.length - 1].number)}
-          interactive={false}
-        />
-      )}
-    </MapContainer>
+        <FitToPolygon polygon={polygon} />
+        {polygon.length >= 3 && (
+          <Polygon
+            positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
+            pathOptions={{ color: "#34C759", weight: 2.5, fillOpacity: 0.18 }}
+            interactive={false}
+          />
+        )}
+        {rows.map((r) => (
+          <Polyline
+            key={r.id}
+            positions={[
+              [r.startPoint.latitude, r.startPoint.longitude],
+              [r.endPoint.latitude, r.endPoint.longitude],
+            ]}
+            pathOptions={{ color: "#FFD60A", weight: 1.75, opacity: 0.95 }}
+          />
+        ))}
+        {rows.length > 0 && (
+          <Marker
+            position={[rows[0].startPoint.latitude, rows[0].startPoint.longitude]}
+            icon={rowChip(rows[0].number)}
+            interactive={false}
+          />
+        )}
+        {rows.length > 1 && (
+          <Marker
+            position={[rows[rows.length - 1].startPoint.latitude, rows[rows.length - 1].startPoint.longitude]}
+            icon={rowChip(rows[rows.length - 1].number)}
+            interactive={false}
+          />
+        )}
+      </MapContainer>
+      <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
+        Satellite · {rows.length} rows
+      </div>
+    </div>
   );
 }
 

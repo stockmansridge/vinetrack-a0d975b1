@@ -5,8 +5,11 @@
 //     Esri World Imagery tiles via Leaflet as a fallback).
 //   - Centre on user → vineyard shared location → existing paddock
 //     centroid → safe default.
-//   - Click/tap to add boundary vertices. Polygon is stored open
-//     (first vertex not repeated) per the iOS-canonical contract.
+//   - Editable polygon: tap empty map to append a vertex, drag a vertex
+//     to reposition, tap a midpoint handle to insert a vertex between
+//     two existing points, tap a vertex (with ≥4 pts) to delete it.
+//   - Polygon stored open (first vertex not repeated) per the
+//     iOS-canonical contract.
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMapEvents } from "react-leaflet";
@@ -33,8 +36,7 @@ interface Props {
 }
 
 // Resolve initial centre: browser geolocation → vineyard.lat/lng →
-// centroid of existing paddocks → safe default. Resolves quickly so the
-// map can render even if geolocation is slow or denied.
+// centroid of existing paddocks → safe default.
 function useInitialCentre(vineyardId: string | null): LatLng | null {
   const [centre, setCentre] = useState<LatLng | null>(null);
   const { data: loc } = useQuery({
@@ -136,6 +138,9 @@ export default function BoundaryDrawMap({ polygon, setPolygon }: Props) {
         {mode === "apple" ? "Apple Maps · Hybrid" : "Satellite (Esri)"}
         {polygon.length > 0 && ` · ${polygon.length} pts`}
       </div>
+      <div className="pointer-events-none absolute left-2 bottom-2 right-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow">
+        Tap empty map to add a point · drag a point to move · tap a small <span className="inline-block w-2 h-2 rounded-full bg-white border border-[color:hsl(145_42%_28%)] align-middle" /> midpoint to insert · tap a numbered point to delete (needs ≥4)
+      </div>
       {mode === "fallback" && reason && (
         <div className="pointer-events-none absolute right-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow" title={reason}>
           Apple Maps unavailable — using satellite fallback
@@ -146,7 +151,7 @@ export default function BoundaryDrawMap({ polygon, setPolygon }: Props) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Apple MapKit drawing surface
+// Apple MapKit drawing surface (with editable polygon)
 // ────────────────────────────────────────────────────────────────────────────
 
 function AppleDrawMap({
@@ -156,9 +161,12 @@ function AppleDrawMap({
   const mapRef = useRef<any>(null);
   const overlayRef = useRef<any>(null);
   const lineRef = useRef<any>(null);
-  const annotationsRef = useRef<any[]>([]);
+  const vertexAnnsRef = useRef<any[]>([]);
+  const midAnnsRef = useRef<any[]>([]);
   const polygonRef = useRef<LatLng[]>(polygon);
   polygonRef.current = polygon;
+  const setPolygonRef = useRef(setPolygon);
+  setPolygonRef.current = setPolygon;
 
   // Init once.
   useEffect(() => {
@@ -191,7 +199,7 @@ function AppleDrawMap({
           const lat = coord?.latitude;
           const lng = coord?.longitude;
           if (typeof lat !== "number" || typeof lng !== "number") return;
-          setPolygon([...polygonRef.current, { lat, lng }]);
+          setPolygonRef.current([...polygonRef.current, { lat, lng }]);
         } catch { /* noop */ }
       };
       map.addEventListener("single-tap", onTap);
@@ -204,7 +212,7 @@ function AppleDrawMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-render polygon overlay + vertex annotations on every change.
+  // Re-render polygon overlay + vertex + midpoint annotations.
   useEffect(() => {
     const map = mapRef.current;
     const mapkit = (window as any).mapkit;
@@ -212,9 +220,13 @@ function AppleDrawMap({
 
     if (overlayRef.current) { try { map.removeOverlay(overlayRef.current); } catch { /* noop */ } overlayRef.current = null; }
     if (lineRef.current) { try { map.removeOverlay(lineRef.current); } catch { /* noop */ } lineRef.current = null; }
-    if (annotationsRef.current.length) {
-      try { map.removeAnnotations(annotationsRef.current); } catch { /* noop */ }
-      annotationsRef.current = [];
+    if (vertexAnnsRef.current.length) {
+      try { map.removeAnnotations(vertexAnnsRef.current); } catch { /* noop */ }
+      vertexAnnsRef.current = [];
+    }
+    if (midAnnsRef.current.length) {
+      try { map.removeAnnotations(midAnnsRef.current); } catch { /* noop */ }
+      midAnnsRef.current = [];
     }
 
     if (polygon.length >= 3) {
@@ -242,21 +254,71 @@ function AppleDrawMap({
       lineRef.current = line;
     }
 
-    const anns = polygon.map((p, i) =>
-      new mapkit.Annotation(
+    // Vertex annotations — draggable; tap deletes when ≥4 pts.
+    const vertexAnns = polygon.map((p, i) => {
+      const ann = new mapkit.Annotation(
         new mapkit.Coordinate(p.lat, p.lng),
         () => {
           const el = document.createElement("div");
           el.style.cssText =
-            "background:#34C759;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%)";
+            "background:#34C759;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:grab";
           el.textContent = String(i + 1);
           return el;
         },
-      ),
-    );
-    if (anns.length) {
-      map.addAnnotations(anns);
-      annotationsRef.current = anns;
+      );
+      try { ann.draggable = true; } catch { /* noop */ }
+      ann.addEventListener("drag-end", () => {
+        try {
+          const c = ann.coordinate;
+          const next = polygonRef.current.slice();
+          next[i] = { lat: c.latitude, lng: c.longitude };
+          setPolygonRef.current(next);
+        } catch { /* noop */ }
+      });
+      ann.addEventListener("select", () => {
+        // Delete on select when we have enough vertices.
+        if (polygonRef.current.length <= 3) return;
+        const next = polygonRef.current.slice();
+        next.splice(i, 1);
+        setPolygonRef.current(next);
+      });
+      return ann;
+    });
+    if (vertexAnns.length) {
+      map.addAnnotations(vertexAnns);
+      vertexAnnsRef.current = vertexAnns;
+    }
+
+    // Midpoint annotations — tap to insert a vertex between two points.
+    if (polygon.length >= 2) {
+      const midAnns: any[] = [];
+      const n = polygon.length;
+      const segCount = n >= 3 ? n : 1; // open segment for 2 pts
+      for (let i = 0; i < segCount; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % n];
+        const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+        const ann = new mapkit.Annotation(
+          new mapkit.Coordinate(mid.lat, mid.lng),
+          () => {
+            const el = document.createElement("div");
+            el.style.cssText =
+              "width:10px;height:10px;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:pointer;opacity:.85";
+            return el;
+          },
+        );
+        const insertAt = i + 1;
+        ann.addEventListener("select", () => {
+          const next = polygonRef.current.slice();
+          next.splice(insertAt, 0, mid);
+          setPolygonRef.current(next);
+        });
+        midAnns.push(ann);
+      }
+      if (midAnns.length) {
+        map.addAnnotations(midAnns);
+        midAnnsRef.current = midAnns;
+      }
     }
   }, [polygon]);
 
@@ -264,7 +326,7 @@ function AppleDrawMap({
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Leaflet satellite fallback (Esri World Imagery)
+// Leaflet satellite fallback (Esri World Imagery) — editable polygon
 // ────────────────────────────────────────────────────────────────────────────
 
 function LeafletSatelliteDraw({
@@ -288,16 +350,66 @@ function LeafletSatelliteDraw({
         <Polygon
           positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
           pathOptions={{ color: POLY_STROKE, weight: 2.5, fillOpacity: 0.25 }}
+          interactive={false}
         />
       )}
       {polygon.length === 2 && (
         <Polyline
           positions={polygon.map((p) => [p.lat, p.lng] as [number, number])}
           pathOptions={{ color: POLY_STROKE, weight: 2 }}
+          interactive={false}
         />
       )}
+      {/* Midpoint insert handles */}
+      {polygon.length >= 2 &&
+        (() => {
+          const n = polygon.length;
+          const segCount = n >= 3 ? n : 1;
+          const items: JSX.Element[] = [];
+          for (let i = 0; i < segCount; i++) {
+            const a = polygon[i];
+            const b = polygon[(i + 1) % n];
+            const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+            const insertAt = i + 1;
+            items.push(
+              <Marker
+                key={`mid-${i}`}
+                position={[mid.lat, mid.lng]}
+                icon={midIcon()}
+                eventHandlers={{
+                  click: () => {
+                    const next = polygon.slice();
+                    next.splice(insertAt, 0, mid);
+                    setPolygon(next);
+                  },
+                }}
+              />,
+            );
+          }
+          return items;
+        })()}
+      {/* Vertex handles — draggable + click-to-delete */}
       {polygon.map((p, i) => (
-        <Marker key={i} position={[p.lat, p.lng]} icon={vertexIcon(i + 1)} />
+        <Marker
+          key={`v-${i}`}
+          position={[p.lat, p.lng]}
+          icon={vertexIcon(i + 1)}
+          draggable
+          eventHandlers={{
+            dragend: (e: any) => {
+              const ll = e.target.getLatLng();
+              const next = polygon.slice();
+              next[i] = { lat: ll.lat, lng: ll.lng };
+              setPolygon(next);
+            },
+            click: () => {
+              if (polygon.length <= 3) return;
+              const next = polygon.slice();
+              next.splice(i, 1);
+              setPolygon(next);
+            },
+          }}
+        />
       ))}
     </MapContainer>
   );
@@ -315,7 +427,15 @@ function ClickHandler({ polygon, setPolygon }: { polygon: LatLng[]; setPolygon: 
 function vertexIcon(n: number) {
   return L.divIcon({
     className: "",
-    html: `<div style="background:#34C759;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%)">${n}</div>`,
+    html: `<div style="background:#34C759;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:grab">${n}</div>`,
+    iconSize: [0, 0],
+  });
+}
+
+function midIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:10px;height:10px;border-radius:9999px;background:#fff;border:2px solid #34C759;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translate(-50%,-50%);cursor:pointer;opacity:.85"></div>`,
     iconSize: [0, 0],
   });
 }
