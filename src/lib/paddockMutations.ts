@@ -85,10 +85,19 @@ export async function hardDeletePaddock(paddockId: string) {
       "This paddock has linked records and cannot be permanently deleted. Archive it instead."
     );
   }
+  const rpc = await (supabase as any).rpc("hard_delete_paddock", { p_id: paddockId });
+  if (!rpc?.error) return;
+
+  const message = String(rpc.error?.message ?? "").toLowerCase();
+  const missingRpc = rpc.error?.code === "42883" || message.includes("hard_delete_paddock");
+  if (!missingRpc) throw rpc.error;
+
   const { error } = await (supabase as any)
     .from("paddocks")
     .delete()
-    .eq("id", paddockId);
+    .eq("id", paddockId)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
 }
 
@@ -97,6 +106,13 @@ export async function hardDeletePaddock(paddockId: string) {
 // reference so reports continue to render correctly. iOS reads the same
 // soft-delete flag.
 export async function archivePaddock(paddockId: string) {
+  const rpc = await (supabase as any).rpc("soft_delete_paddock", { p_id: paddockId });
+  if (!rpc?.error) return;
+
+  const message = String(rpc.error?.message ?? "").toLowerCase();
+  const missingRpc = rpc.error?.code === "42883" || message.includes("soft_delete_paddock");
+  if (!missingRpc) throw rpc.error;
+
   const { error } = await (supabase as any)
     .from("paddocks")
     .update({
@@ -108,6 +124,13 @@ export async function archivePaddock(paddockId: string) {
 }
 
 export async function restorePaddock(paddockId: string) {
+  const rpc = await (supabase as any).rpc("restore_paddock", { p_id: paddockId });
+  if (!rpc?.error) return;
+
+  const message = String(rpc.error?.message ?? "").toLowerCase();
+  const missingRpc = rpc.error?.code === "42883" || message.includes("restore_paddock");
+  if (!missingRpc) throw rpc.error;
+
   const { error } = await (supabase as any)
     .from("paddocks")
     .update({
