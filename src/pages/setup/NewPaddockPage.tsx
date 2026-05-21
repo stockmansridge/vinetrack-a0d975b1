@@ -516,23 +516,13 @@ export default function NewPaddockPage() {
               )}
             </div>
 
-            <Alert variant="destructive">
-              <AlertTitle>Production save is gated</AlertTitle>
-              <AlertDescription className="text-xs">
-                The Save button is disabled by a test flag (<code>ENABLE_PRODUCTION_SAVE</code>) until the
-                payload and row-generation logic are confirmed to round-trip cleanly with iOS. Pressing
-                Save in test mode logs the payload to the console only.
-              </AlertDescription>
-            </Alert>
-
             <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={() => setStep("rows")}>Back</Button>
+              <Button variant="ghost" onClick={() => setStep("rows")} disabled={saving}>Back</Button>
               <Button
                 onClick={onSavePressed}
-                disabled={!ENABLE_PRODUCTION_SAVE || !isValid}
-                title={!ENABLE_PRODUCTION_SAVE ? "Save disabled — test flag off" : ""}
+                disabled={!isValid || saving}
               >
-                {ENABLE_PRODUCTION_SAVE ? "Save paddock" : "Save paddock (test mode — disabled)"}
+                {saving ? "Saving…" : "Save paddock"}
               </Button>
             </div>
           </CardContent>
