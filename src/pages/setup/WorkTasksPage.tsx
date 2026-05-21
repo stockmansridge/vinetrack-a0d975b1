@@ -457,7 +457,7 @@ export default function WorkTasksPage() {
               {canSeeCosts && (
                 <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
               )}
-              <SortableTableHead active={getSortDirection("finalized")} onSort={() => toggleSort("finalized")}>Finalized</SortableTableHead>
+              
               <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
