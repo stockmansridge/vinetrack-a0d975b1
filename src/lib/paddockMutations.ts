@@ -77,9 +77,43 @@ export async function updatePaddock(paddockId: string, patch: Record<string, any
 }
 
 export async function hardDeletePaddock(paddockId: string) {
+  // Safety: refuse to hard-delete if any linked records exist. Callers
+  // should already block via UI, but enforce here as defence in depth.
+  const counts = await fetchLinkedRecordCounts(paddockId);
+  if (counts.total > 0) {
+    throw new Error(
+      "This paddock has linked records and cannot be permanently deleted. Archive it instead."
+    );
+  }
   const { error } = await (supabase as any)
     .from("paddocks")
     .delete()
+    .eq("id", paddockId);
+  if (error) throw error;
+}
+
+// Archive = soft-delete (deleted_at). Hides from active selectors but
+// historical records (trips, pins, yield, etc.) keep their paddock_id
+// reference so reports continue to render correctly. iOS reads the same
+// soft-delete flag.
+export async function archivePaddock(paddockId: string) {
+  const { error } = await (supabase as any)
+    .from("paddocks")
+    .update({
+      deleted_at: new Date().toISOString(),
+      client_updated_at: new Date().toISOString(),
+    })
+    .eq("id", paddockId);
+  if (error) throw error;
+}
+
+export async function restorePaddock(paddockId: string) {
+  const { error } = await (supabase as any)
+    .from("paddocks")
+    .update({
+      deleted_at: null,
+      client_updated_at: new Date().toISOString(),
+    })
     .eq("id", paddockId);
   if (error) throw error;
 }
