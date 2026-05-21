@@ -291,6 +291,7 @@ function AppleDrawMap({
   const midAnnsRef = useRef<any[]>([]);
   const existingOverlaysRef = useRef<any[]>([]);
   const rowOverlaysRef = useRef<any[]>([]);
+  const rowLabelAnnsRef = useRef<any[]>([]);
   const polygonRef = useRef<LatLng[]>(polygon);
   polygonRef.current = polygon;
   const setPolygonRef = useRef(setPolygon);
