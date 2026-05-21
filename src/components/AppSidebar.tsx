@@ -87,6 +87,7 @@ const reportsAdmin: NavItem[] = [
 const setup: NavItem[] = [
   { title: "Team", url: "/team", icon: Users },
   { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
+  { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
   { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
   { title: "Other Equipment Items", url: "/setup/equipment-other", icon: Wrench },
