@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { restorePaddock } from "@/lib/paddockMutations";
+import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
 
 interface ArchivedRow {
   id: string;
@@ -52,9 +53,7 @@ export default function ArchivedPaddocksSection() {
     try {
       await restorePaddock(row.id);
       toast({ title: "Paddock restored", description: row.name ?? row.id });
-      await qc.invalidateQueries({ queryKey: ["paddocks-archived"] });
-      await qc.invalidateQueries({ queryKey: ["list", "paddocks"] });
-      await qc.invalidateQueries({ queryKey: ["paddocks"] });
+      await refreshPaddockQueries(qc, selectedVineyardId);
     } catch (err: any) {
       toast({ title: "Restore failed", description: err?.message ?? String(err), variant: "destructive" });
     } finally {
