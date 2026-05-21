@@ -52,7 +52,9 @@ interface Props {
   setPolygon?: (p: LatLng[]) => void;
   readonly?: boolean;
   rows?: RowOverlay[];
+  excludePaddockId?: string;
 }
+
 
 // Resolve initial centre: browser geolocation → vineyard.lat/lng →
 // centroid of existing paddocks → safe default.
