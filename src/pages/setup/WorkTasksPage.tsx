@@ -759,15 +759,10 @@ function WorkTaskDrawer({
               <Field label="Notes">
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
               </Field>
-              <div className="flex items-center gap-2">
-                <input
-                  id="finalized"
-                  type="checkbox"
-                  checked={isFinalized}
-                  onChange={(e) => setIsFinalized(e.target.checked)}
-                />
-                <Label htmlFor="finalized">Finalized</Label>
-              </div>
+              {/* Finalized flag intentionally hidden: iOS Task Log has no
+                  equivalent UI yet. We keep is_finalized at its current value
+                  on existing rows and default new entries to false to avoid
+                  divergence between platforms. */}
               {!task?.start_date && !task?.end_date && task?.date && (
                 <p className="text-xs text-muted-foreground">
                   Originally a single-day task ({fmtDate(task.date)}). Saving will populate start/end dates from the values above and keep the legacy date field in sync.
