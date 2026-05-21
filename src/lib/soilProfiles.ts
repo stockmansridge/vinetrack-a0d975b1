@@ -275,16 +275,44 @@ export function useNswSeedLookup() {
     mutationFn: async (args: {
       latitude: number;
       longitude: number;
+      vineyardId?: string | null;
+      paddockId?: string | null;
     }): Promise<NswSeedLookupResult> => {
+      const body: Record<string, unknown> = {
+        action: "lookup",
+        latitude: args.latitude,
+        longitude: args.longitude,
+      };
+      if (args.vineyardId) body.vineyardId = args.vineyardId;
+      if (args.paddockId) body.paddockId = args.paddockId;
       const { data, error } = await (supabase as any).functions.invoke(
         "nsw-seed-soil-lookup",
-        { body: { action: "lookup", latitude: args.latitude, longitude: args.longitude } },
+        { body },
       );
-      if (error) throw error;
+      if (error) {
+        // Surface structured error from the edge function body when available.
+        const ctx: any = (error as any)?.context;
+        try {
+          const text =
+            typeof ctx?.text === "function" ? await ctx.text() : null;
+          if (text) {
+            try {
+              const parsed = JSON.parse(text);
+              throw new Error(parsed?.error || parsed?.message || text);
+            } catch {
+              throw new Error(text);
+            }
+          }
+        } catch (inner: any) {
+          if (inner instanceof Error) throw inner;
+        }
+        throw error;
+      }
       return (data ?? {}) as NswSeedLookupResult;
     },
   });
 }
+
 
 // ---------- Derived metrics ----------
 
