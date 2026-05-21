@@ -380,7 +380,7 @@ export default function WorkTasksPage() {
             <Download className="h-4 w-4 mr-2" /> CSV
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" /> New task
+            <Plus className="h-4 w-4 mr-2" /> Log work
           </Button>
         </div>
       </div>
