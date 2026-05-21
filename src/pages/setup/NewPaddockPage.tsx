@@ -6,12 +6,9 @@
 //
 // Spec: docs/paddock-geometry-writer-spec.md
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import BoundaryDrawMap from "@/components/paddocks/BoundaryDrawMap";
 
 import { supabase } from "@/integrations/ios-supabase/client";
