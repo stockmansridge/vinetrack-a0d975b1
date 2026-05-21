@@ -36,6 +36,7 @@ import OperatorCategoriesPage from "./pages/setup/OperatorCategoriesPage";
 import SavedInputsPage from "./pages/setup/SavedInputsPage";
 import EquipmentOtherItemsPage from "./pages/setup/EquipmentOtherItemsPage";
 import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
+import VineyardVarietiesPage from "./pages/setup/VineyardVarietiesPage";
 import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import TripReportsPage from "./pages/reports/TripReportsPage";
