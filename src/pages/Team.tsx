@@ -19,6 +19,7 @@ import {
   describeMemberWriteError,
 } from "@/lib/teamMembersQuery";
 import { useToast } from "@/hooks/use-toast";
+import { dedupeOperatorCategories } from "@/lib/operatorCategoryDedupe";
 
 interface TeamMember {
   membership_id: string;
@@ -86,7 +87,11 @@ export default function Team() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchOperatorCategoriesForVineyard(selectedVineyardId!),
   });
-  const categories = categoriesRes?.categories ?? [];
+  const rawCategories = categoriesRes?.categories ?? [];
+  const { unique: categories, idToKeptId: categoryIdToKeptId } = useMemo(
+    () => dedupeOperatorCategories(rawCategories),
+    [rawCategories],
+  );
 
   const categoryByMembership = useMemo(() => {
     const m = new Map<string, string | null>();
