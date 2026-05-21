@@ -56,10 +56,36 @@ interface Props {
 }
 
 
-// Resolve initial centre: browser geolocation → vineyard.lat/lng →
-// centroid of existing paddocks → safe default.
-function useInitialCentre(vineyardId: string | null, paddocks: any[] | undefined, loc: any): LatLng | null {
-  const [centre, setCentre] = useState<LatLng | null>(null);
+// Compute axis-aligned bounding box for a polygon.
+function polygonBBox(pts: LatLng[]): { sw: LatLng; ne: LatLng } | null {
+  if (!pts.length) return null;
+  let minLat = pts[0].lat, maxLat = pts[0].lat;
+  let minLng = pts[0].lng, maxLng = pts[0].lng;
+  for (const p of pts) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  return { sw: { lat: minLat, lng: minLng }, ne: { lat: maxLat, lng: maxLng } };
+}
+
+// Resolve initial centre. Priority (matches iOS):
+//   1. Existing paddock polygon (if we're editing one) → instant focus.
+//   2. Browser geolocation.
+//   3. Shared vineyard location (SQL 80).
+//   4. Centroid of other paddocks.
+//   5. Safe default.
+function useInitialCentre(
+  vineyardId: string | null,
+  paddocks: any[] | undefined,
+  loc: any,
+  initialPolygon: LatLng[],
+): LatLng | null {
+  const [centre, setCentre] = useState<LatLng | null>(() => {
+    const c = polygonCentroid(initialPolygon);
+    return c ?? null;
+  });
 
   useEffect(() => {
     if (centre) return;
