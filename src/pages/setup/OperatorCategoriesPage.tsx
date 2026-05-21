@@ -30,6 +30,7 @@ import {
   softDeleteOperatorCategory,
   type OperatorCategory,
 } from "@/lib/operatorCategoriesQuery";
+import { dedupeOperatorCategories } from "@/lib/operatorCategoryDedupe";
 import { useCanSeeCosts } from "@/lib/permissions";
 
 const fmtDate = (v?: string | null) => {
@@ -66,6 +67,7 @@ export default function OperatorCategoriesPage() {
   });
 
   const categories = data?.categories ?? [];
+  const dedupe = useMemo(() => dedupeOperatorCategories(categories), [categories]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["operator-categories"] });
