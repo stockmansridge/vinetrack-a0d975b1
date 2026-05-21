@@ -52,7 +52,9 @@ interface Props {
   setPolygon?: (p: LatLng[]) => void;
   readonly?: boolean;
   rows?: RowOverlay[];
+  excludePaddockId?: string;
 }
+
 
 // Resolve initial centre: browser geolocation → vineyard.lat/lng →
 // centroid of existing paddocks → safe default.
@@ -110,7 +112,7 @@ function useInitialCentre(vineyardId: string | null, paddocks: any[] | undefined
   return centre;
 }
 
-export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false, rows = [] }: Props) {
+export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false, rows = [], excludePaddockId }: Props) {
   const { selectedVineyardId } = useVineyard();
   const { data: loc } = useQuery({
     queryKey: ["vineyard-location-centre", selectedVineyardId],
@@ -127,15 +129,18 @@ export default function BoundaryDrawMap({ polygon, setPolygon, readonly = false,
 
   const centre = useInitialCentre(selectedVineyardId, paddocks, loc);
 
-  // Existing paddock polygons (reference outlines).
+  // Existing paddock polygons (reference outlines) — excluding the
+  // currently-edited paddock so it doesn't overlap its own editable polygon.
   const existingPolygons = useMemo<LatLng[][]>(() => {
     const out: LatLng[][] = [];
     for (const p of paddocks ?? []) {
+      if (excludePaddockId && p?.id === excludePaddockId) continue;
       const pts = parsePolygonPoints(p?.polygon_points);
       if (pts.length >= 3) out.push(pts);
     }
     return out;
-  }, [paddocks]);
+  }, [paddocks, excludePaddockId]);
+
 
   const [mode, setMode] = useState<"checking" | "apple" | "fallback">("checking");
   const [reason, setReason] = useState<string | null>(null);
