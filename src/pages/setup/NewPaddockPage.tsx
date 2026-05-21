@@ -652,13 +652,6 @@ function BoundaryStep({
   );
 }
 
-function vertexIcon(n: number) {
-  return L.divIcon({
-    className: "",
-    html: `<div style="background:hsl(145 42% 28%);color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:9999px;box-shadow:0 1px 2px rgba(0,0,0,.3);transform:translate(-50%,-50%)">${n}</div>`,
-    iconSize: [0, 0],
-  });
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Preview map (rows + polygon, fits bounds)
