@@ -85,12 +85,15 @@ export default function VineyardLocationPage() {
   const save = useMutation({
     mutationFn: async () => {
       if (!selectedVineyardId) throw new Error("No vineyard selected");
+      // Treat blank inputs as "no change" so we never accidentally clear
+      // a populated server value.
+      const tzTrim = tz.trim();
       return setVineyardLocation({
         vineyard_id: selectedVineyardId,
-        latitude: numOrNull(lat),
-        longitude: numOrNull(lng),
-        elevation_metres: numOrNull(elev),
-        timezone: tz.trim() === "" ? null : tz.trim(),
+        latitude: lat.trim() === "" ? undefined : numOrNull(lat),
+        longitude: lng.trim() === "" ? undefined : numOrNull(lng),
+        elevation_metres: elev.trim() === "" ? undefined : numOrNull(elev),
+        timezone: tzTrim === "" ? undefined : tzTrim,
       });
     },
     onSuccess: () => {
