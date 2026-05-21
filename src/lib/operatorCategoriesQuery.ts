@@ -74,6 +74,21 @@ export interface CreateOperatorCategoryInput {
 export async function createOperatorCategory(
   input: CreateOperatorCategoryInput,
 ): Promise<OperatorCategory> {
+  // Prefer the shared upsert RPC (SQL 79): idempotent on
+  // (vineyard_id, normalised name, cost_per_hour) and restores
+  // soft-deleted rows. Falls back to a direct insert if the RPC is
+  // missing (older backends).
+  const rpc = await supabase.rpc("upsert_operator_category", {
+    p_vineyard_id: input.vineyard_id,
+    p_name: input.name,
+    p_cost_per_hour: input.cost_per_hour,
+  });
+  if (!rpc.error) {
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+    return row as OperatorCategory;
+  }
+  if ((rpc.error as { code?: string }).code !== "42883") throw rpc.error;
+
   const now = new Date().toISOString();
   const payload = {
     vineyard_id: input.vineyard_id,
