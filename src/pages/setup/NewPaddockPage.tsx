@@ -528,31 +528,38 @@ export default function NewPaddockPage() {
 function StepNav({
   step, setStep, hasPolygon, hasRows,
 }: { step: Step; setStep: (s: Step) => void; hasPolygon: boolean; hasRows: boolean }) {
-  const items: { id: Step; label: string; enabled: boolean }[] = [
-    { id: "details", label: "1. Details", enabled: true },
-    { id: "boundary", label: "2. Boundary", enabled: true },
-    { id: "rows", label: "3. Rows", enabled: hasPolygon },
-    { id: "review", label: "4. Review", enabled: hasPolygon && hasRows },
+  const items: { id: Step; label: string; sub: string; enabled: boolean }[] = [
+    { id: "details", label: "1. Details", sub: "Name · Varieties · Planting year", enabled: true },
+    { id: "boundary", label: "2. Boundary", sub: "Block outline", enabled: true },
+    { id: "rows", label: "3. Rows", sub: "Direction · Width · Count · Trellis · Irrigation", enabled: hasPolygon },
+    { id: "review", label: "4. Review", sub: "Confirm & save", enabled: hasPolygon && hasRows },
   ];
   return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((it) => (
-        <button
-          key={it.id}
-          disabled={!it.enabled}
-          onClick={() => setStep(it.id)}
-          className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-            step === it.id
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-50"
-          }`}
-        >
-          {it.label}
-        </button>
-      ))}
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            disabled={!it.enabled}
+            onClick={() => setStep(it.id)}
+            className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+              step === it.id
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-50"
+            }`}
+          >
+            <div className="font-medium">{it.label}</div>
+            <div className={`text-[10px] ${step === it.id ? "opacity-90" : "opacity-70"}`}>{it.sub}</div>
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        These steps map to the edit tabs: Overview · Boundary · Rows · Varieties · Trellis · Irrigation · Soil. Soil can be set after saving from the paddock detail page.
+      </p>
     </div>
   );
 }
+
 
 function NumberField({
   label, value, onChange, step,
