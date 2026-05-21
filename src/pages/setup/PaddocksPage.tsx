@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import PaddockImportExportDialog from "@/components/paddocks/PaddockImportExportDialog";
+import ArchivedPaddocksSection from "@/components/paddocks/ArchivedPaddocksSection";
 
 const fmtNum = (n: number, digits = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
@@ -72,6 +73,9 @@ export default function PaddocksPage() {
           columns={paddockCols}
           basePath="/setup/paddocks"
         />
+        <div className="mt-4">
+          <ArchivedPaddocksSection />
+        </div>
       </TabsContent>
       <TabsContent value="map" className="mt-0">
         <PaddockMapView />
