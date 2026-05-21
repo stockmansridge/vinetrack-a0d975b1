@@ -90,7 +90,11 @@ function paddockAreaHa(p: PaddockLite | undefined | null): number {
 const ANY = "__any__";
 const NONE = "__none__";
 
-const STATUS_OPTIONS = ["planned", "in_progress", "completed", "on_hold", "cancelled"];
+// Aligned with iOS Task Log model: Task Log entries are historical records of
+// completed work. "planned" is intentionally omitted so new entries do not
+// trigger iOS overdue alerts. Scheduling statuses can be re-introduced once
+// iOS exposes a scheduled-task workflow.
+const STATUS_OPTIONS = ["completed", "in_progress", "on_hold", "cancelled"];
 // Fallback/seed list shown when no synced rows exist. Kept in sync with iOS defaults.
 const DEFAULT_TASK_TYPES = [
   "Pruning",
@@ -179,7 +183,7 @@ export default function WorkTasksPage() {
   }, [paddocks]);
   const categoryById = useMemo(() => {
     const m = new Map<string, OperatorCategory>();
-    categories.forEach((c) => m.set(c.id, c));
+    (Array.isArray(categories) ? categories : []).forEach((c) => m.set(c.id, c));
     return m;
   }, [categories]);
 
@@ -366,9 +370,9 @@ export default function WorkTasksPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Work tasks</h1>
+          <h1 className="text-2xl font-semibold">Task Log</h1>
           <p className="text-sm text-muted-foreground">
-            Active tasks across this vineyard. Archived and soft-deleted tasks are excluded.
+            Historical record of work performed across this vineyard. Matches the iOS Task Log. Archived and soft-deleted entries are excluded.
           </p>
         </div>
         <div className="flex gap-2">
@@ -453,20 +457,20 @@ export default function WorkTasksPage() {
               {canSeeCosts && (
                 <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
               )}
-              <SortableTableHead active={getSortDirection("finalized")} onSort={() => toggleSort("finalized")}>Finalized</SortableTableHead>
+              
               <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={canSeeCosts ? 9 : 8} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 8 : 7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={canSeeCosts ? 9 : 8} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canSeeCosts ? 8 : 7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canSeeCosts ? 9 : 8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 8 : 7} className="text-center text-muted-foreground py-8">
                   No work tasks found.
                 </TableCell>
               </TableRow>
@@ -488,7 +492,7 @@ export default function WorkTasksPage() {
                       {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
                     </TableCell>
                   )}
-                  <TableCell>{t.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}</TableCell>
+                  
                   <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>
                 </TableRow>
               );
@@ -755,15 +759,10 @@ function WorkTaskDrawer({
               <Field label="Notes">
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
               </Field>
-              <div className="flex items-center gap-2">
-                <input
-                  id="finalized"
-                  type="checkbox"
-                  checked={isFinalized}
-                  onChange={(e) => setIsFinalized(e.target.checked)}
-                />
-                <Label htmlFor="finalized">Finalized</Label>
-              </div>
+              {/* Finalized flag intentionally hidden: iOS Task Log has no
+                  equivalent UI yet. We keep is_finalized at its current value
+                  on existing rows and default new entries to false to avoid
+                  divergence between platforms. */}
               {!task?.start_date && !task?.end_date && task?.date && (
                 <p className="text-xs text-muted-foreground">
                   Originally a single-day task ({fmtDate(task.date)}). Saving will populate start/end dates from the values above and keep the legacy date field in sync.
