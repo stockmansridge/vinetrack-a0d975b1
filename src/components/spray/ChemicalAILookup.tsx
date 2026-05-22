@@ -273,7 +273,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </div>
       )}
 
-      {candidates && candidates.length > 0 && (
+      {!resultsCollapsed && candidates && candidates.length > 0 && (
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -282,7 +282,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             </div>
             <button
               type="button"
-              onClick={() => onApply({ name: name.trim() })}
+              onClick={applyManual}
               className="text-[11px] underline text-primary hover:text-primary/80"
             >
               Not the right product? Enter manually
