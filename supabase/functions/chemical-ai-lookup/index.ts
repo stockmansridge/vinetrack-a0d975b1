@@ -221,24 +221,33 @@ CRITICAL: Always include at least one candidate whose product_name closely match
 Return 5–10 ranked candidate products. Prefer products registered or distributed in ${countryStr || "the user's country"}.`;
 
     let aiCandidates: any[] = [];
+    let aiTimedOut = false;
     try {
-      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          temperature: 0.2,
-          messages: [
-            { role: "system", content: SYSTEM },
-            { role: "user", content: userPrompt },
-          ],
-          tools,
-          tool_choice: { type: "function", function: { name: "suggest_candidates" } },
-        }),
-      });
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 60_000);
+      let resp: Response;
+      try {
+        resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: SYSTEM },
+              { role: "user", content: userPrompt },
+            ],
+            tools,
+            tool_choice: { type: "function", function: { name: "suggest_candidates" } },
+          }),
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (resp.ok) {
         const data = await resp.json();
@@ -252,7 +261,6 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           }
         }
       } else if (resp.status === 429) {
-        // If AI is rate-limited but we have cached results, still return them.
         if (cachedCandidates.length === 0) {
           return new Response(
             JSON.stringify({ error: "AI lookup is rate limited. Please try again in a moment." }),
@@ -271,7 +279,18 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
         console.error("ai gateway error", resp.status, t);
       }
     } catch (e) {
-      console.error("ai gateway exception", e);
+      aiTimedOut = (e as any)?.name === "AbortError";
+      console.error("ai gateway exception", aiTimedOut ? "timeout after 60s" : e);
+    }
+
+    if (aiTimedOut && cachedCandidates.length === 0) {
+      return new Response(
+        JSON.stringify({
+          error: "AI lookup timed out. Please try again or enter the product manually.",
+          candidates: [],
+        }),
+        { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // 3. Build a fresh candidate set every call. Order matters for dedupe
