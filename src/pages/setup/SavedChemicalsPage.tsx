@@ -379,6 +379,7 @@ export default function SavedChemicalsPage() {
         initial={editing && editing !== "new" ? editing : null}
         vineyardId={selectedVineyardId!}
         existingLibrary={chemicals}
+        canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setEditing(null);
