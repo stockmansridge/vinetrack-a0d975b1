@@ -30,7 +30,7 @@ import {
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
