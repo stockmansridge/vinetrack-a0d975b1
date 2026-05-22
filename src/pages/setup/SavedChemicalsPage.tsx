@@ -115,12 +115,36 @@ export default function SavedChemicalsPage() {
     return Array.from(s).sort();
   }, [chemicals]);
 
+  const normaliseAI = (v: unknown) =>
+    String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  const activeIngredientOptions = useMemo(() => {
+    const map = new Map<string, string>(); // key -> display label (first-seen, title-ish)
+    for (const c of chemicals) {
+      const raw = String(c.active_ingredient ?? "").trim().replace(/\s+/g, " ");
+      if (!raw) continue;
+      const key = raw.toLowerCase();
+      if (!map.has(key)) map.set(key, raw);
+    }
+    return Array.from(map.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [chemicals]);
+
+  const activeIngredientLabel = useMemo(() => {
+    if (activeIngredient === ANY) return "";
+    return activeIngredientOptions.find((o) => o.key === activeIngredient)?.label ?? "";
+  }, [activeIngredient, activeIngredientOptions]);
+
   const rows = useMemo(() => {
     let list = chemicals.slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (group !== ANY) {
       list = list.filter((c) => normaliseChemicalGroup(c.chemical_group) === group);
     }
     if (use !== ANY) list = list.filter((c) => c.use === use);
+    if (activeIngredient !== ANY) {
+      list = list.filter((c) => normaliseAI(c.active_ingredient) === activeIngredient);
+    }
     if (filter.trim()) {
       const f = filter.toLowerCase();
       const fNorm = normaliseChemicalGroup(filter);
@@ -132,7 +156,7 @@ export default function SavedChemicalsPage() {
       });
     }
     return list;
-  }, [chemicals, filter, group, use]);
+  }, [chemicals, filter, group, use, activeIngredient]);
 
   type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
