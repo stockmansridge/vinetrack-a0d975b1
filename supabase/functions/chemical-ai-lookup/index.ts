@@ -95,8 +95,37 @@ const tools = [
   },
 ];
 
+type LookupCandidate = {
+  product_name?: string;
+  active_ingredient?: string;
+  category?: string;
+  chemical_group?: string;
+  manufacturer?: string;
+  product_type?: "liquid" | "solid";
+  unit?: "L" | "mL" | "kg" | "g";
+  rate_basis?: "per_hectare" | "per_100L";
+  rate_per_unit?: number | null;
+  withholding_period_days?: number | null;
+  re_entry_period_hours?: number | null;
+  target?: string;
+  notes?: string;
+  safety_note?: string;
+  country?: string;
+  country_confirmed?: boolean;
+  confidence?: "high" | "medium" | "low" | "unknown";
+  cached?: boolean;
+  was_applied?: boolean;
+  times_seen?: number;
+  source_hint?: string;
+  last_seen_at?: string;
+};
+
+function normaliseChemicalLookupKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
 function normaliseQuery(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normaliseChemicalLookupKey(s);
 }
 
 function buildQueryExpansion(raw: string): string[] {
@@ -131,6 +160,56 @@ function nameSimilarityScore(query: string, productName: string): number {
 
 function candidateKey(c: any): string {
   return `${normaliseQuery(c?.product_name || "")}|${normaliseQuery(c?.manufacturer || "")}`;
+}
+
+function countryMatches(requestCountry: string, candidateCountry?: string | null): boolean {
+  if (!requestCountry) return true;
+  return normaliseQuery(requestCountry) === normaliseQuery(candidateCountry || "");
+}
+
+function sourceWeight(sourceHint?: string | null): number {
+  switch (sourceHint) {
+    case "manual_applied":
+      return 4;
+    case "known_good_manual":
+      return 3;
+    case "previous_lookup":
+      return 2;
+    case "ai_gateway":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function recencyWeight(value?: string | null): number {
+  const ts = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function getKnownCandidates(queryNorm: string, countryStr: string): LookupCandidate[] {
+  if (queryNorm !== "cropsil") return [];
+  if (countryStr && !/australia/i.test(countryStr)) return [];
+  return [
+    {
+      product_name: "Crop SIL",
+      manufacturer: "Switch Ag",
+      category: "Bio-stimulant",
+      active_ingredient: "Silicic acid / potassium / kelp / organic acids",
+      product_type: "liquid",
+      unit: "L",
+      rate_basis: "per_hectare",
+      rate_per_unit: null,
+      target: "Silicon nutrition / plant health support",
+      notes: "Known Australian Crop SIL candidate. Confirm current label, rate, and permitted use.",
+      safety_note: "Verify against the current Australian label before use.",
+      country: "Australia",
+      country_confirmed: true,
+      confidence: "high",
+      source_hint: "known_good_manual",
+      times_seen: 50,
+    },
+  ];
 }
 
 Deno.serve(async (req) => {
