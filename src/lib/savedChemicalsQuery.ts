@@ -166,7 +166,9 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
     sync_version: 1,
     deleted_at: null,
   };
-  console.log("Sanitised saved chemical payload", payload);
+  if (import.meta.env.DEV) {
+    console.debug("Sanitised saved chemical payload", payload);
+  }
   const { data, error } = await supabase
     .from("saved_chemicals")
     .insert(payload)
@@ -181,7 +183,9 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
     ...sanitize(input),
     client_updated_at: new Date().toISOString(),
   };
-  console.log("Sanitised saved chemical payload", payload);
+  if (import.meta.env.DEV) {
+    console.debug("Sanitised saved chemical payload", payload);
+  }
   const { data, error } = await supabase
     .from("saved_chemicals")
     .update(payload)
