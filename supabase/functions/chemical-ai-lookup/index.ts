@@ -187,30 +187,11 @@ function recencyWeight(value?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
-function getKnownCandidates(queryNorm: string, countryStr: string): LookupCandidate[] {
-  if (queryNorm !== "cropsil") return [];
-  if (countryStr && !/australia/i.test(countryStr)) return [];
-  return [
-    {
-      product_name: "Crop SIL",
-      manufacturer: "Switch Ag",
-      category: "Bio-stimulant",
-      active_ingredient: "Silicic acid / potassium / kelp / organic acids",
-      product_type: "liquid",
-      unit: "L",
-      rate_basis: "per_hectare",
-      rate_per_unit: null,
-      target: "Silicon nutrition / plant health support",
-      notes: "Known Australian Crop SIL candidate. Confirm current label, rate, and permitted use.",
-      safety_note: "Verify against the current Australian label before use.",
-      country: "Australia",
-      country_confirmed: true,
-      confidence: "high",
-      source_hint: "known_good_manual",
-      times_seen: 50,
-    },
-  ];
-}
+// Note: there is intentionally no hard-coded "known good" list for any
+// specific product. Strong candidates are preserved generically via the
+// shared `chemical_lookup_cache` (previous lookups + applied history)
+// and ranked by `sourceWeight` + exact-name match + recency.
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -342,7 +323,7 @@ Deno.serve(async (req) => {
       cached = cachedRows ?? [];
     }
 
-    const knownCandidates = getKnownCandidates(queryNorm, countryStr);
+    
 
     const cachedCandidates: LookupCandidate[] = cached.map((row) => ({
       product_name: row.product_name,
@@ -468,7 +449,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
     // Only add the exact-name skeleton if NOTHING in cache or AI is an
     // exact/near match — guarantees the user's typed query is always
     // selectable for manual entry without clobbering real matches.
-    const preservedCandidates: LookupCandidate[] = [...knownCandidates, ...cachedCandidates];
+    const preservedCandidates: LookupCandidate[] = [...cachedCandidates];
     const appliedCandidates = preservedCandidates.filter((c) => c.was_applied);
     const exactCandidates = preservedCandidates.filter((c) => {
       const score = nameSimilarityScore(rawQuery, c.product_name ?? "");
