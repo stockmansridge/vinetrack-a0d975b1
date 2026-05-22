@@ -57,6 +57,7 @@ interface RawCandidate {
   was_applied?: boolean;
   times_seen?: number;
   source_hint?: string;
+  label_url?: string;
 }
 
 export interface ExistingLibraryItem {
