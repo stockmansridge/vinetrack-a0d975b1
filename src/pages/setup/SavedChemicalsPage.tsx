@@ -59,6 +59,11 @@ function purchaseCostPerUnit(purchase: any): number | null {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+function displayBaseUnit(unit?: string | null): string {
+  const base = normaliseUnit(unit);
+  return base || unit || "unit";
+}
+
 const EMPTY: SavedChemicalInput = {
   name: "", active_ingredient: "", chemical_group: "", use: "",
   manufacturer: "", crop: "", problem: "", rate_per_ha: null, unit: "",
@@ -289,7 +294,7 @@ export default function SavedChemicalsPage() {
                         {(() => {
                           const cost = purchaseCostPerUnit(c.purchase);
                           const currency = c.purchase?.currency ?? "AUD";
-                          return cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayUnitText(c.unit) || "unit"}`;
+                          return cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayBaseUnit(c.purchase?.unit ?? c.unit)}`;
                         })()}
                       </TableCell>
                     )}
@@ -511,7 +516,7 @@ function ChemicalEditor({
               costPerUnit: costNum,
               cost_per_unit: costNum,
               currency,
-              unit: displayUnitText(form.unit) || null,
+              unit: displayBaseUnit(form.unit),
             }
           : null,
       };
@@ -657,7 +662,7 @@ function ChemicalEditor({
           </Field>
           {canSeeCosts && (
             <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3">
-              <Field label={`Cost per ${displayUnitText(form.unit) || "unit"}`}>
+              <Field label={`Cost per ${displayBaseUnit(form.unit)}`}>
                 <Input
                   type="number"
                   inputMode="decimal"
