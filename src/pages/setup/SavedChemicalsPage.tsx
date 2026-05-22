@@ -517,12 +517,14 @@ function ChemicalEditor({
   const saveMut = useMutation({
     mutationFn: async () => {
       const rateNum = rateStr.trim() === "" ? null : Number(rateStr);
-      const costNum = costStr.trim() === "" ? null : Number(costStr);
+      const costNum = effectiveCost;
       if (rateNum != null && Number.isNaN(rateNum)) {
         throw new Error("Rate per ha must be a number");
       }
-      if (costNum != null && (Number.isNaN(costNum) || costNum < 0)) {
-        throw new Error("Cost per unit must be zero or greater");
+      if (packSizeStr.trim() !== "" || packPriceStr.trim() !== "") {
+        if (computedCost == null) {
+          throw new Error("Enter both a pack size (> 0) and a pack price to calculate cost");
+        }
       }
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
       const payload: SavedChemicalInput = {
@@ -537,7 +539,7 @@ function ChemicalEditor({
               costPerUnit: costNum,
               cost_per_unit: costNum,
               currency,
-              unit: displayBaseUnit(form.unit),
+              unit: packUnit || displayBaseUnit(form.unit),
             }
           : null,
       };
