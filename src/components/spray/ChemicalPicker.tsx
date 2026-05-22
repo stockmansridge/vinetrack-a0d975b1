@@ -81,14 +81,16 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
       if (s.rate_per_ha != null && !Number.isNaN(Number(s.rate_per_ha))) {
         const created = await createSavedChemical(vineyardId, {
           name,
-          active_ingredient: s.active_ingredient ?? null,
-          chemical_group: s.chemical_group ?? null,
-          use: (s.category as string) ?? null,
-          manufacturer: s.manufacturer ?? null,
+          active_ingredient: s.active_ingredient ?? "",
+          chemical_group: s.chemical_group ?? "",
+          use: (s.category as string) ?? "",
+          manufacturer: s.manufacturer ?? "",
+          crop: "",
+          problem: s.target ?? "",
           rate_per_ha: s.rate_per_ha,
           unit: composed,
-          restrictions: restrictions || null,
-          notes: s.notes ?? null,
+          restrictions: restrictions || "",
+          notes: s.notes ?? "",
         });
         return { chem: created, saved: true };
       }
@@ -273,12 +275,16 @@ function NewChemicalDialog({
     mutationFn: () =>
       createSavedChemical(vineyardId, {
         name: form.name,
-        active_ingredient: form.active_ingredient || null,
-        chemical_group: form.chemical_group || null,
-        use: form.use || null,
+        active_ingredient: form.active_ingredient || "",
+        chemical_group: form.chemical_group || "",
+        use: form.use || "",
+        manufacturer: "",
+        crop: "",
+        problem: "",
         rate_per_ha: form.rate_per_ha === "" ? null : Number(form.rate_per_ha),
-        unit: form.unit || null,
-        notes: form.notes || null,
+        unit: form.unit || "L/ha",
+        restrictions: "",
+        notes: form.notes || "",
       }),
     onSuccess: (c) => onCreated(c),
     onError: (e: any) => toast({ title: "Could not add", description: e.message, variant: "destructive" }),
