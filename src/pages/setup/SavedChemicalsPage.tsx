@@ -100,11 +100,10 @@ export default function SavedChemicalsPage() {
   });
   const archived = archivedQuery.data?.chemicals ?? [];
 
-  const groups = useMemo(() => {
-    const s = new Set<string>();
-    chemicals.forEach((c) => c.chemical_group && s.add(c.chemical_group));
-    return Array.from(s).sort();
-  }, [chemicals]);
+  const groupOptions = useMemo(
+    () => buildGroupOptions(chemicals.map((c) => c.chemical_group)),
+    [chemicals],
+  );
   const uses = useMemo(() => {
     const s = new Set<string>();
     chemicals.forEach((c) => c.use && s.add(c.use));
@@ -113,14 +112,19 @@ export default function SavedChemicalsPage() {
 
   const rows = useMemo(() => {
     let list = chemicals.slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-    if (group !== ANY) list = list.filter((c) => c.chemical_group === group);
+    if (group !== ANY) {
+      list = list.filter((c) => normaliseChemicalGroup(c.chemical_group) === group);
+    }
     if (use !== ANY) list = list.filter((c) => c.use === use);
     if (filter.trim()) {
       const f = filter.toLowerCase();
-      list = list.filter((c) =>
-        [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      const fNorm = normaliseChemicalGroup(filter);
+      list = list.filter((c) => {
+        const groupNorm = normaliseChemicalGroup(c.chemical_group);
+        if (fNorm && groupNorm && groupNorm.includes(fNorm)) return true;
+        return [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions]
+          .some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
   }, [chemicals, filter, group, use]);
