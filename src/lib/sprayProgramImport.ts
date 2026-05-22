@@ -30,9 +30,17 @@ export type AllowedUnit = (typeof ALLOWED_UNITS)[number];
 export const VSP_CANOPY_SIZES = ["Small", "Medium", "Large", "Full"] as const;
 export const VSP_CANOPY_DENSITIES = ["Low", "High"] as const;
 
-// Recommended (free-text in contract). Used for dropdown in template.
 export const RECOMMENDED_OPERATION_TYPES = [
   "Fungicide", "Insecticide", "Herbicide", "Nutrient", "Other",
+] as const;
+
+// Spray Program sheet layout: 2 instruction rows + header row + data rows.
+// Header row is 0-indexed = 2 (Excel row 3); data starts at Excel row 4.
+export const TEMPLATE_HEADER_ROW_INDEX = 2;
+export const TEMPLATE_FIRST_DATA_EXCEL_ROW = TEMPLATE_HEADER_ROW_INDEX + 2;
+
+export const REQUIRED_HEADERS = [
+  "Name", "Planned Date", "Paddocks", "Chemical 1 Name",
 ] as const;
 
 const CHEM_SUFFIXES = [
