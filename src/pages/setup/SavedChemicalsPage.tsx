@@ -81,6 +81,8 @@ export default function SavedChemicalsPage() {
   const [filter, setFilter] = useState("");
   const [group, setGroup] = useState<string>(ANY);
   const [use, setUse] = useState<string>(ANY);
+  const [activeIngredient, setActiveIngredient] = useState<string>(ANY);
+  const [aiOpen, setAiOpen] = useState(false);
   const [tab, setTab] = useState<"active" | "archived">("active");
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
