@@ -264,12 +264,18 @@ export async function hardDeleteDraftSprayJob(id: string): Promise<void> {
     .eq("spray_job_id", id);
   if (linkErr) throw linkErr;
 
-  const { error: delErr } = await supabase
+  const { data: deleted, error: delErr } = await supabase
     .from("spray_jobs")
     .delete()
     .eq("id", id)
-    .eq("status", "draft");
+    .select("id");
   if (delErr) throw delErr;
+  if (!deleted || deleted.length === 0) {
+    throw new Error(
+      "Delete returned no rows. This is usually a permissions (RLS) issue — only owners/managers can delete draft spray jobs.",
+    );
+  }
+
 }
 
 export async function duplicateSprayJob(id: string, asTemplate: boolean): Promise<string> {
