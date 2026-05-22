@@ -33,15 +33,36 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useCanSeeCosts } from "@/lib/permissions";
 import {
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
   inferProductType, defaultUnitFor, unitsFor,
-  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
+  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL, displayUnitText,
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
+const fmtMoney = (v?: number | null, currency = "AUD") => {
+  if (v == null || !Number.isFinite(Number(v))) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(v));
+  } catch {
+    return `$${Number(v).toFixed(2)}`;
+  }
+};
+
+function purchaseCostPerUnit(purchase: any): number | null {
+  const raw = purchase?.costPerBaseUnit ?? purchase?.cost_per_base_unit
+    ?? purchase?.costPerUnit ?? purchase?.cost_per_unit;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function displayBaseUnit(unit?: string | null): string {
+  const base = normaliseUnit(unit);
+  return base || unit || "unit";
+}
 
 const EMPTY: SavedChemicalInput = {
   name: "", active_ingredient: "", chemical_group: "", use: "",
@@ -52,6 +73,7 @@ const EMPTY: SavedChemicalInput = {
 export default function SavedChemicalsPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const canSeeCosts = useCanSeeCosts();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -102,7 +124,7 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use]);
 
-  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer";
+  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
     accessors: {
       name: (c) => c.name ?? "",
@@ -111,6 +133,7 @@ export default function SavedChemicalsPage() {
       use: (c) => c.use ?? "",
       rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
       manufacturer: (c) => c.manufacturer ?? "",
+      cost: (c) => purchaseCostPerUnit(c.purchase),
     },
     initial: { key: "name", direction: "asc" },
   });
@@ -236,21 +259,22 @@ export default function SavedChemicalsPage() {
                   <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}>Active ingredient</SortableTableHead>
                   <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}>Group</SortableTableHead>
                   <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Rate/ha</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Default rate</SortableTableHead>
                   <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
+                  {canSeeCosts && <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}>Cost / unit</SortableTableHead>}
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -262,9 +286,18 @@ export default function SavedChemicalsPage() {
                     <TableCell>{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>
                     <TableCell>{fmt(c.use)}</TableCell>
                     <TableCell>
-                      {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${c.unit}` : ""}`}
+                      {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}
                     </TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
+                    {canSeeCosts && (
+                      <TableCell>
+                        {(() => {
+                          const cost = purchaseCostPerUnit(c.purchase);
+                          const currency = c.purchase?.currency ?? "AUD";
+                          return cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayBaseUnit(c.purchase?.unit ?? c.unit)}`;
+                        })()}
+                      </TableCell>
+                    )}
                     {canEdit && (
                       <TableCell className="text-right">
                         <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
@@ -351,6 +384,7 @@ export default function SavedChemicalsPage() {
         initial={editing && editing !== "new" ? editing : null}
         vineyardId={selectedVineyardId!}
         existingLibrary={chemicals}
+        canSeeCosts={canSeeCosts}
         onSaved={() => {
           invalidate();
           setEditing(null);
@@ -401,19 +435,22 @@ export default function SavedChemicalsPage() {
 }
 
 function ChemicalEditor({
-  open, onOpenChange, initial, vineyardId, existingLibrary, onSaved,
+  open, onOpenChange, initial, vineyardId, existingLibrary, canSeeCosts, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: SavedChemical | null;
   vineyardId: string;
   existingLibrary: SavedChemical[];
+  canSeeCosts: boolean;
   onSaved: () => void;
 }) {
   const { toast } = useToast();
   const { currentCountry } = useVineyard();
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
+  const [costStr, setCostStr] = useState("");
+  const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
   const [rei, setRei] = useState("");
   const [restNotes, setRestNotes] = useState("");
@@ -435,8 +472,11 @@ function ChemicalEditor({
           unit: initial.unit ?? "",
           restrictions: initial.restrictions ?? "",
           notes: initial.notes ?? "",
+          purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
+        setCostStr(purchaseCostPerUnit(initial.purchase) == null ? "" : String(purchaseCostPerUnit(initial.purchase)));
+        setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
         setRei(p.reiHours);
@@ -444,6 +484,8 @@ function ChemicalEditor({
       } else {
         setForm(EMPTY);
         setRateStr("");
+        setCostStr("");
+        setCurrency("AUD");
         setWhp("");
         setRei("");
         setRestNotes("");
@@ -454,11 +496,30 @@ function ChemicalEditor({
   const saveMut = useMutation({
     mutationFn: async () => {
       const rateNum = rateStr.trim() === "" ? null : Number(rateStr);
+      const costNum = costStr.trim() === "" ? null : Number(costStr);
       if (rateNum != null && Number.isNaN(rateNum)) {
         throw new Error("Rate per ha must be a number");
       }
+      if (costNum != null && (Number.isNaN(costNum) || costNum < 0)) {
+        throw new Error("Cost per unit must be zero or greater");
+      }
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
-      const payload: SavedChemicalInput = { ...form, rate_per_ha: rateNum, restrictions };
+      const payload: SavedChemicalInput = {
+        ...form,
+        rate_per_ha: rateNum,
+        restrictions,
+        purchase: canSeeCosts && costNum != null
+          ? {
+              ...(form.purchase ?? {}),
+              costPerBaseUnit: costNum,
+              cost_per_base_unit: costNum,
+              costPerUnit: costNum,
+              cost_per_unit: costNum,
+              currency,
+              unit: displayBaseUnit(form.unit),
+            }
+          : null,
+      };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
@@ -599,6 +660,32 @@ function ChemicalEditor({
               Choose whether this product rate is applied by area or by spray volume.
             </p>
           </Field>
+          {canSeeCosts && (
+            <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3">
+              <Field label={`Cost per ${displayBaseUnit(form.unit)}`}>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={costStr}
+                  onChange={(e) => setCostStr(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field label="Currency">
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUD">AUD</SelectItem>
+                    <SelectItem value="NZD">NZD</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Withholding period (days)">
               <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />

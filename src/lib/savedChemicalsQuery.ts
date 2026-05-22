@@ -11,7 +11,7 @@
 //   single vineyard_id. No withholding_period / re_entry_interval column
 //   (these typically live inside `restrictions` free text).
 import { supabase } from "@/integrations/ios-supabase/client";
-import { iosUnitFromAny, iosBasisCode, inferRateBasis } from "@/lib/rateBasis";
+import { iosUnitFromAny } from "@/lib/rateBasis";
 
 export interface SavedChemical {
   id: string;
@@ -36,6 +36,8 @@ export interface SavedChemical {
   deleted_at?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
+  client_updated_at?: string | null;
+  sync_version?: number | null;
 }
 
 export interface SavedChemicalsQueryResult {
@@ -79,11 +81,19 @@ export interface SavedChemicalInput {
   unit?: string | null;
   restrictions?: string | null;
   notes?: string | null;
+  purchase?: {
+    costPerUnit?: number | null;
+    cost_per_unit?: number | null;
+    costPerBaseUnit?: number | null;
+    cost_per_base_unit?: number | null;
+    currency?: string | null;
+    unit?: string | null;
+  } | null;
 }
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "name", "active_ingredient", "chemical_group", "use", "manufacturer",
-  "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
+  "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes", "purchase",
 ];
 
 function sanitize(input: SavedChemicalInput) {
@@ -98,30 +108,65 @@ function sanitize(input: SavedChemicalInput) {
       out[k] = v;
     }
   }
-  // iOS-compat: persist `unit` using the iOS raw enum + basis form
-  // ("Litres/ha", "mL/100L", "Kg/ha", "g/100L"). The internal short form
-  // ("L/ha") is only used for editing.
+  // iOS stores saved_chemicals.unit as the raw base unit enum
+  // ("Litres" | "mL" | "Kg" | "g"), while spray job chemical lines store the
+  // combined application unit (e.g. "Litres/ha", "mL/100L").
   if (typeof out.unit === "string" && out.unit) {
-    const basis = iosBasisCode(inferRateBasis(out.unit));
-    const iosUnit = iosUnitFromAny(out.unit);
-    out.unit = basis === "per_100_litres" ? `${iosUnit}/100L` : `${iosUnit}/ha`;
+    out.unit = iosUnitFromAny(out.unit);
   }
-  // saved_chemicals.unit is NOT NULL. Fall back to Litres/ha if the caller
-  // didn't supply one (e.g. AI lookup result missing unit).
+  // saved_chemicals.unit is NOT NULL. Fall back to the iOS liquid base unit
+  // if the caller didn't supply one (e.g. AI lookup result missing unit).
   if (out.unit == null || out.unit === "") {
-    out.unit = "Litres/ha";
+    out.unit = "Litres";
   }
-  // saved_chemicals.restrictions is NOT NULL. Coerce missing/empty to ""
-  // so AI-lookup applies without WHP/REI don't fail the insert.
-  if (out.restrictions == null) {
-    out.restrictions = "";
+  // Shared schema columns that are optional in the UI but NOT NULL in the DB
+  // must be sent as empty strings instead of null.
+  for (const key of [
+    "active_ingredient",
+    "chemical_group",
+    "use",
+    "manufacturer",
+    "crop",
+    "problem",
+    "restrictions",
+    "notes",
+  ]) {
+    if (out[key] == null) out[key] = "";
+  }
+  if (out.purchase != null && typeof out.purchase === "object") {
+    const purchase = { ...out.purchase } as Record<string, any>;
+    const raw = purchase.costPerBaseUnit ?? purchase.cost_per_base_unit
+      ?? purchase.costPerUnit ?? purchase.cost_per_unit;
+    const cost = raw == null || raw === "" ? null : Number(raw);
+    if (Number.isFinite(cost) && cost >= 0) {
+      purchase.costPerBaseUnit = cost;
+      purchase.cost_per_base_unit = cost;
+      if (purchase.costPerUnit == null) purchase.costPerUnit = cost;
+      if (purchase.cost_per_unit == null) purchase.cost_per_unit = cost;
+    } else {
+      delete purchase.costPerBaseUnit;
+      delete purchase.cost_per_base_unit;
+      delete purchase.costPerUnit;
+      delete purchase.cost_per_unit;
+    }
+    purchase.currency = String(purchase.currency ?? "AUD").trim() || "AUD";
+    purchase.unit = iosUnitFromAny(purchase.unit ?? out.unit ?? "Litres");
+    out.purchase = Object.keys(purchase).length ? purchase : null;
   }
 
   return out;
 }
 
 export async function createSavedChemical(vineyardId: string, input: SavedChemicalInput) {
-  const payload = { ...sanitize(input), vineyard_id: vineyardId };
+  const now = new Date().toISOString();
+  const payload = {
+    ...sanitize(input),
+    vineyard_id: vineyardId,
+    client_updated_at: now,
+    sync_version: 1,
+    deleted_at: null,
+  };
+  console.log("Sanitised saved chemical payload", payload);
   const { data, error } = await supabase
     .from("saved_chemicals")
     .insert(payload)
@@ -132,7 +177,11 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
 }
 
 export async function updateSavedChemical(id: string, input: SavedChemicalInput) {
-  const payload = sanitize(input);
+  const payload = {
+    ...sanitize(input),
+    client_updated_at: new Date().toISOString(),
+  };
+  console.log("Sanitised saved chemical payload", payload);
   const { data, error } = await supabase
     .from("saved_chemicals")
     .update(payload)
