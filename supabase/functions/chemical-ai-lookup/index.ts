@@ -284,6 +284,13 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       ai: aiCandidates.length,
     });
 
+    // Only add the exact-name skeleton if NOTHING in cache or AI is an
+    // exact/near match — guarantees the user's typed query is always
+    // selectable for manual entry without clobbering real matches.
+    const hasExactOrNear =
+      cachedCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60) ||
+      aiCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60);
+
     const exactNameSkeleton = {
       product_name: rawQuery,
       manufacturer: "",
@@ -296,7 +303,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
     const freshCandidates = [
       ...cachedCandidates,
       ...aiCandidates,
-      exactNameSkeleton,
+      ...(hasExactOrNear ? [] : [exactNameSkeleton]),
     ];
 
     const merged: any[] = [];
