@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2 } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2, Upload, FileSpreadsheet } from "lucide-react";
+import { downloadSprayProgramTemplate } from "@/lib/sprayProgramTemplate";
+import { SprayProgramImportDialog } from "@/components/spray/SprayProgramImportDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -123,16 +125,32 @@ function useLookups(vineyardId: string | null) {
 }
 
 export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly?: boolean } = {}) {
-  const { selectedVineyardId, currentRole } = useVineyard();
+  const { selectedVineyardId, currentRole, memberships } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const { toast } = useToast();
   const [tab, setTab] = useState<"planned" | "templates" | "archived">(
     templatesOnly ? "templates" : "planned",
   );
   const [editing, setEditing] = useState<{ job: SprayJob | null; isTemplate: boolean } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [tplBusy, setTplBusy] = useState(false);
 
   const lookups = useLookups(selectedVineyardId);
 
   const effectiveTab = templatesOnly && tab === "planned" ? "templates" : tab;
+  const vineyardName = memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
+
+  const handleDownloadTemplate = async () => {
+    if (!selectedVineyardId) return;
+    setTplBusy(true);
+    try {
+      await downloadSprayProgramTemplate({ vineyardId: selectedVineyardId, vineyardName });
+    } catch (e: any) {
+      toast({ title: "Template download failed", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setTplBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -147,15 +165,37 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
               : "Plan upcoming spray work and maintain reusable templates. Completed compliance records live under Spray Records."}
           </p>
         </div>
-        {canEdit && effectiveTab !== "archived" && (
-          <Button onClick={() => setEditing({ job: null, isTemplate: effectiveTab === "templates" || templatesOnly })}>
-            <Plus className="h-4 w-4 mr-1" />
-            {templatesOnly
-              ? "New Spray Template"
-              : effectiveTab === "templates" ? "New template" : "New planned job"}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && effectiveTab !== "archived" && (
+            <Button onClick={() => setEditing({ job: null, isTemplate: effectiveTab === "templates" || templatesOnly })}>
+              <Plus className="h-4 w-4 mr-1" />
+              {templatesOnly
+                ? "New Spray Template"
+                : effectiveTab === "templates" ? "New template" : "New planned job"}
+            </Button>
+          )}
+          {canEdit && !templatesOnly && effectiveTab === "planned" && (
+            <>
+              <Button variant="outline" onClick={handleDownloadTemplate} disabled={tplBusy || !selectedVineyardId}>
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                {tplBusy ? "Preparing…" : "Download spray program template"}
+              </Button>
+              <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!selectedVineyardId}>
+                <Upload className="h-4 w-4 mr-1" />
+                Import spray program
+              </Button>
+            </>
+          )}
+        </div>
       </div>
+
+      {importOpen && selectedVineyardId && (
+        <SprayProgramImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          vineyardId={selectedVineyardId}
+        />
+      )}
 
       <Tabs value={effectiveTab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
