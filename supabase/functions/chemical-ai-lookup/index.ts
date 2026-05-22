@@ -449,7 +449,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
     // Only add the exact-name skeleton if NOTHING in cache or AI is an
     // exact/near match — guarantees the user's typed query is always
     // selectable for manual entry without clobbering real matches.
-    const preservedCandidates: LookupCandidate[] = [...knownCandidates, ...cachedCandidates];
+    const preservedCandidates: LookupCandidate[] = [...cachedCandidates];
     const appliedCandidates = preservedCandidates.filter((c) => c.was_applied);
     const exactCandidates = preservedCandidates.filter((c) => {
       const score = nameSimilarityScore(rawQuery, c.product_name ?? "");
