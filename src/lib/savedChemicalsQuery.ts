@@ -11,7 +11,7 @@
 //   single vineyard_id. No withholding_period / re_entry_interval column
 //   (these typically live inside `restrictions` free text).
 import { supabase } from "@/integrations/ios-supabase/client";
-import { iosUnitFromAny, iosBasisCode, inferRateBasis } from "@/lib/rateBasis";
+import { iosUnitFromAny } from "@/lib/rateBasis";
 
 export interface SavedChemical {
   id: string;
@@ -124,6 +124,7 @@ function sanitize(input: SavedChemicalInput) {
   for (const key of [
     "active_ingredient",
     "chemical_group",
+    "use",
     "manufacturer",
     "crop",
     "problem",
