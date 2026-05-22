@@ -190,6 +190,19 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
         </div>
       </div>
 
+      {canEdit && !templatesOnly && effectiveTab === "planned" && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Before importing a spray program</AlertTitle>
+          <AlertDescription>
+            For the smoothest import, set up your vineyard data first. Add your
+            blocks/paddocks, chemicals, spray equipment, tractors and team/operator
+            details before downloading the template. The template uses these existing
+            records as reference lists so imported jobs can match correctly.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {importOpen && selectedVineyardId && (
         <SprayProgramImportDialog
           open={importOpen}
