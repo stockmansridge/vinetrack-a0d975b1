@@ -598,10 +598,13 @@ function ChemicalEditor({
           <Field label="Supplier / manufacturer">
             <Input value={form.manufacturer ?? ""} onChange={(e) => set("manufacturer", e.target.value)} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Crop"><Input value={form.crop ?? ""} onChange={(e) => set("crop", e.target.value)} /></Field>
-            <Field label="Target pest / disease / weed"><Input value={form.problem ?? ""} onChange={(e) => set("problem", e.target.value)} /></Field>
-          </div>
+          <Field label="Target pest / disease / weed (optional)">
+            <Input
+              value={form.problem ?? ""}
+              onChange={(e) => set("problem", e.target.value)}
+              placeholder="Leave blank for biostimulants / nutrition products"
+            />
+          </Field>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Default rate">
               <Input type="number" inputMode="decimal" step="any" value={rateStr} onChange={(e) => setRateStr(e.target.value)} />
