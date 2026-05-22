@@ -134,7 +134,7 @@ export default function SavedChemicalsPage() {
     accessors: {
       name: (c) => c.name ?? "",
       active_ingredient: (c) => c.active_ingredient ?? "",
-      group: (c) => c.chemical_group ?? "",
+      group: (c) => normaliseChemicalGroup(c.chemical_group),
       use: (c) => c.use ?? "",
       rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
       manufacturer: (c) => c.manufacturer ?? "",
