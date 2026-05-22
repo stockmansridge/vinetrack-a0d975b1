@@ -30,9 +30,17 @@ export type AllowedUnit = (typeof ALLOWED_UNITS)[number];
 export const VSP_CANOPY_SIZES = ["Small", "Medium", "Large", "Full"] as const;
 export const VSP_CANOPY_DENSITIES = ["Low", "High"] as const;
 
-// Recommended (free-text in contract). Used for dropdown in template.
 export const RECOMMENDED_OPERATION_TYPES = [
   "Fungicide", "Insecticide", "Herbicide", "Nutrient", "Other",
+] as const;
+
+// Spray Program sheet layout: 2 instruction rows + header row + data rows.
+// Header row is 0-indexed = 2 (Excel row 3); data starts at Excel row 4.
+export const TEMPLATE_HEADER_ROW_INDEX = 2;
+export const TEMPLATE_FIRST_DATA_EXCEL_ROW = TEMPLATE_HEADER_ROW_INDEX + 2;
+
+export const REQUIRED_HEADERS = [
+  "Name", "Planned Date", "Paddocks", "Chemical 1 Name",
 ] as const;
 
 const CHEM_SUFFIXES = [
@@ -188,14 +196,38 @@ export async function parseAndValidate(
   const wb = XLSX.read(fileBuffer, { type: "array", cellDates: true });
   const sheet = wb.Sheets["Spray Program"] ?? wb.Sheets[wb.SheetNames[0]];
   if (!sheet) throw new Error("Workbook has no 'Spray Program' sheet.");
+
+  // Detect header row position: prefer Excel row 3 (new template format with
+  // 2 instruction rows); fall back to row 1 for legacy files.
+  const headerNames = new Set(templateHeaders());
+  const findHeaderRow = (): number => {
+    const ref = sheet["!ref"];
+    if (!ref) return TEMPLATE_HEADER_ROW_INDEX;
+    const range = XLSX.utils.decode_range(ref);
+    const maxScan = Math.min(range.e.r, 10);
+    for (let r = range.s.r; r <= maxScan; r++) {
+      let hits = 0;
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+        if (cell && typeof cell.v === "string" && headerNames.has(cell.v.trim())) {
+          hits++;
+          if (hits >= 3) return r;
+        }
+      }
+    }
+    return TEMPLATE_HEADER_ROW_INDEX;
+  };
+  const headerRowIdx = findHeaderRow();
+  const firstDataExcelRow = headerRowIdx + 2; // 1-indexed Excel row of first data row
+
   const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
-    defval: null, raw: true, blankrows: false,
+    defval: null, raw: true, blankrows: false, range: headerRowIdx,
   });
 
   const out: ImportedRow[] = [];
 
   rows.forEach((raw, i) => {
-    const excelRow = i + 2; // header is row 1
+    const excelRow = i + firstDataExcelRow;
     const errors: string[] = [];
     const warnings: string[] = [];
 
