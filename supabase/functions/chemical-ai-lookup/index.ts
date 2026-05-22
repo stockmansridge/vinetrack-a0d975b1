@@ -216,7 +216,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { product_name, country } = await req.json();
+    const body = await req.json();
+    const { product_name, country, mark_applied, applied_candidate } = body ?? {};
     const countryStr =
       typeof country === "string" && country.trim() ? country.trim() : "";
     if (!product_name || typeof product_name !== "string" || !product_name.trim()) {
@@ -239,6 +240,81 @@ Deno.serve(async (req) => {
     const admin = SUPABASE_URL && SERVICE_ROLE
       ? createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } })
       : null;
+
+    if (mark_applied === true) {
+      if (!admin || !applied_candidate || typeof applied_candidate !== "object") {
+        return new Response(JSON.stringify({ ok: false, error: "Applied candidate payload is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const candidate = applied_candidate as LookupCandidate;
+      const appliedProductName = String(candidate.product_name ?? "").trim();
+      const appliedManufacturer = String(candidate.manufacturer ?? "").trim();
+      if (!appliedProductName) {
+        return new Response(JSON.stringify({ ok: false, error: "Applied candidate product_name is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const productNameNormalised = normaliseQuery(appliedProductName);
+      const manufacturerNormalised = normaliseQuery(appliedManufacturer);
+      const { data: existingApplied } = await admin
+        .from("chemical_lookup_cache")
+        .select("times_seen")
+        .eq("query_normalised", normaliseQuery(product_name || appliedProductName))
+        .eq("country", countryStr || "")
+        .eq("product_name_normalised", productNameNormalised)
+        .eq("manufacturer_normalised", manufacturerNormalised)
+        .maybeSingle();
+
+      const { error: applyErr } = await admin
+        .from("chemical_lookup_cache")
+        .upsert({
+          query_normalised: normaliseQuery(product_name || appliedProductName),
+          country: countryStr || "",
+          product_name: appliedProductName,
+          manufacturer: appliedManufacturer,
+          product_name_normalised: productNameNormalised,
+          manufacturer_normalised: manufacturerNormalised,
+          active_ingredient: candidate.active_ingredient ?? null,
+          category: candidate.category ?? null,
+          chemical_group: candidate.chemical_group ?? null,
+          product_type: candidate.product_type ?? null,
+          unit: candidate.unit ?? null,
+          rate_basis: candidate.rate_basis ?? null,
+          rate_per_unit: candidate.rate_per_unit ?? null,
+          withholding_period_days: candidate.withholding_period_days ?? null,
+          re_entry_period_hours: candidate.re_entry_period_hours ?? null,
+          target: candidate.target ?? null,
+          notes: candidate.notes ?? null,
+          safety_note: candidate.safety_note ?? null,
+          country_confirmed: candidate.country_confirmed ?? null,
+          confidence: candidate.confidence ?? "medium",
+          source_hint: candidate.source_hint ?? "manual_applied",
+          times_seen: Math.max(1, (existingApplied?.times_seen ?? 0) + 1, candidate.times_seen ?? 0),
+          was_applied: true,
+          last_seen_at: new Date().toISOString(),
+        }, {
+          onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised",
+          ignoreDuplicates: false,
+          defaultToNull: false,
+        });
+
+      if (applyErr) {
+        console.error("apply candidate cache upsert", applyErr);
+        return new Response(JSON.stringify({ ok: false, error: "Could not preserve applied candidate" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const rawQuery = product_name.trim();
     const queryNorm = normaliseQuery(rawQuery);
