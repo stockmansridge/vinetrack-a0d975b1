@@ -492,6 +492,17 @@ function JobsTable({
                       <Button size="sm" variant="ghost" onClick={() => archiveMut.mutate(j.id)} title="Archive">
                         <Archive className="h-3.5 w-3.5" />
                       </Button>
+                      {mode === "planned" && String(j.status ?? "").toLowerCase() === "draft" && !j.is_template && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(j)}
+                          title="Delete draft permanently"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </>
                   )}
                   {canEdit && mode === "archived" && (
