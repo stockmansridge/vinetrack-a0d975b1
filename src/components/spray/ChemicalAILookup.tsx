@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, Check, Library } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,8 @@ export interface AppliedSuggestion {
   rei_hours?: string;
   target?: string;
   notes?: string;
+  /** Product label / SDS / source URL — mirrors iOS `saved_chemicals.label_url`. */
+  label_url?: string;
   /** Set when the user selected an existing library match instead of a new lookup row. */
   existing_chemical_id?: string;
 }
@@ -55,6 +57,7 @@ interface RawCandidate {
   was_applied?: boolean;
   times_seen?: number;
   source_hint?: string;
+  label_url?: string;
 }
 
 export interface ExistingLibraryItem {
@@ -121,6 +124,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
             source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
             times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
+            label_url: "label_url" in candidate ? candidate.label_url ?? null : null,
           },
         },
       });
@@ -201,6 +205,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           : undefined,
       target: c.target,
       notes: c.notes,
+      label_url: c.label_url && /^https?:\/\//i.test(c.label_url) ? c.label_url : undefined,
     });
     void preserveAppliedCandidate(c, finalName);
     setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
@@ -403,6 +408,17 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                 </div>
                 {c.notes && (
                   <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
+                )}
+                {c.label_url && /^https?:\/\//i.test(c.label_url) && (
+                  <a
+                    href={c.label_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View label/source
+                  </a>
                 )}
                 <Button
                   type="button"

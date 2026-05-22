@@ -38,6 +38,7 @@ For each candidate infer:
 - target: typical pest/disease/weed or use-case.
 - notes: concise (<240 chars), include compatibility cautions when known.
 - safety_note: always remind user to verify against current label for their country.
+- label_url: best public link to the product label, SDS, regulator page (APVMA/ACVM/EPA) or manufacturer product page, when you are confident the URL exists. Must start with https:// or http://. Leave null when unsure — never fabricate a URL.
 - country / country_confirmed / confidence as defined.`;
 
 const tools = [
@@ -82,6 +83,7 @@ const tools = [
                 country: { type: "string" },
                 country_confirmed: { type: "boolean" },
                 confidence: { type: "string", enum: ["high", "medium", "low", "unknown"] },
+                label_url: { type: ["string", "null"] },
               },
               required: ["product_name", "category", "confidence", "safety_note"],
               additionalProperties: false,
@@ -118,6 +120,7 @@ type LookupCandidate = {
   times_seen?: number;
   source_hint?: string;
   last_seen_at?: string;
+  label_url?: string | null;
 };
 
 function normaliseChemicalLookupKey(value: string): string {
@@ -185,6 +188,19 @@ function sourceWeight(sourceHint?: string | null): number {
 function recencyWeight(value?: string | null): number {
   const ts = value ? Date.parse(value) : Number.NaN;
   return Number.isFinite(ts) ? ts : 0;
+}
+
+function sanitiseLabelUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
 }
 
 // Note: there is intentionally no hard-coded "known good" list for any
@@ -269,6 +285,7 @@ Deno.serve(async (req) => {
           source_hint: candidate.source_hint ?? "manual_applied",
           times_seen: Math.max(1, (existingApplied?.times_seen ?? 0) + 1, candidate.times_seen ?? 0),
           was_applied: true,
+          label_url: sanitiseLabelUrl(candidate.label_url),
           last_seen_at: new Date().toISOString(),
         }, {
           onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised",
@@ -348,6 +365,7 @@ Deno.serve(async (req) => {
       times_seen: row.times_seen ?? 1,
       last_seen_at: row.last_seen_at ?? undefined,
       source_hint: row.source_hint ?? "previous_lookup",
+      label_url: sanitiseLabelUrl(row.label_url) ?? undefined,
     }));
 
     // 2. Call AI to enrich. Lower temperature for determinism.
@@ -517,6 +535,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
         last_seen_at: recencyWeight(existing.last_seen_at) >= recencyWeight(c.last_seen_at)
           ? existing.last_seen_at
           : c.last_seen_at,
+        label_url: sanitiseLabelUrl(existing.label_url) ?? sanitiseLabelUrl(c.label_url) ?? null,
       };
     }
 
@@ -613,6 +632,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           source_hint: c.source_hint ?? "ai_gateway",
           times_seen: Math.max((cachedTimesSeen.get(cacheKey) ?? 0) + 1, c.times_seen ?? 1, 1),
           was_applied: c.was_applied ?? false,
+          label_url: sanitiseLabelUrl(c.label_url),
           last_seen_at: new Date().toISOString(),
           };
         });

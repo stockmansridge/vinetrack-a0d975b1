@@ -24,6 +24,7 @@ export type Database = {
           country_confirmed: boolean | null
           created_at: string
           id: string
+          label_url: string | null
           last_seen_at: string
           manufacturer: string
           manufacturer_normalised: string
@@ -52,6 +53,7 @@ export type Database = {
           country_confirmed?: boolean | null
           created_at?: string
           id?: string
+          label_url?: string | null
           last_seen_at?: string
           manufacturer?: string
           manufacturer_normalised: string
@@ -80,6 +82,7 @@ export type Database = {
           country_confirmed?: boolean | null
           created_at?: string
           id?: string
+          label_url?: string | null
           last_seen_at?: string
           manufacturer?: string
           manufacturer_normalised?: string

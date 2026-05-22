@@ -1,0 +1,1 @@
+ALTER TABLE public.chemical_lookup_cache ADD COLUMN IF NOT EXISTS label_url text;

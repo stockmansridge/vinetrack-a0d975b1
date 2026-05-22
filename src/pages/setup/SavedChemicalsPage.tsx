@@ -30,7 +30,7 @@ import {
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -72,7 +72,7 @@ function displayBaseUnit(unit?: string | null): string {
 const EMPTY: SavedChemicalInput = {
   name: "", active_ingredient: "", chemical_group: "", use: "",
   manufacturer: "", crop: "", problem: "", rate_per_ha: null, unit: "",
-  restrictions: "", notes: "",
+  restrictions: "", notes: "", label_url: "",
 };
 
 export default function SavedChemicalsPage() {
@@ -403,20 +403,21 @@ export default function SavedChemicalsPage() {
                   <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
                   <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Default rate</SortableTableHead>
                   <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
+                  <TableHead className="w-20">Label</TableHead>
                   {canSeeCosts && <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}>Cost / unit</SortableTableHead>}
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -431,6 +432,22 @@ export default function SavedChemicalsPage() {
                       {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}
                     </TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
+                    <TableCell>
+                      {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+                        <a
+                          href={c.label_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
+                          title={c.label_url}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Label
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     {canSeeCosts && (
                       <TableCell>
                         {(() => {
@@ -629,6 +646,7 @@ function ChemicalEditor({
           unit: initial.unit ?? "",
           restrictions: initial.restrictions ?? "",
           notes: initial.notes ?? "",
+          label_url: initial.label_url ?? "",
           purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
@@ -686,6 +704,20 @@ function ChemicalEditor({
           : null,
       };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
+      const labelUrlRaw = (payload.label_url ?? "").trim();
+      if (labelUrlRaw) {
+        try {
+          const u = new URL(labelUrlRaw);
+          if (u.protocol !== "http:" && u.protocol !== "https:") {
+            throw new Error("only http(s)");
+          }
+          payload.label_url = u.toString();
+        } catch {
+          throw new Error("Label link must be a full http:// or https:// URL");
+        }
+      } else {
+        payload.label_url = "";
+      }
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
     },
@@ -716,6 +748,7 @@ function ChemicalEditor({
       problem: s.target ?? p.problem ?? "",
       unit: composed,
       notes: s.notes ?? p.notes ?? "",
+      label_url: s.label_url && /^https?:\/\//i.test(s.label_url) ? s.label_url : (p.label_url ?? ""),
     }));
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
     if (s.whp_days) setWhp(s.whp_days);
@@ -913,6 +946,29 @@ function ChemicalEditor({
           </Field>
           <Field label="Notes">
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+          </Field>
+          <Field label="Product label link">
+            <Input
+              type="url"
+              inputMode="url"
+              value={form.label_url ?? ""}
+              onChange={(e) => set("label_url", e.target.value)}
+              placeholder="https://…"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Link to the product label, SDS, APVMA page or manufacturer product page. Must start with https:// or http://.
+            </p>
+            {form.label_url && /^https?:\/\//i.test(form.label_url.trim()) && (
+              <a
+                href={form.label_url.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open label
+              </a>
+            )}
           </Field>
         </div>
         <SheetFooter className="mt-6 gap-2">
