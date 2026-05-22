@@ -429,19 +429,22 @@ export default function SavedChemicalsPage() {
 }
 
 function ChemicalEditor({
-  open, onOpenChange, initial, vineyardId, existingLibrary, onSaved,
+  open, onOpenChange, initial, vineyardId, existingLibrary, canSeeCosts, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: SavedChemical | null;
   vineyardId: string;
   existingLibrary: SavedChemical[];
+  canSeeCosts: boolean;
   onSaved: () => void;
 }) {
   const { toast } = useToast();
   const { currentCountry } = useVineyard();
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
+  const [costStr, setCostStr] = useState("");
+  const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
   const [rei, setRei] = useState("");
   const [restNotes, setRestNotes] = useState("");
@@ -463,8 +466,11 @@ function ChemicalEditor({
           unit: initial.unit ?? "",
           restrictions: initial.restrictions ?? "",
           notes: initial.notes ?? "",
+          purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
+        setCostStr(purchaseCostPerUnit(initial.purchase) == null ? "" : String(purchaseCostPerUnit(initial.purchase)));
+        setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
         setRei(p.reiHours);
@@ -472,6 +478,8 @@ function ChemicalEditor({
       } else {
         setForm(EMPTY);
         setRateStr("");
+        setCostStr("");
+        setCurrency("AUD");
         setWhp("");
         setRei("");
         setRestNotes("");
@@ -482,11 +490,30 @@ function ChemicalEditor({
   const saveMut = useMutation({
     mutationFn: async () => {
       const rateNum = rateStr.trim() === "" ? null : Number(rateStr);
+      const costNum = costStr.trim() === "" ? null : Number(costStr);
       if (rateNum != null && Number.isNaN(rateNum)) {
         throw new Error("Rate per ha must be a number");
       }
+      if (costNum != null && (Number.isNaN(costNum) || costNum < 0)) {
+        throw new Error("Cost per unit must be zero or greater");
+      }
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
-      const payload: SavedChemicalInput = { ...form, rate_per_ha: rateNum, restrictions };
+      const payload: SavedChemicalInput = {
+        ...form,
+        rate_per_ha: rateNum,
+        restrictions,
+        purchase: canSeeCosts && costNum != null
+          ? {
+              ...(form.purchase ?? {}),
+              costPerBaseUnit: costNum,
+              cost_per_base_unit: costNum,
+              costPerUnit: costNum,
+              cost_per_unit: costNum,
+              currency,
+              unit: displayUnitText(form.unit) || null,
+            }
+          : null,
+      };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
@@ -627,6 +654,32 @@ function ChemicalEditor({
               Choose whether this product rate is applied by area or by spray volume.
             </p>
           </Field>
+          {canSeeCosts && (
+            <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3">
+              <Field label={`Cost per ${displayUnitText(form.unit) || "unit"}`}>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={costStr}
+                  onChange={(e) => setCostStr(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field label="Currency">
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUD">AUD</SelectItem>
+                    <SelectItem value="NZD">NZD</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Withholding period (days)">
               <Input type="number" inputMode="decimal" step="any" value={whp} onChange={(e) => setWhp(e.target.value)} />
