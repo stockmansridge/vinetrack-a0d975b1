@@ -40,6 +40,7 @@ import {
   RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL, displayUnitText,
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
+import { normaliseChemicalGroup, buildGroupOptions } from "@/lib/chemicalGroupNormalise";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -99,11 +100,10 @@ export default function SavedChemicalsPage() {
   });
   const archived = archivedQuery.data?.chemicals ?? [];
 
-  const groups = useMemo(() => {
-    const s = new Set<string>();
-    chemicals.forEach((c) => c.chemical_group && s.add(c.chemical_group));
-    return Array.from(s).sort();
-  }, [chemicals]);
+  const groupOptions = useMemo(
+    () => buildGroupOptions(chemicals.map((c) => c.chemical_group)),
+    [chemicals],
+  );
   const uses = useMemo(() => {
     const s = new Set<string>();
     chemicals.forEach((c) => c.use && s.add(c.use));
@@ -112,14 +112,19 @@ export default function SavedChemicalsPage() {
 
   const rows = useMemo(() => {
     let list = chemicals.slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-    if (group !== ANY) list = list.filter((c) => c.chemical_group === group);
+    if (group !== ANY) {
+      list = list.filter((c) => normaliseChemicalGroup(c.chemical_group) === group);
+    }
     if (use !== ANY) list = list.filter((c) => c.use === use);
     if (filter.trim()) {
       const f = filter.toLowerCase();
-      list = list.filter((c) =>
-        [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      const fNorm = normaliseChemicalGroup(filter);
+      list = list.filter((c) => {
+        const groupNorm = normaliseChemicalGroup(c.chemical_group);
+        if (fNorm && groupNorm && groupNorm.includes(fNorm)) return true;
+        return [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions]
+          .some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
   }, [chemicals, filter, group, use]);
@@ -129,7 +134,7 @@ export default function SavedChemicalsPage() {
     accessors: {
       name: (c) => c.name ?? "",
       active_ingredient: (c) => c.active_ingredient ?? "",
-      group: (c) => c.chemical_group ?? "",
+      group: (c) => normaliseChemicalGroup(c.chemical_group),
       use: (c) => c.use ?? "",
       rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
       manufacturer: (c) => c.manufacturer ?? "",
@@ -226,7 +231,7 @@ export default function SavedChemicalsPage() {
                 <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ANY}>Any group</SelectItem>
-                  {groups.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                  {groupOptions.map((o) => (<SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
