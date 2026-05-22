@@ -274,6 +274,51 @@ export default function SavedChemicalsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Active ingredient</div>
+              <Popover open={aiOpen} onOpenChange={setAiOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={aiOpen}
+                    className="w-64 justify-between font-normal"
+                  >
+                    <span className={cn("truncate", activeIngredient === ANY && "text-muted-foreground")}>
+                      {activeIngredient === ANY ? "Any active ingredient" : activeIngredientLabel}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search active ingredient…" />
+                    <CommandList>
+                      <CommandEmpty>No matches.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__any__ any active ingredient"
+                          onSelect={() => { setActiveIngredient(ANY); setAiOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", activeIngredient === ANY ? "opacity-100" : "opacity-0")} />
+                          Any active ingredient
+                        </CommandItem>
+                        {activeIngredientOptions.map((o) => (
+                          <CommandItem
+                            key={o.key}
+                            value={o.label}
+                            onSelect={() => { setActiveIngredient(o.key); setAiOpen(false); }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", activeIngredient === o.key ? "opacity-100" : "opacity-0")} />
+                            {o.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="space-y-1 ml-auto">
               <div className="text-xs text-muted-foreground">Search</div>
               <Input
