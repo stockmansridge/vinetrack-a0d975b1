@@ -44,6 +44,7 @@ import {
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
 import { normaliseChemicalGroup, buildGroupOptions } from "@/lib/chemicalGroupNormalise";
+import { normaliseManufacturerName, buildManufacturerOptions } from "@/lib/manufacturerNormalise";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -86,6 +87,8 @@ export default function SavedChemicalsPage() {
   const [use, setUse] = useState<string>(ANY);
   const [activeIngredient, setActiveIngredient] = useState<string>(ANY);
   const [aiOpen, setAiOpen] = useState(false);
+  const [manufacturer, setManufacturer] = useState<string>(ANY);
+  const [mfrOpen, setMfrOpen] = useState(false);
   const [tab, setTab] = useState<"active" | "archived">("active");
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
@@ -136,6 +139,15 @@ export default function SavedChemicalsPage() {
     return activeIngredientOptions.find((o) => o.key === activeIngredient)?.label ?? "";
   }, [activeIngredient, activeIngredientOptions]);
 
+  const manufacturerOptions = useMemo(
+    () => buildManufacturerOptions(chemicals.map((c) => c.manufacturer)),
+    [chemicals],
+  );
+  const manufacturerLabel = useMemo(() => {
+    if (manufacturer === ANY) return "";
+    return manufacturerOptions.find((o) => o.key === manufacturer)?.label ?? "";
+  }, [manufacturer, manufacturerOptions]);
+
   const rows = useMemo(() => {
     let list = chemicals.slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (group !== ANY) {
@@ -145,18 +157,24 @@ export default function SavedChemicalsPage() {
     if (activeIngredient !== ANY) {
       list = list.filter((c) => normaliseAI(c.active_ingredient) === activeIngredient);
     }
+    if (manufacturer !== ANY) {
+      list = list.filter((c) => normaliseManufacturerName(c.manufacturer) === manufacturer);
+    }
     if (filter.trim()) {
       const f = filter.toLowerCase();
       const fNorm = normaliseChemicalGroup(filter);
+      const fMfr = normaliseManufacturerName(filter);
       list = list.filter((c) => {
         const groupNorm = normaliseChemicalGroup(c.chemical_group);
         if (fNorm && groupNorm && groupNorm.includes(fNorm)) return true;
+        const mfrNorm = normaliseManufacturerName(c.manufacturer);
+        if (fMfr && mfrNorm && mfrNorm.includes(fMfr)) return true;
         return [c.name, c.active_ingredient, c.manufacturer, c.chemical_group, c.use, c.crop, c.problem, c.notes, c.restrictions]
           .some((v) => String(v ?? "").toLowerCase().includes(f));
       });
     }
     return list;
-  }, [chemicals, filter, group, use, activeIngredient]);
+  }, [chemicals, filter, group, use, activeIngredient, manufacturer]);
 
   type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
@@ -166,7 +184,7 @@ export default function SavedChemicalsPage() {
       group: (c) => normaliseChemicalGroup(c.chemical_group),
       use: (c) => c.use ?? "",
       rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
-      manufacturer: (c) => c.manufacturer ?? "",
+      manufacturer: (c) => normaliseManufacturerName(c.manufacturer) || (c.manufacturer ?? ""),
       cost: (c) => purchaseCostPerUnit(c.purchase),
     },
     initial: { key: "name", direction: "asc" },
