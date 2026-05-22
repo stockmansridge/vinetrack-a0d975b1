@@ -29,6 +29,8 @@ export interface AppliedSuggestion {
   rei_hours?: string;
   target?: string;
   notes?: string;
+  /** Product label / SDS / source URL — mirrors iOS `saved_chemicals.label_url`. */
+  label_url?: string;
   /** Set when the user selected an existing library match instead of a new lookup row. */
   existing_chemical_id?: string;
 }
