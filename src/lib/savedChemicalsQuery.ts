@@ -121,6 +121,16 @@ function sanitize(input: SavedChemicalInput) {
   if (out.unit == null || out.unit === "") {
     out.unit = "Litres";
   }
+  // Sanitise the product label / SDS / source link — only http(s) URLs are
+  // saved; anything else becomes empty string so iOS sees a consistent value.
+  if (typeof out.label_url === "string" && out.label_url) {
+    const trimmed = out.label_url.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+      out.label_url = trimmed;
+    } else {
+      out.label_url = "";
+    }
+  }
   // Shared schema columns that are optional in the UI but NOT NULL in the DB
   // must be sent as empty strings instead of null.
   for (const key of [
@@ -132,6 +142,7 @@ function sanitize(input: SavedChemicalInput) {
     "problem",
     "restrictions",
     "notes",
+    "label_url",
   ]) {
     if (out[key] == null) out[key] = "";
   }
