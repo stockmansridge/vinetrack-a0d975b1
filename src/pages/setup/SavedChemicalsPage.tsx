@@ -337,6 +337,51 @@ export default function SavedChemicalsPage() {
                 </PopoverContent>
               </Popover>
             </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Manufacturer</div>
+              <Popover open={mfrOpen} onOpenChange={setMfrOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={mfrOpen}
+                    className="w-64 justify-between font-normal"
+                  >
+                    <span className={cn("truncate", manufacturer === ANY && "text-muted-foreground")}>
+                      {manufacturer === ANY ? "Any manufacturer" : manufacturerLabel}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search manufacturer…" />
+                    <CommandList>
+                      <CommandEmpty>No matches.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__any__ any manufacturer"
+                          onSelect={() => { setManufacturer(ANY); setMfrOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", manufacturer === ANY ? "opacity-100" : "opacity-0")} />
+                          Any manufacturer
+                        </CommandItem>
+                        {manufacturerOptions.map((o) => (
+                          <CommandItem
+                            key={o.key}
+                            value={o.label}
+                            onSelect={() => { setManufacturer(o.key); setMfrOpen(false); }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", manufacturer === o.key ? "opacity-100" : "opacity-0")} />
+                            {o.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="space-y-1 ml-auto">
               <div className="text-xs text-muted-foreground">Search</div>
               <Input
