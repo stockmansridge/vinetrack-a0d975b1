@@ -365,6 +365,7 @@ Deno.serve(async (req) => {
       times_seen: row.times_seen ?? 1,
       last_seen_at: row.last_seen_at ?? undefined,
       source_hint: row.source_hint ?? "previous_lookup",
+      label_url: sanitiseLabelUrl(row.label_url) ?? undefined,
     }));
 
     // 2. Call AI to enrich. Lower temperature for determinism.
