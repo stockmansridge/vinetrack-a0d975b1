@@ -149,12 +149,8 @@ function sanitize(input: SavedChemicalInput) {
       delete purchase.costPerUnit;
       delete purchase.cost_per_unit;
     }
-    if (purchase.currency != null) {
-      purchase.currency = String(purchase.currency).trim() || null;
-    }
-    if (purchase.unit != null) {
-      purchase.unit = String(purchase.unit).trim() || null;
-    }
+    purchase.currency = String(purchase.currency ?? "AUD").trim() || "AUD";
+    purchase.unit = iosUnitFromAny(purchase.unit ?? out.unit ?? "Litres");
     out.purchase = Object.keys(purchase).length ? purchase : null;
   }
 
