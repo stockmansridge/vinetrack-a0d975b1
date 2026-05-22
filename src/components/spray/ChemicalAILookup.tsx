@@ -132,8 +132,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     const basis: RateBasis = c.rate_basis ?? "per_hectare";
     const composedUnit =
       unit ? `${unit}${basis === "per_100L" ? "/100L" : "/ha"}` : undefined;
+    const finalName = c.product_name?.trim() || name.trim();
     onApply({
-      name: c.product_name?.trim() || name.trim(),
+      name: finalName,
       active_ingredient: c.active_ingredient,
       category: cat ?? undefined,
       chemical_group: c.chemical_group,
@@ -154,6 +155,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       target: c.target,
       notes: c.notes,
     });
+    setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
+    setResultsCollapsed(true);
   }
 
   function applyExisting(item: ExistingLibraryItem) {
@@ -162,6 +165,15 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       name: item.name ?? undefined,
       active_ingredient: item.active_ingredient ?? undefined,
     });
+    setApplied({ name: item.name ?? name.trim(), source: "existing" });
+    setResultsCollapsed(true);
+  }
+
+  function applyManual() {
+    const q = name.trim();
+    onApply({ name: q });
+    setApplied({ name: q, source: "manual" });
+    setResultsCollapsed(true);
   }
 
   return (
