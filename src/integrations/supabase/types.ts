@@ -26,8 +26,10 @@ export type Database = {
           id: string
           last_seen_at: string
           manufacturer: string
+          manufacturer_normalised: string
           notes: string | null
           product_name: string
+          product_name_normalised: string
           product_type: string | null
           query_normalised: string
           rate_basis: string | null
@@ -36,7 +38,9 @@ export type Database = {
           safety_note: string | null
           source_hint: string | null
           target: string | null
+          times_seen: number
           unit: string | null
+          was_applied: boolean
           withholding_period_days: number | null
         }
         Insert: {
@@ -50,8 +54,10 @@ export type Database = {
           id?: string
           last_seen_at?: string
           manufacturer?: string
+          manufacturer_normalised: string
           notes?: string | null
           product_name: string
+          product_name_normalised: string
           product_type?: string | null
           query_normalised: string
           rate_basis?: string | null
@@ -60,7 +66,9 @@ export type Database = {
           safety_note?: string | null
           source_hint?: string | null
           target?: string | null
+          times_seen?: number
           unit?: string | null
+          was_applied?: boolean
           withholding_period_days?: number | null
         }
         Update: {
@@ -74,8 +82,10 @@ export type Database = {
           id?: string
           last_seen_at?: string
           manufacturer?: string
+          manufacturer_normalised?: string
           notes?: string | null
           product_name?: string
+          product_name_normalised?: string
           product_type?: string | null
           query_normalised?: string
           rate_basis?: string | null
@@ -84,7 +94,9 @@ export type Database = {
           safety_note?: string | null
           source_hint?: string | null
           target?: string | null
+          times_seen?: number
           unit?: string | null
+          was_applied?: boolean
           withholding_period_days?: number | null
         }
         Relationships: []

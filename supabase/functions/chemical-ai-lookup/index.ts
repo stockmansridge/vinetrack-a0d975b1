@@ -95,8 +95,37 @@ const tools = [
   },
 ];
 
+type LookupCandidate = {
+  product_name?: string;
+  active_ingredient?: string;
+  category?: string;
+  chemical_group?: string;
+  manufacturer?: string;
+  product_type?: "liquid" | "solid";
+  unit?: "L" | "mL" | "kg" | "g";
+  rate_basis?: "per_hectare" | "per_100L";
+  rate_per_unit?: number | null;
+  withholding_period_days?: number | null;
+  re_entry_period_hours?: number | null;
+  target?: string;
+  notes?: string;
+  safety_note?: string;
+  country?: string;
+  country_confirmed?: boolean;
+  confidence?: "high" | "medium" | "low" | "unknown";
+  cached?: boolean;
+  was_applied?: boolean;
+  times_seen?: number;
+  source_hint?: string;
+  last_seen_at?: string;
+};
+
+function normaliseChemicalLookupKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
 function normaliseQuery(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normaliseChemicalLookupKey(s);
 }
 
 function buildQueryExpansion(raw: string): string[] {
@@ -133,16 +162,148 @@ function candidateKey(c: any): string {
   return `${normaliseQuery(c?.product_name || "")}|${normaliseQuery(c?.manufacturer || "")}`;
 }
 
+function countryMatches(requestCountry: string, candidateCountry?: string | null): boolean {
+  if (!requestCountry) return true;
+  return normaliseQuery(requestCountry) === normaliseQuery(candidateCountry || "");
+}
+
+function sourceWeight(sourceHint?: string | null): number {
+  switch (sourceHint) {
+    case "manual_applied":
+      return 4;
+    case "known_good_manual":
+      return 3;
+    case "previous_lookup":
+      return 2;
+    case "ai_gateway":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function recencyWeight(value?: string | null): number {
+  const ts = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function getKnownCandidates(queryNorm: string, countryStr: string): LookupCandidate[] {
+  if (queryNorm !== "cropsil") return [];
+  if (countryStr && !/australia/i.test(countryStr)) return [];
+  return [
+    {
+      product_name: "Crop SIL",
+      manufacturer: "Switch Ag",
+      category: "Bio-stimulant",
+      active_ingredient: "Silicic acid / potassium / kelp / organic acids",
+      product_type: "liquid",
+      unit: "L",
+      rate_basis: "per_hectare",
+      rate_per_unit: null,
+      target: "Silicon nutrition / plant health support",
+      notes: "Known Australian Crop SIL candidate. Confirm current label, rate, and permitted use.",
+      safety_note: "Verify against the current Australian label before use.",
+      country: "Australia",
+      country_confirmed: true,
+      confidence: "high",
+      source_hint: "known_good_manual",
+      times_seen: 50,
+    },
+  ];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { product_name, country } = await req.json();
+    const body = await req.json();
+    const { product_name, country, mark_applied, applied_candidate } = body ?? {};
     const countryStr =
       typeof country === "string" && country.trim() ? country.trim() : "";
     if (!product_name || typeof product_name !== "string" || !product_name.trim()) {
       return new Response(JSON.stringify({ error: "product_name is required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const admin = SUPABASE_URL && SERVICE_ROLE
+      ? createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } })
+      : null;
+
+    if (mark_applied === true) {
+      if (!admin || !applied_candidate || typeof applied_candidate !== "object") {
+        return new Response(JSON.stringify({ ok: false, error: "Applied candidate payload is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const candidate = applied_candidate as LookupCandidate;
+      const appliedProductName = String(candidate.product_name ?? "").trim();
+      const appliedManufacturer = String(candidate.manufacturer ?? "").trim();
+      if (!appliedProductName) {
+        return new Response(JSON.stringify({ ok: false, error: "Applied candidate product_name is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const productNameNormalised = normaliseQuery(appliedProductName);
+      const manufacturerNormalised = normaliseQuery(appliedManufacturer);
+      const { data: existingApplied } = await admin
+        .from("chemical_lookup_cache")
+        .select("times_seen")
+        .eq("query_normalised", normaliseQuery(product_name || appliedProductName))
+        .eq("country", countryStr || "")
+        .eq("product_name_normalised", productNameNormalised)
+        .eq("manufacturer_normalised", manufacturerNormalised)
+        .maybeSingle();
+
+      const { error: applyErr } = await admin
+        .from("chemical_lookup_cache")
+        .upsert({
+          query_normalised: normaliseQuery(product_name || appliedProductName),
+          country: countryStr || "",
+          product_name: appliedProductName,
+          manufacturer: appliedManufacturer,
+          product_name_normalised: productNameNormalised,
+          manufacturer_normalised: manufacturerNormalised,
+          active_ingredient: candidate.active_ingredient ?? null,
+          category: candidate.category ?? null,
+          chemical_group: candidate.chemical_group ?? null,
+          product_type: candidate.product_type ?? null,
+          unit: candidate.unit ?? null,
+          rate_basis: candidate.rate_basis ?? null,
+          rate_per_unit: candidate.rate_per_unit ?? null,
+          withholding_period_days: candidate.withholding_period_days ?? null,
+          re_entry_period_hours: candidate.re_entry_period_hours ?? null,
+          target: candidate.target ?? null,
+          notes: candidate.notes ?? null,
+          safety_note: candidate.safety_note ?? null,
+          country_confirmed: candidate.country_confirmed ?? null,
+          confidence: candidate.confidence ?? "medium",
+          source_hint: candidate.source_hint ?? "manual_applied",
+          times_seen: Math.max(1, (existingApplied?.times_seen ?? 0) + 1, candidate.times_seen ?? 0),
+          was_applied: true,
+          last_seen_at: new Date().toISOString(),
+        }, {
+          onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised",
+          ignoreDuplicates: false,
+          defaultToNull: false,
+        });
+
+      if (applyErr) {
+        console.error("apply candidate cache upsert", applyErr);
+        return new Response(JSON.stringify({ ok: false, error: "Could not preserve applied candidate" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -154,12 +315,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const admin = SUPABASE_URL && SERVICE_ROLE
-      ? createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } })
-      : null;
 
     const rawQuery = product_name.trim();
     const queryNorm = normaliseQuery(rawQuery);
@@ -180,12 +335,16 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("query_normalised", queryNorm)
         .in("country", countryStr ? [countryStr, ""] : [""])
+        .order("was_applied", { ascending: false })
+        .order("times_seen", { ascending: false })
         .order("last_seen_at", { ascending: false })
-        .limit(20);
+        .limit(50);
       cached = cachedRows ?? [];
     }
 
-    const cachedCandidates = cached.map((row) => ({
+    const knownCandidates = getKnownCandidates(queryNorm, countryStr);
+
+    const cachedCandidates: LookupCandidate[] = cached.map((row) => ({
       product_name: row.product_name,
       active_ingredient: row.active_ingredient ?? undefined,
       category: row.category ?? undefined,
@@ -204,6 +363,9 @@ Deno.serve(async (req) => {
       country_confirmed: row.country_confirmed ?? undefined,
       confidence: row.confidence ?? "medium",
       cached: true,
+      was_applied: row.was_applied ?? false,
+      times_seen: row.times_seen ?? 1,
+      last_seen_at: row.last_seen_at ?? undefined,
       source_hint: row.source_hint ?? "previous_lookup",
     }));
 
@@ -306,8 +468,15 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
     // Only add the exact-name skeleton if NOTHING in cache or AI is an
     // exact/near match — guarantees the user's typed query is always
     // selectable for manual entry without clobbering real matches.
+    const preservedCandidates: LookupCandidate[] = [...knownCandidates, ...cachedCandidates];
+    const appliedCandidates = preservedCandidates.filter((c) => c.was_applied);
+    const exactCandidates = preservedCandidates.filter((c) => {
+      const score = nameSimilarityScore(rawQuery, c.product_name ?? "");
+      return score >= 80 || (score === 100 && countryMatches(countryStr, c.country));
+    });
+
     const hasExactOrNear =
-      cachedCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60) ||
+      preservedCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60) ||
       aiCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60);
 
     const exactNameSkeleton = {
@@ -319,35 +488,101 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       cached: false,
     };
 
-    const freshCandidates = [
-      ...cachedCandidates,
+    const freshCandidates: LookupCandidate[] = [
+      ...preservedCandidates,
       ...aiCandidates,
       ...(hasExactOrNear ? [] : [exactNameSkeleton]),
     ];
 
-    const merged: any[] = [];
-    const seen = new Set<string>();
+    const merged: LookupCandidate[] = [];
+    const seen = new Map<string, number>();
     for (const c of freshCandidates) {
       const key = candidateKey(c);
       if (!key || key === "|") continue;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push({ ...c }); // clone — never mutate inputs
+      const existingIndex = seen.get(key);
+      if (existingIndex == null) {
+        seen.set(key, merged.length);
+        merged.push({ ...c }); // clone — never mutate inputs
+        continue;
+      }
+
+      const existing = merged[existingIndex];
+      merged[existingIndex] = {
+        ...existing,
+        ...c,
+        product_name: existing.product_name ?? c.product_name,
+        manufacturer: existing.manufacturer ?? c.manufacturer,
+        active_ingredient: existing.active_ingredient ?? c.active_ingredient,
+        category: existing.category ?? c.category,
+        chemical_group: existing.chemical_group ?? c.chemical_group,
+        product_type: existing.product_type ?? c.product_type,
+        unit: existing.unit ?? c.unit,
+        rate_basis: existing.rate_basis ?? c.rate_basis,
+        rate_per_unit: existing.rate_per_unit ?? c.rate_per_unit,
+        target: existing.target ?? c.target,
+        notes: existing.notes ?? c.notes,
+        safety_note: existing.safety_note ?? c.safety_note,
+        country: existing.country ?? c.country,
+        country_confirmed: existing.country_confirmed ?? c.country_confirmed,
+        confidence: (CONFIDENCE_WEIGHT[existing.confidence ?? "unknown"] ?? 0) >= (CONFIDENCE_WEIGHT[c.confidence ?? "unknown"] ?? 0)
+          ? existing.confidence
+          : c.confidence,
+        cached: existing.cached || c.cached,
+        was_applied: existing.was_applied || c.was_applied,
+        times_seen: Math.max(existing.times_seen ?? 0, c.times_seen ?? 0),
+        source_hint: sourceWeight(existing.source_hint) >= sourceWeight(c.source_hint)
+          ? existing.source_hint
+          : c.source_hint,
+        last_seen_at: recencyWeight(existing.last_seen_at) >= recencyWeight(c.last_seen_at)
+          ? existing.last_seen_at
+          : c.last_seen_at,
+      };
     }
 
     // 4. Deterministic ranking:
     //    exact-name match → near-match → country-confirmed → cached → AI confidence.
-    merged.sort((a: any, b: any) => {
+    merged.sort((a: LookupCandidate, b: LookupCandidate) => {
       const sa = nameSimilarityScore(rawQuery, a.product_name);
       const sb = nameSimilarityScore(rawQuery, b.product_name);
+      const exactCountryA = sa === 100 && countryMatches(countryStr, a.country) ? 1 : 0;
+      const exactCountryB = sb === 100 && countryMatches(countryStr, b.country) ? 1 : 0;
+      if (exactCountryA !== exactCountryB) return exactCountryB - exactCountryA;
+      const exactA = sa === 100 ? 1 : 0;
+      const exactB = sb === 100 ? 1 : 0;
+      if (exactA !== exactB) return exactB - exactA;
       if (sa !== sb) return sb - sa;
+      const appliedA = a.was_applied ? 1 : 0;
+      const appliedB = b.was_applied ? 1 : 0;
+      if (appliedA !== appliedB) return appliedB - appliedA;
       const ca = a.country_confirmed === true ? 1 : 0;
       const cb = b.country_confirmed === true ? 1 : 0;
       if (ca !== cb) return cb - ca;
+      const sourceA = sourceWeight(a.source_hint);
+      const sourceB = sourceWeight(b.source_hint);
+      if (sourceA !== sourceB) return sourceB - sourceA;
       const cachedA = a.cached ? 1 : 0;
       const cachedB = b.cached ? 1 : 0;
       if (cachedA !== cachedB) return cachedB - cachedA;
-      return (CONFIDENCE_WEIGHT[b.confidence] ?? 0) - (CONFIDENCE_WEIGHT[a.confidence] ?? 0);
+      const confDelta = (CONFIDENCE_WEIGHT[b.confidence ?? "unknown"] ?? 0) - (CONFIDENCE_WEIGHT[a.confidence ?? "unknown"] ?? 0);
+      if (confDelta !== 0) return confDelta;
+      const timesSeenDelta = (b.times_seen ?? 0) - (a.times_seen ?? 0);
+      if (timesSeenDelta !== 0) return timesSeenDelta;
+      return recencyWeight(b.last_seen_at) - recencyWeight(a.last_seen_at);
+    });
+
+    console.log("Chemical lookup sources", {
+      query: rawQuery,
+      normalisedKey: queryNorm,
+      exactCandidates: exactCandidates.length,
+      cachedCandidates: cachedCandidates.length,
+      appliedCandidates: appliedCandidates.length,
+      aiCandidates: aiCandidates.length,
+      finalCandidates: merged.slice(0, 15).map((c) => ({
+        name: c.product_name,
+        manufacturer: c.manufacturer,
+        source: c.source_hint,
+        confidence: c.confidence,
+      })),
     });
 
     console.log("[chemical-ai-lookup] merged", {
@@ -356,15 +591,30 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       names: merged.map((m) => `${m.product_name}|${m.manufacturer || ""}${m.cached ? " [cached]" : ""}`),
     });
 
+    const cachedTimesSeen = new Map(
+      cached.map((row) => [
+        `${row.product_name_normalised ?? normaliseQuery(row.product_name ?? "")}|${row.manufacturer_normalised ?? normaliseQuery(row.manufacturer ?? "")}`,
+        row.times_seen ?? 1,
+      ]),
+    );
+
     // 5. Write high-confidence AI candidates to cache for future lookups.
     if (admin && aiCandidates.length) {
-      const toCache = aiCandidates
-        .filter((c) => c && c.product_name && (c.confidence === "high" || c.confidence === "medium"))
-        .map((c) => ({
-          query_normalised: queryNorm,
-          country: countryStr || "",
-          product_name: String(c.product_name).trim(),
-          manufacturer: (c.manufacturer ?? "").toString().trim() || "",
+      const toCache = merged
+        .filter((c) => c && c.product_name && (c.confidence === "high" || c.confidence === "medium") && c.source_hint !== "exact_name_fallback")
+        .map((c) => {
+          const product_name = String(c.product_name).trim();
+          const manufacturer = (c.manufacturer ?? "").toString().trim() || "";
+          const product_name_normalised = normaliseQuery(product_name);
+          const manufacturer_normalised = normaliseQuery(manufacturer);
+          const cacheKey = `${product_name_normalised}|${manufacturer_normalised}`;
+          return {
+            query_normalised: queryNorm,
+            country: countryStr || "",
+            product_name,
+            manufacturer,
+            product_name_normalised,
+            manufacturer_normalised,
           active_ingredient: c.active_ingredient ?? null,
           category: c.category ?? null,
           chemical_group: c.chemical_group ?? null,
@@ -379,14 +629,30 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           safety_note: c.safety_note ?? null,
           country_confirmed: c.country_confirmed ?? null,
           confidence: c.confidence ?? "medium",
-          source_hint: "ai_gateway",
+          source_hint: c.source_hint ?? "ai_gateway",
+          times_seen: Math.max((cachedTimesSeen.get(cacheKey) ?? 0) + 1, c.times_seen ?? 1, 1),
+          was_applied: c.was_applied ?? false,
           last_seen_at: new Date().toISOString(),
-        }));
+          };
+        });
       if (toCache.length) {
         const { error: upErr } = await admin
           .from("chemical_lookup_cache")
-          .upsert(toCache, { onConflict: "query_normalised,country,product_name,manufacturer", ignoreDuplicates: false });
+          .upsert(toCache, { onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised", ignoreDuplicates: false, defaultToNull: false });
         if (upErr) console.error("cache upsert", upErr);
+
+        const seenKeys = Array.from(new Set(toCache.map((c) => `${c.product_name_normalised}|${c.manufacturer_normalised}`)));
+        for (const key of seenKeys) {
+          const [productNameNormalised, manufacturerNormalised] = key.split("|");
+          const { error: bumpErr } = await admin
+            .from("chemical_lookup_cache")
+            .update({ last_seen_at: new Date().toISOString() })
+            .eq("query_normalised", queryNorm)
+            .eq("country", countryStr || "")
+            .eq("product_name_normalised", productNameNormalised)
+            .eq("manufacturer_normalised", manufacturerNormalised);
+          if (bumpErr) console.error("cache touch", bumpErr);
+        }
       }
     }
 

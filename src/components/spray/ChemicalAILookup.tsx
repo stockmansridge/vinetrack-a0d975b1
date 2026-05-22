@@ -52,6 +52,8 @@ interface RawCandidate {
   country_confirmed?: boolean;
   confidence?: "high" | "medium" | "low" | "unknown";
   cached?: boolean;
+  was_applied?: boolean;
+  times_seen?: number;
   source_hint?: string;
 }
 
@@ -83,6 +85,49 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
   const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" } | null>(null);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
+
+  async function preserveAppliedCandidate(candidate: RawCandidate | ExistingLibraryItem, fallbackName?: string) {
+    const queryName = name.trim() || fallbackName?.trim();
+    const productName = (
+      "product_name" in candidate
+        ? candidate.product_name
+        : (candidate as ExistingLibraryItem).name
+    )?.trim() || fallbackName?.trim();
+    if (!queryName || !productName) return;
+
+    try {
+      await supabase.functions.invoke("chemical-ai-lookup", {
+        body: {
+          product_name: queryName,
+          country: country ?? null,
+          mark_applied: true,
+          applied_candidate: {
+            product_name: productName,
+            manufacturer: ("manufacturer" in candidate ? candidate.manufacturer : "") ?? "",
+            active_ingredient: candidate.active_ingredient ?? null,
+            category: "category" in candidate ? candidate.category ?? null : null,
+            chemical_group: "chemical_group" in candidate ? candidate.chemical_group ?? null : null,
+            product_type: "product_type" in candidate ? candidate.product_type ?? null : null,
+            unit: "unit" in candidate ? candidate.unit ?? null : null,
+            rate_basis: "rate_basis" in candidate ? candidate.rate_basis ?? null : null,
+            rate_per_unit: "rate_per_unit" in candidate ? candidate.rate_per_unit ?? null : null,
+            withholding_period_days: "withholding_period_days" in candidate ? candidate.withholding_period_days ?? null : null,
+            re_entry_period_hours: "re_entry_period_hours" in candidate ? candidate.re_entry_period_hours ?? null : null,
+            target: "target" in candidate ? candidate.target ?? null : null,
+            notes: "notes" in candidate ? candidate.notes ?? null : null,
+            safety_note: "safety_note" in candidate ? candidate.safety_note ?? null : null,
+            country: "country" in candidate ? candidate.country ?? country ?? null : country ?? null,
+            country_confirmed: "country_confirmed" in candidate ? candidate.country_confirmed ?? null : null,
+            confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
+            source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
+            times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
+          },
+        },
+      });
+    } catch (error) {
+      console.warn("Could not preserve applied chemical candidate", error);
+    }
+  }
 
   async function runLookup() {
     const q = name.trim();
@@ -157,6 +202,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       target: c.target,
       notes: c.notes,
     });
+    void preserveAppliedCandidate(c, finalName);
     setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
     setResultsCollapsed(true);
   }
@@ -167,6 +213,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       name: item.name ?? undefined,
       active_ingredient: item.active_ingredient ?? undefined,
     });
+    void preserveAppliedCandidate(item, item.name ?? name.trim());
     setApplied({ name: item.name ?? name.trim(), source: "existing" });
     setResultsCollapsed(true);
   }
@@ -308,6 +355,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                     {c.cached && (
                       <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
                         Previously found
+                      </Badge>
+                    )}
+                    {c.was_applied && (
+                      <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
+                        Previously applied
                       </Badge>
                     )}
                     {c.country && (
