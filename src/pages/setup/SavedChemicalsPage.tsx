@@ -704,6 +704,20 @@ function ChemicalEditor({
           : null,
       };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
+      const labelUrlRaw = (payload.label_url ?? "").trim();
+      if (labelUrlRaw) {
+        try {
+          const u = new URL(labelUrlRaw);
+          if (u.protocol !== "http:" && u.protocol !== "https:") {
+            throw new Error("only http(s)");
+          }
+          payload.label_url = u.toString();
+        } catch {
+          throw new Error("Label link must be a full http:// or https:// URL");
+        }
+      } else {
+        payload.label_url = "";
+      }
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
     },
