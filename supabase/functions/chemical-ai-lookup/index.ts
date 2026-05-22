@@ -38,6 +38,7 @@ For each candidate infer:
 - target: typical pest/disease/weed or use-case.
 - notes: concise (<240 chars), include compatibility cautions when known.
 - safety_note: always remind user to verify against current label for their country.
+- label_url: best public link to the product label, SDS, regulator page (APVMA/ACVM/EPA) or manufacturer product page, when you are confident the URL exists. Must start with https:// or http://. Leave null when unsure — never fabricate a URL.
 - country / country_confirmed / confidence as defined.`;
 
 const tools = [
