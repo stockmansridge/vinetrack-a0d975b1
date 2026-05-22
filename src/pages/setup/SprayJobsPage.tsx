@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   exportSprayJobPdf, exportYearlySprayProgramPdf, exportYearlySprayProgramCsv,
   fetchJobPaddockMap, jobYear, type JobLookups,
@@ -28,7 +32,7 @@ import { fetchList } from "@/lib/queries";
 import {
   fetchSprayJobs, fetchSprayJobPaddockIds,
   createSprayJob, updateSprayJob,
-  archiveSprayJob, restoreSprayJob, duplicateSprayJob,
+  archiveSprayJob, restoreSprayJob, duplicateSprayJob, hardDeleteDraftSprayJob,
   chemicalLinesSummary,
   fetchVineyardTeamMembers, memberLabel,
   fetchLinkedSprayRecords, fetchUnlinkedSprayRecords,
@@ -273,6 +277,16 @@ function JobsTable({
     onSuccess: () => { toast({ title: "Restored" }); refresh(); },
     onError: (e: any) => toast({ title: "Restore failed", description: e.message, variant: "destructive" }),
   });
+  const [deleteTarget, setDeleteTarget] = useState<SprayJob | null>(null);
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => hardDeleteDraftSprayJob(id),
+    onSuccess: () => {
+      toast({ title: "Draft spray job deleted" });
+      setDeleteTarget(null);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
   const dupMut = useMutation({
     mutationFn: ({ id, asTemplate }: { id: string; asTemplate: boolean }) =>
       duplicateSprayJob(id, asTemplate),
@@ -478,6 +492,17 @@ function JobsTable({
                       <Button size="sm" variant="ghost" onClick={() => archiveMut.mutate(j.id)} title="Archive">
                         <Archive className="h-3.5 w-3.5" />
                       </Button>
+                      {mode === "planned" && String(j.status ?? "").toLowerCase() === "draft" && !j.is_template && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(j)}
+                          title="Delete draft permanently"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </>
                   )}
                   {canEdit && mode === "archived" && (
@@ -492,6 +517,31 @@ function JobsTable({
         </TableBody>
       </Table>
     </Card>
+    <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete draft spray job?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete{deleteTarget?.name ? ` "${deleteTarget.name}"` : " this draft spray job"}.
+            This is safe only because the job has not been started or recorded.
+            Non-draft jobs must be archived or cancelled instead.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              if (deleteTarget) deleteMut.mutate(deleteTarget.id);
+            }}
+            disabled={deleteMut.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleteMut.isPending ? "Deleting…" : "Delete permanently"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </div>
   );
 }

@@ -204,6 +204,74 @@ export async function restoreSprayJob(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Hard-delete a draft spray job. iOS supports permanent deletion of draft
+ * jobs that have never been started/recorded. We mirror that here.
+ *
+ * Safety:
+ *   - Job must exist, not be archived, and have status = 'draft'.
+ *   - Job must not be a template (templates use the archive/restore flow).
+ *   - Job must have zero linked spray_records (operational history).
+ *
+ * Strategy:
+ *   - Prefer a shared RPC (`hard_delete_draft_spray_job`) if Rork/iOS has
+ *     deployed one. If the RPC is missing (PGRST202 / 42883), fall back to
+ *     a client-side safe delete that re-runs the same checks. RLS on
+ *     spray_jobs still enforces owner/manager permission on the DELETE.
+ */
+export async function hardDeleteDraftSprayJob(id: string): Promise<void> {
+  // Try shared RPC first.
+  const rpc = await supabase.rpc("hard_delete_draft_spray_job", { p_spray_job_id: id });
+  if (!rpc.error) return;
+  const code = (rpc.error as any).code;
+  const msg = (rpc.error.message ?? "").toLowerCase();
+  const rpcMissing =
+    code === "PGRST202" || code === "42883" ||
+    msg.includes("could not find") || msg.includes("does not exist");
+  if (!rpcMissing) throw rpc.error;
+
+  // --- Fallback: client-side safe delete ---
+  const { data: job, error: jobErr } = await supabase
+    .from("spray_jobs")
+    .select("id, status, is_template, deleted_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (jobErr) throw jobErr;
+  if (!job) throw new Error("Spray job not found");
+  if (job.is_template) {
+    throw new Error("Templates cannot be hard-deleted. Archive instead.");
+  }
+  if (job.deleted_at) {
+    throw new Error("Job is archived. Restore it first if you need to delete.");
+  }
+  const status = String(job.status ?? "").toLowerCase();
+  if (status && status !== "draft") {
+    throw new Error(`Only draft jobs can be permanently deleted (current status: ${job.status}). Use archive instead.`);
+  }
+
+  const { count, error: countErr } = await supabase
+    .from("spray_records")
+    .select("id", { count: "exact", head: true })
+    .eq("spray_job_id", id);
+  if (countErr) throw countErr;
+  if ((count ?? 0) > 0) {
+    throw new Error("This job has linked spray records and cannot be permanently deleted. Archive it instead.");
+  }
+
+  const { error: linkErr } = await supabase
+    .from("spray_job_paddocks")
+    .delete()
+    .eq("spray_job_id", id);
+  if (linkErr) throw linkErr;
+
+  const { error: delErr } = await supabase
+    .from("spray_jobs")
+    .delete()
+    .eq("id", id)
+    .eq("status", "draft");
+  if (delErr) throw delErr;
+}
+
 export async function duplicateSprayJob(id: string, asTemplate: boolean): Promise<string> {
   const { data, error } = await supabase.rpc("duplicate_spray_job", { p_id: id, p_as_template: asTemplate });
   if (error) throw error;
