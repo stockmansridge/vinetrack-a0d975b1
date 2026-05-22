@@ -81,6 +81,7 @@ export interface SavedChemicalInput {
   unit?: string | null;
   restrictions?: string | null;
   notes?: string | null;
+  label_url?: string | null;
   purchase?: {
     costPerUnit?: number | null;
     cost_per_unit?: number | null;
@@ -93,7 +94,8 @@ export interface SavedChemicalInput {
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "name", "active_ingredient", "chemical_group", "use", "manufacturer",
-  "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes", "purchase",
+  "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
+  "label_url", "purchase",
 ];
 
 function sanitize(input: SavedChemicalInput) {
