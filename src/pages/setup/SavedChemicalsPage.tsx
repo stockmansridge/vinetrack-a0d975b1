@@ -403,6 +403,7 @@ export default function SavedChemicalsPage() {
                   <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
                   <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Default rate</SortableTableHead>
                   <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
+                  <TableHead className="w-20">Label</TableHead>
                   {canSeeCosts && <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}>Cost / unit</SortableTableHead>}
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
