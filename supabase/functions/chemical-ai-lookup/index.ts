@@ -190,6 +190,19 @@ function recencyWeight(value?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function sanitiseLabelUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 // Note: there is intentionally no hard-coded "known good" list for any
 // specific product. Strong candidates are preserved generically via the
 // shared `chemical_lookup_cache` (previous lookups + applied history)
