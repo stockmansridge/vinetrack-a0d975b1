@@ -494,14 +494,49 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       ...(hasExactOrNear ? [] : [exactNameSkeleton]),
     ];
 
-    const merged: any[] = [];
-    const seen = new Set<string>();
+    const merged: LookupCandidate[] = [];
+    const seen = new Map<string, number>();
     for (const c of freshCandidates) {
       const key = candidateKey(c);
       if (!key || key === "|") continue;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push({ ...c }); // clone — never mutate inputs
+      const existingIndex = seen.get(key);
+      if (existingIndex == null) {
+        seen.set(key, merged.length);
+        merged.push({ ...c }); // clone — never mutate inputs
+        continue;
+      }
+
+      const existing = merged[existingIndex];
+      merged[existingIndex] = {
+        ...existing,
+        ...c,
+        product_name: existing.product_name ?? c.product_name,
+        manufacturer: existing.manufacturer ?? c.manufacturer,
+        active_ingredient: existing.active_ingredient ?? c.active_ingredient,
+        category: existing.category ?? c.category,
+        chemical_group: existing.chemical_group ?? c.chemical_group,
+        product_type: existing.product_type ?? c.product_type,
+        unit: existing.unit ?? c.unit,
+        rate_basis: existing.rate_basis ?? c.rate_basis,
+        rate_per_unit: existing.rate_per_unit ?? c.rate_per_unit,
+        target: existing.target ?? c.target,
+        notes: existing.notes ?? c.notes,
+        safety_note: existing.safety_note ?? c.safety_note,
+        country: existing.country ?? c.country,
+        country_confirmed: existing.country_confirmed ?? c.country_confirmed,
+        confidence: (CONFIDENCE_WEIGHT[existing.confidence ?? "unknown"] ?? 0) >= (CONFIDENCE_WEIGHT[c.confidence ?? "unknown"] ?? 0)
+          ? existing.confidence
+          : c.confidence,
+        cached: existing.cached || c.cached,
+        was_applied: existing.was_applied || c.was_applied,
+        times_seen: Math.max(existing.times_seen ?? 0, c.times_seen ?? 0),
+        source_hint: sourceWeight(existing.source_hint) >= sourceWeight(c.source_hint)
+          ? existing.source_hint
+          : c.source_hint,
+        last_seen_at: recencyWeight(existing.last_seen_at) >= recencyWeight(c.last_seen_at)
+          ? existing.last_seen_at
+          : c.last_seen_at,
+      };
     }
 
     // 4. Deterministic ranking:
