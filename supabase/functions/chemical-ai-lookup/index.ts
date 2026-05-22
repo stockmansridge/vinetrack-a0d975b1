@@ -274,21 +274,50 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       console.error("ai gateway exception", e);
     }
 
-    // 3. Merge cached + AI candidates. Cache wins on dedupe (preserves the
-    //    "previously found" flag and stable ranking).
+    // 3. Build a fresh candidate set every call. Order matters for dedupe
+    //    (first occurrence of a key wins, so cached entries keep their
+    //    "previously found" flag).
+    console.log("[chemical-ai-lookup] raw counts", {
+      query: rawQuery,
+      country: countryStr,
+      cached: cachedCandidates.length,
+      ai: aiCandidates.length,
+    });
+
+    // Only add the exact-name skeleton if NOTHING in cache or AI is an
+    // exact/near match — guarantees the user's typed query is always
+    // selectable for manual entry without clobbering real matches.
+    const hasExactOrNear =
+      cachedCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60) ||
+      aiCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60);
+
+    const exactNameSkeleton = {
+      product_name: rawQuery,
+      manufacturer: "",
+      confidence: "low" as const,
+      safety_note: "Manual entry — verify against current product label.",
+      source_hint: "exact_name_fallback",
+      cached: false,
+    };
+
+    const freshCandidates = [
+      ...cachedCandidates,
+      ...aiCandidates,
+      ...(hasExactOrNear ? [] : [exactNameSkeleton]),
+    ];
+
     const merged: any[] = [];
     const seen = new Set<string>();
-    for (const c of [...cachedCandidates, ...aiCandidates]) {
+    for (const c of freshCandidates) {
       const key = candidateKey(c);
       if (!key || key === "|") continue;
       if (seen.has(key)) continue;
       seen.add(key);
-      merged.push(c);
+      merged.push({ ...c }); // clone — never mutate inputs
     }
 
     // 4. Deterministic ranking:
-    //    exact name match first, then near match, then country-confirmed,
-    //    then cached, then AI confidence.
+    //    exact-name match → near-match → country-confirmed → cached → AI confidence.
     merged.sort((a: any, b: any) => {
       const sa = nameSimilarityScore(rawQuery, a.product_name);
       const sb = nameSimilarityScore(rawQuery, b.product_name);
@@ -300,6 +329,12 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       const cachedB = b.cached ? 1 : 0;
       if (cachedA !== cachedB) return cachedB - cachedA;
       return (CONFIDENCE_WEIGHT[b.confidence] ?? 0) - (CONFIDENCE_WEIGHT[a.confidence] ?? 0);
+    });
+
+    console.log("[chemical-ai-lookup] merged", {
+      query: rawQuery,
+      total: merged.length,
+      names: merged.map((m) => `${m.product_name}|${m.manufacturer || ""}${m.cached ? " [cached]" : ""}`),
     });
 
     // 5. Write high-confidence AI candidates to cache for future lookups.
