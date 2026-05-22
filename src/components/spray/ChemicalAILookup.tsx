@@ -221,7 +221,32 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </div>
       )}
 
-      {existingMatches.length > 0 && (
+      {applied && resultsCollapsed && (
+        <div className="rounded-md border bg-background p-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs">
+            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span>
+              <span className="text-muted-foreground">Applied:</span>{" "}
+              <span className="font-medium">{applied.name}</span>
+              {applied.manufacturer ? (
+                <span className="text-muted-foreground"> — {applied.manufacturer}</span>
+              ) : null}
+              <span className="text-muted-foreground"> · review and save below</span>
+            </span>
+          </div>
+          {(candidates?.length || existingMatches.length) ? (
+            <button
+              type="button"
+              onClick={() => setResultsCollapsed(false)}
+              className="text-[11px] underline text-primary hover:text-primary/80 shrink-0"
+            >
+              Change product
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {!resultsCollapsed && existingMatches.length > 0 && (
         <div className="space-y-1">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Already in your library
