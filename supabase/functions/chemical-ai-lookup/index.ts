@@ -83,6 +83,7 @@ const tools = [
                 country: { type: "string" },
                 country_confirmed: { type: "boolean" },
                 confidence: { type: "string", enum: ["high", "medium", "low", "unknown"] },
+                label_url: { type: ["string", "null"] },
               },
               required: ["product_name", "category", "confidence", "safety_note"],
               additionalProperties: false,
