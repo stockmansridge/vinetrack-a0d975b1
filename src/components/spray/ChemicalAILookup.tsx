@@ -409,6 +409,17 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                 {c.notes && (
                   <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
                 )}
+                {c.label_url && /^https?:\/\//i.test(c.label_url) && (
+                  <a
+                    href={c.label_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View label/source
+                  </a>
+                )}
                 <Button
                   type="button"
                   size="sm"
