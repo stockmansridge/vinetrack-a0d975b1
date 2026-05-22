@@ -196,11 +196,6 @@ export async function parseAndValidate(
   const wb = XLSX.read(fileBuffer, { type: "array", cellDates: true });
   const sheet = wb.Sheets["Spray Program"] ?? wb.Sheets[wb.SheetNames[0]];
   if (!sheet) throw new Error("Workbook has no 'Spray Program' sheet.");
-  const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
-    defval: null, raw: true, blankrows: false,
-  });
-
-  const out: ImportedRow[] = [];
 
   // Detect header row position: prefer Excel row 3 (new template format with
   // 2 instruction rows); fall back to row 1 for legacy files.
