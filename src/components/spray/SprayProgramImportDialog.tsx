@@ -159,8 +159,13 @@ export function SprayProgramImportDialog({
                           {status === "warn" && <AlertTriangle className="h-4 w-4 text-amber-600" />}
                           {status === "error" && <XCircle className="h-4 w-4 text-destructive" />}
                         </TableCell>
-                        <TableCell className="font-medium">{r.name || "—"}</TableCell>
-                        <TableCell className="text-xs">{r.planned_date ?? "—"}</TableCell>
+                        <TableCell className="font-medium">
+                          {r.name || "—"}
+                          {r.is_template && (
+                            <Badge variant="outline" className="ml-2 text-[10px]">Template</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">{r.is_template ? "—" : (r.planned_date ?? "—")}</TableCell>
                         <TableCell className="text-xs">{r.paddockNames.join(", ") || "—"}</TableCell>
                         <TableCell className="text-xs">
                           {r.chemical_lines.length
