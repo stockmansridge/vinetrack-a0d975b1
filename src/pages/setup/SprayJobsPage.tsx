@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   exportSprayJobPdf, exportYearlySprayProgramPdf, exportYearlySprayProgramCsv,
   fetchJobPaddockMap, jobYear, type JobLookups,
