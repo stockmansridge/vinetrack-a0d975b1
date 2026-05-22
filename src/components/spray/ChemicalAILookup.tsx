@@ -305,6 +305,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                     {c.product_name || "Unnamed"}
                   </div>
                   <div className="flex items-center gap-1">
+                    {c.cached && (
+                      <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                        Previously found
+                      </Badge>
+                    )}
                     {c.country && (
                       <Badge
                         variant={c.country_confirmed === false ? "outline" : "secondary"}
