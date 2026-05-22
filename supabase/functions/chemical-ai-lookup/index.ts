@@ -535,6 +535,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
         last_seen_at: recencyWeight(existing.last_seen_at) >= recencyWeight(c.last_seen_at)
           ? existing.last_seen_at
           : c.last_seen_at,
+        label_url: sanitiseLabelUrl(existing.label_url) ?? sanitiseLabelUrl(c.label_url) ?? null,
       };
     }
 
