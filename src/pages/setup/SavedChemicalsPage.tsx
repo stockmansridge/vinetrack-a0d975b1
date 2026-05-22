@@ -33,15 +33,31 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useCanSeeCosts } from "@/lib/permissions";
 import {
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
   inferProductType, defaultUnitFor, unitsFor,
-  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
+  RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL, displayUnitText,
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
+const fmtMoney = (v?: number | null, currency = "AUD") => {
+  if (v == null || !Number.isFinite(Number(v))) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(v));
+  } catch {
+    return `$${Number(v).toFixed(2)}`;
+  }
+};
+
+function purchaseCostPerUnit(purchase: any): number | null {
+  const raw = purchase?.costPerBaseUnit ?? purchase?.cost_per_base_unit
+    ?? purchase?.costPerUnit ?? purchase?.cost_per_unit;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
 
 const EMPTY: SavedChemicalInput = {
   name: "", active_ingredient: "", chemical_group: "", use: "",
@@ -52,6 +68,7 @@ const EMPTY: SavedChemicalInput = {
 export default function SavedChemicalsPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const canSeeCosts = useCanSeeCosts();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -102,7 +119,7 @@ export default function SavedChemicalsPage() {
     return list;
   }, [chemicals, filter, group, use]);
 
-  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer";
+  type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
     accessors: {
       name: (c) => c.name ?? "",
@@ -111,6 +128,7 @@ export default function SavedChemicalsPage() {
       use: (c) => c.use ?? "",
       rate: (c) => (c.rate_per_ha == null ? null : Number(c.rate_per_ha)),
       manufacturer: (c) => c.manufacturer ?? "",
+      cost: (c) => purchaseCostPerUnit(c.purchase),
     },
     initial: { key: "name", direction: "asc" },
   });
