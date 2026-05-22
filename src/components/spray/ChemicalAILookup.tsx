@@ -79,6 +79,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
   const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
+  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" } | null>(null);
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
 
   async function runLookup() {
     const q = name.trim();
@@ -89,6 +91,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     setError(null);
     setCandidates(null);
     setExistingMatches([]);
+    setApplied(null);
+    setResultsCollapsed(false);
     setLoading(true);
 
     // First, surface any existing library matches so the user can re-use them
@@ -128,8 +132,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     const basis: RateBasis = c.rate_basis ?? "per_hectare";
     const composedUnit =
       unit ? `${unit}${basis === "per_100L" ? "/100L" : "/ha"}` : undefined;
+    const finalName = c.product_name?.trim() || name.trim();
     onApply({
-      name: c.product_name?.trim() || name.trim(),
+      name: finalName,
       active_ingredient: c.active_ingredient,
       category: cat ?? undefined,
       chemical_group: c.chemical_group,
@@ -150,6 +155,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       target: c.target,
       notes: c.notes,
     });
+    setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
+    setResultsCollapsed(true);
   }
 
   function applyExisting(item: ExistingLibraryItem) {
@@ -158,6 +165,15 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       name: item.name ?? undefined,
       active_ingredient: item.active_ingredient ?? undefined,
     });
+    setApplied({ name: item.name ?? name.trim(), source: "existing" });
+    setResultsCollapsed(true);
+  }
+
+  function applyManual() {
+    const q = name.trim();
+    onApply({ name: q });
+    setApplied({ name: q, source: "manual" });
+    setResultsCollapsed(true);
   }
 
   return (
@@ -205,7 +221,32 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </div>
       )}
 
-      {existingMatches.length > 0 && (
+      {applied && resultsCollapsed && (
+        <div className="rounded-md border bg-background p-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs">
+            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span>
+              <span className="text-muted-foreground">Applied:</span>{" "}
+              <span className="font-medium">{applied.name}</span>
+              {applied.manufacturer ? (
+                <span className="text-muted-foreground"> — {applied.manufacturer}</span>
+              ) : null}
+              <span className="text-muted-foreground"> · review and save below</span>
+            </span>
+          </div>
+          {(candidates?.length || existingMatches.length) ? (
+            <button
+              type="button"
+              onClick={() => setResultsCollapsed(false)}
+              className="text-[11px] underline text-primary hover:text-primary/80 shrink-0"
+            >
+              Change product
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {!resultsCollapsed && existingMatches.length > 0 && (
         <div className="space-y-1">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Already in your library
@@ -232,7 +273,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </div>
       )}
 
-      {candidates && candidates.length > 0 && (
+      {!resultsCollapsed && candidates && candidates.length > 0 && (
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -241,7 +282,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             </div>
             <button
               type="button"
-              onClick={() => onApply({ name: name.trim() })}
+              onClick={applyManual}
               className="text-[11px] underline text-primary hover:text-primary/80"
             >
               Not the right product? Enter manually
