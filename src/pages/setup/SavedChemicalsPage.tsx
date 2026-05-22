@@ -231,7 +231,7 @@ export default function SavedChemicalsPage() {
                 <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ANY}>Any group</SelectItem>
-                  {groups.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                  {groupOptions.map((o) => (<SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
