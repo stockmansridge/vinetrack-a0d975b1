@@ -91,6 +91,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     setError(null);
     setCandidates(null);
     setExistingMatches([]);
+    setApplied(null);
+    setResultsCollapsed(false);
     setLoading(true);
 
     // First, surface any existing library matches so the user can re-use them
