@@ -40,6 +40,7 @@ import {
   RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL, displayUnitText,
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
+import { normaliseChemicalGroup, buildGroupOptions } from "@/lib/chemicalGroupNormalise";
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
