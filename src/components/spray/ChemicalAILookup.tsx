@@ -124,6 +124,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
             source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
             times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
+            label_url: "label_url" in candidate ? candidate.label_url ?? null : null,
           },
         },
       });
