@@ -120,6 +120,7 @@ type LookupCandidate = {
   times_seen?: number;
   source_hint?: string;
   last_seen_at?: string;
+  label_url?: string | null;
 };
 
 function normaliseChemicalLookupKey(value: string): string {
