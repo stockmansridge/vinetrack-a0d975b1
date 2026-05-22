@@ -947,6 +947,29 @@ function ChemicalEditor({
           <Field label="Notes">
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
           </Field>
+          <Field label="Product label link">
+            <Input
+              type="url"
+              inputMode="url"
+              value={form.label_url ?? ""}
+              onChange={(e) => set("label_url", e.target.value)}
+              placeholder="https://…"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Link to the product label, SDS, APVMA page or manufacturer product page. Must start with https:// or http://.
+            </p>
+            {form.label_url && /^https?:\/\//i.test(form.label_url.trim()) && (
+              <a
+                href={form.label_url.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open label
+              </a>
+            )}
+          </Field>
         </div>
         <SheetFooter className="mt-6 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
