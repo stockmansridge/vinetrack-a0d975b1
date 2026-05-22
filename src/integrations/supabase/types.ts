@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      chemical_lookup_cache: {
+        Row: {
+          active_ingredient: string | null
+          category: string | null
+          chemical_group: string | null
+          confidence: string | null
+          country: string
+          country_confirmed: boolean | null
+          created_at: string
+          id: string
+          last_seen_at: string
+          manufacturer: string
+          notes: string | null
+          product_name: string
+          product_type: string | null
+          query_normalised: string
+          rate_basis: string | null
+          rate_per_unit: number | null
+          re_entry_period_hours: number | null
+          safety_note: string | null
+          source_hint: string | null
+          target: string | null
+          unit: string | null
+          withholding_period_days: number | null
+        }
+        Insert: {
+          active_ingredient?: string | null
+          category?: string | null
+          chemical_group?: string | null
+          confidence?: string | null
+          country?: string
+          country_confirmed?: boolean | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          manufacturer?: string
+          notes?: string | null
+          product_name: string
+          product_type?: string | null
+          query_normalised: string
+          rate_basis?: string | null
+          rate_per_unit?: number | null
+          re_entry_period_hours?: number | null
+          safety_note?: string | null
+          source_hint?: string | null
+          target?: string | null
+          unit?: string | null
+          withholding_period_days?: number | null
+        }
+        Update: {
+          active_ingredient?: string | null
+          category?: string | null
+          chemical_group?: string | null
+          confidence?: string | null
+          country?: string
+          country_confirmed?: boolean | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          manufacturer?: string
+          notes?: string | null
+          product_name?: string
+          product_type?: string | null
+          query_normalised?: string
+          rate_basis?: string | null
+          rate_per_unit?: number | null
+          re_entry_period_hours?: number | null
+          safety_note?: string | null
+          source_hint?: string | null
+          target?: string | null
+          unit?: string | null
+          withholding_period_days?: number | null
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string
