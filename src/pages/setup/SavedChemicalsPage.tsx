@@ -449,11 +449,26 @@ function ChemicalEditor({
   const { currentCountry } = useVineyard();
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
-  const [costStr, setCostStr] = useState("");
+  const [packSizeStr, setPackSizeStr] = useState("");
+  const [packPriceStr, setPackPriceStr] = useState("");
+  const [packUnit, setPackUnit] = useState<string>("Litres");
+  const [existingCost, setExistingCost] = useState<number | null>(null);
   const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
   const [rei, setRei] = useState("");
   const [restNotes, setRestNotes] = useState("");
+
+  // Computed cost per base unit from pack size + pack price.
+  const computedCost = useMemo(() => {
+    const size = Number(packSizeStr);
+    const price = Number(packPriceStr);
+    if (!Number.isFinite(size) || !Number.isFinite(price)) return null;
+    if (size <= 0 || price < 0) return null;
+    return price / size;
+  }, [packSizeStr, packPriceStr]);
+
+  // Cost we'll actually save: prefer freshly computed, fall back to existing.
+  const effectiveCost = computedCost ?? existingCost;
 
   // Reset when opening
   useMemo(() => {
@@ -475,7 +490,10 @@ function ChemicalEditor({
           purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
-        setCostStr(purchaseCostPerUnit(initial.purchase) == null ? "" : String(purchaseCostPerUnit(initial.purchase)));
+        setExistingCost(purchaseCostPerUnit(initial.purchase));
+        setPackSizeStr("");
+        setPackPriceStr("");
+        setPackUnit(displayBaseUnit(initial.purchase?.unit ?? initial.unit) || "Litres");
         setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
@@ -484,7 +502,10 @@ function ChemicalEditor({
       } else {
         setForm(EMPTY);
         setRateStr("");
-        setCostStr("");
+        setExistingCost(null);
+        setPackSizeStr("");
+        setPackPriceStr("");
+        setPackUnit("Litres");
         setCurrency("AUD");
         setWhp("");
         setRei("");
@@ -496,12 +517,14 @@ function ChemicalEditor({
   const saveMut = useMutation({
     mutationFn: async () => {
       const rateNum = rateStr.trim() === "" ? null : Number(rateStr);
-      const costNum = costStr.trim() === "" ? null : Number(costStr);
+      const costNum = effectiveCost;
       if (rateNum != null && Number.isNaN(rateNum)) {
         throw new Error("Rate per ha must be a number");
       }
-      if (costNum != null && (Number.isNaN(costNum) || costNum < 0)) {
-        throw new Error("Cost per unit must be zero or greater");
+      if (packSizeStr.trim() !== "" || packPriceStr.trim() !== "") {
+        if (computedCost == null) {
+          throw new Error("Enter both a pack size (> 0) and a pack price to calculate cost");
+        }
       }
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
       const payload: SavedChemicalInput = {
@@ -516,7 +539,7 @@ function ChemicalEditor({
               costPerUnit: costNum,
               cost_per_unit: costNum,
               currency,
-              unit: displayBaseUnit(form.unit),
+              unit: packUnit || displayBaseUnit(form.unit),
             }
           : null,
       };
@@ -664,29 +687,75 @@ function ChemicalEditor({
             </p>
           </Field>
           {canSeeCosts && (
-            <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3">
-              <Field label={`Cost per ${displayBaseUnit(form.unit)}`}>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  value={costStr}
-                  onChange={(e) => setCostStr(e.target.value)}
-                  placeholder="0.00"
-                />
-              </Field>
-              <Field label="Currency">
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AUD">AUD</SelectItem>
-                    <SelectItem value="NZD">NZD</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
+            <div className="rounded-md border border-border/60 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Pricing</h4>
+                {existingCost != null && computedCost == null && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Saved: {fmtMoney(existingCost, currency)} / {packUnit}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Enter the pack size and pack price. VineTrack will calculate the cost per L, mL, kg or g for costing.
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Pack / container size">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min="0"
+                    value={packSizeStr}
+                    onChange={(e) => setPackSizeStr(e.target.value)}
+                    placeholder="e.g. 20"
+                  />
+                </Field>
+                <Field label="Pack unit">
+                  <Select value={packUnit} onValueChange={setPackUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Litres">Litres</SelectItem>
+                      <SelectItem value="mL">mL</SelectItem>
+                      <SelectItem value="Kg">Kg</SelectItem>
+                      <SelectItem value="g">g</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Pack price">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={packPriceStr}
+                    onChange={(e) => setPackPriceStr(e.target.value)}
+                    placeholder="e.g. 180.00"
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3 items-end">
+                <Field label="Calculated cost per unit">
+                  <div className="vt-field flex w-full items-center px-3.5 py-2 text-sm bg-muted/40 text-muted-foreground">
+                    {computedCost != null
+                      ? `${fmtMoney(computedCost, currency)} / ${packUnit}`
+                      : existingCost != null
+                        ? `${fmtMoney(existingCost, currency)} / ${packUnit} (saved)`
+                        : "—"}
+                  </div>
+                </Field>
+                <Field label="Currency">
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AUD">AUD</SelectItem>
+                      <SelectItem value="NZD">NZD</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
