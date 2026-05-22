@@ -277,6 +277,16 @@ function JobsTable({
     onSuccess: () => { toast({ title: "Restored" }); refresh(); },
     onError: (e: any) => toast({ title: "Restore failed", description: e.message, variant: "destructive" }),
   });
+  const [deleteTarget, setDeleteTarget] = useState<SprayJob | null>(null);
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => hardDeleteDraftSprayJob(id),
+    onSuccess: () => {
+      toast({ title: "Draft spray job deleted" });
+      setDeleteTarget(null);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
   const dupMut = useMutation({
     mutationFn: ({ id, asTemplate }: { id: string; asTemplate: boolean }) =>
       duplicateSprayJob(id, asTemplate),
