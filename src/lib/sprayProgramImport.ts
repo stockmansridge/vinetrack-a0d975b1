@@ -202,8 +202,37 @@ export async function parseAndValidate(
 
   const out: ImportedRow[] = [];
 
+  // Detect header row position: prefer Excel row 3 (new template format with
+  // 2 instruction rows); fall back to row 1 for legacy files.
+  const headerNames = new Set(templateHeaders());
+  const findHeaderRow = (): number => {
+    const ref = sheet["!ref"];
+    if (!ref) return TEMPLATE_HEADER_ROW_INDEX;
+    const range = XLSX.utils.decode_range(ref);
+    const maxScan = Math.min(range.e.r, 10);
+    for (let r = range.s.r; r <= maxScan; r++) {
+      let hits = 0;
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+        if (cell && typeof cell.v === "string" && headerNames.has(cell.v.trim())) {
+          hits++;
+          if (hits >= 3) return r;
+        }
+      }
+    }
+    return TEMPLATE_HEADER_ROW_INDEX;
+  };
+  const headerRowIdx = findHeaderRow();
+  const firstDataExcelRow = headerRowIdx + 2; // 1-indexed Excel row of first data row
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
+    defval: null, raw: true, blankrows: false, range: headerRowIdx,
+  });
+
+  const out: ImportedRow[] = [];
+
   rows.forEach((raw, i) => {
-    const excelRow = i + 2; // header is row 1
+    const excelRow = i + firstDataExcelRow;
     const errors: string[] = [];
     const warnings: string[] = [];
 
