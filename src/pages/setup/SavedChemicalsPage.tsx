@@ -410,14 +410,14 @@ export default function SavedChemicalsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -432,6 +432,22 @@ export default function SavedChemicalsPage() {
                       {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}
                     </TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
+                    <TableCell>
+                      {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+                        <a
+                          href={c.label_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
+                          title={c.label_url}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Label
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     {canSeeCosts && (
                       <TableCell>
                         {(() => {
