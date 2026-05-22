@@ -51,6 +51,8 @@ interface RawCandidate {
   country?: string;
   country_confirmed?: boolean;
   confidence?: "high" | "medium" | "low" | "unknown";
+  cached?: boolean;
+  source_hint?: string;
 }
 
 export interface ExistingLibraryItem {
