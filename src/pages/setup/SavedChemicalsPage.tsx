@@ -646,6 +646,7 @@ function ChemicalEditor({
           unit: initial.unit ?? "",
           restrictions: initial.restrictions ?? "",
           notes: initial.notes ?? "",
+          label_url: initial.label_url ?? "",
           purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
