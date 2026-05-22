@@ -517,6 +517,31 @@ function JobsTable({
         </TableBody>
       </Table>
     </Card>
+    <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete draft spray job?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete{deleteTarget?.name ? ` "${deleteTarget.name}"` : " this draft spray job"}.
+            This is safe only because the job has not been started or recorded.
+            Non-draft jobs must be archived or cancelled instead.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              if (deleteTarget) deleteMut.mutate(deleteTarget.id);
+            }}
+            disabled={deleteMut.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleteMut.isPending ? "Deleting…" : "Delete permanently"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </div>
   );
 }
