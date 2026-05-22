@@ -254,21 +254,22 @@ export default function SavedChemicalsPage() {
                   <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}>Active ingredient</SortableTableHead>
                   <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}>Group</SortableTableHead>
                   <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Rate/ha</SortableTableHead>
+                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Default rate</SortableTableHead>
                   <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
+                  {canSeeCosts && <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}>Cost / unit</SortableTableHead>}
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={canEdit ? 7 : 6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 7 : 6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 7 : 6)} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -280,9 +281,18 @@ export default function SavedChemicalsPage() {
                     <TableCell>{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>
                     <TableCell>{fmt(c.use)}</TableCell>
                     <TableCell>
-                      {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${c.unit}` : ""}`}
+                      {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}
                     </TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
+                    {canSeeCosts && (
+                      <TableCell>
+                        {(() => {
+                          const cost = purchaseCostPerUnit(c.purchase);
+                          const currency = c.purchase?.currency ?? "AUD";
+                          return cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayUnitText(c.unit) || "unit"}`;
+                        })()}
+                      </TableCell>
+                    )}
                     {canEdit && (
                       <TableCell className="text-right">
                         <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
