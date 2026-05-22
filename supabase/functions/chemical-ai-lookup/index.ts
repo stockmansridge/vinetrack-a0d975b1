@@ -259,12 +259,16 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("query_normalised", queryNorm)
         .in("country", countryStr ? [countryStr, ""] : [""])
+        .order("was_applied", { ascending: false })
+        .order("times_seen", { ascending: false })
         .order("last_seen_at", { ascending: false })
-        .limit(20);
+        .limit(50);
       cached = cachedRows ?? [];
     }
 
-    const cachedCandidates = cached.map((row) => ({
+    const knownCandidates = getKnownCandidates(queryNorm, countryStr);
+
+    const cachedCandidates: LookupCandidate[] = cached.map((row) => ({
       product_name: row.product_name,
       active_ingredient: row.active_ingredient ?? undefined,
       category: row.category ?? undefined,
@@ -283,6 +287,9 @@ Deno.serve(async (req) => {
       country_confirmed: row.country_confirmed ?? undefined,
       confidence: row.confidence ?? "medium",
       cached: true,
+      was_applied: row.was_applied ?? false,
+      times_seen: row.times_seen ?? 1,
+      last_seen_at: row.last_seen_at ?? undefined,
       source_hint: row.source_hint ?? "previous_lookup",
     }));
 
@@ -385,8 +392,15 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
     // Only add the exact-name skeleton if NOTHING in cache or AI is an
     // exact/near match — guarantees the user's typed query is always
     // selectable for manual entry without clobbering real matches.
+    const preservedCandidates: LookupCandidate[] = [...knownCandidates, ...cachedCandidates];
+    const appliedCandidates = preservedCandidates.filter((c) => c.was_applied);
+    const exactCandidates = preservedCandidates.filter((c) => {
+      const score = nameSimilarityScore(rawQuery, c.product_name ?? "");
+      return score >= 80 || (score === 100 && countryMatches(countryStr, c.country));
+    });
+
     const hasExactOrNear =
-      cachedCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60) ||
+      preservedCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60) ||
       aiCandidates.some((c) => nameSimilarityScore(rawQuery, c.product_name ?? "") >= 60);
 
     const exactNameSkeleton = {
@@ -398,8 +412,8 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       cached: false,
     };
 
-    const freshCandidates = [
-      ...cachedCandidates,
+    const freshCandidates: LookupCandidate[] = [
+      ...preservedCandidates,
       ...aiCandidates,
       ...(hasExactOrNear ? [] : [exactNameSkeleton]),
     ];
@@ -416,17 +430,48 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
 
     // 4. Deterministic ranking:
     //    exact-name match → near-match → country-confirmed → cached → AI confidence.
-    merged.sort((a: any, b: any) => {
+    merged.sort((a: LookupCandidate, b: LookupCandidate) => {
       const sa = nameSimilarityScore(rawQuery, a.product_name);
       const sb = nameSimilarityScore(rawQuery, b.product_name);
+      const exactCountryA = sa === 100 && countryMatches(countryStr, a.country) ? 1 : 0;
+      const exactCountryB = sb === 100 && countryMatches(countryStr, b.country) ? 1 : 0;
+      if (exactCountryA !== exactCountryB) return exactCountryB - exactCountryA;
+      const exactA = sa === 100 ? 1 : 0;
+      const exactB = sb === 100 ? 1 : 0;
+      if (exactA !== exactB) return exactB - exactA;
       if (sa !== sb) return sb - sa;
+      const appliedA = a.was_applied ? 1 : 0;
+      const appliedB = b.was_applied ? 1 : 0;
+      if (appliedA !== appliedB) return appliedB - appliedA;
       const ca = a.country_confirmed === true ? 1 : 0;
       const cb = b.country_confirmed === true ? 1 : 0;
       if (ca !== cb) return cb - ca;
+      const sourceA = sourceWeight(a.source_hint);
+      const sourceB = sourceWeight(b.source_hint);
+      if (sourceA !== sourceB) return sourceB - sourceA;
       const cachedA = a.cached ? 1 : 0;
       const cachedB = b.cached ? 1 : 0;
       if (cachedA !== cachedB) return cachedB - cachedA;
-      return (CONFIDENCE_WEIGHT[b.confidence] ?? 0) - (CONFIDENCE_WEIGHT[a.confidence] ?? 0);
+      const confDelta = (CONFIDENCE_WEIGHT[b.confidence ?? "unknown"] ?? 0) - (CONFIDENCE_WEIGHT[a.confidence ?? "unknown"] ?? 0);
+      if (confDelta !== 0) return confDelta;
+      const timesSeenDelta = (b.times_seen ?? 0) - (a.times_seen ?? 0);
+      if (timesSeenDelta !== 0) return timesSeenDelta;
+      return recencyWeight(b.last_seen_at) - recencyWeight(a.last_seen_at);
+    });
+
+    console.log("Chemical lookup sources", {
+      query: rawQuery,
+      normalisedKey: queryNorm,
+      exactCandidates: exactCandidates.length,
+      cachedCandidates: cachedCandidates.length,
+      appliedCandidates: appliedCandidates.length,
+      aiCandidates: aiCandidates.length,
+      finalCandidates: merged.slice(0, 15).map((c) => ({
+        name: c.product_name,
+        manufacturer: c.manufacturer,
+        source: c.source_hint,
+        confidence: c.confidence,
+      })),
     });
 
     console.log("[chemical-ai-lookup] merged", {
@@ -437,13 +482,15 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
 
     // 5. Write high-confidence AI candidates to cache for future lookups.
     if (admin && aiCandidates.length) {
-      const toCache = aiCandidates
-        .filter((c) => c && c.product_name && (c.confidence === "high" || c.confidence === "medium"))
+      const toCache = merged
+        .filter((c) => c && c.product_name && (c.confidence === "high" || c.confidence === "medium") && c.source_hint !== "exact_name_fallback")
         .map((c) => ({
           query_normalised: queryNorm,
           country: countryStr || "",
           product_name: String(c.product_name).trim(),
           manufacturer: (c.manufacturer ?? "").toString().trim() || "",
+          product_name_normalised: normaliseQuery(String(c.product_name).trim()),
+          manufacturer_normalised: normaliseQuery((c.manufacturer ?? "").toString().trim() || ""),
           active_ingredient: c.active_ingredient ?? null,
           category: c.category ?? null,
           chemical_group: c.chemical_group ?? null,
@@ -458,14 +505,29 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           safety_note: c.safety_note ?? null,
           country_confirmed: c.country_confirmed ?? null,
           confidence: c.confidence ?? "medium",
-          source_hint: "ai_gateway",
+          source_hint: c.source_hint ?? "ai_gateway",
+          times_seen: Math.max(1, c.times_seen ?? 1),
+          was_applied: c.was_applied ?? false,
           last_seen_at: new Date().toISOString(),
         }));
       if (toCache.length) {
         const { error: upErr } = await admin
           .from("chemical_lookup_cache")
-          .upsert(toCache, { onConflict: "query_normalised,country,product_name,manufacturer", ignoreDuplicates: false });
+          .upsert(toCache, { onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised", ignoreDuplicates: false, defaultToNull: false });
         if (upErr) console.error("cache upsert", upErr);
+
+        const seenKeys = Array.from(new Set(toCache.map((c) => `${c.product_name_normalised}|${c.manufacturer_normalised}`)));
+        for (const key of seenKeys) {
+          const [productNameNormalised, manufacturerNormalised] = key.split("|");
+          const { error: bumpErr } = await admin
+            .from("chemical_lookup_cache")
+            .update({ last_seen_at: new Date().toISOString() })
+            .eq("query_normalised", queryNorm)
+            .eq("country", countryStr || "")
+            .eq("product_name_normalised", productNameNormalised)
+            .eq("manufacturer_normalised", manufacturerNormalised);
+          if (bumpErr) console.error("cache touch", bumpErr);
+        }
       }
     }
 
