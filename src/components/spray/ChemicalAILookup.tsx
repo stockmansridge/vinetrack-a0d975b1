@@ -79,6 +79,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
   const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
+  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" } | null>(null);
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
 
   async function runLookup() {
     const q = name.trim();
