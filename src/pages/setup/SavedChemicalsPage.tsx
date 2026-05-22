@@ -687,29 +687,75 @@ function ChemicalEditor({
             </p>
           </Field>
           {canSeeCosts && (
-            <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3">
-              <Field label={`Cost per ${displayBaseUnit(form.unit)}`}>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  value={costStr}
-                  onChange={(e) => setCostStr(e.target.value)}
-                  placeholder="0.00"
-                />
-              </Field>
-              <Field label="Currency">
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AUD">AUD</SelectItem>
-                    <SelectItem value="NZD">NZD</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
+            <div className="rounded-md border border-border/60 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Pricing</h4>
+                {existingCost != null && computedCost == null && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Saved: {fmtMoney(existingCost, currency)} / {packUnit}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Enter the pack size and pack price. VineTrack will calculate the cost per L, mL, kg or g for costing.
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Pack / container size">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min="0"
+                    value={packSizeStr}
+                    onChange={(e) => setPackSizeStr(e.target.value)}
+                    placeholder="e.g. 20"
+                  />
+                </Field>
+                <Field label="Pack unit">
+                  <Select value={packUnit} onValueChange={setPackUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Litres">Litres</SelectItem>
+                      <SelectItem value="mL">mL</SelectItem>
+                      <SelectItem value="Kg">Kg</SelectItem>
+                      <SelectItem value="g">g</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Pack price">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={packPriceStr}
+                    onChange={(e) => setPackPriceStr(e.target.value)}
+                    placeholder="e.g. 180.00"
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr),120px] gap-3 items-end">
+                <Field label="Calculated cost per unit">
+                  <div className="vt-field flex w-full items-center px-3.5 py-2 text-sm bg-muted/40 text-muted-foreground">
+                    {computedCost != null
+                      ? `${fmtMoney(computedCost, currency)} / ${packUnit}`
+                      : existingCost != null
+                        ? `${fmtMoney(existingCost, currency)} / ${packUnit} (saved)`
+                        : "—"}
+                  </div>
+                </Field>
+                <Field label="Currency">
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AUD">AUD</SelectItem>
+                      <SelectItem value="NZD">NZD</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
