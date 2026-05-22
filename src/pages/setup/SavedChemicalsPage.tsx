@@ -490,7 +490,10 @@ function ChemicalEditor({
           purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
-        setCostStr(purchaseCostPerUnit(initial.purchase) == null ? "" : String(purchaseCostPerUnit(initial.purchase)));
+        setExistingCost(purchaseCostPerUnit(initial.purchase));
+        setPackSizeStr("");
+        setPackPriceStr("");
+        setPackUnit(displayBaseUnit(initial.purchase?.unit ?? initial.unit) || "Litres");
         setCurrency(initial.purchase?.currency ?? "AUD");
         const p = parseRestrictions(initial.restrictions);
         setWhp(p.whpDays);
@@ -499,7 +502,10 @@ function ChemicalEditor({
       } else {
         setForm(EMPTY);
         setRateStr("");
-        setCostStr("");
+        setExistingCost(null);
+        setPackSizeStr("");
+        setPackPriceStr("");
+        setPackUnit("Litres");
         setCurrency("AUD");
         setWhp("");
         setRei("");
