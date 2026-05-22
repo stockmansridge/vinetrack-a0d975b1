@@ -32,7 +32,7 @@ import { fetchList } from "@/lib/queries";
 import {
   fetchSprayJobs, fetchSprayJobPaddockIds,
   createSprayJob, updateSprayJob,
-  archiveSprayJob, restoreSprayJob, duplicateSprayJob,
+  archiveSprayJob, restoreSprayJob, duplicateSprayJob, hardDeleteDraftSprayJob,
   chemicalLinesSummary,
   fetchVineyardTeamMembers, memberLabel,
   fetchLinkedSprayRecords, fetchUnlinkedSprayRecords,
