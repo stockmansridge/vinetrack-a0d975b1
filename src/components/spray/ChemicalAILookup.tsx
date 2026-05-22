@@ -234,8 +234,18 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
       {candidates && candidates.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Lookup results ({candidates.length})
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Lookup results ({candidates.length}) for "{name.trim()}"
+              {country ? ` · ${country}` : ""}
+            </div>
+            <button
+              type="button"
+              onClick={() => onApply({ name: name.trim() })}
+              className="text-[11px] underline text-primary hover:text-primary/80"
+            >
+              Not the right product? Enter manually
+            </button>
           </div>
           {candidates.map((c, i) => {
             const unit = c.unit ?? (normaliseUnit(c.unit) as ChemUnit | "");
