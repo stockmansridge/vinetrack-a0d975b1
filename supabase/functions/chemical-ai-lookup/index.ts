@@ -632,6 +632,7 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           source_hint: c.source_hint ?? "ai_gateway",
           times_seen: Math.max((cachedTimesSeen.get(cacheKey) ?? 0) + 1, c.times_seen ?? 1, 1),
           was_applied: c.was_applied ?? false,
+          label_url: sanitiseLabelUrl(c.label_url),
           last_seen_at: new Date().toISOString(),
           };
         });
