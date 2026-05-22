@@ -449,11 +449,26 @@ function ChemicalEditor({
   const { currentCountry } = useVineyard();
   const [form, setForm] = useState<SavedChemicalInput>(EMPTY);
   const [rateStr, setRateStr] = useState("");
-  const [costStr, setCostStr] = useState("");
+  const [packSizeStr, setPackSizeStr] = useState("");
+  const [packPriceStr, setPackPriceStr] = useState("");
+  const [packUnit, setPackUnit] = useState<string>("Litres");
+  const [existingCost, setExistingCost] = useState<number | null>(null);
   const [currency, setCurrency] = useState("AUD");
   const [whp, setWhp] = useState("");
   const [rei, setRei] = useState("");
   const [restNotes, setRestNotes] = useState("");
+
+  // Computed cost per base unit from pack size + pack price.
+  const computedCost = useMemo(() => {
+    const size = Number(packSizeStr);
+    const price = Number(packPriceStr);
+    if (!Number.isFinite(size) || !Number.isFinite(price)) return null;
+    if (size <= 0 || price < 0) return null;
+    return price / size;
+  }, [packSizeStr, packPriceStr]);
+
+  // Cost we'll actually save: prefer freshly computed, fall back to existing.
+  const effectiveCost = computedCost ?? existingCost;
 
   // Reset when opening
   useMemo(() => {
