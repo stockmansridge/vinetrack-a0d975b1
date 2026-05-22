@@ -106,12 +106,17 @@ function sanitize(input: SavedChemicalInput) {
     const iosUnit = iosUnitFromAny(out.unit);
     out.unit = basis === "per_100_litres" ? `${iosUnit}/100L` : `${iosUnit}/ha`;
   }
-  // saved_chemicals.restrictions is NOT NULL in the shared schema. Coerce
-  // any null/missing value to "" so AI-lookup applies (which may legitimately
-  // have no WHP/REI/restrictions returned) don't fail the insert.
+  // saved_chemicals.unit is NOT NULL. Fall back to Litres/ha if the caller
+  // didn't supply one (e.g. AI lookup result missing unit).
+  if (out.unit == null || out.unit === "") {
+    out.unit = "Litres/ha";
+  }
+  // saved_chemicals.restrictions is NOT NULL. Coerce missing/empty to ""
+  // so AI-lookup applies without WHP/REI don't fail the insert.
   if (out.restrictions == null) {
     out.restrictions = "";
   }
+
   return out;
 }
 
