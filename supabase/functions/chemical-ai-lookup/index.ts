@@ -556,17 +556,30 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       names: merged.map((m) => `${m.product_name}|${m.manufacturer || ""}${m.cached ? " [cached]" : ""}`),
     });
 
+    const cachedTimesSeen = new Map(
+      cached.map((row) => [
+        `${row.product_name_normalised ?? normaliseQuery(row.product_name ?? "")}|${row.manufacturer_normalised ?? normaliseQuery(row.manufacturer ?? "")}`,
+        row.times_seen ?? 1,
+      ]),
+    );
+
     // 5. Write high-confidence AI candidates to cache for future lookups.
     if (admin && aiCandidates.length) {
       const toCache = merged
         .filter((c) => c && c.product_name && (c.confidence === "high" || c.confidence === "medium") && c.source_hint !== "exact_name_fallback")
-        .map((c) => ({
-          query_normalised: queryNorm,
-          country: countryStr || "",
-          product_name: String(c.product_name).trim(),
-          manufacturer: (c.manufacturer ?? "").toString().trim() || "",
-          product_name_normalised: normaliseQuery(String(c.product_name).trim()),
-          manufacturer_normalised: normaliseQuery((c.manufacturer ?? "").toString().trim() || ""),
+        .map((c) => {
+          const product_name = String(c.product_name).trim();
+          const manufacturer = (c.manufacturer ?? "").toString().trim() || "";
+          const product_name_normalised = normaliseQuery(product_name);
+          const manufacturer_normalised = normaliseQuery(manufacturer);
+          const cacheKey = `${product_name_normalised}|${manufacturer_normalised}`;
+          return {
+            query_normalised: queryNorm,
+            country: countryStr || "",
+            product_name,
+            manufacturer,
+            product_name_normalised,
+            manufacturer_normalised,
           active_ingredient: c.active_ingredient ?? null,
           category: c.category ?? null,
           chemical_group: c.chemical_group ?? null,
@@ -582,10 +595,11 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           country_confirmed: c.country_confirmed ?? null,
           confidence: c.confidence ?? "medium",
           source_hint: c.source_hint ?? "ai_gateway",
-          times_seen: Math.max(1, c.times_seen ?? 1),
+          times_seen: Math.max((cachedTimesSeen.get(cacheKey) ?? 0) + 1, c.times_seen ?? 1, 1),
           was_applied: c.was_applied ?? false,
           last_seen_at: new Date().toISOString(),
-        }));
+          };
+        });
       if (toCache.length) {
         const { error: upErr } = await admin
           .from("chemical_lookup_cache")
