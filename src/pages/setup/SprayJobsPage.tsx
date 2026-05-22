@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2, Upload, FileSpreadsheet } from "lucide-react";
+import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2, Upload, FileSpreadsheet, Info } from "lucide-react";
 import { downloadSprayProgramTemplate } from "@/lib/sprayProgramTemplate";
 import { SprayProgramImportDialog } from "@/components/spray/SprayProgramImportDialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
