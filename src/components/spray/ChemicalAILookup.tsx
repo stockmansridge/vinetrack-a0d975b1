@@ -88,7 +88,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
   async function preserveAppliedCandidate(candidate: RawCandidate | ExistingLibraryItem, fallbackName?: string) {
     const queryName = name.trim() || fallbackName?.trim();
-    const productName = ("product_name" in candidate ? candidate.product_name : candidate.name)?.trim() || fallbackName?.trim();
+    const productName = (
+      "product_name" in candidate
+        ? candidate.product_name
+        : (candidate as ExistingLibraryItem).name
+    )?.trim() || fallbackName?.trim();
     if (!queryName || !productName) return;
 
     try {
