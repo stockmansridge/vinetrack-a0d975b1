@@ -205,6 +205,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           : undefined,
       target: c.target,
       notes: c.notes,
+      label_url: c.label_url && /^https?:\/\//i.test(c.label_url) ? c.label_url : undefined,
     });
     void preserveAppliedCandidate(c, finalName);
     setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
