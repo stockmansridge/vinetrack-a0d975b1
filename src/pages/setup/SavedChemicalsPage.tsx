@@ -30,7 +30,10 @@ import {
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Archive, RotateCcw } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCanSeeCosts } from "@/lib/permissions";
@@ -81,6 +84,8 @@ export default function SavedChemicalsPage() {
   const [filter, setFilter] = useState("");
   const [group, setGroup] = useState<string>(ANY);
   const [use, setUse] = useState<string>(ANY);
+  const [activeIngredient, setActiveIngredient] = useState<string>(ANY);
+  const [aiOpen, setAiOpen] = useState(false);
   const [tab, setTab] = useState<"active" | "archived">("active");
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
@@ -110,12 +115,36 @@ export default function SavedChemicalsPage() {
     return Array.from(s).sort();
   }, [chemicals]);
 
+  const normaliseAI = (v: unknown) =>
+    String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  const activeIngredientOptions = useMemo(() => {
+    const map = new Map<string, string>(); // key -> display label (first-seen, title-ish)
+    for (const c of chemicals) {
+      const raw = String(c.active_ingredient ?? "").trim().replace(/\s+/g, " ");
+      if (!raw) continue;
+      const key = raw.toLowerCase();
+      if (!map.has(key)) map.set(key, raw);
+    }
+    return Array.from(map.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [chemicals]);
+
+  const activeIngredientLabel = useMemo(() => {
+    if (activeIngredient === ANY) return "";
+    return activeIngredientOptions.find((o) => o.key === activeIngredient)?.label ?? "";
+  }, [activeIngredient, activeIngredientOptions]);
+
   const rows = useMemo(() => {
     let list = chemicals.slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (group !== ANY) {
       list = list.filter((c) => normaliseChemicalGroup(c.chemical_group) === group);
     }
     if (use !== ANY) list = list.filter((c) => c.use === use);
+    if (activeIngredient !== ANY) {
+      list = list.filter((c) => normaliseAI(c.active_ingredient) === activeIngredient);
+    }
     if (filter.trim()) {
       const f = filter.toLowerCase();
       const fNorm = normaliseChemicalGroup(filter);
@@ -127,7 +156,7 @@ export default function SavedChemicalsPage() {
       });
     }
     return list;
-  }, [chemicals, filter, group, use]);
+  }, [chemicals, filter, group, use, activeIngredient]);
 
   type ChemSortKey = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "cost";
   const { sorted: sortedRows, getSortDirection: chemSortDir, toggleSort: chemToggle } = useSortableTable<typeof rows[number], ChemSortKey>(rows, {
@@ -244,6 +273,51 @@ export default function SavedChemicalsPage() {
                   {uses.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Active ingredient</div>
+              <Popover open={aiOpen} onOpenChange={setAiOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={aiOpen}
+                    className="w-64 justify-between font-normal"
+                  >
+                    <span className={cn("truncate", activeIngredient === ANY && "text-muted-foreground")}>
+                      {activeIngredient === ANY ? "Any active ingredient" : activeIngredientLabel}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search active ingredient…" />
+                    <CommandList>
+                      <CommandEmpty>No matches.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__any__ any active ingredient"
+                          onSelect={() => { setActiveIngredient(ANY); setAiOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", activeIngredient === ANY ? "opacity-100" : "opacity-0")} />
+                          Any active ingredient
+                        </CommandItem>
+                        {activeIngredientOptions.map((o) => (
+                          <CommandItem
+                            key={o.key}
+                            value={o.label}
+                            onSelect={() => { setActiveIngredient(o.key); setAiOpen(false); }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", activeIngredient === o.key ? "opacity-100" : "opacity-0")} />
+                            {o.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-1 ml-auto">
               <div className="text-xs text-muted-foreground">Search</div>
