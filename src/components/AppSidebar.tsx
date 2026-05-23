@@ -359,7 +359,7 @@ export function AppSidebar() {
                     />
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                <CollapsibleContent className="overflow-hidden">
                   <SidebarGroupContent className="pl-2">
                     <SidebarMenu>
                       {section.items.map((item) => (
