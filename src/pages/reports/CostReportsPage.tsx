@@ -36,6 +36,11 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
@@ -254,6 +259,33 @@ export default function CostReportsPage() {
       return true;
     });
   }, [grouped, season, paddock, variety]);
+
+  const COST_COLS = ["season","block","variety","area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips","status","warnings"] as const;
+  type CostCol = (typeof COST_COLS)[number];
+  const { order: cOrder, moveColumn: cMove, reset: cReset } = useColumnOrder(
+    "cost_reports_table",
+    COST_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+  const { sorted: filteredSorted, getSortDirection: cDir, toggleSort: cToggle } = useSortableTable<typeof filtered[number], CostCol>(filtered, {
+    accessors: {
+      season: (g) => g.season_year ?? null,
+      block: (g) => g.paddock_name ?? "",
+      variety: (g) => g.variety ?? "",
+      area: (g) => g.allocation_area_ha,
+      yield: (g) => g.yield_tonnes,
+      labour: (g) => g.labour_cost,
+      fuel: (g) => g.fuel_cost,
+      chemical: (g) => g.chemical_cost,
+      input: (g) => g.input_cost,
+      total: (g) => g.total_cost,
+      cost_ha: (g) => g.cost_per_ha,
+      cost_t: (g) => g.cost_per_tonne,
+      trips: (g) => g.trip_count,
+      status: (g) => g.status ?? "",
+      warnings: (g) => g.warnings_count,
+    },
+  });
 
   const summary = useMemo(() => {
     let total = 0, area = 0, yieldT = 0, warns = 0, trips = 0;
