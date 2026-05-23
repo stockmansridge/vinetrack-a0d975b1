@@ -533,7 +533,7 @@ function TripReportsTable({
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((t) => {
+            {sorted.map((t) => {
               const fnLabel = tripFunctionLabel(t.trip_function);
               const s = tripStatus(t);
               const isOpen = expanded.has(t.id);
