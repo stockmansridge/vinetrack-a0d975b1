@@ -324,6 +324,7 @@ export default function PinsPage() {
               onChange={(e) => setFilter(e.target.value)}
               className="w-64"
             />
+            <ColumnSettingsMenu onReset={pinReset} />
           </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
