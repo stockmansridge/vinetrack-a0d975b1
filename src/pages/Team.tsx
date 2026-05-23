@@ -17,6 +17,10 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { Fragment } from "react";
 
 import { Plus, Loader2, X, RefreshCw, Trash2 } from "lucide-react";
 import { useCanSeeCosts } from "@/lib/permissions";
