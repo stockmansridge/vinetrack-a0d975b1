@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
 import {
@@ -28,14 +28,9 @@ import {
   LifeBuoy,
   DollarSign,
   ShieldCheck,
+  LayoutDashboard as AdminDashIcon,
   Bell,
   Flag,
-  ChevronDown,
-  Hammer,
-  ClipboardCheck,
-  FileText,
-  Settings as SettingsIcon,
-  Mail,
 } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
@@ -52,129 +47,76 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
-  useSidebar,
 } from "@/components/ui/sidebar";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
-import { cn } from "@/lib/utils";
 
-type NavItem = { title: string; url: string; icon: any };
-type NavSection = {
-  id: string;
-  label: string;
-  icon: any;
-  items: NavItem[];
-  adminOnly?: boolean; // owner/manager
-  systemAdminOnly?: boolean;
-};
+type NavItem = { title: string; url: string; icon: any; soon?: boolean };
 
-const sections: NavSection[] = [
-  {
-    id: "operations",
-    label: "Operations",
-    icon: Activity,
-    items: [
-      { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
-      { title: "Field Trips", url: "/trips", icon: Sprout },
-      { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
-      { title: "Task Log", url: "/work-tasks", icon: ClipboardList },
-      { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
-      { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
-      { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
-    ],
-  },
-  {
-    id: "spray",
-    label: "Spray & Compliance",
-    icon: Layers,
-    items: [
-      { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
-      { title: "Spray Records / Reports", url: "/reports/spray", icon: FileBarChart },
-      { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-      { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
-    ],
-  },
-  {
-    id: "setup",
-    label: "Vineyard Setup",
-    icon: SettingsIcon,
-    items: [
-      { title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
-      { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
-      { title: "Blocks / Paddocks", url: "/setup/paddocks", icon: Map },
-      { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
-      { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
-      { title: "Other Equipment", url: "/setup/equipment-other", icon: Hammer },
-      { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-      { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
-      { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
-      { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
-    ],
-  },
-  {
-    id: "reports",
-    label: "Reports & Insights",
-    icon: FileText,
-    items: [
-      { title: "Trip Reports", url: "/reports/trips", icon: Route },
-      { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
-      { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
-      { title: "Yield Records", url: "/yield", icon: Grape },
-      { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
-    ],
-  },
-  {
-    id: "reports-admin",
-    label: "Financial",
-    icon: DollarSign,
-    adminOnly: true,
-    items: [
-      { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
-      { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
-    ],
-  },
-  {
-    id: "team",
-    label: "Team",
-    icon: Users,
-    items: [
-      { title: "Team Members", url: "/team", icon: Users },
-    ],
-  },
-  {
-    id: "system-admin",
-    label: "System Admin",
-    icon: ShieldCheck,
-    systemAdminOnly: true,
-    items: [
-      { title: "Diagnostics", url: "/admin/dashboard", icon: Activity },
-      { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
-      { title: "App Notices", url: "/admin/notices", icon: Bell },
-      { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
-      { title: "Invitations", url: "/admin/invitations", icon: Mail },
-    ],
-  },
+const dashboard: NavItem[] = [
+  { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
 ];
 
-const STORAGE_KEY = "vt.sidebar.openSections.v1";
+// "Work" — day-to-day operational records
+const work: NavItem[] = [
+  { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
+  { title: "Task Log", url: "/work-tasks", icon: ClipboardList },
+  { title: "Field Trips", url: "/trips", icon: Sprout },
+  { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
+  { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
+  { title: "Yields", url: "/yield", icon: Grape },
+  { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
+  { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
+];
 
-function loadOpenState(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, boolean>;
-  } catch {
-    return {};
-  }
-}
+// "Reports" — exports & compliance
+const reports: NavItem[] = [
+  { title: "Trip Reports", url: "/reports/trips", icon: Route },
+  { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
+  { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
+  { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
+  { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
+];
 
-function saveOpenState(state: Record<string, boolean>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
-}
+// Owner/manager-only reports (financial)
+const reportsAdmin: NavItem[] = [
+  { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
+];
+
+// "Setup" — vineyard configuration
+const setup: NavItem[] = [
+  { title: "Team", url: "/team", icon: Users },
+  { title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
+  { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
+  { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
+  { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
+  { title: "Tractors", url: "/setup/tractors", icon: Tractor },
+  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
+  { title: "Other Equipment Items", url: "/setup/equipment-other", icon: Wrench },
+  { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
+  { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
+  { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
+  { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
+];
+
+// "Tools" — calculators / helpers
+const tools: NavItem[] = [
+  { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
+];
+
+
+
+
+const settings: NavItem[] = [
+  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
+];
+
+const systemAdmin: NavItem[] = [
+  { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
+  { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
+  { title: "App Notices", url: "/admin/notices", icon: Bell },
+  { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
+];
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -182,101 +124,31 @@ export function AppSidebar() {
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const { data: logoUrl } = useVineyardLogo();
-  const { state: sidebarState } = useSidebar();
-  const collapsed = sidebarState === "collapsed";
-
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const isAdmin = currentRole === "owner" || currentRole === "manager";
-
-  const visibleSections = sections.filter((s) => {
-    if (s.systemAdminOnly && !isSystemAdmin) return false;
-    if (s.adminOnly && !isAdmin) return false;
-    return true;
-  });
-
-  const sectionHasActive = (s: NavSection) => s.items.some((i) => pathname === i.url);
-
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>(() => loadOpenState());
-
-  // Auto-open active section
-  useEffect(() => {
-    const active = visibleSections.find(sectionHasActive);
-    if (active && !openMap[active.id]) {
-      setOpenMap((prev) => {
-        const next = { ...prev, [active.id]: true };
-        saveOpenState(next);
-        return next;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
-
-  const toggleSection = (id: string) => {
-    setOpenMap((prev) => {
-      const next = { ...prev, [id]: !(prev[id] ?? false) };
-      saveOpenState(next);
-      return next;
-    });
-  };
-
   const isActive = (p: string) => pathname === p;
 
-  const activeItemClass =
-    "data-[active=true]:bg-accent data-[active=true]:text-primary data-[active=true]:font-bold data-[active=true]:hover:bg-accent data-[active=true]:hover:text-primary hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white";
-
-  // When sidebar is icon-collapsed, render a flat icon list (one button per section's first/primary item, plus dashboard) with tooltips
-  if (collapsed) {
-    const flatItems: NavItem[] = [
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-      ...visibleSections.flatMap((s) => s.items),
-    ];
-    return (
-      <Sidebar collapsible="icon">
-        <SidebarHeader className="px-2 py-3">
-          <BrandMark circle logoUrl={logoUrl} size={32} alt={vineyardName ?? "VineTrack"} />
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {flatItems.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.title}
-                      isActive={isActive(item.url)}
-                      className={cn("rounded-xl", activeItemClass)}
-                    >
-                      <NavLink to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter className="px-2 pb-3">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Contact support"
-                onClick={() => setSupportOpen(true)}
-                className="rounded-xl hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
-              >
-                <LifeBuoy className="h-4 w-4" />
-                <span>Contact support</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-        <SupportRequestSheet open={supportOpen} onOpenChange={setSupportOpen} />
-      </Sidebar>
-    );
-  }
+  const renderItems = (items: NavItem[]) =>
+    items.map((item) => (
+      <SidebarMenuItem key={item.url}>
+        <SidebarMenuButton
+          asChild
+          isActive={isActive(item.url)}
+          className="rounded-xl data-[active=true]:bg-accent data-[active=true]:text-primary data-[active=true]:font-bold data-[active=true]:hover:bg-accent data-[active=true]:hover:text-primary hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
+        >
+          <NavLink to={item.url} className="flex items-center gap-2">
+            <item.icon className="h-4 w-4" />
+            <span className="flex-1 truncate">{item.title}</span>
+            {item.soon && (
+              <span className="ml-auto rounded-sm bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                Soon
+              </span>
+            )}
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    ));
 
   return (
     <Sidebar collapsible="icon">
@@ -294,74 +166,53 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {/* Dashboard pinned at top */}
         <SidebarGroup>
+          <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/dashboard")}
-                  className={cn("rounded-xl", activeItemClass)}
-                >
-                  <NavLink to="/dashboard" className="flex items-center gap-2">
-                    <LayoutDashboard className="h-4 w-4" />
-                    <span className="flex-1 truncate">Dashboard</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            <SidebarMenu>{renderItems(dashboard)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Work</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(work)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(tools)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Reports</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(isAdmin ? [...reports, ...reportsAdmin] : reports)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Setup</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(setup)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {visibleSections.map((section) => {
-          const hasActive = sectionHasActive(section);
-          const open = openMap[section.id] ?? hasActive;
-          const SectionIcon = section.icon;
-          return (
-            <SidebarGroup key={section.id}>
-              <Collapsible open={open} onOpenChange={() => toggleSection(section.id)}>
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel
-                    className={cn(
-                      "group/label cursor-pointer flex items-center gap-2 hover:text-sidebar-foreground transition-colors",
-                      hasActive && "text-primary",
-                    )}
-                  >
-                    <SectionIcon className="h-3.5 w-3.5" />
-                    <span className="flex-1">{section.label}</span>
-                    <ChevronDown
-                      className={cn(
-                        "h-3.5 w-3.5 transition-transform",
-                        open ? "rotate-0" : "-rotate-90",
-                      )}
-                    />
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {section.items.map((item) => (
-                        <SidebarMenuItem key={item.url}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={isActive(item.url)}
-                            className={cn("rounded-xl", activeItemClass)}
-                          >
-                            <NavLink to={item.url} className="flex items-center gap-2">
-                              <item.icon className="h-4 w-4" />
-                              <span className="flex-1 truncate">{item.title}</span>
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </SidebarGroup>
-          );
-        })}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Settings</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{renderItems(settings)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+        {isSystemAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>System Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{renderItems(systemAdmin)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="px-2 pb-3">
         <SidebarMenu>
