@@ -57,7 +57,6 @@ export default function SelectedPinMap({ pin }: Props) {
 
   const style = pinStyle(pin.mode, (pin as any).button_color, (pin as any).category);
   const title = pinDisplayTitle(pin as any);
-  const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}&t=k`;
   const openInBrowserMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
 
   return (
@@ -101,7 +100,6 @@ export default function SelectedPinMap({ pin }: Props) {
             target="_blank"
             rel="noreferrer"
             aria-label={`Open ${title} in maps`}
-            data-apple-maps-url={openInAppleMapsUrl}
           >
             Open in Maps
           </a>
