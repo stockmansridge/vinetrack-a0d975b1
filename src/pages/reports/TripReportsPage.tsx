@@ -594,23 +594,6 @@ function TripReportsTable({
 }
 
 
-      <Card className="p-4 bg-muted/30 flex items-start gap-2">
-        <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
-        <div className="text-xs text-muted-foreground space-y-1">
-          <div>
-            Trip Reports cover every trip/job type recorded in VineTrack. Each PDF
-            includes Trip Details, Rows / Paths, Pins, Route Map and a VineTrack
-            footer.
-          </div>
-          <div>
-            For spray-specific compliance reports (chemicals, rates, WHP/REI, tank mix)
-            and yearly spray programs, use <strong>Spray Records</strong>.
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
 
 // --- Row completion helpers ---------------------------------------------
 
