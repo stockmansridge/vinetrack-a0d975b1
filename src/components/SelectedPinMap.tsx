@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import OpenExternalMapButton from "@/components/OpenExternalMapButton";
 
 import { initMapKit } from "@/lib/mapkit";
 import MapSourceBadge from "@/components/MapSourceBadge";
@@ -59,24 +58,24 @@ export default function SelectedPinMap({ pin }: Props) {
           {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
         </span>
         <div className="flex flex-wrap items-center gap-2">
-          <a
-            href={openInAppleMapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <OpenExternalMapButton
+            url={openInAppleMapsUrl}
             aria-label={`Open ${title} in Apple Maps`}
-            className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-7 px-2 text-xs")}
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
           >
             Open in Apple Maps
-          </a>
-          <a
-            href={openInGoogleMapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          </OpenExternalMapButton>
+          <OpenExternalMapButton
+            url={openInGoogleMapsUrl}
             aria-label={`Open ${title} in Google Maps`}
-            className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "h-7 px-2 text-xs")}
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
           >
             Google Maps
-          </a>
+          </OpenExternalMapButton>
         </div>
       </div>
     </Card>
