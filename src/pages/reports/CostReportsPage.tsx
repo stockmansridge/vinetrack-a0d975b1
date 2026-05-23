@@ -36,6 +36,11 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
@@ -255,6 +260,33 @@ export default function CostReportsPage() {
     });
   }, [grouped, season, paddock, variety]);
 
+  const COST_COLS = ["season","block","variety","area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips","status","warnings"] as const;
+  type CostCol = (typeof COST_COLS)[number];
+  const { order: cOrder, moveColumn: cMove, reset: cReset } = useColumnOrder(
+    "cost_reports_table",
+    COST_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+  const { sorted: filteredSorted, getSortDirection: cDir, toggleSort: cToggle } = useSortableTable<typeof filtered[number], CostCol>(filtered, {
+    accessors: {
+      season: (g) => g.season_year ?? null,
+      block: (g) => g.paddock_name ?? "",
+      variety: (g) => g.variety ?? "",
+      area: (g) => g.allocation_area_ha,
+      yield: (g) => g.yield_tonnes,
+      labour: (g) => g.labour_cost,
+      fuel: (g) => g.fuel_cost,
+      chemical: (g) => g.chemical_cost,
+      input: (g) => g.input_cost,
+      total: (g) => g.total_cost,
+      cost_ha: (g) => g.cost_per_ha,
+      cost_t: (g) => g.cost_per_tonne,
+      trips: (g) => g.trip_count,
+      status: (g) => g.status ?? "",
+      warnings: (g) => g.warnings_count,
+    },
+  });
+
   const summary = useMemo(() => {
     let total = 0, area = 0, yieldT = 0, warns = 0, trips = 0;
     for (const g of filtered) {
@@ -385,83 +417,95 @@ export default function CostReportsPage() {
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
       </Card>
 
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={cReset} />
+      </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Season</TableHead>
-              <TableHead>Block</TableHead>
-              <TableHead>Variety</TableHead>
-              <TableHead className="text-right">Treated area (ha)</TableHead>
-              <TableHead className="text-right">Yield (t)</TableHead>
-              <TableHead className="text-right">Labour</TableHead>
-              <TableHead className="text-right">Fuel</TableHead>
-              <TableHead className="text-right">Chemical</TableHead>
-              <TableHead className="text-right">Seed/input</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="text-right">Cost/ha</TableHead>
-              <TableHead className="text-right">Cost/t</TableHead>
-              <TableHead className="text-right">Trips</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Warnings</TableHead>
+              {(cOrder as CostCol[]).map((id) => {
+                const labels: Record<CostCol, string> = {
+                  season: "Season", block: "Block", variety: "Variety",
+                  area: "Treated area (ha)", yield: "Yield (t)",
+                  labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
+                  total: "Total", cost_ha: "Cost/ha", cost_t: "Cost/t",
+                  trips: "Trips", status: "Status", warnings: "Warnings",
+                };
+                const rightCols = new Set<CostCol>(["area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips"]);
+                const align: "left" | "right" = rightCols.has(id) ? "right" : "left";
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={cMove} align={align}
+                    sort={{ active: cDir(id), onSort: () => cToggle(id) }}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
             )}
-            {!isLoading && filtered.length === 0 && (
+            {!isLoading && filteredSorted.length === 0 && (
               <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground py-8">
                 No cost allocations match these filters.
               </TableCell></TableRow>
             )}
-            {filtered.map((g) => (
-              <TableRow key={g.key} className="cursor-pointer" onClick={() => setDrill(g)}>
-                <TableCell>{g.season_year ?? "—"}</TableCell>
-                <TableCell className="max-w-[180px] truncate">{g.paddock_name ?? "—"}</TableCell>
-                <TableCell>
-                  {g.variety ? g.variety : (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1">
-                          <Badge variant="outline" className="text-amber-700 border-amber-400">
-                            Unassigned variety
-                          </Badge>
-                          <Info className="h-3 w-3 text-muted-foreground" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        This block has no variety allocation, or the
-                        allocation could not be matched. Add or fix the
-                        variety allocation in{" "}
-                        <Link to="/setup/paddocks" className="underline">Block settings</Link>,
-                        then recalculate costs from the iOS app.
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">{fmtNum(g.allocation_area_ha)}</TableCell>
-                <TableCell className="text-right">{fmtNum(g.yield_tonnes)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(g.labour_cost)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(g.fuel_cost)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(g.chemical_cost)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(g.input_cost)}</TableCell>
-                <TableCell className="text-right font-medium">{fmtMoney(g.total_cost)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(g.cost_per_ha)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>
-                <TableCell className="text-right">{g.trip_count}</TableCell>
-                <TableCell>
-                  {g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}
-                </TableCell>
-                <TableCell>
-                  {g.warnings_count > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                      <AlertTriangle className="h-3 w-3" />{g.warnings_count}
-                    </span>
-                  ) : "—"}
-                </TableCell>
-              </TableRow>
-            ))}
+            {filteredSorted.map((g) => {
+              const cellMap: Record<CostCol, React.ReactNode> = {
+                season: <TableCell>{g.season_year ?? "—"}</TableCell>,
+                block: <TableCell className="max-w-[180px] truncate">{g.paddock_name ?? "—"}</TableCell>,
+                variety: (
+                  <TableCell>
+                    {g.variety ? g.variety : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className="text-amber-700 border-amber-400">
+                              Unassigned variety
+                            </Badge>
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          This block has no variety allocation, or the
+                          allocation could not be matched. Add or fix the
+                          variety allocation in{" "}
+                          <Link to="/setup/paddocks" className="underline">Block settings</Link>,
+                          then recalculate costs from the iOS app.
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </TableCell>
+                ),
+                area: <TableCell className="text-right">{fmtNum(g.allocation_area_ha)}</TableCell>,
+                yield: <TableCell className="text-right">{fmtNum(g.yield_tonnes)}</TableCell>,
+                labour: <TableCell className="text-right">{fmtMoney(g.labour_cost)}</TableCell>,
+                fuel: <TableCell className="text-right">{fmtMoney(g.fuel_cost)}</TableCell>,
+                chemical: <TableCell className="text-right">{fmtMoney(g.chemical_cost)}</TableCell>,
+                input: <TableCell className="text-right">{fmtMoney(g.input_cost)}</TableCell>,
+                total: <TableCell className="text-right font-medium">{fmtMoney(g.total_cost)}</TableCell>,
+                cost_ha: <TableCell className="text-right">{fmtMoney(g.cost_per_ha)}</TableCell>,
+                cost_t: <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>,
+                trips: <TableCell className="text-right">{g.trip_count}</TableCell>,
+                status: <TableCell>{g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}</TableCell>,
+                warnings: (
+                  <TableCell>
+                    {g.warnings_count > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                        <AlertTriangle className="h-3 w-3" />{g.warnings_count}
+                      </span>
+                    ) : "—"}
+                  </TableCell>
+                ),
+              };
+              return (
+                <TableRow key={g.key} className="cursor-pointer" onClick={() => setDrill(g)}>
+                  {(cOrder as CostCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>

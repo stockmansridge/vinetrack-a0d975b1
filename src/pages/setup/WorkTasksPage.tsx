@@ -36,6 +36,10 @@ import {
 } from "@/components/ui/sheet";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { Fragment } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
@@ -327,6 +331,14 @@ export default function WorkTasksPage() {
     initial: { key: "date", direction: "desc" },
   });
 
+  const WT_COLS = ["date","paddock","task_type","status","area_ha","hours",...(canSeeCosts ? ["cost"] : []),"notes"] as const;
+  type WtCol = "date"|"paddock"|"task_type"|"status"|"area_ha"|"hours"|"cost"|"notes";
+  const { order: wtOrder, moveColumn: wtMove, reset: wtReset } = useColumnOrder(
+    "work_tasks_table",
+    WT_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+
   const exportCsv = () => {
     const headers = canSeeCosts
       ? ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
@@ -444,21 +456,28 @@ export default function WorkTasksPage() {
         </Filter>
       </div>
 
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={wtReset} />
+      </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date / range</SortableTableHead>
-              <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
-              <SortableTableHead active={getSortDirection("task_type")} onSort={() => toggleSort("task_type")}>Type</SortableTableHead>
-              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
-              <SortableTableHead active={getSortDirection("area_ha")} onSort={() => toggleSort("area_ha")} align="right">Area ha</SortableTableHead>
-              <SortableTableHead active={getSortDirection("hours")} onSort={() => toggleSort("hours")} align="right">Hours</SortableTableHead>
-              {canSeeCosts && (
-                <SortableTableHead active={getSortDirection("cost")} onSort={() => toggleSort("cost")} align="right">Cost</SortableTableHead>
-              )}
-              
-              <TableHead>Notes</TableHead>
+              {(wtOrder as WtCol[]).map((id) => {
+                if (id === "cost" && !canSeeCosts) return null;
+                const align: "left" | "right" = (id === "area_ha" || id === "hours" || id === "cost") ? "right" : "left";
+                const labels: Record<WtCol, string> = {
+                  date: "Date / range", paddock: "Paddock", task_type: "Type", status: "Status",
+                  area_ha: "Area ha", hours: "Hours", cost: "Cost", notes: "Notes",
+                };
+                const sortable = id !== "notes";
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={wtMove} align={align}
+                    sort={sortable ? { active: getSortDirection(id as SortKey), onSort: () => toggleSort(id as SortKey) } : undefined}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -479,21 +498,26 @@ export default function WorkTasksPage() {
               const padName = taskPaddockNames(t.id) || "—";
               const tot = totalsByTask.get(t.id);
               const summary = (t.description ?? t.notes ?? "").trim();
+              const cellMap: Record<WtCol, React.ReactNode> = {
+                date: <TableCell>{dateRangeLabel(t)}</TableCell>,
+                paddock: <TableCell>{padName}</TableCell>,
+                task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
+                status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
+                area_ha: <TableCell className="text-right">{num(t.area_ha)}</TableCell>,
+                hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
+                cost: (
+                  <TableCell className="text-right">
+                    {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
+                  </TableCell>
+                ),
+                notes: <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>,
+              };
               return (
                 <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
-                  <TableCell>{dateRangeLabel(t)}</TableCell>
-                  <TableCell>{padName}</TableCell>
-                  <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>
-                  <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>
-                  <TableCell className="text-right">{num(t.area_ha)}</TableCell>
-                  <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>
-                  {canSeeCosts && (
-                    <TableCell className="text-right">
-                      {tot?.cost ? money(tot.cost) : tot?.missingRate ? <span className="text-xs text-muted-foreground">add rates</span> : "—"}
-                    </TableCell>
-                  )}
-                  
-                  <TableCell className="max-w-[18rem] truncate text-xs text-muted-foreground">{summary || "—"}</TableCell>
+                  {(wtOrder as WtCol[]).map((id) => {
+                    if (id === "cost" && !canSeeCosts) return null;
+                    return <Fragment key={id}>{cellMap[id]}</Fragment>;
+                  })}
                 </TableRow>
               );
             })}

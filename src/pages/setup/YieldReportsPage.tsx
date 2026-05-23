@@ -36,6 +36,7 @@ import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 
 const ANY = "__any__";
 
@@ -143,6 +144,17 @@ export default function YieldReportsPage() {
     }
     return list;
   }, [allRows, tab, from, to, yearFilter, completion, filter]);
+
+  const { sorted: rowsSorted, getSortDirection: yDir, toggleSort: yToggle } = useSortableTable<AnyRow, YieldCol>(rows, {
+    accessors: {
+      date: (r) => sortDate(r) ?? null,
+      type: (r) => (r.__kind === "historical" ? "Historical" : "Estimation"),
+      season: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).season ?? (r as HistoricalYieldRecord).year ?? null) : null,
+      yield: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).total_yield_tonnes ?? null) : null,
+      area: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).total_area_hectares ?? null) : null,
+      status: (r) => r.__kind === "historical" ? "Archived" : ((r as YieldEstimationSession).is_completed ? "Completed" : "Open"),
+    },
+  });
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
@@ -261,7 +273,7 @@ export default function YieldReportsPage() {
                       status: "Status",
                     };
                     return (
-                      <ReorderableHead key={id} columnId={id} onDropColumn={yMove}>
+                      <ReorderableHead key={id} columnId={id} onDropColumn={yMove} sort={{ active: yDir(id), onSort: () => yToggle(id) }}>
                         {labels[id]}
                       </ReorderableHead>
                     );
@@ -282,7 +294,7 @@ export default function YieldReportsPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {rows.map((r) => {
+                {rowsSorted.map((r) => {
                   const isHist = r.__kind === "historical";
                   const h = r as HistoricalYieldRecord;
                   const s = r as YieldEstimationSession;

@@ -45,6 +45,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 import {
   DAMAGE_TYPE_CODES,
   damageTypeLabel,
@@ -174,6 +179,29 @@ export default function DamageRecordsPage() {
     return list;
   }, [records, from, to, paddockId, damageType, severity, status, filter]);
 
+  const DMG_COLS = ["date","paddock","row","side","type","severity","status","damage_pct","operator","notes","photos"] as const;
+  type DmgCol = (typeof DMG_COLS)[number];
+  const { order: dOrder, moveColumn: dMove, reset: dReset } = useColumnOrder(
+    "damage_records_table",
+    DMG_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+  const { sorted: rowsSorted, getSortDirection: dDir, toggleSort: dToggle } = useSortableTable<DamageRecord, DmgCol>(rows, {
+    accessors: {
+      date: (r) => observed(r),
+      paddock: (r) => r.paddock_id ? (paddockNameById.get(r.paddock_id) ?? "") : "",
+      row: (r) => (r.row_number as any) ?? null,
+      side: (r) => r.side ?? "",
+      type: (r) => damageTypeLabel(r.damage_type) ?? "",
+      severity: (r) => r.severity ?? "",
+      status: (r) => r.status ?? "open",
+      damage_pct: (r) => (r.damage_percent as any) ?? null,
+      operator: (r) => r.operator_name ?? resolve(r.created_by) ?? "",
+      notes: (r) => r.notes ?? "",
+      photos: (r) => (r.photo_urls ?? []).length,
+    },
+  });
+
   const archiveMut = useMutation({
     mutationFn: (id: string) => archiveDamageRecord(id, user?.id ?? null),
     onSuccess: () => {
@@ -280,21 +308,28 @@ export default function DamageRecordsPage() {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={dReset} />
+      </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date observed</TableHead>
-              <TableHead>Paddock</TableHead>
-              <TableHead>Row / path</TableHead>
-              <TableHead>Side</TableHead>
-              <TableHead>Damage type</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Damage %</TableHead>
-              <TableHead>Operator</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead className="text-right">Photos</TableHead>
+              {(dOrder as DmgCol[]).map((id) => {
+                const labels: Record<DmgCol, string> = {
+                  date: "Date observed", paddock: "Paddock", row: "Row / path", side: "Side",
+                  type: "Damage type", severity: "Severity", status: "Status",
+                  damage_pct: "Damage %", operator: "Operator", notes: "Notes", photos: "Photos",
+                };
+                const align: "left" | "right" = (id === "damage_pct" || id === "photos") ? "right" : "left";
+                const sortable = id !== "notes";
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={dMove} align={align}
+                    sort={sortable ? { active: dDir(id), onSort: () => dToggle(id) } : undefined}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
               {canEdit && <TableHead className="w-[80px]" />}
             </TableRow>
           </TableHeader>
@@ -305,7 +340,7 @@ export default function DamageRecordsPage() {
             {error && (
               <TableRow><TableCell colSpan={canEdit ? 12 : 11} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
-            {!isLoading && !error && rows.length === 0 && (
+            {!isLoading && !error && rowsSorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={canEdit ? 12 : 11} className="py-12">
                   <div className="mx-auto flex max-w-md flex-col items-center text-center">
@@ -329,15 +364,15 @@ export default function DamageRecordsPage() {
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((r) => {
+            {rowsSorted.map((r) => {
               const photoCount = (r.photo_urls ?? []).length;
-              return (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                  <TableCell>{fmtDate(observed(r))}</TableCell>
-                  <TableCell>{r.paddock_id ? (paddockNameById.get(r.paddock_id) ?? "—") : "—"}</TableCell>
-                  <TableCell>{fmt(r.row_number)}</TableCell>
-                  <TableCell className="capitalize">{fmt(r.side)}</TableCell>
-                  <TableCell>{damageTypeLabel(r.damage_type)}</TableCell>
+              const cellMap: Record<DmgCol, React.ReactNode> = {
+                date: <TableCell>{fmtDate(observed(r))}</TableCell>,
+                paddock: <TableCell>{r.paddock_id ? (paddockNameById.get(r.paddock_id) ?? "—") : "—"}</TableCell>,
+                row: <TableCell>{fmt(r.row_number)}</TableCell>,
+                side: <TableCell className="capitalize">{fmt(r.side)}</TableCell>,
+                type: <TableCell>{damageTypeLabel(r.damage_type)}</TableCell>,
+                severity: (
                   <TableCell>
                     {r.severity ? (
                       <Badge variant={SEVERITY_VARIANT[r.severity] ?? "outline"} className="capitalize">
@@ -345,17 +380,22 @@ export default function DamageRecordsPage() {
                       </Badge>
                     ) : "—"}
                   </TableCell>
+                ),
+                status: (
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[r.status ?? "open"] ?? "outline"} className="capitalize">
                       {r.status ?? "open"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {r.damage_percent == null ? "—" : `${r.damage_percent}%`}
-                  </TableCell>
-                  <TableCell>{fmt(r.operator_name) === "—" ? resolve(r.created_by) ?? "—" : r.operator_name}</TableCell>
-                  <TableCell className="max-w-[260px] truncate">{fmt(r.notes)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{photoCount}</TableCell>
+                ),
+                damage_pct: <TableCell className="text-right tabular-nums">{r.damage_percent == null ? "—" : `${r.damage_percent}%`}</TableCell>,
+                operator: <TableCell>{fmt(r.operator_name) === "—" ? resolve(r.created_by) ?? "—" : r.operator_name}</TableCell>,
+                notes: <TableCell className="max-w-[260px] truncate">{fmt(r.notes)}</TableCell>,
+                photos: <TableCell className="text-right tabular-nums">{photoCount}</TableCell>,
+              };
+              return (
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                  {(dOrder as DmgCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                   {canEdit && (
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1 justify-end">
