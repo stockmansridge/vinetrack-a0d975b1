@@ -469,19 +469,23 @@ function JobsTable({
           </div>
         )}
       </div>
+      <div className="flex justify-end mb-2">
+        <ColumnSettingsMenu onReset={sjReset} />
+      </div>
       <Card>
       <Table>
         <TableHeader>
           <TableRow>
-            {columnDefs.map((c) => (
-              <SortableTableHead
+            {orderedCols.map((c) => (
+              <ReorderableHead
                 key={c.key}
+                columnId={c.key}
+                onDropColumn={sjMove}
                 align={c.align}
-                active={getSortDirection(c.key)}
-                onSort={() => toggleSort(c.key)}
+                sort={{ active: getSortDirection(c.key), onSort: () => toggleSort(c.key) }}
               >
                 {c.label}
-              </SortableTableHead>
+              </ReorderableHead>
             ))}
             <TableHead className="w-1" />
           </TableRow>
@@ -498,45 +502,9 @@ function JobsTable({
           )}
           {sorted.map((j) => (
             <TableRow key={j.id} className="cursor-pointer" onClick={() => onEdit(j)}>
-              {mode === "templates" ? (
-                <>
-                  <TableCell className="font-medium">{fmt(j.name)}</TableCell>
-                  <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
-                  <TableCell>{j.target ? j.target : "—"}</TableCell>
-                  <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
-                    {j.growth_stage_code ?? "—"}
-                  </TableCell>
-                  <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell>
-                  <TableCell>{fmt(j.water_volume)}</TableCell>
-                  <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
-                  <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell>
-                  <TableCell>{fmtDate(j.updated_at)}</TableCell>
-                </>
-              ) : mode === "archived" ? (
-                <>
-                  <TableCell className="font-medium">{fmt(j.name)}</TableCell>
-                  <TableCell>{j.is_template ? "Template" : "Planned"}</TableCell>
-                  <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
-                  <TableCell>{fmtDate(j.updated_at)}</TableCell>
-                </>
-              ) : (
-                <>
-                  <TableCell className="font-medium">{fmt(j.name)}</TableCell>
-                  <TableCell>{fmtDate(j.planned_date)}</TableCell>
-                  <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell>
-                  <TableCell>{opTypeLabel(j.operation_type)}</TableCell>
-                  <TableCell>{j.target ? j.target : "—"}</TableCell>
-                  <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
-                    {j.growth_stage_code ?? "—"}
-                  </TableCell>
-                  <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell>
-                  <TableCell>{fmt(j.water_volume)}</TableCell>
-                  <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell>
-                  <TableCell>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</TableCell>
-                  <TableCell>{j.operator_user_id ? maps.members.get(j.operator_user_id) ?? "—" : "—"}</TableCell>
-                  <TableCell>{fmtDate(j.updated_at)}</TableCell>
-                </>
-              )}
+              {orderedCols.map((c) => (
+                <Fragment key={c.key}>{c.render(j)}</Fragment>
+              ))}
               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-end gap-1">
                   {mode !== "archived" && (
