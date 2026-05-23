@@ -156,6 +156,24 @@ export function AppSidebar() {
       </SidebarMenuItem>
     ));
 
+  const renderGroup = (label: string, items: NavItem[]) => (
+    <Collapsible defaultOpen className="group/collapsible">
+      <SidebarGroup>
+        <SidebarGroupLabel asChild>
+          <CollapsibleTrigger className="flex w-full items-center justify-between hover:text-sidebar-foreground">
+            {label}
+            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(items)}</SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4">
