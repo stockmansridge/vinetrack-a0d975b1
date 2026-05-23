@@ -73,7 +73,6 @@ const SECTIONS: NavSection[] = [
     label: "Operations",
     icon: Activity,
     items: [
-      { id: "live", title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
       { id: "trips", title: "Field Trips", url: "/trips", icon: Sprout },
       { id: "pins", title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
       { id: "tasks", title: "Task Log", url: "/work-tasks", icon: ClipboardList },
