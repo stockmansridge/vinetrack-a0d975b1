@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BrandName } from "@/components/BrandName";
 import {
@@ -32,6 +32,7 @@ import {
   Flag,
   ChevronDown,
   Hammer,
+  ClipboardCheck,
   FileText,
   Settings as SettingsIcon,
   Mail,
@@ -57,29 +58,29 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { cn } from "@/lib/utils";
 
-type NavItem = { id: string; title: string; url: string; icon: any };
+type NavItem = { title: string; url: string; icon: any };
 type NavSection = {
   id: string;
   label: string;
   icon: any;
   items: NavItem[];
-  adminOnly?: boolean;
+  adminOnly?: boolean; // owner/manager
   systemAdminOnly?: boolean;
 };
 
-const SECTIONS: NavSection[] = [
+const sections: NavSection[] = [
   {
     id: "operations",
     label: "Operations",
     icon: Activity,
     items: [
-      { id: "live", title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
-      { id: "trips", title: "Field Trips", url: "/trips", icon: Sprout },
-      { id: "pins", title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
-      { id: "tasks", title: "Task Log", url: "/work-tasks", icon: ClipboardList },
-      { id: "maint", title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
-      { id: "fuel", title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
-      { id: "irrigation", title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
+      { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
+      { title: "Field Trips", url: "/trips", icon: Sprout },
+      { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
+      { title: "Task Log", url: "/work-tasks", icon: ClipboardList },
+      { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
+      { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
+      { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
     ],
   },
   {
@@ -87,10 +88,10 @@ const SECTIONS: NavSection[] = [
     label: "Spray & Compliance",
     icon: Layers,
     items: [
-      { id: "spray-jobs", title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
-      { id: "spray-reports", title: "Spray Records / Reports", url: "/reports/spray", icon: FileBarChart },
-      { id: "chemicals", title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-      { id: "documents", title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
+      { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
+      { title: "Spray Records / Reports", url: "/reports/spray", icon: FileBarChart },
+      { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
+      { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
     ],
   },
   {
@@ -98,16 +99,16 @@ const SECTIONS: NavSection[] = [
     label: "Vineyard Setup",
     icon: SettingsIcon,
     items: [
-      { id: "vineyard", title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
-      { id: "vineyard-loc", title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
-      { id: "paddocks", title: "Blocks / Paddocks", url: "/setup/paddocks", icon: Map },
-      { id: "varieties", title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
-      { id: "spray-eq", title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
-      { id: "other-eq", title: "Other Equipment", url: "/setup/equipment-other", icon: Hammer },
-      { id: "tractors", title: "Tractors", url: "/setup/tractors", icon: Tractor },
-      { id: "op-cat", title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
-      { id: "saved-inputs", title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
-      { id: "weather", title: "Weather Settings", url: "/setup/weather", icon: Cloud },
+      { title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
+      { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
+      { title: "Blocks / Paddocks", url: "/setup/paddocks", icon: Map },
+      { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
+      { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
+      { title: "Other Equipment", url: "/setup/equipment-other", icon: Hammer },
+      { title: "Tractors", url: "/setup/tractors", icon: Tractor },
+      { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
+      { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
+      { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
     ],
   },
   {
@@ -115,28 +116,30 @@ const SECTIONS: NavSection[] = [
     label: "Reports & Insights",
     icon: FileText,
     items: [
-      { id: "trip-reports", title: "Trip Reports", url: "/reports/trips", icon: Route },
-      { id: "rainfall", title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
-      { id: "growth", title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
-      { id: "yield", title: "Yield Records", url: "/yield", icon: Grape },
-      { id: "damage", title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
+      { title: "Trip Reports", url: "/reports/trips", icon: Route },
+      { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
+      { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
+      { title: "Yield Records", url: "/yield", icon: Grape },
+      { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
     ],
   },
   {
-    id: "financial",
+    id: "reports-admin",
     label: "Financial",
     icon: DollarSign,
     adminOnly: true,
     items: [
-      { id: "costs", title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
-      { id: "coverage", title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
+      { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
+      { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
     ],
   },
   {
     id: "team",
     label: "Team",
     icon: Users,
-    items: [{ id: "team-members", title: "Team Members", url: "/team", icon: Users }],
+    items: [
+      { title: "Team Members", url: "/team", icon: Users },
+    ],
   },
   {
     id: "system-admin",
@@ -144,23 +147,22 @@ const SECTIONS: NavSection[] = [
     icon: ShieldCheck,
     systemAdminOnly: true,
     items: [
-      { id: "diag", title: "Diagnostics", url: "/admin/dashboard", icon: Activity },
-      { id: "flags", title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
-      { id: "notices", title: "App Notices", url: "/admin/notices", icon: Bell },
-      { id: "sysadmins", title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
-      { id: "invites", title: "Invitations", url: "/admin/invitations", icon: Mail },
+      { title: "Diagnostics", url: "/admin/dashboard", icon: Activity },
+      { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
+      { title: "App Notices", url: "/admin/notices", icon: Bell },
+      { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
+      { title: "Invitations", url: "/admin/invitations", icon: Mail },
     ],
   },
 ];
 
-const STORAGE_KEY = "vt.sidebar.openSections.v2";
+const STORAGE_KEY = "vt.sidebar.openSections.v1";
 
 function loadOpenState(): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return JSON.parse(raw) as Record<string, boolean>;
   } catch {
     return {};
   }
@@ -173,10 +175,6 @@ function saveOpenState(state: Record<string, boolean>) {
     /* ignore */
   }
 }
-
-// Brand active state — single green
-const activeItemClass =
-  "data-[active=true]:bg-[hsl(80_58%_46%/0.15)] data-[active=true]:text-[#85B830] data-[active=true]:font-semibold hover:bg-[hsl(80_58%_46%/0.08)]";
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -191,50 +189,32 @@ export function AppSidebar() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const isAdmin = currentRole === "owner" || currentRole === "manager";
 
-  const visibleSections = useMemo(
-    () =>
-      SECTIONS.filter((s) => {
-        if (s.systemAdminOnly && !isSystemAdmin) return false;
-        if (s.adminOnly && !isAdmin) return false;
-        return true;
-      }),
-    [isSystemAdmin, isAdmin],
-  );
-
-  const activeSectionId = useMemo(() => {
-    const s = SECTIONS.find((sec) => sec.items.some((i) => i.url === pathname));
-    return s?.id ?? null;
-  }, [pathname]);
-
-  // Initialise once: localStorage + auto-open active section
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>(() => {
-    const initial = loadOpenState();
-    if (activeSectionId && initial[activeSectionId] === undefined) {
-      initial[activeSectionId] = true;
-    }
-    return initial;
+  const visibleSections = sections.filter((s) => {
+    if (s.systemAdminOnly && !isSystemAdmin) return false;
+    if (s.adminOnly && !isAdmin) return false;
+    return true;
   });
 
-  // When route changes, open the active section ONLY if user hasn't explicitly closed it
-  const lastRouteRef = useRef(pathname);
-  useEffect(() => {
-    if (lastRouteRef.current === pathname) return;
-    lastRouteRef.current = pathname;
-    if (!activeSectionId) return;
-    setOpenMap((prev) => {
-      if (prev[activeSectionId] === true) return prev;
-      // Only force-open if user has no explicit preference (undefined). Respect explicit false.
-      if (prev[activeSectionId] === false) return prev;
-      const next = { ...prev, [activeSectionId]: true };
-      saveOpenState(next);
-      return next;
-    });
-  }, [pathname, activeSectionId]);
+  const sectionHasActive = (s: NavSection) => s.items.some((i) => pathname === i.url);
 
-  const setSectionOpen = (id: string, open: boolean) => {
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>(() => loadOpenState());
+
+  // Auto-open active section
+  useEffect(() => {
+    const active = visibleSections.find(sectionHasActive);
+    if (active && !openMap[active.id]) {
+      setOpenMap((prev) => {
+        const next = { ...prev, [active.id]: true };
+        saveOpenState(next);
+        return next;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const toggleSection = (id: string) => {
     setOpenMap((prev) => {
-      if (prev[id] === open) return prev;
-      const next = { ...prev, [id]: open };
+      const next = { ...prev, [id]: !(prev[id] ?? false) };
       saveOpenState(next);
       return next;
     });
@@ -242,10 +222,13 @@ export function AppSidebar() {
 
   const isActive = (p: string) => pathname === p;
 
-  // Collapsed (icon) mode — flat icon list
+  const activeItemClass =
+    "data-[active=true]:bg-accent data-[active=true]:text-primary data-[active=true]:font-bold data-[active=true]:hover:bg-accent data-[active=true]:hover:text-primary hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white";
+
+  // When sidebar is icon-collapsed, render a flat icon list (one button per section's first/primary item, plus dashboard) with tooltips
   if (collapsed) {
     const flatItems: NavItem[] = [
-      { id: "dashboard", title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       ...visibleSections.flatMap((s) => s.items),
     ];
     return (
@@ -258,7 +241,7 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {flatItems.map((item) => (
-                  <SidebarMenuItem key={item.id}>
+                  <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton
                       asChild
                       tooltip={item.title}
@@ -282,7 +265,7 @@ export function AppSidebar() {
               <SidebarMenuButton
                 tooltip="Contact support"
                 onClick={() => setSupportOpen(true)}
-                className="rounded-xl"
+                className="rounded-xl hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
               >
                 <LifeBuoy className="h-4 w-4" />
                 <span>Contact support</span>
@@ -298,7 +281,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2">
           <BrandMark circle logoUrl={logoUrl} size={40} alt={vineyardName ?? "VineTrack"} />
           <div className="flex flex-col leading-tight min-w-0">
             <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
@@ -310,9 +293,9 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent className="gap-1">
+      <SidebarContent>
         {/* Dashboard pinned at top */}
-        <SidebarGroup className="py-1">
+        <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -322,7 +305,7 @@ export function AppSidebar() {
                   className={cn("rounded-xl", activeItemClass)}
                 >
                   <NavLink to="/dashboard" className="flex items-center gap-2">
-                    <LayoutDashboard className="h-4 w-4 shrink-0" />
+                    <LayoutDashboard className="h-4 w-4" />
                     <span className="flex-1 truncate">Dashboard</span>
                   </NavLink>
                 </SidebarMenuButton>
@@ -332,45 +315,41 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {visibleSections.map((section) => {
-          const open = openMap[section.id] ?? false;
-          const hasActive = section.id === activeSectionId;
+          const hasActive = sectionHasActive(section);
+          const open = openMap[section.id] ?? hasActive;
           const SectionIcon = section.icon;
           return (
-            <SidebarGroup key={section.id} className="py-0.5">
-              <Collapsible
-                open={open}
-                onOpenChange={(o) => setSectionOpen(section.id, o)}
-              >
+            <SidebarGroup key={section.id}>
+              <Collapsible open={open} onOpenChange={() => toggleSection(section.id)}>
                 <CollapsibleTrigger asChild>
                   <SidebarGroupLabel
                     className={cn(
-                      "cursor-pointer flex items-center gap-2 h-8 px-2 select-none",
-                      "hover:text-sidebar-foreground transition-colors",
-                      hasActive && "text-[#85B830]",
+                      "group/label cursor-pointer flex items-center gap-2 hover:text-sidebar-foreground transition-colors",
+                      hasActive && "text-primary",
                     )}
                   >
-                    <SectionIcon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 truncate">{section.label}</span>
+                    <SectionIcon className="h-3.5 w-3.5" />
+                    <span className="flex-1">{section.label}</span>
                     <ChevronDown
                       className={cn(
-                        "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
+                        "h-3.5 w-3.5 transition-transform",
                         open ? "rotate-0" : "-rotate-90",
                       )}
                     />
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="overflow-hidden">
-                  <SidebarGroupContent className="pl-2">
+                <CollapsibleContent>
+                  <SidebarGroupContent>
                     <SidebarMenu>
                       {section.items.map((item) => (
-                        <SidebarMenuItem key={item.id}>
+                        <SidebarMenuItem key={item.url}>
                           <SidebarMenuButton
                             asChild
                             isActive={isActive(item.url)}
                             className={cn("rounded-xl", activeItemClass)}
                           >
                             <NavLink to={item.url} className="flex items-center gap-2">
-                              <item.icon className="h-4 w-4 shrink-0" />
+                              <item.icon className="h-4 w-4" />
                               <span className="flex-1 truncate">{item.title}</span>
                             </NavLink>
                           </SidebarMenuButton>
@@ -389,7 +368,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setSupportOpen(true)}
-              className="rounded-xl"
+              className="rounded-xl hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
             >
               <LifeBuoy className="h-4 w-4" />
               <span>Contact support</span>
