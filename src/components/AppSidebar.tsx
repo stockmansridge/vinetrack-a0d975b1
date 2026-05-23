@@ -322,7 +322,7 @@ export function AppSidebar() {
                 >
                   <NavLink to="/dashboard" className="flex items-center gap-2">
                     <LayoutDashboard className="h-4 w-4 shrink-0" />
-                    <span className="flex-1 truncate">Dashboard</span>
+                    <span className="flex-1 truncate">Overview</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
