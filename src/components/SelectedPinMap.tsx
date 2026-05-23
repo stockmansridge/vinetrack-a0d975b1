@@ -96,6 +96,7 @@ export default function SelectedPinMap({ pin }: Props) {
         >
           <a
             href={`https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}&t=k`}
+
             target="_blank"
             rel="noreferrer"
           >
