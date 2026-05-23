@@ -31,7 +31,13 @@ import {
   LayoutDashboard as AdminDashIcon,
   Bell,
   Flag,
+  ChevronDown,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
