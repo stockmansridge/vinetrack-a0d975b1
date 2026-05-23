@@ -268,7 +268,23 @@ export default function Team() {
                 <TableHead>Member</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Operator category</TableHead>
-                <TableHead>Joined</TableHead>
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active members</h2>
+          <ColumnSettingsMenu onReset={memberCols.reset} />
+        </div>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {(memberCols.order as MemberColId[]).map((id) => {
+                  const label = id === "member" ? "Member" : id === "role" ? "Role" : id === "operator_category" ? "Operator category" : "Joined";
+                  return (
+                    <TableHead key={id}>
+                      <DraggableHeaderCell columnId={id} onDropColumn={memberCols.moveColumn}>{label}</DraggableHeaderCell>
+                    </TableHead>
+                  );
+                })}
                 {canEdit && <TableHead className="w-12"></TableHead>}
               </TableRow>
             </TableHeader>
