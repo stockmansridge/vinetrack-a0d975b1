@@ -29,6 +29,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Download, Image as ImageIcon } from "lucide-react";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 import {
   fetchGrowthStageRecords,
   summariseLatestByBlock,
@@ -118,6 +123,25 @@ export default function GrowthStageRecordsPage() {
     }
     return list;
   }, [all, from, to, block, variety, stage, operator, filter]);
+
+  const GS_COLS = ["date","block","variety","stage","notes","photo","operator"] as const;
+  type GsCol = (typeof GS_COLS)[number];
+  const { order: gsOrder, moveColumn: gsMove, reset: gsReset } = useColumnOrder(
+    "growth_stage_records_table",
+    GS_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+  const { sorted: gsSorted, getSortDirection: gsDir, toggleSort: gsToggle } = useSortableTable<GrowthStageRecord, GsCol>(rows, {
+    accessors: {
+      date: (r) => r.date ?? null,
+      block: (r) => r.paddock_name ?? "",
+      variety: (r) => r.variety ?? "",
+      stage: (r) => r.growth_stage_code ?? "",
+      notes: (r) => r.notes ?? "",
+      photo: (r) => (r.photo_path ? 1 : 0),
+      operator: (r) => resolve(r.created_by) ?? "",
+    },
+  });
 
   const summary = useMemo(() => summariseLatestByBlock(all), [all]);
 
@@ -264,26 +288,58 @@ export default function GrowthStageRecordsPage() {
             {error && (
               <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
-            {!isLoading && !error && rows.length === 0 && (
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={gsReset} />
+      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {(gsOrder as GsCol[]).map((id) => {
+                const labels: Record<GsCol, string> = {
+                  date: "Date", block: "Block", variety: "Variety",
+                  stage: "E-L stage", notes: "Notes", photo: "Photo", operator: "Operator",
+                };
+                const sortable = id !== "notes";
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={gsMove}
+                    sort={sortable ? { active: gsDir(id), onSort: () => gsToggle(id) } : undefined}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+            )}
+            {error && (
+              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+            )}
+            {!isLoading && !error && gsSorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No growth stage records found for this vineyard.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((r) => (
-              <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                <TableCell>{fmtDate(r.date)}</TableCell>
-                <TableCell>{fmt(r.paddock_name)}</TableCell>
-                <TableCell>{fmt(r.variety)}</TableCell>
-                <TableCell>
-                  {r.growth_stage_code ? <Badge variant="secondary">E-L {r.growth_stage_code}</Badge> : "—"}
-                </TableCell>
-                <TableCell className="max-w-[280px] truncate">{fmt(r.notes)}</TableCell>
-                <TableCell>{r.photo_path ? <ImageIcon className="h-4 w-4 text-muted-foreground" /> : "—"}</TableCell>
-                <TableCell>{resolve(r.created_by) ?? "—"}</TableCell>
-              </TableRow>
-            ))}
+            {gsSorted.map((r) => {
+              const cellMap: Record<GsCol, React.ReactNode> = {
+                date: <TableCell>{fmtDate(r.date)}</TableCell>,
+                block: <TableCell>{fmt(r.paddock_name)}</TableCell>,
+                variety: <TableCell>{fmt(r.variety)}</TableCell>,
+                stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">E-L {r.growth_stage_code}</Badge> : "—"}</TableCell>,
+                notes: <TableCell className="max-w-[280px] truncate">{fmt(r.notes)}</TableCell>,
+                photo: <TableCell>{r.photo_path ? <ImageIcon className="h-4 w-4 text-muted-foreground" /> : "—"}</TableCell>,
+                operator: <TableCell>{resolve(r.created_by) ?? "—"}</TableCell>,
+              };
+              return (
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                  {(gsOrder as GsCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
