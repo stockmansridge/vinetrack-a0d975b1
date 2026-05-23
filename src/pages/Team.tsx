@@ -469,6 +469,7 @@ export default function Team() {
 
 function InvitationRow({
   inv,
+  columnOrder,
   categoryName,
   onCancel,
   onResend,
@@ -476,6 +477,7 @@ function InvitationRow({
   resending,
 }: {
   inv: VineyardInvitation;
+  columnOrder: InviteColId[];
   categoryName: string | null;
   onCancel: () => void;
   onResend: () => void;
@@ -484,40 +486,33 @@ function InvitationRow({
 }) {
   const isPending = inv.status === "pending";
   const isExpired = inv.status === "expired";
-  return (
-    <TableRow>
-      <TableCell className="font-medium">{inv.email}</TableCell>
-      <TableCell><Badge variant="secondary">{inv.role}</Badge></TableCell>
-      <TableCell className="text-sm">{categoryName ?? "—"}</TableCell>
+  const cellMap: Record<InviteColId, React.ReactNode> = {
+    email: <TableCell className="font-medium">{inv.email}</TableCell>,
+    role: <TableCell><Badge variant="secondary">{inv.role}</Badge></TableCell>,
+    operator_category: <TableCell className="text-sm">{categoryName ?? "—"}</TableCell>,
+    expires: (
       <TableCell className="text-sm text-muted-foreground">
         {inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : "—"}
       </TableCell>
+    ),
+    status: (
       <TableCell>
-        <Badge variant={isPending ? "default" : "outline"} className="capitalize">
-          {inv.status}
-        </Badge>
+        <Badge variant={isPending ? "default" : "outline"} className="capitalize">{inv.status}</Badge>
       </TableCell>
+    ),
+  };
+  return (
+    <TableRow>
+      {columnOrder.map((id) => (<Fragment key={id}>{cellMap[id]}</Fragment>))}
       <TableCell>
         <div className="flex gap-1 justify-end">
           {(isPending || isExpired) && (
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Reactivate / extend"
-              disabled={resending}
-              onClick={onResend}
-            >
+            <Button variant="ghost" size="icon" title="Reactivate / extend" disabled={resending} onClick={onResend}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           )}
           {isPending && (
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Cancel"
-              disabled={cancelling}
-              onClick={onCancel}
-            >
+            <Button variant="ghost" size="icon" title="Cancel" disabled={cancelling} onClick={onCancel}>
               <X className="h-4 w-4 text-destructive" />
             </Button>
           )}
@@ -526,6 +521,7 @@ function InvitationRow({
     </TableRow>
   );
 }
+
 
 function InviteDialog({
   open,
