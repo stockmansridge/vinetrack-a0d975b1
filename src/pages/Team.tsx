@@ -216,6 +216,14 @@ export default function Team() {
 
   const colCount = canEdit ? 5 : 4;
 
+  type MemberColId = "member" | "role" | "operator_category" | "joined";
+  const MEMBER_DEFAULTS: MemberColId[] = ["member", "role", "operator_category", "joined"];
+  const memberCols = useColumnOrder("team_members_table", MEMBER_DEFAULTS, { vineyardId: selectedVineyardId });
+
+  type InviteColId = "email" | "role" | "operator_category" | "expires" | "status";
+  const INVITE_DEFAULTS: InviteColId[] = ["email", "role", "operator_category", "expires", "status"];
+  const inviteCols = useColumnOrder("team_invitations_table", INVITE_DEFAULTS, { vineyardId: selectedVineyardId });
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
