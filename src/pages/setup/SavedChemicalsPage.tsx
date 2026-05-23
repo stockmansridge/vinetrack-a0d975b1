@@ -444,7 +444,9 @@ export default function SavedChemicalsPage() {
                 onChange={(e) => setFilter(e.target.value)}
                 className="w-72"
               />
+            </div>
             <div className="space-y-1">
+
               <div className="text-xs text-muted-foreground opacity-0 select-none">.</div>
               <ColumnSettingsMenu onReset={resetChemColumns} />
             </div>
