@@ -514,3 +514,108 @@ function RainfallExports({
     </Card>
   );
 }
+
+// ---------- Library table (extracted for column reorder/sort) ----------
+type LibRow = {
+  id: string;
+  name: string;
+  typeLabel: string;
+  vineyardName: string;
+  paddockName?: string | null;
+  related?: string | null;
+  createdAt?: string | null;
+  source: "portal" | "ios";
+  formats: ("pdf" | "csv")[];
+  onDownload?: (f: "pdf" | "csv") => void;
+  openHref?: string;
+};
+
+function DocumentsLibraryTable({
+  loading, rows, getSortDirection, toggleSort, vineyardId,
+}: {
+  loading: boolean;
+  rows: LibRow[];
+  getSortDirection: (k: DocSortKey) => "asc" | "desc" | null;
+  toggleSort: (k: DocSortKey) => void;
+  vineyardId: string | null;
+}) {
+  const DOC_COLS = ["name","type","vineyard","block","related","date","source"] as const;
+  type DocCol = (typeof DOC_COLS)[number];
+  const { order, moveColumn, reset } = useColumnOrder(
+    "documents_library_table",
+    DOC_COLS as unknown as string[],
+    { vineyardId },
+  );
+  const labels: Record<DocCol, string> = {
+    name: "Name", type: "Type", vineyard: "Vineyard", block: "Block",
+    related: "Related", date: "Date", source: "Source",
+  };
+  return (
+    <>
+      <div className="flex justify-end mb-2">
+        <ColumnSettingsMenu onReset={reset} />
+      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {(order as DocCol[]).map((id) => (
+                <ReorderableHead key={id} columnId={id} onDropColumn={moveColumn}
+                  sort={{ active: getSortDirection(id as DocSortKey), onSort: () => toggleSort(id as DocSortKey) }}>
+                  {labels[id]}
+                </ReorderableHead>
+              ))}
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">Loading…</TableCell>
+              </TableRow>
+            )}
+            {!loading && rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">No documents match the current filters.</TableCell>
+              </TableRow>
+            )}
+            {!loading && rows.map((it) => {
+              const cellMap: Record<DocCol, React.ReactNode> = {
+                name: <TableCell className="font-medium">{it.name}</TableCell>,
+                type: <TableCell><Badge variant="secondary">{it.typeLabel}</Badge></TableCell>,
+                vineyard: <TableCell>{it.vineyardName}</TableCell>,
+                block: <TableCell>{it.paddockName ?? "—"}</TableCell>,
+                related: <TableCell className="text-muted-foreground">{it.related ?? "—"}</TableCell>,
+                date: <TableCell className="text-muted-foreground">{fmtDay(it.createdAt)}</TableCell>,
+                source: <TableCell><Badge variant={it.source === "portal" ? "outline" : "default"}>{it.source === "portal" ? "Portal" : "iOS"}</Badge></TableCell>,
+              };
+              return (
+                <TableRow key={it.id}>
+                  {(order as DocCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                  <TableCell className="text-right space-x-1">
+                    {it.formats.map((f) =>
+                      it.onDownload ? (
+                        <Button key={f} size="sm" variant="outline" onClick={() => it.onDownload!(f)}>
+                          {f === "pdf" ? <FileText className="h-3.5 w-3.5 mr-1" /> : <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />}
+                          {f.toUpperCase()}
+                        </Button>
+                      ) : null,
+                    )}
+                    {it.openHref && (
+                      <Button asChild size="sm" variant="ghost">
+                        <Link to={it.openHref}>
+                          <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                          Open
+                        </Link>
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+    </>
+  );
+}
