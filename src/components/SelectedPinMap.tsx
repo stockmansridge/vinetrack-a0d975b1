@@ -22,7 +22,7 @@ export default function SelectedPinMap({ pin }: Props) {
     setProvider("checking");
     initMapKit()
       .then(() => !cancelled && setProvider("apple"))
-      .catch(() => !cancelled && setProvider("osm"));
+      .catch(() => !cancelled && setProvider("unavailable"));
     return () => { cancelled = true; };
   }, []);
 
