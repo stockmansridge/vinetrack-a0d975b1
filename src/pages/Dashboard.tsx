@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount, fetchList } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
+import LiveDashboardPage from "@/pages/LiveDashboardPage";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
