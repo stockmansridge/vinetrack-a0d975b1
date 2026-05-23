@@ -1,7 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -14,25 +11,7 @@ interface Props {
   pin: PinRecord;
 }
 
-const pinIcon = (hex: string) =>
-  L.divIcon({
-    className: "",
-    html: `<div style="width:18px;height:18px;border-radius:50%;background:${hex};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-  });
-
-function Recenter({ lat, lng }: { lat: number; lng: number }) {
-  const map = useMap();
-  useEffect(() => {
-    try {
-      map.setView([lat, lng], Math.max(map.getZoom(), 17));
-    } catch { /* noop */ }
-  }, [lat, lng, map]);
-  return null;
-}
-
-type Provider = "checking" | "apple" | "osm";
+type Provider = "checking" | "apple" | "unavailable";
 
 export default function SelectedPinMap({ pin }: Props) {
   const coords = useMemo(() => pinDisplayCoords(pin as any), [pin]);
@@ -43,7 +22,7 @@ export default function SelectedPinMap({ pin }: Props) {
     setProvider("checking");
     initMapKit()
       .then(() => !cancelled && setProvider("apple"))
-      .catch(() => !cancelled && setProvider("osm"));
+      .catch(() => !cancelled && setProvider("unavailable"));
     return () => { cancelled = true; };
   }, []);
 
@@ -57,55 +36,35 @@ export default function SelectedPinMap({ pin }: Props) {
 
   const style = pinStyle(pin.mode, (pin as any).button_color, (pin as any).category);
   const title = pinDisplayTitle(pin as any);
-  const openInBrowserMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+  const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}`;
 
   return (
     <Card className="overflow-hidden">
       <div className="relative h-[220px] w-full bg-muted">
         {provider === "apple" ? (
           <SingleApplePinMap lat={coords.lat} lng={coords.lng} hex={style.hex} title={title} />
-        ) : provider === "osm" ? (
-          <MapContainer
-            center={[coords.lat, coords.lng]}
-            zoom={17}
-            style={{ height: "100%", width: "100%" }}
-            scrollWheelZoom={false}
-          >
-            <TileLayer
-              attribution='&copy; OpenStreetMap contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <Marker position={[coords.lat, coords.lng]} icon={pinIcon(style.hex)} />
-            <Recenter lat={coords.lat} lng={coords.lng} />
-            <div className="absolute top-2 left-2 z-[400]">
-              <MapSourceBadge source="fallback" />
-            </div>
-          </MapContainer>
         ) : (
-          <div className="h-full w-full animate-pulse" />
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
+            <div className="text-sm font-medium text-foreground">Apple Maps preview unavailable</div>
+            <div className="text-xs text-muted-foreground">
+              The pin can still be opened directly in Apple Maps.
+            </div>
+          </div>
         )}
       </div>
       <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
         <span className="font-mono">
           {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
         </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs"
-          aria-label={`Open ${title} in maps`}
-          onClick={() => {
-            const w = window.open(openInBrowserMapsUrl, "_blank", "noopener,noreferrer");
-            if (!w) {
-              try {
-                (window.top ?? window).location.href = openInBrowserMapsUrl;
-              } catch {
-                window.location.href = openInBrowserMapsUrl;
-              }
-            }
-          }}
-        >
-          Open in Maps
+        <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+          <a
+            href={openInAppleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open ${title} in Apple Maps`}
+          >
+            Open in Apple Maps
+          </a>
         </Button>
       </div>
     </Card>
