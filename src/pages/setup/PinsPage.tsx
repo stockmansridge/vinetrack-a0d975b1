@@ -428,15 +428,18 @@ export default function PinsPage() {
               </TableBody>
             </Table>
           </Card>
-          <div>
+          <div className="space-y-4">
             {selected ? (
-              <PinDetailPanel
-                pin={selected}
-                paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
-                paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
-                vineyardName={vineyardName}
-                onClose={() => setSelectedId(null)}
-              />
+              <>
+                <SelectedPinMap pin={selected} />
+                <PinDetailPanel
+                  pin={selected}
+                  paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+                  paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+                  vineyardName={vineyardName}
+                  onClose={() => setSelectedId(null)}
+                />
+              </>
             ) : (
               <Card className="p-4 text-sm text-muted-foreground">
                 Select a pin to see details.
