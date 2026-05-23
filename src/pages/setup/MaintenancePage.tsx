@@ -64,6 +64,7 @@ import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
@@ -153,6 +154,18 @@ export default function MaintenancePage() {
     }
     return list;
   }, [logs, filter, from, to, item, completion]);
+
+  const { sorted: rowsSorted, getSortDirection: mDir, toggleSort: mToggle } = useSortableTable<MaintenanceLog, MaintCol>(rows, {
+    accessors: {
+      date: (r) => r.date ?? null,
+      item: (r) => r.item_name ?? null,
+      work: (r) => r.work_completed ?? null,
+      hours: (r) => (r.hours as any) ?? null,
+      machine_hours: (r) => (r.machine_hours as any) ?? null,
+      cost: (r) => ((r.parts_cost ?? 0) + (r.labour_cost ?? 0)) || null,
+      status: (r) => (r.is_finalized ? "Finalized" : "Open"),
+    },
+  });
 
   const openNew = () => {
     setEditing(null);
@@ -289,7 +302,7 @@ export default function MaintenancePage() {
                 };
                 if (id === "cost" && !canSeeCosts) return null;
                 return (
-                  <ReorderableHead key={id} columnId={id} onDropColumn={maintMove}>
+                  <ReorderableHead key={id} columnId={id} onDropColumn={maintMove} sort={{ active: mDir(id), onSort: () => mToggle(id) }}>
                     {labels[id]}
                   </ReorderableHead>
                 );
@@ -310,7 +323,7 @@ export default function MaintenancePage() {
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((l) => {
+            {rowsSorted.map((l) => {
               const cost = (l.parts_cost ?? 0) + (l.labour_cost ?? 0);
               const cellMap: Record<MaintCol, React.ReactNode> = {
                 date: <TableCell>{fmtDate(l.date)}</TableCell>,
