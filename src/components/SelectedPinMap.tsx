@@ -57,7 +57,7 @@ export default function SelectedPinMap({ pin }: Props) {
 
   const style = pinStyle(pin.mode, (pin as any).button_color, (pin as any).category);
   const title = pinDisplayTitle(pin as any);
-  const openInBrowserMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+  const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}`;
 
   return (
     <Card className="overflow-hidden">
@@ -89,23 +89,15 @@ export default function SelectedPinMap({ pin }: Props) {
         <span className="font-mono">
           {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
         </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs"
-          aria-label={`Open ${title} in maps`}
-          onClick={() => {
-            const w = window.open(openInBrowserMapsUrl, "_blank", "noopener,noreferrer");
-            if (!w) {
-              try {
-                (window.top ?? window).location.href = openInBrowserMapsUrl;
-              } catch {
-                window.location.href = openInBrowserMapsUrl;
-              }
-            }
-          }}
-        >
-          Open in Maps
+        <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+          <a
+            href={openInAppleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open ${title} in Apple Maps`}
+          >
+            Open in Apple Maps
+          </a>
         </Button>
       </div>
     </Card>
