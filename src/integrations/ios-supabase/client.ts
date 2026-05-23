@@ -1,7 +1,10 @@
-// READ-ONLY client for the iOS app's Supabase project.
-// This is separate from Lovable Cloud (which is used only for edge functions
-// like get-mapkit-token). The anon key is safe to ship; RLS is the authority.
-// Do NOT call .insert / .update / .delete / .upsert / write rpc with this client.
+// Client for the iOS app's Supabase project (the source of truth for
+// vineyard data). The portal reuses iOS RPCs and table writes where the
+// underlying RLS permits it — e.g. vineyard settings, location, logo.
+// Lovable Cloud (separate Supabase project) is only used for portal-only
+// concerns like edge functions (get-mapkit-token, support requests) and
+// user-table preferences. The anon key is safe to ship; RLS is the
+// authority for what the signed-in user may read or write.
 import { createClient } from "@supabase/supabase-js";
 
 const IOS_SUPABASE_URL = "https://tbafuqwruefgkbyxrxyb.supabase.co";
