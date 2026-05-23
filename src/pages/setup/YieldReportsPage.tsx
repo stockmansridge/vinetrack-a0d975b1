@@ -32,6 +32,10 @@ import {
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
 import YieldDamageAdjustmentPanel from "@/components/YieldDamageAdjustmentPanel";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 
 const ANY = "__any__";
 
