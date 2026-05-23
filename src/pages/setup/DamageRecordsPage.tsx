@@ -308,29 +308,6 @@ export default function DamageRecordsPage() {
         </div>
       </div>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date observed</TableHead>
-              <TableHead>Paddock</TableHead>
-              <TableHead>Row / path</TableHead>
-              <TableHead>Side</TableHead>
-              <TableHead>Damage type</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Damage %</TableHead>
-              <TableHead>Operator</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead className="text-right">Photos</TableHead>
-              {canEdit && <TableHead className="w-[80px]" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
-              <TableRow><TableCell colSpan={canEdit ? 12 : 11} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
-            )}
-            {error && (
       <div className="flex justify-end">
         <ColumnSettingsMenu onReset={dReset} />
       </div>
