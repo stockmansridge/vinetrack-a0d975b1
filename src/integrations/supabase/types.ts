@@ -275,6 +275,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_table_preferences: {
+        Row: {
+          column_order: Json
+          created_at: string
+          hidden_columns: Json
+          id: string
+          table_id: string
+          updated_at: string
+          user_id: string
+          vineyard_id: string | null
+        }
+        Insert: {
+          column_order?: Json
+          created_at?: string
+          hidden_columns?: Json
+          id?: string
+          table_id: string
+          updated_at?: string
+          user_id: string
+          vineyard_id?: string | null
+        }
+        Update: {
+          column_order?: Json
+          created_at?: string
+          hidden_columns?: Json
+          id?: string
+          table_id?: string
+          updated_at?: string
+          user_id?: string
+          vineyard_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
