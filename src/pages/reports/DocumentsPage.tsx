@@ -48,6 +48,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { Fragment } from "react";
 import { useSortableTable } from "@/lib/useSortableTable";
 
 interface PaddockLite {
@@ -421,83 +425,14 @@ export default function DocumentsPage() {
       </Card>
 
       {/* Library table */}
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead active={getSortDirection("name")} onSort={() => toggleSort("name")}>Name</SortableTableHead>
-              <SortableTableHead active={getSortDirection("type")} onSort={() => toggleSort("type")}>Type</SortableTableHead>
-              <SortableTableHead active={getSortDirection("vineyard")} onSort={() => toggleSort("vineyard")}>Vineyard</SortableTableHead>
-              <SortableTableHead active={getSortDirection("block")} onSort={() => toggleSort("block")}>Block</SortableTableHead>
-              <SortableTableHead active={getSortDirection("related")} onSort={() => toggleSort("related")}>Related</SortableTableHead>
-              <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date</SortableTableHead>
-              <SortableTableHead active={getSortDirection("source")} onSort={() => toggleSort("source")}>Source</SortableTableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && sortedFiltered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
-                  No documents match the current filters.
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              sortedFiltered.map((it) => (
-                <TableRow key={it.id}>
-                  <TableCell className="font-medium">{it.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{it.typeLabel}</Badge>
-                  </TableCell>
-                  <TableCell>{it.vineyardName}</TableCell>
-                  <TableCell>{it.paddockName ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{it.related ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{fmtDay(it.createdAt)}</TableCell>
-                  <TableCell>
-                    <Badge variant={it.source === "portal" ? "outline" : "default"}>
-                      {it.source === "portal" ? "Portal" : "iOS"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {it.formats.map((f) =>
-                      it.onDownload ? (
-                        <Button
-                          key={f}
-                          size="sm"
-                          variant="outline"
-                          onClick={() => it.onDownload!(f)}
-                        >
-                          {f === "pdf" ? (
-                            <FileText className="h-3.5 w-3.5 mr-1" />
-                          ) : (
-                            <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />
-                          )}
-                          {f.toUpperCase()}
-                        </Button>
-                      ) : null,
-                    )}
-                    {it.openHref && (
-                      <Button asChild size="sm" variant="ghost">
-                        <Link to={it.openHref}>
-                          <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                          Open
-                        </Link>
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-      </Card>
+      <DocumentsLibraryTable
+        loading={loading}
+        rows={sortedFiltered}
+        getSortDirection={getSortDirection}
+        toggleSort={toggleSort}
+        vineyardId={selectedVineyardId}
+      />
+{/* end library */}
 
       <Card className="p-4 bg-muted/30 flex items-start gap-2">
         <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
