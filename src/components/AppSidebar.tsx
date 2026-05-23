@@ -73,7 +73,6 @@ const SECTIONS: NavSection[] = [
     label: "Operations",
     icon: Activity,
     items: [
-      { id: "live", title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
       { id: "trips", title: "Field Trips", url: "/trips", icon: Sprout },
       { id: "pins", title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
       { id: "tasks", title: "Task Log", url: "/work-tasks", icon: ClipboardList },
@@ -245,7 +244,7 @@ export function AppSidebar() {
   // Collapsed (icon) mode — flat icon list
   if (collapsed) {
     const flatItems: NavItem[] = [
-      { id: "dashboard", title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+      { id: "dashboard", title: "Overview", url: "/dashboard", icon: LayoutDashboard },
       ...visibleSections.flatMap((s) => s.items),
     ];
     return (
@@ -323,7 +322,7 @@ export function AppSidebar() {
                 >
                   <NavLink to="/dashboard" className="flex items-center gap-2">
                     <LayoutDashboard className="h-4 w-4 shrink-0" />
-                    <span className="flex-1 truncate">Dashboard</span>
+                    <span className="flex-1 truncate">Overview</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
