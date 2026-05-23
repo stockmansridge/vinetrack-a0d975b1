@@ -268,26 +268,6 @@ export default function GrowthStageRecordsPage() {
         </div>
       </div>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Block</TableHead>
-              <TableHead>Variety</TableHead>
-              <TableHead>E-L stage</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead>Photo</TableHead>
-              <TableHead>Operator</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
-            )}
-            {error && (
-              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
-            )}
       <div className="flex justify-end">
         <ColumnSettingsMenu onReset={gsReset} />
       </div>
