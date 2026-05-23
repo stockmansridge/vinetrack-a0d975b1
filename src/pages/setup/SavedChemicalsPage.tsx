@@ -45,6 +45,14 @@ import {
 } from "@/lib/rateBasis";
 import { normaliseChemicalGroup, buildGroupOptions } from "@/lib/chemicalGroupNormalise";
 import { normaliseManufacturerName, buildManufacturerOptions } from "@/lib/manufacturerNormalise";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+
+type ChemColId = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "label" | "cost";
+const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
+  "name", "active_ingredient", "group", "use", "rate", "manufacturer", "label", "cost",
+];
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
