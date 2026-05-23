@@ -214,6 +214,14 @@ export default function TripsPage() {
     initial: { key: "start", direction: "desc" },
   });
 
+  const TRIPS_COLS = ["start","name","function","paddock","pattern","person","duration","distance","status"] as const;
+  type TripsCol = (typeof TRIPS_COLS)[number];
+  const { order: tripsOrder, moveColumn: tripsMove, reset: tripsReset } = useColumnOrder(
+    "trips_table",
+    TRIPS_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.debug("[TripsPage] diagnostics", {
