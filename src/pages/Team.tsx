@@ -395,9 +395,12 @@ export default function Team() {
       {/* Pending invitations */}
       {canEdit && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Pending invitations
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Pending invitations
+            </h2>
+            <ColumnSettingsMenu onReset={inviteCols.reset} />
+          </div>
           <p className="text-xs text-muted-foreground">
             Invitees will see the invite when they sign in with the matching email. No email is sent yet.
           </p>
@@ -405,11 +408,14 @@ export default function Team() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Operator category</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Status</TableHead>
+                  {(inviteCols.order as InviteColId[]).map((id) => {
+                    const label = id === "email" ? "Email" : id === "role" ? "Role" : id === "operator_category" ? "Operator category" : id === "expires" ? "Expires" : "Status";
+                    return (
+                      <TableHead key={id}>
+                        <DraggableHeaderCell columnId={id} onDropColumn={inviteCols.moveColumn}>{label}</DraggableHeaderCell>
+                      </TableHead>
+                    );
+                  })}
                   <TableHead className="w-32"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -424,6 +430,7 @@ export default function Team() {
                   <InvitationRow
                     key={inv.id}
                     inv={inv}
+                    columnOrder={inviteCols.order as InviteColId[]}
                     categoryName={(() => {
                       const id = inv.default_operator_category_id;
                       if (!id) return null;
@@ -436,6 +443,7 @@ export default function Team() {
                     resending={resendMut.isPending}
                   />
                 ))}
+
               </TableBody>
             </Table>
           </Card>
