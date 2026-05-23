@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
 
 export default function SelectVineyard() {
   const { memberships, loading, selectVineyard, selectedVineyardId } = useVineyard();
@@ -22,7 +23,10 @@ export default function SelectVineyard() {
             <h1 className="text-3xl font-semibold">Select a vineyard</h1>
             <p className="text-muted-foreground">Choose which vineyard to manage.</p>
           </div>
-          <Button variant="ghost" onClick={() => signOut()}>Sign out</Button>
+          <div className="flex items-center gap-2">
+            <CreateVineyardDialog onCreated={() => navigate("/dashboard")} />
+            <Button variant="ghost" onClick={() => signOut()}>Sign out</Button>
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {memberships.map((m) => (
