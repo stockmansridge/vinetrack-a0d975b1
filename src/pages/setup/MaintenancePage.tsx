@@ -269,17 +269,31 @@ export default function MaintenancePage() {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={maintReset} />
+      </div>
+
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Item</TableHead>
-              <TableHead>Work completed</TableHead>
-              <TableHead>Hours</TableHead>
-              <TableHead>Machine hrs</TableHead>
-              {canSeeCosts && <TableHead>Cost</TableHead>}
-              <TableHead>Status</TableHead>
+              {(maintOrder as MaintCol[]).map((id) => {
+                const labels: Record<MaintCol, string> = {
+                  date: "Date",
+                  item: "Item",
+                  work: "Work completed",
+                  hours: "Hours",
+                  machine_hours: "Machine hrs",
+                  cost: "Cost",
+                  status: "Status",
+                };
+                if (id === "cost" && !canSeeCosts) return null;
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={maintMove}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -298,23 +312,32 @@ export default function MaintenancePage() {
             )}
             {rows.map((l) => {
               const cost = (l.parts_cost ?? 0) + (l.labour_cost ?? 0);
-              return (
-                <TableRow key={l.id} className="cursor-pointer" onClick={() => setSelected(l)}>
-                  <TableCell>{fmtDate(l.date)}</TableCell>
-                  <TableCell>{fmt(l.item_name)}</TableCell>
-                  <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>
-                  <TableCell>{fmt(l.hours)}</TableCell>
-                  <TableCell>{fmt(l.machine_hours)}</TableCell>
-                  {canSeeCosts && <TableCell>{l.parts_cost == null && l.labour_cost == null ? "—" : fmtCost(cost)}</TableCell>}
+              const cellMap: Record<MaintCol, React.ReactNode> = {
+                date: <TableCell>{fmtDate(l.date)}</TableCell>,
+                item: <TableCell>{fmt(l.item_name)}</TableCell>,
+                work: <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>,
+                hours: <TableCell>{fmt(l.hours)}</TableCell>,
+                machine_hours: <TableCell>{fmt(l.machine_hours)}</TableCell>,
+                cost: <TableCell>{l.parts_cost == null && l.labour_cost == null ? "—" : fmtCost(cost)}</TableCell>,
+                status: (
                   <TableCell>
                     {l.is_finalized ? <Badge>Finalized</Badge> : <Badge variant="outline">Open</Badge>}
                   </TableCell>
+                ),
+              };
+              return (
+                <TableRow key={l.id} className="cursor-pointer" onClick={() => setSelected(l)}>
+                  {(maintOrder as MaintCol[]).map((id) => {
+                    if (id === "cost" && !canSeeCosts) return null;
+                    return <Fragment key={id}>{cellMap[id]}</Fragment>;
+                  })}
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
       </Card>
+
 
       <MaintenanceSheet
         log={selected}
