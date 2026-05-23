@@ -1,15 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount, fetchList } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
+import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
-import LiveDashboardPage from "@/pages/LiveDashboardPage";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
@@ -115,97 +113,77 @@ export default function Dashboard() {
 
   const loading = paddocksQ.isLoading;
 
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const activeTab = pathname === "/dashboard/live" ? "live" : "overview";
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{vineyard?.vineyard_name ?? "Overview"}</h1>
+        <h1 className="text-2xl font-semibold">{vineyard?.vineyard_name ?? "Dashboard"}</h1>
         <p className="text-sm text-muted-foreground">Read-only overview</p>
       </div>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => navigate(v === "live" ? "/dashboard/live" : "/dashboard")}
-      >
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="live">Live</TabsTrigger>
-        </TabsList>
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Paddocks"
+          Icon={Map}
+          value={loading ? "…" : fmt(summary.paddocks)}
+          hint={loading ? undefined : `${summary.mapped} mapped`}
+        />
+        <StatCard
+          label="Area (ha)"
+          Icon={LayoutGrid}
+          value={loading ? "…" : summary.totalAreaHa > 0 ? fmt(summary.totalAreaHa, 2) : "—"}
+          hint="From paddock polygons"
+        />
+        <StatCard
+          label="Total rows"
+          Icon={Ruler}
+          value={loading ? "…" : fmt(summary.totalRows)}
+        />
+        <StatCard
+          label="Vines"
+          Icon={Grape}
+          value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
+          hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
+        />
+        <StatCard
+          label="Tractors"
+          Icon={Tractor}
+          value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
+        />
+        <StatCard
+          label="Spray equipment"
+          Icon={SprayCan}
+          value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
+        />
+        <StatCard
+          label="Team members"
+          Icon={Users}
+          value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
+        />
+      </div>
 
-        <TabsContent value="overview" className="space-y-6 mt-4">
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label="Paddocks"
-              Icon={Map}
-              value={loading ? "…" : fmt(summary.paddocks)}
-              hint={loading ? undefined : `${summary.mapped} mapped`}
-            />
-            <StatCard
-              label="Area (ha)"
-              Icon={LayoutGrid}
-              value={loading ? "…" : summary.totalAreaHa > 0 ? fmt(summary.totalAreaHa, 2) : "—"}
-              hint="From paddock polygons"
-            />
-            <StatCard
-              label="Total rows"
-              Icon={Ruler}
-              value={loading ? "…" : fmt(summary.totalRows)}
-            />
-            <StatCard
-              label="Vines"
-              Icon={Grape}
-              value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
-              hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
-            />
-            <StatCard
-              label="Tractors"
-              Icon={Tractor}
-              value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
-            />
-            <StatCard
-              label="Spray equipment"
-              Icon={SprayCan}
-              value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
-            />
-            <StatCard
-              label="Team members"
-              Icon={Users}
-              value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
-            />
-          </div>
+      <VineyardOverviewMap />
 
-          <VineyardOverviewMap />
+      <div>
+        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Daily management</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
+          <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
+          <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} />
+          <QuickLink to="/reports/trips" label="Trip Reports" Icon={Route} />
+          <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} />
+          <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} />
+        </div>
+      </div>
 
-          <div>
-            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Daily management</h2>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
-              <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} />
-              <QuickLink to="/reports/trips" label="Trip Reports" Icon={Route} />
-              <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} />
-              <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} />
-            </div>
-          </div>
-
-          <div>
-            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <QuickLink to="/setup/paddocks" label="Paddocks" Icon={Map} />
-              <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
-              <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={SprayCan} />
-              <QuickLink to="/team" label="Team" Icon={Users} />
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="live" className="mt-4">
-          <LiveDashboardPage />
-        </TabsContent>
-      </Tabs>
+      <div>
+        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <QuickLink to="/setup/paddocks" label="Paddocks" Icon={Map} />
+          <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
+          <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={SprayCan} />
+          <QuickLink to="/team" label="Team" Icon={Users} />
+        </div>
+      </div>
     </div>
   );
 }
-
