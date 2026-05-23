@@ -42,6 +42,7 @@ import {
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 
 interface PaddockLite { id: string; name: string | null; polygon_points?: any }
 
@@ -479,6 +480,22 @@ function TripReportsTable({
     TR_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+  const { sorted, getSortDirection, toggleSort } = useSortableTable<Trip, TrCol>(rows, {
+    accessors: {
+      date: (t) => t.start_time ?? null,
+      type: (t) => tripFunctionLabel(t.trip_function) ?? null,
+      name: (t) => tripDisplayName(t),
+      block: (t) => padNameFor(t) ?? null,
+      operator: (t) => t.person_name ?? null,
+      duration: (t) => {
+        if (!t.start_time || !t.end_time) return null;
+        return new Date(t.end_time).getTime() - new Date(t.start_time).getTime();
+      },
+      distance: (t) => (t.total_distance as any) ?? null,
+      rows: (t) => summariseRows(t).total,
+      status: (t) => tripStatus(t) as any,
+    },
+  });
   const labels: Record<TrCol, string> = {
     date: "Date", type: "Trip type", name: "Name", block: "Block",
     operator: "Operator", duration: "Duration", distance: "Distance",
@@ -495,7 +512,7 @@ function TripReportsTable({
             <TableRow>
               <TableHead className="w-8" />
               {(order as TrCol[]).map((id) => (
-                <ReorderableHead key={id} columnId={id} onDropColumn={moveColumn}>
+                <ReorderableHead key={id} columnId={id} onDropColumn={moveColumn} sort={{ active: getSortDirection(id), onSort: () => toggleSort(id) }}>
                   {labels[id]}
                 </ReorderableHead>
               ))}
