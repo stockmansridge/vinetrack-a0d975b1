@@ -24,27 +24,40 @@ async function copyTextToClipboard(text: string) {
   }
 }
 
-export function openExternalMap(url: string) {
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
+async function showBlockedToast(url: string) {
+  await copyTextToClipboard(url).catch(() => {
+    /* noop */
+  });
 
-  if (opened) {
-    try {
-      opened.opener = null;
-    } catch {
-      /* noop */
-    }
+  toast("Map link copied", {
+    description: "Your browser blocked opening the map. Paste the copied link into your browser.",
+  });
+}
+
+export async function openExternalMap(url: string) {
+  const opened = window.open("", "_blank", "noopener,noreferrer");
+
+  if (!opened) {
+    await showBlockedToast(url);
     return;
   }
 
-  copyTextToClipboard(url)
-    .catch(() => {
+  try {
+    opened.opener = null;
+  } catch {
+    /* noop */
+  }
+
+  try {
+    opened.location.replace(url);
+  } catch {
+    try {
+      opened.close();
+    } catch {
       /* noop */
-    })
-    .finally(() => {
-      toast("Map link copied", {
-        description: "Your browser blocked opening the map. Paste the copied link into your browser.",
-      });
-    });
+    }
+    await showBlockedToast(url);
+  }
 }
 
 interface OpenExternalMapButtonProps extends Omit<ButtonProps, "asChild" | "onClick" | "type"> {
@@ -53,10 +66,10 @@ interface OpenExternalMapButtonProps extends Omit<ButtonProps, "asChild" | "onCl
 
 export default function OpenExternalMapButton({ url, children, ...buttonProps }: OpenExternalMapButtonProps) {
   const handleClick = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
+    async (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
       event.stopPropagation();
-      openExternalMap(url);
+      await openExternalMap(url);
     },
     [url],
   );
