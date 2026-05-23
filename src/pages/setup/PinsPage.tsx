@@ -332,18 +332,22 @@ export default function PinsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortableTableHead active={getSortDirection("title")} onSort={() => toggleSort("title")}>Title</SortableTableHead>
-                  {hasMode && <SortableTableHead active={getSortDirection("mode")} onSort={() => toggleSort("mode")}>Type</SortableTableHead>}
-                  <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
-                  <SortableTableHead align="right" active={getSortDirection("row")} onSort={() => toggleSort("row")}>Row</SortableTableHead>
-                  <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
-                  {hasPriority && <SortableTableHead active={getSortDirection("priority")} onSort={() => toggleSort("priority")}>Priority</SortableTableHead>}
-                  {hasCategory && <SortableTableHead active={getSortDirection("category")} onSort={() => toggleSort("category")}>Category</SortableTableHead>}
-                  {hasStage && <SortableTableHead active={getSortDirection("stage")} onSort={() => toggleSort("stage")}>Stage</SortableTableHead>}
-                  <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
-                  <SortableTableHead active={getSortDirection("createdBy")} onSort={() => toggleSort("createdBy")}>Created by</SortableTableHead>
-                  {hasAnyCompleted && <SortableTableHead active={getSortDirection("completed")} onSort={() => toggleSort("completed")}>Completed</SortableTableHead>}
-                  {hasAnyCompleted && <SortableTableHead active={getSortDirection("completedBy")} onSort={() => toggleSort("completedBy")}>Completed by</SortableTableHead>}
+                  {(pinOrder as PinCol[]).map((id) => {
+                    if (!visibleByCol[id]) return null;
+                    const align = id === "row" ? "right" : "left";
+                    const sk = pinSortKey[id];
+                    return (
+                      <ReorderableHead
+                        key={id}
+                        columnId={id}
+                        onDropColumn={pinMove}
+                        align={align}
+                        sort={{ active: getSortDirection(sk), onSort: () => toggleSort(sk) }}
+                      >
+                        {pinLabels[id]}
+                      </ReorderableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -378,6 +382,35 @@ export default function PinsPage() {
                   const completedBy = (p as any).is_completed
                     ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
                     : "—";
+                  const cellMap: Record<PinCol, React.ReactNode> = {
+                    title: (
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ background: style.hex }} title={style.label} />
+                          <span className="truncate">{pinDisplayTitle(p as any)}</span>
+                        </div>
+                      </TableCell>
+                    ),
+                    mode: <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>,
+                    paddock: <TableCell>{p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}</TableCell>,
+                    row: (
+                      <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
+                        {formatPinRowSummary(p as any) ?? "—"}
+                      </TableCell>
+                    ),
+                    status: (
+                      <TableCell>
+                        {(p as any).is_completed ? <Badge>Completed</Badge> : p.status ? <Badge variant="outline">{p.status}</Badge> : <Badge variant="outline">Open</Badge>}
+                      </TableCell>
+                    ),
+                    priority: <TableCell>{p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}</TableCell>,
+                    category: <TableCell>{p.category ?? "—"}</TableCell>,
+                    stage: <TableCell>{p.growth_stage_code ?? "—"}</TableCell>,
+                    created: <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>,
+                    createdBy: <TableCell className="text-sm">{createdBy}</TableCell>,
+                    completed: <TableCell className="text-sm text-muted-foreground">{(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}</TableCell>,
+                    completedBy: <TableCell className="text-sm">{completedBy}</TableCell>,
+                  };
                   return (
                     <TableRow
                       key={p.id}
@@ -385,49 +418,10 @@ export default function PinsPage() {
                       onClick={() => setSelectedId(p.id)}
                       data-active={p.id === selectedId}
                     >
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                            style={{ background: style.hex }}
-                            title={style.label}
-                          />
-                          <span className="truncate">{pinDisplayTitle(p as any)}</span>
-                        </div>
-                      </TableCell>
-                      {hasMode && <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>}
-                      <TableCell>
-                        {p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
-                        {formatPinRowSummary(p as any) ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        {(p as any).is_completed ? (
-                          <Badge>Completed</Badge>
-                        ) : p.status ? (
-                          <Badge variant="outline">{p.status}</Badge>
-                        ) : (
-                          <Badge variant="outline">Open</Badge>
-                        )}
-                      </TableCell>
-                      {hasPriority && (
-                        <TableCell>
-                          {p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}
-                        </TableCell>
-                      )}
-                      {hasCategory && <TableCell>{p.category ?? "—"}</TableCell>}
-                      {hasStage && <TableCell>{p.growth_stage_code ?? "—"}</TableCell>}
-                      <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>
-                      <TableCell className="text-sm">{createdBy}</TableCell>
-                      {hasAnyCompleted && (
-                        <TableCell className="text-sm text-muted-foreground">
-                          {(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}
-                        </TableCell>
-                      )}
-                      {hasAnyCompleted && (
-                        <TableCell className="text-sm">{completedBy}</TableCell>
-                      )}
+                      {(pinOrder as PinCol[]).map((id) => {
+                        if (!visibleByCol[id]) return null;
+                        return <Fragment key={id}>{cellMap[id]}</Fragment>;
+                      })}
                     </TableRow>
                   );
                 })}
