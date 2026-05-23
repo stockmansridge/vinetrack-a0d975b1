@@ -31,7 +31,13 @@ import {
   LayoutDashboard as AdminDashIcon,
   Bell,
   Flag,
+  ChevronDown,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
@@ -150,6 +156,24 @@ export function AppSidebar() {
       </SidebarMenuItem>
     ));
 
+  const renderGroup = (label: string, items: NavItem[]) => (
+    <Collapsible defaultOpen className="group/collapsible">
+      <SidebarGroup>
+        <SidebarGroupLabel asChild>
+          <CollapsibleTrigger className="flex w-full items-center justify-between hover:text-sidebar-foreground">
+            {label}
+            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems(items)}</SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4">
@@ -166,54 +190,15 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(dashboard)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Work</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(work)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(tools)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Reports</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(isAdmin ? [...reports, ...reportsAdmin] : reports)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Setup</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(setup)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Settings</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>{renderItems(settings)}</SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-        {isSystemAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>System Admin</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>{renderItems(systemAdmin)}</SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {renderGroup("Dashboard", dashboard)}
+        {renderGroup("Work", work)}
+        {renderGroup("Tools", tools)}
+        {renderGroup("Reports", isAdmin ? [...reports, ...reportsAdmin] : reports)}
+        {renderGroup("Setup", setup)}
+        {isAdmin && renderGroup("Settings", settings)}
+        {isSystemAdmin && renderGroup("System Admin", systemAdmin)}
       </SidebarContent>
+
       <SidebarFooter className="px-2 pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
