@@ -17,6 +17,10 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { Fragment } from "react";
 
 import { Plus, Loader2, X, RefreshCw, Trash2 } from "lucide-react";
 import { useCanSeeCosts } from "@/lib/permissions";
@@ -59,6 +63,8 @@ interface TeamMember {
 const NONE = "__none__";
 const INVITE_ROLES: InvitationRole[] = ["manager", "supervisor", "operator"];
 const MEMBER_ROLES: MemberRole[] = ["owner", "manager", "supervisor", "operator"];
+
+type InviteColId = "email" | "role" | "operator_category" | "expires" | "status";
 
 const initials = (name: string | null | undefined, fallback: string) => {
   const src = (name && name.trim()) || fallback;
@@ -212,6 +218,14 @@ export default function Team() {
 
   const colCount = canEdit ? 5 : 4;
 
+  type MemberColId = "member" | "role" | "operator_category" | "joined";
+  const MEMBER_DEFAULTS: MemberColId[] = ["member", "role", "operator_category", "joined"];
+  const memberCols = useColumnOrder("team_members_table", MEMBER_DEFAULTS, { vineyardId: selectedVineyardId });
+
+  type InviteColId = "email" | "role" | "operator_category" | "expires" | "status";
+  const INVITE_DEFAULTS: InviteColId[] = ["email", "role", "operator_category", "expires", "status"];
+  const inviteCols = useColumnOrder("team_invitations_table", INVITE_DEFAULTS, { vineyardId: selectedVineyardId });
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -247,16 +261,24 @@ export default function Team() {
       )}
 
       {/* Active members */}
+
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active members</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active members</h2>
+          <ColumnSettingsMenu onReset={memberCols.reset} />
+        </div>
         <Card>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Operator category</TableHead>
-                <TableHead>Joined</TableHead>
+                {(memberCols.order as MemberColId[]).map((id) => {
+                  const label = id === "member" ? "Member" : id === "role" ? "Role" : id === "operator_category" ? "Operator category" : "Joined";
+                  return (
+                    <TableHead key={id}>
+                      <DraggableHeaderCell columnId={id} onDropColumn={memberCols.moveColumn}>{label}</DraggableHeaderCell>
+                    </TableHead>
+                  );
+                })}
                 {canEdit && <TableHead className="w-12"></TableHead>}
               </TableRow>
             </TableHeader>
@@ -280,8 +302,8 @@ export default function Team() {
                 const isMemberOwner = m.role === "owner";
                 const canEditRole = isOwner; // only owners change roles
                 const canRemove = isOwner && !isMemberOwner; // owner can remove non-owners; last-owner guard server-side
-                return (
-                  <TableRow key={m.membership_id}>
+                const memberCellMap: Record<MemberColId, React.ReactNode> = {
+                  member: (
                     <TableCell title={m.user_id}>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
@@ -294,6 +316,8 @@ export default function Team() {
                         </div>
                       </div>
                     </TableCell>
+                  ),
+                  role: (
                     <TableCell>
                       {canEditRole && membershipId ? (
                         <Select
@@ -301,39 +325,31 @@ export default function Team() {
                           onValueChange={(v) => setRole.mutate({ membershipId, role: v as MemberRole })}
                           disabled={setRole.isPending}
                         >
-                          <SelectTrigger className="w-36 h-8">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {MEMBER_ROLES.map((r) => (
-                              <SelectItem key={r} value={r}>{r}</SelectItem>
-                            ))}
+                            {MEMBER_ROLES.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
                           </SelectContent>
                         </Select>
                       ) : (
                         <Badge variant="secondary">{m.role}</Badge>
                       )}
                     </TableCell>
+                  ),
+                  operator_category: (
                     <TableCell>
                       {canEdit && membershipId ? (
                         <Select
                           value={currentCatId ?? NONE}
-                          onValueChange={(v) =>
-                            setCategory.mutate({ membershipId, categoryId: v === NONE ? null : v })
-                          }
+                          onValueChange={(v) => setCategory.mutate({ membershipId, categoryId: v === NONE ? null : v })}
                           disabled={setCategory.isPending}
                         >
-                          <SelectTrigger className="w-56">
-                            <SelectValue placeholder="No category" />
-                          </SelectTrigger>
+                          <SelectTrigger className="w-56"><SelectValue placeholder="No category" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value={NONE}>No category</SelectItem>
                             {categories.map((c) => (
                               <SelectItem key={c.id} value={c.id}>
                                 {c.name ?? "Unnamed"}
-                                {canSeeCosts && c.cost_per_hour != null
-                                  ? ` — $${Number(c.cost_per_hour).toFixed(2)}/h`
-                                  : ""}
+                                {canSeeCosts && c.cost_per_hour != null ? ` — $${Number(c.cost_per_hour).toFixed(2)}/h` : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -342,7 +358,15 @@ export default function Team() {
                         <span className="text-sm">{currentCat?.name ?? "—"}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatDate(m.joined_at)}</TableCell>
+                  ),
+                  joined: <TableCell className="text-sm text-muted-foreground">{formatDate(m.joined_at)}</TableCell>,
+                };
+                return (
+                  <TableRow key={m.membership_id}>
+                    {(memberCols.order as MemberColId[]).map((id) => (
+                      <Fragment key={id}>{memberCellMap[id]}</Fragment>
+                    ))}
+
                     {canEdit && (
                       <TableCell>
                         {canRemove && membershipId ? (
@@ -373,9 +397,12 @@ export default function Team() {
       {/* Pending invitations */}
       {canEdit && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Pending invitations
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Pending invitations
+            </h2>
+            <ColumnSettingsMenu onReset={inviteCols.reset} />
+          </div>
           <p className="text-xs text-muted-foreground">
             Invitees will see the invite when they sign in with the matching email. No email is sent yet.
           </p>
@@ -383,11 +410,14 @@ export default function Team() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Operator category</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Status</TableHead>
+                  {(inviteCols.order as InviteColId[]).map((id) => {
+                    const label = id === "email" ? "Email" : id === "role" ? "Role" : id === "operator_category" ? "Operator category" : id === "expires" ? "Expires" : "Status";
+                    return (
+                      <TableHead key={id}>
+                        <DraggableHeaderCell columnId={id} onDropColumn={inviteCols.moveColumn}>{label}</DraggableHeaderCell>
+                      </TableHead>
+                    );
+                  })}
                   <TableHead className="w-32"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -402,6 +432,7 @@ export default function Team() {
                   <InvitationRow
                     key={inv.id}
                     inv={inv}
+                    columnOrder={inviteCols.order as InviteColId[]}
                     categoryName={(() => {
                       const id = inv.default_operator_category_id;
                       if (!id) return null;
@@ -414,6 +445,7 @@ export default function Team() {
                     resending={resendMut.isPending}
                   />
                 ))}
+
               </TableBody>
             </Table>
           </Card>
@@ -437,6 +469,7 @@ export default function Team() {
 
 function InvitationRow({
   inv,
+  columnOrder,
   categoryName,
   onCancel,
   onResend,
@@ -444,6 +477,7 @@ function InvitationRow({
   resending,
 }: {
   inv: VineyardInvitation;
+  columnOrder: InviteColId[];
   categoryName: string | null;
   onCancel: () => void;
   onResend: () => void;
@@ -452,40 +486,33 @@ function InvitationRow({
 }) {
   const isPending = inv.status === "pending";
   const isExpired = inv.status === "expired";
-  return (
-    <TableRow>
-      <TableCell className="font-medium">{inv.email}</TableCell>
-      <TableCell><Badge variant="secondary">{inv.role}</Badge></TableCell>
-      <TableCell className="text-sm">{categoryName ?? "—"}</TableCell>
+  const cellMap: Record<InviteColId, React.ReactNode> = {
+    email: <TableCell className="font-medium">{inv.email}</TableCell>,
+    role: <TableCell><Badge variant="secondary">{inv.role}</Badge></TableCell>,
+    operator_category: <TableCell className="text-sm">{categoryName ?? "—"}</TableCell>,
+    expires: (
       <TableCell className="text-sm text-muted-foreground">
         {inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : "—"}
       </TableCell>
+    ),
+    status: (
       <TableCell>
-        <Badge variant={isPending ? "default" : "outline"} className="capitalize">
-          {inv.status}
-        </Badge>
+        <Badge variant={isPending ? "default" : "outline"} className="capitalize">{inv.status}</Badge>
       </TableCell>
+    ),
+  };
+  return (
+    <TableRow>
+      {columnOrder.map((id) => (<Fragment key={id}>{cellMap[id]}</Fragment>))}
       <TableCell>
         <div className="flex gap-1 justify-end">
           {(isPending || isExpired) && (
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Reactivate / extend"
-              disabled={resending}
-              onClick={onResend}
-            >
+            <Button variant="ghost" size="icon" title="Reactivate / extend" disabled={resending} onClick={onResend}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           )}
           {isPending && (
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Cancel"
-              disabled={cancelling}
-              onClick={onCancel}
-            >
+            <Button variant="ghost" size="icon" title="Cancel" disabled={cancelling} onClick={onCancel}>
               <X className="h-4 w-4 text-destructive" />
             </Button>
           )}
@@ -494,6 +521,7 @@ function InvitationRow({
     </TableRow>
   );
 }
+
 
 function InviteDialog({
   open,
