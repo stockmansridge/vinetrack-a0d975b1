@@ -456,14 +456,6 @@ export default function WorkTasksPage() {
         </Filter>
       </div>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date / range</SortableTableHead>
-              <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
-              <SortableTableHead active={getSortDirection("task_type")} onSort={() => toggleSort("task_type")}>Type</SortableTableHead>
-              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
       <div className="flex justify-end">
         <ColumnSettingsMenu onReset={wtReset} />
       </div>
