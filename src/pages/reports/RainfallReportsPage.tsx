@@ -267,39 +267,68 @@ function RainfallTable({ rows }: { rows: any[] }) {
     },
     initial: { key: "date", direction: "desc" },
   });
+
+  const COLS = ["date", "rainfall", "source", "station", "notes", "updated"] as const;
+  type Col = (typeof COLS)[number];
+  const { order, moveColumn, reset } = useColumnOrder(
+    "rainfall_reports_table",
+    COLS as unknown as string[],
+  );
+
+  const headerMap: Record<Col, React.ReactNode> = {
+    date: <ReorderableHead columnId="date" onDropColumn={moveColumn} sort={{ active: getSortDirection("date"), onSort: () => toggleSort("date") }}>Date</ReorderableHead>,
+    rainfall: <ReorderableHead columnId="rainfall" onDropColumn={moveColumn} align="right" sort={{ active: getSortDirection("rainfall"), onSort: () => toggleSort("rainfall") }}>Rainfall (mm)</ReorderableHead>,
+    source: <ReorderableHead columnId="source" onDropColumn={moveColumn} sort={{ active: getSortDirection("source"), onSort: () => toggleSort("source") }}>Source</ReorderableHead>,
+    station: <ReorderableHead columnId="station" onDropColumn={moveColumn} sort={{ active: getSortDirection("station"), onSort: () => toggleSort("station") }}>Station</ReorderableHead>,
+    notes: <ReorderableHead columnId="notes" onDropColumn={moveColumn} sort={{ active: getSortDirection("notes"), onSort: () => toggleSort("notes") }}>Notes</ReorderableHead>,
+    updated: <ReorderableHead columnId="updated" onDropColumn={moveColumn} sort={{ active: getSortDirection("updated"), onSort: () => toggleSort("updated") }}>Updated</ReorderableHead>,
+  };
+
+  const renderCell = (r: any, id: Col): React.ReactNode => {
+    switch (id) {
+      case "date":
+        return <TableCell>{r.date ? format(new Date(r.date), "PP") : "—"}</TableCell>;
+      case "rainfall":
+        return (
+          <TableCell className="text-right tabular-nums">
+            {r.rainfall_mm == null ? <span className="text-muted-foreground">—</span> : r.rainfall_mm.toFixed(1)}
+          </TableCell>
+        );
+      case "source":
+        return <TableCell>{sourceLabel(r.source)}</TableCell>;
+      case "station":
+        return <TableCell>{r.station_name ?? "—"}</TableCell>;
+      case "notes":
+        return <TableCell className="max-w-[240px] truncate">{r.notes ?? "—"}</TableCell>;
+      case "updated":
+        return (
+          <TableCell className="text-xs text-muted-foreground">
+            {r.updated_at ? format(new Date(r.updated_at), "PP p") : "—"}
+          </TableCell>
+        );
+    }
+  };
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date</SortableTableHead>
-          <SortableTableHead align="right" active={getSortDirection("rainfall")} onSort={() => toggleSort("rainfall")}>Rainfall (mm)</SortableTableHead>
-          <SortableTableHead active={getSortDirection("source")} onSort={() => toggleSort("source")}>Source</SortableTableHead>
-          <SortableTableHead active={getSortDirection("station")} onSort={() => toggleSort("station")}>Station</SortableTableHead>
-          <SortableTableHead active={getSortDirection("notes")} onSort={() => toggleSort("notes")}>Notes</SortableTableHead>
-          <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {sorted.map((r) => (
-          <TableRow key={r.date}>
-            <TableCell>{r.date ? format(new Date(r.date), "PP") : "—"}</TableCell>
-            <TableCell className="text-right tabular-nums">
-              {r.rainfall_mm == null ? (
-                <span className="text-muted-foreground">—</span>
-              ) : (
-                r.rainfall_mm.toFixed(1)
-              )}
-            </TableCell>
-            <TableCell>{sourceLabel(r.source)}</TableCell>
-            <TableCell>{r.station_name ?? "—"}</TableCell>
-            <TableCell className="max-w-[240px] truncate">{r.notes ?? "—"}</TableCell>
-            <TableCell className="text-xs text-muted-foreground">
-              {r.updated_at ? format(new Date(r.updated_at), "PP p") : "—"}
-            </TableCell>
+    <div className="space-y-2">
+      <div className="flex justify-end px-2 pt-2">
+        <ColumnSettingsMenu onReset={reset} />
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {(order as Col[]).map((id) => <Fragment key={id}>{headerMap[id]}</Fragment>)}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {sorted.map((r) => (
+            <TableRow key={r.date}>
+              {(order as Col[]).map((id) => <Fragment key={id}>{renderCell(r, id)}</Fragment>)}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
