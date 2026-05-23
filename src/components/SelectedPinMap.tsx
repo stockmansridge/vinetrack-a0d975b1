@@ -77,7 +77,7 @@ export default function SelectedPinMap({ pin }: Props) {
             <Marker position={[coords.lat, coords.lng]} icon={pinIcon(style.hex)} />
             <Recenter lat={coords.lat} lng={coords.lng} />
             <div className="absolute top-2 left-2 z-[400]">
-              <MapSourceBadge source="osm" />
+              <MapSourceBadge source="fallback" />
             </div>
           </MapContainer>
         ) : (
