@@ -64,6 +64,8 @@ const NONE = "__none__";
 const INVITE_ROLES: InvitationRole[] = ["manager", "supervisor", "operator"];
 const MEMBER_ROLES: MemberRole[] = ["owner", "manager", "supervisor", "operator"];
 
+type InviteColId = "email" | "role" | "operator_category" | "expires" | "status";
+
 const initials = (name: string | null | undefined, fallback: string) => {
   const src = (name && name.trim()) || fallback;
   const parts = src.split(/\s+/).filter(Boolean);
