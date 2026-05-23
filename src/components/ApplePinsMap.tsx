@@ -8,9 +8,11 @@ import { pinStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } fro
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
+import PinDetailSheet from "@/components/PinDetailSheet";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Props {
   onUnavailable: (reason: string) => void;
@@ -37,6 +39,7 @@ function makePinElement(hex: string) {
 
 export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const isMobile = useIsMobile();
   const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -292,20 +295,29 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
         </div>
       </Card>
 
-      <div className="space-y-4">
-        {selected ? (
-          <PinDetailPanel
-            pin={selected}
-            paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
-            paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
-            onClose={() => setSelectedId(null)}
-          />
-        ) : (
-          <Card className="p-4 text-sm text-muted-foreground">
-            Click a pin to see details. {withCoords.length} pin{withCoords.length === 1 ? "" : "s"} on map.
-          </Card>
-        )}
-      </div>
+      {!isMobile && (
+        <div className="space-y-4">
+          {selected ? (
+            <PinDetailPanel
+              pin={selected}
+              paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+              paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+              onClose={() => setSelectedId(null)}
+            />
+          ) : (
+            <Card className="p-4 text-sm text-muted-foreground">
+              Click a pin to see details. {withCoords.length} pin{withCoords.length === 1 ? "" : "s"} on map.
+            </Card>
+          )}
+        </div>
+      )}
+      <PinDetailSheet
+        open={isMobile && !!selected}
+        onOpenChange={(open) => !open && setSelectedId(null)}
+        pin={selected}
+        paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+        paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+      />
     </div>
   );
 }
