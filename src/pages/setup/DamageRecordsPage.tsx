@@ -72,6 +72,7 @@ import {
 import { calculateDamageImpact } from "@/lib/damageImpact";
 import DamageMapView from "@/components/DamageMapView";
 import DamagePolygonEditor from "@/components/DamagePolygonEditor";
+import OpenExternalMapButton from "@/components/OpenExternalMapButton";
 
 const ANY = "__any__";
 
@@ -565,14 +566,14 @@ function DamageDetailSheet({
                 <Field label="Latitude" value={fmt(record.latitude)} />
                 <Field label="Longitude" value={fmt(record.longitude)} />
                 {record.latitude != null && record.longitude != null && (
-                  <a
-                    className="inline-flex items-center gap-1 text-xs text-primary underline"
-                    href={`https://maps.apple.com/?ll=${record.latitude},${record.longitude}`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <OpenExternalMapButton
+                    url={`https://maps.apple.com/?ll=${record.latitude},${record.longitude}`}
+                    variant="link"
+                    size="sm"
+                    className="h-auto px-0 text-xs"
                   >
                     <MapPinIcon className="h-3 w-3" /> Open in Maps
-                  </a>
+                  </OpenExternalMapButton>
                 )}
               </Section>
             )}
