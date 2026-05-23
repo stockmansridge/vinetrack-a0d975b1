@@ -90,19 +90,22 @@ export default function SelectedPinMap({ pin }: Props) {
           {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
         </span>
         <Button
-          asChild
           size="sm"
           variant="ghost"
           className="h-7 px-2 text-xs"
+          aria-label={`Open ${title} in maps`}
+          onClick={() => {
+            const w = window.open(openInBrowserMapsUrl, "_blank", "noopener,noreferrer");
+            if (!w) {
+              try {
+                (window.top ?? window).location.href = openInBrowserMapsUrl;
+              } catch {
+                window.location.href = openInBrowserMapsUrl;
+              }
+            }
+          }}
         >
-          <a
-            href={openInBrowserMapsUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Open ${title} in maps`}
-          >
-            Open in Maps
-          </a>
+          Open in Maps
         </Button>
       </div>
     </Card>
