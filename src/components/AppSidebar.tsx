@@ -244,7 +244,7 @@ export function AppSidebar() {
   // Collapsed (icon) mode — flat icon list
   if (collapsed) {
     const flatItems: NavItem[] = [
-      { id: "dashboard", title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+      { id: "dashboard", title: "Overview", url: "/dashboard", icon: LayoutDashboard },
       ...visibleSections.flatMap((s) => s.items),
     ];
     return (
