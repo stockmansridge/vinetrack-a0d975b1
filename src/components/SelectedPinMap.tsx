@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import { initMapKit } from "@/lib/mapkit";
 import MapSourceBadge from "@/components/MapSourceBadge";
@@ -37,6 +38,7 @@ export default function SelectedPinMap({ pin }: Props) {
   const style = pinStyle(pin.mode, (pin as any).button_color, (pin as any).category);
   const title = pinDisplayTitle(pin as any);
   const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}`;
+  const openInGoogleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
 
   return (
     <Card className="overflow-hidden">
@@ -52,20 +54,30 @@ export default function SelectedPinMap({ pin }: Props) {
           </div>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
         <span className="font-mono">
           {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
         </span>
-        <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <a
             href={openInAppleMapsUrl}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Open ${title} in Apple Maps`}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-7 px-2 text-xs")}
           >
             Open in Apple Maps
           </a>
-        </Button>
+          <a
+            href={openInGoogleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open ${title} in Google Maps`}
+            className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "h-7 px-2 text-xs")}
+          >
+            Google Maps
+          </a>
+        </div>
       </div>
     </Card>
   );

@@ -25,12 +25,14 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
+import PinDetailSheet from "@/components/PinDetailSheet";
 import SelectedPinMap from "@/components/SelectedPinMap";
 import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface PaddockLite {
   id: string;
@@ -40,6 +42,7 @@ interface PaddockLite {
 
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const isMobile = useIsMobile();
   const showPinDiagnostics = useDiagnosticPanel("show_pin_diagnostics");
   const queryClient = useQueryClient();
   const vineyardName =
@@ -429,25 +432,35 @@ export default function PinsPage() {
               </TableBody>
             </Table>
           </Card>
-          <div className="space-y-4">
-            {selected ? (
-              <>
-                <SelectedPinMap pin={selected} />
-                <PinDetailPanel
-                  pin={selected}
-                  paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
-                  paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
-                  vineyardName={vineyardName}
-                  onClose={() => setSelectedId(null)}
-                />
-              </>
-            ) : (
-              <Card className="p-4 text-sm text-muted-foreground">
-                Select a pin to see details.
-              </Card>
-            )}
-          </div>
+          {!isMobile && (
+            <div className="space-y-4">
+              {selected ? (
+                <>
+                  <SelectedPinMap pin={selected} />
+                  <PinDetailPanel
+                    pin={selected}
+                    paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+                    paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+                    vineyardName={vineyardName}
+                    onClose={() => setSelectedId(null)}
+                  />
+                </>
+              ) : (
+                <Card className="p-4 text-sm text-muted-foreground">
+                  Select a pin to see details.
+                </Card>
+              )}
+            </div>
+          )}
         </div>
+        <PinDetailSheet
+          open={isMobile && !!selected}
+          onOpenChange={(open) => !open && setSelectedId(null)}
+          pin={selected}
+          paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
+          vineyardName={vineyardName}
+          paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+        />
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
