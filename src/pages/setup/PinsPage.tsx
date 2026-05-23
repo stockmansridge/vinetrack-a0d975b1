@@ -203,6 +203,38 @@ export default function PinsPage() {
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
+  const PIN_ALL_COLS = ["title","mode","paddock","row","status","priority","category","stage","created","createdBy","completed","completedBy"] as const;
+  type PinCol = (typeof PIN_ALL_COLS)[number];
+  const { order: pinOrder, moveColumn: pinMove, reset: pinReset } = useColumnOrder(
+    "pins_table",
+    PIN_ALL_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+  const visibleByCol: Record<PinCol, boolean> = {
+    title: true,
+    mode: hasMode,
+    paddock: true,
+    row: true,
+    status: true,
+    priority: hasPriority,
+    category: hasCategory,
+    stage: hasStage,
+    created: true,
+    createdBy: true,
+    completed: hasAnyCompleted,
+    completedBy: hasAnyCompleted,
+  };
+  const pinLabels: Record<PinCol, string> = {
+    title: "Title", mode: "Type", paddock: "Paddock", row: "Row",
+    status: "Status", priority: "Priority", category: "Category", stage: "Stage",
+    created: "Created", createdBy: "Created by", completed: "Completed", completedBy: "Completed by",
+  };
+  const pinSortKey: Record<PinCol, PinSortKey> = {
+    title: "title", mode: "mode", paddock: "paddock", row: "row",
+    status: "status", priority: "priority", category: "category", stage: "stage",
+    created: "created", createdBy: "createdBy", completed: "completed", completedBy: "completedBy",
+  };
+
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
