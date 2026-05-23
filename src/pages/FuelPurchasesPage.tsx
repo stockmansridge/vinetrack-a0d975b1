@@ -43,6 +43,10 @@ import {
   type FuelPurchase,
 } from "@/lib/fuelPurchasesQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
