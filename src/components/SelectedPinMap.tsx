@@ -4,7 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import ApplePinsMap from "@/components/ApplePinsMap";
+
 import { initMapKit } from "@/lib/mapkit";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { pinDisplayCoords, pinStyle, pinDisplayTitle } from "@/lib/pinStyle";
