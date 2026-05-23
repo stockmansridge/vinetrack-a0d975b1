@@ -5,6 +5,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -13,6 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 
 import type { ReactNode } from "react";
 
@@ -22,6 +26,8 @@ export interface ListColumn {
   render?: (row: any) => ReactNode;
   filterValue?: (row: any) => string;
   className?: string;
+  /** When true, this column is pinned and cannot be reordered. */
+  locked?: "start" | "end";
 }
 
 interface Props {
@@ -30,12 +36,37 @@ interface Props {
   description?: string;
   columns: ListColumn[];
   basePath: string; // e.g. /setup/paddocks
+  /** Stable id used to persist column order preference. Defaults to `<table>_table`. */
+  tableId?: string;
 }
 
-export default function ListPage({ table, title, description, columns, basePath }: Props) {
+export default function ListPage({ table, title, description, columns, basePath, tableId }: Props) {
   const { selectedVineyardId } = useVineyard();
   const navigate = useNavigate();
   const [filter, setFilter] = useState("");
+
+  const lockedStart = columns.filter((c) => c.locked === "start");
+  const lockedEnd = columns.filter((c) => c.locked === "end");
+  const movable = columns.filter((c) => !c.locked);
+  const defaultOrder = useMemo(() => movable.map((c) => c.key), [movable]);
+  const { order, moveColumn, reset } = useColumnOrder(
+    tableId ?? `${table}_table`,
+    defaultOrder,
+    { vineyardId: selectedVineyardId },
+  );
+  const columnsById = useMemo(() => {
+    const m = new Map<string, ListColumn>();
+    for (const c of columns) m.set(c.key, c);
+    return m;
+  }, [columns]);
+  const orderedMovable = useMemo(
+    () => order.map((id) => columnsById.get(id)).filter(Boolean) as ListColumn[],
+    [order, columnsById],
+  );
+  const finalColumns = useMemo(
+    () => [...lockedStart, ...orderedMovable, ...lockedEnd],
+    [lockedStart, orderedMovable, lockedEnd],
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["list", table, selectedVineyardId],
@@ -62,40 +93,51 @@ export default function ListPage({ table, title, description, columns, basePath 
           <h1 className="text-2xl font-semibold">{title}</h1>
           {description && <p className="text-sm text-muted-foreground">{description}</p>}
         </div>
-        <Input
-          placeholder="Filter…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="w-64"
-        />
+        <div className="flex items-end gap-2">
+          <Input
+            placeholder="Filter…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-64"
+          />
+          <ColumnSettingsMenu onReset={reset} />
+        </div>
       </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              {columns.map((c) => (
-                <TableHead key={c.key}>{c.label}</TableHead>
+              {finalColumns.map((c) => (
+                <TableHead key={c.key} className={c.className}>
+                  {c.locked ? (
+                    c.label
+                  ) : (
+                    <DraggableHeaderCell columnId={c.key} onDropColumn={moveColumn}>
+                      {c.label}
+                    </DraggableHeaderCell>
+                  )}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                <TableCell colSpan={finalColumns.length} className="text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-destructive">
+                <TableCell colSpan={finalColumns.length} className="text-center text-destructive">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={finalColumns.length} className="text-center text-muted-foreground py-8">
                   No records found. If expected records are missing, check that the selected
                   vineyard is correct and that this user has owner/manager access.
                 </TableCell>
@@ -107,7 +149,7 @@ export default function ListPage({ table, title, description, columns, basePath 
                 className="cursor-pointer"
                 onClick={() => navigate(`${basePath}/${r.id}`)}
               >
-                {columns.map((c) => (
+                {finalColumns.map((c) => (
                   <TableCell key={c.key} className={c.className}>
                     {c.render ? c.render(r) : formatCell(r[c.key])}
                   </TableCell>
