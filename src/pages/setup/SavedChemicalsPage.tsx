@@ -249,6 +249,52 @@ export default function SavedChemicalsPage() {
     onError: (e: any) => toast({ title: "Restore failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
+  const { order: chemColumnOrder, moveColumn: moveChemColumn, reset: resetChemColumns } =
+    useColumnOrder("chemicals_table", CHEM_DEFAULT_COLUMNS, { vineyardId: selectedVineyardId });
+  // Filter out cost column when user can't see costs (still allowed in saved order, just skipped on render).
+  const visibleChemColumns = useMemo<ChemColId[]>(
+    () => (chemColumnOrder as ChemColId[]).filter((id) => id !== "cost" || canSeeCosts),
+    [chemColumnOrder, canSeeCosts],
+  );
+
+  const renderChemHeader = (id: ChemColId): React.ReactNode => {
+    switch (id) {
+      case "name": return <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}><DraggableHeaderCell columnId="name" onDropColumn={moveChemColumn}>Name</DraggableHeaderCell></SortableTableHead>;
+      case "active_ingredient": return <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}><DraggableHeaderCell columnId="active_ingredient" onDropColumn={moveChemColumn}>Active ingredient</DraggableHeaderCell></SortableTableHead>;
+      case "group": return <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}><DraggableHeaderCell columnId="group" onDropColumn={moveChemColumn}>Group</DraggableHeaderCell></SortableTableHead>;
+      case "use": return <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}><DraggableHeaderCell columnId="use" onDropColumn={moveChemColumn}>Use</DraggableHeaderCell></SortableTableHead>;
+      case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
+      case "manufacturer": return <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}><DraggableHeaderCell columnId="manufacturer" onDropColumn={moveChemColumn}>Manufacturer</DraggableHeaderCell></SortableTableHead>;
+      case "label": return <TableHead className="w-20"><DraggableHeaderCell columnId="label" onDropColumn={moveChemColumn}>Label</DraggableHeaderCell></TableHead>;
+      case "cost": return <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}><DraggableHeaderCell columnId="cost" onDropColumn={moveChemColumn}>Cost / unit</DraggableHeaderCell></SortableTableHead>;
+    }
+  };
+
+  const renderChemCell = (id: ChemColId, c: typeof rows[number]): React.ReactNode => {
+    switch (id) {
+      case "name": return <TableCell key="name" className="font-medium">{fmt(c.name)}</TableCell>;
+      case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
+      case "group": return <TableCell key="group">{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>;
+      case "use": return <TableCell key="use">{fmt(c.use)}</TableCell>;
+      case "rate": return <TableCell key="rate">{c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}</TableCell>;
+      case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
+      case "label": return (
+        <TableCell key="label">
+          {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+            <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" title={c.label_url}>
+              <ExternalLink className="h-3 w-3" />Label
+            </a>
+          ) : (<span className="text-muted-foreground">—</span>)}
+        </TableCell>
+      );
+      case "cost": {
+        const cost = purchaseCostPerUnit(c.purchase);
+        const currency = c.purchase?.currency ?? "AUD";
+        return <TableCell key="cost">{cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayBaseUnit(c.purchase?.unit ?? c.unit)}`}</TableCell>;
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-start gap-3">
