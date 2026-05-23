@@ -92,6 +92,14 @@ export default function MaintenancePage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<MaintenanceLog | null>(null);
 
+  const MAINT_COLS = ["date", "item", "work", "hours", "machine_hours", ...(canSeeCosts ? ["cost"] : []), "status"] as const;
+  type MaintCol = "date" | "item" | "work" | "hours" | "machine_hours" | "cost" | "status";
+  const { order: maintOrder, moveColumn: maintMove, reset: maintReset } = useColumnOrder(
+    "maintenance_logs_table",
+    MAINT_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["maintenance_logs", selectedVineyardId],
     enabled: !!selectedVineyardId,
