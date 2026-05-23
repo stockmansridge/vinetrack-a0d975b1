@@ -95,11 +95,11 @@ export default function SelectedPinMap({ pin }: Props) {
           className="h-7 px-2 text-xs"
         >
           <a
-            href={`https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=18/${coords.lat}/${coords.lng}`}
+            href={`https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}&t=k`}
             target="_blank"
             rel="noreferrer"
           >
-            Open in map
+            Open in Apple Maps
           </a>
         </Button>
       </div>
