@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
@@ -20,7 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import {
   Sheet,
@@ -212,6 +214,14 @@ export default function TripsPage() {
     initial: { key: "start", direction: "desc" },
   });
 
+  const TRIPS_COLS = ["start","name","function","paddock","pattern","person","duration","distance","status"] as const;
+  type TripsCol = (typeof TRIPS_COLS)[number];
+  const { order: tripsOrder, moveColumn: tripsMove, reset: tripsReset } = useColumnOrder(
+    "trips_table",
+    TRIPS_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.debug("[TripsPage] diagnostics", {
@@ -343,19 +353,27 @@ export default function TripsPage() {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={tripsReset} />
+      </div>
+
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <SortableTableHead active={getSortDirection("start")} onSort={() => toggleSort("start")}>Start</SortableTableHead>
-              <SortableTableHead active={getSortDirection("name")} onSort={() => toggleSort("name")}>Name</SortableTableHead>
-              <SortableTableHead active={getSortDirection("function")} onSort={() => toggleSort("function")}>Function</SortableTableHead>
-              <SortableTableHead active={getSortDirection("paddock")} onSort={() => toggleSort("paddock")}>Paddock</SortableTableHead>
-              <SortableTableHead active={getSortDirection("pattern")} onSort={() => toggleSort("pattern")}>Pattern</SortableTableHead>
-              <SortableTableHead active={getSortDirection("person")} onSort={() => toggleSort("person")}>Person</SortableTableHead>
-              <SortableTableHead active={getSortDirection("duration")} onSort={() => toggleSort("duration")}>Duration</SortableTableHead>
-              <SortableTableHead active={getSortDirection("distance")} onSort={() => toggleSort("distance")}>Distance</SortableTableHead>
-              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+              {(tripsOrder as TripsCol[]).map((id) => {
+                const labels: Record<TripsCol, string> = {
+                  start: "Start", name: "Name", function: "Function", paddock: "Paddock",
+                  pattern: "Pattern", person: "Person", duration: "Duration", distance: "Distance", status: "Status",
+                };
+                const sk: any = id;
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={tripsMove}
+                    sort={{ active: getSortDirection(sk), onSort: () => toggleSort(sk) }}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -376,21 +394,26 @@ export default function TripsPage() {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
               const fnLabel = tripFunctionLabel(t.trip_function);
-              return (
-                <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
-                  <TableCell>{fmtDate(t.start_time)}</TableCell>
-                  <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>
-                  <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>
-                  <TableCell>{fmt(padName)}</TableCell>
-                  <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{t.tracking_pattern}</Badge> : "—"}</TableCell>
-                  <TableCell>{fmt(t.person_name)}</TableCell>
-                  <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>
-                  <TableCell>{fmtKm(t.total_distance)}</TableCell>
+              const cellMap: Record<TripsCol, React.ReactNode> = {
+                start: <TableCell>{fmtDate(t.start_time)}</TableCell>,
+                name: <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>,
+                function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
+                paddock: <TableCell>{fmt(padName)}</TableCell>,
+                pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{t.tracking_pattern}</Badge> : "—"}</TableCell>,
+                person: <TableCell>{fmt(t.person_name)}</TableCell>,
+                duration: <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>,
+                distance: <TableCell>{fmtKm(t.total_distance)}</TableCell>,
+                status: (
                   <TableCell>
                     {s === "active" ? <Badge>Active</Badge> :
                      s === "paused" ? <Badge variant="outline">Paused</Badge> :
                      <Badge variant="secondary">Completed</Badge>}
                   </TableCell>
+                ),
+              };
+              return (
+                <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
+                  {(tripsOrder as TripsCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                 </TableRow>
               );
             })}

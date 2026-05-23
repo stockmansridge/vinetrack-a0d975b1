@@ -32,6 +32,10 @@ import {
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
 import YieldDamageAdjustmentPanel from "@/components/YieldDamageAdjustmentPanel";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 
 const ANY = "__any__";
 
@@ -56,6 +60,14 @@ export default function YieldReportsPage() {
   const [completion, setCompletion] = useState<string>(ANY);
   const [tab, setTab] = useState<"all" | "sessions" | "historical">("all");
   const [selected, setSelected] = useState<AnyRow | null>(null);
+
+  const YIELD_COLS = ["date", "type", "season", "yield", "area", "status"] as const;
+  type YieldCol = (typeof YIELD_COLS)[number];
+  const { order: yOrder, moveColumn: yMove, reset: yReset } = useColumnOrder(
+    "yield_reports_table",
+    YIELD_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["yield_reports", selectedVineyardId],
@@ -232,16 +244,28 @@ export default function YieldReportsPage() {
         </div>
 
         <TabsContent value={tab} className="mt-4">
+          <div className="flex justify-end mb-2">
+            <ColumnSettingsMenu onReset={yReset} />
+          </div>
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Season / year</TableHead>
-                  <TableHead>Total yield (t)</TableHead>
-                  <TableHead>Area (ha)</TableHead>
-                  <TableHead>Status</TableHead>
+                  {(yOrder as YieldCol[]).map((id) => {
+                    const labels: Record<YieldCol, string> = {
+                      date: "Date",
+                      type: "Type",
+                      season: "Season / year",
+                      yield: "Total yield (t)",
+                      area: "Area (ha)",
+                      status: "Status",
+                    };
+                    return (
+                      <ReorderableHead key={id} columnId={id} onDropColumn={yMove}>
+                        {labels[id]}
+                      </ReorderableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -262,17 +286,19 @@ export default function YieldReportsPage() {
                   const isHist = r.__kind === "historical";
                   const h = r as HistoricalYieldRecord;
                   const s = r as YieldEstimationSession;
-                  return (
-                    <TableRow key={r.__kind + ":" + r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                      <TableCell>{fmtDate(sortDate(r))}</TableCell>
+                  const cellMap: Record<YieldCol, React.ReactNode> = {
+                    date: <TableCell>{fmtDate(sortDate(r))}</TableCell>,
+                    type: (
                       <TableCell>
                         <Badge variant={isHist ? "secondary" : "outline"}>
                           {isHist ? "Historical" : "Estimation"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{isHist ? fmt(h.season ?? h.year) : "—"}</TableCell>
-                      <TableCell>{isHist ? fmtNum(h.total_yield_tonnes) : "—"}</TableCell>
-                      <TableCell>{isHist ? fmtNum(h.total_area_hectares) : "—"}</TableCell>
+                    ),
+                    season: <TableCell>{isHist ? fmt(h.season ?? h.year) : "—"}</TableCell>,
+                    yield: <TableCell>{isHist ? fmtNum(h.total_yield_tonnes) : "—"}</TableCell>,
+                    area: <TableCell>{isHist ? fmtNum(h.total_area_hectares) : "—"}</TableCell>,
+                    status: (
                       <TableCell>
                         {isHist
                           ? <Badge variant="secondary">Archived</Badge>
@@ -280,6 +306,11 @@ export default function YieldReportsPage() {
                           ? <Badge>Completed</Badge>
                           : <Badge variant="outline">Open</Badge>}
                       </TableCell>
+                    ),
+                  };
+                  return (
+                    <TableRow key={r.__kind + ":" + r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                      {(yOrder as YieldCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                     </TableRow>
                   );
                 })}
@@ -288,6 +319,7 @@ export default function YieldReportsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
 
       <YieldSheet row={selected} vineyardId={selectedVineyardId} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
     </div>

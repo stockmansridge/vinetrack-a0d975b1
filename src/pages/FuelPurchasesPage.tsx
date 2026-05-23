@@ -43,6 +43,10 @@ import {
   type FuelPurchase,
 } from "@/lib/fuelPurchasesQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
+import { Fragment } from "react";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
@@ -87,6 +91,14 @@ export default function FuelPurchasesPage() {
   const [selected, setSelected] = useState<FuelPurchase | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<FuelPurchase | null>(null);
+
+  const FUEL_COLS = ["date", "volume", ...(canSeeCosts ? ["total", "cpl"] : []), "by", "updated"] as const;
+  type FuelCol = "date" | "volume" | "total" | "cpl" | "by" | "updated";
+  const { order: fOrder, moveColumn: fMove, reset: fReset } = useColumnOrder(
+    "fuel_purchases_table",
+    FUEL_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["fuel_purchases", selectedVineyardId],
@@ -212,16 +224,31 @@ export default function FuelPurchasesPage() {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <ColumnSettingsMenu onReset={fReset} />
+      </div>
+
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right">Volume (L)</TableHead>
-              {canSeeCosts && <TableHead className="text-right">Total cost</TableHead>}
-              {canSeeCosts && <TableHead className="text-right">Cost / L</TableHead>}
-              <TableHead>Entered by</TableHead>
-              <TableHead>Updated</TableHead>
+              {(fOrder as FuelCol[]).map((id) => {
+                if ((id === "total" || id === "cpl") && !canSeeCosts) return null;
+                const labels: Record<FuelCol, string> = {
+                  date: "Date",
+                  volume: "Volume (L)",
+                  total: "Total cost",
+                  cpl: "Cost / L",
+                  by: "Entered by",
+                  updated: "Updated",
+                };
+                const rightAlign = id === "volume" || id === "total" || id === "cpl";
+                return (
+                  <ReorderableHead key={id} columnId={id} onDropColumn={fMove} align={rightAlign ? "right" : "left"}>
+                    {labels[id]}
+                  </ReorderableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -238,19 +265,28 @@ export default function FuelPurchasesPage() {
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((r) => (
-              <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                <TableCell>{fmtDate(r.date)}</TableCell>
-                <TableCell className="text-right">{fmtLitres(r.volume_litres)}</TableCell>
-                {canSeeCosts && <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>}
-                {canSeeCosts && <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>}
-                <TableCell>{fmt(resolve(r.created_by))}</TableCell>
-                <TableCell>{fmtDate(r.updated_at)}</TableCell>
-              </TableRow>
-            ))}
+            {rows.map((r) => {
+              const cellMap: Record<FuelCol, React.ReactNode> = {
+                date: <TableCell>{fmtDate(r.date)}</TableCell>,
+                volume: <TableCell className="text-right">{fmtLitres(r.volume_litres)}</TableCell>,
+                total: <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>,
+                cpl: <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>,
+                by: <TableCell>{fmt(resolve(r.created_by))}</TableCell>,
+                updated: <TableCell>{fmtDate(r.updated_at)}</TableCell>,
+              };
+              return (
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                  {(fOrder as FuelCol[]).map((id) => {
+                    if ((id === "total" || id === "cpl") && !canSeeCosts) return null;
+                    return <Fragment key={id}>{cellMap[id]}</Fragment>;
+                  })}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
+
 
       <FuelSheet
         record={selected}
