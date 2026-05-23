@@ -300,8 +300,8 @@ export default function Team() {
                 const isMemberOwner = m.role === "owner";
                 const canEditRole = isOwner; // only owners change roles
                 const canRemove = isOwner && !isMemberOwner; // owner can remove non-owners; last-owner guard server-side
-                return (
-                  <TableRow key={m.membership_id}>
+                const memberCellMap: Record<MemberColId, React.ReactNode> = {
+                  member: (
                     <TableCell title={m.user_id}>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
@@ -314,6 +314,8 @@ export default function Team() {
                         </div>
                       </div>
                     </TableCell>
+                  ),
+                  role: (
                     <TableCell>
                       {canEditRole && membershipId ? (
                         <Select
@@ -321,39 +323,31 @@ export default function Team() {
                           onValueChange={(v) => setRole.mutate({ membershipId, role: v as MemberRole })}
                           disabled={setRole.isPending}
                         >
-                          <SelectTrigger className="w-36 h-8">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {MEMBER_ROLES.map((r) => (
-                              <SelectItem key={r} value={r}>{r}</SelectItem>
-                            ))}
+                            {MEMBER_ROLES.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
                           </SelectContent>
                         </Select>
                       ) : (
                         <Badge variant="secondary">{m.role}</Badge>
                       )}
                     </TableCell>
+                  ),
+                  operator_category: (
                     <TableCell>
                       {canEdit && membershipId ? (
                         <Select
                           value={currentCatId ?? NONE}
-                          onValueChange={(v) =>
-                            setCategory.mutate({ membershipId, categoryId: v === NONE ? null : v })
-                          }
+                          onValueChange={(v) => setCategory.mutate({ membershipId, categoryId: v === NONE ? null : v })}
                           disabled={setCategory.isPending}
                         >
-                          <SelectTrigger className="w-56">
-                            <SelectValue placeholder="No category" />
-                          </SelectTrigger>
+                          <SelectTrigger className="w-56"><SelectValue placeholder="No category" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value={NONE}>No category</SelectItem>
                             {categories.map((c) => (
                               <SelectItem key={c.id} value={c.id}>
                                 {c.name ?? "Unnamed"}
-                                {canSeeCosts && c.cost_per_hour != null
-                                  ? ` — $${Number(c.cost_per_hour).toFixed(2)}/h`
-                                  : ""}
+                                {canSeeCosts && c.cost_per_hour != null ? ` — $${Number(c.cost_per_hour).toFixed(2)}/h` : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -362,7 +356,15 @@ export default function Team() {
                         <span className="text-sm">{currentCat?.name ?? "—"}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatDate(m.joined_at)}</TableCell>
+                  ),
+                  joined: <TableCell className="text-sm text-muted-foreground">{formatDate(m.joined_at)}</TableCell>,
+                };
+                return (
+                  <TableRow key={m.membership_id}>
+                    {(memberCols.order as MemberColId[]).map((id) => (
+                      <Fragment key={id}>{memberCellMap[id]}</Fragment>
+                    ))}
+
                     {canEdit && (
                       <TableCell>
                         {canRemove && membershipId ? (
