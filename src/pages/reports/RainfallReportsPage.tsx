@@ -35,9 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { RainCalendar } from "@/components/rainfall/RainCalendar";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { Fragment } from "react";
 import { cn } from "@/lib/utils";
 
 const PRESETS: { value: RangePreset; label: string }[] = [
