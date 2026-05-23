@@ -92,6 +92,14 @@ export default function FuelPurchasesPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<FuelPurchase | null>(null);
 
+  const FUEL_COLS = ["date", "volume", ...(canSeeCosts ? ["total", "cpl"] : []), "by", "updated"] as const;
+  type FuelCol = "date" | "volume" | "total" | "cpl" | "by" | "updated";
+  const { order: fOrder, moveColumn: fMove, reset: fReset } = useColumnOrder(
+    "fuel_purchases_table",
+    FUEL_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["fuel_purchases", selectedVineyardId],
     enabled: !!selectedVineyardId,
