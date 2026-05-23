@@ -61,6 +61,14 @@ export default function YieldReportsPage() {
   const [tab, setTab] = useState<"all" | "sessions" | "historical">("all");
   const [selected, setSelected] = useState<AnyRow | null>(null);
 
+  const YIELD_COLS = ["date", "type", "season", "yield", "area", "status"] as const;
+  type YieldCol = (typeof YIELD_COLS)[number];
+  const { order: yOrder, moveColumn: yMove, reset: yReset } = useColumnOrder(
+    "yield_reports_table",
+    YIELD_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["yield_reports", selectedVineyardId],
     enabled: !!selectedVineyardId,
