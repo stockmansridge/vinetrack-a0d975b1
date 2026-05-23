@@ -425,20 +425,80 @@ export default function TripReportsPage() {
         </div>
       </Card>
 
+      <TripReportsTable
+        rows={rows}
+        isLoading={isLoading}
+        error={error}
+        expanded={expanded}
+        toggleExpand={toggleExpand}
+        handleExportPdf={handleExportPdf}
+        exportingId={exportingId}
+        padNameFor={padNameFor}
+        selectedVineyardId={selectedVineyardId}
+      />
+
+      <Card className="p-4 bg-muted/30 flex items-start gap-2">
+        <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
+        <div className="text-xs text-muted-foreground space-y-1">
+          <div>
+            Trip Reports cover every trip/job type recorded in VineTrack. Each PDF
+            includes Trip Details, Rows / Paths, Pins, Route Map and a VineTrack
+            footer.
+          </div>
+          <div>
+            For spray-specific compliance reports (chemicals, rates, WHP/REI, tank mix)
+            and yearly spray programs, use <strong>Spray Records</strong>.
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// --- Reorderable trip reports table -------------------------------------
+
+const TR_COLS = ["date","type","name","block","operator","duration","distance","rows","status"] as const;
+type TrCol = (typeof TR_COLS)[number];
+
+function TripReportsTable({
+  rows, isLoading, error, expanded, toggleExpand,
+  handleExportPdf, exportingId, padNameFor, selectedVineyardId,
+}: {
+  rows: Trip[];
+  isLoading: boolean;
+  error: unknown;
+  expanded: Set<string>;
+  toggleExpand: (id: string) => void;
+  handleExportPdf: (t: Trip) => void;
+  exportingId: string | null;
+  padNameFor: (t: Trip) => string | null;
+  selectedVineyardId: string | null;
+}) {
+  const { order, moveColumn, reset } = useColumnOrder(
+    "trip_reports_table",
+    TR_COLS as unknown as string[],
+    { vineyardId: selectedVineyardId },
+  );
+  const labels: Record<TrCol, string> = {
+    date: "Date", type: "Trip type", name: "Name", block: "Block",
+    operator: "Operator", duration: "Duration", distance: "Distance",
+    rows: "Rows", status: "Status",
+  };
+  return (
+    <>
+      <div className="flex justify-end mb-2">
+        <ColumnSettingsMenu onReset={reset} />
+      </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-8" />
-              <TableHead>Date</TableHead>
-              <TableHead>Trip type</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Block</TableHead>
-              <TableHead>Operator</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Distance</TableHead>
-              <TableHead>Rows</TableHead>
-              <TableHead>Status</TableHead>
+              {(order as TrCol[]).map((id) => (
+                <ReorderableHead key={id} columnId={id} onDropColumn={moveColumn}>
+                  {labels[id]}
+                </ReorderableHead>
+              ))}
               <TableHead className="text-right">Report</TableHead>
             </TableRow>
           </TableHeader>
@@ -446,9 +506,9 @@ export default function TripReportsPage() {
             {isLoading && (
               <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
             )}
-            {error && (
+            {error ? (
               <TableRow><TableCell colSpan={11} className="text-center text-destructive py-8">{(error as Error).message}</TableCell></TableRow>
-            )}
+            ) : null}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
@@ -461,6 +521,33 @@ export default function TripReportsPage() {
               const s = tripStatus(t);
               const isOpen = expanded.has(t.id);
               const summary = summariseRows(t);
+              const cellMap: Record<TrCol, React.ReactNode> = {
+                date: <TableCell>{fmtDay(t.start_time)}</TableCell>,
+                type: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
+                name: <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>,
+                block: <TableCell>{padNameFor(t) ?? "—"}</TableCell>,
+                operator: <TableCell>{t.person_name ?? "—"}</TableCell>,
+                duration: <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>,
+                distance: <TableCell>{fmtKm(t.total_distance)}</TableCell>,
+                rows: (
+                  <TableCell className="text-xs">
+                    {summary.total > 0 ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Check className="h-3 w-3 text-green-600" />{summary.completed}
+                        <X className="h-3 w-3 text-red-600 ml-1" />{summary.skipped}
+                        <span className="text-muted-foreground ml-1">/ {summary.total}</span>
+                      </span>
+                    ) : "—"}
+                  </TableCell>
+                ),
+                status: (
+                  <TableCell>
+                    {s === "active" ? <Badge>Active</Badge> :
+                     s === "paused" ? <Badge variant="outline">Paused</Badge> :
+                     <Badge variant="secondary">Completed</Badge>}
+                  </TableCell>
+                ),
+              };
               return (
                 <Fragment key={t.id}>
                   <TableRow>
@@ -475,27 +562,7 @@ export default function TripReportsPage() {
                         {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </Button>
                     </TableCell>
-                    <TableCell>{fmtDay(t.start_time)}</TableCell>
-                    <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>
-                    <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>
-                    <TableCell>{padNameFor(t) ?? "—"}</TableCell>
-                    <TableCell>{t.person_name ?? "—"}</TableCell>
-                    <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>
-                    <TableCell>{fmtKm(t.total_distance)}</TableCell>
-                    <TableCell className="text-xs">
-                      {summary.total > 0 ? (
-                        <span className="inline-flex items-center gap-1">
-                          <Check className="h-3 w-3 text-green-600" />{summary.completed}
-                          <X className="h-3 w-3 text-red-600 ml-1" />{summary.skipped}
-                          <span className="text-muted-foreground ml-1">/ {summary.total}</span>
-                        </span>
-                      ) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {s === "active" ? <Badge>Active</Badge> :
-                       s === "paused" ? <Badge variant="outline">Paused</Badge> :
-                       <Badge variant="secondary">Completed</Badge>}
-                    </TableCell>
+                    {(order as TrCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                     <TableCell className="text-right">
                       <Button
                         size="sm"
@@ -522,6 +589,10 @@ export default function TripReportsPage() {
           </TableBody>
         </Table>
       </Card>
+    </>
+  );
+}
+
 
       <Card className="p-4 bg-muted/30 flex items-start gap-2">
         <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
