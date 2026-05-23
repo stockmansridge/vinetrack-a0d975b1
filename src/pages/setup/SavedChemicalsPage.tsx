@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
@@ -45,6 +45,14 @@ import {
 } from "@/lib/rateBasis";
 import { normaliseChemicalGroup, buildGroupOptions } from "@/lib/chemicalGroupNormalise";
 import { normaliseManufacturerName, buildManufacturerOptions } from "@/lib/manufacturerNormalise";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+
+type ChemColId = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "label" | "cost";
+const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
+  "name", "active_ingredient", "group", "use", "rate", "manufacturer", "label", "cost",
+];
 
 const ANY = "__any__";
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
@@ -241,6 +249,52 @@ export default function SavedChemicalsPage() {
     onError: (e: any) => toast({ title: "Restore failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
+  const { order: chemColumnOrder, moveColumn: moveChemColumn, reset: resetChemColumns } =
+    useColumnOrder("chemicals_table", CHEM_DEFAULT_COLUMNS, { vineyardId: selectedVineyardId });
+  // Filter out cost column when user can't see costs (still allowed in saved order, just skipped on render).
+  const visibleChemColumns = useMemo<ChemColId[]>(
+    () => (chemColumnOrder as ChemColId[]).filter((id) => id !== "cost" || canSeeCosts),
+    [chemColumnOrder, canSeeCosts],
+  );
+
+  const renderChemHeader = (id: ChemColId): React.ReactNode => {
+    switch (id) {
+      case "name": return <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}><DraggableHeaderCell columnId="name" onDropColumn={moveChemColumn}>Name</DraggableHeaderCell></SortableTableHead>;
+      case "active_ingredient": return <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}><DraggableHeaderCell columnId="active_ingredient" onDropColumn={moveChemColumn}>Active ingredient</DraggableHeaderCell></SortableTableHead>;
+      case "group": return <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}><DraggableHeaderCell columnId="group" onDropColumn={moveChemColumn}>Group</DraggableHeaderCell></SortableTableHead>;
+      case "use": return <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}><DraggableHeaderCell columnId="use" onDropColumn={moveChemColumn}>Use</DraggableHeaderCell></SortableTableHead>;
+      case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
+      case "manufacturer": return <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}><DraggableHeaderCell columnId="manufacturer" onDropColumn={moveChemColumn}>Manufacturer</DraggableHeaderCell></SortableTableHead>;
+      case "label": return <TableHead className="w-20"><DraggableHeaderCell columnId="label" onDropColumn={moveChemColumn}>Label</DraggableHeaderCell></TableHead>;
+      case "cost": return <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}><DraggableHeaderCell columnId="cost" onDropColumn={moveChemColumn}>Cost / unit</DraggableHeaderCell></SortableTableHead>;
+    }
+  };
+
+  const renderChemCell = (id: ChemColId, c: typeof rows[number]): React.ReactNode => {
+    switch (id) {
+      case "name": return <TableCell key="name" className="font-medium">{fmt(c.name)}</TableCell>;
+      case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
+      case "group": return <TableCell key="group">{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>;
+      case "use": return <TableCell key="use">{fmt(c.use)}</TableCell>;
+      case "rate": return <TableCell key="rate">{c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}</TableCell>;
+      case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
+      case "label": return (
+        <TableCell key="label">
+          {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+            <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" title={c.label_url}>
+              <ExternalLink className="h-3 w-3" />Label
+            </a>
+          ) : (<span className="text-muted-foreground">—</span>)}
+        </TableCell>
+      );
+      case "cost": {
+        const cost = purchaseCostPerUnit(c.purchase);
+        const currency = c.purchase?.currency ?? "AUD";
+        return <TableCell key="cost">{cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayBaseUnit(c.purchase?.unit ?? c.unit)}`}</TableCell>;
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-start gap-3">
@@ -391,72 +445,42 @@ export default function SavedChemicalsPage() {
                 className="w-72"
               />
             </div>
+            <div className="space-y-1">
+
+              <div className="text-xs text-muted-foreground opacity-0 select-none">.</div>
+              <ColumnSettingsMenu onReset={resetChemColumns} />
+            </div>
           </div>
 
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}>Name</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}>Active ingredient</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}>Group</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}>Use</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}>Default rate</SortableTableHead>
-                  <SortableTableHead active={chemSortDir("manufacturer")} onSort={() => chemToggle("manufacturer")}>Manufacturer</SortableTableHead>
-                  <TableHead className="w-20">Label</TableHead>
-                  {canSeeCosts && <SortableTableHead active={chemSortDir("cost")} onSort={() => chemToggle("cost")}>Cost / unit</SortableTableHead>}
+                  {visibleChemColumns.map((id) => (
+                    <React.Fragment key={id}>{renderChemHeader(id)}</React.Fragment>
+                  ))}
                   {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleChemColumns.length + (canEdit ? 1 : 0)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleChemColumns.length + (canEdit ? 1 : 0)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={(canEdit ? 1 : 0) + (canSeeCosts ? 8 : 7)} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={visibleChemColumns.length + (canEdit ? 1 : 0)} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
                 )}
                 {sortedRows.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">{fmt(c.name)}</TableCell>
-                    <TableCell>{fmt(c.active_ingredient)}</TableCell>
-                    <TableCell>{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>
-                    <TableCell>{fmt(c.use)}</TableCell>
-                    <TableCell>
-                      {c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}
-                    </TableCell>
-                    <TableCell>{fmt(c.manufacturer)}</TableCell>
-                    <TableCell>
-                      {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
-                        <a
-                          href={c.label_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
-                          title={c.label_url}
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          Label
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    {canSeeCosts && (
-                      <TableCell>
-                        {(() => {
-                          const cost = purchaseCostPerUnit(c.purchase);
-                          const currency = c.purchase?.currency ?? "AUD";
-                          return cost == null ? "—" : `${fmtMoney(cost, currency)} / ${displayBaseUnit(c.purchase?.unit ?? c.unit)}`;
-                        })()}
-                      </TableCell>
-                    )}
+                    {visibleChemColumns.map((id) => (
+                      <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
+                    ))}
                     {canEdit && (
                       <TableCell className="text-right">
                         <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
@@ -473,6 +497,7 @@ export default function SavedChemicalsPage() {
             </Table>
           </Card>
         </TabsContent>
+
 
         <TabsContent value="archived" className="space-y-3">
           <div className="flex flex-wrap items-end gap-2">
