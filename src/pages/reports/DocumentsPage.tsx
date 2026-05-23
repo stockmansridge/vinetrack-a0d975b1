@@ -525,10 +525,12 @@ type LibRow = {
   related?: string | null;
   createdAt?: string | null;
   source: "portal" | "ios";
-  formats: ("pdf" | "csv")[];
-  onDownload?: (f: "pdf" | "csv") => void;
+  formats: ("pdf" | "csv" | "xlsx")[];
+  onDownload?: (f: "pdf" | "csv" | "xlsx") => void;
   openHref?: string;
 };
+
+type DocSortKey = "name" | "type" | "vineyard" | "block" | "related" | "date" | "source";
 
 function DocumentsLibraryTable({
   loading, rows, getSortDirection, toggleSort, vineyardId,
