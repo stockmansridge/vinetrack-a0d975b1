@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import OpenExternalMapButton from "@/components/OpenExternalMapButton";
+import OpenExternalMapButton, { copyTextToClipboard, type ExternalMapOpenResult } from "@/components/OpenExternalMapButton";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 import { initMapKit } from "@/lib/mapkit";
 import MapSourceBadge from "@/components/MapSourceBadge";
@@ -16,6 +18,7 @@ type Provider = "checking" | "apple" | "unavailable";
 export default function SelectedPinMap({ pin }: Props) {
   const coords = useMemo(() => pinDisplayCoords(pin as any), [pin]);
   const [provider, setProvider] = useState<Provider>("checking");
+  const [externalMapResult, setExternalMapResult] = useState<ExternalMapOpenResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +41,16 @@ export default function SelectedPinMap({ pin }: Props) {
   const title = pinDisplayTitle(pin as any);
   const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}`;
   const openInGoogleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+  const coordinatesLabel = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+
+  const handleExternalMapResult = useCallback((result: ExternalMapOpenResult) => {
+    setExternalMapResult(result);
+  }, []);
+
+  const handleCopy = useCallback(async (value: string, label: string) => {
+    await copyTextToClipboard(value);
+    toast(`${label} copied`);
+  }, []);
 
   return (
     <Card className="overflow-hidden">
@@ -55,12 +68,13 @@ export default function SelectedPinMap({ pin }: Props) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
         <span className="font-mono">
-          {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+          {coordinatesLabel}
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <OpenExternalMapButton
             url={openInAppleMapsUrl}
             aria-label={`Open ${title} in Apple Maps`}
+            onResult={handleExternalMapResult}
             size="sm"
             variant="outline"
             className="h-7 px-2 text-xs"
@@ -70,13 +84,52 @@ export default function SelectedPinMap({ pin }: Props) {
           <OpenExternalMapButton
             url={openInGoogleMapsUrl}
             aria-label={`Open ${title} in Google Maps`}
+            onResult={handleExternalMapResult}
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-xs"
           >
             Google Maps
           </OpenExternalMapButton>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => void handleCopy(coordinatesLabel, "Coordinates")}
+          >
+            Copy coordinates
+          </Button>
         </div>
+      </div>
+      <div className="border-t bg-muted/20 px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => void handleCopy(openInAppleMapsUrl, "Apple Maps link")}
+          >
+            Copy Apple Maps link
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => void handleCopy(openInGoogleMapsUrl, "Google Maps link")}
+          >
+            Copy Google Maps link
+          </Button>
+        </div>
+        {externalMapResult?.status === "copied" ? (
+          <div className="mt-3 rounded-md border bg-background px-3 py-2 text-xs text-foreground">
+            <div className="font-medium">External map opening was blocked.</div>
+            <div className="mt-1 text-muted-foreground">{externalMapResult.message}</div>
+            <div className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{externalMapResult.url}</div>
+          </div>
+        ) : null}
       </div>
     </Card>
   );
