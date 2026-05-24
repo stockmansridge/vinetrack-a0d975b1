@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.restore_saved_chemicals(uuid) FROM anon, PUBLIC;
