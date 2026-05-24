@@ -70,6 +70,33 @@ Deno.serve(async (req) => {
   try {
     const body: Body = await req.json();
 
+    // If a Bearer JWT is supplied, verify it and override any caller-supplied
+    // identity fields with the verified values. Submissions without a JWT are
+    // allowed but flagged as unverified in metadata.
+    let verifiedUserId: string | null = null;
+    let verifiedUserEmail: string | null = null;
+    const incomingAuth = req.headers.get("Authorization") ?? "";
+    if (incomingAuth.toLowerCase().startsWith("bearer ")) {
+      try {
+        const authClient = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: incomingAuth } } },
+        );
+        const { data: claimsData } = await authClient.auth.getClaims(
+          incomingAuth.slice(7).trim(),
+        );
+        const sub = claimsData?.claims?.sub;
+        if (typeof sub === "string" && sub) {
+          verifiedUserId = sub;
+          const email = claimsData?.claims?.email;
+          if (typeof email === "string") verifiedUserEmail = email;
+        }
+      } catch (_e) {
+        // Treat as unverified — fall through to anonymous submission handling.
+      }
+    }
+
     // Validation
     if (!body.request_type || !ALLOWED_TYPES.has(body.request_type)) {
       return jsonResponse({ error: "Invalid request_type" }, 400);
@@ -84,6 +111,7 @@ Deno.serve(async (req) => {
     if (attachments.length > MAX_ATTACHMENTS) {
       return jsonResponse({ error: `Max ${MAX_ATTACHMENTS} attachments` }, 400);
     }
+
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -126,8 +154,11 @@ Deno.serve(async (req) => {
       id: requestId,
       vineyard_id: body.vineyard_id ?? null,
       vineyard_name: body.vineyard_name ?? null,
-      user_id: body.user_id ?? null,
-      user_email: body.user_email ?? null,
+      // Only store user_id when we verified the JWT — never trust a caller-supplied UUID.
+      user_id: verifiedUserId,
+      user_email: verifiedUserEmail ?? body.user_email ?? null,
+
+
       user_name: body.user_name ?? null,
       user_role: body.user_role ?? null,
       request_type: body.request_type,
