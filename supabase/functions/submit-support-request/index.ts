@@ -154,8 +154,9 @@ Deno.serve(async (req) => {
       id: requestId,
       vineyard_id: body.vineyard_id ?? null,
       vineyard_name: body.vineyard_name ?? null,
-      user_id: body.user_id ?? null,
-      user_email: body.user_email ?? null,
+      user_id: verifiedUserId ?? (verifiedUserId === null ? null : body.user_id ?? null),
+      user_email: verifiedUserEmail ?? body.user_email ?? null,
+
       user_name: body.user_name ?? null,
       user_role: body.user_role ?? null,
       request_type: body.request_type,
