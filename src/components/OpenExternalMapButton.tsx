@@ -20,6 +20,8 @@ export type ExternalMapOpenResult =
       message: string;
     };
 
+type CopiedReason = Extract<ExternalMapOpenResult, { status: "copied" }>["reason"];
+
 export async function copyTextToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -50,7 +52,7 @@ function isEmbeddedContext() {
   }
 }
 
-async function copyAndNotify(url: string, message: string, reason: ExternalMapOpenResult["reason"]) {
+async function copyAndNotify(url: string, message: string, reason: CopiedReason): Promise<ExternalMapOpenResult> {
   await copyTextToClipboard(url).catch(() => {
     /* noop */
   });
