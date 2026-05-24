@@ -39,7 +39,7 @@ export default function SelectedPinMap({ pin }: Props) {
 
   const style = pinStyle(pin.mode, (pin as any).button_color, (pin as any).category);
   const title = pinDisplayTitle(pin as any);
-  const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}&z=19`;
+  const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}&z=19&t=k`;
   const openInGoogleMapsUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
   const coordinatesLabel = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
 
