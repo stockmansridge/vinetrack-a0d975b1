@@ -43,6 +43,28 @@ export default function SelectedPinMap({ pin }: Props) {
   const openInGoogleMapsUrl = `https://www.google.com/maps/@${coords.lat},${coords.lng},21z/data=!3m1!1e3`;
   const coordinatesLabel = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
 
+  const rowNumber = (pin as any).pin_row_number ?? (pin as any).row_number ?? (pin as any).driving_row_number;
+  const side = (pin as any).pin_side ?? (pin as any).side;
+  const category = (pin as any).category;
+  const note = (pin as any).notes;
+  const whatsappLines = [
+    "VineTrack pin:",
+    title,
+    "",
+    category ? `Category: ${category}` : null,
+    rowNumber != null ? `Row: ${rowNumber}` : null,
+    side ? `Side: ${side}` : null,
+    note ? `Note: ${note}` : null,
+    `Coordinates: ${coordinatesLabel}`,
+    "",
+    `Google Maps:`,
+    openInGoogleMapsUrl,
+    "",
+    `Apple Maps:`,
+    openInAppleMapsUrl,
+  ].filter(Boolean);
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappLines.join("\n"))}`;
+
   const handleExternalMapResult = useCallback((result: ExternalMapOpenResult) => {
     setExternalMapResult(result);
   }, []);
@@ -90,6 +112,16 @@ export default function SelectedPinMap({ pin }: Props) {
             className="h-7 px-2 text-xs"
           >
             Google Maps
+          </OpenExternalMapButton>
+          <OpenExternalMapButton
+            url={whatsappUrl}
+            aria-label="Share pin via WhatsApp"
+            onResult={handleExternalMapResult}
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+          >
+            Share via WhatsApp
           </OpenExternalMapButton>
           <Button
             type="button"
