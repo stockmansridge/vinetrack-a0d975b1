@@ -98,7 +98,7 @@ export default function SelectedPinMap({ pin }: Props) {
             aria-label={`Open ${title} in Apple Maps`}
             onResult={handleExternalMapResult}
             size="sm"
-            variant="outline"
+            variant="ghost"
             className="h-7 px-2 text-xs"
           >
             Open in Apple Maps
