@@ -122,6 +122,7 @@ export default function SelectedPinMap({ pin }: Props) {
             className="h-7 px-2 text-xs"
           >
             Share via WhatsApp
+          </OpenExternalMapButton>
           <Button
             type="button"
             size="sm"
