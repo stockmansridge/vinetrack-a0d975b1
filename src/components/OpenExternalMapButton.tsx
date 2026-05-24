@@ -15,7 +15,7 @@ export type ExternalMapOpenResult =
     }
   | {
       status: "copied";
-      reason: "iframe" | "popup-blocked" | "navigation-blocked";
+      reason: "iframe" | "popup-blocked";
       url: string;
       message: string;
     };
@@ -74,7 +74,7 @@ export async function openExternalMap(url: string): Promise<ExternalMapOpenResul
     return copyAndNotify(url, EMBEDDED_PREVIEW_MESSAGE, "iframe");
   }
 
-  const opened = window.open("about:blank", "_blank", "noopener,noreferrer");
+  const opened = window.open(url, "_blank");
 
   if (!opened) {
     return copyAndNotify(url, POPUP_BLOCKED_MESSAGE, "popup-blocked");
@@ -86,21 +86,11 @@ export async function openExternalMap(url: string): Promise<ExternalMapOpenResul
     /* noop */
   }
 
-  try {
-    opened.location.replace(url);
-    return {
-      status: "opened",
-      reason: "new-tab",
-      url,
-    };
-  } catch {
-    try {
-      opened.close();
-    } catch {
-      /* noop */
-    }
-    return copyAndNotify(url, POPUP_BLOCKED_MESSAGE, "navigation-blocked");
-  }
+  return {
+    status: "opened",
+    reason: "new-tab",
+    url,
+  };
 }
 
 interface OpenExternalMapButtonProps extends Omit<ButtonProps, "asChild" | "onClick" | "type"> {
