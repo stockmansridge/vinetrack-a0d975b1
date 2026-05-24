@@ -113,6 +113,15 @@ export default function SelectedPinMap({ pin }: Props) {
           >
             Google Maps
           </OpenExternalMapButton>
+          <OpenExternalMapButton
+            url={whatsappUrl}
+            aria-label="Share pin via WhatsApp"
+            onResult={handleExternalMapResult}
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+          >
+            Share via WhatsApp
           <Button
             type="button"
             size="sm"
