@@ -15,6 +15,9 @@ import {
   createVineyardWithOwner,
   describeVineyardError,
 } from "@/lib/vineyardSettingsQuery";
+import { usePendingInvites } from "@/components/invites/PendingInvitesModal";
+
+
 
 export default function Onboarding() {
   const { user, signOut, loading: authLoading } = useAuth();
