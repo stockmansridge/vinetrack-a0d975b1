@@ -195,7 +195,7 @@ export function AppSidebar() {
         {renderGroup("Work", work)}
         {renderGroup("Tools", tools)}
         {renderGroup("Reports", isAdmin ? [...reports, ...reportsAdmin] : reports)}
-        {isAdmin && renderGroup("Setup", setup, false)}
+        {renderGroup("Setup", setup, false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
