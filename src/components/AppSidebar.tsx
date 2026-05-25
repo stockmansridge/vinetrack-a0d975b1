@@ -113,16 +113,14 @@ const tools: NavItem[] = [
 
 
 
-const settings: NavItem[] = [
-  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
-];
-
 const systemAdmin: NavItem[] = [
   { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
   { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
   { title: "App Notices", url: "/admin/notices", icon: Bell },
   { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
+  { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
 ];
+
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -198,7 +196,8 @@ export function AppSidebar() {
         {renderGroup("Tools", tools)}
         {renderGroup("Reports", isAdmin ? [...reports, ...reportsAdmin] : reports)}
         {renderGroup("Setup", setup, false)}
-        {isAdmin && renderGroup("Settings", settings, false)}
+        {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
+
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
       </SidebarContent>
 
