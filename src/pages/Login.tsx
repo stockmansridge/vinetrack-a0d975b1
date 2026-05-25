@@ -152,14 +152,23 @@ export default function Login() {
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={onReset}
-          className="text-sm font-medium hover:underline"
-          style={{ color: "#F0EBB8" }}
-        >
-          Forgot password?
-        </button>
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-sm font-medium hover:underline"
+            style={{ color: "#F0EBB8" }}
+          >
+            Forgot password?
+          </button>
+          <a
+            href="/signup"
+            className="text-sm font-semibold hover:underline"
+            style={{ color: "#FFFFFF" }}
+          >
+            Don't have an account? Create one
+          </a>
+        </div>
       </div>
     </div>
     </>
