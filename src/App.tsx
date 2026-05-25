@@ -8,6 +8,8 @@ import { VineyardProvider } from "@/context/VineyardContext";
 import { RequireAuth, RequireVineyard } from "@/components/guards";
 import AppLayout from "@/components/AppLayout";
 import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
+import Onboarding from "./pages/Onboarding";
 import SelectVineyard from "./pages/SelectVineyard";
 import NoAccess from "./pages/NoAccess";
 import Dashboard from "./pages/Dashboard";
