@@ -71,8 +71,10 @@ export function PendingInvitesModal() {
     mutationFn: async (id: string) => acceptInvitation(id),
     onSuccess: async (_d, id) => {
       const inv = invites.find((i) => i.id === id);
-      await qc.invalidateQueries({ queryKey: ["memberships", user?.id] });
-      await qc.invalidateQueries({ queryKey: ["pending-invites"] });
+      // Refetch (not just invalidate) so RequireVineyard sees the new
+      // membership before we navigate to the dashboard.
+      await qc.refetchQueries({ queryKey: ["memberships", user?.id] });
+      await qc.refetchQueries({ queryKey: ["pending-invites"] });
       if (inv) {
         selectVineyard(inv.vineyard_id);
         toast({
@@ -84,6 +86,7 @@ export function PendingInvitesModal() {
         navigate("/dashboard", { replace: true });
       }
     },
+
     onError: (e: unknown) =>
       toast({
         title: "Couldn't accept invite",
