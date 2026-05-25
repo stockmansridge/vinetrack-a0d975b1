@@ -12,7 +12,7 @@ export default function SelectVineyard() {
   const navigate = useNavigate();
 
   if (loading) return <div className="p-8">Loading vineyards…</div>;
-  if (memberships.length === 0) return <Navigate to="/no-access" replace />;
+  if (memberships.length === 0) return <Navigate to="/onboarding" replace />;
   if (selectedVineyardId) return <Navigate to="/dashboard" replace />;
 
   return (
