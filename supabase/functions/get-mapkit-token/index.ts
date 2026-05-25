@@ -70,11 +70,14 @@ Deno.serve(async (req) => {
   }
   try {
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-    const sb = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    // The portal authenticates users against the iOS Supabase project, not
+    // Lovable Cloud, so verify the JWT against that project's JWKS.
+    const IOS_SUPABASE_URL = "https://tbafuqwruefgkbyxrxyb.supabase.co";
+    const IOS_SUPABASE_ANON_KEY =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiYWZ1cXdydWVmZ2tieXhyeHliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyOTY0NDcsImV4cCI6MjA5Mjg3MjQ0N30.tvOzn1ketbd0zYJWDujh_DGcWVDeitJaoVWw3aqtuRw";
+    const sb = createClient(IOS_SUPABASE_URL, IOS_SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
     const { data: claimsData, error: claimsErr } = await sb.auth.getClaims(
       authHeader.slice(7).trim(),
     );
