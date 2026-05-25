@@ -79,9 +79,11 @@ const App = () => (
           <VineyardProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
               <Route path="/no-access" element={<NoAccess />} />
               <Route path="/unsubscribe" element={<UnsubscribePage />} />
               <Route element={<RequireAuth />}>
+                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/select-vineyard" element={<SelectVineyard />} />
                 <Route element={<RequireVineyard />}>
                   <Route element={<AppLayout />}>
