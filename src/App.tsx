@@ -8,6 +8,8 @@ import { VineyardProvider } from "@/context/VineyardContext";
 import { RequireAuth, RequireVineyard } from "@/components/guards";
 import AppLayout from "@/components/AppLayout";
 import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
+import Onboarding from "./pages/Onboarding";
 import SelectVineyard from "./pages/SelectVineyard";
 import NoAccess from "./pages/NoAccess";
 import Dashboard from "./pages/Dashboard";
@@ -77,9 +79,11 @@ const App = () => (
           <VineyardProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
               <Route path="/no-access" element={<NoAccess />} />
               <Route path="/unsubscribe" element={<UnsubscribePage />} />
               <Route element={<RequireAuth />}>
+                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/select-vineyard" element={<SelectVineyard />} />
                 <Route element={<RequireVineyard />}>
                   <Route element={<AppLayout />}>
