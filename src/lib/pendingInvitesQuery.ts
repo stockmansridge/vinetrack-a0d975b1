@@ -88,11 +88,11 @@ export function describePendingInviteLookupError(error: unknown) {
 }
 
 export async function acceptInvitation(id: string): Promise<void> {
-  const { error } = await supabase.rpc("accept_invitation", { id });
+  const { error } = await supabase.rpc("accept_invitation", { p_invitation_id: id });
   if (error) throw error;
 }
 
 export async function declineInvitation(id: string): Promise<void> {
-  const { error } = await supabase.rpc("decline_invitation", { id });
+  const { error } = await supabase.rpc("decline_invitation", { p_invitation_id: id });
   if (error) throw error;
 }
