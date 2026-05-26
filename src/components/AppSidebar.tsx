@@ -158,6 +158,7 @@ export function AppSidebar() {
     ));
 
   const renderGroup = (label: string, items: NavItem[], defaultOpen = true) => {
+    if (items.length === 0) return null;
     const hasActive = items.some((i) => isActive(i.url));
     return (
       <Collapsible defaultOpen={defaultOpen || hasActive} className="group/collapsible">
