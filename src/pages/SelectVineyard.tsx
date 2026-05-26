@@ -7,19 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
 import {
   PendingInvitationsSection,
-  usePendingInvites,
 } from "@/components/invites/PendingInvitesModal";
+import { usePendingInvites } from "@/hooks/usePendingInvites";
 
 export default function SelectVineyard() {
   const { memberships, loading, selectVineyard, selectedVineyardId } = useVineyard();
   const { signOut } = useAuth();
-  const { data: pendingInvites = [], isLoading: invitesLoading } = usePendingInvites();
+  const {
+    data: pendingInvites = [],
+    isLoading: invitesLoading,
+    error: pendingInvitesError,
+  } = usePendingInvites();
   const navigate = useNavigate();
 
   if (loading || invitesLoading) return <div className="p-8">Loading vineyards…</div>;
 
   // If the user has no memberships and no pending invites, force onboarding.
-  if (memberships.length === 0 && pendingInvites.length === 0) {
+  if (memberships.length === 0 && pendingInvites.length === 0 && !pendingInvitesError) {
     return <Navigate to="/onboarding" replace />;
   }
   if (memberships.length > 0 && selectedVineyardId) {
@@ -36,7 +40,9 @@ export default function SelectVineyard() {
             </h1>
             <p className="text-muted-foreground">
               {memberships.length === 0
-                ? "You have a pending invitation. Accept it, or create a new vineyard."
+                ? pendingInvitesError
+                  ? "We couldn't check invitations right now. Retry below, or create a new vineyard."
+                  : "You have a pending invitation. Accept it, or create a new vineyard."
                 : "Choose which vineyard to manage."}
             </p>
           </div>

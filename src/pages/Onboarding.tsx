@@ -15,7 +15,7 @@ import {
   createVineyardWithOwner,
   describeVineyardError,
 } from "@/lib/vineyardSettingsQuery";
-import { usePendingInvites } from "@/components/invites/PendingInvitesModal";
+import { usePendingInvites } from "@/hooks/usePendingInvites";
 
 
 
@@ -50,13 +50,18 @@ export default function Onboarding() {
       }),
   });
 
-  const { data: pendingInvites = [], isLoading: invitesLoading } = usePendingInvites();
+  const {
+    data: pendingInvites = [],
+    isLoading: invitesLoading,
+    error: pendingInvitesError,
+  } = usePendingInvites();
 
   if (authLoading || vyLoading || invitesLoading) return <div className="p-8">Loading…</div>;
   // If user already has accessible vineyards, skip onboarding.
   if (memberships.length > 0) return <Navigate to="/select-vineyard" replace />;
   // If a pending invite is waiting, defer to the selector + invite modal.
   if (pendingInvites.length > 0) return <Navigate to="/select-vineyard" replace />;
+  if (pendingInvitesError) return <Navigate to="/select-vineyard" replace />;
 
 
   const onSubmit = (e: FormEvent) => {
