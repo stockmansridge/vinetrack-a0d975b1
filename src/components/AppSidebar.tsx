@@ -39,6 +39,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
+import { canAccessRoute } from "@/lib/rolePermissions";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { BrandMark } from "@/components/BrandMark";
@@ -132,6 +133,8 @@ export function AppSidebar() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
+  const visible = (items: NavItem[]) =>
+    items.filter((i) => canAccessRoute(i.url, currentRole));
 
   const renderItems = (items: NavItem[]) =>
     items.map((item) => (
@@ -155,6 +158,7 @@ export function AppSidebar() {
     ));
 
   const renderGroup = (label: string, items: NavItem[], defaultOpen = true) => {
+    if (items.length === 0) return null;
     const hasActive = items.some((i) => isActive(i.url));
     return (
       <Collapsible defaultOpen={defaultOpen || hasActive} className="group/collapsible">
@@ -191,11 +195,11 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {renderGroup("Dashboard", dashboard)}
-        {renderGroup("Work", work)}
-        {renderGroup("Tools", tools)}
-        {renderGroup("Reports", isAdmin ? [...reports, ...reportsAdmin] : reports)}
-        {renderGroup("Setup", setup, false)}
+        {renderGroup("Dashboard", visible(dashboard))}
+        {renderGroup("Work", visible(work))}
+        {renderGroup("Tools", visible(tools))}
+        {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports))}
+        {renderGroup("Setup", visible(setup), false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
       </SidebarContent>

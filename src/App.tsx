@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { VineyardProvider } from "@/context/VineyardContext";
 import { RequireAuth, RequireVineyard } from "@/components/guards";
+import { RoleRoute } from "@/components/PermissionGate";
 import AppLayout from "@/components/AppLayout";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
@@ -87,6 +88,7 @@ const App = () => (
                 <Route path="/select-vineyard" element={<SelectVineyard />} />
                 <Route element={<RequireVineyard />}>
                   <Route element={<AppLayout />}>
+                   <Route element={<RoleRoute />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
@@ -169,6 +171,7 @@ const App = () => (
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
+                   </Route>
                   </Route>
                 </Route>
               </Route>
