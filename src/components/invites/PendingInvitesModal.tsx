@@ -56,12 +56,33 @@ function usePendingInviteActions(invites: PendingInvite[]) {
       const inv = invites.find((i) => i.id === id);
       clearDismissedInvites();
       setInviteBannerHidden(false);
-      await qc.invalidateQueries({ queryKey: ["memberships"] });
-      await qc.invalidateQueries({ queryKey: ["pending-invites"] });
+      // Refetch BEFORE selecting the vineyard, so the VineyardContext
+      // doesn't immediately clear the selection because the new
+      // membership isn't in its cached list yet.
+      await Promise.all([
+        qc.refetchQueries({ queryKey: ["memberships"] }),
+        qc.refetchQueries({ queryKey: ["pending-invites"] }),
+        qc.invalidateQueries({ queryKey: ["vineyards"] }),
+        qc.invalidateQueries({ queryKey: ["accessible-vineyards"] }),
+      ]);
       if (inv) {
-        selectVineyard(inv.vineyard_id);
-        toast({ title: "Invitation accepted", description: "Your vineyard access has been updated." });
-        navigate("/dashboard", { replace: true });
+        const memberships =
+          (qc.getQueriesData({ queryKey: ["memberships"] })?.[0]?.[1] as
+            | { vineyard_id: string; role: string }[]
+            | undefined) ?? [];
+        const accepted = memberships.find((m) => m.vineyard_id === inv.vineyard_id);
+        if (accepted) {
+          selectVineyard(inv.vineyard_id);
+          toast({ title: "Invitation accepted", description: "Your vineyard access has been updated." });
+          navigate("/dashboard", { replace: true });
+        } else {
+          // Membership was created but role isn't permitted in the portal
+          // (portal currently allows owner/manager only).
+          toast({
+            title: "Invitation accepted",
+            description: `You joined as ${inv.role}. The portal is available to owners and managers — please use the VineTrack iOS app.`,
+          });
+        }
       }
     },
     onError: (e: unknown) =>
