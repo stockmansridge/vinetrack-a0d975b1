@@ -88,6 +88,7 @@ const App = () => (
                 <Route path="/select-vineyard" element={<SelectVineyard />} />
                 <Route element={<RequireVineyard />}>
                   <Route element={<AppLayout />}>
+                   <Route element={<RoleRoute />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
