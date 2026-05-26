@@ -194,11 +194,11 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {renderGroup("Dashboard", dashboard)}
-        {renderGroup("Work", work)}
-        {renderGroup("Tools", tools)}
-        {renderGroup("Reports", isAdmin ? [...reports, ...reportsAdmin] : reports)}
-        {renderGroup("Setup", setup, false)}
+        {renderGroup("Dashboard", visible(dashboard))}
+        {renderGroup("Work", visible(work))}
+        {renderGroup("Tools", visible(tools))}
+        {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports))}
+        {renderGroup("Setup", visible(setup), false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
       </SidebarContent>
