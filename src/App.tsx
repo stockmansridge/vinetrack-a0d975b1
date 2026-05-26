@@ -171,6 +171,7 @@ const App = () => (
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
+                   </Route>
                   </Route>
                 </Route>
               </Route>
