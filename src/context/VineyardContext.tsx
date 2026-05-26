@@ -29,7 +29,6 @@ const VineyardContext = createContext<VineyardContextValue>({
 });
 
 const STORAGE_KEY = "vt_selected_vineyard";
-const ALLOWED_ROLES = ["owner", "manager"];
 
 export function VineyardProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -48,7 +47,6 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
         .is("vineyards.deleted_at", null);
       if (error) throw error;
       return (data ?? [])
-        .filter((m: any) => ALLOWED_ROLES.includes(m.role))
         .map((m: any) => ({
           vineyard_id: m.vineyard_id,
           role: m.role,
