@@ -1,6 +1,6 @@
 // Pending invitations for the currently authenticated user.
-// RLS on the iOS Supabase `invitations` table allows the invited email's user
-// to SELECT their own pending rows. Accept/decline use the existing iOS RPCs.
+// Keep this query scoped to the invitations table only so invited users do not
+// lose rows when related-table joins are blocked by RLS.
 import { supabase } from "@/integrations/ios-supabase/client";
 
 export interface PendingInvite {
@@ -11,6 +11,7 @@ export interface PendingInvite {
   status: string;
   expires_at: string | null;
   default_operator_category_id: string | null;
+  created_at: string | null;
   vineyard_name: string | null;
   operator_category_name: string | null;
 }
@@ -23,16 +24,12 @@ export async function fetchPendingInvitesForEmail(
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("invitations")
-    .select(
-      "id, vineyard_id, email, role, status, expires_at, default_operator_category_id, vineyards(name), operator_categories:default_operator_category_id(name)",
-    )
-    .ilike("email", normalised)
+    .select("id, vineyard_id, email, role, status, expires_at, default_operator_category_id, created_at")
+    .eq("email", normalised)
     .eq("status", "pending")
     .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
     .order("created_at", { ascending: true });
   if (error) {
-    // 42501 / permission errors → just treat as no invites visible.
-    if ((error as { code?: string }).code === "42501") return [];
     throw error;
   }
   return (data ?? []).map((row: any) => ({
@@ -43,8 +40,9 @@ export async function fetchPendingInvitesForEmail(
     status: row.status,
     expires_at: row.expires_at,
     default_operator_category_id: row.default_operator_category_id,
-    vineyard_name: row.vineyards?.name ?? null,
-    operator_category_name: row.operator_categories?.name ?? null,
+    created_at: row.created_at ?? null,
+    vineyard_name: null,
+    operator_category_name: null,
   }));
 }
 
