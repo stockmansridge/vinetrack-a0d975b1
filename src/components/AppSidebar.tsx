@@ -39,6 +39,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useVineyard } from "@/context/VineyardContext";
+import { canAccessRoute } from "@/lib/rolePermissions";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
 import { BrandMark } from "@/components/BrandMark";
