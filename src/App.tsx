@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { VineyardProvider } from "@/context/VineyardContext";
 import { RequireAuth, RequireVineyard } from "@/components/guards";
+import { RoleRoute } from "@/components/PermissionGate";
 import AppLayout from "@/components/AppLayout";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
