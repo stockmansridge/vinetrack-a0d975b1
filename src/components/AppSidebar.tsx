@@ -198,7 +198,6 @@ export function AppSidebar() {
         {renderGroup("Setup", setup, false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
-        {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3">
