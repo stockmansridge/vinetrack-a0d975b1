@@ -30,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
+import { PendingInvitationsSection } from "@/components/invites/PendingInvitesModal";
 import {
   archiveVineyard,
   describeVineyardError,
@@ -190,6 +191,11 @@ export default function VineyardSettingsPage() {
           {describeVineyardError(vQuery.error)}
         </div>
       )}
+
+      <PendingInvitationsSection
+        title="Pending invitations"
+        description="If you were invited to another vineyard, you can accept it here later."
+      />
 
       <Card className="p-4 space-y-4">
         <div className="flex items-center gap-4">
