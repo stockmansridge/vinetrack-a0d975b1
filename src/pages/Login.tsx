@@ -91,20 +91,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Info card */}
-        <div
-          className="w-full bg-[#FFFDF2] px-4 py-3 text-center ring-1 ring-black/5"
-          style={{ borderRadius: 16, boxShadow: "0 6px 12px rgba(0,0,0,0.18)" }}
-        >
-          <p className="text-[13px] font-semibold leading-snug" style={{ color: "#03331A" }}>
-            Accounts are created in the VineTrack iOS app. Sign in here with your existing
-            VineTrack account.
-          </p>
-          <p className="mt-1.5 text-[12px] leading-snug" style={{ color: "#3B4A40" }}>
-            Portal access is limited to vineyard Owners and Managers. Operators can continue
-            using the VineTrack app.
-          </p>
-        </div>
 
         {/* Form card */}
         <form
