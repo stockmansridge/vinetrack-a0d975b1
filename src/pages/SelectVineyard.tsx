@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog";
-import { usePendingInvites } from "@/components/invites/PendingInvitesModal";
+import {
+  PendingInvitationsSection,
+  usePendingInvites,
+} from "@/components/invites/PendingInvitesModal";
 
 export default function SelectVineyard() {
   const { memberships, loading, selectVineyard, selectedVineyardId } = useVineyard();
@@ -48,10 +51,16 @@ export default function SelectVineyard() {
               {pendingInvites.length === 1
                 ? "You have a pending vineyard invitation."
                 : `You have ${pendingInvites.length} pending vineyard invitations.`}{" "}
-              Review them in the dialog, or create your own vineyard above.
+              Accept it below, or create your own vineyard above.
             </p>
           </div>
         )}
+        <div className="mb-6">
+          <PendingInvitationsSection
+            title="Pending invitations"
+            description="Accept an invite before creating your first vineyard."
+          />
+        </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {memberships.map((m) => (
             <Card
