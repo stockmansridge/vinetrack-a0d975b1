@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { PendingInvitesBanner } from "@/components/invites/PendingInvitesModal";
 import PortalInfoBanner from "@/components/PortalInfoBanner";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
@@ -83,6 +84,7 @@ export default function AppLayout() {
             </div>
           </header>
           <PortalInfoBanner />
+          <PendingInvitesBanner />
           <main className="flex-1 p-6 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
             <Outlet />
           </main>
