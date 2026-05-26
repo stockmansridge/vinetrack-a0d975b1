@@ -76,11 +76,9 @@ function usePendingInviteActions(invites: PendingInvite[]) {
           toast({ title: "Invitation accepted", description: "Your vineyard access has been updated." });
           navigate("/dashboard", { replace: true });
         } else {
-          // Membership was created but role isn't permitted in the portal
-          // (portal currently allows owner/manager only).
           toast({
             title: "Invitation accepted",
-            description: `You joined as ${inv.role}. The portal is available to owners and managers — please use the VineTrack iOS app.`,
+            description: "Your vineyard access has been updated. If the new vineyard doesn't appear, please refresh.",
           });
         }
       }
