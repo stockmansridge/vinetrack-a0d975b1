@@ -133,6 +133,8 @@ export function AppSidebar() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const isActive = (p: string) => pathname === p;
+  const visible = (items: NavItem[]) =>
+    items.filter((i) => canAccessRoute(i.url, currentRole));
 
   const renderItems = (items: NavItem[]) =>
     items.map((item) => (
