@@ -445,6 +445,15 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                 <NumField label="Row length override (m)" value={rowLengthOverride} onChange={setRowLengthOverride} step="1" disabled={!canEdit} />
                 <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
                   <Metric label="Rows generated" value={String(generatedRows.length)} />
+                  <Metric
+                    label="Last row # (calculated)"
+                    value={(() => {
+                      const start = Number(rowStartNumber);
+                      const count = Number(rowsCount);
+                      if (!Number.isFinite(start) || !Number.isFinite(count) || count <= 0) return "—";
+                      return String(start + count - 1);
+                    })()}
+                  />
                   <Metric label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
                 </div>
                 {canEdit && (
