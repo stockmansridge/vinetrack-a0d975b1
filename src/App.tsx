@@ -82,6 +82,7 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/no-access" element={<NoAccess />} />
               <Route path="/unsubscribe" element={<UnsubscribePage />} />
               <Route element={<RequireAuth />}>
