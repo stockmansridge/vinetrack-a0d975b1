@@ -214,11 +214,25 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
 }
 
 export async function archiveSavedChemical(id: string) {
-  const { error } = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
-  if (error) {
-    const alt = await supabase.rpc("soft_delete_saved_chemicals", { id } as any);
-    if (alt.error) throw error;
-  }
+  // Try the canonical RPC first (soft_delete_saved_chemicals(p_id)). If it
+  // isn't present in this Supabase project (PGRST202 = function not found in
+  // schema cache), fall back to a direct soft-delete UPDATE so archiving
+  // still works. RLS on saved_chemicals already restricts writes to
+  // owner/manager vineyard members.
+  const rpc = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
+  if (!rpc.error) return;
+
+  const code = (rpc.error as any)?.code;
+  const msg = String((rpc.error as any)?.message ?? "");
+  const missing = code === "PGRST202" || /Could not find the function/i.test(msg);
+  if (!missing) throw rpc.error;
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("saved_chemicals")
+    .update({ deleted_at: now, client_updated_at: now })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function restoreSavedChemical(id: string) {
