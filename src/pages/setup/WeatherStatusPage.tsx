@@ -65,7 +65,11 @@ import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttrib
 import {
   backfillWuRainfall,
   findNearbyWuStations,
+  getWundergroundConfig,
+  removeWundergroundStation,
+  saveWundergroundStation,
   type WuNearbyStation,
+  type WundergroundConfig,
 } from "@/lib/wundergroundProxy";
 
 const WU: WeatherProvider = "wunderground";
