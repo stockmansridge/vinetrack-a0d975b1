@@ -1,10 +1,15 @@
 // Centralised constants for the Weather Underground integration.
 //
-// The wunderground-proxy edge function action strings live here so they can
-// be updated in one place if the iOS Supabase function contract changes.
+// Nearby station search is handled by the dedicated
+// `weather-nearby-stations` edge function on the iOS Supabase project
+// (it serves all weather providers), not by `wunderground-proxy`.
+// `wunderground-proxy` only handles WU-specific actions like rainfall
+// backfill. Keeping the function names + action strings here means we
+// can update them in one place if the iOS contract changes.
+export const WU_PROXY_FUNCTION = "wunderground-proxy" as const;
+export const WU_NEARBY_FUNCTION = "weather-nearby-stations" as const;
+
 export const WU_PROXY_ACTIONS = {
-  /** Find nearest WU PWS to a lat/lon. */
-  findNearby: "find_nearby",
   /** Fetch + write WU rainfall for a list of explicit dates. */
   backfillDates: "backfill_dates",
   /** Legacy server-driven 14-day backfill (kept as a fallback). */
