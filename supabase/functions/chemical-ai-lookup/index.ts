@@ -797,6 +797,8 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           times_seen: Math.max((cachedTimesSeen.get(cacheKey) ?? 0) + 1, c.times_seen ?? 1, 1),
           was_applied: c.was_applied ?? false,
           label_url: sanitiseLabelUrl(c.label_url),
+          product_url: sanitiseLabelUrl(c.product_url),
+          sds_url: sanitiseLabelUrl(c.sds_url),
           last_seen_at: new Date().toISOString(),
           };
         });
