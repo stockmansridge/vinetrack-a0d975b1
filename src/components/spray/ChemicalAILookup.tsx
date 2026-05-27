@@ -419,17 +419,46 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                 {c.notes && (
                   <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
                 )}
-                {c.label_url && /^https?:\/\//i.test(c.label_url) && (
-                  <a
-                    href={c.label_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    View label/source
-                  </a>
-                )}
+                <div className="flex flex-wrap gap-3">
+                  {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+                    <a
+                      href={c.label_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Label
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground italic">
+                      No label found
+                    </span>
+                  )}
+                  {c.sds_url && /^https?:\/\//i.test(c.sds_url) && (
+                    <a
+                      href={c.sds_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      SDS
+                    </a>
+                  )}
+                  {c.product_url && /^https?:\/\//i.test(c.product_url) && (
+                    <a
+                      href={c.product_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline"
+                      title="Manufacturer/distributor product page (not an official label)"
+                    >
+                      <Globe className="h-3 w-3" />
+                      Product page
+                    </a>
+                  )}
+                </div>
                 <Button
                   type="button"
                   size="sm"
