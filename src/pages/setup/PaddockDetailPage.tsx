@@ -163,7 +163,19 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
   const [rowWidth, setRowWidth] = useState<string>(String(paddock.row_width ?? 2.5));
   const [rowOffset, setRowOffset] = useState<string>(String(paddock.row_offset ?? 0));
   const [rowsCount, setRowsCount] = useState<string>(String(initialRows.length || 10));
-  const [rowStartNumber, setRowStartNumber] = useState<string>(String((initialRows[0] as any)?.number ?? 1));
+  // IMPORTANT: rows are stored in left-to-right perpRad order, NOT by `number`
+  // (see docs/paddock-geometry-writer-spec.md §4 "Sort order on disk"). When
+  // `rowNumberAscending` is false, `initialRows[0].number` is the LARGEST row
+  // number, not the user-entered start. We must always derive the start row
+  // as the minimum row number across the stored rows — otherwise re-opening
+  // the form hydrates the start field with the calculated last row number,
+  // and the next save shifts the whole sequence upward.
+  const [rowStartNumber, setRowStartNumber] = useState<string>(() => {
+    const nums = initialRows
+      .map((r: any) => Number(r?.number))
+      .filter((n) => Number.isFinite(n));
+    return String(nums.length ? Math.min(...nums) : 1);
+  });
   const [rowNumberAscending, setRowNumberAscending] = useState<boolean>(() => {
     if (initialRows.length < 2) return true;
     const a = Number((initialRows[0] as any)?.number ?? 0);
