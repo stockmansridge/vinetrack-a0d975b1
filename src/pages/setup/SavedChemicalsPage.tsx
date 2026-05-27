@@ -284,7 +284,7 @@ export default function SavedChemicalsPage() {
             <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" title={c.label_url}>
               <ExternalLink className="h-3 w-3" />Label
             </a>
-          ) : (<span className="text-muted-foreground">—</span>)}
+          ) : (<span className="text-xs text-muted-foreground italic">No label found</span>)}
         </TableCell>
       );
       case "cost": {
