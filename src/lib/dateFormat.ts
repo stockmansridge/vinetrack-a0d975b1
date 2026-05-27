@@ -44,7 +44,7 @@ function toDate(value: Date | string | number | null | undefined): Date | null {
 
 /** Format as date only, respecting vineyard country (default d/m/y). */
 export function formatDate(
-  value: Date | string | number | null | undefined,
+  value?: Date | string | number | null,
   options?: Intl.DateTimeFormatOptions,
 ): string {
   const d = toDate(value);
@@ -54,7 +54,7 @@ export function formatDate(
 
 /** Format as date + time, respecting vineyard country. */
 export function formatDateTime(
-  value: Date | string | number | null | undefined,
+  value?: Date | string | number | null,
   options?: Intl.DateTimeFormatOptions,
 ): string {
   const d = toDate(value);

@@ -47,7 +47,7 @@ import {
 } from "@/lib/memberManagementQuery";
 import { useToast } from "@/hooks/use-toast";
 import { dedupeOperatorCategories } from "@/lib/operatorCategoryDedupe";
-import { formatDate } from "@/lib/dateFormat";
+import { formatDate as fmtDate } from "@/lib/dateFormat";
 
 interface TeamMember {
   membership_id: string;
@@ -77,7 +77,7 @@ const initials = (name: string | null | undefined, fallback: string) => {
 
 const formatDate = (iso: string | null) => {
   if (!iso) return "—";
-  try { return formatDate(iso); } catch { return iso; }
+  try { return fmtDate(iso) || iso; } catch { return iso; }
 };
 
 export default function Team() {
