@@ -623,7 +623,7 @@ export default function SavedChemicalsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive “{confirmArchive?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              The chemical will be soft-deleted and hidden from spray-job pickers. You can restore it later from the Archived tab.
+              Archive this chemical? It will be hidden from active chemical lists but kept for historical records.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
