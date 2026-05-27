@@ -251,22 +251,96 @@ async function callWuProxy<T = any>(
   return { ok: true, code, message: body?.message, data: (body?.data ?? body) as T };
 }
 
-/** Nearest Weather Underground personal weather stations near lat/lon. */
+/** Nearest Weather Underground personal weather stations near lat/lon.
+ *  Routed through the dedicated `weather-nearby-stations` edge function
+ *  (the same one iOS uses), NOT through `wunderground-proxy`. */
 export async function findNearbyWuStations(args: {
   vineyardId: string;
   lat: number;
   lon: number;
   limit?: number;
 }): Promise<WuActionResult<{ stations: WuNearbyStation[] }>> {
-  const r = await callWuProxy<any>({
-    action: WU_PROXY_ACTIONS.findNearby,
+  let accessToken: string | null = null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    accessToken = data.session?.access_token ?? null;
+  } catch {
+    /* ignore */
+  }
+  if (!accessToken) {
+    return { ok: false, code: "unauthorized", message: "Sign-in expired. Please sign in again." };
+  }
+
+  const url = `${IOS_SUPABASE_URL}/functions/v1/${WU_NEARBY_FUNCTION}`;
+  const payload = {
+    provider: WU_PROVIDER,
     vineyardId: args.vineyardId,
+    vineyard_id: args.vineyardId,
     lat: args.lat,
     lon: args.lon,
+    latitude: args.lat,
+    longitude: args.lon,
     limit: args.limit ?? 10,
-  });
-  if (!r.ok) return r as any;
-  const raw = (r.data as any)?.stations ?? (r.data as any)?.results ?? (r.data as any) ?? [];
+  };
+
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        apikey: IOS_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (e: any) {
+    return {
+      ok: false,
+      code: "network_error",
+      message: e?.message ?? "Network error contacting Weather Underground service.",
+    };
+  }
+
+  let body: any = null;
+  try {
+    body = await resp.json();
+  } catch {
+    body = null;
+  }
+
+  if (resp.status === 404) {
+    return {
+      ok: false,
+      code: "function_not_found",
+      message:
+        "Nearby Weather Underground station search is not currently wired to the correct server action. Please check the WU edge function configuration.",
+    };
+  }
+  if (resp.status === 401) {
+    return { ok: false, code: "unauthorized", message: "Sign-in expired. Please sign in again." };
+  }
+  if (resp.status === 403) {
+    return { ok: false, code: "forbidden", message: "Only vineyard Owners and Managers can do this." };
+  }
+
+  const code: string | undefined = body?.code ?? body?.error_code;
+  const errMsg: string | undefined = body?.error ?? body?.message;
+  const looksLikeUnknownAction =
+    typeof errMsg === "string" && /unknown action/i.test(errMsg);
+
+  if (!resp.ok || looksLikeUnknownAction) {
+    return {
+      ok: false,
+      code: code ?? (looksLikeUnknownAction ? "unknown_action" : undefined),
+      message: looksLikeUnknownAction
+        ? "Nearby Weather Underground station search is not currently wired to the correct server action. Please check the WU edge function configuration."
+        : errMsg ?? `HTTP ${resp.status}`,
+    };
+  }
+
+  const raw =
+    body?.stations ?? body?.results ?? body?.data?.stations ?? body?.data ?? body ?? [];
   const list: WuNearbyStation[] = (Array.isArray(raw) ? raw : []).map((s: any) => ({
     station_id: String(s.station_id ?? s.stationId ?? s.id ?? ""),
     station_name:
@@ -275,7 +349,7 @@ export async function findNearbyWuStations(args: {
     longitude: s.longitude ?? s.lon ?? null,
     distance_km: s.distance_km ?? s.distanceKm ?? s.distance ?? null,
     neighborhood: s.neighborhood ?? null,
-  }));
+  })).filter((s) => s.station_id);
   return { ok: true, data: { stations: list } };
 }
 
