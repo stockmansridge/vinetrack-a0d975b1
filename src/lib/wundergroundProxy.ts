@@ -201,7 +201,7 @@ async function callWuProxy<T = any>(
     return { ok: false, code: "unauthorized", message: "Sign-in expired. Please sign in again." };
   }
 
-  const url = `${IOS_SUPABASE_URL}/functions/v1/wunderground-proxy`;
+  const url = `${IOS_SUPABASE_URL}/functions/v1/${WU_PROXY_FUNCTION}`;
   let resp: Response;
   try {
     resp = await fetch(url, {
