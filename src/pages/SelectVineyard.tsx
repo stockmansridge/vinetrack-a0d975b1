@@ -102,6 +102,9 @@ export default function SelectVineyard() {
             </Card>
           ))}
         </div>
+        <div className="mt-8">
+          <ArchivedVineyardsSection />
+        </div>
       </div>
     </div>
   );
