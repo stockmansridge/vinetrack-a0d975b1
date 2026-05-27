@@ -131,6 +131,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
             times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
             label_url: "label_url" in candidate ? candidate.label_url ?? null : null,
+            product_url: "product_url" in candidate ? candidate.product_url ?? null : null,
+            sds_url: "sds_url" in candidate ? candidate.sds_url ?? null : null,
           },
         },
       });
