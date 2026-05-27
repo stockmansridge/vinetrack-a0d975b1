@@ -29,8 +29,12 @@ export interface AppliedSuggestion {
   rei_hours?: string;
   target?: string;
   notes?: string;
-  /** Product label / SDS / source URL — mirrors iOS `saved_chemicals.label_url`. */
+  /** Validated official product label / SDS / regulator URL. */
   label_url?: string;
+  /** Manufacturer or distributor product page (NOT a label). */
+  product_url?: string;
+  /** Safety Data Sheet URL when known. */
+  sds_url?: string;
   /** Set when the user selected an existing library match instead of a new lookup row. */
   existing_chemical_id?: string;
 }
