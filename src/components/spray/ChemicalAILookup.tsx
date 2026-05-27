@@ -427,7 +427,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                     >
-                      <ExternalLink className="h-3 w-3" />
+                      <FileText className="h-3 w-3" />
                       Label
                     </a>
                   ) : (
