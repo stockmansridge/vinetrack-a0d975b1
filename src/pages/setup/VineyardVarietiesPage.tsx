@@ -9,7 +9,7 @@
 // vineyard and round-trip into iOS.
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Archive, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Plus, Archive, AlertTriangle, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -38,6 +38,7 @@ import {
   useGrapeVarietyCatalog,
   useUpsertVineyardGrapeVariety,
   useArchiveVineyardGrapeVariety,
+  useHardDeleteCustomGrapeVariety,
   type CatalogVariety,
 } from "@/lib/varietyCatalog";
 
@@ -94,11 +95,13 @@ export default function VineyardVarietiesPage() {
   const paddockUsage = useVineyardPaddockUsage(selectedVineyardId);
   const upsert = useUpsertVineyardGrapeVariety();
   const archive = useArchiveVineyardGrapeVariety();
+  const hardDelete = useHardDeleteCustomGrapeVariety();
 
   const [newName, setNewName] = useState("");
   const [newGdd, setNewGdd] = useState("");
   const [filter, setFilter] = useState("");
   const [pendingArchive, setPendingArchive] = useState<CatalogVariety | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CatalogVariety | null>(null);
 
   const usageMap = useMemo(
     () => buildUsageMap(paddockUsage.data ?? []),
@@ -199,6 +202,42 @@ export default function VineyardVarietiesPage() {
     } catch (err: any) {
       toast({
         title: "Archive failed",
+        description: err?.message ?? String(err),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmHardDelete = async () => {
+    if (!pendingDelete?.id) return;
+    try {
+      const result = await hardDelete.mutateAsync(pendingDelete.id);
+      if (result.success || result.status === "hard_deleted") {
+        toast({
+          title: "Variety deleted",
+          description: `${pendingDelete.display_name} permanently removed.`,
+        });
+        setPendingDelete(null);
+        return;
+      }
+      const friendly: Record<string, string> = {
+        variety_in_use:
+          "This custom variety is used by existing records and cannot be deleted. Archive it instead.",
+        system_variety: "Built-in varieties cannot be deleted.",
+        not_custom: "Only custom varieties can be permanently deleted.",
+        not_found: "This variety no longer exists.",
+        not_authorised: "Only owners and managers can delete custom varieties.",
+        delete_failed: "Delete failed. Please try again.",
+        failed: "Delete failed. Please try again.",
+      };
+      toast({
+        title: "Cannot delete variety",
+        description: friendly[result.status] ?? result.message ?? "Delete failed.",
+        variant: "destructive",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Delete failed",
         description: err?.message ?? String(err),
         variant: "destructive",
       });
@@ -338,7 +377,7 @@ export default function VineyardVarietiesPage() {
                   <TableHead>Type</TableHead>
                   <TableHead>Optimal GDD</TableHead>
                   <TableHead>Used by blocks</TableHead>
-                  {canEdit && <TableHead className="w-[120px]" />}
+                  {canEdit && <TableHead className="w-[200px]" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -386,16 +425,29 @@ export default function VineyardVarietiesPage() {
                       </TableCell>
                       {canEdit && (
                         <TableCell>
-                          {isCustom && !isArchived && v.id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1 text-muted-foreground hover:text-destructive"
-                              onClick={() => setPendingArchive(v)}
-                            >
-                              <Archive className="h-3.5 w-3.5" /> Archive
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {isCustom && !isArchived && v.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-muted-foreground hover:text-foreground"
+                                onClick={() => setPendingArchive(v)}
+                              >
+                                <Archive className="h-3.5 w-3.5" /> Archive
+                              </Button>
+                            )}
+                            {isCustom && v.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-muted-foreground hover:text-destructive"
+                                onClick={() => setPendingDelete(v)}
+                                title="Permanently delete this custom variety (only if unused)"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -453,6 +505,33 @@ export default function VineyardVarietiesPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmArchive} disabled={archive.isPending}>
               {archive.isPending ? "Archiving…" : "Archive"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete this custom variety?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the custom grape variety
+              {pendingDelete ? ` “${pendingDelete.display_name}” ` : " "}
+              from your library. It can only be deleted if it is not used by any
+              vineyard records or historical data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmHardDelete}
+              disabled={hardDelete.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {hardDelete.isPending ? "Deleting…" : "Delete Permanently"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
