@@ -271,9 +271,10 @@ export default function PaddockFullBlockBackupDialog() {
             </Alert>
             <div className="flex justify-end">
               <Button onClick={handleExport} disabled={isLoading || !blocks.length}>
-                <Download className="mr-1 h-4 w-4" /> Download JSON backup
+                <Download className="mr-1 h-4 w-4" /> Export Full Block Backup
               </Button>
             </div>
+
           </TabsContent>
 
           {/* ---------- IMPORT ---------- */}
