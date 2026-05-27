@@ -786,6 +786,7 @@ function ChemicalEditor({
       unit: composed,
       notes: s.notes ?? p.notes ?? "",
       label_url: s.label_url && /^https?:\/\//i.test(s.label_url) ? s.label_url : (p.label_url ?? ""),
+      product_url: s.product_url && /^https?:\/\//i.test(s.product_url) ? s.product_url : (p.product_url ?? ""),
     }));
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
     if (s.whp_days) setWhp(s.whp_days);
