@@ -517,11 +517,20 @@ export default function SavedChemicalsPage() {
                     ))}
                     {canEdit && (
                       <TableCell className="text-right">
-                        <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(c)} title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setConfirmArchive(c)}>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmArchive(c)} title="Archive">
                           <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setConfirmHardDelete(c)}
+                          title="Delete permanently (only if unused)"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </TableCell>
                     )}
