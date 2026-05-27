@@ -238,7 +238,11 @@ export default function SavedChemicalsPage() {
       toast({ title: "Chemical archived" });
       setConfirmArchive(null);
     },
-    onError: (e: any) => toast({ title: "Archive failed", description: e?.message ?? String(e), variant: "destructive" }),
+    onError: (e: any) => toast({
+      title: "Archive failed. Please try again.",
+      description: e?.message ?? String(e),
+      variant: "destructive",
+    }),
   });
 
   const restoreMut = useMutation({
