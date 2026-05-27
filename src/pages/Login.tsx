@@ -116,14 +116,16 @@ export default function Login() {
           </FieldRow>
           <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               required
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
               style={{ color: "#03331A" }}
+              autoComplete="current-password"
             />
+            <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
           </FieldRow>
 
           <button
