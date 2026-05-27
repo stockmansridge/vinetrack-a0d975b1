@@ -150,6 +150,43 @@ export function useArchiveVineyardGrapeVariety() {
   });
 }
 
+export interface HardDeleteVarietyResult {
+  success: boolean;
+  status: string;
+  message: string;
+  [k: string]: any;
+}
+
+/** Hard delete an UNUSED custom grape variety. Server enforces:
+ *  - only custom varieties (not system/built-in)
+ *  - only when not referenced by paddocks, growth stage records, trip cost
+ *    allocations, or other historical records
+ *  - caller must be owner/manager
+ *  Returns a status object — callers should switch on result.status. */
+export function useHardDeleteCustomGrapeVariety() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (varietyId: string): Promise<HardDeleteVarietyResult> => {
+      const { data, error } = await supabase.rpc(
+        "hard_delete_unused_custom_grape_variety",
+        { p_variety_id: varietyId },
+      );
+      if (error) throw error;
+      const row = (Array.isArray(data) ? data[0] : data) as any;
+      return {
+        success: !!row?.success,
+        status: String(row?.status ?? (row?.success ? "hard_deleted" : "failed")),
+        message: String(row?.message ?? ""),
+        ...(row ?? {}),
+      };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vineyard_grape_varieties"] });
+      qc.invalidateQueries({ queryKey: ["vineyard_variety_usage"] });
+    },
+  });
+}
+
 /** Build the allocation snapshot Lovable should write to paddocks.variety_allocations.
  *  Always includes both varietyKey and a name snapshot so the resolver never has to guess. */
 export function buildAllocationSnapshot(
