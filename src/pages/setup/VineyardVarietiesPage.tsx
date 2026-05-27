@@ -38,6 +38,7 @@ import {
   useGrapeVarietyCatalog,
   useUpsertVineyardGrapeVariety,
   useArchiveVineyardGrapeVariety,
+  useHardDeleteCustomGrapeVariety,
   type CatalogVariety,
 } from "@/lib/varietyCatalog";
 
