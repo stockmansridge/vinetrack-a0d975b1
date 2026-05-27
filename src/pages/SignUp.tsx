@@ -163,7 +163,7 @@ export default function SignUp() {
               </FieldRow>
               <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   placeholder="Password (min 8 chars)"
                   value={password}
@@ -171,11 +171,13 @@ export default function SignUp() {
                   minLength={8}
                   className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
                   style={{ color: "#03331A" }}
+                  autoComplete="new-password"
                 />
+                <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
               </FieldRow>
               <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
                 <input
-                  type="password"
+                  type={showConfirm ? "text" : "password"}
                   required
                   placeholder="Confirm password"
                   value={confirm}
@@ -183,7 +185,9 @@ export default function SignUp() {
                   minLength={8}
                   className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
                   style={{ color: "#03331A" }}
+                  autoComplete="new-password"
                 />
+                <PasswordToggleButton visible={showConfirm} onToggle={() => setShowConfirm((v) => !v)} />
               </FieldRow>
 
               <button
