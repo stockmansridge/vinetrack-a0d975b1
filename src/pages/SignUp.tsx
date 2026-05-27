@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
 import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
+import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function SignUp() {
   const { session, loading } = useAuth();
@@ -14,6 +15,8 @@ export default function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
