@@ -80,7 +80,7 @@ function displayBaseUnit(unit?: string | null): string {
 const EMPTY: SavedChemicalInput = {
   name: "", active_ingredient: "", chemical_group: "", use: "",
   manufacturer: "", crop: "", problem: "", rate_per_ha: null, unit: "",
-  restrictions: "", notes: "", label_url: "",
+  restrictions: "", notes: "", label_url: "", product_url: "",
 };
 
 export default function SavedChemicalsPage() {
