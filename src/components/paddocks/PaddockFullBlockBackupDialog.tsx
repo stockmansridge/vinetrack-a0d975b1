@@ -497,8 +497,9 @@ export default function PaddockFullBlockBackupDialog() {
                 }
                 className="gap-1"
               >
-                <Upload className="h-4 w-4" /> Apply import ({counts.willWrite} field
+                <Upload className="h-4 w-4" /> Restore Backup ({counts.willWrite} field
                 {counts.willWrite === 1 ? "" : "s"})
+
               </Button>
             </>
           ) : (
