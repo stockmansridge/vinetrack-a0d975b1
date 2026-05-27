@@ -11,10 +11,12 @@ import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function Login() {
   const { session, loading } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
 
   if (loading) return <div className="p-8">Loading…</div>;
   if (session) return <Navigate to="/select-vineyard" replace />;
