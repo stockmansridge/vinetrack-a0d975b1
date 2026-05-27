@@ -207,7 +207,16 @@ export default function PaddockImportExportDialog() {
                 </span>
               </Button>
             </div>
-            <input
+            <Alert>
+              <AlertTitle>Boundaries are not in the CSV</AlertTitle>
+              <AlertDescription className="text-xs">
+                The CSV format does not carry polygon geometry, so newly
+                imported blocks will show as <b>unmapped</b> on the map. To map
+                them in bulk, use the <b>Import boundaries</b> button (KML or
+                GeoJSON) — or draw each boundary in Setup → Paddocks → Edit
+                boundary, or in the iOS app.
+              </AlertDescription>
+            </Alert>
               ref={fileRef}
               type="file"
               accept=".csv,text/csv"
