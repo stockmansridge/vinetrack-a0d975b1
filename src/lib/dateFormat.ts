@@ -36,7 +36,8 @@ export function getDateLocale(): string {
 }
 
 function toDate(value: Date | string | number | null | undefined): Date | null {
-  if (value == null || value === "") return null;
+  if (value === undefined) return new Date();
+  if (value === null || value === "") return null;
   const d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? null : d;
 }
