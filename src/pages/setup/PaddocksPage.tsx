@@ -10,6 +10,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import PaddockImportExportDialog from "@/components/paddocks/PaddockImportExportDialog";
 import PaddockBoundaryImportDialog from "@/components/paddocks/PaddockBoundaryImportDialog";
 import PaddockBoundaryExportDialog from "@/components/paddocks/PaddockBoundaryExportDialog";
+import PaddockFullBlockBackupDialog from "@/components/paddocks/PaddockFullBlockBackupDialog";
 import ArchivedPaddocksSection from "@/components/paddocks/ArchivedPaddocksSection";
 
 const fmtNum = (n: number, digits = 1) =>
@@ -61,6 +62,7 @@ export default function PaddocksPage() {
           <PaddockImportExportDialog />
           <PaddockBoundaryExportDialog />
           <PaddockBoundaryImportDialog />
+          <PaddockFullBlockBackupDialog />
           {canEdit && (
             <Button asChild size="sm" className="gap-1">
               <Link to="/setup/paddocks/new">
