@@ -95,11 +95,13 @@ export default function VineyardVarietiesPage() {
   const paddockUsage = useVineyardPaddockUsage(selectedVineyardId);
   const upsert = useUpsertVineyardGrapeVariety();
   const archive = useArchiveVineyardGrapeVariety();
+  const hardDelete = useHardDeleteCustomGrapeVariety();
 
   const [newName, setNewName] = useState("");
   const [newGdd, setNewGdd] = useState("");
   const [filter, setFilter] = useState("");
   const [pendingArchive, setPendingArchive] = useState<CatalogVariety | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CatalogVariety | null>(null);
 
   const usageMap = useMemo(
     () => buildUsageMap(paddockUsage.data ?? []),
