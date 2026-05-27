@@ -8,7 +8,11 @@ import { CreateVineyardDialog } from "@/components/vineyard/CreateVineyardDialog
 import {
   PendingInvitationsSection,
 } from "@/components/invites/PendingInvitesModal";
+import { ArchivedVineyardsSection } from "@/components/vineyard/ArchivedVineyardsSection";
 import { usePendingInvites } from "@/hooks/usePendingInvites";
+import { useAuth as _useAuthForArchived } from "@/context/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchArchivedVineyardsForOwner } from "@/lib/vineyardSettingsQuery";
 
 export default function SelectVineyard() {
   const { memberships, loading, selectVineyard, selectedVineyardId } = useVineyard();
