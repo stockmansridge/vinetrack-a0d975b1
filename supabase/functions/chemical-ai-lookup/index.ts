@@ -203,10 +203,87 @@ function sanitiseLabelUrl(value: unknown): string | null {
   }
 }
 
-// Note: there is intentionally no hard-coded "known good" list for any
-// specific product. Strong candidates are preserved generically via the
-// shared `chemical_lookup_cache` (previous lookups + applied history)
-// and ranked by `sourceWeight` + exact-name match + recency.
+// Regulator domains whose pages we trust as legitimate label sources even
+// when they are HTML (not PDF). Manufacturer/distributor product pages do
+// NOT belong here — they are product pages, not labels.
+const REGULATOR_HOST_PATTERNS: RegExp[] = [
+  /(^|\.)apvma\.gov\.au$/i,
+  /(^|\.)epa\.govt\.nz$/i,
+  /(^|\.)epa\.gov$/i,
+  /(^|\.)hse\.gov\.uk$/i,
+  /(^|\.)acvm\.govt\.nz$/i,
+];
+
+function looksLikeLabelPath(pathname: string): boolean {
+  const p = pathname.toLowerCase();
+  if (p.endsWith(".pdf")) return true;
+  return /(label|sds|msds|safety[-_]?data|apvma|product[-_]?label)/i.test(p);
+}
+
+// Validate an AI-supplied label_url. Returns the URL only if:
+//   - it parses as http(s)
+//   - HEAD/GET returns a 2xx response within the timeout
+//   - it is a PDF (by Content-Type or .pdf path), OR the host is a known
+//     regulator, OR the path looks like a label/SDS document
+// Anything else (product pages, brand pages, hallucinated URLs) → null.
+async function validateLabelUrl(value: unknown, timeoutMs = 6000): Promise<string | null> {
+  const sanitised = sanitiseLabelUrl(value);
+  if (!sanitised) return null;
+  let u: URL;
+  try { u = new URL(sanitised); } catch { return null; }
+  const regulator = REGULATOR_HOST_PATTERNS.some((re) => re.test(u.hostname));
+  const pathLooksLikeLabel = looksLikeLabelPath(u.pathname);
+  // Require either regulator or label-shaped path before even hitting the
+  // network. This blocks /products/<slug> brand pages outright.
+  if (!regulator && !pathLooksLikeLabel) return null;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    // Try HEAD first (cheap). Fall back to GET when servers reject HEAD.
+    let resp: Response | null = null;
+    try {
+      resp = await fetch(sanitised, { method: "HEAD", redirect: "follow", signal: ac.signal });
+      if (!resp.ok || resp.status >= 400) {
+        resp = await fetch(sanitised, { method: "GET", redirect: "follow", signal: ac.signal });
+      }
+    } catch {
+      try {
+        resp = await fetch(sanitised, { method: "GET", redirect: "follow", signal: ac.signal });
+      } catch {
+        return null;
+      }
+    }
+    if (!resp || !resp.ok) return null;
+    const ct = (resp.headers.get("content-type") || "").toLowerCase();
+    const isPdf = ct.includes("application/pdf") || u.pathname.toLowerCase().endsWith(".pdf");
+    if (isPdf) return resp.url || sanitised;
+    if (regulator && (ct.includes("text/html") || ct.includes("application/xhtml"))) {
+      return resp.url || sanitised;
+    }
+    // Path-looks-like-label but HTML on a non-regulator host → reject.
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function validateLabelUrlsInPlace<T extends { label_url?: string | null }>(items: T[]): Promise<void> {
+  await Promise.all(items.map(async (it) => {
+    if (!it || it.label_url == null) return;
+    const validated = await validateLabelUrl(it.label_url);
+    if (validated) {
+      it.label_url = validated;
+    } else {
+      if (it.label_url) {
+        console.log("[chemical-ai-lookup] rejected label_url", it.label_url);
+      }
+      it.label_url = null;
+    }
+  }));
+}
 
 
 Deno.serve(async (req) => {
