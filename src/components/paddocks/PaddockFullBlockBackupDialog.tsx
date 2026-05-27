@@ -288,12 +288,15 @@ export default function PaddockFullBlockBackupDialog() {
                   disabled={!canEdit}
                 >
                   <Upload className="h-4 w-4" />
-                  <span className="font-medium">Choose JSON backup file</span>
+                  <span className="font-medium">
+                    Import / Restore Full Block Backup
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {canEdit
-                      ? "Preview matches before applying"
+                      ? "Upload a VineTrack Full Block Backup JSON file. Blocks are matched by name and you can preview every field before applying changes."
                       : "Manager role required"}
                   </span>
+
                 </Button>
                 <input
                   ref={fileRef}
