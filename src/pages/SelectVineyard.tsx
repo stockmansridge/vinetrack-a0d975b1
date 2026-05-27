@@ -15,18 +15,31 @@ import { fetchArchivedVineyardsForOwner } from "@/lib/vineyardSettingsQuery";
 
 export default function SelectVineyard() {
   const { memberships, loading, selectVineyard, selectedVineyardId } = useVineyard();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const {
     data: pendingInvites = [],
     isLoading: invitesLoading,
     error: pendingInvitesError,
   } = usePendingInvites();
+  const { data: archivedVineyards = [], isLoading: archivedLoading } = useQuery({
+    queryKey: ["archived-vineyards", user?.id],
+    enabled: !!user,
+    queryFn: () => fetchArchivedVineyardsForOwner(user!.id),
+  });
   const navigate = useNavigate();
 
-  if (loading || invitesLoading) return <div className="p-8">Loading vineyards…</div>;
+  if (loading || invitesLoading || archivedLoading) {
+    return <div className="p-8">Loading vineyards…</div>;
+  }
 
-  // If the user has no memberships and no pending invites, force onboarding.
-  if (memberships.length === 0 && pendingInvites.length === 0 && !pendingInvitesError) {
+  // If the user has no memberships, no pending invites, and no archived
+  // vineyards to restore, force onboarding.
+  if (
+    memberships.length === 0 &&
+    pendingInvites.length === 0 &&
+    archivedVineyards.length === 0 &&
+    !pendingInvitesError
+  ) {
     return <Navigate to="/onboarding" replace />;
   }
   if (memberships.length > 0 && selectedVineyardId) {
