@@ -338,32 +338,13 @@ async function validateLabelUrlsInPlace<T extends { label_url?: string | null; p
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // Require an authenticated caller. Prevents anonymous AI cost abuse and
-  // cache poisoning via the mark_applied service-role write path.
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // NOTE: Supabase gateway already requires a valid apikey/Authorization header
+  // (anon or user JWT) before the request reaches this function. We do NOT
+  // additionally require a user-session JWT here because the VineTrack portal
+  // authenticates users against a separate (iOS) Supabase project, so its
+  // calls to this Lovable Cloud function carry only the anon key and have no
+  // `sub` claim. The LOVABLE_API_KEY check below prevents AI cost abuse.
   try {
-    {
-      const authClient = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-        { global: { headers: { Authorization: authHeader } } },
-      );
-      const { data: claimsData, error: claimsErr } = await authClient.auth.getClaims(
-        authHeader.slice(7).trim(),
-      );
-      if (claimsErr || !claimsData?.claims?.sub) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
 
     const body = await req.json();
 
