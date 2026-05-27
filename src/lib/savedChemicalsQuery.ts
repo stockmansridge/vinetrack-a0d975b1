@@ -214,25 +214,37 @@ export async function updateSavedChemical(id: string, input: SavedChemicalInput)
 }
 
 export async function archiveSavedChemical(id: string) {
-  // Try the canonical RPC first (soft_delete_saved_chemicals(p_id)). If it
-  // isn't present in this Supabase project (PGRST202 = function not found in
-  // schema cache), fall back to a direct soft-delete UPDATE so archiving
-  // still works. RLS on saved_chemicals already restricts writes to
-  // owner/manager vineyard members.
-  const rpc = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
-  if (!rpc.error) return;
-
-  const code = (rpc.error as any)?.code;
-  const msg = String((rpc.error as any)?.message ?? "");
-  const missing = code === "PGRST202" || /Could not find the function/i.test(msg);
-  if (!missing) throw rpc.error;
-
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from("saved_chemicals")
-    .update({ deleted_at: now, client_updated_at: now })
-    .eq("id", id);
+  // Canonical soft-delete RPC. iOS shares the same Supabase project and the
+  // function enforces vineyard_members role checks server-side.
+  const { error } = await supabase.rpc("soft_delete_saved_chemicals", { p_id: id } as any);
   if (error) throw error;
+}
+
+export class ChemicalInUseError extends Error {
+  reason = "chemical_in_use" as const;
+  constructor() {
+    super("This chemical has been used and cannot be permanently deleted.");
+    this.name = "ChemicalInUseError";
+  }
+}
+
+/** Hard-delete a saved chemical that has never been used. Throws
+ *  ChemicalInUseError if the backend refuses with reason chemical_in_use. */
+export async function hardDeleteUnusedSavedChemical(id: string) {
+  const { data, error } = await supabase.rpc(
+    "hard_delete_unused_saved_chemical",
+    { p_id: id } as any,
+  );
+  if (error) {
+    const msg = String((error as any)?.message ?? "");
+    if (/chemical_in_use/i.test(msg)) throw new ChemicalInUseError();
+    throw error;
+  }
+  // Some RPCs return a row { reason: "chemical_in_use" } instead of raising.
+  const reason = Array.isArray(data)
+    ? (data[0] as any)?.reason
+    : (data as any)?.reason;
+  if (reason === "chemical_in_use") throw new ChemicalInUseError();
 }
 
 export async function restoreSavedChemical(id: string) {

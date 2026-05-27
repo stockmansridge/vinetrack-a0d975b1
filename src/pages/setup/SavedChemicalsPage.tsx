@@ -26,11 +26,12 @@ import {
 import {
   fetchSavedChemicalsForVineyard,
   createSavedChemical, updateSavedChemical, archiveSavedChemical, restoreSavedChemical,
+  hardDeleteUnusedSavedChemical, ChemicalInUseError,
   type SavedChemical, type SavedChemicalInput,
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -101,6 +102,7 @@ export default function SavedChemicalsPage() {
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
+  const [confirmHardDelete, setConfirmHardDelete] = useState<SavedChemical | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "active"],
@@ -236,7 +238,11 @@ export default function SavedChemicalsPage() {
       toast({ title: "Chemical archived" });
       setConfirmArchive(null);
     },
-    onError: (e: any) => toast({ title: "Archive failed", description: e?.message ?? String(e), variant: "destructive" }),
+    onError: (e: any) => toast({
+      title: "Archive failed. Please try again.",
+      description: e?.message ?? String(e),
+      variant: "destructive",
+    }),
   });
 
   const restoreMut = useMutation({
@@ -247,6 +253,27 @@ export default function SavedChemicalsPage() {
       setConfirmRestore(null);
     },
     onError: (e: any) => toast({ title: "Restore failed", description: e?.message ?? String(e), variant: "destructive" }),
+  });
+
+  const hardDeleteMut = useMutation({
+    mutationFn: (id: string) => hardDeleteUnusedSavedChemical(id),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Chemical deleted permanently" });
+      setConfirmHardDelete(null);
+    },
+    onError: (e: any) => {
+      if (e instanceof ChemicalInUseError) {
+        toast({
+          title: "Can't delete this chemical",
+          description: "This chemical has been used and cannot be permanently deleted. You can archive it instead.",
+          variant: "destructive",
+        });
+        setConfirmHardDelete(null);
+        return;
+      }
+      toast({ title: "Delete failed. Please try again.", description: e?.message ?? String(e), variant: "destructive" });
+    },
   });
 
   const { order: chemColumnOrder, moveColumn: moveChemColumn, reset: resetChemColumns } =
@@ -490,11 +517,20 @@ export default function SavedChemicalsPage() {
                     ))}
                     {canEdit && (
                       <TableCell className="text-right">
-                        <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(c)} title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setConfirmArchive(c)}>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmArchive(c)} title="Archive">
                           <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setConfirmHardDelete(c)}
+                          title="Delete permanently (only if unused)"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </TableCell>
                     )}
@@ -587,7 +623,7 @@ export default function SavedChemicalsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive “{confirmArchive?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              The chemical will be soft-deleted and hidden from spray-job pickers. You can restore it later from the Archived tab.
+              Archive this chemical? It will be hidden from active chemical lists but kept for historical records.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -617,6 +653,27 @@ export default function SavedChemicalsPage() {
               onClick={() => confirmRestore && restoreMut.mutate(confirmRestore.id)}
             >
               {restoreMut.isPending ? "Restoring…" : "Restore"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmHardDelete} onOpenChange={(o) => !o && setConfirmHardDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{confirmHardDelete?.name}” permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete this chemical permanently? This is only available because it has not been used in any spray records or jobs. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={hardDeleteMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => confirmHardDelete && hardDeleteMut.mutate(confirmHardDelete.id)}
+            >
+              {hardDeleteMut.isPending ? "Deleting…" : "Delete permanently"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
