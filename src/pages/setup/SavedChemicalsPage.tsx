@@ -737,19 +737,23 @@ function ChemicalEditor({
           : null,
       };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
-      const labelUrlRaw = (payload.label_url ?? "").trim();
-      if (labelUrlRaw) {
-        try {
-          const u = new URL(labelUrlRaw);
-          if (u.protocol !== "http:" && u.protocol !== "https:") {
-            throw new Error("only http(s)");
+      for (const key of ["label_url", "product_url"] as const) {
+        const raw = ((payload as any)[key] ?? "").trim();
+        if (raw) {
+          try {
+            const u = new URL(raw);
+            if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("only http(s)");
+            (payload as any)[key] = u.toString();
+          } catch {
+            throw new Error(
+              key === "label_url"
+                ? "Label link must be a full http:// or https:// URL"
+                : "Product/manufacturer page must be a full http:// or https:// URL",
+            );
           }
-          payload.label_url = u.toString();
-        } catch {
-          throw new Error("Label link must be a full http:// or https:// URL");
+        } else {
+          (payload as any)[key] = "";
         }
-      } else {
-        payload.label_url = "";
       }
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
