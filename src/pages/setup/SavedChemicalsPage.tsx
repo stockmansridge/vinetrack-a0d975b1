@@ -102,6 +102,7 @@ export default function SavedChemicalsPage() {
   const [editing, setEditing] = useState<SavedChemical | "new" | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
+  const [confirmHardDelete, setConfirmHardDelete] = useState<SavedChemical | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "active"],
