@@ -62,6 +62,13 @@ import {
 } from "@/lib/willyWeatherProxy";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttribution";
+import {
+  backfillWuRainfall,
+  findNearbyWuStations,
+  type WuNearbyStation,
+} from "@/lib/wundergroundProxy";
+
+const WU: WeatherProvider = "wunderground";
 
 const DAVIS: WeatherProvider = "davis_weatherlink";
 
