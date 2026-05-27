@@ -280,11 +280,18 @@ export default function SavedChemicalsPage() {
       case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
       case "label": return (
         <TableCell key="label">
-          {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
-            <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" title={c.label_url}>
-              <ExternalLink className="h-3 w-3" />Label
-            </a>
-          ) : (<span className="text-xs text-muted-foreground italic">No label found</span>)}
+          <div className="flex flex-col gap-0.5 text-xs">
+            {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+              <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline" title={c.label_url}>
+                <FileText className="h-3 w-3" />Label
+              </a>
+            ) : (<span className="text-muted-foreground italic">No label found</span>)}
+            {c.product_url && /^https?:\/\//i.test(c.product_url) && (
+              <a href={c.product_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary hover:underline" title={`Manufacturer/product page — not the official label: ${c.product_url}`}>
+                <Globe className="h-3 w-3" />Product page
+              </a>
+            )}
+          </div>
         </TableCell>
       );
       case "cost": {
