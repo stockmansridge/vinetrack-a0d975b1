@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Navigate } from "react-router-dom";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { formatDate as fmtDate } from "@/lib/dateFormat";
 
 export function AdminGate({ children }: { children: ReactNode }) {
   const { isAdmin, loading } = useIsSystemAdmin();
@@ -84,7 +85,7 @@ export function ArchivedBadge() {
 
 export function formatDate(iso: string | null | undefined) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString();
+  return fmtDate(iso) || "—";
 }
 
 export function formatRelative(iso: string | null | undefined) {
@@ -98,7 +99,7 @@ export function formatRelative(iso: string | null | undefined) {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return fmtDate(iso) || "—";
 }
 
 export function CrumbLink({ to, children }: { to: string; children: ReactNode }) {

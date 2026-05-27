@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { formatDateTime } from "@/lib/dateFormat";
 import {
   useAppNotices,
   useUpsertAppNotice,
@@ -62,7 +63,7 @@ function fromNotice(n: AppNotice): FormState {
 function fmtDate(s?: string | null): string {
   if (!s) return "—";
   try {
-    return new Date(s).toLocaleString();
+    return formatDateTime(s);
   } catch {
     return s;
   }

@@ -47,6 +47,7 @@ import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { formatDate } from "@/lib/dateFormat";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
@@ -54,7 +55,7 @@ const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtCost = (v?: number | null) =>

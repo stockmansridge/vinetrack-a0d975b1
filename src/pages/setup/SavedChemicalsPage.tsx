@@ -49,6 +49,7 @@ import { normaliseManufacturerName, buildManufacturerOptions } from "@/lib/manuf
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { formatDate } from "@/lib/dateFormat";
 
 type ChemColId = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "label" | "cost";
 const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
@@ -588,7 +589,7 @@ export default function SavedChemicalsPage() {
                     <TableCell>{fmt(c.active_ingredient)}</TableCell>
                     <TableCell>{fmt(c.manufacturer)}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {c.deleted_at ? new Date(c.deleted_at).toLocaleDateString() : "—"}
+                      {c.deleted_at ? formatDate(c.deleted_at) : "—"}
                     </TableCell>
                     {canEdit && (
                       <TableCell className="text-right">

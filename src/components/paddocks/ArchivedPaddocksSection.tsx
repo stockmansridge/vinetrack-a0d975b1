@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { restorePaddock } from "@/lib/paddockMutations";
 import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
+import { formatDate } from "@/lib/dateFormat";
 
 interface ArchivedRow {
   id: string;
@@ -85,7 +86,7 @@ export default function ArchivedPaddocksSection() {
                 <TableRow key={row.id}>
                   <TableCell>{row.name ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {row.deleted_at ? new Date(row.deleted_at).toLocaleDateString() : "—"}
+                    {row.deleted_at ? formatDate(row.deleted_at) : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

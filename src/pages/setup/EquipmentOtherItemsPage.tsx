@@ -24,6 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
+import { formatDate } from "@/lib/dateFormat";
 import {
   fetchEquipmentItemsForVineyard,
   createEquipmentItem,
@@ -36,7 +37,7 @@ const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 

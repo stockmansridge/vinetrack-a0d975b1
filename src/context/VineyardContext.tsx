@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "./AuthContext";
+import { setDateLocaleFromCountry } from "@/lib/dateFormat";
 
 export interface VineyardMembership {
   vineyard_id: string;
@@ -78,6 +79,11 @@ export function VineyardProvider({ children }: { children: ReactNode }) {
   const currentMembership = memberships.find((m) => m.vineyard_id === selectedVineyardId);
   const currentRole = currentMembership?.role ?? null;
   const currentCountry = currentMembership?.vineyard_country ?? null;
+
+  // Keep the global date formatter in sync with the selected vineyard's country.
+  useEffect(() => {
+    setDateLocaleFromCountry(currentCountry);
+  }, [currentCountry]);
 
   return (
     <VineyardContext.Provider

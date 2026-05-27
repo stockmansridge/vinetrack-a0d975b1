@@ -63,6 +63,7 @@ import AdvisorWizard from "@/components/irrigation/AdvisorWizard";
 import VarietyResolverDiagnostics from "@/components/irrigation/VarietyResolverDiagnostics";
 import AdvisorConfigSheet from "@/components/irrigation/AdvisorConfigSheet";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
+import { formatDate } from "@/lib/dateFormat";
 import {
   useRecentRainResolution,
   useRecentRainLookbackHours,
@@ -869,7 +870,7 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
 function formatDateLabel(s: string): string {
   const d = new Date(s);
   if (isNaN(d.getTime())) return s;
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return formatDate(d, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function ForecastSection({

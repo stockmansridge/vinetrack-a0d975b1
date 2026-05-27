@@ -6,6 +6,7 @@ import { ArchiveRestore } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { formatDate } from "@/lib/dateFormat";
 import {
   fetchArchivedVineyardsForOwner,
   restoreVineyard,
@@ -72,7 +73,7 @@ export function ArchivedVineyardsSection() {
                 <Badge variant="outline">Archived</Badge>
                 {v.deleted_at && (
                   <span className="text-xs text-muted-foreground">
-                    {new Date(v.deleted_at).toLocaleDateString()}
+                    {formatDate(v.deleted_at)}
                   </span>
                 )}
               </div>

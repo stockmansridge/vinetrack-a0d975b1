@@ -18,6 +18,7 @@ import type { TripCostBreakdown } from "./tripCosting";
 import { fmtCurrency, fmtHa, fmtHours, fmtTonnes } from "./tripCosting";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { composeSatelliteRouteImage } from "./satelliteRouteMap";
+import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 // Cache the logo data URL between exports.
 let _logoDataUrl: string | null = null;
@@ -614,7 +615,7 @@ const fmtDate = (v?: string | null) => {
   const d = new Date(v);
   return isNaN(d.getTime())
     ? v
-    : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    : formatDate(d, { day: "numeric", month: "short", year: "numeric" });
 };
 const fmtTime = (v?: string | null) => {
   if (!v) return "—";
@@ -1152,7 +1153,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   const totalPages = doc.getNumberOfPages();
   const tz =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
-  const footer = `Generated ${new Date().toLocaleString()} (${tz}) • VineTrack`;
+  const footer = `Generated ${formatDateTime()} (${tz}) • VineTrack`;
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(120);

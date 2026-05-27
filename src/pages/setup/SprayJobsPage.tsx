@@ -58,11 +58,12 @@ import { deriveMetrics } from "@/lib/paddockGeometry";
 import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { inferRateBasis, composeUnit, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
+import { formatDate } from "@/lib/dateFormat";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
-  return isNaN(d.getTime()) ? v : d.toLocaleDateString();
+  return isNaN(d.getTime()) ? v : formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
@@ -776,7 +777,7 @@ function SprayJobSheet({
             onUseTemplate={(t) => {
               setForm((f) => ({
                 ...f,
-                name: t.name ? `${t.name} — ${new Date().toLocaleDateString()}` : f.name,
+                name: t.name ? `${t.name} — ${formatDate()}` : f.name,
                 operation_type: t.operation_type ?? f.operation_type,
                 target: t.target ?? f.target,
                 chemical_lines: (t.chemical_lines ?? []).map((l) => ({ ...l })),
