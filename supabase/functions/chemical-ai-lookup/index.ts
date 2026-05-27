@@ -38,7 +38,7 @@ For each candidate infer:
 - target: typical pest/disease/weed or use-case.
 - notes: concise (<240 chars), include compatibility cautions when known.
 - safety_note: always remind user to verify against current label for their country.
-- label_url: best public link to the product label, SDS, regulator page (APVMA/ACVM/EPA) or manufacturer product page, when you are confident the URL exists. Must start with https:// or http://. Leave null when unsure — never fabricate a URL.
+- label_url: ONLY a direct link to the actual product label (preferably a PDF), the SDS PDF, or the regulator's label page (APVMA/ACVM/EPA). A general manufacturer or distributor product webpage is NOT a label — leave label_url null in that case. Do NOT guess or construct URLs from brand/product names. If you are not certain the exact URL exists and points to the actual label document, leave it null. Server-side validation will reject any URL that is not reachable or does not look like a label/SDS/regulator document; fabricated URLs will be discarded.
 - country / country_confirmed / confidence as defined.`;
 
 const tools = [
