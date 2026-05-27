@@ -32,11 +32,13 @@ export type Database = {
           product_name: string
           product_name_normalised: string
           product_type: string | null
+          product_url: string | null
           query_normalised: string
           rate_basis: string | null
           rate_per_unit: number | null
           re_entry_period_hours: number | null
           safety_note: string | null
+          sds_url: string | null
           source_hint: string | null
           target: string | null
           times_seen: number
@@ -61,11 +63,13 @@ export type Database = {
           product_name: string
           product_name_normalised: string
           product_type?: string | null
+          product_url?: string | null
           query_normalised: string
           rate_basis?: string | null
           rate_per_unit?: number | null
           re_entry_period_hours?: number | null
           safety_note?: string | null
+          sds_url?: string | null
           source_hint?: string | null
           target?: string | null
           times_seen?: number
@@ -90,11 +94,13 @@ export type Database = {
           product_name?: string
           product_name_normalised?: string
           product_type?: string | null
+          product_url?: string | null
           query_normalised?: string
           rate_basis?: string | null
           rate_per_unit?: number | null
           re_entry_period_hours?: number | null
           safety_note?: string | null
+          sds_url?: string | null
           source_hint?: string | null
           target?: string | null
           times_seen?: number

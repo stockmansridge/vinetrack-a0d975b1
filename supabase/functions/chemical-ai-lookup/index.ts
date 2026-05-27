@@ -39,6 +39,8 @@ For each candidate infer:
 - notes: concise (<240 chars), include compatibility cautions when known.
 - safety_note: always remind user to verify against current label for their country.
 - label_url: ONLY a direct link to the actual product label (preferably a PDF), the SDS PDF, or the regulator's label page (APVMA/ACVM/EPA). A general manufacturer or distributor product webpage is NOT a label — leave label_url null in that case. Do NOT guess or construct URLs from brand/product names. If you are not certain the exact URL exists and points to the actual label document, leave it null. Server-side validation will reject any URL that is not reachable or does not look like a label/SDS/regulator document; fabricated URLs will be discarded.
+- product_url: Optional. The manufacturer's or distributor's product page for this product (e.g. https://hortag.com.au/products/synertrol-horti-oil). This is NOT a label — it is a brand/marketing page. Leave null when unknown. Do NOT put a product page into label_url.
+- sds_url: Optional. A direct link to the Safety Data Sheet PDF when you are confident it exists. Otherwise null. Do NOT fabricate.
 - country / country_confirmed / confidence as defined.`;
 
 const tools = [
@@ -84,6 +86,8 @@ const tools = [
                 country_confirmed: { type: "boolean" },
                 confidence: { type: "string", enum: ["high", "medium", "low", "unknown"] },
                 label_url: { type: ["string", "null"] },
+                product_url: { type: ["string", "null"] },
+                sds_url: { type: ["string", "null"] },
               },
               required: ["product_name", "category", "confidence", "safety_note"],
               additionalProperties: false,
@@ -121,6 +125,8 @@ type LookupCandidate = {
   source_hint?: string;
   last_seen_at?: string;
   label_url?: string | null;
+  product_url?: string | null;
+  sds_url?: string | null;
 };
 
 function normaliseChemicalLookupKey(value: string): string {
@@ -270,19 +276,62 @@ async function validateLabelUrl(value: unknown, timeoutMs = 6000): Promise<strin
   }
 }
 
-async function validateLabelUrlsInPlace<T extends { label_url?: string | null }>(items: T[]): Promise<void> {
-  await Promise.all(items.map(async (it) => {
-    if (!it || it.label_url == null) return;
-    const validated = await validateLabelUrl(it.label_url);
-    if (validated) {
-      it.label_url = validated;
-    } else {
-      if (it.label_url) {
-        console.log("[chemical-ai-lookup] rejected label_url", it.label_url);
+// Loose validator for product_url / manufacturer page. Requires the URL
+// to be reachable (2xx) and HTML-ish. Rejects PDFs (those are labels) and
+// obvious homepage roots ("/") so we don't surface a brand homepage as a
+// product page.
+async function validateProductUrl(value: unknown, timeoutMs = 6000): Promise<string | null> {
+  const sanitised = sanitiseLabelUrl(value);
+  if (!sanitised) return null;
+  let u: URL;
+  try { u = new URL(sanitised); } catch { return null; }
+  // Reject bare homepages — too generic to be useful as a "Product page".
+  if (u.pathname === "" || u.pathname === "/") return null;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    let resp: Response | null = null;
+    try {
+      resp = await fetch(sanitised, { method: "HEAD", redirect: "follow", signal: ac.signal });
+      if (!resp.ok || resp.status >= 400) {
+        resp = await fetch(sanitised, { method: "GET", redirect: "follow", signal: ac.signal });
       }
-      it.label_url = null;
+    } catch {
+      try {
+        resp = await fetch(sanitised, { method: "GET", redirect: "follow", signal: ac.signal });
+      } catch {
+        return null;
+      }
     }
+    if (!resp || !resp.ok) return null;
+    return resp.url || sanitised;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function validateUrlFieldsInPlace<T extends { label_url?: string | null; product_url?: string | null; sds_url?: string | null }>(items: T[]): Promise<void> {
+  await Promise.all(items.map(async (it) => {
+    if (!it) return;
+    const [label, sds, product] = await Promise.all([
+      it.label_url != null ? validateLabelUrl(it.label_url) : Promise.resolve(null),
+      it.sds_url   != null ? validateLabelUrl(it.sds_url)   : Promise.resolve(null),
+      it.product_url != null ? validateProductUrl(it.product_url) : Promise.resolve(null),
+    ]);
+    if (it.label_url && !label) console.log("[chemical-ai-lookup] rejected label_url", it.label_url);
+    if (it.sds_url && !sds)     console.log("[chemical-ai-lookup] rejected sds_url",   it.sds_url);
+    if (it.product_url && !product) console.log("[chemical-ai-lookup] rejected product_url", it.product_url);
+    it.label_url   = label;
+    it.sds_url     = sds;
+    it.product_url = product;
   }));
+}
+
+// Back-compat: keep the older name as a thin wrapper.
+async function validateLabelUrlsInPlace<T extends { label_url?: string | null; product_url?: string | null; sds_url?: string | null }>(items: T[]): Promise<void> {
+  await validateUrlFieldsInPlace(items);
 }
 
 
@@ -390,6 +439,8 @@ Deno.serve(async (req) => {
           times_seen: Math.max(1, (existingApplied?.times_seen ?? 0) + 1, candidate.times_seen ?? 0),
           was_applied: true,
           label_url: await validateLabelUrl(candidate.label_url),
+          product_url: await validateProductUrl(candidate.product_url),
+          sds_url: await validateLabelUrl(candidate.sds_url),
           last_seen_at: new Date().toISOString(),
         }, {
           onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised",
@@ -470,6 +521,8 @@ Deno.serve(async (req) => {
       last_seen_at: row.last_seen_at ?? undefined,
       source_hint: row.source_hint ?? "previous_lookup",
       label_url: sanitiseLabelUrl(row.label_url) ?? undefined,
+      product_url: sanitiseLabelUrl((row as any).product_url) ?? undefined,
+      sds_url: sanitiseLabelUrl((row as any).sds_url) ?? undefined,
     }));
 
     // 2. Call AI to enrich. Lower temperature for determinism.
@@ -640,6 +693,8 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           ? existing.last_seen_at
           : c.last_seen_at,
         label_url: sanitiseLabelUrl(existing.label_url) ?? sanitiseLabelUrl(c.label_url) ?? null,
+        product_url: sanitiseLabelUrl(existing.product_url) ?? sanitiseLabelUrl(c.product_url) ?? null,
+        sds_url: sanitiseLabelUrl(existing.sds_url) ?? sanitiseLabelUrl(c.sds_url) ?? null,
       };
     }
 
@@ -742,6 +797,8 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           times_seen: Math.max((cachedTimesSeen.get(cacheKey) ?? 0) + 1, c.times_seen ?? 1, 1),
           was_applied: c.was_applied ?? false,
           label_url: sanitiseLabelUrl(c.label_url),
+          product_url: sanitiseLabelUrl(c.product_url),
+          sds_url: sanitiseLabelUrl(c.sds_url),
           last_seen_at: new Date().toISOString(),
           };
         });

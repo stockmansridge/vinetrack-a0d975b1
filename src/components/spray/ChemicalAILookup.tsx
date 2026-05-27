@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +29,12 @@ export interface AppliedSuggestion {
   rei_hours?: string;
   target?: string;
   notes?: string;
-  /** Product label / SDS / source URL — mirrors iOS `saved_chemicals.label_url`. */
+  /** Validated official product label / SDS / regulator URL. */
   label_url?: string;
+  /** Manufacturer or distributor product page (NOT a label). */
+  product_url?: string;
+  /** Safety Data Sheet URL when known. */
+  sds_url?: string;
   /** Set when the user selected an existing library match instead of a new lookup row. */
   existing_chemical_id?: string;
 }
@@ -58,6 +62,8 @@ interface RawCandidate {
   times_seen?: number;
   source_hint?: string;
   label_url?: string;
+  product_url?: string;
+  sds_url?: string;
 }
 
 export interface ExistingLibraryItem {
@@ -125,6 +131,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
             times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
             label_url: "label_url" in candidate ? candidate.label_url ?? null : null,
+            product_url: "product_url" in candidate ? candidate.product_url ?? null : null,
+            sds_url: "sds_url" in candidate ? candidate.sds_url ?? null : null,
           },
         },
       });
@@ -206,6 +214,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       target: c.target,
       notes: c.notes,
       label_url: c.label_url && /^https?:\/\//i.test(c.label_url) ? c.label_url : undefined,
+      product_url: c.product_url && /^https?:\/\//i.test(c.product_url) ? c.product_url : undefined,
+      sds_url: c.sds_url && /^https?:\/\//i.test(c.sds_url) ? c.sds_url : undefined,
     });
     void preserveAppliedCandidate(c, finalName);
     setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
@@ -409,17 +419,46 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                 {c.notes && (
                   <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
                 )}
-                {c.label_url && /^https?:\/\//i.test(c.label_url) && (
-                  <a
-                    href={c.label_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    View label/source
-                  </a>
-                )}
+                <div className="flex flex-wrap gap-3">
+                  {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+                    <a
+                      href={c.label_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Label
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground italic">
+                      No label found
+                    </span>
+                  )}
+                  {c.sds_url && /^https?:\/\//i.test(c.sds_url) && (
+                    <a
+                      href={c.sds_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      SDS
+                    </a>
+                  )}
+                  {c.product_url && /^https?:\/\//i.test(c.product_url) && (
+                    <a
+                      href={c.product_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline"
+                      title="Manufacturer/distributor product page (not an official label)"
+                    >
+                      <Globe className="h-3 w-3" />
+                      Product page
+                    </a>
+                  )}
+                </div>
                 <Button
                   type="button"
                   size="sm"
