@@ -39,6 +39,8 @@ For each candidate infer:
 - notes: concise (<240 chars), include compatibility cautions when known.
 - safety_note: always remind user to verify against current label for their country.
 - label_url: ONLY a direct link to the actual product label (preferably a PDF), the SDS PDF, or the regulator's label page (APVMA/ACVM/EPA). A general manufacturer or distributor product webpage is NOT a label — leave label_url null in that case. Do NOT guess or construct URLs from brand/product names. If you are not certain the exact URL exists and points to the actual label document, leave it null. Server-side validation will reject any URL that is not reachable or does not look like a label/SDS/regulator document; fabricated URLs will be discarded.
+- product_url: Optional. The manufacturer's or distributor's product page for this product (e.g. https://hortag.com.au/products/synertrol-horti-oil). This is NOT a label — it is a brand/marketing page. Leave null when unknown. Do NOT put a product page into label_url.
+- sds_url: Optional. A direct link to the Safety Data Sheet PDF when you are confident it exists. Otherwise null. Do NOT fabricate.
 - country / country_confirmed / confidence as defined.`;
 
 const tools = [
