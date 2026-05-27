@@ -9,6 +9,7 @@ import { Plus } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import PaddockImportExportDialog from "@/components/paddocks/PaddockImportExportDialog";
 import PaddockBoundaryImportDialog from "@/components/paddocks/PaddockBoundaryImportDialog";
+import PaddockBoundaryExportDialog from "@/components/paddocks/PaddockBoundaryExportDialog";
 import ArchivedPaddocksSection from "@/components/paddocks/ArchivedPaddocksSection";
 
 const fmtNum = (n: number, digits = 1) =>
@@ -58,6 +59,7 @@ export default function PaddocksPage() {
         </TabsList>
         <div className="flex items-center gap-2">
           <PaddockImportExportDialog />
+          <PaddockBoundaryExportDialog />
           <PaddockBoundaryImportDialog />
           {canEdit && (
             <Button asChild size="sm" className="gap-1">
