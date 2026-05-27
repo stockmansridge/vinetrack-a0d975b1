@@ -425,16 +425,29 @@ export default function VineyardVarietiesPage() {
                       </TableCell>
                       {canEdit && (
                         <TableCell>
-                          {isCustom && !isArchived && v.id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1 text-muted-foreground hover:text-destructive"
-                              onClick={() => setPendingArchive(v)}
-                            >
-                              <Archive className="h-3.5 w-3.5" /> Archive
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {isCustom && !isArchived && v.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-muted-foreground hover:text-foreground"
+                                onClick={() => setPendingArchive(v)}
+                              >
+                                <Archive className="h-3.5 w-3.5" /> Archive
+                              </Button>
+                            )}
+                            {isCustom && v.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-muted-foreground hover:text-destructive"
+                                onClick={() => setPendingDelete(v)}
+                                title="Permanently delete this custom variety (only if unused)"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
