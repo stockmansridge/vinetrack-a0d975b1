@@ -13,6 +13,7 @@ import {
   useAdminVineyards,
 } from "@/lib/adminApi";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
+import { formatDate } from "@/lib/dateFormat";
 
 const SHARED_PROJECT_REF = "tbafuqwruefgkbyxrxyb";
 
@@ -27,7 +28,7 @@ function formatRelative(iso: string | null | undefined) {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 function initials(name: string | null, email: string) {

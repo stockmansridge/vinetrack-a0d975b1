@@ -62,6 +62,7 @@ import {
 } from "@/lib/willyWeatherProxy";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttribution";
+import { formatDateTime } from "@/lib/dateFormat";
 import {
   backfillWuRainfall,
   findNearbyWuStations,
@@ -80,7 +81,7 @@ const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleString();
+  return formatDateTime(d);
 };
 
 export default function WeatherStatusPage() {

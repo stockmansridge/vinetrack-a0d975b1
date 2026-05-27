@@ -32,12 +32,13 @@ import {
 } from "@/lib/operatorCategoriesQuery";
 import { dedupeOperatorCategories } from "@/lib/operatorCategoryDedupe";
 import { useCanSeeCosts } from "@/lib/permissions";
+import { formatDate } from "@/lib/dateFormat";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtMoney = (v?: number | null) =>

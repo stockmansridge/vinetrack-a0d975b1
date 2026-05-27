@@ -37,12 +37,13 @@ import {
   type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import { formatDate } from "@/lib/dateFormat";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 
 const fmtTime = (v?: string | null) => {

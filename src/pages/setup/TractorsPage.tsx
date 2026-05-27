@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Sparkles, Archive } from "lucide-react";
 import { z } from "zod";
+import { formatDate } from "@/lib/dateFormat";
 
 interface Tractor {
   id: string;
@@ -99,7 +100,7 @@ const fmtCell = (v: any) => {
   if (v == null || v === "") return "—";
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
     const d = new Date(v);
-    if (!isNaN(d.getTime())) return d.toLocaleDateString();
+    if (!isNaN(d.getTime())) return formatDate(d);
   }
   return String(v);
 };

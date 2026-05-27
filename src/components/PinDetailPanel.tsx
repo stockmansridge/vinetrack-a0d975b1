@@ -7,6 +7,7 @@ import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
+import { formatDateTime } from "@/lib/dateFormat";
 
 export interface PinRecord {
   id: string;
@@ -77,7 +78,7 @@ function formatDateTime(v?: string | null): string | null {
   if (!v) return null;
   const d = new Date(v);
   if (isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, {
+  return formatDateTime(d, {
     day: "numeric",
     month: "short",
     year: "numeric",

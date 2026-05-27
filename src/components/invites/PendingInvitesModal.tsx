@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { usePendingInvites } from "@/hooks/usePendingInvites";
+import { formatDate } from "@/lib/dateFormat";
 import {
   acceptInvitation,
   declineInvitation,
@@ -189,7 +190,7 @@ export function PendingInvitationsSection({
               <Badge variant="secondary" className="capitalize">{invite.role}</Badge>
               <Badge variant="outline">{invite.email}</Badge>
               {invite.expires_at && (
-                <Badge variant="outline">Expires {new Date(invite.expires_at).toLocaleDateString()}</Badge>
+                <Badge variant="outline">Expires {formatDate(invite.expires_at)}</Badge>
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -290,7 +291,7 @@ export function PendingInvitesModal() {
   if (!current) return null;
 
   const expiry = current.expires_at
-    ? new Date(current.expires_at).toLocaleDateString()
+    ? formatDate(current.expires_at)
     : null;
 
   return (

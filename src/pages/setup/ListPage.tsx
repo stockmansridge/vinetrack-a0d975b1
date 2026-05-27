@@ -19,6 +19,7 @@ import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 
 import type { ReactNode } from "react";
+import { formatDate } from "@/lib/dateFormat";
 
 export interface ListColumn {
   key: string;
@@ -168,7 +169,7 @@ function formatCell(v: any) {
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
     const d = new Date(v);
-    if (!isNaN(d.getTime())) return d.toLocaleDateString();
+    if (!isNaN(d.getTime())) return formatDate(d);
   }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);

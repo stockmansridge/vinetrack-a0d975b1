@@ -47,6 +47,7 @@ import {
 } from "@/lib/memberManagementQuery";
 import { useToast } from "@/hooks/use-toast";
 import { dedupeOperatorCategories } from "@/lib/operatorCategoryDedupe";
+import { formatDate } from "@/lib/dateFormat";
 
 interface TeamMember {
   membership_id: string;
@@ -76,7 +77,7 @@ const initials = (name: string | null | undefined, fallback: string) => {
 
 const formatDate = (iso: string | null) => {
   if (!iso) return "—";
-  try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
+  try { return formatDate(iso); } catch { return iso; }
 };
 
 export default function Team() {
@@ -492,7 +493,7 @@ function InvitationRow({
     operator_category: <TableCell className="text-sm">{categoryName ?? "—"}</TableCell>,
     expires: (
       <TableCell className="text-sm text-muted-foreground">
-        {inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : "—"}
+        {inv.expires_at ? formatDate(inv.expires_at) : "—"}
       </TableCell>
     ),
     status: (

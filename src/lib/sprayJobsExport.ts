@@ -4,6 +4,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { SprayJob, SprayJobChemicalLine } from "./sprayJobsQuery";
+import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import {
   fetchLinkedSprayRecords, recordTotalWaterLitres, recordChemicalNames,
 } from "./sprayJobsQuery";
@@ -14,7 +15,7 @@ const fmtVal = (v: any): string => (v == null || v === "" ? NR : String(v));
 const fmtDate = (v?: string | null) => {
   if (!v) return NR;
   const d = new Date(v);
-  return isNaN(d.getTime()) ? v : d.toLocaleDateString();
+  return isNaN(d.getTime()) ? v : formatDate(d);
 };
 
 const isFoliar = (op?: string | null) => (op ?? "").toLowerCase() === "foliar spray";
@@ -90,7 +91,7 @@ export async function exportSprayJobPdf(
   doc.setFontSize(10);
   doc.setTextColor(90);
   doc.text(`Vineyard: ${fmtVal(vineyardName)}`, margin, 68);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 68, { align: "right" });
+  doc.text(`Generated: ${formatDateTime()}`, pageWidth - margin, 68, { align: "right" });
   doc.setDrawColor(200);
   doc.line(margin, 78, pageWidth - margin, 78);
   doc.setTextColor(0);
@@ -284,7 +285,7 @@ export function exportYearlySprayProgramPdf(
   doc.setTextColor(90);
   doc.text(`Vineyard: ${fmtVal(vineyardName)}`, margin, 62);
   doc.text(`Total spray jobs: ${jobs.length}`, margin, 76);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 62, { align: "right" });
+  doc.text(`Generated: ${formatDateTime()}`, pageWidth - margin, 62, { align: "right" });
   doc.setDrawColor(200);
   doc.line(margin, 86, pageWidth - margin, 86);
   doc.setTextColor(0);
@@ -506,7 +507,7 @@ export function exportYearlySprayProgramXlsx(
     { Field: "Vineyard", Value: vineyardName ?? "" },
     { Field: "Year", Value: year },
     { Field: "Total spray jobs", Value: jobs.length },
-    { Field: "Generated", Value: new Date().toLocaleString() },
+    { Field: "Generated", Value: formatDateTime() },
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Summary");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(programRows), "Spray Program");

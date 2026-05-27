@@ -41,6 +41,7 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { formatDateTime } from "@/lib/dateFormat";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
@@ -551,7 +552,7 @@ export default function CostReportsPage() {
                           {stale && <Badge variant="outline">Stale</Badge>}
                         </div>
                         <div className="text-muted-foreground">
-                          {r.trip_function ?? "trip"} · {r.calculated_at ? new Date(r.calculated_at).toLocaleString() : "—"}
+                          {r.trip_function ?? "trip"} · {r.calculated_at ? formatDateTime(r.calculated_at) : "—"}
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
                           <DetailRow label="Area" value={`${fmtNum(r.allocation_area_ha)} ha`} small />

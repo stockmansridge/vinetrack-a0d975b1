@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { PaddockDetailContent } from "@/components/PaddockDetailPanel";
 import type { PinRecord } from "@/components/PinDetailPanel";
+import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 // ---------- Trip function helpers ----------
 
@@ -108,14 +109,14 @@ const fmtShortDate = (v?: string | null) => {
   if (!v) return "";
   const d = new Date(v);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return formatDate(d, { day: "numeric", month: "short" });
 };
 
 const fmtDateTime = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
+  return formatDateTime(d, {
     day: "numeric",
     month: "short",
     hour: "numeric",

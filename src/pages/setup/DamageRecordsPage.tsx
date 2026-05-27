@@ -73,6 +73,7 @@ import { calculateDamageImpact } from "@/lib/damageImpact";
 import DamageMapView from "@/components/DamageMapView";
 import DamagePolygonEditor from "@/components/DamagePolygonEditor";
 import OpenExternalMapButton from "@/components/OpenExternalMapButton";
+import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 const ANY = "__any__";
 
@@ -87,13 +88,13 @@ const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 const fmtDateTime = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleString();
+  return formatDateTime(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 

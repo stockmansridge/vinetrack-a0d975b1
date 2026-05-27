@@ -66,6 +66,7 @@ import {
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
 import { deriveMetrics } from "@/lib/paddockGeometry";
+import { formatDate } from "@/lib/dateFormat";
 
 interface PaddockLite {
   id: string;
@@ -126,7 +127,7 @@ const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const num = (v: any, digits = 2) =>

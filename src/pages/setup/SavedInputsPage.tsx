@@ -26,12 +26,13 @@ import {
   type SavedInputInput,
 } from "@/lib/savedInputsQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
+import { formatDate } from "@/lib/dateFormat";
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
-  return isNaN(d.getTime()) ? v : d.toLocaleDateString();
+  return isNaN(d.getTime()) ? v : formatDate(d);
 };
 const fmtMoney = (v?: number | null, unit?: string | null) =>
   v == null

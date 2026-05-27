@@ -65,6 +65,7 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { formatDate } from "@/lib/dateFormat";
 
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
@@ -73,7 +74,7 @@ const fmtDate = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtCost = (v?: number | null) =>

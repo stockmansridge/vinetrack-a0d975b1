@@ -11,6 +11,7 @@ import { parsePolygonPoints, polygonCentroid } from "@/lib/paddockGeometry";
 import { useVineyard } from "@/context/VineyardContext";
 import SoilProfileSection from "@/components/soil/SoilProfileSection";
 import EditVarietiesDialog from "@/components/varieties/EditVarietiesDialog";
+import { formatDate } from "@/lib/dateFormat";
 import {
   useGrapeVarieties,
   buildVarietyMap,
@@ -24,7 +25,7 @@ const fmtInt = (n: any) =>
 const fmtDate = (v: any) => {
   if (!v) return "—";
   try {
-    return new Date(v).toLocaleDateString();
+    return formatDate(v);
   } catch {
     return String(v);
   }

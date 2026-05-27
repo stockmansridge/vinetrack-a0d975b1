@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import type { SprayRecord } from "./sprayRecordsQuery";
 import type { TripCostBreakdown } from "./tripCosting";
 import { fmtCurrency, fmtHa, fmtHours, fmtTonnes } from "./tripCosting";
+import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 const NR = "Not recorded";
 
@@ -15,14 +16,14 @@ const fmtDate = (v?: string | null) => {
   if (!v) return NR;
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString();
+  return formatDate(d);
 };
 
 const fmtDateTime = (v?: string | null) => {
   if (!v) return NR;
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
-  return d.toLocaleString();
+  return formatDateTime(d);
 };
 
 const fmtTime = (v?: string | null) => {
@@ -90,7 +91,7 @@ export function exportSprayRecordPdf(
   doc.setTextColor(90);
   doc.text(`Vineyard: ${fmtVal(vineyardName)}`, margin, 68);
   doc.text(
-    `Generated: ${new Date().toLocaleString()}`,
+    `Generated: ${formatDateTime()}`,
     pageWidth - margin,
     68,
     { align: "right" },
