@@ -377,7 +377,7 @@ export default function VineyardVarietiesPage() {
                   <TableHead>Type</TableHead>
                   <TableHead>Optimal GDD</TableHead>
                   <TableHead>Used by blocks</TableHead>
-                  {canEdit && <TableHead className="w-[120px]" />}
+                  {canEdit && <TableHead className="w-[200px]" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
