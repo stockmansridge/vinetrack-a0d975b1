@@ -206,19 +206,29 @@ export default function PaddockFullBlockBackupDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1">
-          <Database className="h-4 w-4" /> Full block backup
+        <Button size="sm" className="gap-1">
+          <Database className="h-4 w-4" /> Full Block Backup & Restore
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Full block backup</DialogTitle>
+          <DialogTitle>Full Block Backup & Restore</DialogTitle>
           <DialogDescription>
-            Export every stored field for every block in <b>{vineyardName}</b>{" "}
-            as a JSON file (boundaries, rows, setup, varieties), or restore
-            from a previously exported backup.
+            Export or restore full block setup data for <b>{vineyardName}</b>,
+            including boundaries, rows, row direction, spacing, emitter
+            settings, vine counts and variety allocations.
           </DialogDescription>
         </DialogHeader>
+
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="text-sm">Use this for backup, restore or migration</AlertTitle>
+          <AlertDescription className="text-xs">
+            This is the recommended tool for copying blocks between vineyards,
+            restoring missing data, or migrating a full block setup. For simple
+            spreadsheet review, use reports/exports if available.
+          </AlertDescription>
+        </Alert>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
           <TabsList>
@@ -226,9 +236,10 @@ export default function PaddockFullBlockBackupDialog() {
               <Download className="mr-1 h-4 w-4" /> Export
             </TabsTrigger>
             <TabsTrigger value="import">
-              <Upload className="mr-1 h-4 w-4" /> Import / restore
+              <Upload className="mr-1 h-4 w-4" /> Restore
             </TabsTrigger>
           </TabsList>
+
 
           {/* ---------- EXPORT ---------- */}
           <TabsContent value="export" className="space-y-3">
