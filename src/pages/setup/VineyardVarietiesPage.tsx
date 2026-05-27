@@ -208,6 +208,42 @@ export default function VineyardVarietiesPage() {
     }
   };
 
+  const confirmHardDelete = async () => {
+    if (!pendingDelete?.id) return;
+    try {
+      const result = await hardDelete.mutateAsync(pendingDelete.id);
+      if (result.success || result.status === "hard_deleted") {
+        toast({
+          title: "Variety deleted",
+          description: `${pendingDelete.display_name} permanently removed.`,
+        });
+        setPendingDelete(null);
+        return;
+      }
+      const friendly: Record<string, string> = {
+        variety_in_use:
+          "This custom variety is used by existing records and cannot be deleted. Archive it instead.",
+        system_variety: "Built-in varieties cannot be deleted.",
+        not_custom: "Only custom varieties can be permanently deleted.",
+        not_found: "This variety no longer exists.",
+        not_authorised: "Only owners and managers can delete custom varieties.",
+        delete_failed: "Delete failed. Please try again.",
+        failed: "Delete failed. Please try again.",
+      };
+      toast({
+        title: "Cannot delete variety",
+        description: friendly[result.status] ?? result.message ?? "Delete failed.",
+        variant: "destructive",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Delete failed",
+        description: err?.message ?? String(err),
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!selectedVineyardId) {
     return (
       <Alert>
