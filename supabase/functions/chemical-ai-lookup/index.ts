@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
           source_hint: candidate.source_hint ?? "manual_applied",
           times_seen: Math.max(1, (existingApplied?.times_seen ?? 0) + 1, candidate.times_seen ?? 0),
           was_applied: true,
-          label_url: sanitiseLabelUrl(candidate.label_url),
+          label_url: await validateLabelUrl(candidate.label_url),
           last_seen_at: new Date().toISOString(),
         }, {
           onConflict: "query_normalised,country,product_name_normalised,manufacturer_normalised",
