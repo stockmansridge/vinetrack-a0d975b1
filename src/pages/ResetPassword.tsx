@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
 import { PageHead } from "@/components/PageHead";
+import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
