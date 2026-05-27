@@ -30,6 +30,7 @@ export interface SavedChemical {
   rates?: any;
   purchase?: any;
   label_url?: string | null;
+  product_url?: string | null;
   mode_of_action?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
