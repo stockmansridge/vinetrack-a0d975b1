@@ -217,6 +217,7 @@ export default function PaddockImportExportDialog() {
                 boundary, or in the iOS app.
               </AlertDescription>
             </Alert>
+            <input
               ref={fileRef}
               type="file"
               accept=".csv,text/csv"
