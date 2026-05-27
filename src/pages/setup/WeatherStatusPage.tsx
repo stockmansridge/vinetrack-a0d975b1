@@ -65,7 +65,11 @@ import { WillyWeatherAttribution } from "@/components/weather/WillyWeatherAttrib
 import {
   backfillWuRainfall,
   findNearbyWuStations,
+  getWundergroundConfig,
+  removeWundergroundStation,
+  saveWundergroundStation,
   type WuNearbyStation,
+  type WundergroundConfig,
 } from "@/lib/wundergroundProxy";
 
 const WU: WeatherProvider = "wunderground";
@@ -1347,19 +1351,60 @@ function WundergroundCard({
   vineyardId: string;
   onChanged: () => void;
 }) {
-  const configured = !!status?.configured && !!status?.station_id;
+  const qc = useQueryClient();
 
-  const [stationId, setStationId] = useState<string>(status?.station_id ?? "");
-  const [stationName, setStationName] = useState<string>(status?.station_name ?? "");
+  // Source of truth: WU-specific RPC introduced in SQL 88. We still fall
+  // back to the generic status from the parent if the RPC hasn't returned
+  // yet so the badge and form initial values render immediately.
+  const { data: wuConfig, isLoading: wuLoading } = useQuery<WundergroundConfig>({
+    queryKey: ["wunderground_config", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => getWundergroundConfig(vineyardId),
+  });
+
+  const refreshConfig = () =>
+    qc.invalidateQueries({ queryKey: ["wunderground_config", vineyardId] });
+
+  const merged: {
+    configured: boolean;
+    station_id: string | null;
+    station_name: string | null;
+    station_latitude: number | null;
+    station_longitude: number | null;
+    error: string | null;
+  } = {
+    configured:
+      wuConfig?.configured ??
+      !!(status?.configured && status?.station_id),
+    station_id: wuConfig?.station_id ?? status?.station_id ?? null,
+    station_name: wuConfig?.station_name ?? status?.station_name ?? null,
+    station_latitude: wuConfig?.station_latitude ?? null,
+    station_longitude: wuConfig?.station_longitude ?? null,
+    error: wuConfig?.error ?? status?.error ?? null,
+  };
+
+  const [stationId, setStationId] = useState<string>(merged.station_id ?? "");
+  const [stationName, setStationName] = useState<string>(merged.station_name ?? "");
+  const [stationLat, setStationLat] = useState<number | null>(merged.station_latitude);
+  const [stationLon, setStationLon] = useState<number | null>(merged.station_longitude);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [nearby, setNearby] = useState<WuNearbyStation[] | null>(null);
   const [findError, setFindError] = useState<string | null>(null);
   const [backfillResult, setBackfillResult] = useState<string | null>(null);
 
   useEffect(() => {
-    setStationId(status?.station_id ?? "");
-    setStationName(status?.station_name ?? "");
-  }, [status?.station_id, status?.station_name, status?.configured]);
+    setStationId(merged.station_id ?? "");
+    setStationName(merged.station_name ?? "");
+    setStationLat(merged.station_latitude);
+    setStationLon(merged.station_longitude);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    merged.station_id,
+    merged.station_name,
+    merged.station_latitude,
+    merged.station_longitude,
+    merged.configured,
+  ]);
 
   const { data: vineyardCenter } = useQuery<{ lat: number; lon: number } | null>({
     queryKey: ["vineyard_center", vineyardId],
@@ -1373,31 +1418,32 @@ function WundergroundCard({
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      await saveWeatherIntegration({
+      const r = await saveWundergroundStation({
         vineyardId,
-        provider: WU,
-        isActive: true,
-        stationId: stationId.trim() || null,
+        stationId: stationId.trim(),
         stationName: stationName.trim() || null,
-        // Weather Underground uses a platform-level API key — never write
-        // per-vineyard credentials from the portal. Null COALESCEs to
-        // existing stored values server-side.
-        apiKey: null,
-        apiSecret: null,
+        latitude: stationLat,
+        longitude: stationLon,
       });
+      if (!r.ok) throw new Error(r.message ?? "Failed to save station");
     },
     onSuccess: async () => {
       toast.success("Weather Underground station saved");
-      await onChanged();
+      await refreshConfig();
+      onChanged();
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed to save station"),
   });
 
   const deleteMut = useMutation({
-    mutationFn: () => deleteWeatherIntegration(vineyardId, WU),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const r = await removeWundergroundStation(vineyardId);
+      if (!r.ok) throw new Error(r.message ?? "Failed to remove");
+    },
+    onSuccess: async () => {
       toast.success("Weather Underground station removed");
       setConfirmDelete(false);
+      await refreshConfig();
       onChanged();
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed to remove"),
@@ -1432,24 +1478,32 @@ function WundergroundCard({
   });
 
   const backfillMut = useMutation({
-    mutationFn: () => backfillWuRainfall({ vineyardId, days: 14 }),
+    mutationFn: () => backfillWuRainfall({ vineyardId }),
     onSuccess: (r) => {
       if (!r.ok) {
         setBackfillResult(r.message ?? "Backfill failed");
         toast.error(r.message ?? "Backfill failed");
         return;
       }
-      const d = r.data ?? {};
-      const parts = [
-        d.inserted != null ? `${d.inserted} inserted` : null,
-        d.updated != null ? `${d.updated} updated` : null,
-        d.skipped != null ? `${d.skipped} skipped` : null,
-      ].filter(Boolean);
-      const summary = parts.length
-        ? `Backfill complete — ${parts.join(", ")}.`
-        : r.message ?? "Backfill complete.";
+      const d = r.data!;
+      const lines = [
+        `Fetched ${d.plan.dates_to_fetch.length} day(s) from Weather Underground.`,
+        `${d.inserted} inserted · ${d.updated} updated · ${d.skipped} skipped by server.`,
+      ];
+      const guards: string[] = [];
+      if (d.plan.dates_skipped_today.length)
+        guards.push(`today (${d.plan.dates_skipped_today.length})`);
+      if (d.plan.dates_skipped_manual.length)
+        guards.push(`Manual rainfall preserved (${d.plan.dates_skipped_manual.length})`);
+      if (d.plan.dates_skipped_davis.length)
+        guards.push(`Davis rainfall preserved (${d.plan.dates_skipped_davis.length})`);
+      if (d.plan.dates_already_wu.length)
+        guards.push(`already-WU (${d.plan.dates_already_wu.length})`);
+      if (guards.length) lines.push(`Skipped: ${guards.join(", ")}.`);
+      if (d.errors.length) lines.push(`Errors: ${d.errors.length}.`);
+      const summary = lines.join(" ");
       setBackfillResult(summary);
-      toast.success(summary);
+      toast.success("Weather Underground backfill complete");
     },
     onError: (e: any) => {
       const msg = e?.message ?? "Backfill failed";
@@ -1461,7 +1515,11 @@ function WundergroundCard({
   const pickNearby = (s: WuNearbyStation) => {
     setStationId(s.station_id);
     setStationName(s.station_name ?? s.neighborhood ?? "");
+    if (s.latitude != null) setStationLat(Number(s.latitude));
+    if (s.longitude != null) setStationLon(Number(s.longitude));
   };
+
+  const configured = merged.configured;
 
   return (
     <Card className="p-4 space-y-4">
@@ -1482,15 +1540,22 @@ function WundergroundCard({
         vineyard history server-side.
       </p>
 
-      {status?.error && (
-        <div className="text-xs text-destructive">RPC error: {status.error}</div>
+      {merged.error && (
+        <div className="text-xs text-destructive">RPC error: {merged.error}</div>
+      )}
+
+      {wuLoading && !wuConfig && (
+        <div className="text-xs text-muted-foreground">Loading station config…</div>
       )}
 
       {configured && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          <div className="font-medium">Selected: {status?.station_name ?? "—"}</div>
+          <div className="font-medium">Selected: {merged.station_name ?? "—"}</div>
           <div className="text-xs text-muted-foreground">
-            Station ID: {status?.station_id ?? "—"}
+            Station ID: {merged.station_id ?? "—"}
+            {merged.station_latitude != null && merged.station_longitude != null
+              ? ` · ${merged.station_latitude.toFixed(3)}, ${merged.station_longitude.toFixed(3)}`
+              : ""}
           </div>
         </div>
       )}
@@ -1664,3 +1729,4 @@ function WundergroundCard({
     </Card>
   );
 }
+
