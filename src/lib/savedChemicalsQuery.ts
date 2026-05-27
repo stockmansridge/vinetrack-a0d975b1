@@ -83,6 +83,7 @@ export interface SavedChemicalInput {
   restrictions?: string | null;
   notes?: string | null;
   label_url?: string | null;
+  product_url?: string | null;
   purchase?: {
     costPerUnit?: number | null;
     cost_per_unit?: number | null;
