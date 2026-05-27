@@ -196,7 +196,14 @@ export default function WeatherStatusPage() {
             }
           />
 
-          <ProviderStatusCard title="Weather Underground" status={wu} />
+          <WundergroundCard
+            status={wu}
+            canEdit={canEdit}
+            vineyardId={selectedVineyardId!}
+            onChanged={() =>
+              qc.invalidateQueries({ queryKey: ["weather_status", selectedVineyardId] })
+            }
+          />
 
           <p className="text-xs text-muted-foreground">
             Weather credentials are stored securely server-side and are never
