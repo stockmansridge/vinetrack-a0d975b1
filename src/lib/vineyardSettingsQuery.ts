@@ -74,6 +74,49 @@ export async function archiveVineyard(vineyardId: string): Promise<void> {
   if (error) throw error;
 }
 
+export interface ArchivedVineyard {
+  id: string;
+  name: string;
+  country: string | null;
+  deleted_at: string | null;
+}
+
+/**
+ * List vineyards the signed-in user owns that have been soft-archived.
+ * Relies on the iOS app's vineyards-table RLS allowing owners to read
+ * their own rows regardless of deleted_at.
+ */
+export async function fetchArchivedVineyardsForOwner(
+  userId: string,
+): Promise<ArchivedVineyard[]> {
+  const { data, error } = await supabase
+    .from("vineyards")
+    .select("id, name, country, deleted_at")
+    .eq("owner_id", userId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ArchivedVineyard[];
+}
+
+/**
+ * Clear deleted_at so the vineyard reappears for all members. Scoped by
+ * owner_id so a non-owner can't restore another owner's vineyard even if
+ * RLS were misconfigured.
+ */
+export async function restoreVineyard(
+  vineyardId: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("vineyards")
+    .update({ deleted_at: null, updated_at: new Date().toISOString() })
+    .eq("id", vineyardId)
+    .eq("owner_id", userId);
+  if (error) throw error;
+}
+
+
 /**
  * Upload a new logo to `vineyard-logos/{vineyard_id}/logo.<ext>` and update
  * the `vineyards.logo_path` + `vineyards.logo_updated_at` columns. Storage
