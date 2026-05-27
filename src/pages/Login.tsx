@@ -31,14 +31,23 @@ export default function Login() {
 
   const onReset = async () => {
     if (!email) {
-      toast({ title: "Enter your email first", variant: "destructive" });
+      toast({ title: "Enter your email first", description: "Type your email above, then tap Forgot password.", variant: "destructive" });
       return;
     }
+    setSendingReset(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) toast({ title: "Reset failed", description: error.message, variant: "destructive" });
-    else toast({ title: "Password reset email sent" });
+    setSendingReset(false);
+    if (error) {
+      toast({ title: "Reset failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "Reset email sent",
+      description: "Check your inbox. Use the link, or enter the 6-digit code on the next page.",
+    });
+    navigate(`/reset-password?email=${encodeURIComponent(email)}`);
   };
 
   return (
