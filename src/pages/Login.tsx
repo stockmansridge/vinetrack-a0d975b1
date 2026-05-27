@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -11,10 +11,12 @@ import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function Login() {
   const { session, loading } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
 
   if (loading) return <div className="p-8">Loading…</div>;
   if (session) return <Navigate to="/select-vineyard" replace />;
@@ -29,14 +31,23 @@ export default function Login() {
 
   const onReset = async () => {
     if (!email) {
-      toast({ title: "Enter your email first", variant: "destructive" });
+      toast({ title: "Enter your email first", description: "Type your email above, then tap Forgot password.", variant: "destructive" });
       return;
     }
+    setSendingReset(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) toast({ title: "Reset failed", description: error.message, variant: "destructive" });
-    else toast({ title: "Password reset email sent" });
+    setSendingReset(false);
+    if (error) {
+      toast({ title: "Reset failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "Reset email sent",
+      description: "Check your inbox. Use the link, or enter the 6-digit code on the next page.",
+    });
+    navigate(`/reset-password?email=${encodeURIComponent(email)}`);
   };
 
   return (
@@ -146,10 +157,11 @@ export default function Login() {
           <button
             type="button"
             onClick={onReset}
-            className="text-sm font-medium hover:underline"
+            disabled={sendingReset}
+            className="text-sm font-medium hover:underline disabled:opacity-60"
             style={{ color: "#F0EBB8" }}
           >
-            Forgot password?
+            {sendingReset ? "Sending reset email…" : "Forgot password?"}
           </button>
           <a
             href="/signup"
