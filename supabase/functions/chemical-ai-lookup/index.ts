@@ -693,6 +693,8 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
           ? existing.last_seen_at
           : c.last_seen_at,
         label_url: sanitiseLabelUrl(existing.label_url) ?? sanitiseLabelUrl(c.label_url) ?? null,
+        product_url: sanitiseLabelUrl(existing.product_url) ?? sanitiseLabelUrl(c.product_url) ?? null,
+        sds_url: sanitiseLabelUrl(existing.sds_url) ?? sanitiseLabelUrl(c.sds_url) ?? null,
       };
     }
 
