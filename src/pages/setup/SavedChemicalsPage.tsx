@@ -251,6 +251,27 @@ export default function SavedChemicalsPage() {
     onError: (e: any) => toast({ title: "Restore failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
+  const hardDeleteMut = useMutation({
+    mutationFn: (id: string) => hardDeleteUnusedSavedChemical(id),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Chemical deleted permanently" });
+      setConfirmHardDelete(null);
+    },
+    onError: (e: any) => {
+      if (e instanceof ChemicalInUseError) {
+        toast({
+          title: "Can't delete this chemical",
+          description: "This chemical has been used and cannot be permanently deleted. You can archive it instead.",
+          variant: "destructive",
+        });
+        setConfirmHardDelete(null);
+        return;
+      }
+      toast({ title: "Delete failed. Please try again.", description: e?.message ?? String(e), variant: "destructive" });
+    },
+  });
+
   const { order: chemColumnOrder, moveColumn: moveChemColumn, reset: resetChemColumns } =
     useColumnOrder("chemicals_table", CHEM_DEFAULT_COLUMNS, { vineyardId: selectedVineyardId });
   // Filter out cost column when user can't see costs (still allowed in saved order, just skipped on render).
