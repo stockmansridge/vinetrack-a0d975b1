@@ -493,6 +493,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               </div>
             );
           })}
+          <p className="text-[11px] text-muted-foreground italic leading-snug pt-1">
+            You can search again if you do not see the right product. A second search may find additional chemicals or alternative product listings.
+          </p>
         </div>
       )}
 
