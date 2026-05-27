@@ -375,40 +375,48 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                 : "Rate varies — check label";
             return (
               <div key={i} className="rounded border bg-background p-2 text-xs space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium">
-                    {c.product_name || "Unnamed"}
+                <div className="space-y-0.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm font-bold leading-tight">
+                      {c.manufacturer?.trim() || (
+                        <span className="italic text-muted-foreground font-normal">Manufacturer unknown</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                      {c.cached && (
+                        <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                          Previously found
+                        </Badge>
+                      )}
+                      {c.was_applied && (
+                        <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
+                          Previously applied
+                        </Badge>
+                      )}
+                      {c.country && (
+                        <Badge
+                          variant={c.country_confirmed === false ? "outline" : "secondary"}
+                          className="text-[10px]"
+                        >
+                          {c.country}
+                          {c.country_confirmed === false ? " (unverified)" : ""}
+                        </Badge>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        {c.confidence ?? "unknown"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {c.cached && (
-                      <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                        Previously found
-                      </Badge>
+                  <div className="text-sm font-medium text-foreground/90">
+                    {c.product_name || (
+                      <span className="italic text-muted-foreground font-normal">Unnamed product</span>
                     )}
-                    {c.was_applied && (
-                      <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
-                        Previously applied
-                      </Badge>
-                    )}
-                    {c.country && (
-                      <Badge
-                        variant={c.country_confirmed === false ? "outline" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {c.country}
-                        {c.country_confirmed === false ? " (unverified)" : ""}
-                      </Badge>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">
-                      {c.confidence ?? "unknown"}
-                    </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                   <Row label="Active" value={c.active_ingredient} />
                   <Row label="Category" value={c.category} />
-                  <Row label="Manufacturer" value={c.manufacturer} />
-                  <Row label="Group" value={c.chemical_group} />
+                  <Row label="Group / MOA" value={c.chemical_group} />
                   <Row label="Type" value={productType} />
                   <Row label="Rate" value={rateText} />
                   <Row
@@ -485,6 +493,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               </div>
             );
           })}
+          <p className="text-[11px] text-muted-foreground italic leading-snug pt-1">
+            You can search again if you do not see the right product. A second search may find additional chemicals or alternative product listings.
+          </p>
         </div>
       )}
 
