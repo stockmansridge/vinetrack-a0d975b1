@@ -322,15 +322,16 @@ export function parsePaddocksCsv(text: string): ParsedImport {
     if (!name) errors.push("Missing required column 'name'");
 
     // row_length_override: must be > 0 if provided
-    const numericChecks: [string, number | null | "INVALID"][] = [
-      ["row_width", num(get("row_width_m"), { positive: true })],
-      ["vine_spacing", num(get("vine_spacing_m"), { positive: true })],
-      ["row_offset", num(get("row_offset_m"), { nonNeg: true })],
-      ["row_direction", num(get("row_direction_deg"))],
-      ["intermediate_post_spacing", num(get("intermediate_post_spacing_m"), { positive: true })],
-      ["flow_per_emitter", num(get("flow_per_emitter_lh"), { positive: true })],
-      ["emitter_spacing", num(get("emitter_spacing_m"), { positive: true })],
-      ["row_length_override", num(get("row_length_override_m"), { positive: true })],
+    const numericChecks: [string, string | undefined, number | null | "INVALID", "positive" | "nonNeg" | "any"][] = [
+      ["row_width", get("row_width_m"), num(get("row_width_m"), { positive: true }), "positive"],
+      ["vine_spacing", get("vine_spacing_m"), num(get("vine_spacing_m"), { positive: true }), "positive"],
+      // row_offset is a positional shift and may be negative or zero
+      ["row_offset", get("row_offset_m"), num(get("row_offset_m")), "any"],
+      ["row_direction", get("row_direction_deg"), num(get("row_direction_deg")), "any"],
+      ["intermediate_post_spacing", get("intermediate_post_spacing_m"), num(get("intermediate_post_spacing_m"), { positive: true }), "positive"],
+      ["flow_per_emitter", get("flow_per_emitter_lh"), num(get("flow_per_emitter_lh"), { positive: true }), "positive"],
+      ["emitter_spacing", get("emitter_spacing_m"), num(get("emitter_spacing_m"), { positive: true }), "positive"],
+      ["row_length_override", get("row_length_override_m"), num(get("row_length_override_m"), { positive: true }), "positive"],
     ];
     const intChecks: [string, number | null | "INVALID"][] = [
       ["planting_year", int(get("planting_year"))],
@@ -343,9 +344,15 @@ export function parsePaddocksCsv(text: string): ParsedImport {
     values.clone = get("clone") || undefined;
     values.rootstock = get("rootstock") || undefined;
 
-    for (const [k, v] of numericChecks) {
-      if (v === "INVALID") errors.push(`Invalid numeric value for ${k} (must be a positive number)`);
-      else (values as any)[k] = v;
+    for (const [k, raw, v, kind] of numericChecks) {
+      if (v === "INVALID") {
+        const constraint = kind === "positive"
+          ? "must be a positive number"
+          : kind === "nonNeg"
+            ? "must be zero or a positive number"
+            : "must be a number";
+        errors.push(`Invalid numeric value for ${k} ("${raw ?? ""}") — ${constraint}`);
+      } else (values as any)[k] = v;
     }
     for (const [k, v] of intChecks) {
       if (v === "INVALID") errors.push(`Invalid integer for ${k}`);
