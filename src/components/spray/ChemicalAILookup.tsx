@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink, Globe } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink, Globe, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -427,7 +427,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                     >
-                      <ExternalLink className="h-3 w-3" />
+                      <FileText className="h-3 w-3" />
                       Label
                     </a>
                   ) : (

@@ -30,6 +30,7 @@ export interface SavedChemical {
   rates?: any;
   purchase?: any;
   label_url?: string | null;
+  product_url?: string | null;
   mode_of_action?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -82,6 +83,7 @@ export interface SavedChemicalInput {
   restrictions?: string | null;
   notes?: string | null;
   label_url?: string | null;
+  product_url?: string | null;
   purchase?: {
     costPerUnit?: number | null;
     cost_per_unit?: number | null;
@@ -95,7 +97,7 @@ export interface SavedChemicalInput {
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "name", "active_ingredient", "chemical_group", "use", "manufacturer",
   "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
-  "label_url", "purchase",
+  "label_url", "product_url", "purchase",
 ];
 
 function sanitize(input: SavedChemicalInput) {
@@ -121,14 +123,15 @@ function sanitize(input: SavedChemicalInput) {
   if (out.unit == null || out.unit === "") {
     out.unit = "Litres";
   }
-  // Sanitise the product label / SDS / source link — only http(s) URLs are
-  // saved; anything else becomes empty string so iOS sees a consistent value.
-  if (typeof out.label_url === "string" && out.label_url) {
-    const trimmed = out.label_url.trim();
-    if (/^https?:\/\//i.test(trimmed)) {
-      out.label_url = trimmed;
-    } else {
-      out.label_url = "";
+  // Sanitise URL fields — only http(s) URLs are saved; anything else becomes
+  // empty string so iOS sees a consistent value. `label_url` is reserved for
+  // the official product label / SDS PDF / regulator page. `product_url` is
+  // for manufacturer / distributor product pages and must NEVER be displayed
+  // as an official label.
+  for (const key of ["label_url", "product_url"] as const) {
+    if (typeof out[key] === "string" && out[key]) {
+      const trimmed = (out[key] as string).trim();
+      out[key] = /^https?:\/\//i.test(trimmed) ? trimmed : "";
     }
   }
   // Shared schema columns that are optional in the UI but NOT NULL in the DB
@@ -143,6 +146,7 @@ function sanitize(input: SavedChemicalInput) {
     "restrictions",
     "notes",
     "label_url",
+    "product_url",
   ]) {
     if (out[key] == null) out[key] = "";
   }

@@ -30,7 +30,7 @@ import {
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -80,7 +80,7 @@ function displayBaseUnit(unit?: string | null): string {
 const EMPTY: SavedChemicalInput = {
   name: "", active_ingredient: "", chemical_group: "", use: "",
   manufacturer: "", crop: "", problem: "", rate_per_ha: null, unit: "",
-  restrictions: "", notes: "", label_url: "",
+  restrictions: "", notes: "", label_url: "", product_url: "",
 };
 
 export default function SavedChemicalsPage() {
@@ -280,11 +280,18 @@ export default function SavedChemicalsPage() {
       case "manufacturer": return <TableCell key="manufacturer">{fmt(c.manufacturer)}</TableCell>;
       case "label": return (
         <TableCell key="label">
-          {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
-            <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" title={c.label_url}>
-              <ExternalLink className="h-3 w-3" />Label
-            </a>
-          ) : (<span className="text-xs text-muted-foreground italic">No label found</span>)}
+          <div className="flex flex-col gap-0.5 text-xs">
+            {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
+              <a href={c.label_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline" title={c.label_url}>
+                <FileText className="h-3 w-3" />Label
+              </a>
+            ) : (<span className="text-muted-foreground italic">No label found</span>)}
+            {c.product_url && /^https?:\/\//i.test(c.product_url) && (
+              <a href={c.product_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary hover:underline" title={`Manufacturer/product page — not the official label: ${c.product_url}`}>
+                <Globe className="h-3 w-3" />Product page
+              </a>
+            )}
+          </div>
         </TableCell>
       );
       case "cost": {
@@ -672,6 +679,7 @@ function ChemicalEditor({
           restrictions: initial.restrictions ?? "",
           notes: initial.notes ?? "",
           label_url: initial.label_url ?? "",
+          product_url: (initial as any).product_url ?? "",
           purchase: initial.purchase ?? null,
         });
         setRateStr(initial.rate_per_ha == null ? "" : String(initial.rate_per_ha));
@@ -729,19 +737,23 @@ function ChemicalEditor({
           : null,
       };
       if (!payload.name || !payload.name.trim()) throw new Error("Name is required");
-      const labelUrlRaw = (payload.label_url ?? "").trim();
-      if (labelUrlRaw) {
-        try {
-          const u = new URL(labelUrlRaw);
-          if (u.protocol !== "http:" && u.protocol !== "https:") {
-            throw new Error("only http(s)");
+      for (const key of ["label_url", "product_url"] as const) {
+        const raw = ((payload as any)[key] ?? "").trim();
+        if (raw) {
+          try {
+            const u = new URL(raw);
+            if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("only http(s)");
+            (payload as any)[key] = u.toString();
+          } catch {
+            throw new Error(
+              key === "label_url"
+                ? "Label link must be a full http:// or https:// URL"
+                : "Product/manufacturer page must be a full http:// or https:// URL",
+            );
           }
-          payload.label_url = u.toString();
-        } catch {
-          throw new Error("Label link must be a full http:// or https:// URL");
+        } else {
+          (payload as any)[key] = "";
         }
-      } else {
-        payload.label_url = "";
       }
       if (initial) return updateSavedChemical(initial.id, payload);
       return createSavedChemical(vineyardId, payload);
@@ -774,6 +786,7 @@ function ChemicalEditor({
       unit: composed,
       notes: s.notes ?? p.notes ?? "",
       label_url: s.label_url && /^https?:\/\//i.test(s.label_url) ? s.label_url : (p.label_url ?? ""),
+      product_url: s.product_url && /^https?:\/\//i.test(s.product_url) ? s.product_url : (p.product_url ?? ""),
     }));
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
     if (s.whp_days) setWhp(s.whp_days);
@@ -972,16 +985,16 @@ function ChemicalEditor({
           <Field label="Notes">
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
           </Field>
-          <Field label="Product label link">
+          <Field label="Label URL (official label PDF or regulator page)">
             <Input
               type="url"
               inputMode="url"
               value={form.label_url ?? ""}
               onChange={(e) => set("label_url", e.target.value)}
-              placeholder="https://…"
+              placeholder="https://…/label.pdf"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Link to the product label, SDS, APVMA page or manufacturer product page. Must start with https:// or http://.
+              Label URL should be the official label PDF or regulator label page (e.g. APVMA). Must start with https:// or http://.
             </p>
             {form.label_url && /^https?:\/\//i.test(form.label_url.trim()) && (
               <a
@@ -990,8 +1003,31 @@ function ChemicalEditor({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
               >
-                <ExternalLink className="h-3 w-3" />
+                <FileText className="h-3 w-3" />
                 Open label
+              </a>
+            )}
+          </Field>
+          <Field label="Product / Manufacturer page (optional)">
+            <Input
+              type="url"
+              inputMode="url"
+              value={form.product_url ?? ""}
+              onChange={(e) => set("product_url", e.target.value)}
+              placeholder="https://… (manufacturer/brand page)"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Optional link to the manufacturer or distributor product page. This is <strong>not</strong> the official label and will be displayed separately as "Product page".
+            </p>
+            {form.product_url && /^https?:\/\//i.test(form.product_url.trim()) && (
+              <a
+                href={form.product_url.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline mt-1"
+              >
+                <Globe className="h-3 w-3" />
+                Open product page
               </a>
             )}
           </Field>
