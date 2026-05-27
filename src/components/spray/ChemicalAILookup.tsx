@@ -62,6 +62,8 @@ interface RawCandidate {
   times_seen?: number;
   source_hint?: string;
   label_url?: string;
+  product_url?: string;
+  sds_url?: string;
 }
 
 export interface ExistingLibraryItem {
