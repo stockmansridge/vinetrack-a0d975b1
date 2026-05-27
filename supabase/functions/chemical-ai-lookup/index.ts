@@ -276,19 +276,62 @@ async function validateLabelUrl(value: unknown, timeoutMs = 6000): Promise<strin
   }
 }
 
-async function validateLabelUrlsInPlace<T extends { label_url?: string | null }>(items: T[]): Promise<void> {
-  await Promise.all(items.map(async (it) => {
-    if (!it || it.label_url == null) return;
-    const validated = await validateLabelUrl(it.label_url);
-    if (validated) {
-      it.label_url = validated;
-    } else {
-      if (it.label_url) {
-        console.log("[chemical-ai-lookup] rejected label_url", it.label_url);
+// Loose validator for product_url / manufacturer page. Requires the URL
+// to be reachable (2xx) and HTML-ish. Rejects PDFs (those are labels) and
+// obvious homepage roots ("/") so we don't surface a brand homepage as a
+// product page.
+async function validateProductUrl(value: unknown, timeoutMs = 6000): Promise<string | null> {
+  const sanitised = sanitiseLabelUrl(value);
+  if (!sanitised) return null;
+  let u: URL;
+  try { u = new URL(sanitised); } catch { return null; }
+  // Reject bare homepages — too generic to be useful as a "Product page".
+  if (u.pathname === "" || u.pathname === "/") return null;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    let resp: Response | null = null;
+    try {
+      resp = await fetch(sanitised, { method: "HEAD", redirect: "follow", signal: ac.signal });
+      if (!resp.ok || resp.status >= 400) {
+        resp = await fetch(sanitised, { method: "GET", redirect: "follow", signal: ac.signal });
       }
-      it.label_url = null;
+    } catch {
+      try {
+        resp = await fetch(sanitised, { method: "GET", redirect: "follow", signal: ac.signal });
+      } catch {
+        return null;
+      }
     }
+    if (!resp || !resp.ok) return null;
+    return resp.url || sanitised;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function validateUrlFieldsInPlace<T extends { label_url?: string | null; product_url?: string | null; sds_url?: string | null }>(items: T[]): Promise<void> {
+  await Promise.all(items.map(async (it) => {
+    if (!it) return;
+    const [label, sds, product] = await Promise.all([
+      it.label_url != null ? validateLabelUrl(it.label_url) : Promise.resolve(null),
+      it.sds_url   != null ? validateLabelUrl(it.sds_url)   : Promise.resolve(null),
+      it.product_url != null ? validateProductUrl(it.product_url) : Promise.resolve(null),
+    ]);
+    if (it.label_url && !label) console.log("[chemical-ai-lookup] rejected label_url", it.label_url);
+    if (it.sds_url && !sds)     console.log("[chemical-ai-lookup] rejected sds_url",   it.sds_url);
+    if (it.product_url && !product) console.log("[chemical-ai-lookup] rejected product_url", it.product_url);
+    it.label_url   = label;
+    it.sds_url     = sds;
+    it.product_url = product;
   }));
+}
+
+// Back-compat: keep the older name as a thin wrapper.
+async function validateLabelUrlsInPlace<T extends { label_url?: string | null; product_url?: string | null; sds_url?: string | null }>(items: T[]): Promise<void> {
+  await validateUrlFieldsInPlace(items);
 }
 
 
