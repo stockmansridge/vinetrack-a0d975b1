@@ -97,7 +97,7 @@ export interface SavedChemicalInput {
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "name", "active_ingredient", "chemical_group", "use", "manufacturer",
   "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
-  "label_url", "purchase",
+  "label_url", "product_url", "purchase",
 ];
 
 function sanitize(input: SavedChemicalInput) {
