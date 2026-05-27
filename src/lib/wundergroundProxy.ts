@@ -3,23 +3,34 @@
 // Mirrors the iOS Weather Data & Forecasting page. The vineyard-wide
 // Weather Underground configuration is stored in
 // `vineyard_weather_integrations` (provider = 'wunderground') and is
-// managed via the SAME server-side RPCs / edge function the iOS app uses,
-// so changes made in the portal appear in iOS after sync and vice versa.
+// managed via the WU-specific RPCs introduced in SQL 88 so changes made
+// in the portal appear in iOS after sync and vice versa.
 //
-//   - get_vineyard_weather_integration(vineyard_id, 'wunderground')
-//       members read non-secret fields (station id/name, etc.).
-//   - save_vineyard_weather_integration(...)
-//       owner/manager — upserts station id/name (api_key/secret left null
-//       so the platform-level Weather Underground key is used).
-//   - delete_vineyard_weather_integration(vineyard_id, 'wunderground')
-//       owner/manager — removes the shared station.
-//   - edge function `wunderground-proxy` on the iOS Supabase project
-//       authenticated actions:
-//         action "find_nearby" — nearest WU PWS to given lat/lon
-//         action "backfill"    — chunked 14-day rainfall backfill
+//   - get_vineyard_wunderground_config(p_vineyard_id)
+//   - save_vineyard_wunderground_station(
+//       p_vineyard_id, p_station_id, p_station_name,
+//       p_station_latitude, p_station_longitude
+//     )
+//   - remove_vineyard_wunderground_station(p_vineyard_id)
+//   - plan_wunderground_rainfall_backfill(
+//       p_vineyard_id, p_days, p_timezone
+//     ) → planner. Returns:
+//         dates_to_fetch, dates_skipped_today,
+//         dates_skipped_manual, dates_skipped_davis,
+//         dates_already_wu
 //
-// We never display, log or send api credentials from this module.
+// HTTP calls to Weather Underground itself still go through the
+// `wunderground-proxy` edge function on the iOS Supabase project:
+//   - action WU_PROXY_ACTIONS.findNearby
+//   - action WU_PROXY_ACTIONS.backfillDates (only for the dates returned
+//     by the planner)
+//
+// We never display, log or send WU api credentials from this module.
 import { supabase } from "@/integrations/ios-supabase/client";
+import {
+  WU_DEFAULT_BACKFILL_DAYS,
+  WU_PROXY_ACTIONS,
+} from "./wundergroundConstants";
 
 // Same iOS Supabase project as davis-proxy lives in.
 const IOS_SUPABASE_URL = "https://tbafuqwruefgkbyxrxyb.supabase.co";
@@ -41,6 +52,137 @@ export interface WuActionResult<T = unknown> {
   message?: string;
   data?: T;
 }
+
+export interface WundergroundConfig {
+  configured: boolean;
+  is_active?: boolean | null;
+  station_id?: string | null;
+  station_name?: string | null;
+  station_latitude?: number | null;
+  station_longitude?: number | null;
+  last_tested_at?: string | null;
+  last_test_status?: string | null;
+  updated_at?: string | null;
+  caller_role?: string | null;
+  error?: string | null;
+}
+
+export interface WuBackfillPlan {
+  dates_to_fetch: string[];
+  dates_skipped_today: string[];
+  dates_skipped_manual: string[];
+  dates_skipped_davis: string[];
+  dates_already_wu: string[];
+}
+
+export interface WuBackfillSummary {
+  plan: WuBackfillPlan;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
+// ---------------------------------------------------------------------------
+// SQL 88 RPCs
+// ---------------------------------------------------------------------------
+
+/** Load the vineyard-wide Weather Underground configuration. Source of
+ *  truth = public.vineyard_weather_integrations (provider='wunderground'). */
+export async function getWundergroundConfig(
+  vineyardId: string,
+): Promise<WundergroundConfig> {
+  const res = await (supabase.rpc as any)("get_vineyard_wunderground_config", {
+    p_vineyard_id: vineyardId,
+  });
+  if (res.error) {
+    return { configured: false, error: res.error.message };
+  }
+  const row = Array.isArray(res.data) ? res.data[0] : res.data;
+  if (!row) return { configured: false };
+  return {
+    configured: !!(row.station_id ?? row.configured),
+    is_active: row.is_active ?? null,
+    station_id: row.station_id ?? null,
+    station_name: row.station_name ?? null,
+    station_latitude: row.station_latitude ?? null,
+    station_longitude: row.station_longitude ?? null,
+    last_tested_at: row.last_tested_at ?? null,
+    last_test_status: row.last_test_status ?? null,
+    updated_at: row.updated_at ?? null,
+    caller_role: row.caller_role ?? null,
+  };
+}
+
+/** Upsert the vineyard-wide Weather Underground station. Owner/manager only. */
+export async function saveWundergroundStation(args: {
+  vineyardId: string;
+  stationId: string;
+  stationName?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}): Promise<{ ok: boolean; message?: string }> {
+  const res = await (supabase.rpc as any)(
+    "save_vineyard_wunderground_station",
+    {
+      p_vineyard_id: args.vineyardId,
+      p_station_id: args.stationId,
+      p_station_name: args.stationName ?? null,
+      p_station_latitude: args.latitude ?? null,
+      p_station_longitude: args.longitude ?? null,
+    },
+  );
+  if (res.error) return { ok: false, message: res.error.message };
+  return { ok: true };
+}
+
+/** Remove the vineyard-wide Weather Underground station. */
+export async function removeWundergroundStation(
+  vineyardId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const res = await (supabase.rpc as any)(
+    "remove_vineyard_wunderground_station",
+    { p_vineyard_id: vineyardId },
+  );
+  if (res.error) return { ok: false, message: res.error.message };
+  return { ok: true };
+}
+
+/** Server-side planner. Returns which dates the proxy should fetch and which
+ *  were skipped (today / Manual / Davis / already-WU). */
+export async function planWundergroundBackfill(args: {
+  vineyardId: string;
+  days?: number;
+  timezone?: string | null;
+}): Promise<{ ok: boolean; plan?: WuBackfillPlan; message?: string }> {
+  const tz =
+    args.timezone ??
+    (typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : null);
+  const res = await (supabase.rpc as any)(
+    "plan_wunderground_rainfall_backfill",
+    {
+      p_vineyard_id: args.vineyardId,
+      p_days: args.days ?? WU_DEFAULT_BACKFILL_DAYS,
+      p_timezone: tz,
+    },
+  );
+  if (res.error) return { ok: false, message: res.error.message };
+  const row = Array.isArray(res.data) ? res.data[0] : res.data;
+  const plan: WuBackfillPlan = {
+    dates_to_fetch: row?.dates_to_fetch ?? [],
+    dates_skipped_today: row?.dates_skipped_today ?? [],
+    dates_skipped_manual: row?.dates_skipped_manual ?? [],
+    dates_skipped_davis: row?.dates_skipped_davis ?? [],
+    dates_already_wu: row?.dates_already_wu ?? [],
+  };
+  return { ok: true, plan };
+}
+
+// ---------------------------------------------------------------------------
+// wunderground-proxy edge function
+// ---------------------------------------------------------------------------
 
 async function callWuProxy<T = any>(
   payload: Record<string, unknown>,
@@ -114,7 +256,7 @@ export async function findNearbyWuStations(args: {
   limit?: number;
 }): Promise<WuActionResult<{ stations: WuNearbyStation[] }>> {
   const r = await callWuProxy<any>({
-    action: "find_nearby",
+    action: WU_PROXY_ACTIONS.findNearby,
     vineyardId: args.vineyardId,
     lat: args.lat,
     lon: args.lon,
@@ -134,16 +276,54 @@ export async function findNearbyWuStations(args: {
   return { ok: true, data: { stations: list } };
 }
 
-/** Backfill the last 14 days of Weather Underground rainfall. The server
- *  refuses to overwrite Manual or Davis rainfall rows and skips today
- *  because the daily summary is incomplete. */
+/** Planner-driven backfill. Calls plan_wunderground_rainfall_backfill, then
+ *  asks the proxy to fetch + write only the explicit dates_to_fetch list.
+ *  Manual and Davis rainfall are never overwritten; today is skipped. */
 export async function backfillWuRainfall(args: {
   vineyardId: string;
   days?: number;
-}): Promise<WuActionResult<{ inserted?: number; updated?: number; skipped?: number; days?: number }>> {
-  return callWuProxy({
-    action: "backfill",
+  timezone?: string | null;
+}): Promise<WuActionResult<WuBackfillSummary>> {
+  const planned = await planWundergroundBackfill({
     vineyardId: args.vineyardId,
-    days: args.days ?? 14,
+    days: args.days ?? WU_DEFAULT_BACKFILL_DAYS,
+    timezone: args.timezone ?? null,
   });
+  if (!planned.ok || !planned.plan) {
+    return { ok: false, message: planned.message ?? "Could not plan backfill" };
+  }
+  const plan = planned.plan;
+
+  // Nothing to fetch — return a clean summary without hitting the proxy.
+  if (plan.dates_to_fetch.length === 0) {
+    return {
+      ok: true,
+      data: { plan, inserted: 0, updated: 0, skipped: 0, errors: [] },
+    };
+  }
+
+  const r = await callWuProxy<any>({
+    action: WU_PROXY_ACTIONS.backfillDates,
+    vineyardId: args.vineyardId,
+    dates: plan.dates_to_fetch,
+  });
+  if (!r.ok) {
+    return {
+      ok: false,
+      code: r.code,
+      message: r.message,
+      data: { plan, inserted: 0, updated: 0, skipped: 0, errors: [r.message ?? "proxy_error"] },
+    };
+  }
+  const d = (r.data ?? {}) as any;
+  return {
+    ok: true,
+    data: {
+      plan,
+      inserted: Number(d.inserted ?? 0) || 0,
+      updated: Number(d.updated ?? 0) || 0,
+      skipped: Number(d.skipped ?? 0) || 0,
+      errors: Array.isArray(d.errors) ? d.errors : [],
+    },
+  };
 }
