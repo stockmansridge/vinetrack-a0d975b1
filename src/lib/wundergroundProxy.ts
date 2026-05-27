@@ -29,7 +29,10 @@
 import { supabase } from "@/integrations/ios-supabase/client";
 import {
   WU_DEFAULT_BACKFILL_DAYS,
+  WU_NEARBY_FUNCTION,
+  WU_PROVIDER,
   WU_PROXY_ACTIONS,
+  WU_PROXY_FUNCTION,
 } from "./wundergroundConstants";
 
 // Same iOS Supabase project as davis-proxy lives in.
