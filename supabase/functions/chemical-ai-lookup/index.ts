@@ -674,6 +674,11 @@ Return 5–10 ranked candidate products. Prefer products registered or distribut
       return recencyWeight(b.last_seen_at) - recencyWeight(a.last_seen_at);
     });
 
+    // Validate every candidate's label_url before we cache or return them.
+    // Rejects hallucinated, unreachable, non-PDF/non-regulator URLs (e.g.
+    // brand product pages). Anything that fails validation is nulled out.
+    await validateLabelUrlsInPlace(merged);
+
     console.log("Chemical lookup sources", {
       query: rawQuery,
       normalisedKey: queryNorm,
