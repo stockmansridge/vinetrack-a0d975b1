@@ -985,16 +985,16 @@ function ChemicalEditor({
           <Field label="Notes">
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
           </Field>
-          <Field label="Product label link">
+          <Field label="Label URL (official label PDF or regulator page)">
             <Input
               type="url"
               inputMode="url"
               value={form.label_url ?? ""}
               onChange={(e) => set("label_url", e.target.value)}
-              placeholder="https://…"
+              placeholder="https://…/label.pdf"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Link to the product label, SDS, APVMA page or manufacturer product page. Must start with https:// or http://.
+              Label URL should be the official label PDF or regulator label page (e.g. APVMA). Must start with https:// or http://.
             </p>
             {form.label_url && /^https?:\/\//i.test(form.label_url.trim()) && (
               <a
@@ -1003,8 +1003,31 @@ function ChemicalEditor({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
               >
-                <ExternalLink className="h-3 w-3" />
+                <FileText className="h-3 w-3" />
                 Open label
+              </a>
+            )}
+          </Field>
+          <Field label="Product / Manufacturer page (optional)">
+            <Input
+              type="url"
+              inputMode="url"
+              value={form.product_url ?? ""}
+              onChange={(e) => set("product_url", e.target.value)}
+              placeholder="https://… (manufacturer/brand page)"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Optional link to the manufacturer or distributor product page. This is <strong>not</strong> the official label and will be displayed separately as "Product page".
+            </p>
+            {form.product_url && /^https?:\/\//i.test(form.product_url.trim()) && (
+              <a
+                href={form.product_url.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline mt-1"
+              >
+                <Globe className="h-3 w-3" />
+                Open product page
               </a>
             )}
           </Field>
