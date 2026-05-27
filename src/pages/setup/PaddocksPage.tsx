@@ -58,6 +58,7 @@ export default function PaddocksPage() {
         </TabsList>
         <div className="flex items-center gap-2">
           <PaddockImportExportDialog />
+          <PaddockBoundaryImportDialog />
           {canEdit && (
             <Button asChild size="sm" className="gap-1">
               <Link to="/setup/paddocks/new">
