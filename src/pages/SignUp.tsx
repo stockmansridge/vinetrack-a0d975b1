@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
 import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
+import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function SignUp() {
   const { session, loading } = useAuth();
@@ -14,6 +15,8 @@ export default function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
@@ -160,7 +163,7 @@ export default function SignUp() {
               </FieldRow>
               <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   placeholder="Password (min 8 chars)"
                   value={password}
@@ -168,11 +171,13 @@ export default function SignUp() {
                   minLength={8}
                   className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
                   style={{ color: "#03331A" }}
+                  autoComplete="new-password"
                 />
+                <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
               </FieldRow>
               <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
                 <input
-                  type="password"
+                  type={showConfirm ? "text" : "password"}
                   required
                   placeholder="Confirm password"
                   value={confirm}
@@ -180,7 +185,9 @@ export default function SignUp() {
                   minLength={8}
                   className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
                   style={{ color: "#03331A" }}
+                  autoComplete="new-password"
                 />
+                <PasswordToggleButton visible={showConfirm} onToggle={() => setShowConfirm((v) => !v)} />
               </FieldRow>
 
               <button

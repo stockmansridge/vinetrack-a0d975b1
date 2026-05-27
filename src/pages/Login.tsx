@@ -7,11 +7,13 @@ import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
 import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
+import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function Login() {
   const { session, loading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (loading) return <div className="p-8">Loading…</div>;
@@ -114,14 +116,16 @@ export default function Login() {
           </FieldRow>
           <FieldRow icon={<Lock className="h-4 w-4" style={{ color: "#055124" }} />}>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               required
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#4D5C52]"
               style={{ color: "#03331A" }}
+              autoComplete="current-password"
             />
+            <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
           </FieldRow>
 
           <button

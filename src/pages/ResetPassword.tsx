@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { toast } from "@/hooks/use-toast";
 import appIcon from "@/assets/vinetrack-app-icon.png";
 import { PageHead } from "@/components/PageHead";
+import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -12,6 +13,8 @@ export default function ResetPassword() {
   const [hasRecoverySession, setHasRecoverySession] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Supabase puts ?code=... in the query (PKCE) or #access_token=...&type=recovery in the hash.
@@ -111,25 +114,35 @@ export default function ResetPassword() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   placeholder="New password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl bg-white/95 pl-9 pr-3 py-3 text-sm outline-none"
+                  className="w-full rounded-xl bg-white/95 pl-9 pr-10 py-3 text-sm outline-none"
                   autoComplete="new-password"
+                />
+                <PasswordToggleButton
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
                 />
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
                 <input
-                  type="password"
+                  type={showConfirm ? "text" : "password"}
                   required
                   placeholder="Confirm new password"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
-                  className="w-full rounded-xl bg-white/95 pl-9 pr-3 py-3 text-sm outline-none"
+                  className="w-full rounded-xl bg-white/95 pl-9 pr-10 py-3 text-sm outline-none"
                   autoComplete="new-password"
+                />
+                <PasswordToggleButton
+                  visible={showConfirm}
+                  onToggle={() => setShowConfirm((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
                 />
               </div>
               <button
