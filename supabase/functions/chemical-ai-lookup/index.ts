@@ -125,6 +125,8 @@ type LookupCandidate = {
   source_hint?: string;
   last_seen_at?: string;
   label_url?: string | null;
+  product_url?: string | null;
+  sds_url?: string | null;
 };
 
 function normaliseChemicalLookupKey(value: string): string {
