@@ -167,16 +167,29 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
         body: { product_name: q, country: country ?? null },
       });
-      if (fnErr) throw fnErr;
+      if (fnErr) {
+        // Surface server-side error payload when available; otherwise show a
+        // friendly fallback. The technical detail is still logged.
+        console.error("[chemical-ai-lookup] invoke failed", fnErr, data);
+        const serverMsg = (data as any)?.error;
+        throw new Error(
+          typeof serverMsg === "string" && serverMsg
+            ? serverMsg
+            : "Chemical lookup failed. Please try again, or add the chemical manually.",
+        );
+      }
       const list: RawCandidate[] = Array.isArray(data?.candidates)
         ? data.candidates
         : data?.suggestion
         ? [data.suggestion]
         : [];
-      if (!list.length) throw new Error("No matches returned");
+      if (!list.length) {
+        throw new Error("No matches returned. Try a different spelling, or add the chemical manually.");
+      }
       setCandidates(list);
     } catch (e: any) {
-      setError(e?.message ?? "AI lookup failed");
+      console.error("[chemical-ai-lookup] error", e);
+      setError(e?.message ?? "Chemical lookup failed. Please try again, or add the chemical manually.");
     } finally {
       setLoading(false);
     }
