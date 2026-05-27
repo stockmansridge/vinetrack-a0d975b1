@@ -157,10 +157,11 @@ export default function Login() {
           <button
             type="button"
             onClick={onReset}
-            className="text-sm font-medium hover:underline"
+            disabled={sendingReset}
+            className="text-sm font-medium hover:underline disabled:opacity-60"
             style={{ color: "#F0EBB8" }}
           >
-            Forgot password?
+            {sendingReset ? "Sending reset email…" : "Forgot password?"}
           </button>
           <a
             href="/signup"
