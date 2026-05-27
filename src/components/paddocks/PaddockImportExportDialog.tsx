@@ -119,13 +119,19 @@ export default function PaddockImportExportDialog() {
         result.rowOverridesQueued > 0
           ? ` (${result.rowOverridesQueued} per-row override(s) saved)`
           : "";
+      const newlyImported = result.inserted + result.updated;
+      const mappingNote =
+        result.inserted > 0
+          ? ` ${result.inserted} new block${result.inserted === 1 ? "" : "s"} will appear as unmapped until a boundary is drawn — use "Import boundaries" (KML/GeoJSON) or draw each one in Setup → Paddocks → Edit boundary.`
+          : "";
       if (result.errors.length) {
         toast.error(
           `Import finished with ${result.errors.length} error(s). Created ${result.inserted}, updated ${result.updated}, archived ${result.archived}.${overrideNote}`,
         );
       } else {
         toast.success(
-          `Created ${result.inserted}, updated ${result.updated}, archived ${result.archived}, skipped ${result.skipped}.${overrideNote}`,
+          `Created ${result.inserted}, updated ${result.updated}, archived ${result.archived}, skipped ${result.skipped}.${overrideNote}${mappingNote}`,
+          { duration: result.inserted > 0 ? 10000 : 4000 },
         );
       }
       await queryClient.invalidateQueries({ queryKey: ["list", "paddocks"] });
