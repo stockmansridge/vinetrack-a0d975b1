@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import BlockMap from "@/components/BlockMap";
 
 const fmt = (n: any, d = 0) =>
   Number.isFinite(Number(n))
