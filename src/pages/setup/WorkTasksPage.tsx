@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
@@ -156,7 +157,13 @@ export default function WorkTasksPage() {
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [paddockId, setPaddockId] = useState<string>(ANY);
+  const [searchParams] = useSearchParams();
+  const initialPaddock = searchParams.get("paddock") ?? ANY;
+  const [paddockId, setPaddockId] = useState<string>(initialPaddock);
+  useEffect(() => {
+    const p = searchParams.get("paddock");
+    if (p) setPaddockId(p);
+  }, [searchParams]);
   const [taskType, setTaskType] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
   const [workerType, setWorkerType] = useState<string>(ANY);
