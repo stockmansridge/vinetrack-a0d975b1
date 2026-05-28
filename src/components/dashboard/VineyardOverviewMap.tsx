@@ -7,7 +7,7 @@
 // READ-ONLY — no writes.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Crosshair, ExternalLink, Layers, X } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -154,6 +154,7 @@ export default function VineyardOverviewMap({
   height = 520,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const navigate = useNavigate();
   const [selection, setSelection] = useState<Selection>(null);
   const [showPaddocks, setShowPaddocks] = useState(true);
   const [showTrips, setShowTrips] = useState(true);
