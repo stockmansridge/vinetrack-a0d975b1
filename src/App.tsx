@@ -97,6 +97,7 @@ const App = () => (
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
                     <Route path="/blocks/:blockId" element={<BlockDetailPage />} />
+                    <Route path="/paddocks" element={<PaddocksListPage />} />
                     <Route path="/setup/paddocks" element={<PaddocksPage />} />
                     <Route path="/setup/paddocks/new" element={<NewPaddockPage />} />
                     <Route
