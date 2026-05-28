@@ -206,6 +206,7 @@ export default function BlockMap({
             el.title = pinDisplayTitle(pin);
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
+              onPinSelected?.(pin.id);
               setActivePin(pin as PinRecord);
             });
             return el;
