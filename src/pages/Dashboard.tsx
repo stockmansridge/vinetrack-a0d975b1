@@ -142,6 +142,7 @@ export default function Dashboard() {
           Icon={Map}
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
+          to="/setup/paddocks"
         />
         <StatCard
           label="Area (ha)"
@@ -164,16 +165,19 @@ export default function Dashboard() {
           label="Tractors"
           Icon={Tractor}
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
+          to="/setup/tractors"
         />
         <StatCard
           label="Spray equipment"
           Icon={SprayCan}
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
+          to="/setup/spray-equipment"
         />
         <StatCard
           label="Team members"
           Icon={Users}
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
+          to="/team"
         />
       </div>
 
