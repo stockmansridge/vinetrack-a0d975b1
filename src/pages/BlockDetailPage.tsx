@@ -212,6 +212,39 @@ export default function BlockDetailPage() {
     [tasksQ.data, paddock?.id],
   );
 
+  // ---- Map side-panel state -------------------------------------------------
+  const [panelTab, setPanelTab] = useState<"trips" | "pins">("trips");
+  const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
+  const [pinScope, setPinScope] = useState<"open" | "range">("open");
+  const [activePin, setActivePin] = useState<PinRecord | null>(null);
+
+  const since = useMemo(() => rangeStart(dateRange), [dateRange]);
+
+  const tripsInRange = useMemo<Trip[]>(() => {
+    if (!since) return trips;
+    const cutoff = since.getTime();
+    return trips.filter((t) => {
+      const ts = t.start_time ? new Date(t.start_time).getTime() : 0;
+      return ts >= cutoff;
+    });
+  }, [trips, since]);
+
+  const pinsForPanel = useMemo(() => {
+    if (pinScope === "open") {
+      return pins.filter((p: any) => !p.is_completed && !p.deleted_at);
+    }
+    if (!since) return pins;
+    const cutoff = since.getTime();
+    return pins.filter((p: any) => {
+      const ts = p.created_at ? new Date(p.created_at).getTime() : 0;
+      return ts >= cutoff;
+    });
+  }, [pins, pinScope, since]);
+
+  // Map overlays follow the active tab so the map mirrors the panel scope.
+  const mapTrips = panelTab === "trips" ? tripsInRange : [];
+  const mapPins = panelTab === "pins" ? pinsForPanel : [];
+
   if (paddockQ.isLoading) {
     return (
       <div className="space-y-4">
