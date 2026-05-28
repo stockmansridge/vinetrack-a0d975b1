@@ -301,6 +301,24 @@ export default function BlockDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Block-scoped map */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapIcon className="h-4 w-4" /> Block map
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BlockMap
+            paddock={paddock}
+            pins={pins}
+            trips={trips}
+            vineyardName={vineyardName}
+          />
+        </CardContent>
+      </Card>
+
+
       {/* Metric cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <MetricCard
