@@ -248,7 +248,7 @@ export default function BlockMap({
   if (!hasGeometry) {
     return (
       <div
-        className="flex items-center justify-center rounded-md border border-dashed bg-muted/30 text-sm text-muted-foreground"
+        className="flex h-full items-center justify-center rounded-md border border-dashed bg-muted/30 text-sm text-muted-foreground"
         style={{ height }}
       >
         <div className="text-center px-4">
@@ -263,25 +263,30 @@ export default function BlockMap({
     setFilters((f) => ({ ...f, [k]: !f[k] }));
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterChip
-          label="Pins"
-          count={pinsWithCoords.length}
-          active={filters.pins}
-          onClick={() => toggle("pins")}
-        />
-        <FilterChip
-          label="Trips"
-          count={tripsWithPath.length}
-          active={filters.trips}
-          onClick={() => toggle("trips")}
-        />
-        {vineyardName && (
-          <span className="ml-auto text-xs text-muted-foreground">{vineyardName}</span>
-        )}
-      </div>
-      <div className="relative overflow-hidden rounded-md border bg-muted" style={{ height }}>
+    <div className="flex h-full flex-col gap-2">
+      {!hideControls && (
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterChip
+            label="Pins"
+            count={pinsWithCoords.length}
+            active={filters.pins}
+            onClick={() => toggle("pins")}
+          />
+          <FilterChip
+            label="Trips"
+            count={tripsWithPath.length}
+            active={filters.trips}
+            onClick={() => toggle("trips")}
+          />
+          {vineyardName && (
+            <span className="ml-auto text-xs text-muted-foreground">{vineyardName}</span>
+          )}
+        </div>
+      )}
+      <div
+        className="relative flex-1 overflow-hidden rounded-md border bg-muted"
+        style={hideControls ? { height: "100%", minHeight: 0 } : { height }}
+      >
         <div ref={containerRef} className="absolute inset-0" />
         {mapError && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 text-sm text-muted-foreground p-4 text-center">
