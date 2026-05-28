@@ -507,6 +507,7 @@ export default function VineyardOverviewMap({
     selection,
     vineyardExtent,
     fitToBounds,
+    navigate,
   ]);
 
   // Reset fit when vineyard switches.
@@ -558,7 +559,7 @@ export default function VineyardOverviewMap({
         <div>
           <CardTitle className="text-base">Vineyard map</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Blocks, recent trips and pins. Click anything for details.
+            Click a block to open its detail page. Click a trip or pin for details here.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
