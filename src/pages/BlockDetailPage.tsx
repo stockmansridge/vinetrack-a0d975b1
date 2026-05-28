@@ -366,22 +366,205 @@ export default function BlockDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Block-scoped map */}
-      <Card>
-        <CardHeader className="pb-2">
+      {/* Block-scoped map + side panel — overview-style layout */}
+      <Card className="overflow-hidden">
+        <CardHeader className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <MapIcon className="h-4 w-4" /> Block map
           </CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRangeKey)}>
+              <SelectTrigger className="h-8 w-[160px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DATE_RANGE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
-        <CardContent>
-          <BlockMap
-            paddock={paddock}
-            pins={pins}
-            trips={trips}
-            vineyardName={vineyardName}
-          />
-        </CardContent>
+        <div className="grid lg:grid-cols-[1fr_360px]">
+          <div className="bg-muted" style={{ height: 480 }}>
+            <BlockMap
+              paddock={paddock}
+              pins={mapPins}
+              trips={mapTrips}
+              vineyardName={vineyardName}
+              hideControls
+              height="100%"
+              onPinSelected={(id) => {
+                const p = pins.find((x: any) => x.id === id);
+                if (p) setActivePin(p as PinRecord);
+              }}
+            />
+          </div>
+          <div
+            className="flex flex-col border-t lg:border-l lg:border-t-0"
+            style={{ maxHeight: 480 }}
+          >
+            <Tabs
+              value={panelTab}
+              onValueChange={(v) => setPanelTab(v as "trips" | "pins")}
+              className="flex flex-1 flex-col min-h-0"
+            >
+              <div className="border-b p-2">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="trips">
+                    Trips ({tripsInRange.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="pins">
+                    Pins ({pinsForPanel.length})
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="trips" className="flex-1 min-h-0 mt-0">
+                <ScrollArea className="h-full">
+                  {tripsInRange.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      No trips recorded for this block in the selected date range.
+                    </div>
+                  ) : (
+                    <ul className="divide-y">
+                      {[...tripsInRange]
+                        .sort(
+                          (a, b) =>
+                            (b.start_time ? new Date(b.start_time).getTime() : 0) -
+                            (a.start_time ? new Date(a.start_time).getTime() : 0),
+                        )
+                        .map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/trips?paddock=${paddock.id}&trip=${t.id}`)
+                              }
+                              className="w-full px-3 py-2 text-left hover:bg-muted/60 focus:bg-muted/60 focus:outline-none"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">
+                                    {t.trip_title || t.trip_function || "Trip"}
+                                  </div>
+                                  <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                                    {fmtDateTime(t.start_time)}
+                                    {t.person_name ? ` · ${t.person_name}` : ""}
+                                    {(t as any).tractor_name
+                                      ? ` · ${(t as any).tractor_name}`
+                                      : ""}
+                                  </div>
+                                </div>
+                                {t.total_distance != null && (
+                                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                    {(t.total_distance / 1000).toFixed(2)} km
+                                  </Badge>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="pins" className="flex-1 min-h-0 mt-0">
+                <div className="flex items-center gap-1 border-b p-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPinScope("open")}
+                    className={`rounded-md px-2 py-1 ${
+                      pinScope === "open"
+                        ? "bg-primary/10 text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60"
+                    }`}
+                  >
+                    All open pins
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPinScope("range")}
+                    className={`rounded-md px-2 py-1 ${
+                      pinScope === "range"
+                        ? "bg-primary/10 text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60"
+                    }`}
+                  >
+                    In date range
+                  </button>
+                </div>
+                <ScrollArea className="h-full">
+                  {pinsForPanel.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      No pins found for this block.
+                    </div>
+                  ) : (
+                    <ul className="divide-y">
+                      {[...pinsForPanel]
+                        .sort(
+                          (a: any, b: any) =>
+                            new Date(b.created_at ?? 0).getTime() -
+                            new Date(a.created_at ?? 0).getTime(),
+                        )
+                        .map((p: any) => (
+                          <li key={p.id}>
+                            <button
+                              type="button"
+                              onClick={() => setActivePin(p as PinRecord)}
+                              className="w-full px-3 py-2 text-left hover:bg-muted/60 focus:bg-muted/60 focus:outline-none"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">
+                                    {p.title ?? p.button_name ?? "Pin"}
+                                  </div>
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                                    {p.category && <span>{p.category}</span>}
+                                    {p.priority && <span>· {p.priority}</span>}
+                                    {p.row_number != null && (
+                                      <span>· Row {p.row_number}</span>
+                                    )}
+                                    {p.side && <span>· {p.side}</span>}
+                                    <span>· {fmtDay(p.created_at)}</span>
+                                  </div>
+                                </div>
+                                <Badge
+                                  variant={p.is_completed ? "secondary" : "default"}
+                                  className="shrink-0 text-[10px]"
+                                >
+                                  {p.is_completed ? "Done" : p.status ?? "Open"}
+                                </Badge>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
       </Card>
+
+      <PinDetailSheet
+        open={!!activePin}
+        onOpenChange={(o) => !o && setActivePin(null)}
+        pin={activePin}
+        paddockName={paddock?.name ?? null}
+        vineyardName={vineyardName ?? null}
+        paddockRowDirection={
+          Number.isFinite(Number(paddock?.row_direction))
+            ? Number(paddock.row_direction)
+            : null
+        }
+      />
+
+
 
 
       {/* Metric cards */}
