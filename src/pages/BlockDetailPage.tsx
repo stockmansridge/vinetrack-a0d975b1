@@ -264,7 +264,29 @@ export default function BlockDetailPage() {
               value={paddock.planting_year ? String(paddock.planting_year) : "—"}
             />
             <Field label="Last updated" value={fmtDateTime(paddock.updated_at)} />
+            {rowNumberRange && (
+              <Field label="Row numbers" value={rowNumberRange} />
+            )}
+            {irrigation?.blockFlowLhr != null && (
+              <Field
+                label="Irrigation flow rate"
+                value={`${fmt(irrigation.blockFlowLhr, 0)} L/hr`}
+              />
+            )}
+            {irrigation?.emitterCount != null && (
+              <Field
+                label="Emitters"
+                value={`${fmt(irrigation.emitterCount)} emitters`}
+              />
+            )}
+            {irrigation?.emitterRateLMin != null && (
+              <Field
+                label="Emitter rate"
+                value={`${fmt(irrigation.emitterRateLMin, 2)} L/min/emitter`}
+              />
+            )}
           </div>
+
           {polygonPts.length < 3 && (
             <p className="mt-3 text-xs text-muted-foreground">
               <MapIcon className="inline h-3 w-3 mr-1" />
