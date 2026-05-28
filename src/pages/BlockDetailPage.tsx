@@ -99,15 +99,19 @@ export default function BlockDetailPage() {
 
   const irrigation = useMemo(() => {
     if (!paddock || !metrics) return null;
-    const flowPerEmitter = Number(paddock.flow_per_emitter); // L/hr per emitter
+    // Stored: flow_per_emitter is in L/hr per emitter.
+    const flowPerEmitterLhr = Number(paddock.flow_per_emitter);
     const emitterCount = metrics.emitterCount;
-    const hasFlow = Number.isFinite(flowPerEmitter) && flowPerEmitter > 0;
+    const hasFlow = Number.isFinite(flowPerEmitterLhr) && flowPerEmitterLhr > 0;
     const hasEmitters = emitterCount != null && emitterCount > 0;
     if (!hasFlow && !hasEmitters) return null;
-    const blockFlowLhr =
-      hasFlow && hasEmitters ? flowPerEmitter * (emitterCount as number) : null;
-    const emitterRateLMin = hasFlow ? flowPerEmitter / 60 : null;
-    return { blockFlowLhr, emitterCount, emitterRateLMin };
+    // Block total flow in L/hr → display in kL/hr.
+    const blockFlowKlhr =
+      hasFlow && hasEmitters
+        ? (flowPerEmitterLhr * (emitterCount as number)) / 1000
+        : null;
+    const emitterRateLhr = hasFlow ? flowPerEmitterLhr : null;
+    return { blockFlowKlhr, emitterCount, emitterRateLhr };
   }, [paddock, metrics]);
 
   const varieties = useMemo(() => {
