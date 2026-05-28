@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import BlockMap from "@/components/BlockMap";
 
 const fmt = (n: any, d = 0) =>
   Number.isFinite(Number(n))
@@ -98,15 +99,19 @@ export default function BlockDetailPage() {
 
   const irrigation = useMemo(() => {
     if (!paddock || !metrics) return null;
-    const flowPerEmitter = Number(paddock.flow_per_emitter); // L/hr per emitter
+    // Stored: flow_per_emitter is in L/hr per emitter.
+    const flowPerEmitterLhr = Number(paddock.flow_per_emitter);
     const emitterCount = metrics.emitterCount;
-    const hasFlow = Number.isFinite(flowPerEmitter) && flowPerEmitter > 0;
+    const hasFlow = Number.isFinite(flowPerEmitterLhr) && flowPerEmitterLhr > 0;
     const hasEmitters = emitterCount != null && emitterCount > 0;
     if (!hasFlow && !hasEmitters) return null;
-    const blockFlowLhr =
-      hasFlow && hasEmitters ? flowPerEmitter * (emitterCount as number) : null;
-    const emitterRateLMin = hasFlow ? flowPerEmitter / 60 : null;
-    return { blockFlowLhr, emitterCount, emitterRateLMin };
+    // Block total flow in L/hr → display in kL/hr.
+    const blockFlowKlhr =
+      hasFlow && hasEmitters
+        ? (flowPerEmitterLhr * (emitterCount as number)) / 1000
+        : null;
+    const emitterRateLhr = hasFlow ? flowPerEmitterLhr : null;
+    return { blockFlowKlhr, emitterCount, emitterRateLhr };
   }, [paddock, metrics]);
 
   const varieties = useMemo(() => {
@@ -267,10 +272,10 @@ export default function BlockDetailPage() {
             {rowNumberRange && (
               <Field label="Row numbers" value={rowNumberRange} />
             )}
-            {irrigation?.blockFlowLhr != null && (
+            {irrigation?.blockFlowKlhr != null && (
               <Field
                 label="Irrigation flow rate"
-                value={`${fmt(irrigation.blockFlowLhr, 0)} L/hr`}
+                value={`${fmt(irrigation.blockFlowKlhr, 1)} kL/hr`}
               />
             )}
             {irrigation?.emitterCount != null && (
@@ -279,10 +284,10 @@ export default function BlockDetailPage() {
                 value={`${fmt(irrigation.emitterCount)} emitters`}
               />
             )}
-            {irrigation?.emitterRateLMin != null && (
+            {irrigation?.emitterRateLhr != null && (
               <Field
                 label="Emitter rate"
-                value={`${fmt(irrigation.emitterRateLMin, 2)} L/min/emitter`}
+                value={`${fmt(irrigation.emitterRateLhr, 2)} L/hr/emitter`}
               />
             )}
           </div>
@@ -295,6 +300,24 @@ export default function BlockDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Block-scoped map */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapIcon className="h-4 w-4" /> Block map
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BlockMap
+            paddock={paddock}
+            pins={pins}
+            trips={trips}
+            vineyardName={vineyardName}
+          />
+        </CardContent>
+      </Card>
+
 
       {/* Metric cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
