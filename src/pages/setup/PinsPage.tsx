@@ -1,6 +1,7 @@
 import { useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -154,14 +155,29 @@ export default function PinsPage() {
     [pins, statusFilter],
   );
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paddockFilter = searchParams.get("paddock");
+  const paddockFilterName = paddockFilter
+    ? paddockNameById.get(paddockFilter) ?? null
+    : null;
+  const clearPaddockFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("paddock");
+    setSearchParams(next, { replace: true });
+  };
+
   const filtered = useMemo(() => {
-    if (!filter) return statusFiltered;
+    let list = statusFiltered;
+    if (paddockFilter) {
+      list = list.filter((p: any) => p.paddock_id === paddockFilter);
+    }
+    if (!filter) return list;
     const f = filter.toLowerCase();
-    return statusFiltered.filter((p) =>
+    return list.filter((p) =>
       [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [statusFiltered, filter]);
+  }, [statusFiltered, filter, paddockFilter]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
