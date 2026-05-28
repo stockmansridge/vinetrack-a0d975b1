@@ -272,10 +272,10 @@ export default function BlockDetailPage() {
             {rowNumberRange && (
               <Field label="Row numbers" value={rowNumberRange} />
             )}
-            {irrigation?.blockFlowLhr != null && (
+            {irrigation?.blockFlowKlhr != null && (
               <Field
                 label="Irrigation flow rate"
-                value={`${fmt(irrigation.blockFlowLhr, 0)} L/hr`}
+                value={`${fmt(irrigation.blockFlowKlhr, 1)} kL/hr`}
               />
             )}
             {irrigation?.emitterCount != null && (
@@ -284,10 +284,10 @@ export default function BlockDetailPage() {
                 value={`${fmt(irrigation.emitterCount)} emitters`}
               />
             )}
-            {irrigation?.emitterRateLMin != null && (
+            {irrigation?.emitterRateLhr != null && (
               <Field
                 label="Emitter rate"
-                value={`${fmt(irrigation.emitterRateLMin, 2)} L/min/emitter`}
+                value={`${fmt(irrigation.emitterRateLhr, 2)} L/hr/emitter`}
               />
             )}
           </div>
