@@ -395,7 +395,7 @@ export default function VineyardOverviewMap({
           }),
         });
         const id = p.paddock.id;
-        poly.addEventListener("select", () => setSelection({ kind: "paddock", id }));
+        poly.addEventListener("select", () => navigate(`/blocks/${id}`));
         newOverlays.push(poly);
 
         if (p.centroid && validPt(p.centroid) && p.paddock.name) {
@@ -407,10 +407,11 @@ export default function VineyardOverviewMap({
               el.className = "vt-name-chip";
               el.style.cssText =
                 "background:rgba(0,0,0,0.55);color:white;font-size:11px;padding:2px 6px;border-radius:4px;cursor:pointer;white-space:nowrap;";
+              el.title = `${name} — open block`;
               el.textContent = name;
               el.addEventListener("click", (ev) => {
                 ev.stopPropagation();
-                setSelection({ kind: "paddock", id });
+                navigate(`/blocks/${id}`);
               });
               return el;
             },
