@@ -7,7 +7,7 @@
 // READ-ONLY — no writes.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Crosshair, ExternalLink, Layers, X } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -154,6 +154,7 @@ export default function VineyardOverviewMap({
   height = 520,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const navigate = useNavigate();
   const [selection, setSelection] = useState<Selection>(null);
   const [showPaddocks, setShowPaddocks] = useState(true);
   const [showTrips, setShowTrips] = useState(true);
@@ -394,7 +395,7 @@ export default function VineyardOverviewMap({
           }),
         });
         const id = p.paddock.id;
-        poly.addEventListener("select", () => setSelection({ kind: "paddock", id }));
+        poly.addEventListener("select", () => navigate(`/blocks/${id}`));
         newOverlays.push(poly);
 
         if (p.centroid && validPt(p.centroid) && p.paddock.name) {
@@ -406,10 +407,11 @@ export default function VineyardOverviewMap({
               el.className = "vt-name-chip";
               el.style.cssText =
                 "background:rgba(0,0,0,0.55);color:white;font-size:11px;padding:2px 6px;border-radius:4px;cursor:pointer;white-space:nowrap;";
+              el.title = `${name} — open block`;
               el.textContent = name;
               el.addEventListener("click", (ev) => {
                 ev.stopPropagation();
-                setSelection({ kind: "paddock", id });
+                navigate(`/blocks/${id}`);
               });
               return el;
             },
@@ -505,6 +507,7 @@ export default function VineyardOverviewMap({
     selection,
     vineyardExtent,
     fitToBounds,
+    navigate,
   ]);
 
   // Reset fit when vineyard switches.
@@ -556,7 +559,7 @@ export default function VineyardOverviewMap({
         <div>
           <CardTitle className="text-base">Vineyard map</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Blocks, recent trips and pins. Click anything for details.
+            Click a block to open its detail page. Click a trip or pin for details here.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

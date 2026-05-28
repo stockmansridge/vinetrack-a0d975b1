@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useGrowthStagePhoto } from "@/hooks/useGrowthStagePhoto";
@@ -57,7 +58,12 @@ export default function GrowthStageRecordsPage() {
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [block, setBlock] = useState<string>(ANY);
+  const [searchParams] = useSearchParams();
+  const [block, setBlock] = useState<string>(searchParams.get("paddock") ?? ANY);
+  useEffect(() => {
+    const p = searchParams.get("paddock");
+    if (p) setBlock(p);
+  }, [searchParams]);
   const [variety, setVariety] = useState<string>(ANY);
   const [stage, setStage] = useState<string>(ANY);
   const [operator, setOperator] = useState<string>(ANY);
