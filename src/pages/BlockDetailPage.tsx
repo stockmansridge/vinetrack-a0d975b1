@@ -18,7 +18,7 @@ import {
 
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchOne } from "@/lib/queries";
-import { deriveMetrics, parsePolygonPoints } from "@/lib/paddockGeometry";
+import { deriveMetrics, parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
 import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
@@ -84,7 +84,33 @@ export default function BlockDetailPage() {
     [paddock],
   );
 
+  const rowNumberRange = useMemo(() => {
+    if (!paddock) return null;
+    const nums = parseRows(paddock.rows)
+      .map((r) => r.number)
+      .filter((n): n is number => Number.isFinite(n as number));
+    if (!nums.length) return null;
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    const f = (n: number) => (Number.isInteger(n) ? String(n) : String(n));
+    return min === max ? f(min) : `${f(min)}–${f(max)}`;
+  }, [paddock]);
+
+  const irrigation = useMemo(() => {
+    if (!paddock || !metrics) return null;
+    const flowPerEmitter = Number(paddock.flow_per_emitter); // L/hr per emitter
+    const emitterCount = metrics.emitterCount;
+    const hasFlow = Number.isFinite(flowPerEmitter) && flowPerEmitter > 0;
+    const hasEmitters = emitterCount != null && emitterCount > 0;
+    if (!hasFlow && !hasEmitters) return null;
+    const blockFlowLhr =
+      hasFlow && hasEmitters ? flowPerEmitter * (emitterCount as number) : null;
+    const emitterRateLMin = hasFlow ? flowPerEmitter / 60 : null;
+    return { blockFlowLhr, emitterCount, emitterRateLMin };
+  }, [paddock, metrics]);
+
   const varieties = useMemo(() => {
+
     if (!paddock) return [] as { name: string; percent?: number | null }[];
     const arr = Array.isArray(paddock.variety_allocations)
       ? paddock.variety_allocations
@@ -238,7 +264,29 @@ export default function BlockDetailPage() {
               value={paddock.planting_year ? String(paddock.planting_year) : "—"}
             />
             <Field label="Last updated" value={fmtDateTime(paddock.updated_at)} />
+            {rowNumberRange && (
+              <Field label="Row numbers" value={rowNumberRange} />
+            )}
+            {irrigation?.blockFlowLhr != null && (
+              <Field
+                label="Irrigation flow rate"
+                value={`${fmt(irrigation.blockFlowLhr, 0)} L/hr`}
+              />
+            )}
+            {irrigation?.emitterCount != null && (
+              <Field
+                label="Emitters"
+                value={`${fmt(irrigation.emitterCount)} emitters`}
+              />
+            )}
+            {irrigation?.emitterRateLMin != null && (
+              <Field
+                label="Emitter rate"
+                value={`${fmt(irrigation.emitterRateLMin, 2)} L/min/emitter`}
+              />
+            )}
           </div>
+
           {polygonPts.length < 3 && (
             <p className="mt-3 text-xs text-muted-foreground">
               <MapIcon className="inline h-3 w-3 mr-1" />
