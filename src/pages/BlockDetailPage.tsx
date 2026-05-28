@@ -84,7 +84,33 @@ export default function BlockDetailPage() {
     [paddock],
   );
 
+  const rowNumberRange = useMemo(() => {
+    if (!paddock) return null;
+    const nums = parseRows(paddock.rows)
+      .map((r) => r.number)
+      .filter((n): n is number => Number.isFinite(n as number));
+    if (!nums.length) return null;
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    const f = (n: number) => (Number.isInteger(n) ? String(n) : String(n));
+    return min === max ? f(min) : `${f(min)}–${f(max)}`;
+  }, [paddock]);
+
+  const irrigation = useMemo(() => {
+    if (!paddock || !metrics) return null;
+    const flowPerEmitter = Number(paddock.flow_per_emitter); // L/hr per emitter
+    const emitterCount = metrics.emitterCount;
+    const hasFlow = Number.isFinite(flowPerEmitter) && flowPerEmitter > 0;
+    const hasEmitters = emitterCount != null && emitterCount > 0;
+    if (!hasFlow && !hasEmitters) return null;
+    const blockFlowLhr =
+      hasFlow && hasEmitters ? flowPerEmitter * (emitterCount as number) : null;
+    const emitterRateLMin = hasFlow ? flowPerEmitter / 60 : null;
+    return { blockFlowLhr, emitterCount, emitterRateLMin };
+  }, [paddock, metrics]);
+
   const varieties = useMemo(() => {
+
     if (!paddock) return [] as { name: string; percent?: number | null }[];
     const arr = Array.isArray(paddock.variety_allocations)
       ? paddock.variety_allocations
