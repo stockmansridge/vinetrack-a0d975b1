@@ -272,6 +272,21 @@ export default function PinsPage() {
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
+      {paddockFilter && (
+        <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Filtered by block:</span>
+          <Badge variant="secondary">{paddockFilterName ?? paddockFilter.slice(0, 8)}</Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2"
+            onClick={clearPaddockFilter}
+          >
+            <X className="h-3 w-3 mr-1" /> Clear
+          </Button>
+        </div>
+      )}
+
       {showPinDiagnostics && (
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
         <div className="font-semibold">Pins diagnostics (temporary)</div>
