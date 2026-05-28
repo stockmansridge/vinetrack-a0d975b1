@@ -23,7 +23,12 @@ interface Props {
   pins: any[];
   trips: Trip[];
   vineyardName?: string | null;
-  height?: number;
+  height?: number | string;
+  /** Hide the built-in Pins/Trips chip row (when external controls drive it). */
+  hideControls?: boolean;
+  /** Selected pin id to visually highlight (called from external list). */
+  highlightedPinId?: string | null;
+  onPinSelected?: (pinId: string) => void;
 }
 
 type FilterKey = "pins" | "trips";
@@ -34,6 +39,9 @@ export default function BlockMap({
   trips,
   vineyardName,
   height = 420,
+  hideControls = false,
+  highlightedPinId: _highlightedPinId,
+  onPinSelected,
 }: Props) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
