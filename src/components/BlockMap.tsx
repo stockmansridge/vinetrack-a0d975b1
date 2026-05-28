@@ -178,7 +178,9 @@ export default function BlockMap({
           }),
         });
         const id = trip.id;
-        line.addEventListener("select", () => navigate(`/trips/${id}`));
+        line.addEventListener("select", () =>
+          navigate(`/trips?paddock=${paddock.id}&trip=${id}`),
+        );
         newOverlays.push(line);
       }
     }
