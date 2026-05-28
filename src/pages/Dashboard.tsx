@@ -141,7 +141,7 @@ export default function Dashboard() {
           Icon={Map}
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
-          to="/setup/paddocks"
+          to="/paddocks"
         />
         <StatCard
           label="Area (ha)"

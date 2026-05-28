@@ -22,6 +22,7 @@ import ListPage from "./pages/setup/ListPage";
 import DetailPage from "./pages/setup/DetailPage";
 import PaddockDetailPage from "./pages/setup/PaddockDetailPage";
 import BlockDetailPage from "./pages/BlockDetailPage";
+import PaddocksListPage from "./pages/PaddocksListPage";
 import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
 import PaddocksPage from "./pages/setup/PaddocksPage";
@@ -96,6 +97,7 @@ const App = () => (
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
                     <Route path="/blocks/:blockId" element={<BlockDetailPage />} />
+                    <Route path="/paddocks" element={<PaddocksListPage />} />
                     <Route path="/setup/paddocks" element={<PaddocksPage />} />
                     <Route path="/setup/paddocks/new" element={<NewPaddockPage />} />
                     <Route
