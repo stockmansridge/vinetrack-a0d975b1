@@ -1,14 +1,13 @@
 // Block (paddock) detail page — operational overview for a single block.
 // Header, metric cards and tabbed activity (trips, pins, growth stages,
 // work tasks) for the selected block only. READ-ONLY.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Pencil,
   Map as MapIcon,
-  Layers,
   Sprout,
   MapPin,
   SprayCan,
@@ -19,7 +18,7 @@ import {
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchOne } from "@/lib/queries";
 import { deriveMetrics, parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
-import { fetchTripsForVineyard } from "@/lib/tripsQuery";
+import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
@@ -31,6 +30,14 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   Table,
   TableBody,
   TableCell,
@@ -39,6 +46,31 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import BlockMap from "@/components/BlockMap";
+import PinDetailSheet from "@/components/PinDetailSheet";
+import type { PinRecord } from "@/components/PinDetailPanel";
+
+type DateRangeKey = "7d" | "30d" | "90d" | "season" | "all";
+
+const DATE_RANGE_OPTIONS: { value: DateRangeKey; label: string }[] = [
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "90d", label: "Last 90 days" },
+  { value: "season", label: "This season" },
+  { value: "all", label: "All time" },
+];
+
+function rangeStart(key: DateRangeKey): Date | null {
+  const now = new Date();
+  if (key === "all") return null;
+  if (key === "7d") return new Date(now.getTime() - 7 * 86_400_000);
+  if (key === "30d") return new Date(now.getTime() - 30 * 86_400_000);
+  if (key === "90d") return new Date(now.getTime() - 90 * 86_400_000);
+  // Season: assume Southern Hemisphere viticultural season starts July 1.
+  const y = now.getFullYear();
+  const seasonStartYear = now.getMonth() >= 6 ? y : y - 1;
+  return new Date(seasonStartYear, 6, 1);
+}
+
 
 const fmt = (n: any, d = 0) =>
   Number.isFinite(Number(n))
