@@ -70,6 +70,7 @@ import AdminPinsPage from "./pages/admin/AdminPinsPage";
 import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
 import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
 import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
+import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 
 const queryClient = new QueryClient();
 
@@ -174,6 +175,7 @@ const App = () => (
                     <Route path="/admin/spray-records" element={<AdminSprayRecordsPage />} />
                     <Route path="/admin/work-tasks" element={<AdminWorkTasksPage />} />
                     <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
+                    <Route path="/admin/block-troubleshooter" element={<BlockTroubleshooterPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
