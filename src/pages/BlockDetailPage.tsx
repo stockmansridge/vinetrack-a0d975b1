@@ -1,14 +1,13 @@
 // Block (paddock) detail page — operational overview for a single block.
 // Header, metric cards and tabbed activity (trips, pins, growth stages,
 // work tasks) for the selected block only. READ-ONLY.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Pencil,
   Map as MapIcon,
-  Layers,
   Sprout,
   MapPin,
   SprayCan,
@@ -19,7 +18,7 @@ import {
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchOne } from "@/lib/queries";
 import { deriveMetrics, parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
-import { fetchTripsForVineyard } from "@/lib/tripsQuery";
+import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
@@ -31,6 +30,14 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   Table,
   TableBody,
   TableCell,
@@ -39,6 +46,31 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import BlockMap from "@/components/BlockMap";
+import PinDetailSheet from "@/components/PinDetailSheet";
+import type { PinRecord } from "@/components/PinDetailPanel";
+
+type DateRangeKey = "7d" | "30d" | "90d" | "season" | "all";
+
+const DATE_RANGE_OPTIONS: { value: DateRangeKey; label: string }[] = [
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "90d", label: "Last 90 days" },
+  { value: "season", label: "This season" },
+  { value: "all", label: "All time" },
+];
+
+function rangeStart(key: DateRangeKey): Date | null {
+  const now = new Date();
+  if (key === "all") return null;
+  if (key === "7d") return new Date(now.getTime() - 7 * 86_400_000);
+  if (key === "30d") return new Date(now.getTime() - 30 * 86_400_000);
+  if (key === "90d") return new Date(now.getTime() - 90 * 86_400_000);
+  // Season: assume Southern Hemisphere viticultural season starts July 1.
+  const y = now.getFullYear();
+  const seasonStartYear = now.getMonth() >= 6 ? y : y - 1;
+  return new Date(seasonStartYear, 6, 1);
+}
+
 
 const fmt = (n: any, d = 0) =>
   Number.isFinite(Number(n))
@@ -180,6 +212,39 @@ export default function BlockDetailPage() {
     [tasksQ.data, paddock?.id],
   );
 
+  // ---- Map side-panel state -------------------------------------------------
+  const [panelTab, setPanelTab] = useState<"trips" | "pins">("trips");
+  const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
+  const [pinScope, setPinScope] = useState<"open" | "range">("open");
+  const [activePin, setActivePin] = useState<PinRecord | null>(null);
+
+  const since = useMemo(() => rangeStart(dateRange), [dateRange]);
+
+  const tripsInRange = useMemo<Trip[]>(() => {
+    if (!since) return trips;
+    const cutoff = since.getTime();
+    return trips.filter((t) => {
+      const ts = t.start_time ? new Date(t.start_time).getTime() : 0;
+      return ts >= cutoff;
+    });
+  }, [trips, since]);
+
+  const pinsForPanel = useMemo(() => {
+    if (pinScope === "open") {
+      return pins.filter((p: any) => !p.is_completed && !p.deleted_at);
+    }
+    if (!since) return pins;
+    const cutoff = since.getTime();
+    return pins.filter((p: any) => {
+      const ts = p.created_at ? new Date(p.created_at).getTime() : 0;
+      return ts >= cutoff;
+    });
+  }, [pins, pinScope, since]);
+
+  // Map overlays follow the active tab so the map mirrors the panel scope.
+  const mapTrips = panelTab === "trips" ? tripsInRange : [];
+  const mapPins = panelTab === "pins" ? pinsForPanel : [];
+
   if (paddockQ.isLoading) {
     return (
       <div className="space-y-4">
@@ -301,22 +366,205 @@ export default function BlockDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Block-scoped map */}
-      <Card>
-        <CardHeader className="pb-2">
+      {/* Block-scoped map + side panel — overview-style layout */}
+      <Card className="overflow-hidden">
+        <CardHeader className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <MapIcon className="h-4 w-4" /> Block map
           </CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRangeKey)}>
+              <SelectTrigger className="h-8 w-[160px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DATE_RANGE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
-        <CardContent>
-          <BlockMap
-            paddock={paddock}
-            pins={pins}
-            trips={trips}
-            vineyardName={vineyardName}
-          />
-        </CardContent>
+        <div className="grid lg:grid-cols-[1fr_360px]">
+          <div className="bg-muted" style={{ height: 480 }}>
+            <BlockMap
+              paddock={paddock}
+              pins={mapPins}
+              trips={mapTrips}
+              vineyardName={vineyardName}
+              hideControls
+              height="100%"
+              onPinSelected={(id) => {
+                const p = pins.find((x: any) => x.id === id);
+                if (p) setActivePin(p as PinRecord);
+              }}
+            />
+          </div>
+          <div
+            className="flex flex-col border-t lg:border-l lg:border-t-0"
+            style={{ maxHeight: 480 }}
+          >
+            <Tabs
+              value={panelTab}
+              onValueChange={(v) => setPanelTab(v as "trips" | "pins")}
+              className="flex flex-1 flex-col min-h-0"
+            >
+              <div className="border-b p-2">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="trips">
+                    Trips ({tripsInRange.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="pins">
+                    Pins ({pinsForPanel.length})
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="trips" className="flex-1 min-h-0 mt-0">
+                <ScrollArea className="h-full">
+                  {tripsInRange.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      No trips recorded for this block in the selected date range.
+                    </div>
+                  ) : (
+                    <ul className="divide-y">
+                      {[...tripsInRange]
+                        .sort(
+                          (a, b) =>
+                            (b.start_time ? new Date(b.start_time).getTime() : 0) -
+                            (a.start_time ? new Date(a.start_time).getTime() : 0),
+                        )
+                        .map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/trips?paddock=${paddock.id}&trip=${t.id}`)
+                              }
+                              className="w-full px-3 py-2 text-left hover:bg-muted/60 focus:bg-muted/60 focus:outline-none"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">
+                                    {t.trip_title || t.trip_function || "Trip"}
+                                  </div>
+                                  <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                                    {fmtDateTime(t.start_time)}
+                                    {t.person_name ? ` · ${t.person_name}` : ""}
+                                    {(t as any).tractor_name
+                                      ? ` · ${(t as any).tractor_name}`
+                                      : ""}
+                                  </div>
+                                </div>
+                                {t.total_distance != null && (
+                                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                    {(t.total_distance / 1000).toFixed(2)} km
+                                  </Badge>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="pins" className="flex-1 min-h-0 mt-0">
+                <div className="flex items-center gap-1 border-b p-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPinScope("open")}
+                    className={`rounded-md px-2 py-1 ${
+                      pinScope === "open"
+                        ? "bg-primary/10 text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60"
+                    }`}
+                  >
+                    All open pins
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPinScope("range")}
+                    className={`rounded-md px-2 py-1 ${
+                      pinScope === "range"
+                        ? "bg-primary/10 text-foreground"
+                        : "text-muted-foreground hover:bg-muted/60"
+                    }`}
+                  >
+                    In date range
+                  </button>
+                </div>
+                <ScrollArea className="h-full">
+                  {pinsForPanel.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      No pins found for this block.
+                    </div>
+                  ) : (
+                    <ul className="divide-y">
+                      {[...pinsForPanel]
+                        .sort(
+                          (a: any, b: any) =>
+                            new Date(b.created_at ?? 0).getTime() -
+                            new Date(a.created_at ?? 0).getTime(),
+                        )
+                        .map((p: any) => (
+                          <li key={p.id}>
+                            <button
+                              type="button"
+                              onClick={() => setActivePin(p as PinRecord)}
+                              className="w-full px-3 py-2 text-left hover:bg-muted/60 focus:bg-muted/60 focus:outline-none"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">
+                                    {p.title ?? p.button_name ?? "Pin"}
+                                  </div>
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                                    {p.category && <span>{p.category}</span>}
+                                    {p.priority && <span>· {p.priority}</span>}
+                                    {p.row_number != null && (
+                                      <span>· Row {p.row_number}</span>
+                                    )}
+                                    {p.side && <span>· {p.side}</span>}
+                                    <span>· {fmtDay(p.created_at)}</span>
+                                  </div>
+                                </div>
+                                <Badge
+                                  variant={p.is_completed ? "secondary" : "default"}
+                                  className="shrink-0 text-[10px]"
+                                >
+                                  {p.is_completed ? "Done" : p.status ?? "Open"}
+                                </Badge>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
       </Card>
+
+      <PinDetailSheet
+        open={!!activePin}
+        onOpenChange={(o) => !o && setActivePin(null)}
+        pin={activePin}
+        paddockName={paddock?.name ?? null}
+        vineyardName={vineyardName ?? null}
+        paddockRowDirection={
+          Number.isFinite(Number(paddock?.row_direction))
+            ? Number(paddock.row_direction)
+            : null
+        }
+      />
+
+
 
 
       {/* Metric cards */}

@@ -23,7 +23,12 @@ interface Props {
   pins: any[];
   trips: Trip[];
   vineyardName?: string | null;
-  height?: number;
+  height?: number | string;
+  /** Hide the built-in Pins/Trips chip row (when external controls drive it). */
+  hideControls?: boolean;
+  /** Selected pin id to visually highlight (called from external list). */
+  highlightedPinId?: string | null;
+  onPinSelected?: (pinId: string) => void;
 }
 
 type FilterKey = "pins" | "trips";
@@ -34,6 +39,9 @@ export default function BlockMap({
   trips,
   vineyardName,
   height = 420,
+  hideControls = false,
+  highlightedPinId: _highlightedPinId,
+  onPinSelected,
 }: Props) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -198,6 +206,7 @@ export default function BlockMap({
             el.title = pinDisplayTitle(pin);
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
+              onPinSelected?.(pin.id);
               setActivePin(pin as PinRecord);
             });
             return el;
@@ -239,7 +248,7 @@ export default function BlockMap({
   if (!hasGeometry) {
     return (
       <div
-        className="flex items-center justify-center rounded-md border border-dashed bg-muted/30 text-sm text-muted-foreground"
+        className="flex h-full items-center justify-center rounded-md border border-dashed bg-muted/30 text-sm text-muted-foreground"
         style={{ height }}
       >
         <div className="text-center px-4">
@@ -254,25 +263,30 @@ export default function BlockMap({
     setFilters((f) => ({ ...f, [k]: !f[k] }));
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterChip
-          label="Pins"
-          count={pinsWithCoords.length}
-          active={filters.pins}
-          onClick={() => toggle("pins")}
-        />
-        <FilterChip
-          label="Trips"
-          count={tripsWithPath.length}
-          active={filters.trips}
-          onClick={() => toggle("trips")}
-        />
-        {vineyardName && (
-          <span className="ml-auto text-xs text-muted-foreground">{vineyardName}</span>
-        )}
-      </div>
-      <div className="relative overflow-hidden rounded-md border bg-muted" style={{ height }}>
+    <div className="flex h-full flex-col gap-2">
+      {!hideControls && (
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterChip
+            label="Pins"
+            count={pinsWithCoords.length}
+            active={filters.pins}
+            onClick={() => toggle("pins")}
+          />
+          <FilterChip
+            label="Trips"
+            count={tripsWithPath.length}
+            active={filters.trips}
+            onClick={() => toggle("trips")}
+          />
+          {vineyardName && (
+            <span className="ml-auto text-xs text-muted-foreground">{vineyardName}</span>
+          )}
+        </div>
+      )}
+      <div
+        className="relative flex-1 overflow-hidden rounded-md border bg-muted"
+        style={hideControls ? { height: "100%", minHeight: 0 } : { height }}
+      >
         <div ref={containerRef} className="absolute inset-0" />
         {mapError && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 text-sm text-muted-foreground p-4 text-center">
