@@ -17,14 +17,22 @@ function StatCard({
   value,
   Icon,
   hint,
+  to,
 }: {
   label: string;
   value: React.ReactNode;
   Icon: any;
   hint?: string;
+  to?: string;
 }) {
-  return (
-    <Card>
+  const card = (
+    <Card
+      className={
+        to
+          ? "cursor-pointer transition hover:border-primary/50 hover:shadow-md hover:bg-muted/40"
+          : undefined
+      }
+    >
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -35,6 +43,14 @@ function StatCard({
       </CardContent>
     </Card>
   );
+  if (to) {
+    return (
+      <Link to={to} aria-label={`${label} — open`} className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {card}
+      </Link>
+    );
+  }
+  return card;
 }
 
 const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }) => (
