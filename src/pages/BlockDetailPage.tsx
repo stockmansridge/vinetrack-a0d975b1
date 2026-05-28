@@ -18,7 +18,7 @@ import {
 
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchOne } from "@/lib/queries";
-import { deriveMetrics, parsePolygonPoints } from "@/lib/paddockGeometry";
+import { deriveMetrics, parsePolygonPoints, parseRows } from "@/lib/paddockGeometry";
 import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
