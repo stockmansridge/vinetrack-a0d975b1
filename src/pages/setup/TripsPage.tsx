@@ -1,5 +1,6 @@
-import { useMemo, useState, Fragment } from "react";
+import { useMemo, useState, useEffect, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { Card } from "@/components/ui/card";
@@ -134,7 +135,12 @@ export default function TripsPage() {
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [paddockId, setPaddockId] = useState<string>(ANY);
+  const [searchParams] = useSearchParams();
+  const [paddockId, setPaddockId] = useState<string>(searchParams.get("paddock") ?? ANY);
+  useEffect(() => {
+    const p = searchParams.get("paddock");
+    if (p) setPaddockId(p);
+  }, [searchParams]);
   const [pattern, setPattern] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
   const [tripFn, setTripFn] = useState<string>(ANY);
