@@ -1,4 +1,4 @@
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase as lovableCloud } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -29,14 +29,17 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-const TYPE_OPTIONS = [
-  { value: "support", label: "Support / question" },
-  { value: "bug", label: "Bug report" },
-  { value: "feature", label: "Feature request" },
+// Match iOS support form categories exactly.
+const CATEGORY_OPTIONS = [
+  { value: "general", label: "General" },
+  { value: "bug", label: "Bug / Issue" },
+  { value: "feature", label: "Feature Request" },
+  { value: "account", label: "Account" },
+  { value: "billing", label: "Billing" },
   { value: "other", label: "Other" },
 ];
 
-const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENTS = 5;
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
 
@@ -52,7 +55,6 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Strip "data:...;base64," prefix
       resolve(result.includes(",") ? result.split(",")[1] : result);
     };
     reader.onerror = () => reject(reader.error);
@@ -66,7 +68,7 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   const { pathname } = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [requestType, setRequestType] = useState("support");
+  const [category, setCategory] = useState("general");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -75,8 +77,25 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
 
+  const submitterName =
+    (user?.user_metadata?.full_name as string | undefined) ??
+    (user?.user_metadata?.name as string | undefined) ??
+    null;
+  const submitterEmail = user?.email ?? null;
+
+  // Editable contact fields, prefilled from auth.
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setContactName(submitterName ?? "");
+      setContactEmail(submitterEmail ?? "");
+    }
+  }, [open, submitterName, submitterEmail]);
+
   const reset = () => {
-    setRequestType("support");
+    setCategory("general");
     setSubject("");
     setMessage("");
     setAttachments([]);
@@ -84,7 +103,7 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
 
   const handleFiles = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    e.target.value = ""; // allow re-pick
+    e.target.value = "";
     if (!files.length) return;
     if (attachments.length + files.length > MAX_ATTACHMENTS) {
       toast.error(`Maximum ${MAX_ATTACHMENTS} attachments`);
@@ -110,31 +129,51 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Map portal category to the request_type values the edge function accepts.
+  // The backend currently allows: support | bug | feature | other.
+  const mapToRequestType = (cat: string): string => {
+    switch (cat) {
+      case "general":
+        return "support";
+      case "bug":
+        return "bug";
+      case "feature":
+        return "feature";
+      case "account":
+      case "billing":
+      case "other":
+      default:
+        return "other";
+    }
+  };
+
   const submit = async () => {
     if (!subject.trim()) {
       toast.error("Please add a subject");
       return;
     }
     if (!message.trim()) {
-      toast.error("Please describe your request");
+      toast.error("Please add details");
       return;
     }
     setSubmitting(true);
     try {
+      const categoryLabel =
+        CATEGORY_OPTIONS.find((c) => c.value === category)?.label ?? category;
       const payload = {
-        request_type: requestType,
-        subject: subject.trim(),
+        request_type: mapToRequestType(category),
+        // Prefix the subject with the iOS-style category label so admins
+        // see the full taxonomy (Account/Billing) even though backend
+        // request_type collapses to the allowed set.
+        subject: `[${categoryLabel}] ${subject.trim()}`,
         message: message.trim(),
         page_path: pathname,
         browser_info: navigator.userAgent,
         vineyard_id: selectedVineyardId,
         vineyard_name: vineyardName,
         user_id: user?.id ?? null,
-        user_email: user?.email ?? null,
-        user_name:
-          (user?.user_metadata?.full_name as string | undefined) ??
-          (user?.user_metadata?.name as string | undefined) ??
-          null,
+        user_email: contactEmail.trim() || submitterEmail,
+        user_name: contactName.trim() || submitterName,
         user_role: currentRole,
         attachments: attachments.map((a) => ({
           name: a.name,
@@ -168,20 +207,18 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
     <Sheet open={open} onOpenChange={(v) => !submitting && onOpenChange(v)}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Contact support</SheetTitle>
-          <SheetDescription>
-            Report a bug, request a feature, or ask a question. Goes straight to the team.
-          </SheetDescription>
+          <SheetTitle>Contact Support</SheetTitle>
+          <SheetDescription>What can we help with?</SheetDescription>
         </SheetHeader>
         <div className="mt-6 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="sr-type">Type</Label>
-            <Select value={requestType} onValueChange={setRequestType}>
-              <SelectTrigger id="sr-type">
+            <Label htmlFor="sr-category">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="sr-category">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TYPE_OPTIONS.map((o) => (
+                {CATEGORY_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
@@ -195,24 +232,24 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
               id="sr-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Brief summary"
+              placeholder="Subject"
               maxLength={200}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="sr-message">Message</Label>
+            <Label htmlFor="sr-message">Details</Label>
             <Textarea
               id="sr-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="What's happening? Steps to reproduce, expected behaviour, etc."
+              placeholder="Describe your question, issue, or request…"
               rows={8}
               maxLength={5000}
             />
             <p className="text-xs text-muted-foreground">{message.length}/5000</p>
           </div>
           <div className="space-y-2">
-            <Label>Attachments (optional)</Label>
+            <Label>Attachments</Label>
             <input
               ref={fileInputRef}
               type="file"
@@ -229,10 +266,10 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
               disabled={attachments.length >= MAX_ATTACHMENTS}
             >
               <Paperclip className="mr-2 h-4 w-4" />
-              Add screenshot
+              Add attachment
             </Button>
             <p className="text-xs text-muted-foreground">
-              Up to {MAX_ATTACHMENTS} images, max 10 MB each (JPG, PNG, WebP).
+              Optional. Add up to {MAX_ATTACHMENTS} photos or screenshots.
             </p>
             {attachments.length > 0 && (
               <ul className="space-y-1">
@@ -262,19 +299,49 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
             )}
           </div>
 
-          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-            <div>
-              <span className="font-medium text-foreground">Vineyard:</span>{" "}
-              {vineyardName ?? "—"}
+          <div className="space-y-3 pt-2">
+            <h3 className="text-sm font-semibold">Contact</h3>
+            <div className="space-y-2">
+              <Label htmlFor="sr-contact-name">Name</Label>
+              <Input
+                id="sr-contact-name"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="Your name"
+                maxLength={120}
+              />
             </div>
-            <div>
-              <span className="font-medium text-foreground">Page:</span> {pathname}
+            <div className="space-y-2">
+              <Label htmlFor="sr-contact-email">Email</Label>
+              <Input
+                id="sr-contact-email"
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="you@example.com"
+                maxLength={255}
+              />
             </div>
-            <div>
-              <span className="font-medium text-foreground">From:</span>{" "}
-              {user?.email ?? "Not signed in"}
+            <div className="space-y-2">
+              <Label>Vineyard</Label>
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                {vineyardName ?? "—"}
+              </div>
             </div>
           </div>
+
+          <details className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <summary className="cursor-pointer select-none">Diagnostic context</summary>
+            <div className="mt-2 space-y-1">
+              <div>
+                <span className="font-medium text-foreground">Page:</span> {pathname}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">Role:</span>{" "}
+                {currentRole ?? "—"}
+              </div>
+            </div>
+          </details>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button
