@@ -70,7 +70,6 @@ export async function createEquipmentItem(
     model: input.model ?? null,
     serial_number: input.serial_number ?? null,
     notes: input.notes ?? null,
-    sort_order: input.sort_order ?? null,
     created_by: input.user_id,
     updated_by: input.user_id,
     client_updated_at: nowIso(),
