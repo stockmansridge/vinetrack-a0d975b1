@@ -71,6 +71,7 @@ import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
 import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
 import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
+import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 
 const queryClient = new QueryClient();
 
