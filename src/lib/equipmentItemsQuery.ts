@@ -56,7 +56,6 @@ export interface CreateEquipmentItemInput {
   serial_number?: string | null;
   notes?: string | null;
   category?: EquipmentCategory;
-  sort_order?: number | null;
   user_id: string | null;
 }
 
