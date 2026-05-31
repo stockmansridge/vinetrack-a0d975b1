@@ -109,7 +109,7 @@ export async function updateEquipmentItem(
   if (input.make !== undefined) patch.make = input.make;
   if (input.model !== undefined) patch.model = input.model;
   if (input.serial_number !== undefined) patch.serial_number = input.serial_number;
-  if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.notes !== undefined) patch.notes = input.notes ?? "";
   
 
   const { data, error } = await supabase
