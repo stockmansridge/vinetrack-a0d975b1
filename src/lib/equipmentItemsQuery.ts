@@ -69,7 +69,7 @@ export async function createEquipmentItem(
     make: input.make ?? null,
     model: input.model ?? null,
     serial_number: input.serial_number ?? null,
-    notes: input.notes ?? null,
+    notes: input.notes ?? "",
     created_by: input.user_id,
     updated_by: input.user_id,
     client_updated_at: nowIso(),
@@ -109,7 +109,7 @@ export async function updateEquipmentItem(
   if (input.make !== undefined) patch.make = input.make;
   if (input.model !== undefined) patch.model = input.model;
   if (input.serial_number !== undefined) patch.serial_number = input.serial_number;
-  if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.notes !== undefined) patch.notes = input.notes ?? "";
   
 
   const { data, error } = await supabase
