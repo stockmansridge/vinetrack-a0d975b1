@@ -3,8 +3,9 @@
 //
 // Schema assumptions (confirmed by Rork):
 //   public.equipment_items: id, vineyard_id, category ('other' for now),
-//     name, sort_order, created_at, updated_at, deleted_at,
-//     created_by, updated_by, client_updated_at, sync_version
+//     name, make, model, serial_number, notes, created_at, updated_at,
+//     deleted_at, created_by, updated_by, client_updated_at, sync_version
+//   NOTE: no sort_order column exists in production — do not send it.
 //
 // Soft-delete RPC: soft_delete_equipment_item(p_id) — falls back to a
 // direct deleted_at update if the RPC is not yet deployed.
@@ -21,7 +22,7 @@ export interface EquipmentItem {
   model?: string | null;
   serial_number?: string | null;
   notes?: string | null;
-  sort_order?: number | null;
+  // sort_order intentionally omitted — column does not exist in production.
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
@@ -55,7 +56,6 @@ export interface CreateEquipmentItemInput {
   serial_number?: string | null;
   notes?: string | null;
   category?: EquipmentCategory;
-  sort_order?: number | null;
   user_id: string | null;
 }
 
@@ -70,7 +70,6 @@ export async function createEquipmentItem(
     model: input.model ?? null,
     serial_number: input.serial_number ?? null,
     notes: input.notes ?? null,
-    sort_order: input.sort_order ?? null,
     created_by: input.user_id,
     updated_by: input.user_id,
     client_updated_at: nowIso(),
@@ -93,7 +92,6 @@ export interface UpdateEquipmentItemInput {
   model?: string | null;
   serial_number?: string | null;
   notes?: string | null;
-  sort_order?: number | null;
   user_id: string | null;
   current_sync_version?: number | null;
 }
@@ -112,7 +110,7 @@ export async function updateEquipmentItem(
   if (input.model !== undefined) patch.model = input.model;
   if (input.serial_number !== undefined) patch.serial_number = input.serial_number;
   if (input.notes !== undefined) patch.notes = input.notes;
-  if (input.sort_order !== undefined) patch.sort_order = input.sort_order;
+  
 
   const { data, error } = await supabase
     .from("equipment_items")
