@@ -3,8 +3,9 @@
 //
 // Schema assumptions (confirmed by Rork):
 //   public.equipment_items: id, vineyard_id, category ('other' for now),
-//     name, sort_order, created_at, updated_at, deleted_at,
-//     created_by, updated_by, client_updated_at, sync_version
+//     name, make, model, serial_number, notes, created_at, updated_at,
+//     deleted_at, created_by, updated_by, client_updated_at, sync_version
+//   NOTE: no sort_order column exists in production — do not send it.
 //
 // Soft-delete RPC: soft_delete_equipment_item(p_id) — falls back to a
 // direct deleted_at update if the RPC is not yet deployed.
