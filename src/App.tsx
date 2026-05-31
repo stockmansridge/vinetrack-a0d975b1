@@ -177,6 +177,7 @@ const App = () => (
                     <Route path="/admin/work-tasks" element={<AdminWorkTasksPage />} />
                     <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
                     <Route path="/admin/block-troubleshooter" element={<BlockTroubleshooterPage />} />
+                    <Route path="/admin/support-requests" element={<AdminSupportRequestsPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
