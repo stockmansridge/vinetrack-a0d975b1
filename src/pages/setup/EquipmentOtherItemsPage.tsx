@@ -66,12 +66,7 @@ export default function EquipmentOtherItemsPage() {
 
   const rows = useMemo(() => {
     let list = items.slice();
-    list.sort((a, b) => {
-      const sa = a.sort_order ?? 9999;
-      const sb = b.sort_order ?? 9999;
-      if (sa !== sb) return sa - sb;
-      return (a.name ?? "").localeCompare(b.name ?? "");
-    });
+    list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((c) => (c.name ?? "").toLowerCase().includes(f));
