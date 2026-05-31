@@ -22,7 +22,7 @@ export interface EquipmentItem {
   model?: string | null;
   serial_number?: string | null;
   notes?: string | null;
-  sort_order?: number | null;
+  // sort_order intentionally omitted — column does not exist in production.
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
