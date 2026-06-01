@@ -36,6 +36,8 @@ export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
 /** Subset of saved_inputs used for cost fallback resolution. */
 export type SavedInputLite = Pick<SavedInput, "id" | "name" | "cost_per_unit">;
 
+import { computeFuelEstimate } from "@/lib/fuelEstimate";
+
 /** Pull a cost-per-base-unit out of saved_chemicals.purchase JSON. */
 export function savedChemicalCostPerUnit(c: SavedChemicalLite | null | undefined): number | null {
   const p: any = c?.purchase;
