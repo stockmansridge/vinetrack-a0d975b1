@@ -308,7 +308,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl">
+    <div className="p-6 space-y-6 w-full">
       <div>
         <h1 className="text-2xl font-semibold">Documents & Exports</h1>
         <p className="text-sm text-muted-foreground mt-1">
