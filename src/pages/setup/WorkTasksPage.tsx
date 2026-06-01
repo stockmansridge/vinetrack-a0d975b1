@@ -193,6 +193,11 @@ export default function WorkTasksPage() {
     paddocks.forEach((p) => m.set(p.id, p.name));
     return m;
   }, [paddocks]);
+  const paddockById = useMemo(() => {
+    const m = new Map<string, PaddockLite>();
+    paddocks.forEach((p) => m.set(p.id, p));
+    return m;
+  }, [paddocks]);
   const categoryById = useMemo(() => {
     const m = new Map<string, OperatorCategory>();
     (Array.isArray(categories) ? categories : []).forEach((c) => m.set(c.id, c));
