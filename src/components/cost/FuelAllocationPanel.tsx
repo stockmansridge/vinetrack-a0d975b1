@@ -91,12 +91,12 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
     enabled: !!vineyardId,
   });
 
-  const { teamMap } = useTeamLookup(vineyardId ?? null);
+  const { resolve: resolveTeam } = useTeamLookup(vineyardId ?? null);
 
-  const operatorNameFor = (userId: string | null | undefined): string | null => {
-    if (!userId) return null;
-    const tm = teamMap?.[userId];
-    return tm?.display_name ?? tm?.email ?? null;
+  const operatorNameFor = (userId: string | null | undefined, fallback?: string | null): string | null => {
+    if (!userId) return fallback ?? null;
+    const r = resolveTeam(userId, fallback ?? "");
+    return r || (fallback ?? null);
   };
 
   // Filter by date range against trip.start_time.
