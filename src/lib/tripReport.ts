@@ -681,7 +681,7 @@ export function tripToCsvRow(
     base.labour_rate_per_hour = num(cost.labour.ratePerHour);
     base.labour_cost = num(cost.labour.cost);
     // Phase 3 — fuel allocation columns mirror the iOS estimate.
-    base.tractor = ""; // resolved & filled in by caller when known
+    base.tractor = tractorName ?? "";
     base.trip_function = tripFunctionLabel ?? t.trip_function ?? "";
     base.fuel_basis = cost.fuel.basisLabel;
     base.engine_hour_delta = num(cost.fuel.engineHourDelta);
