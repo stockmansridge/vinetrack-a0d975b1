@@ -22,6 +22,7 @@ import {
 import CostingSetupWizard, {
   useCostingSetupSummary,
 } from "@/components/cost/CostingSetupWizard";
+import FuelAllocationPanel from "@/components/cost/FuelAllocationPanel";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card } from "@/components/ui/card";
