@@ -36,6 +36,8 @@ export type SavedChemicalLite = Pick<SavedChemical, "id" | "name" | "purchase">;
 /** Subset of saved_inputs used for cost fallback resolution. */
 export type SavedInputLite = Pick<SavedInput, "id" | "name" | "cost_per_unit">;
 
+import { computeFuelEstimate } from "@/lib/fuelEstimate";
+
 /** Pull a cost-per-base-unit out of saved_chemicals.purchase JSON. */
 export function savedChemicalCostPerUnit(c: SavedChemicalLite | null | undefined): number | null {
   const p: any = c?.purchase;
@@ -64,7 +66,19 @@ export interface PaddockGeoLite {
 export interface TripCostBreakdown {
   activeHours: number | null;
   labour: { hours: number | null; ratePerHour: number | null; cost: number | null; categoryName: string | null };
-  fuel: { hours: number | null; litresPerHour: number | null; costPerLitre: number | null; litres: number | null; cost: number | null };
+  fuel: {
+    hours: number | null;
+    litresPerHour: number | null;
+    costPerLitre: number | null;
+    litres: number | null;
+    cost: number | null;
+    /** Phase 3: "engine_hours" | "trip_duration" | "unavailable" */
+    basis: "engine_hours" | "trip_duration" | "unavailable";
+    basisLabel: string;
+    engineHourDelta: number | null;
+    rateMissing: boolean;
+    warnings: string[];
+  };
   chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
   inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
@@ -397,14 +411,14 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
 
   const labourCost = hours != null && ratePerHour != null ? hours * ratePerHour : null;
 
-  // Fuel
-  const lph = inp.tractor?.fuel_usage_l_per_hour ?? null;
-  if (!inp.tractor) warnings.push("No tractor linked to this trip — fuel cost cannot be calculated.");
-  else if (lph == null) warnings.push("Linked tractor has no fuel usage (L/hr) recorded.");
-  const cpl = weightedFuelCostPerLitre(inp.fuelPurchases);
-  if (cpl == null) warnings.push("No fuel purchases on file — weighted fuel cost/litre unknown.");
-  const litres = hours != null && lph != null ? hours * lph : null;
-  const fuelCost = litres != null && cpl != null ? litres * cpl : null;
+  // Fuel — delegate to the Phase 3 fuel estimator so we use engine hours
+  // when available and fall back to trip duration otherwise.
+  const fuelEst = computeFuelEstimate(inp.trip, inp.tractor, inp.fuelPurchases);
+  const lph = fuelEst.litresPerHour;
+  const cpl = fuelEst.costPerLitre;
+  const litres = fuelEst.litres;
+  const fuelCost = fuelEst.cost;
+  for (const w of fuelEst.warnings) warnings.push(w);
 
   // Chemicals — sum across spray_records linked by trip_id.
   let chemCost = 0;
@@ -461,7 +475,18 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
   return {
     activeHours: hours,
     labour: { hours, ratePerHour, cost: labourCost, categoryName: cat?.name ?? null },
-    fuel: { hours, litresPerHour: lph, costPerLitre: cpl, litres, cost: fuelCost },
+    fuel: {
+      hours,
+      litresPerHour: lph,
+      costPerLitre: cpl,
+      litres,
+      cost: fuelCost,
+      basis: fuelEst.basis,
+      basisLabel: fuelEst.basisLabel,
+      engineHourDelta: fuelEst.engineHourDelta,
+      rateMissing: fuelEst.rateMissing,
+      warnings: fuelEst.warnings,
+    },
     chemicals: { cost: chemCostFinal, lineCount: chemLines, missingCostLines: chemMissing },
     inputs: { cost: inputCostFinal, lineCount: inputAgg.lines, missingCostLines: inputAgg.missing },
     total,

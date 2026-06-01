@@ -648,6 +648,8 @@ export function tripToCsvRow(
   tripDisplay: string,
   tripFunctionLabel: string | null,
   cost?: TripCostBreakdown | null,
+  tractorName?: string | null,
+  fuelOnly?: { basisLabel: string; basis: string; engineHourDelta: number | null; activeHours: number | null; litresPerHour: number | null; litres: number | null; costPerLitre: number | null; cost: number | null; warnings: string[] } | null,
 ): Record<string, string> {
   const cov = summarizeCoverage(t);
   const base: Record<string, string> = {
@@ -679,9 +681,17 @@ export function tripToCsvRow(
     base.labour_category = cost.labour.categoryName ?? "";
     base.labour_rate_per_hour = num(cost.labour.ratePerHour);
     base.labour_cost = num(cost.labour.cost);
+    // Phase 3 — fuel allocation columns mirror the iOS estimate.
+    base.tractor = tractorName ?? "";
+    base.trip_function = tripFunctionLabel ?? t.trip_function ?? "";
+    base.fuel_basis = cost.fuel.basisLabel;
+    base.engine_hour_delta = num(cost.fuel.engineHourDelta);
+    base.fuel_active_hours = num(cost.fuel.hours);
+    base.fuel_rate_l_per_hr = num(cost.fuel.litresPerHour);
     base.fuel_litres_estimated = num(cost.fuel.litres);
     base.fuel_cost_per_litre = num(cost.fuel.costPerLitre);
     base.fuel_cost = num(cost.fuel.cost);
+    base.fuel_warning = cost.fuel.warnings.join(" | ");
     base.chemical_cost = num(cost.chemicals.cost);
     base.chemical_lines = String(cost.chemicals.lineCount);
     base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
@@ -694,6 +704,21 @@ export function tripToCsvRow(
     base.yield_tonnes = num(cost.yieldTonnes);
     base.cost_per_tonne = num(cost.costPerTonne);
     base.costing_warnings = cost.warnings.join(" | ");
+  }
+  // Fuel-only path (when no full cost breakdown is available, e.g. on Trips
+  // page CSV where we don't fetch operator categories/spray records).
+  if (!cost && fuelOnly) {
+    const num = (n: number | null | undefined) => (n == null || !isFinite(n) ? "" : n.toFixed(2));
+    base.tractor = tractorName ?? "";
+    base.trip_function = tripFunctionLabel ?? t.trip_function ?? "";
+    base.fuel_basis = fuelOnly.basisLabel;
+    base.engine_hour_delta = num(fuelOnly.engineHourDelta);
+    base.fuel_active_hours = num(fuelOnly.activeHours);
+    base.fuel_rate_l_per_hr = num(fuelOnly.litresPerHour);
+    base.fuel_litres_estimated = num(fuelOnly.litres);
+    base.fuel_cost_per_litre = num(fuelOnly.costPerLitre);
+    base.fuel_cost = num(fuelOnly.cost);
+    base.fuel_warning = fuelOnly.warnings.join(" | ");
   }
   return base;
 }

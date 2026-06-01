@@ -55,6 +55,7 @@ import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
+import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 
@@ -145,7 +146,30 @@ export default function TripsPage() {
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
   });
 
+  // Tractors + fuel purchases (page-level) so CSV export can include fuel
+  // estimate columns for every row without needing to open each trip.
+  const canSeeCostsPage = useCanSeeCosts();
+  const { data: pageTractors = [] } = useQuery({
+    queryKey: ["trips-page-tractors", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
+  });
+  const { data: pageFuel = [] } = useQuery({
+    queryKey: ["trips-page-fuel", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: async () => {
+      try { return await fetchFuelPurchasesForVineyard(selectedVineyardId!); }
+      catch { return []; }
+    },
+  });
+  const pageTractorById = useMemo(() => {
+    const m = new Map<string, TractorLite>();
+    (pageTractors ?? []).forEach((t) => m.set(t.id, t));
+    return m;
+  }, [pageTractors]);
+
   const trips = data?.trips ?? [];
+
 
   // Dev-only diagnostic: surface unknown trip_function raw values so we can
   // keep the portal label map aligned with new Rork/iOS values.
@@ -278,7 +302,27 @@ export default function TripsPage() {
           onClick={() => {
             const csvRows = rows.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
-              return tripToCsvRow(t, padName, tripDisplayName(t), tripFunctionLabel(t.trip_function));
+              const tractor = t.tractor_id ? pageTractorById.get(t.tractor_id) ?? null : null;
+              const fe = computeFuelEstimate(t, tractor, canSeeCostsPage ? (pageFuel ?? []) : []);
+              return tripToCsvRow(
+                t,
+                padName,
+                tripDisplayName(t),
+                tripFunctionLabel(t.trip_function),
+                null,
+                tractor?.name ?? null,
+                {
+                  basisLabel: fe.basisLabel,
+                  basis: fe.basis,
+                  engineHourDelta: fe.engineHourDelta,
+                  activeHours: fe.activeHours,
+                  litresPerHour: fe.litresPerHour,
+                  litres: fe.litres,
+                  costPerLitre: canSeeCostsPage ? fe.costPerLitre : null,
+                  cost: canSeeCostsPage ? fe.cost : null,
+                  warnings: fe.warnings,
+                },
+              );
             });
             downloadCsv(`trips_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
           }}
@@ -518,6 +562,35 @@ function TripSheet({
     queryFn: () => fetchYieldReportsForVineyard(vineyardId!),
   });
 
+  // Tractors for the Fuel estimate section (visible to all users — non-sensitive).
+  const fuelEnabled = !!trip && !!vineyardId;
+  const { data: allTractors } = useQuery({
+    queryKey: ["trip-tractors", vineyardId],
+    enabled: fuelEnabled,
+    queryFn: () => fetchList<TractorLite>("tractors", vineyardId!),
+  });
+  // Fuel purchases for cost/L — may RLS to owner/manager only; failures
+  // bubble up as no rows which we render as "cost unavailable".
+  const { data: allFuel } = useQuery({
+    queryKey: ["trip-fuel-purchases", vineyardId],
+    enabled: fuelEnabled,
+    queryFn: async () => {
+      try { return await fetchFuelPurchasesForVineyard(vineyardId!); }
+      catch { return []; }
+    },
+  });
+
+  const fuelEstimate = useMemo(() => {
+    if (!trip || !trip.tractor_id) return null;
+    const tractor = (allTractors ?? []).find((t) => t.id === trip.tractor_id) ?? null;
+    return computeFuelEstimate(trip, tractor, allFuel ?? []);
+  }, [trip, allTractors, allFuel]);
+
+  const tractorName = useMemo(() => {
+    if (!trip?.tractor_id) return null;
+    return (allTractors ?? []).find((t) => t.id === trip.tractor_id)?.name ?? null;
+  }, [trip, allTractors]);
+
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
     const tractor = trip.tractor_id ? (costTractors ?? []).find((t) => t.id === trip.tractor_id) ?? null : null;
@@ -595,6 +668,55 @@ function TripSheet({
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
+            {fuelEstimate && (
+              <Section title="Fuel estimate">
+                <Field label="Tractor" value={fmt(tractorName)} />
+                <Field label="Trip function" value={fmt(tripFunctionLabel(trip.trip_function))} />
+                <Field label="Basis" value={fuelEstimate.basisLabel} />
+                {fuelEstimate.basis === "engine_hours" && (
+                  <Field
+                    label="Engine hour delta"
+                    value={fuelEstimate.engineHourDelta != null ? `${fuelEstimate.engineHourDelta.toFixed(2)} hr` : "—"}
+                  />
+                )}
+                {fuelEstimate.basis !== "engine_hours" && (
+                  <Field label="Active hours" value={fmtHours(fuelEstimate.activeHours)} />
+                )}
+                <Field
+                  label="Fuel rate"
+                  value={
+                    fuelEstimate.rateMissing
+                      ? "Fuel rate missing"
+                      : fuelEstimate.litresPerHour != null
+                        ? `${fuelEstimate.litresPerHour.toFixed(2)} L/hr`
+                        : "—"
+                  }
+                />
+                <Field
+                  label="Estimated litres"
+                  value={fuelEstimate.litres != null ? `${fuelEstimate.litres.toFixed(1)} L` : "—"}
+                />
+                {canSeeCosts && (
+                  <>
+                    <Field
+                      label="Fuel cost/L"
+                      value={fuelEstimate.costPerLitre != null ? `${fmtCurrency(fuelEstimate.costPerLitre)}/L` : "Unavailable"}
+                    />
+                    <Field
+                      label="Estimated fuel cost"
+                      value={fuelEstimate.cost != null ? fmtCurrency(fuelEstimate.cost) : "Unavailable"}
+                    />
+                  </>
+                )}
+                {fuelEstimate.warnings.length > 0 && (
+                  <div className="mt-2 rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {fuelEstimate.warnings.map((w, i) => (<li key={i}>{w}</li>))}
+                    </ul>
+                  </div>
+                )}
+              </Section>
+            )}
             {canSeeCosts && cost && (
               <Section title="Estimated trip cost">
                 <Field label="Active hours" value={fmtHours(cost.activeHours)} />
@@ -607,13 +729,24 @@ function TripSheet({
                   }
                 />
                 <Field
-                  label="Fuel"
+                  label={`Fuel${cost.fuel.basisLabel ? ` (${cost.fuel.basisLabel})` : ""}`}
                   value={
-                    cost.fuel.cost != null
-                      ? `${fmtCurrency(cost.fuel.cost)}${cost.fuel.litres != null ? ` · ${cost.fuel.litres.toFixed(1)} L` : ""}${cost.fuel.costPerLitre != null ? ` @ ${fmtCurrency(cost.fuel.costPerLitre)}/L` : ""}`
-                      : "—"
+                    cost.fuel.rateMissing
+                      ? "Fuel rate missing"
+                      : cost.fuel.litres == null
+                        ? "—"
+                        : `${cost.fuel.litres.toFixed(1)} L${cost.fuel.cost != null ? ` · ${fmtCurrency(cost.fuel.cost)}` : " · cost unavailable"}${cost.fuel.costPerLitre != null ? ` @ ${fmtCurrency(cost.fuel.costPerLitre)}/L` : ""}`
                   }
                 />
+                {cost.fuel.basis === "engine_hours" && cost.fuel.engineHourDelta != null && (
+                  <Field label="Engine hour delta" value={`${cost.fuel.engineHourDelta.toFixed(2)} hr`} />
+                )}
+                {cost.fuel.basis === "trip_duration" && cost.fuel.hours != null && (
+                  <Field label="Active hours (fuel)" value={fmtHours(cost.fuel.hours)} />
+                )}
+                {cost.fuel.litresPerHour != null && cost.fuel.litresPerHour > 0 && (
+                  <Field label="Fuel rate" value={`${cost.fuel.litresPerHour.toFixed(2)} L/hr`} />
+                )}
                 <Field
                   label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
                   value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}

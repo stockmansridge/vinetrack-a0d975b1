@@ -53,6 +53,9 @@ export interface Trip {
   trip_title?: string | null;
   manual_correction_events?: string[] | null;
   seeding_details?: any;
+  // Phase 3 — optional engine-hour fields written by iOS at start/finish.
+  start_engine_hours?: number | null;
+  end_engine_hours?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;

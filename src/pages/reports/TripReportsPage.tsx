@@ -272,15 +272,17 @@ export default function TripReportsPage() {
 
   const handleExportCsv = () => {
     if (!rows.length) return;
-    const csvRows = rows.map((t) =>
-      tripToCsvRow(
+    const csvRows = rows.map((t) => {
+      const tractorName = t.tractor_id ? (costTractors ?? []).find((x) => x.id === t.tractor_id)?.name ?? null : null;
+      return tripToCsvRow(
         t,
         padNameFor(t),
         tripDisplayName(t),
         tripFunctionLabel(t.trip_function),
         computeCostFor(t),
-      ),
-    );
+        tractorName,
+      );
+    });
     downloadCsv(`TripReports_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
   };
 
