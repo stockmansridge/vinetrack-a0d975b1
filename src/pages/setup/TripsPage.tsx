@@ -67,27 +67,7 @@ const ANY = "__any__";
 const SPRAY = "__spray__";
 const MAINT = "__maint__";
 
-const TRIP_FUNCTION_LABELS: Record<string, string> = {
-  slashing: "Slashing",
-  mulching: "Mulching",
-  harrowing: "Harrowing",
-  mowing: "Mowing",
-  spraying: "Spraying",
-  seeding: "Seeding",
-  spreading: "Spreading",
-  fertiliser: "Fertiliser",
-  fertilising: "Fertilising",
-  undervineWeeding: "Undervine weeding",
-  interRowCultivation: "Inter-row cultivation",
-  pruning: "Pruning",
-  shootThinning: "Shoot thinning",
-  canopyWork: "Canopy work",
-  irrigationCheck: "Irrigation check",
-  repairs: "Repairs",
-  other: "Other",
-};
-const tripFunctionLabel = (v?: string | null) =>
-  v ? TRIP_FUNCTION_LABELS[v] ?? v : null;
+import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
 const tripDisplayName = (t: Trip): string => {
   if (t.trip_title && t.trip_title.trim()) return t.trip_title.trim();
   const fn = tripFunctionLabel(t.trip_function);
