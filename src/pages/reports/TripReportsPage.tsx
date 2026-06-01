@@ -51,27 +51,7 @@ const MAINT = "__maint__";
 
 // All known trip functions (matches TripsPage). "Maintenance" is a virtual
 // bucket covering every non-spray function.
-const TRIP_FUNCTION_LABELS: Record<string, string> = {
-  spraying: "Spray",
-  seeding: "Seeding",
-  mowing: "Mowing",
-  slashing: "Slashing",
-  mulching: "Mulching",
-  harrowing: "Harrowing",
-  spreading: "Spreading",
-  fertiliser: "Fertiliser",
-  fertilising: "Fertilising",
-  undervineWeeding: "Undervine weeding",
-  interRowCultivation: "Inter-row cultivation",
-  pruning: "Pruning",
-  shootThinning: "Shoot thinning",
-  canopyWork: "Canopy work",
-  irrigationCheck: "Irrigation check",
-  repairs: "Repairs",
-  other: "Custom / Other",
-};
-const tripFunctionLabel = (v?: string | null) =>
-  v ? TRIP_FUNCTION_LABELS[v] ?? v : null;
+import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 const tripDisplayName = (t: Trip): string => {
   if (t.trip_title?.trim()) return t.trip_title.trim();
