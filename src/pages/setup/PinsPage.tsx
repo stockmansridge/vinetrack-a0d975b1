@@ -25,9 +25,7 @@ import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { formatCell } from "@/pages/setup/ListPage";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
-import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import PinDetailSheet from "@/components/PinDetailSheet";
-import SelectedPinMap from "@/components/SelectedPinMap";
 import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
@@ -383,136 +381,108 @@ export default function PinsPage() {
             <ColumnSettingsMenu onReset={pinReset} />
           </div>
         </div>
-        <div
-          className={
-            sideBySide
-              ? "grid gap-4 grid-cols-[minmax(0,1fr)_400px]"
-              : "block"
-          }
-        >
-          <Card className="min-w-0 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {(pinOrder as PinCol[]).map((id) => {
-                    if (!visibleByCol[id]) return null;
-                    const align = id === "row" ? "right" : "left";
-                    const sk = pinSortKey[id];
-                    return (
-                      <ReorderableHead
-                        key={id}
-                        columnId={id}
-                        onDropColumn={pinMove}
-                        align={align}
-                        sort={{ active: getSortDirection(sk), onSort: () => toggleSort(sk) }}
-                      >
-                        {pinLabels[id]}
-                      </ReorderableHead>
-                    );
-                  })}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading && (
-                  <TableRow>
-                    <TableCell colSpan={colCount} className="text-center text-muted-foreground">Loading…</TableCell>
-                  </TableRow>
-                )}
-                {error && (
-                  <TableRow>
-                    <TableCell colSpan={colCount} className="text-center text-destructive">
-                      {(error as Error).message}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!isLoading && !error && sorted.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
-                      {filter
-                        ? "No pins match the current filters."
-                        : statusFilter === "active"
-                          ? "No active pins found."
-                          : statusFilter === "completed"
-                            ? "No completed pins found."
-                            : "No pins found."}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sorted.map((p) => {
-                  const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
-                  const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
-                  const completedBy = (p as any).is_completed
-                    ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
-                    : "—";
-                  const cellMap: Record<PinCol, React.ReactNode> = {
-                    title: (
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ background: style.hex }} title={style.label} />
-                          <span className="truncate">{pinDisplayTitle(p as any)}</span>
-                        </div>
-                      </TableCell>
-                    ),
-                    mode: <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>,
-                    paddock: <TableCell>{p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}</TableCell>,
-                    row: (
-                      <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
-                        {formatPinRowSummary(p as any) ?? "—"}
-                      </TableCell>
-                    ),
-                    status: (
-                      <TableCell>
-                        {(p as any).is_completed ? <Badge>Completed</Badge> : p.status ? <Badge variant="outline">{p.status}</Badge> : <Badge variant="outline">Open</Badge>}
-                      </TableCell>
-                    ),
-                    priority: <TableCell>{p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}</TableCell>,
-                    category: <TableCell>{p.category ?? "—"}</TableCell>,
-                    stage: <TableCell>{p.growth_stage_code ?? "—"}</TableCell>,
-                    created: <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>,
-                    createdBy: <TableCell className="text-sm">{createdBy}</TableCell>,
-                    completed: <TableCell className="text-sm text-muted-foreground">{(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}</TableCell>,
-                    completedBy: <TableCell className="text-sm">{completedBy}</TableCell>,
-                  };
+        <Card className="min-w-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {(pinOrder as PinCol[]).map((id) => {
+                  if (!visibleByCol[id]) return null;
+                  const align = id === "row" ? "right" : "left";
+                  const sk = pinSortKey[id];
                   return (
-                    <TableRow
-                      key={p.id}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedId(p.id)}
-                      data-active={p.id === selectedId}
+                    <ReorderableHead
+                      key={id}
+                      columnId={id}
+                      onDropColumn={pinMove}
+                      align={align}
+                      sort={{ active: getSortDirection(sk), onSort: () => toggleSort(sk) }}
                     >
-                      {(pinOrder as PinCol[]).map((id) => {
-                        if (!visibleByCol[id]) return null;
-                        return <Fragment key={id}>{cellMap[id]}</Fragment>;
-                      })}
-                    </TableRow>
+                      {pinLabels[id]}
+                    </ReorderableHead>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </Card>
-          {sideBySide && (
-            <div className="space-y-4 min-w-0">
-              {selected ? (
-                <>
-                  <SelectedPinMap pin={selected} />
-                  <PinDetailPanel
-                    pin={selected}
-                    paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
-                    paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
-                    vineyardName={vineyardName}
-                    onClose={() => setSelectedId(null)}
-                  />
-                </>
-              ) : (
-                <Card className="p-4 text-sm text-muted-foreground">
-                  Select a pin to see details.
-                </Card>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={colCount} className="text-center text-muted-foreground">Loading…</TableCell>
+                </TableRow>
               )}
-            </div>
-          )}
-        </div>
+              {error && (
+                <TableRow>
+                  <TableCell colSpan={colCount} className="text-center text-destructive">
+                    {(error as Error).message}
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && !error && sorted.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
+                    {filter
+                      ? "No pins match the current filters."
+                      : statusFilter === "active"
+                        ? "No active pins found."
+                        : statusFilter === "completed"
+                          ? "No completed pins found."
+                          : "No pins found."}
+                  </TableCell>
+                </TableRow>
+              )}
+              {sorted.map((p) => {
+                const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
+                const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
+                const completedBy = (p as any).is_completed
+                  ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
+                  : "—";
+                const cellMap: Record<PinCol, React.ReactNode> = {
+                  title: (
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ background: style.hex }} title={style.label} />
+                        <span className="truncate">{pinDisplayTitle(p as any)}</span>
+                      </div>
+                    </TableCell>
+                  ),
+                  mode: <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>,
+                  paddock: <TableCell>{p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}</TableCell>,
+                  row: (
+                    <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
+                      {formatPinRowSummary(p as any) ?? "—"}
+                    </TableCell>
+                  ),
+                  status: (
+                    <TableCell>
+                      {(p as any).is_completed ? <Badge>Completed</Badge> : p.status ? <Badge variant="outline">{p.status}</Badge> : <Badge variant="outline">Open</Badge>}
+                    </TableCell>
+                  ),
+                  priority: <TableCell>{p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}</TableCell>,
+                  category: <TableCell>{p.category ?? "—"}</TableCell>,
+                  stage: <TableCell>{p.growth_stage_code ?? "—"}</TableCell>,
+                  created: <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>,
+                  createdBy: <TableCell className="text-sm">{createdBy}</TableCell>,
+                  completed: <TableCell className="text-sm text-muted-foreground">{(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}</TableCell>,
+                  completedBy: <TableCell className="text-sm">{completedBy}</TableCell>,
+                };
+                return (
+                  <TableRow
+                    key={p.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedId(p.id)}
+                    data-active={p.id === selectedId}
+                  >
+                    {(pinOrder as PinCol[]).map((id) => {
+                      if (!visibleByCol[id]) return null;
+                      return <Fragment key={id}>{cellMap[id]}</Fragment>;
+                    })}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
         <PinDetailSheet
-          open={!sideBySide && !!selected}
+          open={!!selected}
           onOpenChange={(open) => !open && setSelectedId(null)}
           pin={selected}
           paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
@@ -520,6 +490,7 @@ export default function PinsPage() {
           paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
           side={isMobile ? "bottom" : "right"}
         />
+
 
       </TabsContent>
 
