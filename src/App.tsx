@@ -131,6 +131,7 @@ const App = () => (
                     <Route path="/yield" element={<YieldReportsPage />} />
                     <Route path="/damage-records" element={<DamageRecordsPage />} />
                     <Route path="/fuel-purchases" element={<FuelPurchasesPage />} />
+                    <Route path="/tractor-fuel-logs" element={<TractorFuelLogsPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />
