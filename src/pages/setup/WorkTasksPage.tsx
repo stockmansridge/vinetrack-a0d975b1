@@ -354,13 +354,16 @@ export default function WorkTasksPage() {
       paddock: (r: WorkTask) => taskPaddockNames(r.id),
       task_type: (r: WorkTask) => r.task_type ?? "",
       status: (r: WorkTask) => r.status ?? "",
-      area_ha: (r: WorkTask) => (r.area_ha == null ? null : Number(r.area_ha)),
+      area_ha: (r: WorkTask) => {
+        const v = effectiveTaskAreaHa(r);
+        return v == null ? null : v;
+      },
       hours: (r: WorkTask) => totalsByTask.get(r.id)?.hours ?? 0,
       cost: (r: WorkTask) => totalsByTask.get(r.id)?.cost ?? 0,
       finalized: (r: WorkTask) => (r.is_finalized ? 1 : 0),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [paddockNameById, totalsByTask, taskPaddockIds],
+    [paddockNameById, totalsByTask, taskPaddockIds, paddocksByTask, paddockById],
   );
 
   const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(filtered, {
