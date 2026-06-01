@@ -351,15 +351,21 @@ function ForecastStrip({
                 <span>{d.wind_max_kmh != null ? `${fmt(d.wind_max_kmh, 0)} km/h` : "—"}</span>
               </div>
               {(() => {
-                const heavy = (d.rainfall_mm ?? 0) >= 5;
+                const rain = d.rainfall_mm ?? 0;
+                const hasRain = rain > 0;
                 return (
-                  <div
-                    className={`flex items-center justify-center gap-1 text-xs mt-0.5 rounded px-1 ${
-                      heavy ? "bg-blue-500/15 text-blue-700 font-semibold" : ""
-                    }`}
-                  >
-                    <CloudRain className={`h-3 w-3 ${heavy ? "text-blue-600" : "text-muted-foreground"}`} />
-                    <span>{d.rainfall_mm != null ? `${fmt(d.rainfall_mm, 1)} mm` : "—"}</span>
+                  <div className="flex items-center justify-center text-xs mt-0.5">
+                    {hasRain ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+                        <CloudRain className="h-3 w-3 text-white" />
+                        {`${fmt(rain, 1)} mm`}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                        <CloudRain className="h-3 w-3 text-muted-foreground" />
+                        {d.rainfall_mm != null ? `${fmt(d.rainfall_mm, 1)} mm` : "—"}
+                      </span>
+                    )}
                   </div>
                 );
               })()}
