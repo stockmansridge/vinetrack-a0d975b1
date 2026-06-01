@@ -352,7 +352,7 @@ function ForecastStrip({
               </div>
               {(() => {
                 const rain = d.rainfall_mm ?? 0;
-                const hasRain = rain > 0;
+                const hasRain = rain >= 5;
                 return (
                   <div className="flex items-center justify-center text-xs mt-0.5">
                     {hasRain ? (
