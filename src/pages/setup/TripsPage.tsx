@@ -607,13 +607,24 @@ function TripSheet({
                   }
                 />
                 <Field
-                  label="Fuel"
+                  label={`Fuel${cost.fuel.basisLabel ? ` (${cost.fuel.basisLabel})` : ""}`}
                   value={
-                    cost.fuel.cost != null
-                      ? `${fmtCurrency(cost.fuel.cost)}${cost.fuel.litres != null ? ` · ${cost.fuel.litres.toFixed(1)} L` : ""}${cost.fuel.costPerLitre != null ? ` @ ${fmtCurrency(cost.fuel.costPerLitre)}/L` : ""}`
-                      : "—"
+                    cost.fuel.rateMissing
+                      ? "Fuel rate missing"
+                      : cost.fuel.litres == null
+                        ? "—"
+                        : `${cost.fuel.litres.toFixed(1)} L${cost.fuel.cost != null ? ` · ${fmtCurrency(cost.fuel.cost)}` : " · cost unavailable"}${cost.fuel.costPerLitre != null ? ` @ ${fmtCurrency(cost.fuel.costPerLitre)}/L` : ""}`
                   }
                 />
+                {cost.fuel.basis === "engine_hours" && cost.fuel.engineHourDelta != null && (
+                  <Field label="Engine hour delta" value={`${cost.fuel.engineHourDelta.toFixed(2)} hr`} />
+                )}
+                {cost.fuel.basis === "trip_duration" && cost.fuel.hours != null && (
+                  <Field label="Active hours (fuel)" value={fmtHours(cost.fuel.hours)} />
+                )}
+                {cost.fuel.litresPerHour != null && cost.fuel.litresPerHour > 0 && (
+                  <Field label="Fuel rate" value={`${cost.fuel.litresPerHour.toFixed(2)} L/hr`} />
+                )}
                 <Field
                   label={`Chemicals${cost.chemicals.lineCount ? ` (${cost.chemicals.lineCount} line${cost.chemicals.lineCount === 1 ? "" : "s"})` : ""}`}
                   value={cost.chemicals.cost != null ? fmtCurrency(cost.chemicals.cost) : "—"}
