@@ -383,8 +383,14 @@ export default function PinsPage() {
             <ColumnSettingsMenu onReset={pinReset} />
           </div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <Card>
+        <div
+          className={
+            sideBySide
+              ? "grid gap-4 grid-cols-[minmax(0,1fr)_400px]"
+              : "block"
+          }
+        >
+          <Card className="min-w-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -484,8 +490,8 @@ export default function PinsPage() {
               </TableBody>
             </Table>
           </Card>
-          {!isMobile && (
-            <div className="space-y-4">
+          {sideBySide && (
+            <div className="space-y-4 min-w-0">
               {selected ? (
                 <>
                   <SelectedPinMap pin={selected} />
@@ -506,13 +512,15 @@ export default function PinsPage() {
           )}
         </div>
         <PinDetailSheet
-          open={isMobile && !!selected}
+          open={!sideBySide && !!selected}
           onOpenChange={(open) => !open && setSelectedId(null)}
           pin={selected}
           paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
           vineyardName={vineyardName}
           paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+          side={isMobile ? "bottom" : "right"}
         />
+
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
