@@ -352,7 +352,7 @@ export default function CostReportsPage() {
 
   return (
     <TooltipProvider delayDuration={150}>
-    <div className="p-6 space-y-6 max-w-7xl">
+    <div className="p-6 space-y-6 w-full">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
