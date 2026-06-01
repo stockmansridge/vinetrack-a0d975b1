@@ -248,6 +248,9 @@ export default function PinsPage() {
     PIN_ALL_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+  // Hide lower-priority columns by default on laptop and smaller widths so
+  // the table doesn't crowd the detail panel / get clipped.
+  const compact = !sideBySide;
   const visibleByCol: Record<PinCol, boolean> = {
     title: true,
     mode: hasMode,
@@ -258,9 +261,9 @@ export default function PinsPage() {
     category: hasCategory,
     stage: hasStage,
     created: true,
-    createdBy: true,
-    completed: hasAnyCompleted,
-    completedBy: hasAnyCompleted,
+    createdBy: !compact,
+    completed: hasAnyCompleted && !compact,
+    completedBy: hasAnyCompleted && !compact,
   };
   const pinLabels: Record<PinCol, string> = {
     title: "Title", mode: "Type", paddock: "Paddock", row: "Row",
