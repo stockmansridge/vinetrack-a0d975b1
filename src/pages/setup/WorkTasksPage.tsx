@@ -694,7 +694,9 @@ function WorkTaskDrawer({
         start_date: startDate || null,
         end_date: endDate || null,
         date: startDate || task?.date || null,
-        area_ha: selectedPaddocks.length ? totalAreaHa : null,
+        // Preserve existing area_ha when no paddocks are selected on edit,
+        // so legacy iPhone-created rows aren't accidentally cleared.
+        area_ha: selectedPaddocks.length ? totalAreaHa : (task?.area_ha ?? null),
         description,
         notes,
         is_finalized: isFinalized,
