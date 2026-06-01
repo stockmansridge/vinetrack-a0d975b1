@@ -147,6 +147,26 @@ export default function TripsPage() {
 
   const trips = data?.trips ?? [];
 
+  // Dev-only diagnostic: surface unknown trip_function raw values so we can
+  // keep the portal label map aligned with new Rork/iOS values.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!trips.length) return;
+    const unknown = new Map<string, number>();
+    trips.forEach((t) => {
+      const fn = t.trip_function;
+      if (!fn) return;
+      if (!Object.prototype.hasOwnProperty.call(TRIP_FUNCTION_LABELS, fn)) {
+        unknown.set(fn, (unknown.get(fn) ?? 0) + 1);
+      }
+    });
+    if (unknown.size) {
+      // eslint-disable-next-line no-console
+      console.warn("[trips/trip_function] unknown values not in label map", Object.fromEntries(unknown));
+    }
+  }, [trips]);
+
+
   const patterns = useMemo(() => {
     const s = new Set<string>();
     trips.forEach((t) => t.tracking_pattern && s.add(t.tracking_pattern));
