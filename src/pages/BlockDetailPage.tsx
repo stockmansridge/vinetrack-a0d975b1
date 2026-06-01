@@ -23,6 +23,7 @@ import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
