@@ -705,6 +705,21 @@ export function tripToCsvRow(
     base.cost_per_tonne = num(cost.costPerTonne);
     base.costing_warnings = cost.warnings.join(" | ");
   }
+  // Fuel-only path (when no full cost breakdown is available, e.g. on Trips
+  // page CSV where we don't fetch operator categories/spray records).
+  if (!cost && fuelOnly) {
+    const num = (n: number | null | undefined) => (n == null || !isFinite(n) ? "" : n.toFixed(2));
+    base.tractor = tractorName ?? "";
+    base.trip_function = tripFunctionLabel ?? t.trip_function ?? "";
+    base.fuel_basis = fuelOnly.basisLabel;
+    base.engine_hour_delta = num(fuelOnly.engineHourDelta);
+    base.fuel_active_hours = num(fuelOnly.activeHours);
+    base.fuel_rate_l_per_hr = num(fuelOnly.litresPerHour);
+    base.fuel_litres_estimated = num(fuelOnly.litres);
+    base.fuel_cost_per_litre = num(fuelOnly.costPerLitre);
+    base.fuel_cost = num(fuelOnly.cost);
+    base.fuel_warning = fuelOnly.warnings.join(" | ");
+  }
   return base;
 }
 
