@@ -1,4 +1,4 @@
-import { useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw, X } from "lucide-react";
@@ -41,9 +41,27 @@ interface PaddockLite {
   row_direction?: number | null;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    mql.addEventListener("change", onChange);
+    setMatches(mql.matches);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
+
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const isMobile = useIsMobile();
+  // Side-by-side table + detail panel only on very wide screens so the
+  // detail panel never gets squeezed on laptop widths.
+  const sideBySide = useMediaQuery("(min-width: 1536px)");
   const showPinDiagnostics = useDiagnosticPanel("show_pin_diagnostics");
   const queryClient = useQueryClient();
   const vineyardName =
@@ -230,6 +248,9 @@ export default function PinsPage() {
     PIN_ALL_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+  // Hide lower-priority columns by default on laptop and smaller widths so
+  // the table doesn't crowd the detail panel / get clipped.
+  const compact = !sideBySide;
   const visibleByCol: Record<PinCol, boolean> = {
     title: true,
     mode: hasMode,
@@ -240,9 +261,9 @@ export default function PinsPage() {
     category: hasCategory,
     stage: hasStage,
     created: true,
-    createdBy: true,
-    completed: hasAnyCompleted,
-    completedBy: hasAnyCompleted,
+    createdBy: !compact,
+    completed: hasAnyCompleted && !compact,
+    completedBy: hasAnyCompleted && !compact,
   };
   const pinLabels: Record<PinCol, string> = {
     title: "Title", mode: "Type", paddock: "Paddock", row: "Row",
@@ -362,8 +383,14 @@ export default function PinsPage() {
             <ColumnSettingsMenu onReset={pinReset} />
           </div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <Card>
+        <div
+          className={
+            sideBySide
+              ? "grid gap-4 grid-cols-[minmax(0,1fr)_400px]"
+              : "block"
+          }
+        >
+          <Card className="min-w-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -463,8 +490,8 @@ export default function PinsPage() {
               </TableBody>
             </Table>
           </Card>
-          {!isMobile && (
-            <div className="space-y-4">
+          {sideBySide && (
+            <div className="space-y-4 min-w-0">
               {selected ? (
                 <>
                   <SelectedPinMap pin={selected} />
@@ -485,13 +512,15 @@ export default function PinsPage() {
           )}
         </div>
         <PinDetailSheet
-          open={isMobile && !!selected}
+          open={!sideBySide && !!selected}
           onOpenChange={(open) => !open && setSelectedId(null)}
           pin={selected}
           paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
           vineyardName={vineyardName}
           paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+          side={isMobile ? "bottom" : "right"}
         />
+
       </TabsContent>
 
       <TabsContent value="map" className="mt-0">
