@@ -92,7 +92,7 @@ interface GroupedRow {
 
 function NoAccessCard() {
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 w-full">
       <Card className="p-6 flex items-start gap-3">
         <Lock className="h-5 w-5 mt-0.5 text-muted-foreground" />
         <div>
@@ -352,7 +352,7 @@ export default function CostReportsPage() {
 
   return (
     <TooltipProvider delayDuration={150}>
-    <div className="p-6 space-y-6 max-w-7xl">
+    <div className="p-6 space-y-6 w-full">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
