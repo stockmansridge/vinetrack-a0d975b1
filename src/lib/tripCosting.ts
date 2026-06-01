@@ -409,14 +409,14 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
 
   const labourCost = hours != null && ratePerHour != null ? hours * ratePerHour : null;
 
-  // Fuel
-  const lph = inp.tractor?.fuel_usage_l_per_hour ?? null;
-  if (!inp.tractor) warnings.push("No tractor linked to this trip — fuel cost cannot be calculated.");
-  else if (lph == null) warnings.push("Linked tractor has no fuel usage (L/hr) recorded.");
-  const cpl = weightedFuelCostPerLitre(inp.fuelPurchases);
-  if (cpl == null) warnings.push("No fuel purchases on file — weighted fuel cost/litre unknown.");
-  const litres = hours != null && lph != null ? hours * lph : null;
-  const fuelCost = litres != null && cpl != null ? litres * cpl : null;
+  // Fuel — delegate to the Phase 3 fuel estimator so we use engine hours
+  // when available and fall back to trip duration otherwise.
+  const fuelEst = computeFuelEstimate(inp.trip, inp.tractor, inp.fuelPurchases);
+  const lph = fuelEst.litresPerHour;
+  const cpl = fuelEst.costPerLitre;
+  const litres = fuelEst.litres;
+  const fuelCost = fuelEst.cost;
+  for (const w of fuelEst.warnings) warnings.push(w);
 
   // Chemicals — sum across spray_records linked by trip_id.
   let chemCost = 0;
