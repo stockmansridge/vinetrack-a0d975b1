@@ -165,7 +165,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
       }
     }
     return Array.from(map.values()).sort((a, b) => b.litres - a.litres);
-  }, [filteredTrips, tractorById, fuel, padNameById, groupBy, resolveTeam, members]);
+  }, [filteredTrips, tractorById, fuel, padNameById, groupBy, resolveTeam]);
 
   const totals = useMemo(() => {
     return groups.reduce(
