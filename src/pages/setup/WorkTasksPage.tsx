@@ -347,6 +347,35 @@ export default function WorkTasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
 
+  // Dev-only sync diagnostic: keep visibility on rows that still need
+  // area_ha hydration after Rork's iPhone fix lands.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!tasks.length) return;
+    let withArea = 0;
+    let recoveredFromPaddock = 0;
+    let stillMissing = 0;
+    tasks.forEach((t) => {
+      const stored = t.area_ha == null ? NaN : Number(t.area_ha);
+      if (Number.isFinite(stored) && stored > 0) {
+        withArea++;
+        return;
+      }
+      const eff = effectiveTaskAreaHa(t);
+      if (eff != null && eff > 0) recoveredFromPaddock++;
+      else stillMissing++;
+    });
+    // eslint-disable-next-line no-console
+    console.info("[work_tasks/area] diagnostic", {
+      total: tasks.length,
+      withAreaHa: withArea,
+      recoveredFromPaddock,
+      stillMissing,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, paddocksByTask, taskPaddockIds, paddockById]);
+
+
   type SortKey = "date" | "paddock" | "task_type" | "status" | "area_ha" | "hours" | "cost" | "finalized";
   const accessors = useMemo(
     () => ({
