@@ -41,9 +41,28 @@ interface PaddockLite {
   row_direction?: number | null;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
+  );
+  useMemo(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    mql.addEventListener("change", onChange);
+    setMatches(mql.matches);
+    return () => mql.removeEventListener("change", onChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  return matches;
+}
+
 export default function PinsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const isMobile = useIsMobile();
+  // Side-by-side table + detail panel only on very wide screens so the
+  // detail panel never gets squeezed on laptop widths.
+  const sideBySide = useMediaQuery("(min-width: 1536px)");
   const showPinDiagnostics = useDiagnosticPanel("show_pin_diagnostics");
   const queryClient = useQueryClient();
   const vineyardName =
