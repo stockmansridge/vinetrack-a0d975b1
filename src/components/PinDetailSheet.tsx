@@ -9,6 +9,7 @@ interface Props {
   paddockName?: string | null;
   vineyardName?: string | null;
   paddockRowDirection?: number | null;
+  side?: "bottom" | "right";
 }
 
 export default function PinDetailSheet({
@@ -18,10 +19,15 @@ export default function PinDetailSheet({
   paddockName,
   vineyardName,
   paddockRowDirection,
+  side = "bottom",
 }: Props) {
+  const contentClass =
+    side === "right"
+      ? "w-full sm:max-w-[440px] h-full overflow-y-auto px-0 pb-0"
+      : "h-[88vh] overflow-y-auto rounded-t-lg px-0 pb-0";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[88vh] overflow-y-auto rounded-t-lg px-0 pb-0">
+      <SheetContent side={side} className={contentClass}>
         <SheetHeader className="px-4 pb-0 text-left">
           <SheetTitle>{pin?.title?.trim() || pin?.button_name?.trim() || "Pin details"}</SheetTitle>
         </SheetHeader>
