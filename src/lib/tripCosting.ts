@@ -64,7 +64,19 @@ export interface PaddockGeoLite {
 export interface TripCostBreakdown {
   activeHours: number | null;
   labour: { hours: number | null; ratePerHour: number | null; cost: number | null; categoryName: string | null };
-  fuel: { hours: number | null; litresPerHour: number | null; costPerLitre: number | null; litres: number | null; cost: number | null };
+  fuel: {
+    hours: number | null;
+    litresPerHour: number | null;
+    costPerLitre: number | null;
+    litres: number | null;
+    cost: number | null;
+    /** Phase 3: "engine_hours" | "trip_duration" | "unavailable" */
+    basis: "engine_hours" | "trip_duration" | "unavailable";
+    basisLabel: string;
+    engineHourDelta: number | null;
+    rateMissing: boolean;
+    warnings: string[];
+  };
   chemicals: { cost: number | null; lineCount: number; missingCostLines: number };
   inputs: { cost: number | null; lineCount: number; missingCostLines: number };
   total: number | null;
