@@ -145,7 +145,7 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={isActive(item.url)}
-          className="rounded-xl data-[active=true]:bg-accent data-[active=true]:text-primary data-[active=true]:font-bold data-[active=true]:hover:bg-accent data-[active=true]:hover:text-primary hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
+          className="rounded-xl data-[active=true]:bg-accent data-[active=true]:text-primary data-[active=true]:font-bold data-[active=true]:hover:bg-accent data-[active=true]:hover:text-primary dark:data-[active=true]:text-sidebar-primary-foreground dark:data-[active=true]:hover:text-sidebar-primary-foreground hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
         >
           <NavLink to={item.url} className="flex items-center gap-2">
             <item.icon className="h-4 w-4" />
