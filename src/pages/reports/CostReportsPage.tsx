@@ -22,6 +22,7 @@ import {
 import CostingSetupWizard, {
   useCostingSetupSummary,
 } from "@/components/cost/CostingSetupWizard";
+import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
