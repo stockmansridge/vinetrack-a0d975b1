@@ -299,6 +299,30 @@ export default function WorkTasksPage() {
       .join(", ");
   };
 
+  /**
+   * Effective area resolver for a task.
+   * 1) task.area_ha if positive
+   * 2) sum of work_task_paddocks.area_ha for the task (if any present)
+   * 3) sum of paddockAreaHa() for taskPaddockIds (covers legacy rows where
+   *    iPhone-created task logs only have paddock_id and no area_ha)
+   * 4) null
+   */
+  const effectiveTaskAreaHa = (t: WorkTask): number | null => {
+    const stored = t.area_ha == null ? NaN : Number(t.area_ha);
+    if (Number.isFinite(stored) && stored > 0) return stored;
+    const joinRows = paddocksByTask.get(t.id) ?? [];
+    if (joinRows.length) {
+      const sum = joinRows.reduce((s, r) => s + (Number(r.area_ha) > 0 ? Number(r.area_ha) : 0), 0);
+      if (sum > 0) return sum;
+    }
+    const ids = taskPaddockIds.get(t.id) ?? [];
+    if (ids.length) {
+      const sum = ids.reduce((s, id) => s + paddockAreaHa(paddockById.get(id)), 0);
+      if (sum > 0) return sum;
+    }
+    return null;
+  };
+
   const filtered = useMemo(() => {
     let list = tasks.slice();
     if (from) list = list.filter((t) => (effectiveEnd(t) ?? "") >= from);
