@@ -55,6 +55,7 @@ import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
+import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
 import UnsubscribePage from "./pages/UnsubscribePage";
 import FeatureFlagsPage from "./pages/admin/FeatureFlagsPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
@@ -130,6 +131,7 @@ const App = () => (
                     <Route path="/yield" element={<YieldReportsPage />} />
                     <Route path="/damage-records" element={<DamageRecordsPage />} />
                     <Route path="/fuel-purchases" element={<FuelPurchasesPage />} />
+                    <Route path="/tractor-fuel-logs" element={<TractorFuelLogsPage />} />
                     <Route path="/setup/chemicals" element={<SavedChemicalsPage />} />
                     <Route path="/setup/spray-presets" element={<Navigate to="/spray-jobs" replace />} />
                     <Route path="/spray-jobs" element={<SprayJobsPage />} />
