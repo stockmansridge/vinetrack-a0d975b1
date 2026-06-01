@@ -625,6 +625,55 @@ function TripSheet({
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
+            {fuelEstimate && (
+              <Section title="Fuel estimate">
+                <Field label="Tractor" value={fmt(tractorName)} />
+                <Field label="Trip function" value={fmt(tripFunctionLabel(trip.trip_function))} />
+                <Field label="Basis" value={fuelEstimate.basisLabel} />
+                {fuelEstimate.basis === "engine_hours" && (
+                  <Field
+                    label="Engine hour delta"
+                    value={fuelEstimate.engineHourDelta != null ? `${fuelEstimate.engineHourDelta.toFixed(2)} hr` : "—"}
+                  />
+                )}
+                {fuelEstimate.basis !== "engine_hours" && (
+                  <Field label="Active hours" value={fmtHours(fuelEstimate.activeHours)} />
+                )}
+                <Field
+                  label="Fuel rate"
+                  value={
+                    fuelEstimate.rateMissing
+                      ? "Fuel rate missing"
+                      : fuelEstimate.litresPerHour != null
+                        ? `${fuelEstimate.litresPerHour.toFixed(2)} L/hr`
+                        : "—"
+                  }
+                />
+                <Field
+                  label="Estimated litres"
+                  value={fuelEstimate.litres != null ? `${fuelEstimate.litres.toFixed(1)} L` : "—"}
+                />
+                {canSeeCosts && (
+                  <>
+                    <Field
+                      label="Fuel cost/L"
+                      value={fuelEstimate.costPerLitre != null ? `${fmtCurrency(fuelEstimate.costPerLitre)}/L` : "Unavailable"}
+                    />
+                    <Field
+                      label="Estimated fuel cost"
+                      value={fuelEstimate.cost != null ? fmtCurrency(fuelEstimate.cost) : "Unavailable"}
+                    />
+                  </>
+                )}
+                {fuelEstimate.warnings.length > 0 && (
+                  <div className="mt-2 rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {fuelEstimate.warnings.map((w, i) => (<li key={i}>{w}</li>))}
+                    </ul>
+                  </div>
+                )}
+              </Section>
+            )}
             {canSeeCosts && cost && (
               <Section title="Estimated trip cost">
                 <Field label="Active hours" value={fmtHours(cost.activeHours)} />
