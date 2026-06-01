@@ -245,7 +245,7 @@ function YearMatrixView({
                               "w-full h-7 px-1 text-center tabular-nums leading-none cursor-pointer hover:outline hover:outline-1 hover:outline-primary",
                               !hasData && "text-muted-foreground/40",
                               hasData && (mm as number) === 0 && "text-muted-foreground",
-                              hasData && (mm as number) > 0 && "font-medium",
+                              hasData && (mm as number) > 0 && "font-medium dark:text-[#0F1410]",
                             )}
                           >
                             {!hasData
