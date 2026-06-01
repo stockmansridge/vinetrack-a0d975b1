@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { fetchTripsForVineyard } from "@/lib/tripsQuery";
 import { fetchList } from "@/lib/queries";
 import { fetchFuelPurchasesForVineyard } from "@/lib/fuelPurchasesQuery";
-import { fetchVineyardMembersWithCategory } from "@/lib/teamMembersQuery";
+
 import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 import type { TractorLite } from "@/lib/tripCosting";
