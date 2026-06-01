@@ -45,21 +45,7 @@ import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 // ---------- Trip function helpers ----------
 
-const TRIP_FUNCTION_LABELS: Record<string, string> = {
-  spray: "Spray",
-  mowing: "Mowing",
-  slashing: "Slashing",
-  harrowing: "Harrowing",
-  seeding: "Seeding",
-  spreading: "Spreading",
-  fertiliser: "Fertiliser",
-  pruning: "Pruning",
-  shootThinning: "Shoot thinning",
-  canopyWork: "Canopy work",
-  irrigationCheck: "Irrigation check",
-  repairs: "Repairs",
-  other: "Other",
-};
+import { TRIP_FUNCTION_LABELS } from "@/lib/tripFunctionLabels";
 const TRIP_FUNCTION_COLORS: Record<string, string> = {
   spray: "#AF52DE",
   mowing: "#34C759",
