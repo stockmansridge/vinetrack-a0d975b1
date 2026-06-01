@@ -513,6 +513,8 @@ export default function CostReportsPage() {
         </Table>
       </Card>
 
+      {selectedVineyardId && <FuelAllocationPanel vineyardId={selectedVineyardId} />}
+
       <Sheet open={!!drill} onOpenChange={(o) => !o && setDrill(null)}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
           {drill && (
