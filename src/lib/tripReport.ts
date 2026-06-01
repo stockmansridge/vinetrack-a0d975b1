@@ -679,9 +679,17 @@ export function tripToCsvRow(
     base.labour_category = cost.labour.categoryName ?? "";
     base.labour_rate_per_hour = num(cost.labour.ratePerHour);
     base.labour_cost = num(cost.labour.cost);
+    // Phase 3 — fuel allocation columns mirror the iOS estimate.
+    base.tractor = ""; // resolved & filled in by caller when known
+    base.trip_function = tripFunctionLabel ?? t.trip_function ?? "";
+    base.fuel_basis = cost.fuel.basisLabel;
+    base.engine_hour_delta = num(cost.fuel.engineHourDelta);
+    base.fuel_active_hours = num(cost.fuel.hours);
+    base.fuel_rate_l_per_hr = num(cost.fuel.litresPerHour);
     base.fuel_litres_estimated = num(cost.fuel.litres);
     base.fuel_cost_per_litre = num(cost.fuel.costPerLitre);
     base.fuel_cost = num(cost.fuel.cost);
+    base.fuel_warning = cost.fuel.warnings.join(" | ");
     base.chemical_cost = num(cost.chemicals.cost);
     base.chemical_lines = String(cost.chemicals.lineCount);
     base.chemical_lines_missing_cost = String(cost.chemicals.missingCostLines);
