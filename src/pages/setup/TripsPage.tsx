@@ -55,6 +55,7 @@ import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
+import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 
 
