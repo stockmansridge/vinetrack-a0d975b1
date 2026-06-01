@@ -302,7 +302,27 @@ export default function TripsPage() {
           onClick={() => {
             const csvRows = rows.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
-              return tripToCsvRow(t, padName, tripDisplayName(t), tripFunctionLabel(t.trip_function));
+              const tractor = t.tractor_id ? pageTractorById.get(t.tractor_id) ?? null : null;
+              const fe = computeFuelEstimate(t, tractor, canSeeCostsPage ? (pageFuel ?? []) : []);
+              return tripToCsvRow(
+                t,
+                padName,
+                tripDisplayName(t),
+                tripFunctionLabel(t.trip_function),
+                null,
+                tractor?.name ?? null,
+                {
+                  basisLabel: fe.basisLabel,
+                  basis: fe.basis,
+                  engineHourDelta: fe.engineHourDelta,
+                  activeHours: fe.activeHours,
+                  litresPerHour: fe.litresPerHour,
+                  litres: fe.litres,
+                  costPerLitre: canSeeCostsPage ? fe.costPerLitre : null,
+                  cost: canSeeCostsPage ? fe.cost : null,
+                  warnings: fe.warnings,
+                },
+              );
             });
             downloadCsv(`trips_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
           }}
