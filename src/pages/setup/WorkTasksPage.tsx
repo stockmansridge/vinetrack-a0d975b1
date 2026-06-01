@@ -544,7 +544,7 @@ export default function WorkTasksPage() {
                 paddock: <TableCell>{padName}</TableCell>,
                 task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
-                area_ha: <TableCell className="text-right">{num(t.area_ha)}</TableCell>,
+                area_ha: <TableCell className="text-right">{num(effectiveTaskAreaHa(t))}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
                 cost: (
                   <TableCell className="text-right">
