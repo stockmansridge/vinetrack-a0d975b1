@@ -387,7 +387,8 @@ export default function WorkTasksPage() {
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
       const padNames = taskPaddockNames(t.id);
-      const costPerHa = t.area_ha && tot?.cost ? (tot.cost / Number(t.area_ha)).toFixed(2) : "";
+      const areaHa = effectiveTaskAreaHa(t);
+      const costPerHa = areaHa && tot?.cost ? (tot.cost / areaHa).toFixed(2) : "";
       const base = [
         t.id,
         effectiveStart(t) ?? "",
@@ -395,7 +396,7 @@ export default function WorkTasksPage() {
         padNames,
         t.task_type ?? "",
         t.status ?? "",
-        t.area_ha ?? "",
+        areaHa == null ? "" : areaHa.toFixed(4),
         tot?.hours?.toFixed(2) ?? "0",
       ];
       const tail = [
