@@ -519,6 +519,35 @@ function TripSheet({
     queryFn: () => fetchYieldReportsForVineyard(vineyardId!),
   });
 
+  // Tractors for the Fuel estimate section (visible to all users — non-sensitive).
+  const fuelEnabled = !!trip && !!vineyardId;
+  const { data: allTractors } = useQuery({
+    queryKey: ["trip-tractors", vineyardId],
+    enabled: fuelEnabled,
+    queryFn: () => fetchList<TractorLite>("tractors", vineyardId!),
+  });
+  // Fuel purchases for cost/L — may RLS to owner/manager only; failures
+  // bubble up as no rows which we render as "cost unavailable".
+  const { data: allFuel } = useQuery({
+    queryKey: ["trip-fuel-purchases", vineyardId],
+    enabled: fuelEnabled,
+    queryFn: async () => {
+      try { return await fetchFuelPurchasesForVineyard(vineyardId!); }
+      catch { return []; }
+    },
+  });
+
+  const fuelEstimate = useMemo(() => {
+    if (!trip || !trip.tractor_id) return null;
+    const tractor = (allTractors ?? []).find((t) => t.id === trip.tractor_id) ?? null;
+    return computeFuelEstimate(trip, tractor, allFuel ?? []);
+  }, [trip, allTractors, allFuel]);
+
+  const tractorName = useMemo(() => {
+    if (!trip?.tractor_id) return null;
+    return (allTractors ?? []).find((t) => t.id === trip.tractor_id)?.name ?? null;
+  }, [trip, allTractors]);
+
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
     const tractor = trip.tractor_id ? (costTractors ?? []).find((t) => t.id === trip.tractor_id) ?? null : null;
