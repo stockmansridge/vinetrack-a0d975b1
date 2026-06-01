@@ -146,7 +146,30 @@ export default function TripsPage() {
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
   });
 
+  // Tractors + fuel purchases (page-level) so CSV export can include fuel
+  // estimate columns for every row without needing to open each trip.
+  const canSeeCostsPage = useCanSeeCosts();
+  const { data: pageTractors = [] } = useQuery({
+    queryKey: ["trips-page-tractors", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
+  });
+  const { data: pageFuel = [] } = useQuery({
+    queryKey: ["trips-page-fuel", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: async () => {
+      try { return await fetchFuelPurchasesForVineyard(selectedVineyardId!); }
+      catch { return []; }
+    },
+  });
+  const pageTractorById = useMemo(() => {
+    const m = new Map<string, TractorLite>();
+    (pageTractors ?? []).forEach((t) => m.set(t.id, t));
+    return m;
+  }, [pageTractors]);
+
   const trips = data?.trips ?? [];
+
 
   // Dev-only diagnostic: surface unknown trip_function raw values so we can
   // keep the portal label map aligned with new Rork/iOS values.
