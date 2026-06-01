@@ -53,8 +53,7 @@ interface PaddockLite {
   name: string | null;
 }
 
-import { TRIP_FUNCTION_LABELS, tripFunctionLabel as tripFn } from "@/lib/tripFunctionLabels";
-void TRIP_FUNCTION_LABELS;
+import { tripFunctionLabel as tripFn } from "@/lib/tripFunctionLabels";
 
 const tripDisplay = (t: Trip): string => {
   if (t.trip_title?.trim()) return t.trip_title.trim();
