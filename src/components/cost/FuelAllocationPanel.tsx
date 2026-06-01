@@ -85,11 +85,8 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
     enabled: !!vineyardId,
   });
 
-  const { data: members = [] } = useQuery({
-    queryKey: ["fuel-alloc-members", vineyardId],
-    queryFn: () => fetchVineyardMembersWithCategory(vineyardId),
-    enabled: !!vineyardId,
-  });
+
+
 
   const { resolve: resolveTeam } = useTeamLookup(vineyardId ?? null);
 
