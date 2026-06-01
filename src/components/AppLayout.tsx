@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import vinetrackLogo from "@/assets/vinetrack-logo.png";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
@@ -70,6 +71,8 @@ export default function AppLayout() {
               </span>
             </div>
             <div className="ml-auto flex items-center gap-3">
+              <ThemeToggle />
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1 rounded-full">

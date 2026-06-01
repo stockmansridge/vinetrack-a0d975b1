@@ -60,42 +60,51 @@
   }
 
   .dark {
-    --background: 144 25% 6%;
-    --foreground: 100 10% 96%;
+    /* Page + surface — dark grey, not pure black */
+    --background: 210 8% 8%;              /* #111315 */
+    --foreground: 210 17% 96%;            /* #F4F6F8 */
 
-    --card: 144 22% 9%;
-    --card-foreground: 100 10% 96%;
+    --card: 213 14% 13%;                  /* #1B2025 */
+    --card-foreground: 210 17% 96%;
 
-    --popover: 144 22% 9%;
-    --popover-foreground: 100 10% 96%;
+    --popover: 213 14% 13%;
+    --popover-foreground: 210 17% 96%;
 
-    --primary: 80 58% 46%;
-    --primary-foreground: 144 92% 10%;
+    /* Primary: keep VineTrack accent green readable on dark */
+    --primary: 80 58% 46%;                /* #85B830 */
+    --primary-foreground: 144 60% 8%;
+    --primary-glow: 80 58% 52%;
 
-    --secondary: 144 18% 14%;
-    --secondary-foreground: 100 10% 96%;
+    --secondary: 213 14% 16%;
+    --secondary-foreground: 210 17% 96%;
 
-    --muted: 144 18% 14%;
-    --muted-foreground: 100 8% 65%;
+    --muted: 213 14% 16%;
+    --muted-foreground: 212 12% 70%;      /* #B8C0C8 */
 
     --accent: 80 58% 46%;
-    --accent-foreground: 144 92% 10%;
+    --accent-foreground: 144 60% 8%;
 
-    --destructive: 0 62% 40%;
+    --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 144 15% 18%;
-    --input: 144 15% 18%;
-    --ring: 80 58% 46%;
+    --warning: 36 92% 55%;
+    --warning-foreground: 30 30% 12%;
 
-    --sidebar-background: 144 60% 8%;
-    --sidebar-foreground: 0 0% 100%;
+    --map-accent: 210 90% 60%;
+
+    --border: 213 12% 22%;                /* #30363D */
+    --input: 213 12% 22%;
+    --ring: 80 58% 50%;
+
+    /* Sidebar — distinct dark surface */
+    --sidebar-background: 210 14% 10%;    /* #15191D */
+    --sidebar-foreground: 210 17% 96%;
     --sidebar-primary: 80 58% 46%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 80 50% 22%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 144 40% 16%;
-    --sidebar-ring: 80 58% 46%;
+    --sidebar-primary-foreground: 144 60% 8%;
+    --sidebar-accent: 213 14% 18%;        /* #262C33 */
+    --sidebar-accent-foreground: 210 17% 96%;
+    --sidebar-border: 213 12% 18%;
+    --sidebar-ring: 80 58% 50%;
   }
 }
 
@@ -120,32 +129,31 @@
 @layer components {
   /* VineTrack form field — unified style for inputs, selects, textareas */
   .vt-field {
-    background-color: #FFFFFF;
-    border: 1.5px solid #C9D6C4;
+    background-color: hsl(var(--card));
+    border: 1.5px solid hsl(var(--input));
     border-radius: 14px;
-    color: #102016;
+    color: hsl(var(--foreground));
     min-height: 48px;
     box-shadow: inset 0 1px 2px rgba(16, 32, 22, 0.04), 0 1px 2px rgba(16, 32, 22, 0.03);
     transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
   }
-  .vt-field::placeholder { color: #7A887C; }
+  .vt-field::placeholder { color: hsl(var(--muted-foreground)); }
   .vt-field:hover:not(:disabled):not([data-disabled]) {
-    border-color: #AFC49D;
-    background-color: #FFFFFF;
+    border-color: hsl(var(--ring) / 0.55);
   }
   .vt-field:focus,
   .vt-field:focus-visible,
   .vt-field[data-state="open"] {
     outline: none;
-    border-color: #85B830;
-    box-shadow: 0 0 0 3px rgba(133, 184, 48, 0.22), inset 0 1px 2px rgba(16, 32, 22, 0.04);
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.22), inset 0 1px 2px rgba(16, 32, 22, 0.04);
   }
   .vt-field:disabled,
   .vt-field[data-disabled],
   .vt-field[readonly] {
-    background-color: #F1F4EF;
-    border: 1px solid #D9E2D6;
-    color: #6B766D;
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
   }
 
   .vt-field-textarea {
@@ -153,7 +161,4 @@
     min-height: 120px;
     padding: 14px 16px;
   }
-
-  /* Field labels */
-  label { color: #102016; }
 }
