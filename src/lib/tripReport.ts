@@ -648,6 +648,7 @@ export function tripToCsvRow(
   tripDisplay: string,
   tripFunctionLabel: string | null,
   cost?: TripCostBreakdown | null,
+  tractorName?: string | null,
 ): Record<string, string> {
   const cov = summarizeCoverage(t);
   const base: Record<string, string> = {
