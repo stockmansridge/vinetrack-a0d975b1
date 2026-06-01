@@ -53,23 +53,7 @@ interface PaddockLite {
   name: string | null;
 }
 
-const TRIP_FUNCTION_LABELS: Record<string, string> = {
-  spray: "Spray",
-  mowing: "Mowing",
-  slashing: "Slashing",
-  harrowing: "Harrowing",
-  seeding: "Seeding",
-  spreading: "Spreading",
-  fertiliser: "Fertiliser",
-  pruning: "Pruning",
-  shootThinning: "Shoot thinning",
-  canopyWork: "Canopy work",
-  irrigationCheck: "Irrigation check",
-  repairs: "Repairs",
-  other: "Other",
-};
-const tripFn = (v?: string | null) =>
-  v ? TRIP_FUNCTION_LABELS[v] ?? v : null;
+import { tripFunctionLabel as tripFn } from "@/lib/tripFunctionLabels";
 
 const tripDisplay = (t: Trip): string => {
   if (t.trip_title?.trim()) return t.trip_title.trim();

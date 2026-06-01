@@ -67,27 +67,7 @@ const ANY = "__any__";
 const SPRAY = "__spray__";
 const MAINT = "__maint__";
 
-const TRIP_FUNCTION_LABELS: Record<string, string> = {
-  slashing: "Slashing",
-  mulching: "Mulching",
-  harrowing: "Harrowing",
-  mowing: "Mowing",
-  spraying: "Spraying",
-  seeding: "Seeding",
-  spreading: "Spreading",
-  fertiliser: "Fertiliser",
-  fertilising: "Fertilising",
-  undervineWeeding: "Undervine weeding",
-  interRowCultivation: "Inter-row cultivation",
-  pruning: "Pruning",
-  shootThinning: "Shoot thinning",
-  canopyWork: "Canopy work",
-  irrigationCheck: "Irrigation check",
-  repairs: "Repairs",
-  other: "Other",
-};
-const tripFunctionLabel = (v?: string | null) =>
-  v ? TRIP_FUNCTION_LABELS[v] ?? v : null;
+import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
 const tripDisplayName = (t: Trip): string => {
   if (t.trip_title && t.trip_title.trim()) return t.trip_title.trim();
   const fn = tripFunctionLabel(t.trip_function);
@@ -166,6 +146,26 @@ export default function TripsPage() {
   });
 
   const trips = data?.trips ?? [];
+
+  // Dev-only diagnostic: surface unknown trip_function raw values so we can
+  // keep the portal label map aligned with new Rork/iOS values.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!trips.length) return;
+    const unknown = new Map<string, number>();
+    trips.forEach((t) => {
+      const fn = t.trip_function;
+      if (!fn) return;
+      if (!Object.prototype.hasOwnProperty.call(TRIP_FUNCTION_LABELS, fn)) {
+        unknown.set(fn, (unknown.get(fn) ?? 0) + 1);
+      }
+    });
+    if (unknown.size) {
+      // eslint-disable-next-line no-console
+      console.warn("[trips/trip_function] unknown values not in label map", Object.fromEntries(unknown));
+    }
+  }, [trips]);
+
 
   const patterns = useMemo(() => {
     const s = new Set<string>();

@@ -193,6 +193,11 @@ export default function WorkTasksPage() {
     paddocks.forEach((p) => m.set(p.id, p.name));
     return m;
   }, [paddocks]);
+  const paddockById = useMemo(() => {
+    const m = new Map<string, PaddockLite>();
+    paddocks.forEach((p) => m.set(p.id, p));
+    return m;
+  }, [paddocks]);
   const categoryById = useMemo(() => {
     const m = new Map<string, OperatorCategory>();
     (Array.isArray(categories) ? categories : []).forEach((c) => m.set(c.id, c));
@@ -294,6 +299,30 @@ export default function WorkTasksPage() {
       .join(", ");
   };
 
+  /**
+   * Effective area resolver for a task.
+   * 1) task.area_ha if positive
+   * 2) sum of work_task_paddocks.area_ha for the task (if any present)
+   * 3) sum of paddockAreaHa() for taskPaddockIds (covers legacy rows where
+   *    iPhone-created task logs only have paddock_id and no area_ha)
+   * 4) null
+   */
+  const effectiveTaskAreaHa = (t: WorkTask): number | null => {
+    const stored = t.area_ha == null ? NaN : Number(t.area_ha);
+    if (Number.isFinite(stored) && stored > 0) return stored;
+    const joinRows = paddocksByTask.get(t.id) ?? [];
+    if (joinRows.length) {
+      const sum = joinRows.reduce((s, r) => s + (Number(r.area_ha) > 0 ? Number(r.area_ha) : 0), 0);
+      if (sum > 0) return sum;
+    }
+    const ids = taskPaddockIds.get(t.id) ?? [];
+    if (ids.length) {
+      const sum = ids.reduce((s, id) => s + paddockAreaHa(paddockById.get(id)), 0);
+      if (sum > 0) return sum;
+    }
+    return null;
+  };
+
   const filtered = useMemo(() => {
     let list = tasks.slice();
     if (from) list = list.filter((t) => (effectiveEnd(t) ?? "") >= from);
@@ -318,6 +347,35 @@ export default function WorkTasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
 
+  // Dev-only sync diagnostic: keep visibility on rows that still need
+  // area_ha hydration after Rork's iPhone fix lands.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!tasks.length) return;
+    let withArea = 0;
+    let recoveredFromPaddock = 0;
+    let stillMissing = 0;
+    tasks.forEach((t) => {
+      const stored = t.area_ha == null ? NaN : Number(t.area_ha);
+      if (Number.isFinite(stored) && stored > 0) {
+        withArea++;
+        return;
+      }
+      const eff = effectiveTaskAreaHa(t);
+      if (eff != null && eff > 0) recoveredFromPaddock++;
+      else stillMissing++;
+    });
+    // eslint-disable-next-line no-console
+    console.info("[work_tasks/area] diagnostic", {
+      total: tasks.length,
+      withAreaHa: withArea,
+      recoveredFromPaddock,
+      stillMissing,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, paddocksByTask, taskPaddockIds, paddockById]);
+
+
   type SortKey = "date" | "paddock" | "task_type" | "status" | "area_ha" | "hours" | "cost" | "finalized";
   const accessors = useMemo(
     () => ({
@@ -325,13 +383,16 @@ export default function WorkTasksPage() {
       paddock: (r: WorkTask) => taskPaddockNames(r.id),
       task_type: (r: WorkTask) => r.task_type ?? "",
       status: (r: WorkTask) => r.status ?? "",
-      area_ha: (r: WorkTask) => (r.area_ha == null ? null : Number(r.area_ha)),
+      area_ha: (r: WorkTask) => {
+        const v = effectiveTaskAreaHa(r);
+        return v == null ? null : v;
+      },
       hours: (r: WorkTask) => totalsByTask.get(r.id)?.hours ?? 0,
       cost: (r: WorkTask) => totalsByTask.get(r.id)?.cost ?? 0,
       finalized: (r: WorkTask) => (r.is_finalized ? 1 : 0),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [paddockNameById, totalsByTask, taskPaddockIds],
+    [paddockNameById, totalsByTask, taskPaddockIds, paddocksByTask, paddockById],
   );
 
   const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(filtered, {
@@ -355,7 +416,8 @@ export default function WorkTasksPage() {
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
       const padNames = taskPaddockNames(t.id);
-      const costPerHa = t.area_ha && tot?.cost ? (tot.cost / Number(t.area_ha)).toFixed(2) : "";
+      const areaHa = effectiveTaskAreaHa(t);
+      const costPerHa = areaHa && tot?.cost ? (tot.cost / areaHa).toFixed(2) : "";
       const base = [
         t.id,
         effectiveStart(t) ?? "",
@@ -363,7 +425,7 @@ export default function WorkTasksPage() {
         padNames,
         t.task_type ?? "",
         t.status ?? "",
-        t.area_ha ?? "",
+        areaHa == null ? "" : areaHa.toFixed(4),
         tot?.hours?.toFixed(2) ?? "0",
       ];
       const tail = [
@@ -511,7 +573,7 @@ export default function WorkTasksPage() {
                 paddock: <TableCell>{padName}</TableCell>,
                 task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
-                area_ha: <TableCell className="text-right">{num(t.area_ha)}</TableCell>,
+                area_ha: <TableCell className="text-right">{num(effectiveTaskAreaHa(t))}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
                 cost: (
                   <TableCell className="text-right">
@@ -661,7 +723,9 @@ function WorkTaskDrawer({
         start_date: startDate || null,
         end_date: endDate || null,
         date: startDate || task?.date || null,
-        area_ha: selectedPaddocks.length ? totalAreaHa : null,
+        // Preserve existing area_ha when no paddocks are selected on edit,
+        // so legacy iPhone-created rows aren't accidentally cleared.
+        area_ha: selectedPaddocks.length ? totalAreaHa : (task?.area_ha ?? null),
         description,
         notes,
         is_finalized: isFinalized,

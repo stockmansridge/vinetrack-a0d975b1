@@ -22,6 +22,7 @@ import {
 import CostingSetupWizard, {
   useCostingSetupSummary,
 } from "@/components/cost/CostingSetupWizard";
+import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -414,7 +415,7 @@ export default function CostReportsPage() {
         <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
         <FilterSelect label="Block" value={paddock} onChange={setPaddock} options={paddocks} />
         <FilterSelect label="Variety" value={variety} onChange={setVariety} options={varieties} />
-        <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} />
+        <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} renderLabel={(v) => tripFunctionLabel(v) ?? v} />
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
       </Card>
 
@@ -552,7 +553,7 @@ export default function CostReportsPage() {
                           {stale && <Badge variant="outline">Stale</Badge>}
                         </div>
                         <div className="text-muted-foreground">
-                          {r.trip_function ?? "trip"} · {r.calculated_at ? formatDateTime(r.calculated_at) : "—"}
+                          {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? formatDateTime(r.calculated_at) : "—"}
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
                           <DetailRow label="Area" value={`${fmtNum(r.allocation_area_ha)} ha`} small />
@@ -601,8 +602,8 @@ function SummaryCard({ label, value, info }: { label: string; value: string; inf
 }
 
 function FilterSelect({
-  label, value, onChange, options,
-}: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  label, value, onChange, options, renderLabel,
+}: { label: string; value: string; onChange: (v: string) => void; options: string[]; renderLabel?: (v: string) => string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -610,7 +611,7 @@ function FilterSelect({
         <SelectTrigger className="h-8 w-[160px]"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value={ANY}>All</SelectItem>
-          {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+          {options.map((o) => <SelectItem key={o} value={o}>{renderLabel ? renderLabel(o) : o}</SelectItem>)}
         </SelectContent>
       </Select>
     </div>

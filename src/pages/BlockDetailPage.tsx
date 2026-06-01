@@ -23,6 +23,7 @@ import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -448,7 +449,7 @@ export default function BlockDetailPage() {
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
                                   <div className="truncate text-sm font-medium">
-                                    {t.trip_title || t.trip_function || "Trip"}
+                                    {t.trip_title || tripFunctionLabel(t.trip_function) || "Trip"}
                                   </div>
                                   <div className="mt-0.5 text-xs text-muted-foreground truncate">
                                     {fmtDateTime(t.start_time)}
@@ -644,8 +645,8 @@ export default function BlockDetailPage() {
                   .map((t) => (
                     <TableRow key={t.id}>
                       <TableCell>{fmtDateTime(t.start_time)}</TableCell>
-                      <TableCell>{t.trip_title || t.trip_function || "Trip"}</TableCell>
-                      <TableCell>{t.trip_function ?? "—"}</TableCell>
+                      <TableCell>{t.trip_title || tripFunctionLabel(t.trip_function) || "Trip"}</TableCell>
+                      <TableCell>{tripFunctionLabel(t.trip_function) ?? "—"}</TableCell>
                       <TableCell>{t.person_name ?? "—"}</TableCell>
                       <TableCell className="text-right">
                         {t.total_distance != null
