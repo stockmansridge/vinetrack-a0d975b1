@@ -415,7 +415,7 @@ export default function CostReportsPage() {
         <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
         <FilterSelect label="Block" value={paddock} onChange={setPaddock} options={paddocks} />
         <FilterSelect label="Variety" value={variety} onChange={setVariety} options={varieties} />
-        <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} />
+        <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} renderLabel={(v) => tripFunctionLabel(v) ?? v} />
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
       </Card>
 
