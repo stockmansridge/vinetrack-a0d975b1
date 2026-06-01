@@ -92,7 +92,7 @@ interface GroupedRow {
 
 function NoAccessCard() {
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 w-full">
       <Card className="p-6 flex items-start gap-3">
         <Lock className="h-5 w-5 mt-0.5 text-muted-foreground" />
         <div>
