@@ -73,6 +73,7 @@ import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
 import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
+import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
 
 const queryClient = new QueryClient();
 
@@ -180,6 +181,7 @@ const App = () => (
                     <Route path="/admin/system-admins" element={<SystemAdminsPage />} />
                     <Route path="/admin/block-troubleshooter" element={<BlockTroubleshooterPage />} />
                     <Route path="/admin/support-requests" element={<AdminSupportRequestsPage />} />
+                    <Route path="/admin/user-activity" element={<AdminUserActivityPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />

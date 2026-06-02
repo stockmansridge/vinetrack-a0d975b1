@@ -118,6 +118,7 @@ const tools: NavItem[] = [
 
 const systemAdmin: NavItem[] = [
   { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
+  { title: "User Activity", url: "/admin/user-activity", icon: Activity },
   { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck },
   { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy },
   { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
