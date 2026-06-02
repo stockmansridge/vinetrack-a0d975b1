@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.handle-email-suppression]
 verify_jwt = false
+
+[functions.stripe-vinetrack-webhook]
+verify_jwt = false
+
+[functions.create-vinetrack-team-checkout]
+verify_jwt = true
+
+[functions.create-vinetrack-billing-portal]
+verify_jwt = true

@@ -74,6 +74,7 @@ import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
+import BillingPage from "./pages/BillingPage";
 
 const queryClient = new QueryClient();
 
@@ -165,6 +166,7 @@ const App = () => (
                     <Route path="/tools/seeding-mix" element={<ToolPlaceholder title="Seeding Mix Calculator" />} />
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
+                    <Route path="/billing" element={<BillingPage />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
