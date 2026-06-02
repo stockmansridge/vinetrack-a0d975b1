@@ -56,6 +56,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
+import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
 
 type NavItem = { title: string; url: string; icon: any; soon?: boolean };
 
