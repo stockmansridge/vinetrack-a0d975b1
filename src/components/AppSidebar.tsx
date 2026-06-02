@@ -152,6 +152,11 @@ export function AppSidebar() {
           <NavLink to={item.url} className="flex items-center gap-2">
             <item.icon className="h-4 w-4" />
             <span className="flex-1 truncate">{item.title}</span>
+            {item.url === "/admin/support-requests" && unresolvedSupport > 0 && (
+              <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white dark:bg-amber-400 dark:text-amber-950">
+                {unresolvedSupport}
+              </span>
+            )}
             {item.soon && (
               <span className="ml-auto rounded-sm bg-muted px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
                 Soon
