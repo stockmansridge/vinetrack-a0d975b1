@@ -25,6 +25,7 @@ import { ChevronDown } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import vinetrackLogo from "@/assets/vinetrack-logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
