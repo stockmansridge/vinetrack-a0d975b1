@@ -342,6 +342,7 @@ export default function AdminSupportRequestsPage() {
     onSuccess: (_d, vars) => {
       toast.success(`Status updated to ${vars.status}`);
       qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
+      qc.invalidateQueries({ queryKey: ["admin", "support-requests", "unresolved-count"] });
     },
     onError: (e) => {
       const msg = e instanceof Error ? e.message : String(e);
