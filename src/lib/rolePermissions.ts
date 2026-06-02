@@ -17,6 +17,7 @@ const ROUTE_ALLOW: Record<string, Role[]> = {
   // Owner/manager only — financials, team, admin setup
   "/reports/costs": ADMIN_ROLES,
   "/team": ADMIN_ROLES,
+  "/billing": ["owner"],
   "/setup/vineyard": ADMIN_ROLES,
   "/setup/spray-equipment": ADMIN_ROLES,
   "/setup/equipment-other": ADMIN_ROLES,
