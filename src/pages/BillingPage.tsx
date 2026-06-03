@@ -242,7 +242,25 @@ export default function BillingPage() {
         <p className="text-sm text-muted-foreground">
           Plan, licences and invoices for your VineTrack subscription.
         </p>
+        <p className="text-xs text-muted-foreground font-mono">
+          [debug] Selected vineyard:{" "}
+          {selectedVineyardId
+            ? `${selectedVineyardName ?? "(unnamed)"} / ${selectedVineyardId}`
+            : "(none)"}
+        </p>
       </header>
+
+      {!selectedVineyardId && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Select a vineyard before starting Team checkout</AlertTitle>
+          <AlertDescription>
+            Choose a vineyard from the dropdown at the top of the page. The
+            selected vineyard becomes the primary vineyard for this
+            subscription.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
