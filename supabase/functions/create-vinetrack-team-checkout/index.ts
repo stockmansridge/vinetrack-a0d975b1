@@ -89,6 +89,34 @@ Deno.serve(async (req: Request) => {
   });
   let customerId: string | undefined;
   try {
+    // Block creating a new checkout when an active Team subscription already exists.
+    const { data: activeSub } = await admin
+      .from("vinetrack_subscriptions")
+      .select("id, stripe_customer_id, stripe_subscription_id, status")
+      .eq("owner_user_id", user.id)
+      .eq("billing_provider", "stripe")
+      .is("deleted_at", null)
+      .in("status", ["active", "trialing", "past_due"])
+      .neq("stripe_subscription_id", "sub_TEST_SEED")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (activeSub?.id) {
+      console.log("[create-vinetrack-team-checkout] active subscription exists, blocking new checkout", {
+        userId: user.id,
+        stripeSubscriptionId: activeSub.stripe_subscription_id,
+        status: activeSub.status,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "You already have an active Team subscription. Use Manage billing to make changes.",
+          code: "already_subscribed",
+          stripe_subscription_id: activeSub.stripe_subscription_id,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { data: existing } = await admin
       .from("vinetrack_subscriptions")
       .select("stripe_customer_id,stripe_subscription_id")
