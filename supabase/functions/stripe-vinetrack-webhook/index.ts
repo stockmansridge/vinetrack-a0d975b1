@@ -352,6 +352,7 @@ Deno.serve(async (req: Request) => {
 
     if (["active", "trialing", "past_due"].includes(sub.status)) {
       await ensureOwnerLicence(subRowId, resolvedOwner, resolvedVineyard);
+      await archiveDuplicateActiveTeamSubs(resolvedOwner, sub.id, subRowId);
     }
 
     logEvent("subscription upserted", {
