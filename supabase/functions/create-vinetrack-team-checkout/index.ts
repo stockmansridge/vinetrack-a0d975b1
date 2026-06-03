@@ -81,13 +81,33 @@ Deno.serve(async (req: Request) => {
   try {
     const { data: existing } = await admin
       .from("vinetrack_subscriptions")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id,stripe_subscription_id")
       .eq("owner_user_id", user.id)
+      .eq("billing_provider", "stripe")
+      .is("deleted_at", null)
       .not("stripe_customer_id", "is", null)
+      .neq("stripe_customer_id", "cus_TEST_SEED")
+      .neq("stripe_subscription_id", "sub_TEST_SEED")
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (existing?.stripe_customer_id) customerId = existing.stripe_customer_id as string;
-  } catch { /* table may not exist yet */ }
+  } catch (e) {
+    console.warn("[create-vinetrack-team-checkout] customer lookup failed", (e as any)?.message);
+  }
+
+  if (customerId) {
+    try {
+      const customer = await stripe.customers.retrieve(customerId);
+      if ((customer as any)?.deleted) {
+        console.log("[create-vinetrack-team-checkout] ignoring deleted Stripe customer", customerId);
+        customerId = undefined;
+      }
+    } catch (e) {
+      console.log("[create-vinetrack-team-checkout] ignoring stale Stripe customer", customerId, (e as any)?.message);
+      customerId = undefined;
+    }
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
