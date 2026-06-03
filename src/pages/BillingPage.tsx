@@ -104,19 +104,57 @@ export default function BillingPage() {
     pollStartedRef.current = true;
     toast.success("Payment received. Finalising your subscription…");
     let attempts = 0;
+    const MAX_ATTEMPTS = 20; // ~40s
     const tick = async () => {
       attempts += 1;
-      await refetch();
-      await refetchLicences();
-      await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices"] });
-      if (attempts < 8) {
-        setTimeout(tick, 2000);
-      } else {
-        // Clean the URL so we don't re-trigger on remounts.
+      const { data: refreshed } = await refetch();
+      const acc = refreshed?.access ?? null;
+      const sid = acc?.subscription_id ?? null;
+
+      let ownerLicenceCount = 0;
+      let invoiceCount = 0;
+      if (sid) {
+        await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", sid] });
+        await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
+        const licRes = await refetchLicences();
+        ownerLicenceCount = (licRes.data ?? []).filter(
+          (l) => l.user_id === acc?.user_id && l.status === "active",
+        ).length;
+        try {
+          const { data: invs } = await (iosSupabase as any)
+            .from("vinetrack_invoice_records")
+            .select("id")
+            .eq("subscription_id", sid);
+          invoiceCount = (invs ?? []).length;
+        } catch {
+          invoiceCount = 0;
+        }
+      }
+
+      const subActive =
+        !!acc && !!acc.status && ["active", "trialing", "past_due"].includes(acc.status);
+      const ready = subActive && ownerLicenceCount >= 1;
+
+      if (ready || attempts >= MAX_ATTEMPTS) {
+        // Final invalidation to refresh invoice list display.
+        if (sid) {
+          await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
+        }
         const url = new URL(window.location.href);
         url.searchParams.delete("checkout");
         window.history.replaceState({}, "", url.toString());
+        if (ready) {
+          toast.success(
+            invoiceCount > 0
+              ? "Subscription is active and invoice is linked."
+              : "Subscription is active.",
+          );
+        } else {
+          toast.message("Still finalising — refresh in a moment if needed.");
+        }
+        return;
       }
+      setTimeout(tick, 2000);
     };
     tick();
   }, [refetch, refetchLicences, qc]);
