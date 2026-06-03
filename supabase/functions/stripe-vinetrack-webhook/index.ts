@@ -87,12 +87,47 @@ Deno.serve(async (req: Request) => {
 
   // ---------- helpers ----------
 
+  async function expectData<T>(
+    promise: Promise<{ data: T | null; error: any }>,
+    context: string,
+    meta: Record<string, unknown> = {},
+  ): Promise<T> {
+    const { data, error } = await promise;
+    if (error) {
+      const message = stringifyError(error);
+      logEvent(`${context} failed`, { ...meta, error: message });
+      throw new Error(`${context}: ${message}`);
+    }
+    if (data == null) {
+      const message = `${context}: no data returned`;
+      logEvent(`${context} failed`, { ...meta, error: message });
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  async function expectOk(
+    promise: Promise<{ error: any }>,
+    context: string,
+    meta: Record<string, unknown> = {},
+  ): Promise<void> {
+    const { error } = await promise;
+    if (error) {
+      const message = stringifyError(error);
+      logEvent(`${context} failed`, { ...meta, error: message });
+      throw new Error(`${context}: ${message}`);
+    }
+  }
+
   async function getTeamPlan(): Promise<{ id: string | null; seats_included: number }> {
-    const { data } = await admin
-      .from("vinetrack_plans")
-      .select("id, seats_included")
-      .eq("code", "team")
-      .maybeSingle();
+    const data = await expectData(
+      admin
+        .from("vinetrack_plans")
+        .select("id, seats_included")
+        .eq("code", "team")
+        .maybeSingle(),
+      "Load team plan",
+    );
     return {
       id: (data?.id as string) ?? null,
       seats_included: (data?.seats_included as number) ?? 3,
@@ -123,14 +158,34 @@ Deno.serve(async (req: Request) => {
 
   /** Find the VineTrack subscription row id (and owner) for a Stripe sub id. */
   async function findSubByStripeId(stripeSubId: string) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("vinetrack_subscriptions")
-      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased")
+      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased, stripe_customer_id, created_at")
       .eq("stripe_subscription_id", stripeSubId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (error) {
+      throw new Error(`Find subscription by Stripe ID: ${stringifyError(error)}`);
+    }
+    return data ?? null;
+  }
+
+  async function findLatestActiveTeamSubByCustomer(customerId: string) {
+    const { data, error } = await admin
+      .from("vinetrack_subscriptions")
+      .select("id, owner_user_id, primary_vineyard_id, stripe_subscription_id, stripe_customer_id, status, created_at")
+      .eq("billing_provider", "stripe")
+      .eq("stripe_customer_id", customerId)
+      .is("deleted_at", null)
+      .in("status", ["active", "trialing", "past_due"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Find latest team subscription by customer: ${stringifyError(error)}`);
+    }
     return data ?? null;
   }
 
