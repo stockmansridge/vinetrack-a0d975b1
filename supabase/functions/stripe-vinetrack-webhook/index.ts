@@ -26,6 +26,35 @@ function fail(status: number, message: string) {
   });
 }
 
+function logEvent(message: string, detail: Record<string, unknown>) {
+  console.log(`[stripe-vinetrack-webhook] ${message}`, detail);
+}
+
+function stringifyError(error: unknown): string {
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (typeof error === "object") {
+    const err = error as Record<string, unknown>;
+    return [err.message, err.details, err.hint, err.code]
+      .filter(Boolean)
+      .join(" | ") || JSON.stringify(err);
+  }
+  return String(error);
+}
+
+function getInvoiceStripeSubId(inv: Stripe.Invoice): string | null {
+  return (
+    (typeof inv.subscription === "string" ? inv.subscription : (inv.subscription as any)?.id) ||
+    ((inv as any).parent?.subscription_details?.subscription as string | undefined) ||
+    ((inv as any).subscription_details?.subscription as string | undefined) ||
+    ((inv as any).lines?.data?.[0]?.subscription as string | undefined) ||
+    ((inv as any).lines?.data?.[0]?.parent?.subscription_item_details?.subscription as
+      | string
+      | undefined) ||
+    null
+  );
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return fail(405, "Method not allowed");
