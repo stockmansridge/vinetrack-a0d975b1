@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,33 @@ export default function BillingPage() {
   const [seatsOpen, setSeatsOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
+
+  // After Stripe redirects back with ?checkout=success, poll for the webhook
+  // to land the subscription/invoice rows. We refetch a few times then stop.
+  const pollStartedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") !== "success" || pollStartedRef.current) return;
+    pollStartedRef.current = true;
+    toast.success("Payment received. Finalising your subscription…");
+    let attempts = 0;
+    const tick = async () => {
+      attempts += 1;
+      await refetch();
+      await refetchLicences();
+      await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices"] });
+      if (attempts < 8) {
+        setTimeout(tick, 2000);
+      } else {
+        // Clean the URL so we don't re-trigger on remounts.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("checkout");
+        window.history.replaceState({}, "", url.toString());
+      }
+    };
+    tick();
+  }, [refetch, refetchLicences, qc]);
 
   const activeStatus = ["active", "trialing", "past_due"];
   const hasActiveSub =

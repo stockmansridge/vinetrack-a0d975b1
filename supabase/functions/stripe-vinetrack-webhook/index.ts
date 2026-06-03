@@ -120,17 +120,33 @@ Deno.serve(async (req: Request) => {
   }
 
   async function getTeamPlan(): Promise<{ id: string | null; seats_included: number }> {
-    const data = await expectData(
-      admin
+    // Try with seats_included; if the column doesn't exist (42703), fall back.
+    let row: any = null;
+    let lastError: any = null;
+    for (const cols of ["id, seats_included", "id, included_seats", "id"]) {
+      const { data, error } = await admin
         .from("vinetrack_plans")
-        .select("id, seats_included")
+        .select(cols)
         .eq("code", "team")
-        .maybeSingle(),
-      "Load team plan",
-    );
+        .maybeSingle();
+      if (!error) {
+        row = data;
+        break;
+      }
+      lastError = error;
+      if ((error as any)?.code !== "42703") break;
+    }
+    if (!row && lastError) {
+      logEvent("Load team plan failed", { error: stringifyError(lastError) });
+      throw new Error(`Load team plan: ${stringifyError(lastError)}`);
+    }
+    const included =
+      (row?.seats_included as number | undefined) ??
+      (row?.included_seats as number | undefined) ??
+      3;
     return {
-      id: (data?.id as string) ?? null,
-      seats_included: (data?.seats_included as number) ?? 3,
+      id: (row?.id as string) ?? null,
+      seats_included: included,
     };
   }
 
@@ -160,9 +176,11 @@ Deno.serve(async (req: Request) => {
   async function findSubByStripeId(stripeSubId: string) {
     const { data, error } = await admin
       .from("vinetrack_subscriptions")
-      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased, stripe_customer_id, created_at")
+      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased, stripe_customer_id, created_at, deleted_at")
       .eq("stripe_subscription_id", stripeSubId)
-      .is("deleted_at", null)
+      // Intentionally NOT filtering by deleted_at — if a prior row was
+      // soft-deleted (e.g. by external cleanup), we still want to reuse it
+      // and clear its deleted_at so we don't create duplicates.
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -259,6 +277,10 @@ Deno.serve(async (req: Request) => {
       seats_purchased: seatsPurchased,
       metadata: sub.metadata ?? {},
     };
+    // Clear any stale soft-delete when Stripe says the subscription is live.
+    if (["active", "trialing", "past_due", "incomplete"].includes(sub.status)) {
+      (baseRow as any).deleted_at = null;
+    }
     if (resolvedVineyard) {
       (baseRow as any).primary_vineyard_id = resolvedVineyard;
     }
@@ -561,27 +583,35 @@ Deno.serve(async (req: Request) => {
       eventLinkedOwner =
         ownerFromMeta(obj?.metadata, obj?.subscription_details?.metadata) ?? null;
     }
-    await expectOk(
-      admin.from("vinetrack_billing_events").insert({
-        provider: "stripe",
-        event_type: event.type,
-        external_event_id: event.id,
-        subscription_id: eventLinkedSubId,
-        owner_user_id: eventLinkedOwner,
-        payload: event as unknown as Record<string, unknown>,
-      }),
-      "Insert billing event",
-      {
+    const { error: insertEventError } = await admin
+      .from("vinetrack_billing_events")
+      .upsert(
+        {
+          provider: "stripe",
+          event_type: event.type,
+          external_event_id: event.id,
+          subscription_id: eventLinkedSubId,
+          owner_user_id: eventLinkedOwner,
+          payload: event as unknown as Record<string, unknown>,
+        },
+        { onConflict: "provider,external_event_id", ignoreDuplicates: false },
+      );
+    if (insertEventError) {
+      const message = stringifyError(insertEventError);
+      logEvent("Upsert billing event failed", {
         eventType: event.type,
         stripeSubscriptionId: stripeSubId,
         ownerUserId: eventLinkedOwner,
         supabaseSubscriptionId: eventLinkedSubId,
         invoiceId: obj?.object === "invoice" ? obj?.id ?? null : null,
-      },
-    );
+        error: message,
+      });
+      // Don't fail the whole webhook just because we couldn't log the event.
+      // The handler dispatch below is what actually links subscriptions/invoices.
+      console.error("billing_events upsert failed (continuing)", message);
+    }
   } catch (e) {
-    console.error("billing_events insert failed", e);
-    return fail(500, stringifyError(e));
+    console.error("billing_events logging failed (continuing)", e);
   }
 
   // ---------- dispatch ----------
