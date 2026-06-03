@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase as cloudSupabase } from "@/integrations/supabase/client";
+import { iosSupabase } from "@/integrations/ios-supabase/client";
 import {
   useVinetrackAccess,
   useVinetrackInvoices,
