@@ -275,6 +275,10 @@ Deno.serve(async (req: Request) => {
       seats_purchased: seatsPurchased,
       metadata: sub.metadata ?? {},
     };
+    // Clear any stale soft-delete when Stripe says the subscription is live.
+    if (["active", "trialing", "past_due", "incomplete"].includes(sub.status)) {
+      (baseRow as any).deleted_at = null;
+    }
     if (resolvedVineyard) {
       (baseRow as any).primary_vineyard_id = resolvedVineyard;
     }
