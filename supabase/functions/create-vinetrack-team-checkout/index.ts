@@ -64,8 +64,18 @@ Deno.serve(async (req: Request) => {
   if (userErr || !userData?.user) return jsonError(401, "Unauthorized");
   const user = userData.user;
 
-  let body: { successUrl?: string; cancelUrl?: string; quantity?: number } = {};
+  let body: {
+    successUrl?: string;
+    cancelUrl?: string;
+    quantity?: number;
+    primary_vineyard_id?: string;
+  } = {};
   try { body = await req.json(); } catch { /* optional body */ }
+
+  const primaryVineyardId = body.primary_vineyard_id ?? null;
+  if (!primaryVineyardId) {
+    return jsonError(400, "primary_vineyard_id is required. Please select a vineyard before starting checkout.");
+  }
 
   const origin = req.headers.get("origin") ?? "https://portal.vinetrack.com.au";
   const successUrl = body.successUrl ?? `${origin}/billing?checkout=success`;
@@ -100,14 +110,18 @@ Deno.serve(async (req: Request) => {
     try {
       const customer = await stripe.customers.retrieve(customerId);
       if ((customer as any)?.deleted) {
-        console.log("[create-vinetrack-team-checkout] ignoring deleted Stripe customer", customerId);
         customerId = undefined;
       }
-    } catch (e) {
-      console.log("[create-vinetrack-team-checkout] ignoring stale Stripe customer", customerId, (e as any)?.message);
+    } catch {
       customerId = undefined;
     }
   }
+
+  const sharedMeta = {
+    owner_user_id: user.id,
+    plan_code: "team",
+    primary_vineyard_id: primaryVineyardId,
+  };
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -121,8 +135,8 @@ Deno.serve(async (req: Request) => {
       allow_promotion_codes: true,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { owner_user_id: user.id, plan_code: "team" },
-      subscription_data: { metadata: { owner_user_id: user.id, plan_code: "team" } },
+      metadata: sharedMeta,
+      subscription_data: { metadata: sharedMeta },
     });
     return new Response(JSON.stringify({ url: session.url, id: session.id }), {
       status: 200,
@@ -132,3 +146,4 @@ Deno.serve(async (req: Request) => {
     return jsonError(500, e?.message ?? "Stripe error");
   }
 });
+
