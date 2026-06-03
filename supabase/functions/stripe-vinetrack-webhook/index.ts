@@ -577,27 +577,35 @@ Deno.serve(async (req: Request) => {
       eventLinkedOwner =
         ownerFromMeta(obj?.metadata, obj?.subscription_details?.metadata) ?? null;
     }
-    await expectOk(
-      admin.from("vinetrack_billing_events").insert({
-        provider: "stripe",
-        event_type: event.type,
-        external_event_id: event.id,
-        subscription_id: eventLinkedSubId,
-        owner_user_id: eventLinkedOwner,
-        payload: event as unknown as Record<string, unknown>,
-      }),
-      "Insert billing event",
-      {
+    const { error: insertEventError } = await admin
+      .from("vinetrack_billing_events")
+      .upsert(
+        {
+          provider: "stripe",
+          event_type: event.type,
+          external_event_id: event.id,
+          subscription_id: eventLinkedSubId,
+          owner_user_id: eventLinkedOwner,
+          payload: event as unknown as Record<string, unknown>,
+        },
+        { onConflict: "provider,external_event_id", ignoreDuplicates: false },
+      );
+    if (insertEventError) {
+      const message = stringifyError(insertEventError);
+      logEvent("Upsert billing event failed", {
         eventType: event.type,
         stripeSubscriptionId: stripeSubId,
         ownerUserId: eventLinkedOwner,
         supabaseSubscriptionId: eventLinkedSubId,
         invoiceId: obj?.object === "invoice" ? obj?.id ?? null : null,
-      },
-    );
+        error: message,
+      });
+      // Don't fail the whole webhook just because we couldn't log the event.
+      // The handler dispatch below is what actually links subscriptions/invoices.
+      console.error("billing_events upsert failed (continuing)", message);
+    }
   } catch (e) {
-    console.error("billing_events insert failed", e);
-    return fail(500, stringifyError(e));
+    console.error("billing_events logging failed (continuing)", e);
   }
 
   // ---------- dispatch ----------
