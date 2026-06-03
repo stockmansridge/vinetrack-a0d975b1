@@ -22,7 +22,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.create-vinetrack-team-checkout]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-vinetrack-billing-portal]
-verify_jwt = true
+verify_jwt = false
