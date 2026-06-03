@@ -26,6 +26,35 @@ function fail(status: number, message: string) {
   });
 }
 
+function logEvent(message: string, detail: Record<string, unknown>) {
+  console.log(`[stripe-vinetrack-webhook] ${message}`, detail);
+}
+
+function stringifyError(error: unknown): string {
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (typeof error === "object") {
+    const err = error as Record<string, unknown>;
+    return [err.message, err.details, err.hint, err.code]
+      .filter(Boolean)
+      .join(" | ") || JSON.stringify(err);
+  }
+  return String(error);
+}
+
+function getInvoiceStripeSubId(inv: Stripe.Invoice): string | null {
+  return (
+    (typeof inv.subscription === "string" ? inv.subscription : (inv.subscription as any)?.id) ||
+    ((inv as any).parent?.subscription_details?.subscription as string | undefined) ||
+    ((inv as any).subscription_details?.subscription as string | undefined) ||
+    ((inv as any).lines?.data?.[0]?.subscription as string | undefined) ||
+    ((inv as any).lines?.data?.[0]?.parent?.subscription_item_details?.subscription as
+      | string
+      | undefined) ||
+    null
+  );
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return fail(405, "Method not allowed");
@@ -58,12 +87,47 @@ Deno.serve(async (req: Request) => {
 
   // ---------- helpers ----------
 
+  async function expectData<T>(
+    promise: Promise<{ data: T | null; error: any }>,
+    context: string,
+    meta: Record<string, unknown> = {},
+  ): Promise<T> {
+    const { data, error } = await promise;
+    if (error) {
+      const message = stringifyError(error);
+      logEvent(`${context} failed`, { ...meta, error: message });
+      throw new Error(`${context}: ${message}`);
+    }
+    if (data == null) {
+      const message = `${context}: no data returned`;
+      logEvent(`${context} failed`, { ...meta, error: message });
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  async function expectOk(
+    promise: Promise<{ error: any }>,
+    context: string,
+    meta: Record<string, unknown> = {},
+  ): Promise<void> {
+    const { error } = await promise;
+    if (error) {
+      const message = stringifyError(error);
+      logEvent(`${context} failed`, { ...meta, error: message });
+      throw new Error(`${context}: ${message}`);
+    }
+  }
+
   async function getTeamPlan(): Promise<{ id: string | null; seats_included: number }> {
-    const { data } = await admin
-      .from("vinetrack_plans")
-      .select("id, seats_included")
-      .eq("code", "team")
-      .maybeSingle();
+    const data = await expectData(
+      admin
+        .from("vinetrack_plans")
+        .select("id, seats_included")
+        .eq("code", "team")
+        .maybeSingle(),
+      "Load team plan",
+    );
     return {
       id: (data?.id as string) ?? null,
       seats_included: (data?.seats_included as number) ?? 3,
@@ -94,14 +158,34 @@ Deno.serve(async (req: Request) => {
 
   /** Find the VineTrack subscription row id (and owner) for a Stripe sub id. */
   async function findSubByStripeId(stripeSubId: string) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("vinetrack_subscriptions")
-      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased")
+      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased, stripe_customer_id, created_at")
       .eq("stripe_subscription_id", stripeSubId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (error) {
+      throw new Error(`Find subscription by Stripe ID: ${stringifyError(error)}`);
+    }
+    return data ?? null;
+  }
+
+  async function findLatestActiveTeamSubByCustomer(customerId: string) {
+    const { data, error } = await admin
+      .from("vinetrack_subscriptions")
+      .select("id, owner_user_id, primary_vineyard_id, stripe_subscription_id, stripe_customer_id, status, created_at")
+      .eq("billing_provider", "stripe")
+      .eq("stripe_customer_id", customerId)
+      .is("deleted_at", null)
+      .in("status", ["active", "trialing", "past_due"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Find latest team subscription by customer: ${stringifyError(error)}`);
+    }
     return data ?? null;
   }
 
@@ -111,16 +195,12 @@ Deno.serve(async (req: Request) => {
     ownerHint?: string | null,
     vineyardHint?: string | null,
   ) {
-    const ownerUserId =
-      ownerHint ||
-      ownerFromMeta(sub.metadata as any) ||
-      null;
-
-    if (!ownerUserId) {
-      console.warn("[webhook] subscription with no owner_user_id", sub.id);
+    const ownerUserId = ownerHint || ownerFromMeta(sub.metadata as any) || null;
+    const plan = await getTeamPlan();
+    if (!plan.id) {
+      throw new Error("Team plan id is missing for Team subscription webhook.");
     }
 
-    const plan = await getTeamPlan();
     // Compute seat counts from Stripe items.
     let baseQty = 0;
     let extraQty = 0;
@@ -141,12 +221,24 @@ Deno.serve(async (req: Request) => {
       vineyardFromMeta(sub.metadata as any) ||
       null;
 
+    const existing = await findSubByStripeId(sub.id);
+    const resolvedOwner = ownerUserId || (existing?.owner_user_id as string | null) || null;
+    const resolvedVineyard =
+      primaryVineyardId || (existing?.primary_vineyard_id as string | null) || null;
+
+    if (!resolvedOwner) {
+      throw new Error(`owner_user_id is required for Team subscription ${sub.id}`);
+    }
+
+    const stripeCustomerId =
+      typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
+
     const baseRow: Record<string, unknown> = {
-      owner_user_id: ownerUserId,
+      owner_user_id: resolvedOwner,
       plan_id: plan.id,
       billing_provider: "stripe",
       status: sub.status,
-      stripe_customer_id: sub.customer as string,
+      stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: sub.id,
       current_period_start: sub.current_period_start
         ? new Date(sub.current_period_start * 1000).toISOString()
@@ -167,65 +259,86 @@ Deno.serve(async (req: Request) => {
       seats_purchased: seatsPurchased,
       metadata: sub.metadata ?? {},
     };
-    if (primaryVineyardId) {
-      (baseRow as any).primary_vineyard_id = primaryVineyardId;
+    if (resolvedVineyard) {
+      (baseRow as any).primary_vineyard_id = resolvedVineyard;
     }
 
-    const existing = await findSubByStripeId(sub.id);
     let subRowId: string | null = null;
-    let resolvedOwner: string | null = ownerUserId;
-    let resolvedVineyard: string | null = primaryVineyardId;
-
     if (existing?.id) {
-      // Keep existing owner / vineyard if Stripe metadata didn't provide them.
-      const update: Record<string, unknown> = { ...baseRow };
-      if (!ownerUserId && existing.owner_user_id) {
-        (update as any).owner_user_id = existing.owner_user_id;
-        resolvedOwner = existing.owner_user_id as string;
-      }
-      if (!primaryVineyardId && existing.primary_vineyard_id) {
-        resolvedVineyard = existing.primary_vineyard_id as string;
-      }
-      await admin.from("vinetrack_subscriptions").update(update).eq("id", existing.id);
-      subRowId = existing.id as string;
+      const updated = await expectData(
+        admin
+          .from("vinetrack_subscriptions")
+          .update(baseRow)
+          .eq("id", existing.id)
+          .select("id")
+          .maybeSingle(),
+        "Update Team subscription",
+        {
+          stripeSubscriptionId: sub.id,
+          ownerUserId: resolvedOwner,
+          primaryVineyardId: resolvedVineyard,
+        },
+      );
+      subRowId = updated.id as string;
     } else {
       const insertRow: Record<string, unknown> = {
         ...baseRow,
         started_at: new Date().toISOString(),
         seats_included: plan.seats_included,
       };
-      const { data: inserted } = await admin
-        .from("vinetrack_subscriptions")
-        .insert(insertRow)
-        .select("id")
-        .maybeSingle();
-      subRowId = (inserted?.id as string) ?? null;
+      const inserted = await expectData(
+        admin
+          .from("vinetrack_subscriptions")
+          .insert(insertRow)
+          .select("id")
+          .maybeSingle(),
+        "Insert Team subscription",
+        {
+          stripeSubscriptionId: sub.id,
+          ownerUserId: resolvedOwner,
+          primaryVineyardId: resolvedVineyard,
+        },
+      );
+      subRowId = inserted.id as string;
     }
 
-    // Back-fill any prior billing events for this Stripe sub.
-    if (subRowId) {
-      try {
-        await admin
-          .from("vinetrack_billing_events")
-          .update({ subscription_id: subRowId, owner_user_id: resolvedOwner })
-          .eq("provider", "stripe")
-          .or(
-            `external_event_id.eq.${sub.id},payload->data->object->>id.eq.${sub.id}`,
-          )
-          .is("subscription_id", null);
-      } catch (e) {
-        console.warn("[webhook] back-fill billing_events failed", (e as any)?.message);
-      }
+    if (!subRowId) {
+      throw new Error(`Failed to resolve Team subscription row id for ${sub.id}`);
     }
 
-    // Ensure owner licence for active Team subscriptions.
-    if (
-      subRowId &&
-      resolvedOwner &&
-      ["active", "trialing", "past_due"].includes(sub.status)
-    ) {
+    await expectOk(
+      admin
+        .from("vinetrack_billing_events")
+        .update({ subscription_id: subRowId, owner_user_id: resolvedOwner })
+        .eq("provider", "stripe")
+        .is("subscription_id", null)
+        .or([
+          `payload->data->object->>id.eq.${sub.id}`,
+          `payload->data->object->>subscription.eq.${sub.id}`,
+          `payload->data->object->parent->subscription_details->>subscription.eq.${sub.id}`,
+          `payload->data->object->subscription_details->>subscription.eq.${sub.id}`,
+          `payload->data->object->lines->data->0->>subscription.eq.${sub.id}`,
+          `payload->data->object->lines->data->0->parent->subscription_item_details->>subscription.eq.${sub.id}`,
+        ].join(",")),
+      "Backfill billing events",
+      {
+        stripeSubscriptionId: sub.id,
+        ownerUserId: resolvedOwner,
+        supabaseSubscriptionId: subRowId,
+      },
+    );
+
+    if (["active", "trialing", "past_due"].includes(sub.status)) {
       await ensureOwnerLicence(subRowId, resolvedOwner, resolvedVineyard);
     }
+
+    logEvent("subscription upserted", {
+      eventType: event.type,
+      stripeSubscriptionId: sub.id,
+      ownerUserId: resolvedOwner,
+      primaryVineyardId: resolvedVineyard,
+      supabaseSubscriptionId: subRowId,
+    });
 
     return { subRowId, ownerUserId: resolvedOwner, primaryVineyardId: resolvedVineyard };
   }
@@ -235,30 +348,39 @@ Deno.serve(async (req: Request) => {
     ownerUserId: string,
     vineyardId: string | null,
   ) {
-    try {
-      const { data: existing } = await admin
-        .from("vinetrack_user_licences")
-        .select("id, status")
-        .eq("subscription_id", subscriptionId)
-        .eq("user_id", ownerUserId)
-        .maybeSingle();
-      if (existing?.id) {
-        if (existing.status !== "active") {
-          await admin
+    const { data: existing, error: existingError } = await admin
+      .from("vinetrack_user_licences")
+      .select("id, status")
+      .eq("subscription_id", subscriptionId)
+      .eq("user_id", ownerUserId)
+      .maybeSingle();
+    if (existingError) {
+      throw new Error(`Lookup owner licence: ${stringifyError(existingError)}`);
+    }
+    if (existing?.id) {
+      if (existing.status !== "active") {
+        await expectOk(
+          admin
             .from("vinetrack_user_licences")
             .update({ status: "active" })
-            .eq("id", existing.id);
-        }
-        return;
+            .eq("id", existing.id),
+          "Update owner licence",
+          { subscriptionId, ownerUserId, vineyardId, licenceId: existing.id },
+        );
       }
-      // Resolve owner email (best-effort).
-      let ownerEmail: string | null = null;
-      try {
-        const { data: au } = await (admin as any).auth.admin.getUserById(ownerUserId);
-        ownerEmail = au?.user?.email ?? null;
-      } catch { /* ignore */ }
+      return;
+    }
 
-      await admin.from("vinetrack_user_licences").insert({
+    let ownerEmail: string | null = null;
+    try {
+      const { data: au } = await (admin as any).auth.admin.getUserById(ownerUserId);
+      ownerEmail = au?.user?.email ?? null;
+    } catch {
+      ownerEmail = null;
+    }
+
+    await expectOk(
+      admin.from("vinetrack_user_licences").insert({
         subscription_id: subscriptionId,
         user_id: ownerUserId,
         invited_email: ownerEmail,
@@ -266,30 +388,53 @@ Deno.serve(async (req: Request) => {
         status: "active",
         assigned_by: ownerUserId,
         metadata: { source: "stripe_webhook" },
-      });
-    } catch (e) {
-      console.warn("[webhook] ensureOwnerLicence failed", (e as any)?.message);
-    }
+      }),
+      "Insert owner licence",
+      { subscriptionId, ownerUserId, vineyardId },
+    );
   }
 
   async function upsertInvoice(inv: Stripe.Invoice) {
-    let subscriptionId: string | null = null;
-    let ownerUserId: string | null =
-      ownerFromMeta(
-        (inv as any).subscription_details?.metadata,
-        inv.metadata as any,
-      ) ?? null;
+    let invoice = inv;
+    let stripeSubscriptionId = getInvoiceStripeSubId(invoice);
+    const customerId =
+      typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
 
-    if (inv.subscription) {
-      const subRow = await findSubByStripeId(inv.subscription as string);
-      subscriptionId = subRow?.id ?? null;
-      if (!ownerUserId) ownerUserId = subRow?.owner_user_id ?? null;
+    if (!stripeSubscriptionId) {
+      invoice = await stripe.invoices.retrieve(inv.id, { expand: ["subscription"] }) as Stripe.Invoice;
+      stripeSubscriptionId = getInvoiceStripeSubId(invoice);
     }
 
+    let subRow = stripeSubscriptionId ? await findSubByStripeId(stripeSubscriptionId) : null;
+    if (!subRow && stripeSubscriptionId) {
+      const stripeSub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+      const upserted = await upsertSubscriptionFromStripe(stripeSub);
+      subRow = {
+        id: upserted.subRowId,
+        owner_user_id: upserted.ownerUserId,
+        primary_vineyard_id: upserted.primaryVineyardId,
+        stripe_subscription_id: stripeSubscriptionId,
+        stripe_customer_id: typeof stripeSub.customer === "string" ? stripeSub.customer : stripeSub.customer?.id ?? null,
+      } as any;
+    }
+
+    if (!subRow && customerId) {
+      subRow = await findLatestActiveTeamSubByCustomer(customerId);
+      if (subRow?.stripe_subscription_id) {
+        stripeSubscriptionId = subRow.stripe_subscription_id as string;
+      }
+    }
+
+    const subscriptionId = (subRow?.id as string | null) ?? null;
+    const ownerUserId =
+      ownerFromMeta((invoice as any).subscription_details?.metadata, invoice.metadata as any) ||
+      (subRow?.owner_user_id as string | null) ||
+      null;
+
     const totalTax =
-      typeof inv.tax === "number"
-        ? inv.tax
-        : (inv.total_tax_amounts ?? []).reduce(
+      typeof invoice.tax === "number"
+        ? invoice.tax
+        : (invoice.total_tax_amounts ?? []).reduce(
             (acc, t) => acc + ((t as any)?.amount ?? 0),
             0,
           ) || null;
@@ -298,41 +443,99 @@ Deno.serve(async (req: Request) => {
       subscription_id: subscriptionId,
       owner_user_id: ownerUserId,
       provider: "stripe",
-      external_invoice_id: inv.id,
-      invoice_number: inv.number ?? null,
-      status: inv.status ?? "open",
-      currency: (inv.currency ?? "aud").toUpperCase(),
-      subtotal_cents: inv.subtotal ?? null,
+      external_invoice_id: invoice.id,
+      invoice_number: invoice.number ?? null,
+      status: invoice.status ?? "open",
+      currency: (invoice.currency ?? "aud").toUpperCase(),
+      subtotal_cents: invoice.subtotal ?? null,
       tax_cents: totalTax,
-      total_cents: inv.total ?? null,
-      amount_paid_cents: inv.amount_paid ?? null,
-      period_start: inv.period_start
-        ? new Date(inv.period_start * 1000).toISOString()
+      total_cents: invoice.total ?? null,
+      amount_paid_cents: invoice.amount_paid ?? null,
+      period_start: invoice.period_start
+        ? new Date(invoice.period_start * 1000).toISOString()
         : null,
-      period_end: inv.period_end
-        ? new Date(inv.period_end * 1000).toISOString()
+      period_end: invoice.period_end
+        ? new Date(invoice.period_end * 1000).toISOString()
         : null,
-      issued_at: inv.created ? new Date(inv.created * 1000).toISOString() : null,
-      due_at: inv.due_date ? new Date(inv.due_date * 1000).toISOString() : null,
-      paid_at: inv.status_transitions?.paid_at
-        ? new Date(inv.status_transitions.paid_at * 1000).toISOString()
+      issued_at: invoice.created ? new Date(invoice.created * 1000).toISOString() : null,
+      due_at: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
+      paid_at: invoice.status_transitions?.paid_at
+        ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
         : null,
-      hosted_invoice_url: inv.hosted_invoice_url ?? null,
-      invoice_pdf_url: inv.invoice_pdf ?? null,
-      metadata: inv.metadata ?? {},
+      hosted_invoice_url: invoice.hosted_invoice_url ?? null,
+      invoice_pdf_url: invoice.invoice_pdf ?? null,
+      metadata: {
+        ...(invoice.metadata ?? {}),
+        stripe_subscription_id: stripeSubscriptionId,
+        stripe_customer_id: customerId,
+        customer: customerId,
+        subscription_details: (invoice as any).subscription_details ?? null,
+      },
     };
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingError } = await admin
       .from("vinetrack_invoice_records")
       .select("id")
       .eq("provider", "stripe")
-      .eq("external_invoice_id", inv.id)
+      .eq("external_invoice_id", invoice.id)
       .maybeSingle();
-    if (existing?.id) {
-      await admin.from("vinetrack_invoice_records").update(row).eq("id", existing.id);
-    } else {
-      await admin.from("vinetrack_invoice_records").insert(row);
+    if (existingError) {
+      throw new Error(`Lookup invoice record: ${stringifyError(existingError)}`);
     }
+
+    if (existing?.id) {
+      await expectOk(
+        admin.from("vinetrack_invoice_records").update(row).eq("id", existing.id),
+        "Update invoice record",
+        { invoiceId: invoice.id, stripeSubscriptionId, ownerUserId, supabaseSubscriptionId: subscriptionId },
+      );
+    } else {
+      await expectOk(
+        admin.from("vinetrack_invoice_records").insert(row),
+        "Insert invoice record",
+        { invoiceId: invoice.id, stripeSubscriptionId, ownerUserId, supabaseSubscriptionId: subscriptionId },
+      );
+    }
+
+    if (subscriptionId || ownerUserId) {
+      const filters: string[] = [];
+      if (stripeSubscriptionId) {
+        filters.push(`metadata->>stripe_subscription_id.eq.${stripeSubscriptionId}`);
+      }
+      if (customerId) {
+        filters.push(`metadata->>stripe_customer_id.eq.${customerId}`);
+        filters.push(`metadata->>customer.eq.${customerId}`);
+      }
+      if (filters.length) {
+        await expectOk(
+          admin
+            .from("vinetrack_invoice_records")
+            .update({ subscription_id: subscriptionId, owner_user_id: ownerUserId })
+            .eq("provider", "stripe")
+            .is("subscription_id", null)
+            .or(filters.join(",")),
+          "Backfill invoice records",
+          { invoiceId: invoice.id, stripeSubscriptionId, customerId, ownerUserId, supabaseSubscriptionId: subscriptionId },
+        );
+      }
+    }
+
+    logEvent("invoice upserted", {
+      eventType: event.type,
+      stripeSubscriptionId,
+      ownerUserId,
+      primaryVineyardId: (subRow?.primary_vineyard_id as string | null) ?? null,
+      supabaseSubscriptionId: subscriptionId,
+      invoiceId: invoice.id,
+    });
+
+    return {
+      stripeSubscriptionId,
+      subscriptionId,
+      ownerUserId,
+      primaryVineyardId: (subRow?.primary_vineyard_id as string | null) ?? null,
+      invoiceId: invoice.id,
+    };
   }
 
   // ---------- log raw event (linked when possible) ----------
@@ -343,7 +546,12 @@ Deno.serve(async (req: Request) => {
     const stripeSubId: string | null =
       obj?.object === "subscription"
         ? obj.id
-        : obj?.subscription ?? null;
+        : obj?.subscription ??
+          obj?.parent?.subscription_details?.subscription ??
+          obj?.subscription_details?.subscription ??
+          obj?.lines?.data?.[0]?.subscription ??
+          obj?.lines?.data?.[0]?.parent?.subscription_item_details?.subscription ??
+          null;
     if (stripeSubId) {
       const subRow = await findSubByStripeId(stripeSubId);
       eventLinkedSubId = subRow?.id ?? null;
@@ -353,20 +561,51 @@ Deno.serve(async (req: Request) => {
       eventLinkedOwner =
         ownerFromMeta(obj?.metadata, obj?.subscription_details?.metadata) ?? null;
     }
-    await admin.from("vinetrack_billing_events").insert({
-      provider: "stripe",
-      event_type: event.type,
-      external_event_id: event.id,
-      subscription_id: eventLinkedSubId,
-      owner_user_id: eventLinkedOwner,
-      payload: event as unknown as Record<string, unknown>,
-    });
+    await expectOk(
+      admin.from("vinetrack_billing_events").insert({
+        provider: "stripe",
+        event_type: event.type,
+        external_event_id: event.id,
+        subscription_id: eventLinkedSubId,
+        owner_user_id: eventLinkedOwner,
+        payload: event as unknown as Record<string, unknown>,
+      }),
+      "Insert billing event",
+      {
+        eventType: event.type,
+        stripeSubscriptionId: stripeSubId,
+        ownerUserId: eventLinkedOwner,
+        supabaseSubscriptionId: eventLinkedSubId,
+        invoiceId: obj?.object === "invoice" ? obj?.id ?? null : null,
+      },
+    );
   } catch (e) {
     console.error("billing_events insert failed", e);
+    return fail(500, stringifyError(e));
   }
 
   // ---------- dispatch ----------
   try {
+    logEvent("event received", {
+      eventType: event.type,
+      stripeSubscriptionId:
+        (event.data.object as any)?.object === "subscription"
+          ? (event.data.object as any)?.id ?? null
+          : getInvoiceStripeSubId(event.data.object as Stripe.Invoice),
+      ownerUserId:
+        ownerFromMeta(
+          (event.data.object as any)?.metadata,
+          (event.data.object as any)?.subscription_details?.metadata,
+        ) ?? eventLinkedOwner,
+      primaryVineyardId:
+        vineyardFromMeta(
+          (event.data.object as any)?.metadata,
+          (event.data.object as any)?.subscription_details?.metadata,
+        ) ?? null,
+      supabaseSubscriptionId: eventLinkedSubId,
+      invoiceId: (event.data.object as any)?.object === "invoice" ? (event.data.object as any)?.id ?? null : null,
+    });
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -395,17 +634,18 @@ Deno.serve(async (req: Request) => {
       case "invoice.voided":
       case "invoice.marked_uncollectible": {
         const inv = event.data.object as Stripe.Invoice;
-        await upsertInvoice(inv);
+        const linked = await upsertInvoice(inv);
         // On paid/renewal, make sure owner licence still exists.
-        if (event.type === "invoice.paid" && inv.subscription) {
-          const subRow = await findSubByStripeId(inv.subscription as string);
-          if (subRow?.id && subRow.owner_user_id) {
+        if (
+          event.type === "invoice.paid" &&
+          linked.subscriptionId &&
+          linked.ownerUserId
+        ) {
             await ensureOwnerLicence(
-              subRow.id,
-              subRow.owner_user_id as string,
-              (subRow as any).primary_vineyard_id ?? null,
+              linked.subscriptionId,
+              linked.ownerUserId,
+              linked.primaryVineyardId,
             );
-          }
         }
         break;
       }
@@ -413,8 +653,10 @@ Deno.serve(async (req: Request) => {
         break;
     }
   } catch (e: any) {
+    const errorMessage = stringifyError(e);
     console.error("webhook handler error", e);
-    return fail(500, e?.message ?? "Handler error");
+    logEvent("handler error", { eventType: event.type, error: errorMessage });
+    return fail(500, errorMessage || "Handler error");
   }
 
   return ok();
