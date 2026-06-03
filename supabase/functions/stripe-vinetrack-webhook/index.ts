@@ -176,9 +176,11 @@ Deno.serve(async (req: Request) => {
   async function findSubByStripeId(stripeSubId: string) {
     const { data, error } = await admin
       .from("vinetrack_subscriptions")
-      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased, stripe_customer_id, created_at")
+      .select("id, owner_user_id, primary_vineyard_id, status, seats_included, seats_purchased, stripe_customer_id, created_at, deleted_at")
       .eq("stripe_subscription_id", stripeSubId)
-      .is("deleted_at", null)
+      // Intentionally NOT filtering by deleted_at — if a prior row was
+      // soft-deleted (e.g. by external cleanup), we still want to reuse it
+      // and clear its deleted_at so we don't create duplicates.
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
