@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase as cloudSupabase } from "@/integrations/supabase/client";
+import { iosSupabase } from "@/integrations/ios-supabase/client";
 import {
   useVinetrackAccess,
   useVinetrackInvoices,
@@ -86,12 +87,21 @@ export default function BillingPage() {
     access.active_licences != null &&
     access.active_licences > (access.seats_included ?? 0) + (access.seats_purchased ?? 0);
 
+  async function invokeWithVinetrackAuth(name: string) {
+    const { data: sess } = await iosSupabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) throw new Error("Not signed in to VineTrack");
+    return cloudSupabase.functions.invoke(name, {
+      body: {},
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
   async function startCheckout() {
     try {
       setBusy("checkout");
-      const { data: res, error: err } = await cloudSupabase.functions.invoke(
-        "create-vinetrack-team-checkout",
-        { body: {} }
+      const { data: res, error: err } = await invokeWithVinetrackAuth(
+        "create-vinetrack-team-checkout"
       );
       if (err) throw err;
       if ((res as any)?.error) throw new Error((res as any).error);
@@ -108,9 +118,8 @@ export default function BillingPage() {
   async function openPortal() {
     try {
       setBusy("portal");
-      const { data: res, error: err } = await cloudSupabase.functions.invoke(
-        "create-vinetrack-billing-portal",
-        { body: {} }
+      const { data: res, error: err } = await invokeWithVinetrackAuth(
+        "create-vinetrack-billing-portal"
       );
       if (err) throw err;
       if ((res as any)?.error) throw new Error((res as any).error);
