@@ -165,23 +165,26 @@ export default function BillingPage() {
         </Alert>
       )}
 
-      {!isLoading && !schemaMissing && !access && (
+      {!isLoading && !schemaMissing && showTeamCta && (
         <Card className="p-6">
-          <div className="space-y-2">
-            <h2 className="text-lg font-medium">No active subscription</h2>
+          <div className="space-y-3">
+            <h2 className="text-lg font-medium">
+              {isApple || access?.plan_tier === "solo"
+                ? "Upgrade to Team"
+                : "No active Team subscription"}
+            </h2>
             <p className="text-sm text-muted-foreground">
-              You don't have an active VineTrack plan on this account. Team
-              subscriptions are managed here in the portal; Solo is managed
-              through Apple.
+              Team includes 3 user licences, full portal access, and iPhone app
+              access for licensed users.
             </p>
-            <div className="pt-2">
+            <div className="pt-1">
               <Button onClick={startCheckout} disabled={busy === "checkout"}>
                 {busy === "checkout" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <CreditCard className="mr-2 h-4 w-4" />
                 )}
-                Subscribe to Team
+                Start Team plan
               </Button>
             </div>
           </div>
