@@ -546,7 +546,12 @@ Deno.serve(async (req: Request) => {
     const stripeSubId: string | null =
       obj?.object === "subscription"
         ? obj.id
-        : obj?.subscription ?? null;
+        : obj?.subscription ??
+          obj?.parent?.subscription_details?.subscription ??
+          obj?.subscription_details?.subscription ??
+          obj?.lines?.data?.[0]?.subscription ??
+          obj?.lines?.data?.[0]?.parent?.subscription_item_details?.subscription ??
+          null;
     if (stripeSubId) {
       const subRow = await findSubByStripeId(stripeSubId);
       eventLinkedSubId = subRow?.id ?? null;
@@ -556,20 +561,51 @@ Deno.serve(async (req: Request) => {
       eventLinkedOwner =
         ownerFromMeta(obj?.metadata, obj?.subscription_details?.metadata) ?? null;
     }
-    await admin.from("vinetrack_billing_events").insert({
-      provider: "stripe",
-      event_type: event.type,
-      external_event_id: event.id,
-      subscription_id: eventLinkedSubId,
-      owner_user_id: eventLinkedOwner,
-      payload: event as unknown as Record<string, unknown>,
-    });
+    await expectOk(
+      admin.from("vinetrack_billing_events").insert({
+        provider: "stripe",
+        event_type: event.type,
+        external_event_id: event.id,
+        subscription_id: eventLinkedSubId,
+        owner_user_id: eventLinkedOwner,
+        payload: event as unknown as Record<string, unknown>,
+      }),
+      "Insert billing event",
+      {
+        eventType: event.type,
+        stripeSubscriptionId: stripeSubId,
+        ownerUserId: eventLinkedOwner,
+        supabaseSubscriptionId: eventLinkedSubId,
+        invoiceId: obj?.object === "invoice" ? obj?.id ?? null : null,
+      },
+    );
   } catch (e) {
     console.error("billing_events insert failed", e);
+    return fail(500, stringifyError(e));
   }
 
   // ---------- dispatch ----------
   try {
+    logEvent("event received", {
+      eventType: event.type,
+      stripeSubscriptionId:
+        (event.data.object as any)?.object === "subscription"
+          ? (event.data.object as any)?.id ?? null
+          : getInvoiceStripeSubId(event.data.object as Stripe.Invoice),
+      ownerUserId:
+        ownerFromMeta(
+          (event.data.object as any)?.metadata,
+          (event.data.object as any)?.subscription_details?.metadata,
+        ) ?? eventLinkedOwner,
+      primaryVineyardId:
+        vineyardFromMeta(
+          (event.data.object as any)?.metadata,
+          (event.data.object as any)?.subscription_details?.metadata,
+        ) ?? null,
+      supabaseSubscriptionId: eventLinkedSubId,
+      invoiceId: (event.data.object as any)?.object === "invoice" ? (event.data.object as any)?.id ?? null : null,
+    });
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -598,17 +634,18 @@ Deno.serve(async (req: Request) => {
       case "invoice.voided":
       case "invoice.marked_uncollectible": {
         const inv = event.data.object as Stripe.Invoice;
-        await upsertInvoice(inv);
+        const linked = await upsertInvoice(inv);
         // On paid/renewal, make sure owner licence still exists.
-        if (event.type === "invoice.paid" && inv.subscription) {
-          const subRow = await findSubByStripeId(inv.subscription as string);
-          if (subRow?.id && subRow.owner_user_id) {
+        if (
+          event.type === "invoice.paid" &&
+          linked.subscriptionId &&
+          linked.ownerUserId
+        ) {
             await ensureOwnerLicence(
-              subRow.id,
-              subRow.owner_user_id as string,
-              (subRow as any).primary_vineyard_id ?? null,
+              linked.subscriptionId,
+              linked.ownerUserId,
+              linked.primaryVineyardId,
             );
-          }
         }
         break;
       }
@@ -616,8 +653,10 @@ Deno.serve(async (req: Request) => {
         break;
     }
   } catch (e: any) {
+    const errorMessage = stringifyError(e);
     console.error("webhook handler error", e);
-    return fail(500, e?.message ?? "Handler error");
+    logEvent("handler error", { eventType: event.type, error: errorMessage });
+    return fail(500, errorMessage || "Handler error");
   }
 
   return ok();
