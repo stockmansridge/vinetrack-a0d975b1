@@ -366,6 +366,57 @@ Deno.serve(async (req: Request) => {
     return { subRowId, ownerUserId: resolvedOwner, primaryVineyardId: resolvedVineyard };
   }
 
+  /** Soft-delete any other active/trialing/past_due Stripe Team rows for this owner
+   *  that are NOT the current Stripe subscription. Historical canceled/expired/etc.
+   *  rows are left untouched. */
+  async function archiveDuplicateActiveTeamSubs(
+    ownerUserId: string,
+    currentStripeSubId: string,
+    currentSubRowId: string,
+  ) {
+    const { data: dupes, error } = await admin
+      .from("vinetrack_subscriptions")
+      .select("id, stripe_subscription_id, status")
+      .eq("owner_user_id", ownerUserId)
+      .eq("billing_provider", "stripe")
+      .is("deleted_at", null)
+      .in("status", ["active", "trialing", "past_due", "incomplete"])
+      .neq("id", currentSubRowId);
+    if (error) {
+      logEvent("Archive duplicates lookup failed", {
+        ownerUserId,
+        currentStripeSubId,
+        error: stringifyError(error),
+      });
+      return;
+    }
+    const toArchive = (dupes ?? []).filter(
+      (r) => (r as any).stripe_subscription_id !== currentStripeSubId,
+    );
+    if (toArchive.length === 0) return;
+    const ids = toArchive.map((r) => (r as any).id as string);
+    const { error: updErr } = await admin
+      .from("vinetrack_subscriptions")
+      .update({ deleted_at: new Date().toISOString(), status: "canceled" })
+      .in("id", ids);
+    if (updErr) {
+      logEvent("Archive duplicates failed", {
+        ownerUserId,
+        currentStripeSubId,
+        ids,
+        error: stringifyError(updErr),
+      });
+      return;
+    }
+    logEvent("Archived duplicate active Team subscriptions", {
+      ownerUserId,
+      currentStripeSubId,
+      currentSubRowId,
+      archivedSubRowIds: ids,
+      archivedStripeSubIds: toArchive.map((r) => (r as any).stripe_subscription_id),
+    });
+  }
+
   async function ensureOwnerLicence(
     subscriptionId: string,
     ownerUserId: string,
