@@ -120,17 +120,33 @@ Deno.serve(async (req: Request) => {
   }
 
   async function getTeamPlan(): Promise<{ id: string | null; seats_included: number }> {
-    const data = await expectData(
-      admin
+    // Try with seats_included; if the column doesn't exist (42703), fall back.
+    let row: any = null;
+    let lastError: any = null;
+    for (const cols of ["id, seats_included", "id, included_seats", "id"]) {
+      const { data, error } = await admin
         .from("vinetrack_plans")
-        .select("id, seats_included")
+        .select(cols)
         .eq("code", "team")
-        .maybeSingle(),
-      "Load team plan",
-    );
+        .maybeSingle();
+      if (!error) {
+        row = data;
+        break;
+      }
+      lastError = error;
+      if ((error as any)?.code !== "42703") break;
+    }
+    if (!row && lastError) {
+      logEvent("Load team plan failed", { error: stringifyError(lastError) });
+      throw new Error(`Load team plan: ${stringifyError(lastError)}`);
+    }
+    const included =
+      (row?.seats_included as number | undefined) ??
+      (row?.included_seats as number | undefined) ??
+      3;
     return {
-      id: (data?.id as string) ?? null,
-      seats_included: (data?.seats_included as number) ?? 3,
+      id: (row?.id as string) ?? null,
+      seats_included: included,
     };
   }
 
