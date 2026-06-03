@@ -20,13 +20,25 @@ function jsonError(status: number, message: string) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonError(405, "Method not allowed");
 
   const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
   const STRIPE_PRICE_TEAM = Deno.env.get("STRIPE_PRICE_TEAM");
   const VINETRACK_SUPABASE_URL = Deno.env.get("VINETRACK_SUPABASE_URL");
   const VINETRACK_SERVICE_ROLE_KEY = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY");
   const VINETRACK_ANON_KEY = Deno.env.get("VINETRACK_ANON_KEY");
+  const authHeader = req.headers.get("Authorization") ?? "";
+
+  console.log("[create-vinetrack-team-checkout] reached", {
+    method: req.method,
+    hasAuthHeader: authHeader.startsWith("Bearer "),
+    hasStripeSecret: !!STRIPE_SECRET_KEY,
+    hasStripePrice: !!STRIPE_PRICE_TEAM,
+    hasVinetrackUrl: !!VINETRACK_SUPABASE_URL,
+    hasVinetrackAnon: !!VINETRACK_ANON_KEY,
+    hasVinetrackServiceRole: !!VINETRACK_SERVICE_ROLE_KEY,
+  });
+
+  if (req.method !== "POST") return jsonError(405, "Method not allowed");
 
   if (!STRIPE_SECRET_KEY || !STRIPE_PRICE_TEAM) {
     return jsonError(
@@ -41,7 +53,6 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return jsonError(401, "Unauthorized");
 
   // Resolve caller identity against the VineTrack auth project.
