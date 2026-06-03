@@ -57,11 +57,29 @@ export default function BillingPage() {
   const { data: invoices = [] } = useVinetrackInvoices(subId);
   const [busy, setBusy] = useState<"checkout" | "portal" | null>(null);
 
+  const activeStatus = ["active", "trialing", "past_due"];
+  const hasActiveSub =
+    !!access &&
+    !!access.subscription_id &&
+    !!access.status &&
+    activeStatus.includes(access.status);
   const isStripeTeam =
+    hasActiveSub &&
     access?.billing_provider === "stripe" &&
     (access?.plan_tier === "team" || access?.access_source === "team");
   const isApple = access?.billing_provider === "apple";
-  const isEnterprise = access?.plan_tier === "enterprise";
+  const isEnterprise =
+    hasActiveSub &&
+    (access?.plan_tier === "enterprise" || access?.access_source === "enterprise");
+  const showTeamCta =
+    !isStripeTeam &&
+    !isEnterprise &&
+    (!access ||
+      !hasActiveSub ||
+      !access.has_supabase_access ||
+      access.solo_check_required ||
+      isApple ||
+      access.plan_tier === "solo");
   const overSeats =
     access &&
     access.seats_included != null &&
