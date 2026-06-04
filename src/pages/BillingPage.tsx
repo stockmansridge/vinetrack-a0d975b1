@@ -1009,6 +1009,7 @@ export default function BillingPage() {
           if (!open) {
             setSeatsMessage(null);
             setSeatsPaymentUrl(null);
+            setSeatsPaymentAction(null);
           }
         }}
       >
