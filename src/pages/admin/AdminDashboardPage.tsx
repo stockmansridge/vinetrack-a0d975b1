@@ -141,6 +141,10 @@ export default function AdminDashboardPage() {
         </Card>
       )}
 
+      <PlatformScaleSection query={platformScale} />
+
+
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Tile to="/admin/users" label="Total Users" value={s?.total_users ?? "—"} />
         <Tile to="/admin/vineyards" label="Vineyards" value={s?.total_vineyards ?? "—"} />
