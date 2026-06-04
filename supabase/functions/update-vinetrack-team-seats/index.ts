@@ -67,15 +67,26 @@ Deno.serve(async (req: Request) => {
   });
   const { data: sub } = await admin
     .from("vinetrack_subscriptions")
-    .select("stripe_subscription_id, seats_purchased")
+    .select("stripe_subscription_id, seats_purchased, unlimited_licences, billing_provider")
     .eq("owner_user_id", caller.id)
-    .eq("billing_provider", "stripe")
+    .in("billing_provider", ["stripe", "manual"])
     .is("deleted_at", null)
     .in("status", ["active", "trialing", "past_due"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!sub?.stripe_subscription_id)
+  if (!sub)
+    return jsonError(403, "No active Team subscription for this user.");
+
+  if ((sub as any).unlimited_licences === true) {
+    return jsonError(
+      409,
+      "This account has unlimited licences managed by VineTrack. Extra paid seats are not required.",
+      { code: "unlimited_licences" },
+    );
+  }
+
+  if (!sub.stripe_subscription_id)
     return jsonError(403, "No active Team subscription for this user.");
 
   const currentPurchased = (sub.seats_purchased as number | null) ?? 0;
