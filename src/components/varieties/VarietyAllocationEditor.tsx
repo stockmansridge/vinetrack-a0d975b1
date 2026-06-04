@@ -16,6 +16,9 @@ export interface VarietyAllocationRow {
   /** Vineyard catalogue row id, if the variety came from the picker. */
   varietyId?: string | null;
   percent: number;
+  /** Optional reference-only fields — mirror iOS shape. */
+  clone?: string | null;
+  rootstock?: string | null;
 }
 
 interface Props {
@@ -34,6 +37,8 @@ export const newAllocationRow = (): VarietyAllocationRow => ({
   name: null,
   varietyId: null,
   percent: 100,
+  clone: null,
+  rootstock: null,
 });
 
 export function totalPercent(rows: VarietyAllocationRow[]): number {
@@ -46,20 +51,35 @@ export function isAllocationsValid(rows: VarietyAllocationRow[]): boolean {
   return Math.abs(totalPercent(rows) - 100) < 0.01;
 }
 
-/** Serialise editor rows into the JSON shape stored in paddocks.variety_allocations. */
+function cleanOptional(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t.length === 0 ? null : t;
+}
+
+/** Serialise editor rows into the JSON shape stored in paddocks.variety_allocations.
+ *  Matches the iOS shape: { id, varietyKey, varietyId?, name, percent, clone?, rootstock? }.
+ *  Blank clone/rootstock values are omitted (never written as empty strings). */
 export function serialiseAllocations(rows: VarietyAllocationRow[]) {
   return rows
     .filter((r) => r.varietyKey && r.name)
-    .map((r) => ({
-      id: r.id,
-      varietyKey: r.varietyKey!,
-      name: r.name!,
-      percent: r.percent,
-      ...(r.varietyId ? { varietyId: r.varietyId } : {}),
-    }));
+    .map((r) => {
+      const clone = cleanOptional(r.clone);
+      const rootstock = cleanOptional(r.rootstock);
+      return {
+        id: r.id,
+        varietyKey: r.varietyKey!,
+        name: r.name!,
+        percent: r.percent,
+        ...(r.varietyId ? { varietyId: r.varietyId } : {}),
+        ...(clone !== null ? { clone } : {}),
+        ...(rootstock !== null ? { rootstock } : {}),
+      };
+    });
 }
 
-/** Hydrate stored allocations into editor rows. */
+/** Hydrate stored allocations into editor rows. Tolerant of legacy keys
+ *  (variety_key / variety_name / root_stock). */
 export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -74,6 +94,8 @@ export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
       name: a.name ?? a.varietyName ?? a.variety_name ?? a.variety ?? null,
       varietyId: a.varietyId ?? a.variety_id ?? null,
       percent: typeof a.percent === "number" ? a.percent : 0,
+      clone: cleanOptional(a.clone),
+      rootstock: cleanOptional(a.rootstock ?? a.root_stock),
     }));
 }
 
