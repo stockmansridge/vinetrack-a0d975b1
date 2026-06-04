@@ -883,18 +883,26 @@ export default function BillingPage() {
       </Dialog>
 
       {/* Manage extra seats dialog */}
-      <Dialog open={seatsOpen} onOpenChange={setSeatsOpen}>
+      <Dialog
+        open={seatsOpen}
+        onOpenChange={(open) => {
+          setSeatsOpen(open);
+          if (!open) setSeatsMessage(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Manage extra seats</DialogTitle>
+            <DialogTitle>Purchased extra user licences</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Your plan includes {seatsIncluded} users. Add extra seats at $99/year
-              ex GST each. Stripe will prorate the change.
+              Your plan includes <strong>{seatsIncluded}</strong> user licences.
+              Extra paid licences are billed at $99/year ex GST per seat and
+              prorated by Stripe. You currently have{" "}
+              <strong>{seatsPurchased}</strong> extra paid seat(s).
             </p>
             <div className="space-y-1">
-              <Label htmlFor="extra-seats">Extra seats</Label>
+              <Label htmlFor="extra-seats">Purchased extra user licences</Label>
               <Input
                 id="extra-seats"
                 type="number"
@@ -902,11 +910,20 @@ export default function BillingPage() {
                 value={extraSeats}
                 onChange={(e) => setExtraSeats(Number(e.target.value))}
               />
+              <p className="text-xs text-muted-foreground">
+                Total user licences after change:{" "}
+                <strong>{seatsIncluded + Math.max(0, Math.floor(extraSeats))}</strong>
+              </p>
             </div>
+            {seatsMessage && (
+              <Alert>
+                <AlertDescription>{seatsMessage}</AlertDescription>
+              </Alert>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSeatsOpen(false)}>
-              Cancel
+              Close
             </Button>
             <Button onClick={updateExtraSeats} disabled={busy === "seats"}>
               {busy === "seats" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
