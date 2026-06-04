@@ -150,7 +150,7 @@ export default function VarietyAllocationEditor({
               <VarietyPicker
                 vineyardId={vineyardId}
                 value={row.varietyKey && row.name ? { varietyKey: row.varietyKey, name: row.name } : null}
-                excludeKeys={usedKeys.filter((k) => k !== row.varietyKey)}
+                excludeKeys={[]}
                 disabled={disabled}
                 onSelect={(v) =>
                   update(row.id, {
