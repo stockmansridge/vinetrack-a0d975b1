@@ -1051,17 +1051,29 @@ export default function BillingPage() {
               </p>
             </div>
             {seatsMessage && (
-              <Alert>
+              <Alert
+                variant={seatsMessageTone === "error" ? "destructive" : "default"}
+              >
                 <AlertDescription>{seatsMessage}</AlertDescription>
               </Alert>
             )}
-            {seatsPaymentUrl && (
+            {seatsPaymentAction === "complete" && seatsPaymentUrl && (
               <Button
                 variant="default"
                 onClick={() => window.open(seatsPaymentUrl, "_blank", "noopener")}
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Complete payment in Stripe
+              </Button>
+            )}
+            {seatsPaymentAction === "manage" && (
+              <Button variant="default" onClick={openPortal} disabled={busy === "portal"}>
+                {busy === "portal" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Settings className="mr-2 h-4 w-4" />
+                )}
+                Manage billing
               </Button>
             )}
           </div>
