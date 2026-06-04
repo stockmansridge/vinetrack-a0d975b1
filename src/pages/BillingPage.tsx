@@ -175,6 +175,8 @@ export default function BillingPage() {
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
   const [seatsMessage, setSeatsMessage] = useState<string | null>(null);
+  const [seatsConfirmOpen, setSeatsConfirmOpen] = useState(false);
+  const [seatsPaymentUrl, setSeatsPaymentUrl] = useState<string | null>(null);
 
   // After Stripe redirects back with ?checkout=success, poll for the webhook
   // to land the subscription/invoice rows. We refetch a few times then stop.
