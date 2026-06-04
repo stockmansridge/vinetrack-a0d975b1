@@ -199,7 +199,7 @@ export default function BillingPage() {
         await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", sid] });
         await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
         await refetchLicences();
-        const team = await fetchTeam();
+        const team = await fetchBilling();
         ownerLicenceCount = (team?.licences ?? []).filter(
           (l) => l.user_id === acc?.user_id && l.status === "active",
         ).length;
@@ -231,7 +231,7 @@ export default function BillingPage() {
       setTimeout(tick, 2000);
     };
     tick();
-  }, [refetch, refetchLicences, qc, fetchTeam]);
+  }, [refetch, refetchLicences, qc, fetchBilling]);
 
   const activeStatus = ["active", "trialing", "past_due"];
   const hasActiveSub =
@@ -345,7 +345,7 @@ export default function BillingPage() {
         await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", returnedSubId] });
       }
       await refetchLicences();
-      await fetchTeam();
+      await fetchBilling();
       await qc.invalidateQueries({ queryKey: ["vinetrack", "access"] });
     } catch (e: any) {
       toast.error(e?.message || "Could not create licence.");
@@ -365,7 +365,7 @@ export default function BillingPage() {
       if (err) throw err;
       toast.success("Licence revoked.");
       await refetchLicences();
-      await fetchTeam();
+      await fetchBilling();
     } catch (e: any) {
       toast.error(e?.message || "Could not revoke licence.");
     } finally {
@@ -397,7 +397,7 @@ export default function BillingPage() {
         const newPurchased = refreshed?.access?.seats_purchased ?? null;
         if (newPurchased === target) {
           setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
-          await fetchTeam();
+          await fetchBilling();
           return;
         }
         if (Date.now() - startedAt > 45_000) {
@@ -446,12 +446,12 @@ export default function BillingPage() {
         <div>direct invoices row count: {directInvoices.length}</div>
         <div>
           edge get-vinetrack-team-licences subscription.id:{" "}
-          {teamData?.subscription?.id ?? "(none)"}
+          {billing?.subscription?.id ?? "(none)"}
         </div>
-        <div>edge licences row count: {teamData?.licences.length ?? 0}</div>
-        <div>edge invoices row count: {teamData?.invoices.length ?? 0}</div>
-        <div>edge error: {teamFetchError ?? "(none)"}</div>
-        <div>edge debug: {teamData?.debug ? JSON.stringify(teamData.debug) : "(none)"}</div>
+        <div>edge licences row count: {billing?.licences.length ?? 0}</div>
+        <div>edge invoices row count: {billing?.invoices.length ?? 0}</div>
+        <div>edge error: {billingFetchError ?? "(none)"}</div>
+        <div>edge debug: {billing?.debug ? JSON.stringify(billing.debug) : "(none)"}</div>
       </Card>
 
       {!selectedVineyardId && (
