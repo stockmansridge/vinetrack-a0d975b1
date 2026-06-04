@@ -107,9 +107,9 @@ export default function VarietyAllocationEditor({
 }: Props) {
   const total = useMemo(() => totalPercent(value), [value]);
   const totalOk = Math.abs(total - 100) < 0.01;
-  const usedKeys = value
-    .map((r) => r.varietyKey)
-    .filter((k): k is string => !!k);
+  // Note: the same variety may intentionally appear more than once on a block
+  // (e.g. Pinot Noir split across two clones/rootstocks). We deliberately do
+  // NOT filter out already-selected varieties from the picker.
 
   const update = (id: string, patch: Partial<VarietyAllocationRow>) => {
     onChange(value.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -150,7 +150,7 @@ export default function VarietyAllocationEditor({
               <VarietyPicker
                 vineyardId={vineyardId}
                 value={row.varietyKey && row.name ? { varietyKey: row.varietyKey, name: row.name } : null}
-                excludeKeys={usedKeys.filter((k) => k !== row.varietyKey)}
+                excludeKeys={[]}
                 disabled={disabled}
                 onSelect={(v) =>
                   update(row.id, {
