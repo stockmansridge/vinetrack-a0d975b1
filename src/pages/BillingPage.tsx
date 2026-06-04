@@ -78,7 +78,8 @@ async function invokeWithVinetrackAuth(name: string, body: Record<string, unknow
   });
 }
 
-interface TeamLicencesResponse {
+interface BillingDetailResponse {
+  access: any | null;
   subscription: {
     id: string;
     owner_user_id: string;
@@ -87,6 +88,7 @@ interface TeamLicencesResponse {
     primary_vineyard_id: string | null;
     seats_included: number | null;
     seats_purchased: number | null;
+    current_period_end: string | null;
   } | null;
   licences: Array<{
     id: string;
@@ -113,6 +115,7 @@ interface TeamLicencesResponse {
     hosted_invoice_url: string | null;
     invoice_pdf_url: string | null;
   }>;
+  errors?: Record<string, string | null>;
   debug?: Record<string, unknown>;
   error?: string;
 }
@@ -128,43 +131,43 @@ export default function BillingPage() {
   const { data: directInvoices = [] } = useVinetrackInvoices(subId);
   const { data: directLicences = [], refetch: refetchLicences } = useVinetrackLicences(subId);
 
-  // Service-role fallback that bypasses browser-side RLS and repairs the
-  // owner licence if missing. Authoritative for the licences/invoices view.
-  const [teamData, setTeamData] = useState<TeamLicencesResponse | null>(null);
-  const [teamFetchError, setTeamFetchError] = useState<string | null>(null);
-  const teamFetchInFlight = useRef(false);
-  const fetchTeam = useCallback(async (): Promise<TeamLicencesResponse | null> => {
-    if (teamFetchInFlight.current) return teamData;
-    teamFetchInFlight.current = true;
+  // Service-role billing detail — authoritative source for licences,
+  // invoices, and the active subscription. Bypasses browser-side RLS.
+  const [billing, setBilling] = useState<BillingDetailResponse | null>(null);
+  const [billingFetchError, setBillingFetchError] = useState<string | null>(null);
+  const billingFetchInFlight = useRef(false);
+  const fetchBilling = useCallback(async (): Promise<BillingDetailResponse | null> => {
+    if (billingFetchInFlight.current) return billing;
+    billingFetchInFlight.current = true;
     try {
       const { data: res, error: err } = await invokeWithVinetrackAuth(
-        "get-vinetrack-team-licences",
+        "get-vinetrack-billing-detail",
       );
       if (err) {
-        setTeamFetchError(err.message ?? String(err));
+        setBillingFetchError(err.message ?? String(err));
         return null;
       }
-      const r = res as TeamLicencesResponse;
-      setTeamData(r);
-      setTeamFetchError(r?.error ?? null);
+      const r = res as BillingDetailResponse;
+      setBilling(r);
+      setBillingFetchError(r?.error ?? null);
       return r;
     } catch (e: any) {
-      setTeamFetchError(e?.message ?? String(e));
+      setBillingFetchError(e?.message ?? String(e));
       return null;
     } finally {
-      teamFetchInFlight.current = false;
+      billingFetchInFlight.current = false;
     }
   }, []);
   useEffect(() => {
-    if (subId) fetchTeam();
-  }, [subId, fetchTeam]);
+    fetchBilling();
+  }, [fetchBilling]);
 
-  // Prefer service-role responses when they have content; fall back to
-  // direct RLS queries (which can be empty for owners with strict RLS).
+  // Prefer billing-detail response (service role) over direct RLS reads.
   const licences =
-    teamData && teamData.licences.length > 0 ? teamData.licences : directLicences;
+    billing && billing.licences.length > 0 ? billing.licences : directLicences;
   const invoices =
-    teamData && teamData.invoices.length > 0 ? teamData.invoices : directInvoices;
+    billing && billing.invoices.length > 0 ? billing.invoices : directInvoices;
+  const billingSub = billing?.subscription ?? null;
 
   const [busy, setBusy] = useState<"checkout" | "portal" | "seats" | "addUser" | "revoke" | null>(null);
   const [addOpen, setAddOpen] = useState(false);
