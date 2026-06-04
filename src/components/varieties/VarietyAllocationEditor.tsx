@@ -143,51 +143,76 @@ export default function VarietyAllocationEditor({
       )}
 
       {value.map((row, idx) => (
-        <div
-          key={row.id}
-          className="grid grid-cols-[1fr_110px_36px] items-end gap-2"
-        >
-          <div className="space-y-1">
-            {idx === 0 && <Label className="text-xs">Variety</Label>}
-            <VarietyPicker
-              vineyardId={vineyardId}
-              value={row.varietyKey && row.name ? { varietyKey: row.varietyKey, name: row.name } : null}
-              excludeKeys={usedKeys.filter((k) => k !== row.varietyKey)}
+        <div key={row.id} className="space-y-2 rounded border border-border/60 p-2">
+          <div className="grid grid-cols-[1fr_110px_36px] items-end gap-2">
+            <div className="space-y-1">
+              {idx === 0 && <Label className="text-xs">Variety</Label>}
+              <VarietyPicker
+                vineyardId={vineyardId}
+                value={row.varietyKey && row.name ? { varietyKey: row.varietyKey, name: row.name } : null}
+                excludeKeys={usedKeys.filter((k) => k !== row.varietyKey)}
+                disabled={disabled}
+                onSelect={(v) =>
+                  update(row.id, {
+                    varietyKey: v.varietyKey,
+                    name: v.name,
+                    varietyId: v.id ?? null,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              {idx === 0 && <Label className="text-xs">Percent</Label>}
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                inputMode="decimal"
+                value={Number.isFinite(row.percent) ? row.percent : 0}
+                onChange={(e) =>
+                  update(row.id, { percent: Number(e.target.value) || 0 })
+                }
+                disabled={disabled}
+              />
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => remove(row.id)}
               disabled={disabled}
-              onSelect={(v) =>
-                update(row.id, {
-                  varietyKey: v.varietyKey,
-                  name: v.name,
-                  varietyId: v.id ?? null,
-                })
-              }
-            />
+              aria-label="Remove variety"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-          <div className="space-y-1">
-            {idx === 0 && <Label className="text-xs">Percent</Label>}
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              inputMode="decimal"
-              value={Number.isFinite(row.percent) ? row.percent : 0}
-              onChange={(e) =>
-                update(row.id, { percent: Number(e.target.value) || 0 })
-              }
-              disabled={disabled}
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Clone <span className="text-muted-foreground font-normal">(optional reference)</span></Label>
+              <Input
+                value={row.clone ?? ""}
+                placeholder="e.g. MV6"
+                onChange={(e) => update(row.id, { clone: e.target.value })}
+                onBlur={(e) =>
+                  update(row.id, { clone: e.target.value.trim() || null })
+                }
+                disabled={disabled}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Rootstock <span className="text-muted-foreground font-normal">(optional reference)</span></Label>
+              <Input
+                value={row.rootstock ?? ""}
+                placeholder="e.g. 101-14"
+                onChange={(e) => update(row.id, { rootstock: e.target.value })}
+                onBlur={(e) =>
+                  update(row.id, { rootstock: e.target.value.trim() || null })
+                }
+                disabled={disabled}
+              />
+            </div>
           </div>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            onClick={() => remove(row.id)}
-            disabled={disabled}
-            aria-label="Remove variety"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
         </div>
       ))}
 
