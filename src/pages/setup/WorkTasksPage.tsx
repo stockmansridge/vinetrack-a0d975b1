@@ -410,8 +410,8 @@ export default function WorkTasksPage() {
 
   const exportCsv = () => {
     const headers = canSeeCosts
-      ? ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
-      : ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
+      ? ["Task ID","Start","End","Blocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
+      : ["Task ID","Start","End","Blocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
     const lines = [headers.join(",")];
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
