@@ -266,15 +266,26 @@ export default function BillingPage() {
     !!access.subscription_id &&
     !!access.status &&
     activeStatus.includes(access.status);
+  const isInternalUnlimited =
+    (!!access &&
+      (access.plan_code === "internal_unlimited" ||
+        access.plan_tier === "internal" ||
+        access.unlimited_licences === true)) ||
+    billingSub?.unlimited_licences === true ||
+    billingSub?.plan_code === "internal_unlimited" ||
+    billingSub?.plan_tier === "internal";
   const isStripeTeam =
+    !isInternalUnlimited &&
     hasActiveSub &&
     access?.billing_provider === "stripe" &&
     (access?.plan_tier === "team" || access?.access_source === "team");
-  const isApple = access?.billing_provider === "apple";
+  const isApple = !isInternalUnlimited && access?.billing_provider === "apple";
   const isEnterprise =
+    !isInternalUnlimited &&
     hasActiveSub &&
     (access?.plan_tier === "enterprise" || access?.access_source === "enterprise");
   const showTeamCta =
+    !isInternalUnlimited &&
     !isStripeTeam &&
     !isEnterprise &&
     (!access ||
@@ -296,8 +307,14 @@ export default function BillingPage() {
   const activeLicenceCount = licences.filter((l) => l.status === "active").length;
   const pendingLicenceCount = licences.filter((l) => l.status === "pending").length;
   const consumed = activeLicenceCount + pendingLicenceCount;
-  const remaining = Math.max(0, totalSeats - consumed);
-  const overSeats = consumed > totalSeats;
+  const remaining = isInternalUnlimited ? Infinity : Math.max(0, totalSeats - consumed);
+  const overSeats = !isInternalUnlimited && consumed > totalSeats;
+  const manualGrantReason =
+    billingSub?.manual_grant_reason ?? access?.manual_grant_reason ?? null;
+  const manualGrantExpiresAt =
+    billingSub?.manual_grant_expires_at ?? access?.manual_grant_expires_at ?? null;
+  // Show licence management for any active sub with team OR internal_unlimited
+  const showLicenceManagement = isStripeTeam || isInternalUnlimited;
 
   async function startCheckout() {
     if (!selectedVineyardId) {
