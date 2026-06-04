@@ -322,10 +322,27 @@ export default function BillingPage() {
       );
       if (err) throw err;
       if ((res as any)?.error) throw new Error((res as any).error);
-      toast.success("User licence created.");
+      const licence = (res as any)?.licence;
+      const returnedSubId = (res as any)?.subscription_id ?? null;
+      const emailAdded = newEmail.trim();
+      const status = licence?.status ?? "active";
+      const friendly =
+        status === "pending"
+          ? `Licence added for ${emailAdded} — pending invite.`
+          : `Licence added for ${emailAdded} and active.`;
+      toast.success(friendly);
+      if (returnedSubId && subId && returnedSubId !== subId) {
+        toast.error(
+          `BUG: licence created under subscription ${returnedSubId} but billing page is showing ${subId}.`,
+        );
+      }
       setNewEmail("");
       setAddOpen(false);
+      if (returnedSubId) {
+        await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", returnedSubId] });
+      }
       await refetchLicences();
+      await fetchTeam();
       await qc.invalidateQueries({ queryKey: ["vinetrack", "access"] });
     } catch (e: any) {
       toast.error(e?.message || "Could not create licence.");
@@ -338,7 +355,6 @@ export default function BillingPage() {
     if (!confirm("Revoke this licence? The user will lose access at the end of the period.")) return;
     try {
       setBusy("revoke");
-      // Direct write — RLS on vinetrack_user_licences governs.
       const { error: err } = await (iosSupabase as any)
         .from("vinetrack_user_licences")
         .update({ status: "revoked" })
@@ -346,6 +362,7 @@ export default function BillingPage() {
       if (err) throw err;
       toast.success("Licence revoked.");
       await refetchLicences();
+      await fetchTeam();
     } catch (e: any) {
       toast.error(e?.message || "Could not revoke licence.");
     } finally {
@@ -354,18 +371,45 @@ export default function BillingPage() {
   }
 
   async function updateExtraSeats() {
+    const target = Math.max(0, Math.floor(extraSeats));
+    if (target === seatsPurchased) {
+      setSeatsMessage("No change to extra seats.");
+      return;
+    }
     try {
       setBusy("seats");
+      setSeatsMessage(null);
       const { data: res, error: err } = await invokeWithVinetrackAuth(
         "update-vinetrack-team-seats",
-        { extra_seats: Math.max(0, Math.floor(extraSeats)) },
+        { extra_seats: target },
       );
       if (err) throw err;
       if ((res as any)?.error) throw new Error((res as any).error);
-      toast.success("Seat count updated. Stripe will sync momentarily.");
-      setSeatsOpen(false);
+      setSeatsMessage("Extra seats updated in Stripe. Waiting for billing sync…");
+      toast.success("Extra seats updated in Stripe. Waiting for billing sync…");
+      // Poll access for up to ~45s for seats_purchased to change.
+      const startedAt = Date.now();
+      const poll = async () => {
+        const { data: refreshed } = await refetch();
+        const newPurchased = refreshed?.access?.seats_purchased ?? null;
+        if (newPurchased === target) {
+          setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
+          await fetchTeam();
+          return;
+        }
+        if (Date.now() - startedAt > 45_000) {
+          setSeatsMessage(
+            "Stripe updated, but billing sync is still pending. Refresh in a moment.",
+          );
+          return;
+        }
+        setTimeout(poll, 3_000);
+      };
+      setTimeout(poll, 2_000);
     } catch (e: any) {
-      toast.error(e?.message || "Could not update seats.");
+      const msg = e?.message || "Could not update seats.";
+      setSeatsMessage(`Error: ${msg}`);
+      toast.error(msg);
     } finally {
       setBusy(null);
     }
