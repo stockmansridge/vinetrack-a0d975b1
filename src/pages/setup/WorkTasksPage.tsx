@@ -452,9 +452,9 @@ export default function WorkTasksPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Task Log</h1>
+          <h1 className="text-2xl font-semibold">Work Tasks</h1>
           <p className="text-sm text-muted-foreground">
-            Historical record of work performed across this vineyard. Matches the iOS Task Log. Archived and soft-deleted entries are excluded.
+            View and manage task logs for completed vineyard work.
           </p>
         </div>
         <div className="flex gap-2">
@@ -462,7 +462,7 @@ export default function WorkTasksPage() {
             <Download className="h-4 w-4 mr-2" /> CSV
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" /> Log work
+            <Plus className="h-4 w-4 mr-2" /> Add Task Log
           </Button>
         </div>
       </div>
@@ -750,7 +750,7 @@ function WorkTaskDrawer({
     },
     onSuccess: (saved) => {
       setSavedTaskId(saved.id);
-      toast({ title: isNew ? "Task created" : "Task updated" });
+      toast({ title: isNew ? "Task log created" : "Task log updated" });
       onSaved();
       if (!isNew) onOpenChange(false);
     },
@@ -775,7 +775,7 @@ function WorkTaskDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isNew ? "New task log" : `Task log — ${dateRangeLabel(task!)}`}</SheetTitle>
+          <SheetTitle>{isNew ? "New Task Log" : `Task log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -889,7 +889,7 @@ function WorkTaskDrawer({
         <SheetFooter className="mt-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending}>
-            {saveTask.isPending ? "Saving…" : isNew ? "Create task" : "Save changes"}
+            {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
           </Button>
         </SheetFooter>
       </SheetContent>
