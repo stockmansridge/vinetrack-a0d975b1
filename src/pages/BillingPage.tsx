@@ -859,6 +859,11 @@ export default function BillingPage() {
               <p className="mt-3 text-xs text-muted-foreground">
                 Extra licences are billed at $99/year ex GST per user via Stripe.
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Available seats can be assigned to new users. Removing a user
+                frees the seat for reassignment but does not automatically create
+                a refund.
+              </p>
             </Card>
           )}
 
