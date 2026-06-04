@@ -78,6 +78,45 @@ async function invokeWithVinetrackAuth(name: string, body: Record<string, unknow
   });
 }
 
+interface TeamLicencesResponse {
+  subscription: {
+    id: string;
+    owner_user_id: string;
+    status: string;
+    stripe_subscription_id: string | null;
+    primary_vineyard_id: string | null;
+    seats_included: number | null;
+    seats_purchased: number | null;
+  } | null;
+  licences: Array<{
+    id: string;
+    subscription_id: string | null;
+    user_id: string | null;
+    invited_email: string | null;
+    vineyard_id: string | null;
+    status: string | null;
+    assigned_by: string | null;
+    created_at: string | null;
+    metadata: Record<string, unknown> | null;
+  }>;
+  invoices: Array<{
+    id: string;
+    invoice_number: string | null;
+    status: string | null;
+    currency: string | null;
+    total_cents: number | null;
+    amount_paid_cents: number | null;
+    period_start: string | null;
+    period_end: string | null;
+    issued_at: string | null;
+    paid_at: string | null;
+    hosted_invoice_url: string | null;
+    invoice_pdf_url: string | null;
+  }>;
+  debug?: Record<string, unknown>;
+  error?: string;
+}
+
 export default function BillingPage() {
   const { user } = useAuth();
   const { selectedVineyardId, memberships } = useVineyard();
@@ -86,13 +125,53 @@ export default function BillingPage() {
   const access = data?.access ?? null;
   const schemaMissing = data?.schemaMissing ?? false;
   const subId = access?.subscription_id ?? null;
-  const { data: invoices = [] } = useVinetrackInvoices(subId);
-  const { data: licences = [], refetch: refetchLicences } = useVinetrackLicences(subId);
+  const { data: directInvoices = [] } = useVinetrackInvoices(subId);
+  const { data: directLicences = [], refetch: refetchLicences } = useVinetrackLicences(subId);
+
+  // Service-role fallback that bypasses browser-side RLS and repairs the
+  // owner licence if missing. Authoritative for the licences/invoices view.
+  const [teamData, setTeamData] = useState<TeamLicencesResponse | null>(null);
+  const [teamFetchError, setTeamFetchError] = useState<string | null>(null);
+  const teamFetchInFlight = useRef(false);
+  const fetchTeam = useMemoized<() => Promise<TeamLicencesResponse | null>>(() => async () => {
+    if (teamFetchInFlight.current) return teamData;
+    teamFetchInFlight.current = true;
+    try {
+      const { data: res, error: err } = await invokeWithVinetrackAuth(
+        "get-vinetrack-team-licences",
+      );
+      if (err) {
+        setTeamFetchError(err.message ?? String(err));
+        return null;
+      }
+      const r = res as TeamLicencesResponse;
+      setTeamData(r);
+      setTeamFetchError(r?.error ?? null);
+      return r;
+    } catch (e: any) {
+      setTeamFetchError(e?.message ?? String(e));
+      return null;
+    } finally {
+      teamFetchInFlight.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    if (subId) fetchTeam();
+  }, [subId, fetchTeam]);
+
+  // Prefer service-role responses when they have content; fall back to
+  // direct RLS queries (which can be empty for owners with strict RLS).
+  const licences =
+    teamData && teamData.licences.length > 0 ? teamData.licences : directLicences;
+  const invoices =
+    teamData && teamData.invoices.length > 0 ? teamData.invoices : directInvoices;
+
   const [busy, setBusy] = useState<"checkout" | "portal" | "seats" | "addUser" | "revoke" | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [seatsOpen, setSeatsOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
+  const [seatsMessage, setSeatsMessage] = useState<string | null>(null);
 
   // After Stripe redirects back with ?checkout=success, poll for the webhook
   // to land the subscription/invoice rows. We refetch a few times then stop.
