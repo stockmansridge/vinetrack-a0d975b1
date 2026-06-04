@@ -262,8 +262,9 @@ export default function BillingPage() {
     [memberships, selectedVineyardId],
   );
 
-  const seatsIncluded = access?.seats_included ?? 0;
-  const seatsPurchased = access?.seats_purchased ?? 0;
+  // Prefer billing-detail values (real DB) over access RPC for seat counts.
+  const seatsIncluded = billingSub?.seats_included ?? access?.seats_included ?? 0;
+  const seatsPurchased = billingSub?.seats_purchased ?? access?.seats_purchased ?? 0;
   const totalSeats = seatsIncluded + seatsPurchased;
   const activeLicenceCount = licences.filter((l) => l.status === "active").length;
   const pendingLicenceCount = licences.filter((l) => l.status === "pending").length;
