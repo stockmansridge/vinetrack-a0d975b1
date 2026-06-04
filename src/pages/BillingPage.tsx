@@ -175,6 +175,8 @@ export default function BillingPage() {
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
   const [seatsMessage, setSeatsMessage] = useState<string | null>(null);
+  const [seatsConfirmOpen, setSeatsConfirmOpen] = useState(false);
+  const [seatsPaymentUrl, setSeatsPaymentUrl] = useState<string | null>(null);
 
   // After Stripe redirects back with ?checkout=success, poll for the webhook
   // to land the subscription/invoice rows. We refetch a few times then stop.
@@ -375,38 +377,84 @@ export default function BillingPage() {
     }
   }
 
-  async function updateExtraSeats() {
+  function requestSeatsChange() {
     const target = Math.max(0, Math.floor(extraSeats));
+    setSeatsPaymentUrl(null);
     if (target === seatsPurchased) {
       setSeatsMessage("No change to extra seats.");
       return;
     }
+    if (target < seatsPurchased) {
+      setSeatsMessage(
+        "Reducing paid seats mid-cycle would create a credit or refund. Contact support to reduce paid seats before renewal.",
+      );
+      return;
+    }
+    setSeatsMessage(null);
+    setSeatsConfirmOpen(true);
+  }
+
+  async function confirmSeatsIncrease() {
+    const target = Math.max(0, Math.floor(extraSeats));
+    setSeatsConfirmOpen(false);
     try {
       setBusy("seats");
       setSeatsMessage(null);
+      setSeatsPaymentUrl(null);
       const { data: res, error: err } = await invokeWithVinetrackAuth(
         "update-vinetrack-team-seats",
-        { extra_seats: target },
+        { extra_seats: target, confirm: true },
       );
       if (err) throw err;
-      if ((res as any)?.error) throw new Error((res as any).error);
-      setSeatsMessage("Extra seats updated in Stripe. Waiting for billing sync…");
-      toast.success("Extra seats updated in Stripe. Waiting for billing sync…");
-      // Poll billing-detail for up to ~45s for seats_purchased to change.
+      const r = res as any;
+      if (r?.error) throw new Error(r.error);
+
+      const invoice = r?.invoice ?? null;
+      const payment = r?.payment ?? null;
+      const chargedNow = !!payment?.charged_immediately;
+      const requiresAction = !!payment?.requires_action;
+      const actionUrl: string | null =
+        payment?.next_action_url ?? invoice?.hosted_invoice_url ?? null;
+
+      if (requiresAction && actionUrl) {
+        setSeatsPaymentUrl(actionUrl);
+        setSeatsMessage(
+          "Stripe needs you to complete payment for the extra seats before they activate.",
+        );
+        toast.message("Payment action required to add extra seats.");
+      } else if (chargedNow) {
+        setSeatsMessage("Stripe charged your saved payment method. Extra seats pending sync…");
+        toast.success("Extra seats paid. Waiting for billing sync…");
+      } else {
+        setSeatsMessage("Extra seats pending payment/sync…");
+      }
+
+      // Poll billing-detail for up to ~60s for the webhook to confirm.
       const startedAt = Date.now();
       const poll = async () => {
-        billingFetchInFlight.current = false; // allow concurrent refresh
+        billingFetchInFlight.current = false;
         const fresh = await fetchBilling();
         await refetch();
         const newPurchased = fresh?.subscription?.seats_purchased ?? null;
-        if (newPurchased === target) {
+        const linkedInvoice = invoice?.id
+          ? (fresh?.invoices ?? []).find(
+              (i: any) => (i as any).external_invoice_id === invoice.id,
+            )
+          : null;
+        const invoicePaid = linkedInvoice
+          ? linkedInvoice.status === "paid"
+          : chargedNow && !requiresAction;
+        if (newPurchased === target && invoicePaid) {
           setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
+          setSeatsPaymentUrl(null);
           return;
         }
-        if (Date.now() - startedAt > 45_000) {
-          setSeatsMessage(
-            "Stripe updated, but billing sync is still pending. Refresh in a moment.",
-          );
+        if (Date.now() - startedAt > 60_000) {
+          if (!seatsPaymentUrl) {
+            setSeatsMessage(
+              "Stripe updated, but billing sync is still pending. Refresh in a moment.",
+            );
+          }
           return;
         }
         setTimeout(poll, 3_000);
@@ -893,7 +941,10 @@ export default function BillingPage() {
         open={seatsOpen}
         onOpenChange={(open) => {
           setSeatsOpen(open);
-          if (!open) setSeatsMessage(null);
+          if (!open) {
+            setSeatsMessage(null);
+            setSeatsPaymentUrl(null);
+          }
         }}
       >
         <DialogContent>
@@ -903,12 +954,25 @@ export default function BillingPage() {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Your plan includes <strong>{seatsIncluded}</strong> user licences.
-              Extra paid licences are billed at $99/year ex GST per seat and
-              prorated by Stripe. You currently have{" "}
-              <strong>{seatsPurchased}</strong> extra paid seat(s).
+              Extra user licences are billed annually at $99/year ex GST per seat
+              and prorated to your Team renewal date. Removing a user frees the
+              licence for reassignment but does not automatically refund the
+              licence.
             </p>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Current extra paid seats</dt>
+                <dd className="font-medium">{seatsPurchased}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Requested extra seats</dt>
+                <dd className="font-medium">
+                  {Math.max(0, Math.floor(extraSeats))}
+                </dd>
+              </div>
+            </dl>
             <div className="space-y-1">
-              <Label htmlFor="extra-seats">Purchased extra user licences</Label>
+              <Label htmlFor="extra-seats">New extra user licences</Label>
               <Input
                 id="extra-seats"
                 type="number"
@@ -926,18 +990,61 @@ export default function BillingPage() {
                 <AlertDescription>{seatsMessage}</AlertDescription>
               </Alert>
             )}
+            {seatsPaymentUrl && (
+              <Button
+                variant="default"
+                onClick={() => window.open(seatsPaymentUrl, "_blank", "noopener")}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Complete payment in Stripe
+              </Button>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSeatsOpen(false)}>
               Close
             </Button>
-            <Button onClick={updateExtraSeats} disabled={busy === "seats"}>
+            <Button onClick={requestSeatsChange} disabled={busy === "seats"}>
               {busy === "seats" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update seats
+              Review change
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm seats increase */}
+      <Dialog open={seatsConfirmOpen} onOpenChange={setSeatsConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm extra licences</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              Add{" "}
+              <strong>
+                {Math.max(0, Math.floor(extraSeats)) - seatsPurchased}
+              </strong>{" "}
+              extra user licence(s). These are <strong>$99/year ex GST each</strong>{" "}
+              and will be prorated to your current Team renewal date. Stripe will
+              charge your saved payment method immediately.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              New total extra paid seats:{" "}
+              <strong>{Math.max(0, Math.floor(extraSeats))}</strong>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSeatsConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmSeatsIncrease} disabled={busy === "seats"}>
+              {busy === "seats" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm and pay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
