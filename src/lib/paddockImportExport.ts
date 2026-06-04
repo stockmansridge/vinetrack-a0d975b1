@@ -81,9 +81,9 @@ function firstAlloc(p: PaddockRow): { variety?: string; clone?: string; rootstoc
   const a = arr[0];
   if (!a || typeof a !== "object") return {};
   return {
-    variety: a.variety ?? undefined,
+    variety: a.name ?? a.varietyName ?? a.variety_name ?? a.variety ?? undefined,
     clone: a.clone ?? undefined,
-    rootstock: a.rootstock ?? undefined,
+    rootstock: a.rootstock ?? a.root_stock ?? undefined,
   };
 }
 
