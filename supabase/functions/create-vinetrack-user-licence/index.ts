@@ -109,12 +109,15 @@ Deno.serve(async (req: Request) => {
   const { data: inserted, error: insErr } = await admin
     .from("vinetrack_user_licences")
     .insert(row)
-    .select("id, status")
+    .select("id, status, subscription_id, user_id, invited_email, vineyard_id, created_at, metadata")
     .maybeSingle();
   if (insErr) return jsonError(500, insErr.message);
 
-  return new Response(JSON.stringify({ ok: true, licence: inserted }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ ok: true, licence: inserted, subscription_id: sub.id }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 });
