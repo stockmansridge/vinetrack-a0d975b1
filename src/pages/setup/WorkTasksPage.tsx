@@ -902,6 +902,36 @@ function WorkTaskDrawer({
                 <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
               )}
             </Section>
+            {blockBreakdown.length > 1 && (
+              <Section title="Block breakdown">
+                <div className="overflow-x-auto -mx-3">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground">
+                        <th className="text-left font-normal px-2 py-1">Block</th>
+                        <th className="text-right font-normal px-2 py-1">Area ha</th>
+                        <th className="text-right font-normal px-2 py-1">Share</th>
+                        <th className="text-right font-normal px-2 py-1">Hours</th>
+                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost</th>}
+                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost/ha</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {blockBreakdown.map((b) => (
+                        <tr key={b.id} className="border-t">
+                          <td className="px-2 py-1 truncate max-w-[8rem]" title={b.name}>{b.name}</td>
+                          <td className="px-2 py-1 text-right">{b.areaHa > 0 ? b.areaHa.toFixed(2) : "—"}</td>
+                          <td className="px-2 py-1 text-right">{(b.share * 100).toFixed(1)}%</td>
+                          <td className="px-2 py-1 text-right">{b.allocHours.toFixed(2)}</td>
+                          {drawerCanSeeCosts && <td className="px-2 py-1 text-right">{b.allocCost ? money(b.allocCost) : "—"}</td>}
+                          {drawerCanSeeCosts && <td className="px-2 py-1 text-right">{b.costPerHa == null ? "—" : money(b.costPerHa)}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+            )}
             {!isNew && task && (
               <Section title="Meta">
                 <Field label="Created" value={fmtDate(task.created_at)} />
