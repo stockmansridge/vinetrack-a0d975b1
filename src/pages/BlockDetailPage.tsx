@@ -309,13 +309,27 @@ export default function BlockDetailPage() {
             <Field
               label="Variety"
               value={
-                varieties.length === 0
-                  ? "—"
-                  : varieties
-                      .map((v) =>
-                        v.percent != null ? `${v.name} (${fmt(v.percent, 0)}%)` : v.name,
-                      )
-                      .join(", ")
+                varieties.length === 0 ? (
+                  "—"
+                ) : (
+                  <div className="space-y-1.5">
+                    {varieties.map((v, i) => (
+                      <div key={i} className="text-sm leading-tight">
+                        <div>
+                          {v.name}
+                          {v.percent != null ? ` — ${fmt(v.percent, 0)}%` : ""}
+                        </div>
+                        {(v.clone || v.rootstock) && (
+                          <div className="text-xs text-muted-foreground">
+                            {v.clone ? `Clone: ${v.clone}` : ""}
+                            {v.clone && v.rootstock ? " · " : ""}
+                            {v.rootstock ? `Rootstock: ${v.rootstock}` : ""}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
               }
             />
             <Field
