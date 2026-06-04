@@ -251,6 +251,31 @@ Deno.serve(async (req: Request) => {
     const stripeCustomerId =
       typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
 
+    // Resolve current period from subscription, falling back to the first
+    // subscription item (Stripe API >= 2025-x moves period fields onto items).
+    const itemPeriodStart =
+      (sub.items?.data ?? [])
+        .map((i: any) => i.current_period_start)
+        .find((v: any) => typeof v === "number") ?? null;
+    const itemPeriodEnd =
+      (sub.items?.data ?? [])
+        .map((i: any) => i.current_period_end)
+        .find((v: any) => typeof v === "number") ?? null;
+    const periodStart =
+      (sub as any).current_period_start ?? itemPeriodStart ?? null;
+    const periodEnd =
+      (sub as any).current_period_end ?? itemPeriodEnd ?? null;
+
+    logEvent("subscription period fields", {
+      stripeSubscriptionId: sub.id,
+      sub_current_period_start: (sub as any).current_period_start ?? null,
+      sub_current_period_end: (sub as any).current_period_end ?? null,
+      item_current_period_start: itemPeriodStart,
+      item_current_period_end: itemPeriodEnd,
+      resolved_period_start: periodStart,
+      resolved_period_end: periodEnd,
+    });
+
     const baseRow: Record<string, unknown> = {
       owner_user_id: resolvedOwner,
       plan_id: plan.id,
@@ -258,11 +283,11 @@ Deno.serve(async (req: Request) => {
       status: sub.status,
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: sub.id,
-      current_period_start: sub.current_period_start
-        ? new Date(sub.current_period_start * 1000).toISOString()
+      current_period_start: periodStart
+        ? new Date(periodStart * 1000).toISOString()
         : null,
-      current_period_end: sub.current_period_end
-        ? new Date(sub.current_period_end * 1000).toISOString()
+      current_period_end: periodEnd
+        ? new Date(periodEnd * 1000).toISOString()
         : null,
       trial_start: sub.trial_start
         ? new Date(sub.trial_start * 1000).toISOString()
