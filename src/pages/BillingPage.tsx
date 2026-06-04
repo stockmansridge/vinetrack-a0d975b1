@@ -133,7 +133,7 @@ export default function BillingPage() {
   const [teamData, setTeamData] = useState<TeamLicencesResponse | null>(null);
   const [teamFetchError, setTeamFetchError] = useState<string | null>(null);
   const teamFetchInFlight = useRef(false);
-  const fetchTeam = useMemoized<() => Promise<TeamLicencesResponse | null>>(() => async () => {
+  const fetchTeam = useCallback(async (): Promise<TeamLicencesResponse | null> => {
     if (teamFetchInFlight.current) return teamData;
     teamFetchInFlight.current = true;
     try {
