@@ -195,19 +195,12 @@ export default function BillingPage() {
       if (sid) {
         await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", sid] });
         await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
-        const licRes = await refetchLicences();
-        ownerLicenceCount = (licRes.data ?? []).filter(
+        await refetchLicences();
+        const team = await fetchTeam();
+        ownerLicenceCount = (team?.licences ?? []).filter(
           (l) => l.user_id === acc?.user_id && l.status === "active",
         ).length;
-        try {
-          const { data: invs } = await (iosSupabase as any)
-            .from("vinetrack_invoice_records")
-            .select("id")
-            .eq("subscription_id", sid);
-          invoiceCount = (invs ?? []).length;
-        } catch {
-          invoiceCount = 0;
-        }
+        invoiceCount = (team?.invoices ?? []).length;
       }
 
       const subActive =
@@ -215,7 +208,6 @@ export default function BillingPage() {
       const ready = subActive && ownerLicenceCount >= 1;
 
       if (ready || attempts >= MAX_ATTEMPTS) {
-        // Final invalidation to refresh invoice list display.
         if (sid) {
           await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
         }
@@ -236,7 +228,7 @@ export default function BillingPage() {
       setTimeout(tick, 2000);
     };
     tick();
-  }, [refetch, refetchLicences, qc]);
+  }, [refetch, refetchLicences, qc, fetchTeam]);
 
   const activeStatus = ["active", "trialing", "past_due"];
   const hasActiveSub =
