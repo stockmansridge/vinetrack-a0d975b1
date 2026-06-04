@@ -961,7 +961,14 @@ export default function BillingPage() {
           )}
 
           {/* Invoices (Stripe/manual only) */}
-          {!isApple && (
+          {isInternalUnlimited ? (
+            <Card className="p-6">
+              <h3 className="text-base font-medium">Invoices</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                No invoices — this access is manually managed by VineTrack.
+              </p>
+            </Card>
+          ) : !isApple && (
             <Card className="p-6">
               <h3 className="text-base font-medium">Invoices</h3>
               {invoices.length === 0 ? (
