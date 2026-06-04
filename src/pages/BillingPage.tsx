@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,45 @@ async function invokeWithVinetrackAuth(name: string, body: Record<string, unknow
   });
 }
 
+interface TeamLicencesResponse {
+  subscription: {
+    id: string;
+    owner_user_id: string;
+    status: string;
+    stripe_subscription_id: string | null;
+    primary_vineyard_id: string | null;
+    seats_included: number | null;
+    seats_purchased: number | null;
+  } | null;
+  licences: Array<{
+    id: string;
+    subscription_id: string | null;
+    user_id: string | null;
+    invited_email: string | null;
+    vineyard_id: string | null;
+    status: string | null;
+    assigned_by: string | null;
+    created_at: string | null;
+    metadata: Record<string, unknown> | null;
+  }>;
+  invoices: Array<{
+    id: string;
+    invoice_number: string | null;
+    status: string | null;
+    currency: string | null;
+    total_cents: number | null;
+    amount_paid_cents: number | null;
+    period_start: string | null;
+    period_end: string | null;
+    issued_at: string | null;
+    paid_at: string | null;
+    hosted_invoice_url: string | null;
+    invoice_pdf_url: string | null;
+  }>;
+  debug?: Record<string, unknown>;
+  error?: string;
+}
+
 export default function BillingPage() {
   const { user } = useAuth();
   const { selectedVineyardId, memberships } = useVineyard();
@@ -86,13 +125,53 @@ export default function BillingPage() {
   const access = data?.access ?? null;
   const schemaMissing = data?.schemaMissing ?? false;
   const subId = access?.subscription_id ?? null;
-  const { data: invoices = [] } = useVinetrackInvoices(subId);
-  const { data: licences = [], refetch: refetchLicences } = useVinetrackLicences(subId);
+  const { data: directInvoices = [] } = useVinetrackInvoices(subId);
+  const { data: directLicences = [], refetch: refetchLicences } = useVinetrackLicences(subId);
+
+  // Service-role fallback that bypasses browser-side RLS and repairs the
+  // owner licence if missing. Authoritative for the licences/invoices view.
+  const [teamData, setTeamData] = useState<TeamLicencesResponse | null>(null);
+  const [teamFetchError, setTeamFetchError] = useState<string | null>(null);
+  const teamFetchInFlight = useRef(false);
+  const fetchTeam = useCallback(async (): Promise<TeamLicencesResponse | null> => {
+    if (teamFetchInFlight.current) return teamData;
+    teamFetchInFlight.current = true;
+    try {
+      const { data: res, error: err } = await invokeWithVinetrackAuth(
+        "get-vinetrack-team-licences",
+      );
+      if (err) {
+        setTeamFetchError(err.message ?? String(err));
+        return null;
+      }
+      const r = res as TeamLicencesResponse;
+      setTeamData(r);
+      setTeamFetchError(r?.error ?? null);
+      return r;
+    } catch (e: any) {
+      setTeamFetchError(e?.message ?? String(e));
+      return null;
+    } finally {
+      teamFetchInFlight.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    if (subId) fetchTeam();
+  }, [subId, fetchTeam]);
+
+  // Prefer service-role responses when they have content; fall back to
+  // direct RLS queries (which can be empty for owners with strict RLS).
+  const licences =
+    teamData && teamData.licences.length > 0 ? teamData.licences : directLicences;
+  const invoices =
+    teamData && teamData.invoices.length > 0 ? teamData.invoices : directInvoices;
+
   const [busy, setBusy] = useState<"checkout" | "portal" | "seats" | "addUser" | "revoke" | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [seatsOpen, setSeatsOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
+  const [seatsMessage, setSeatsMessage] = useState<string | null>(null);
 
   // After Stripe redirects back with ?checkout=success, poll for the webhook
   // to land the subscription/invoice rows. We refetch a few times then stop.
@@ -116,19 +195,12 @@ export default function BillingPage() {
       if (sid) {
         await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", sid] });
         await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
-        const licRes = await refetchLicences();
-        ownerLicenceCount = (licRes.data ?? []).filter(
+        await refetchLicences();
+        const team = await fetchTeam();
+        ownerLicenceCount = (team?.licences ?? []).filter(
           (l) => l.user_id === acc?.user_id && l.status === "active",
         ).length;
-        try {
-          const { data: invs } = await (iosSupabase as any)
-            .from("vinetrack_invoice_records")
-            .select("id")
-            .eq("subscription_id", sid);
-          invoiceCount = (invs ?? []).length;
-        } catch {
-          invoiceCount = 0;
-        }
+        invoiceCount = (team?.invoices ?? []).length;
       }
 
       const subActive =
@@ -136,7 +208,6 @@ export default function BillingPage() {
       const ready = subActive && ownerLicenceCount >= 1;
 
       if (ready || attempts >= MAX_ATTEMPTS) {
-        // Final invalidation to refresh invoice list display.
         if (sid) {
           await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
         }
@@ -157,7 +228,7 @@ export default function BillingPage() {
       setTimeout(tick, 2000);
     };
     tick();
-  }, [refetch, refetchLicences, qc]);
+  }, [refetch, refetchLicences, qc, fetchTeam]);
 
   const activeStatus = ["active", "trialing", "past_due"];
   const hasActiveSub =
@@ -251,10 +322,27 @@ export default function BillingPage() {
       );
       if (err) throw err;
       if ((res as any)?.error) throw new Error((res as any).error);
-      toast.success("User licence created.");
+      const licence = (res as any)?.licence;
+      const returnedSubId = (res as any)?.subscription_id ?? null;
+      const emailAdded = newEmail.trim();
+      const status = licence?.status ?? "active";
+      const friendly =
+        status === "pending"
+          ? `Licence added for ${emailAdded} — pending invite.`
+          : `Licence added for ${emailAdded} and active.`;
+      toast.success(friendly);
+      if (returnedSubId && subId && returnedSubId !== subId) {
+        toast.error(
+          `BUG: licence created under subscription ${returnedSubId} but billing page is showing ${subId}.`,
+        );
+      }
       setNewEmail("");
       setAddOpen(false);
+      if (returnedSubId) {
+        await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", returnedSubId] });
+      }
       await refetchLicences();
+      await fetchTeam();
       await qc.invalidateQueries({ queryKey: ["vinetrack", "access"] });
     } catch (e: any) {
       toast.error(e?.message || "Could not create licence.");
@@ -267,7 +355,6 @@ export default function BillingPage() {
     if (!confirm("Revoke this licence? The user will lose access at the end of the period.")) return;
     try {
       setBusy("revoke");
-      // Direct write — RLS on vinetrack_user_licences governs.
       const { error: err } = await (iosSupabase as any)
         .from("vinetrack_user_licences")
         .update({ status: "revoked" })
@@ -275,6 +362,7 @@ export default function BillingPage() {
       if (err) throw err;
       toast.success("Licence revoked.");
       await refetchLicences();
+      await fetchTeam();
     } catch (e: any) {
       toast.error(e?.message || "Could not revoke licence.");
     } finally {
@@ -283,18 +371,45 @@ export default function BillingPage() {
   }
 
   async function updateExtraSeats() {
+    const target = Math.max(0, Math.floor(extraSeats));
+    if (target === seatsPurchased) {
+      setSeatsMessage("No change to extra seats.");
+      return;
+    }
     try {
       setBusy("seats");
+      setSeatsMessage(null);
       const { data: res, error: err } = await invokeWithVinetrackAuth(
         "update-vinetrack-team-seats",
-        { extra_seats: Math.max(0, Math.floor(extraSeats)) },
+        { extra_seats: target },
       );
       if (err) throw err;
       if ((res as any)?.error) throw new Error((res as any).error);
-      toast.success("Seat count updated. Stripe will sync momentarily.");
-      setSeatsOpen(false);
+      setSeatsMessage("Extra seats updated in Stripe. Waiting for billing sync…");
+      toast.success("Extra seats updated in Stripe. Waiting for billing sync…");
+      // Poll access for up to ~45s for seats_purchased to change.
+      const startedAt = Date.now();
+      const poll = async () => {
+        const { data: refreshed } = await refetch();
+        const newPurchased = refreshed?.access?.seats_purchased ?? null;
+        if (newPurchased === target) {
+          setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
+          await fetchTeam();
+          return;
+        }
+        if (Date.now() - startedAt > 45_000) {
+          setSeatsMessage(
+            "Stripe updated, but billing sync is still pending. Refresh in a moment.",
+          );
+          return;
+        }
+        setTimeout(poll, 3_000);
+      };
+      setTimeout(poll, 2_000);
     } catch (e: any) {
-      toast.error(e?.message || "Could not update seats.");
+      const msg = e?.message || "Could not update seats.";
+      setSeatsMessage(`Error: ${msg}`);
+      toast.error(msg);
     } finally {
       setBusy(null);
     }
@@ -314,6 +429,27 @@ export default function BillingPage() {
             : "(none)"}
         </p>
       </header>
+
+      {/* Temporary debug block — remove once Billing data is confirmed stable. */}
+      <Card className="border-dashed bg-muted/30 p-4 text-xs font-mono space-y-1">
+        <div className="font-semibold not-italic">[debug] Billing data sources</div>
+        <div>access.subscription_id: {access?.subscription_id ?? "(null)"}</div>
+        <div>access.user_id: {access?.user_id ?? "(null)"}</div>
+        <div>access.current_period_end: {access?.current_period_end ?? "(null)"}</div>
+        <div>access.seats_purchased: {access?.seats_purchased ?? "(null)"}</div>
+        <div>direct licences query subId: {subId ?? "(null)"}</div>
+        <div>direct licences row count: {directLicences.length}</div>
+        <div>direct invoices query subId: {subId ?? "(null)"}</div>
+        <div>direct invoices row count: {directInvoices.length}</div>
+        <div>
+          edge get-vinetrack-team-licences subscription.id:{" "}
+          {teamData?.subscription?.id ?? "(none)"}
+        </div>
+        <div>edge licences row count: {teamData?.licences.length ?? 0}</div>
+        <div>edge invoices row count: {teamData?.invoices.length ?? 0}</div>
+        <div>edge error: {teamFetchError ?? "(none)"}</div>
+        <div>edge debug: {teamData?.debug ? JSON.stringify(teamData.debug) : "(none)"}</div>
+      </Card>
 
       {!selectedVineyardId && (
         <Alert variant="destructive">
@@ -747,18 +883,26 @@ export default function BillingPage() {
       </Dialog>
 
       {/* Manage extra seats dialog */}
-      <Dialog open={seatsOpen} onOpenChange={setSeatsOpen}>
+      <Dialog
+        open={seatsOpen}
+        onOpenChange={(open) => {
+          setSeatsOpen(open);
+          if (!open) setSeatsMessage(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Manage extra seats</DialogTitle>
+            <DialogTitle>Purchased extra user licences</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Your plan includes {seatsIncluded} users. Add extra seats at $99/year
-              ex GST each. Stripe will prorate the change.
+              Your plan includes <strong>{seatsIncluded}</strong> user licences.
+              Extra paid licences are billed at $99/year ex GST per seat and
+              prorated by Stripe. You currently have{" "}
+              <strong>{seatsPurchased}</strong> extra paid seat(s).
             </p>
             <div className="space-y-1">
-              <Label htmlFor="extra-seats">Extra seats</Label>
+              <Label htmlFor="extra-seats">Purchased extra user licences</Label>
               <Input
                 id="extra-seats"
                 type="number"
@@ -766,11 +910,20 @@ export default function BillingPage() {
                 value={extraSeats}
                 onChange={(e) => setExtraSeats(Number(e.target.value))}
               />
+              <p className="text-xs text-muted-foreground">
+                Total user licences after change:{" "}
+                <strong>{seatsIncluded + Math.max(0, Math.floor(extraSeats))}</strong>
+              </p>
             </div>
+            {seatsMessage && (
+              <Alert>
+                <AlertDescription>{seatsMessage}</AlertDescription>
+              </Alert>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSeatsOpen(false)}>
-              Cancel
+              Close
             </Button>
             <Button onClick={updateExtraSeats} disabled={busy === "seats"}>
               {busy === "seats" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
