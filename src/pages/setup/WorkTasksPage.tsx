@@ -819,7 +819,7 @@ function WorkTaskDrawer({
                     </PopoverTrigger>
                     <PopoverContent className="w-72 max-h-80 overflow-y-auto p-2" align="start">
                       {paddocks.length === 0 && (
-                        <p className="text-sm text-muted-foreground p-2">No paddocks.</p>
+                        <p className="text-sm text-muted-foreground p-2">No blocks.</p>
                       )}
                       {paddocks.map((p) => {
                         const ha = paddockAreaHa(p);
