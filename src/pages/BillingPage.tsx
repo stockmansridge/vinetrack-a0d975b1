@@ -522,38 +522,48 @@ export default function BillingPage() {
   return (
     <div className="container mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-        <p className="text-sm text-muted-foreground">
-          Plan, licences and invoices for your VineTrack subscription.
-        </p>
-        <p className="text-xs text-muted-foreground font-mono">
-          [debug] Selected vineyard:{" "}
-          {selectedVineyardId
-            ? `${selectedVineyardName ?? "(unnamed)"} / ${selectedVineyardId}`
-            : "(none)"}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
+            <p className="text-sm text-muted-foreground">
+              Plan, licences and invoices for your VineTrack subscription.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={toggleDebug}>
+            {showDebug ? "Hide debug" : "Show debug"}
+          </Button>
+        </div>
+        {showDebug && (
+          <p className="text-xs text-muted-foreground font-mono">
+            [debug] Selected vineyard:{" "}
+            {selectedVineyardId
+              ? `${selectedVineyardName ?? "(unnamed)"} / ${selectedVineyardId}`
+              : "(none)"}
+          </p>
+        )}
       </header>
 
-      {/* Temporary debug block — remove once Billing data is confirmed stable. */}
-      <Card className="border-dashed bg-muted/30 p-4 text-xs font-mono space-y-1">
-        <div className="font-semibold not-italic">[debug] Billing data sources</div>
-        <div>access.subscription_id: {access?.subscription_id ?? "(null)"}</div>
-        <div>access.user_id: {access?.user_id ?? "(null)"}</div>
-        <div>access.current_period_end: {access?.current_period_end ?? "(null)"}</div>
-        <div>access.seats_purchased: {access?.seats_purchased ?? "(null)"}</div>
-        <div>direct licences query subId: {subId ?? "(null)"}</div>
-        <div>direct licences row count: {directLicences.length}</div>
-        <div>direct invoices query subId: {subId ?? "(null)"}</div>
-        <div>direct invoices row count: {directInvoices.length}</div>
-        <div>
-          edge get-vinetrack-billing-detail subscription.id:{" "}
-          {billing?.subscription?.id ?? "(none)"}
-        </div>
-        <div>edge licences row count: {billing?.licences.length ?? 0}</div>
-        <div>edge invoices row count: {billing?.invoices.length ?? 0}</div>
-        <div>edge error: {billingFetchError ?? "(none)"}</div>
-        <div>edge debug: {billing?.debug ? JSON.stringify(billing.debug) : "(none)"}</div>
-      </Card>
+      {showDebug && (
+        <Card className="border-dashed bg-muted/30 p-4 text-xs font-mono space-y-1">
+          <div className="font-semibold not-italic">[debug] Billing data sources</div>
+          <div>access.subscription_id: {access?.subscription_id ?? "(null)"}</div>
+          <div>access.user_id: {access?.user_id ?? "(null)"}</div>
+          <div>access.current_period_end: {access?.current_period_end ?? "(null)"}</div>
+          <div>access.seats_purchased: {access?.seats_purchased ?? "(null)"}</div>
+          <div>direct licences query subId: {subId ?? "(null)"}</div>
+          <div>direct licences row count: {directLicences.length}</div>
+          <div>direct invoices query subId: {subId ?? "(null)"}</div>
+          <div>direct invoices row count: {directInvoices.length}</div>
+          <div>
+            edge get-vinetrack-billing-detail subscription.id:{" "}
+            {billing?.subscription?.id ?? "(none)"}
+          </div>
+          <div>edge licences row count: {billing?.licences.length ?? 0}</div>
+          <div>edge invoices row count: {billing?.invoices.length ?? 0}</div>
+          <div>edge error: {billingFetchError ?? "(none)"}</div>
+          <div>edge debug: {billing?.debug ? JSON.stringify(billing.debug) : "(none)"}</div>
+        </Card>
+      )}
 
       {!selectedVineyardId && (
         <Alert variant="destructive">
