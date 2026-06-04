@@ -11,6 +11,7 @@ import {
   useEngagementSummary,
   useAdminUsers,
   useAdminVineyards,
+  usePlatformScale,
 } from "@/lib/adminApi";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { formatDate } from "@/lib/dateFormat";
