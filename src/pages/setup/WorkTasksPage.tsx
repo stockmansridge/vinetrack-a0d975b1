@@ -537,7 +537,7 @@ export default function WorkTasksPage() {
                 if (id === "cost" && !canSeeCosts) return null;
                 const align: "left" | "right" = (id === "area_ha" || id === "hours" || id === "cost") ? "right" : "left";
                 const labels: Record<WtCol, string> = {
-                  date: "Date / range", paddock: "Paddock", task_type: "Type", status: "Status",
+                  date: "Date / range", paddock: "Blocks", task_type: "Type", status: "Status",
                   area_ha: "Area ha", hours: "Hours", cost: "Cost", notes: "Notes",
                 };
                 const sortable = id !== "notes";
