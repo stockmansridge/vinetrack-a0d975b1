@@ -47,31 +47,33 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
-  // Find active Team subscription owned by caller.
+  // Find active subscription owned by caller (stripe team or manual internal).
   const { data: sub } = await admin
     .from("vinetrack_subscriptions")
-    .select("id, owner_user_id, status, seats_included, seats_purchased, primary_vineyard_id")
+    .select("id, owner_user_id, status, seats_included, seats_purchased, primary_vineyard_id, billing_provider, unlimited_licences")
     .eq("owner_user_id", caller.id)
-    .eq("billing_provider", "stripe")
+    .in("billing_provider", ["stripe", "manual"])
     .is("deleted_at", null)
     .in("status", ["active", "trialing", "past_due"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!sub?.id) return jsonError(403, "No active Team subscription for this user.");
+  if (!sub?.id) return jsonError(403, "No active subscription for this user.");
 
-  // Seat availability.
-  const total = (sub.seats_included ?? 0) + (sub.seats_purchased ?? 0);
-  const { count: activeCount } = await admin
-    .from("vinetrack_user_licences")
-    .select("id", { count: "exact", head: true })
-    .eq("subscription_id", sub.id)
-    .in("status", ["active", "pending"]);
-  if ((activeCount ?? 0) >= total) {
-    return jsonError(
-      409,
-      "All seats are used. Purchase an extra seat before adding more users.",
-    );
+  // Seat availability — skipped for unlimited subscriptions.
+  if (!(sub as any).unlimited_licences) {
+    const total = (sub.seats_included ?? 0) + (sub.seats_purchased ?? 0);
+    const { count: activeCount } = await admin
+      .from("vinetrack_user_licences")
+      .select("id", { count: "exact", head: true })
+      .eq("subscription_id", sub.id)
+      .in("status", ["active", "pending"]);
+    if ((activeCount ?? 0) >= total) {
+      return jsonError(
+        409,
+        "All seats are used. Purchase an extra seat before adding more users.",
+      );
+    }
   }
 
   // Look up existing user by email (best-effort).
