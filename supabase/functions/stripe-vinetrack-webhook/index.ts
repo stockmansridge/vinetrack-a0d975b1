@@ -494,15 +494,23 @@ Deno.serve(async (req: Request) => {
   }
 
   async function upsertInvoice(inv: Stripe.Invoice) {
+    // Always refetch the invoice from Stripe so we have the latest status,
+    // amount_paid, status_transitions and hosted/pdf URLs.
     let invoice = inv;
+    try {
+      invoice = (await stripe.invoices.retrieve(inv.id, {
+        expand: ["subscription"],
+      })) as Stripe.Invoice;
+    } catch (e) {
+      logEvent("invoice refetch failed (using event payload)", {
+        invoiceId: inv.id,
+        error: (e as any)?.message ?? String(e),
+      });
+    }
+
     let stripeSubscriptionId = getInvoiceStripeSubId(invoice);
     const customerId =
       typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
-
-    if (!stripeSubscriptionId) {
-      invoice = await stripe.invoices.retrieve(inv.id, { expand: ["subscription"] }) as Stripe.Invoice;
-      stripeSubscriptionId = getInvoiceStripeSubId(invoice);
-    }
 
     let subRow = stripeSubscriptionId ? await findSubByStripeId(stripeSubscriptionId) : null;
     if (!subRow && stripeSubscriptionId) {
@@ -538,13 +546,14 @@ Deno.serve(async (req: Request) => {
             0,
           ) || null;
 
+    const incomingStatus = invoice.status ?? "open";
     const row: Record<string, unknown> = {
       subscription_id: subscriptionId,
       owner_user_id: ownerUserId,
       provider: "stripe",
       external_invoice_id: invoice.id,
       invoice_number: invoice.number ?? null,
-      status: invoice.status ?? "open",
+      status: incomingStatus,
       currency: (invoice.currency ?? "aud").toUpperCase(),
       subtotal_cents: invoice.subtotal ?? null,
       tax_cents: totalTax,
@@ -574,7 +583,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: existing, error: existingError } = await admin
       .from("vinetrack_invoice_records")
-      .select("id")
+      .select("id, status, amount_paid_cents")
       .eq("provider", "stripe")
       .eq("external_invoice_id", invoice.id)
       .maybeSingle();
@@ -583,11 +592,23 @@ Deno.serve(async (req: Request) => {
     }
 
     if (existing?.id) {
-      await expectOk(
-        admin.from("vinetrack_invoice_records").update(row).eq("id", existing.id),
-        "Update invoice record",
-        { invoiceId: invoice.id, stripeSubscriptionId, ownerUserId, supabaseSubscriptionId: subscriptionId },
-      );
+      // Never let a non-paid event downgrade an already-paid invoice.
+      const existingPaid = existing.status === "paid";
+      const incomingPaid = incomingStatus === "paid";
+      if (existingPaid && !incomingPaid) {
+        logEvent("Skipping invoice downgrade (already paid)", {
+          invoiceId: invoice.id,
+          existingStatus: existing.status,
+          incomingStatus,
+          eventType: event.type,
+        });
+      } else {
+        await expectOk(
+          admin.from("vinetrack_invoice_records").update(row).eq("id", existing.id),
+          "Update invoice record",
+          { invoiceId: invoice.id, stripeSubscriptionId, ownerUserId, supabaseSubscriptionId: subscriptionId },
+        );
+      }
     } else {
       await expectOk(
         admin.from("vinetrack_invoice_records").insert(row),
