@@ -89,6 +89,12 @@ interface BillingDetailResponse {
     seats_included: number | null;
     seats_purchased: number | null;
     current_period_end: string | null;
+    billing_provider?: string | null;
+    plan_code?: string | null;
+    plan_tier?: string | null;
+    unlimited_licences?: boolean | null;
+    manual_grant_reason?: string | null;
+    manual_grant_expires_at?: string | null;
   } | null;
   licences: Array<{
     id: string;
