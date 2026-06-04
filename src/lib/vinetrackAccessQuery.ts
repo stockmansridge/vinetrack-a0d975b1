@@ -31,6 +31,9 @@ export interface VinetrackAccess {
   vineyard_id: string | null;
   licence_id: string | null;
   solo_check_required: boolean;
+  unlimited_licences?: boolean | null;
+  manual_grant_reason?: string | null;
+  manual_grant_expires_at?: string | null;
 }
 
 const QK = ["vinetrack", "access"] as const;

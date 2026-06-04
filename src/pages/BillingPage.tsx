@@ -89,6 +89,12 @@ interface BillingDetailResponse {
     seats_included: number | null;
     seats_purchased: number | null;
     current_period_end: string | null;
+    billing_provider?: string | null;
+    plan_code?: string | null;
+    plan_tier?: string | null;
+    unlimited_licences?: boolean | null;
+    manual_grant_reason?: string | null;
+    manual_grant_expires_at?: string | null;
   } | null;
   licences: Array<{
     id: string;
@@ -260,15 +266,26 @@ export default function BillingPage() {
     !!access.subscription_id &&
     !!access.status &&
     activeStatus.includes(access.status);
+  const isInternalUnlimited =
+    (!!access &&
+      (access.plan_code === "internal_unlimited" ||
+        access.plan_tier === "internal" ||
+        access.unlimited_licences === true)) ||
+    billingSub?.unlimited_licences === true ||
+    billingSub?.plan_code === "internal_unlimited" ||
+    billingSub?.plan_tier === "internal";
   const isStripeTeam =
+    !isInternalUnlimited &&
     hasActiveSub &&
     access?.billing_provider === "stripe" &&
     (access?.plan_tier === "team" || access?.access_source === "team");
-  const isApple = access?.billing_provider === "apple";
+  const isApple = !isInternalUnlimited && access?.billing_provider === "apple";
   const isEnterprise =
+    !isInternalUnlimited &&
     hasActiveSub &&
     (access?.plan_tier === "enterprise" || access?.access_source === "enterprise");
   const showTeamCta =
+    !isInternalUnlimited &&
     !isStripeTeam &&
     !isEnterprise &&
     (!access ||
@@ -290,8 +307,14 @@ export default function BillingPage() {
   const activeLicenceCount = licences.filter((l) => l.status === "active").length;
   const pendingLicenceCount = licences.filter((l) => l.status === "pending").length;
   const consumed = activeLicenceCount + pendingLicenceCount;
-  const remaining = Math.max(0, totalSeats - consumed);
-  const overSeats = consumed > totalSeats;
+  const remaining = isInternalUnlimited ? Infinity : Math.max(0, totalSeats - consumed);
+  const overSeats = !isInternalUnlimited && consumed > totalSeats;
+  const manualGrantReason =
+    billingSub?.manual_grant_reason ?? access?.manual_grant_reason ?? null;
+  const manualGrantExpiresAt =
+    billingSub?.manual_grant_expires_at ?? access?.manual_grant_expires_at ?? null;
+  // Show licence management for any active sub with team OR internal_unlimited
+  const showLicenceManagement = isStripeTeam || isInternalUnlimited;
 
   async function startCheckout() {
     if (!selectedVineyardId) {
@@ -728,30 +751,53 @@ export default function BillingPage() {
             </dl>
           </Card>
 
+          {/* Internal Unlimited note */}
+          {isInternalUnlimited && (
+            <Alert>
+              <AlertTitle>Internal Unlimited access</AlertTitle>
+              <AlertDescription>
+                This account has unlimited access managed directly by VineTrack.
+                No Stripe billing or Apple subscription is required.
+                {manualGrantReason && (
+                  <div className="mt-1">Reason: {manualGrantReason}</div>
+                )}
+                {manualGrantExpiresAt && (
+                  <div className="mt-1">
+                    Access expires: {formatDate(manualGrantExpiresAt)}
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Team licences */}
-          {isStripeTeam && (
+          {showLicenceManagement && (
             <Card className="p-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-base font-medium">Team licences</h3>
+                  <h3 className="text-base font-medium">
+                    {isInternalUnlimited ? "User licences" : "Team licences"}
+                  </h3>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setExtraSeats(seatsPurchased);
-                      setSeatsOpen(true);
-                    }}
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    Manage extra seats
-                  </Button>
+                  {!isInternalUnlimited && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setExtraSeats(seatsPurchased);
+                        setSeatsOpen(true);
+                      }}
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      Manage extra seats
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     onClick={() => setAddOpen(true)}
-                    disabled={remaining <= 0}
+                    disabled={!isInternalUnlimited && remaining <= 0}
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Add user
@@ -762,11 +808,15 @@ export default function BillingPage() {
               <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-5">
                 <div>
                   <dt className="text-muted-foreground">Included</dt>
-                  <dd className="font-medium">{seatsIncluded}</dd>
+                  <dd className="font-medium">
+                    {isInternalUnlimited ? "Unlimited" : seatsIncluded}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Extra paid</dt>
-                  <dd className="font-medium">{seatsPurchased}</dd>
+                  <dd className="font-medium">
+                    {isInternalUnlimited ? "—" : seatsPurchased}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Active</dt>
@@ -778,7 +828,9 @@ export default function BillingPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Available</dt>
-                  <dd className="font-medium">{remaining}</dd>
+                  <dd className="font-medium">
+                    {isInternalUnlimited ? "Unlimited" : remaining}
+                  </dd>
                 </div>
               </dl>
 
@@ -814,8 +866,11 @@ export default function BillingPage() {
                     ) : (
                       licences.map((l, idx) => {
                         const isOwner = l.user_id && l.user_id === user?.id;
-                        const licenceType =
-                          idx < seatsIncluded ? "included" : "extra paid";
+                        const licenceType = isInternalUnlimited
+                          ? "unlimited"
+                          : idx < seatsIncluded
+                            ? "included"
+                            : "extra paid";
                         return (
                           <tr key={l.id} className="border-t border-border/60">
                             <td className="py-2 pr-4">
@@ -856,14 +911,18 @@ export default function BillingPage() {
                 </table>
               </div>
 
-              <p className="mt-3 text-xs text-muted-foreground">
-                Extra licences are billed at $99/year ex GST per user via Stripe.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Available seats can be assigned to new users. Removing a user
-                frees the seat for reassignment but does not automatically create
-                a refund.
-              </p>
+              {!isInternalUnlimited && (
+                <>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Extra licences are billed at $99/year ex GST per user via Stripe.
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Available seats can be assigned to new users. Removing a user
+                    frees the seat for reassignment but does not automatically create
+                    a refund.
+                  </p>
+                </>
+              )}
             </Card>
           )}
 
@@ -902,7 +961,14 @@ export default function BillingPage() {
           )}
 
           {/* Invoices (Stripe/manual only) */}
-          {!isApple && (
+          {isInternalUnlimited ? (
+            <Card className="p-6">
+              <h3 className="text-base font-medium">Invoices</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                No invoices — this access is manually managed by VineTrack.
+              </p>
+            </Card>
+          ) : !isApple && (
             <Card className="p-6">
               <h3 className="text-base font-medium">Invoices</h3>
               {invoices.length === 0 ? (
