@@ -123,6 +123,7 @@ const systemAdmin: NavItem[] = [
   { title: "Block Troubleshooter", url: "/admin/block-troubleshooter", icon: ShieldCheck },
   { title: "Support Requests", url: "/admin/support-requests", icon: LifeBuoy },
   { title: "System Admins", url: "/admin/system-admins", icon: ShieldCheck },
+  { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign },
   { title: "App Notices", url: "/admin/notices", icon: Bell },
   { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
   { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
