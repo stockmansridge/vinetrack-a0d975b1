@@ -359,11 +359,12 @@ export default function BillingPage() {
     if (!confirm("Revoke this licence? The user will lose access at the end of the period.")) return;
     try {
       setBusy("revoke");
-      const { error: err } = await (iosSupabase as any)
-        .from("vinetrack_user_licences")
-        .update({ status: "revoked" })
-        .eq("id", licenceId);
+      const { data: res, error: err } = await invokeWithVinetrackAuth(
+        "revoke-vinetrack-user-licence",
+        { licence_id: licenceId },
+      );
       if (err) throw err;
+      if ((res as any)?.error) throw new Error((res as any).error);
       toast.success("Licence revoked.");
       await refetchLicences();
       await fetchBilling();
