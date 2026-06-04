@@ -1102,8 +1102,12 @@ export default function BillingPage() {
                 {Math.max(0, Math.floor(extraSeats)) - seatsPurchased}
               </strong>{" "}
               extra user licence(s). These are <strong>$99/year ex GST each</strong>{" "}
-              and will be prorated to your current Team renewal date. Stripe will
-              charge your saved payment method immediately.
+              and will be prorated to your current Team renewal date.
+            </p>
+            <p>
+              Stripe will try to charge your saved payment method immediately.
+              If your bank requires confirmation, you'll be sent to Stripe to
+              complete payment.
             </p>
             <p className="text-xs text-muted-foreground">
               New total extra paid seats:{" "}
