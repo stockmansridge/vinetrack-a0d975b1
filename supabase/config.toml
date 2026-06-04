@@ -35,3 +35,9 @@ verify_jwt = false
 
 [functions.get-vinetrack-team-licences]
 verify_jwt = false
+
+[functions.get-vinetrack-billing-detail]
+verify_jwt = false
+
+[functions.revoke-vinetrack-user-licence]
+verify_jwt = false

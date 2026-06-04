@@ -78,7 +78,8 @@ async function invokeWithVinetrackAuth(name: string, body: Record<string, unknow
   });
 }
 
-interface TeamLicencesResponse {
+interface BillingDetailResponse {
+  access: any | null;
   subscription: {
     id: string;
     owner_user_id: string;
@@ -87,6 +88,7 @@ interface TeamLicencesResponse {
     primary_vineyard_id: string | null;
     seats_included: number | null;
     seats_purchased: number | null;
+    current_period_end: string | null;
   } | null;
   licences: Array<{
     id: string;
@@ -113,6 +115,7 @@ interface TeamLicencesResponse {
     hosted_invoice_url: string | null;
     invoice_pdf_url: string | null;
   }>;
+  errors?: Record<string, string | null>;
   debug?: Record<string, unknown>;
   error?: string;
 }
@@ -128,43 +131,43 @@ export default function BillingPage() {
   const { data: directInvoices = [] } = useVinetrackInvoices(subId);
   const { data: directLicences = [], refetch: refetchLicences } = useVinetrackLicences(subId);
 
-  // Service-role fallback that bypasses browser-side RLS and repairs the
-  // owner licence if missing. Authoritative for the licences/invoices view.
-  const [teamData, setTeamData] = useState<TeamLicencesResponse | null>(null);
-  const [teamFetchError, setTeamFetchError] = useState<string | null>(null);
-  const teamFetchInFlight = useRef(false);
-  const fetchTeam = useCallback(async (): Promise<TeamLicencesResponse | null> => {
-    if (teamFetchInFlight.current) return teamData;
-    teamFetchInFlight.current = true;
+  // Service-role billing detail — authoritative source for licences,
+  // invoices, and the active subscription. Bypasses browser-side RLS.
+  const [billing, setBilling] = useState<BillingDetailResponse | null>(null);
+  const [billingFetchError, setBillingFetchError] = useState<string | null>(null);
+  const billingFetchInFlight = useRef(false);
+  const fetchBilling = useCallback(async (): Promise<BillingDetailResponse | null> => {
+    if (billingFetchInFlight.current) return billing;
+    billingFetchInFlight.current = true;
     try {
       const { data: res, error: err } = await invokeWithVinetrackAuth(
-        "get-vinetrack-team-licences",
+        "get-vinetrack-billing-detail",
       );
       if (err) {
-        setTeamFetchError(err.message ?? String(err));
+        setBillingFetchError(err.message ?? String(err));
         return null;
       }
-      const r = res as TeamLicencesResponse;
-      setTeamData(r);
-      setTeamFetchError(r?.error ?? null);
+      const r = res as BillingDetailResponse;
+      setBilling(r);
+      setBillingFetchError(r?.error ?? null);
       return r;
     } catch (e: any) {
-      setTeamFetchError(e?.message ?? String(e));
+      setBillingFetchError(e?.message ?? String(e));
       return null;
     } finally {
-      teamFetchInFlight.current = false;
+      billingFetchInFlight.current = false;
     }
   }, []);
   useEffect(() => {
-    if (subId) fetchTeam();
-  }, [subId, fetchTeam]);
+    fetchBilling();
+  }, [fetchBilling]);
 
-  // Prefer service-role responses when they have content; fall back to
-  // direct RLS queries (which can be empty for owners with strict RLS).
+  // Prefer billing-detail response (service role) over direct RLS reads.
   const licences =
-    teamData && teamData.licences.length > 0 ? teamData.licences : directLicences;
+    billing && billing.licences.length > 0 ? billing.licences : directLicences;
   const invoices =
-    teamData && teamData.invoices.length > 0 ? teamData.invoices : directInvoices;
+    billing && billing.invoices.length > 0 ? billing.invoices : directInvoices;
+  const billingSub = billing?.subscription ?? null;
 
   const [busy, setBusy] = useState<"checkout" | "portal" | "seats" | "addUser" | "revoke" | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -196,7 +199,7 @@ export default function BillingPage() {
         await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", sid] });
         await qc.invalidateQueries({ queryKey: ["vinetrack", "invoices", sid] });
         await refetchLicences();
-        const team = await fetchTeam();
+        const team = await fetchBilling();
         ownerLicenceCount = (team?.licences ?? []).filter(
           (l) => l.user_id === acc?.user_id && l.status === "active",
         ).length;
@@ -228,7 +231,7 @@ export default function BillingPage() {
       setTimeout(tick, 2000);
     };
     tick();
-  }, [refetch, refetchLicences, qc, fetchTeam]);
+  }, [refetch, refetchLicences, qc, fetchBilling]);
 
   const activeStatus = ["active", "trialing", "past_due"];
   const hasActiveSub =
@@ -259,8 +262,9 @@ export default function BillingPage() {
     [memberships, selectedVineyardId],
   );
 
-  const seatsIncluded = access?.seats_included ?? 0;
-  const seatsPurchased = access?.seats_purchased ?? 0;
+  // Prefer billing-detail values (real DB) over access RPC for seat counts.
+  const seatsIncluded = billingSub?.seats_included ?? access?.seats_included ?? 0;
+  const seatsPurchased = billingSub?.seats_purchased ?? access?.seats_purchased ?? 0;
   const totalSeats = seatsIncluded + seatsPurchased;
   const activeLicenceCount = licences.filter((l) => l.status === "active").length;
   const pendingLicenceCount = licences.filter((l) => l.status === "pending").length;
@@ -342,7 +346,7 @@ export default function BillingPage() {
         await qc.invalidateQueries({ queryKey: ["vinetrack", "licences", returnedSubId] });
       }
       await refetchLicences();
-      await fetchTeam();
+      await fetchBilling();
       await qc.invalidateQueries({ queryKey: ["vinetrack", "access"] });
     } catch (e: any) {
       toast.error(e?.message || "Could not create licence.");
@@ -355,14 +359,15 @@ export default function BillingPage() {
     if (!confirm("Revoke this licence? The user will lose access at the end of the period.")) return;
     try {
       setBusy("revoke");
-      const { error: err } = await (iosSupabase as any)
-        .from("vinetrack_user_licences")
-        .update({ status: "revoked" })
-        .eq("id", licenceId);
+      const { data: res, error: err } = await invokeWithVinetrackAuth(
+        "revoke-vinetrack-user-licence",
+        { licence_id: licenceId },
+      );
       if (err) throw err;
+      if ((res as any)?.error) throw new Error((res as any).error);
       toast.success("Licence revoked.");
       await refetchLicences();
-      await fetchTeam();
+      await fetchBilling();
     } catch (e: any) {
       toast.error(e?.message || "Could not revoke licence.");
     } finally {
@@ -387,14 +392,15 @@ export default function BillingPage() {
       if ((res as any)?.error) throw new Error((res as any).error);
       setSeatsMessage("Extra seats updated in Stripe. Waiting for billing sync…");
       toast.success("Extra seats updated in Stripe. Waiting for billing sync…");
-      // Poll access for up to ~45s for seats_purchased to change.
+      // Poll billing-detail for up to ~45s for seats_purchased to change.
       const startedAt = Date.now();
       const poll = async () => {
-        const { data: refreshed } = await refetch();
-        const newPurchased = refreshed?.access?.seats_purchased ?? null;
+        billingFetchInFlight.current = false; // allow concurrent refresh
+        const fresh = await fetchBilling();
+        await refetch();
+        const newPurchased = fresh?.subscription?.seats_purchased ?? null;
         if (newPurchased === target) {
           setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
-          await fetchTeam();
           return;
         }
         if (Date.now() - startedAt > 45_000) {
@@ -442,13 +448,13 @@ export default function BillingPage() {
         <div>direct invoices query subId: {subId ?? "(null)"}</div>
         <div>direct invoices row count: {directInvoices.length}</div>
         <div>
-          edge get-vinetrack-team-licences subscription.id:{" "}
-          {teamData?.subscription?.id ?? "(none)"}
+          edge get-vinetrack-billing-detail subscription.id:{" "}
+          {billing?.subscription?.id ?? "(none)"}
         </div>
-        <div>edge licences row count: {teamData?.licences.length ?? 0}</div>
-        <div>edge invoices row count: {teamData?.invoices.length ?? 0}</div>
-        <div>edge error: {teamFetchError ?? "(none)"}</div>
-        <div>edge debug: {teamData?.debug ? JSON.stringify(teamData.debug) : "(none)"}</div>
+        <div>edge licences row count: {billing?.licences.length ?? 0}</div>
+        <div>edge invoices row count: {billing?.invoices.length ?? 0}</div>
+        <div>edge error: {billingFetchError ?? "(none)"}</div>
+        <div>edge debug: {billing?.debug ? JSON.stringify(billing.debug) : "(none)"}</div>
       </Card>
 
       {!selectedVineyardId && (

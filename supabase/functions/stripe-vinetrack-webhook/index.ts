@@ -251,6 +251,31 @@ Deno.serve(async (req: Request) => {
     const stripeCustomerId =
       typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
 
+    // Resolve current period from subscription, falling back to the first
+    // subscription item (Stripe API >= 2025-x moves period fields onto items).
+    const itemPeriodStart =
+      (sub.items?.data ?? [])
+        .map((i: any) => i.current_period_start)
+        .find((v: any) => typeof v === "number") ?? null;
+    const itemPeriodEnd =
+      (sub.items?.data ?? [])
+        .map((i: any) => i.current_period_end)
+        .find((v: any) => typeof v === "number") ?? null;
+    const periodStart =
+      (sub as any).current_period_start ?? itemPeriodStart ?? null;
+    const periodEnd =
+      (sub as any).current_period_end ?? itemPeriodEnd ?? null;
+
+    logEvent("subscription period fields", {
+      stripeSubscriptionId: sub.id,
+      sub_current_period_start: (sub as any).current_period_start ?? null,
+      sub_current_period_end: (sub as any).current_period_end ?? null,
+      item_current_period_start: itemPeriodStart,
+      item_current_period_end: itemPeriodEnd,
+      resolved_period_start: periodStart,
+      resolved_period_end: periodEnd,
+    });
+
     const baseRow: Record<string, unknown> = {
       owner_user_id: resolvedOwner,
       plan_id: plan.id,
@@ -258,11 +283,11 @@ Deno.serve(async (req: Request) => {
       status: sub.status,
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: sub.id,
-      current_period_start: sub.current_period_start
-        ? new Date(sub.current_period_start * 1000).toISOString()
+      current_period_start: periodStart
+        ? new Date(periodStart * 1000).toISOString()
         : null,
-      current_period_end: sub.current_period_end
-        ? new Date(sub.current_period_end * 1000).toISOString()
+      current_period_end: periodEnd
+        ? new Date(periodEnd * 1000).toISOString()
         : null,
       trial_start: sub.trial_start
         ? new Date(sub.trial_start * 1000).toISOString()
@@ -469,15 +494,23 @@ Deno.serve(async (req: Request) => {
   }
 
   async function upsertInvoice(inv: Stripe.Invoice) {
+    // Always refetch the invoice from Stripe so we have the latest status,
+    // amount_paid, status_transitions and hosted/pdf URLs.
     let invoice = inv;
+    try {
+      invoice = (await stripe.invoices.retrieve(inv.id, {
+        expand: ["subscription"],
+      })) as Stripe.Invoice;
+    } catch (e) {
+      logEvent("invoice refetch failed (using event payload)", {
+        invoiceId: inv.id,
+        error: (e as any)?.message ?? String(e),
+      });
+    }
+
     let stripeSubscriptionId = getInvoiceStripeSubId(invoice);
     const customerId =
       typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
-
-    if (!stripeSubscriptionId) {
-      invoice = await stripe.invoices.retrieve(inv.id, { expand: ["subscription"] }) as Stripe.Invoice;
-      stripeSubscriptionId = getInvoiceStripeSubId(invoice);
-    }
 
     let subRow = stripeSubscriptionId ? await findSubByStripeId(stripeSubscriptionId) : null;
     if (!subRow && stripeSubscriptionId) {
@@ -513,13 +546,14 @@ Deno.serve(async (req: Request) => {
             0,
           ) || null;
 
+    const incomingStatus = invoice.status ?? "open";
     const row: Record<string, unknown> = {
       subscription_id: subscriptionId,
       owner_user_id: ownerUserId,
       provider: "stripe",
       external_invoice_id: invoice.id,
       invoice_number: invoice.number ?? null,
-      status: invoice.status ?? "open",
+      status: incomingStatus,
       currency: (invoice.currency ?? "aud").toUpperCase(),
       subtotal_cents: invoice.subtotal ?? null,
       tax_cents: totalTax,
@@ -549,7 +583,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: existing, error: existingError } = await admin
       .from("vinetrack_invoice_records")
-      .select("id")
+      .select("id, status, amount_paid_cents")
       .eq("provider", "stripe")
       .eq("external_invoice_id", invoice.id)
       .maybeSingle();
@@ -558,11 +592,23 @@ Deno.serve(async (req: Request) => {
     }
 
     if (existing?.id) {
-      await expectOk(
-        admin.from("vinetrack_invoice_records").update(row).eq("id", existing.id),
-        "Update invoice record",
-        { invoiceId: invoice.id, stripeSubscriptionId, ownerUserId, supabaseSubscriptionId: subscriptionId },
-      );
+      // Never let a non-paid event downgrade an already-paid invoice.
+      const existingPaid = existing.status === "paid";
+      const incomingPaid = incomingStatus === "paid";
+      if (existingPaid && !incomingPaid) {
+        logEvent("Skipping invoice downgrade (already paid)", {
+          invoiceId: invoice.id,
+          existingStatus: existing.status,
+          incomingStatus,
+          eventType: event.type,
+        });
+      } else {
+        await expectOk(
+          admin.from("vinetrack_invoice_records").update(row).eq("id", existing.id),
+          "Update invoice record",
+          { invoiceId: invoice.id, stripeSubscriptionId, ownerUserId, supabaseSubscriptionId: subscriptionId },
+        );
+      }
     } else {
       await expectOk(
         admin.from("vinetrack_invoice_records").insert(row),
