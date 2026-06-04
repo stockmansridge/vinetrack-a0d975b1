@@ -773,10 +773,30 @@ function WorkTaskDrawer({
   const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
 
   const paddocksLabel = paddockIds.length === 0
-    ? "—"
+    ? "No block"
     : paddockIds.length === 1
       ? selectedPaddocks[0]?.name ?? paddockIds[0].slice(0, 8)
-      : `${paddockIds.length} paddocks`;
+      : `${paddockIds.length} blocks`;
+
+  // Per-block cost breakdown (proportional by area).
+  const blockBreakdown = useMemo(() => {
+    if (!paddockAreas.length || totalAreaHa <= 0) return [];
+    return paddockAreas.map(({ paddock, areaHa }) => {
+      const share = areaHa > 0 ? areaHa / totalAreaHa : 0;
+      const allocHours = totalHours * share;
+      const allocCost = totalCost * share;
+      const cph = areaHa > 0 ? allocCost / areaHa : null;
+      return {
+        id: paddock.id,
+        name: paddock.name ?? paddock.id.slice(0, 8),
+        areaHa,
+        share,
+        allocHours,
+        allocCost,
+        costPerHa: cph,
+      };
+    });
+  }, [paddockAreas, totalAreaHa, totalHours, totalCost]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
