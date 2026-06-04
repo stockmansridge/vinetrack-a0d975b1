@@ -396,20 +396,34 @@ export default function BillingPage() {
     }
   }
 
+  function setSeatsStatus(
+    message: string | null,
+    tone: "info" | "success" | "warning" | "error" = "info",
+    action: "complete" | "manage" | null = null,
+    url: string | null = null,
+  ) {
+    setSeatsMessage(message);
+    setSeatsMessageTone(tone);
+    setSeatsPaymentAction(action);
+    setSeatsPaymentUrl(url);
+  }
+
   function requestSeatsChange() {
     const target = Math.max(0, Math.floor(extraSeats));
     setSeatsPaymentUrl(null);
+    setSeatsPaymentAction(null);
     if (target === seatsPurchased) {
-      setSeatsMessage("No change to extra seats.");
+      setSeatsStatus("No change to extra seats.", "info");
       return;
     }
     if (target < seatsPurchased) {
-      setSeatsMessage(
+      setSeatsStatus(
         "Reducing paid seats mid-cycle would create a credit or refund. Contact support to reduce paid seats before renewal.",
+        "warning",
       );
       return;
     }
-    setSeatsMessage(null);
+    setSeatsStatus(null);
     setSeatsConfirmOpen(true);
   }
 
@@ -418,8 +432,7 @@ export default function BillingPage() {
     setSeatsConfirmOpen(false);
     try {
       setBusy("seats");
-      setSeatsMessage(null);
-      setSeatsPaymentUrl(null);
+      setSeatsStatus(null);
       const { data: res, error: err } = await invokeWithVinetrackAuth(
         "update-vinetrack-team-seats",
         { extra_seats: target, confirm: true },
@@ -432,20 +445,35 @@ export default function BillingPage() {
       const payment = r?.payment ?? null;
       const chargedNow = !!payment?.charged_immediately;
       const requiresAction = !!payment?.requires_action;
+      const paymentFailed = !!payment?.failed || invoice?.status === "uncollectible";
+      const invoicePaidNow = invoice?.status === "paid" || chargedNow;
       const actionUrl: string | null =
         payment?.next_action_url ?? invoice?.hosted_invoice_url ?? null;
 
-      if (requiresAction && actionUrl) {
-        setSeatsPaymentUrl(actionUrl);
-        setSeatsMessage(
-          "Stripe needs you to complete payment for the extra seats before they activate.",
+      if (paymentFailed) {
+        setSeatsStatus(
+          "Payment failed. Update your payment method in Stripe.",
+          "error",
+          "manage",
+          null,
+        );
+        toast.error("Payment failed for extra seats.");
+      } else if (requiresAction && actionUrl) {
+        setSeatsStatus(
+          "Payment needs to be completed in Stripe.",
+          "warning",
+          "complete",
+          actionUrl,
         );
         toast.message("Payment action required to add extra seats.");
-      } else if (chargedNow) {
-        setSeatsMessage("Stripe charged your saved payment method. Extra seats pending sync…");
-        toast.success("Extra seats paid. Waiting for billing sync…");
+      } else if (invoicePaidNow) {
+        setSeatsStatus(
+          "Your saved payment method was charged successfully. Extra seats are now active.",
+          "success",
+        );
+        toast.success("Saved card charged. Extra seats active.");
       } else {
-        setSeatsMessage("Extra seats pending payment/sync…");
+        setSeatsStatus("Extra seats pending payment confirmation…", "info");
       }
 
       // Poll billing-detail for up to ~60s for the webhook to confirm.
@@ -462,16 +490,19 @@ export default function BillingPage() {
           : null;
         const invoicePaid = linkedInvoice
           ? linkedInvoice.status === "paid"
-          : chargedNow && !requiresAction;
+          : invoicePaidNow && !requiresAction;
         if (newPurchased === target && invoicePaid) {
-          setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
-          setSeatsPaymentUrl(null);
+          setSeatsStatus(
+            "Payment received. Your extra user licences are active.",
+            "success",
+          );
           return;
         }
         if (Date.now() - startedAt > 60_000) {
-          if (!seatsPaymentUrl) {
-            setSeatsMessage(
+          if (!requiresAction && !paymentFailed) {
+            setSeatsStatus(
               "Stripe updated, but billing sync is still pending. Refresh in a moment.",
+              "info",
             );
           }
           return;
@@ -481,7 +512,7 @@ export default function BillingPage() {
       setTimeout(poll, 2_000);
     } catch (e: any) {
       const msg = e?.message || "Could not update seats.";
-      setSeatsMessage(`Error: ${msg}`);
+      setSeatsStatus(msg, "error");
       toast.error(msg);
     } finally {
       setBusy(null);
