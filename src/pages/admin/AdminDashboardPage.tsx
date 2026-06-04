@@ -93,6 +93,7 @@ export default function AdminDashboardPage() {
     [vineyardsQ.data],
   );
   const blocks = useBlocksTotal(activeVineyardIds);
+  const platformScale = usePlatformScale();
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
