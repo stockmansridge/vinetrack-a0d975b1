@@ -51,7 +51,31 @@ export default function EditVarietiesDialog({
     if (!canSave) return;
     setSaving(true);
     try {
-      const payload = serialiseAllocations(rows);
+      const serialised = serialiseAllocations(rows);
+      // Merge any unknown legacy fields from the original allocation (by id)
+      // back onto the serialised payload so a portal save never strips fields
+      // the editor doesn't model. Known iOS-shape fields always come from the
+      // editor (source of truth).
+      const originalById = new Map<string, any>();
+      if (Array.isArray(initialAllocations)) {
+        for (const a of initialAllocations) {
+          if (a && typeof a === "object" && a.id) originalById.set(String(a.id), a);
+        }
+      }
+      const KNOWN = new Set([
+        "id", "varietyKey", "variety_key", "varietyId", "variety_id",
+        "name", "varietyName", "variety_name", "variety",
+        "percent", "clone", "rootstock", "root_stock",
+      ]);
+      const payload = serialised.map((row) => {
+        const orig = originalById.get(String(row.id));
+        if (!orig) return row;
+        const extras: Record<string, any> = {};
+        for (const [k, v] of Object.entries(orig)) {
+          if (!KNOWN.has(k) && v !== undefined) extras[k] = v;
+        }
+        return { ...extras, ...row };
+      });
       const { error } = await supabase
         .from("paddocks")
         .update({
