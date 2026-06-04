@@ -11,6 +11,7 @@ import {
   useEngagementSummary,
   useAdminUsers,
   useAdminVineyards,
+  usePlatformScale,
 } from "@/lib/adminApi";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { formatDate } from "@/lib/dateFormat";
@@ -78,6 +79,89 @@ function useBlocksTotal(vineyardIds: string[]) {
   return { total, loading };
 }
 
+function formatHectares(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "0.0 ha";
+  if (v >= 1000) {
+    return `${v.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ha`;
+  }
+  return `${v.toFixed(1)} ha`;
+}
+
+function formatNumber(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return v.toLocaleString();
+}
+
+function PlatformScaleSection({
+  query,
+}: {
+  query: ReturnType<typeof usePlatformScale>;
+}) {
+  const { data, isLoading, error } = query;
+  const unavailable = !!error;
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="font-semibold">Platform Scale</h2>
+          <p className="text-xs text-muted-foreground">
+            Across active vineyards and blocks
+          </p>
+        </div>
+        {unavailable && (
+          <Badge variant="outline" className="text-xs gap-1">
+            <AlertTriangle className="h-3 w-3 text-orange-500" />
+            Unavailable
+          </Badge>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          Total hectares under management
+        </div>
+        <div className="text-4xl font-semibold mt-1">
+          {isLoading ? "—" : unavailable ? "—" : formatHectares(data?.total_hectares_under_management)}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Vineyards</div>
+          <div className="text-lg font-medium mt-0.5">
+            {isLoading || unavailable ? "—" : formatNumber(data?.total_vineyards)}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Active blocks</div>
+          <div className="text-lg font-medium mt-0.5">
+            {isLoading || unavailable ? "—" : formatNumber(data?.total_active_paddocks)}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Blocks with mapped area
+          </div>
+          <div className="text-lg font-medium mt-0.5">
+            {isLoading || unavailable ? "—" : formatNumber(data?.total_paddocks_with_area)}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Average ha per vineyard
+          </div>
+          <div className="text-lg font-medium mt-0.5">
+            {isLoading || unavailable
+              ? "—"
+              : formatHectares(data?.average_hectares_per_vineyard)}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function AdminDashboardPage() {
   const { isAdmin, loading } = useIsSystemAdmin();
   const { user } = useAuth();
@@ -92,6 +176,7 @@ export default function AdminDashboardPage() {
     [vineyardsQ.data],
   );
   const blocks = useBlocksTotal(activeVineyardIds);
+  const platformScale = usePlatformScale();
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -138,6 +223,10 @@ export default function AdminDashboardPage() {
           <span>Could not load engagement summary: {(summary.error as Error).message}</span>
         </Card>
       )}
+
+      <PlatformScaleSection query={platformScale} />
+
+
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Tile to="/admin/users" label="Total Users" value={s?.total_users ?? "—"} />

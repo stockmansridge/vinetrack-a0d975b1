@@ -135,6 +135,14 @@ export interface SystemAdminRow {
   created_by: string | null;
 }
 
+export interface AdminPlatformScale {
+  total_hectares_under_management: number;
+  total_vineyards: number;
+  total_active_paddocks: number;
+  total_paddocks_with_area: number;
+  average_hectares_per_vineyard: number;
+}
+
 // ---------- Hooks ----------
 
 async function rpc<T>(name: string, args?: Record<string, unknown>): Promise<T> {
@@ -152,6 +160,18 @@ export function useEngagementSummary() {
         "admin_engagement_summary",
       );
       return Array.isArray(data) ? data[0] : data;
+    },
+  });
+}
+
+export function usePlatformScale() {
+  return useQuery({
+    queryKey: ["admin", "platform-scale"] as const,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const data = await rpc<AdminPlatformScale[] | AdminPlatformScale>("admin_platform_scale");
+      return (Array.isArray(data) ? data[0] : data) ?? null;
     },
   });
 }
