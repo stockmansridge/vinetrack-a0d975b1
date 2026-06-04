@@ -149,14 +149,21 @@ export default function BlockDetailPage() {
 
   const varieties = useMemo(() => {
 
-    if (!paddock) return [] as { name: string; percent?: number | null }[];
+    if (!paddock) return [] as { name: string; percent?: number | null; clone?: string | null; rootstock?: string | null }[];
     const arr = Array.isArray(paddock.variety_allocations)
       ? paddock.variety_allocations
       : [];
+    const clean = (v: any) => {
+      if (v == null) return null;
+      const t = String(v).trim();
+      return t.length === 0 ? null : t;
+    };
     return arr
       .map((v: any) => ({
-        name: String(v?.variety ?? v?.name ?? "").trim(),
+        name: String(v?.name ?? v?.varietyName ?? v?.variety_name ?? v?.variety ?? "").trim(),
         percent: Number.isFinite(Number(v?.percent)) ? Number(v.percent) : null,
+        clone: clean(v?.clone),
+        rootstock: clean(v?.rootstock ?? v?.root_stock),
       }))
       .filter((v) => v.name);
   }, [paddock]);
