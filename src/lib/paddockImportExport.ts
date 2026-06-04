@@ -478,21 +478,26 @@ function dbValuesFromImport(
     }
   }
 
-  // variety/clone/rootstock → variety_allocations[0] only when no existing alloc
+  // variety/clone/rootstock → variety_allocations[0] only when no existing alloc.
+  // Uses the iOS shape ({ id, varietyKey, varietyId, name, percent, clone?, rootstock? })
+  // so portal-imported CSV rows sync cleanly to iOS.
   if (v.variety || v.clone || v.rootstock) {
     const existingAllocs = Array.isArray(existing?.variety_allocations)
       ? existing!.variety_allocations
       : [];
     if (existingAllocs.length === 0) {
+      const clone = v.clone ? String(v.clone).trim() : "";
+      const rootstock = v.rootstock ? String(v.rootstock).trim() : "";
       patch.variety_allocations = [
         {
           id: crypto.randomUUID(),
-          variety: v.variety ?? null,
-          clone: v.clone ?? null,
-          rootstock: v.rootstock ?? null,
-          plantingYear: v.planting_year ?? null,
-          polygonPoints: [],
-          rowIds: [],
+          varietyKey: null,
+          varietyId: null,
+          name: v.variety ?? null,
+          percent: 100,
+          ...(clone ? { clone } : {}),
+          ...(rootstock ? { rootstock } : {}),
+          ...(v.planting_year != null ? { plantingYear: v.planting_year } : {}),
         },
       ];
     }
