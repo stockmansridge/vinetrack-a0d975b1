@@ -164,6 +164,18 @@ export function useEngagementSummary() {
   });
 }
 
+export function usePlatformScale() {
+  return useQuery({
+    queryKey: ["admin", "platform-scale"] as const,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const data = await rpc<AdminPlatformScale[] | AdminPlatformScale>("admin_platform_scale");
+      return (Array.isArray(data) ? data[0] : data) ?? null;
+    },
+  });
+}
+
 export function useAdminUsers() {
   return useQuery({
     queryKey: QK.users,
