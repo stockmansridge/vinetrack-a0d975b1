@@ -410,8 +410,8 @@ export default function WorkTasksPage() {
 
   const exportCsv = () => {
     const headers = canSeeCosts
-      ? ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
-      : ["Task ID","Start","End","Paddocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
+      ? ["Task ID","Start","End","Blocks","Task type","Status","Area ha (total)","Total hours","Total cost","Cost per ha","Worker types","Description","Notes"]
+      : ["Task ID","Start","End","Blocks","Task type","Status","Area ha (total)","Total hours","Worker types","Description","Notes"];
     const lines = [headers.join(",")];
     rows.forEach((t) => {
       const tot = totalsByTask.get(t.id);
@@ -470,7 +470,7 @@ export default function WorkTasksPage() {
       <div className="flex flex-wrap items-end gap-2">
         <Filter label="From"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" /></Filter>
         <Filter label="To"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" /></Filter>
-        <Filter label="Paddock">
+        <Filter label="Block">
           <Select value={paddockId} onValueChange={setPaddockId}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -518,7 +518,7 @@ export default function WorkTasksPage() {
         </Filter>
         <Filter label="Search">
           <Input
-            placeholder="Type, paddock, notes…"
+            placeholder="Type, block, notes…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-64"
@@ -537,7 +537,7 @@ export default function WorkTasksPage() {
                 if (id === "cost" && !canSeeCosts) return null;
                 const align: "left" | "right" = (id === "area_ha" || id === "hours" || id === "cost") ? "right" : "left";
                 const labels: Record<WtCol, string> = {
-                  date: "Date / range", paddock: "Paddock", task_type: "Type", status: "Status",
+                  date: "Date / range", paddock: "Blocks", task_type: "Type", status: "Status",
                   area_ha: "Area ha", hours: "Hours", cost: "Cost", notes: "Notes",
                 };
                 const sortable = id !== "notes";
@@ -565,12 +565,19 @@ export default function WorkTasksPage() {
               </TableRow>
             )}
             {rows.map((t) => {
-              const padName = taskPaddockNames(t.id) || "—";
+              const padIds = taskPaddockIds.get(t.id) ?? [];
+              const padNamesFull = taskPaddockNames(t.id);
+              const blockCellLabel =
+                padIds.length === 0
+                  ? "No block"
+                  : padIds.length === 1
+                    ? (padNamesFull || "—")
+                    : `${padIds.length} blocks`;
               const tot = totalsByTask.get(t.id);
               const summary = (t.description ?? t.notes ?? "").trim();
               const cellMap: Record<WtCol, React.ReactNode> = {
                 date: <TableCell>{dateRangeLabel(t)}</TableCell>,
-                paddock: <TableCell>{padName}</TableCell>,
+                paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
                 task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
                 area_ha: <TableCell className="text-right">{num(effectiveTaskAreaHa(t))}</TableCell>,
@@ -766,23 +773,43 @@ function WorkTaskDrawer({
   const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
 
   const paddocksLabel = paddockIds.length === 0
-    ? "—"
+    ? "No block"
     : paddockIds.length === 1
       ? selectedPaddocks[0]?.name ?? paddockIds[0].slice(0, 8)
-      : `${paddockIds.length} paddocks`;
+      : `${paddockIds.length} blocks`;
+
+  // Per-block cost breakdown (proportional by area).
+  const blockBreakdown = useMemo(() => {
+    if (!paddockAreas.length || totalAreaHa <= 0) return [];
+    return paddockAreas.map(({ paddock, areaHa }) => {
+      const share = areaHa > 0 ? areaHa / totalAreaHa : 0;
+      const allocHours = totalHours * share;
+      const allocCost = totalCost * share;
+      const cph = areaHa > 0 ? allocCost / areaHa : null;
+      return {
+        id: paddock.id,
+        name: paddock.name ?? paddock.id.slice(0, 8),
+        areaHa,
+        share,
+        allocHours,
+        allocCost,
+        costPerHa: cph,
+      };
+    });
+  }, [paddockAreas, totalAreaHa, totalHours, totalCost]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isNew ? "New Task Log" : `Task log — ${dateRangeLabel(task!)}`}</SheetTitle>
+          <SheetTitle>{isNew ? "New Task Log" : `Edit Task Log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
             <Section title="Task">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Paddocks">
+                <Field label="Blocks">
                   <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-between font-normal">
@@ -792,7 +819,7 @@ function WorkTaskDrawer({
                     </PopoverTrigger>
                     <PopoverContent className="w-72 max-h-80 overflow-y-auto p-2" align="start">
                       {paddocks.length === 0 && (
-                        <p className="text-sm text-muted-foreground p-2">No paddocks.</p>
+                        <p className="text-sm text-muted-foreground p-2">No blocks.</p>
                       )}
                       {paddocks.map((p) => {
                         const ha = paddockAreaHa(p);
@@ -831,7 +858,7 @@ function WorkTaskDrawer({
               </div>
               {paddockMissingArea && (
                 <p className="text-xs text-destructive">
-                  One or more selected paddocks are missing area data, so the area total may be incomplete.
+                  One or more selected blocks are missing area data, so the total area and cost per ha may be incomplete.
                 </p>
               )}
               <Field label="Description">
@@ -875,6 +902,36 @@ function WorkTaskDrawer({
                 <p className="text-xs text-muted-foreground">Cost per tonne will appear once tonnage/yield is connected.</p>
               )}
             </Section>
+            {blockBreakdown.length > 1 && (
+              <Section title="Block breakdown">
+                <div className="overflow-x-auto -mx-3">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground">
+                        <th className="text-left font-normal px-2 py-1">Block</th>
+                        <th className="text-right font-normal px-2 py-1">Area ha</th>
+                        <th className="text-right font-normal px-2 py-1">Share</th>
+                        <th className="text-right font-normal px-2 py-1">Hours</th>
+                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost</th>}
+                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost/ha</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {blockBreakdown.map((b) => (
+                        <tr key={b.id} className="border-t">
+                          <td className="px-2 py-1 truncate max-w-[8rem]" title={b.name}>{b.name}</td>
+                          <td className="px-2 py-1 text-right">{b.areaHa > 0 ? b.areaHa.toFixed(2) : "—"}</td>
+                          <td className="px-2 py-1 text-right">{(b.share * 100).toFixed(1)}%</td>
+                          <td className="px-2 py-1 text-right">{b.allocHours.toFixed(2)}</td>
+                          {drawerCanSeeCosts && <td className="px-2 py-1 text-right">{b.allocCost ? money(b.allocCost) : "—"}</td>}
+                          {drawerCanSeeCosts && <td className="px-2 py-1 text-right">{b.costPerHa == null ? "—" : money(b.costPerHa)}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+            )}
             {!isNew && task && (
               <Section title="Meta">
                 <Field label="Created" value={fmtDate(task.created_at)} />
