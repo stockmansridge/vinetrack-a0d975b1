@@ -278,7 +278,28 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
     if (varietyAllocations.length > 0 && !isAllocationsValid(varietyAllocations)) {
       return toast({ title: "Allocations must total 100%", variant: "destructive" });
     }
-    await save({ variety_allocations: serialiseAllocations(varietyAllocations) });
+    // Preserve unknown legacy fields by id (sync safety).
+    const serialised = serialiseAllocations(varietyAllocations);
+    const originalById = new Map<string, any>();
+    const orig = Array.isArray(paddock.variety_allocations) ? paddock.variety_allocations : [];
+    for (const a of orig) {
+      if (a && typeof a === "object" && (a as any).id) originalById.set(String((a as any).id), a);
+    }
+    const KNOWN = new Set([
+      "id", "varietyKey", "variety_key", "varietyId", "variety_id",
+      "name", "varietyName", "variety_name", "variety",
+      "percent", "clone", "rootstock", "root_stock",
+    ]);
+    const merged = serialised.map((row) => {
+      const o = originalById.get(String(row.id));
+      if (!o) return row;
+      const extras: Record<string, any> = {};
+      for (const [k, v] of Object.entries(o)) {
+        if (!KNOWN.has(k) && v !== undefined) extras[k] = v;
+      }
+      return { ...extras, ...row };
+    });
+    await save({ variety_allocations: merged });
   };
 
   const onSaveTrellis = async () => {
