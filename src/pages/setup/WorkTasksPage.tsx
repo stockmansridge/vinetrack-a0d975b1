@@ -565,12 +565,19 @@ export default function WorkTasksPage() {
               </TableRow>
             )}
             {rows.map((t) => {
-              const padName = taskPaddockNames(t.id) || "—";
+              const padIds = taskPaddockIds.get(t.id) ?? [];
+              const padNamesFull = taskPaddockNames(t.id);
+              const blockCellLabel =
+                padIds.length === 0
+                  ? "No block"
+                  : padIds.length === 1
+                    ? (padNamesFull || "—")
+                    : `${padIds.length} blocks`;
               const tot = totalsByTask.get(t.id);
               const summary = (t.description ?? t.notes ?? "").trim();
               const cellMap: Record<WtCol, React.ReactNode> = {
                 date: <TableCell>{dateRangeLabel(t)}</TableCell>,
-                paddock: <TableCell>{padName}</TableCell>,
+                paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
                 task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
                 area_ha: <TableCell className="text-right">{num(effectiveTaskAreaHa(t))}</TableCell>,
