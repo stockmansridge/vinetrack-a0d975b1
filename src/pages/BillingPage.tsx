@@ -430,6 +430,27 @@ export default function BillingPage() {
         </p>
       </header>
 
+      {/* Temporary debug block — remove once Billing data is confirmed stable. */}
+      <Card className="border-dashed bg-muted/30 p-4 text-xs font-mono space-y-1">
+        <div className="font-semibold not-italic">[debug] Billing data sources</div>
+        <div>access.subscription_id: {access?.subscription_id ?? "(null)"}</div>
+        <div>access.user_id: {access?.user_id ?? "(null)"}</div>
+        <div>access.current_period_end: {access?.current_period_end ?? "(null)"}</div>
+        <div>access.seats_purchased: {access?.seats_purchased ?? "(null)"}</div>
+        <div>direct licences query subId: {subId ?? "(null)"}</div>
+        <div>direct licences row count: {directLicences.length}</div>
+        <div>direct invoices query subId: {subId ?? "(null)"}</div>
+        <div>direct invoices row count: {directInvoices.length}</div>
+        <div>
+          edge get-vinetrack-team-licences subscription.id:{" "}
+          {teamData?.subscription?.id ?? "(none)"}
+        </div>
+        <div>edge licences row count: {teamData?.licences.length ?? 0}</div>
+        <div>edge invoices row count: {teamData?.invoices.length ?? 0}</div>
+        <div>edge error: {teamFetchError ?? "(none)"}</div>
+        <div>edge debug: {teamData?.debug ? JSON.stringify(teamData.debug) : "(none)"}</div>
+      </Card>
+
       {!selectedVineyardId && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
