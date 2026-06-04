@@ -941,7 +941,10 @@ export default function BillingPage() {
         open={seatsOpen}
         onOpenChange={(open) => {
           setSeatsOpen(open);
-          if (!open) setSeatsMessage(null);
+          if (!open) {
+            setSeatsMessage(null);
+            setSeatsPaymentUrl(null);
+          }
         }}
       >
         <DialogContent>
@@ -951,12 +954,25 @@ export default function BillingPage() {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Your plan includes <strong>{seatsIncluded}</strong> user licences.
-              Extra paid licences are billed at $99/year ex GST per seat and
-              prorated by Stripe. You currently have{" "}
-              <strong>{seatsPurchased}</strong> extra paid seat(s).
+              Extra user licences are billed annually at $99/year ex GST per seat
+              and prorated to your Team renewal date. Removing a user frees the
+              licence for reassignment but does not automatically refund the
+              licence.
             </p>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Current extra paid seats</dt>
+                <dd className="font-medium">{seatsPurchased}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Requested extra seats</dt>
+                <dd className="font-medium">
+                  {Math.max(0, Math.floor(extraSeats))}
+                </dd>
+              </div>
+            </dl>
             <div className="space-y-1">
-              <Label htmlFor="extra-seats">Purchased extra user licences</Label>
+              <Label htmlFor="extra-seats">New extra user licences</Label>
               <Input
                 id="extra-seats"
                 type="number"
@@ -974,18 +990,61 @@ export default function BillingPage() {
                 <AlertDescription>{seatsMessage}</AlertDescription>
               </Alert>
             )}
+            {seatsPaymentUrl && (
+              <Button
+                variant="default"
+                onClick={() => window.open(seatsPaymentUrl, "_blank", "noopener")}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Complete payment in Stripe
+              </Button>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSeatsOpen(false)}>
               Close
             </Button>
-            <Button onClick={updateExtraSeats} disabled={busy === "seats"}>
+            <Button onClick={requestSeatsChange} disabled={busy === "seats"}>
               {busy === "seats" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update seats
+              Review change
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm seats increase */}
+      <Dialog open={seatsConfirmOpen} onOpenChange={setSeatsConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm extra licences</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              Add{" "}
+              <strong>
+                {Math.max(0, Math.floor(extraSeats)) - seatsPurchased}
+              </strong>{" "}
+              extra user licence(s). These are <strong>$99/year ex GST each</strong>{" "}
+              and will be prorated to your current Team renewal date. Stripe will
+              charge your saved payment method immediately.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              New total extra paid seats:{" "}
+              <strong>{Math.max(0, Math.floor(extraSeats))}</strong>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSeatsConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmSeatsIncrease} disabled={busy === "seats"}>
+              {busy === "seats" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm and pay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
