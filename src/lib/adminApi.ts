@@ -135,6 +135,14 @@ export interface SystemAdminRow {
   created_by: string | null;
 }
 
+export interface AdminPlatformScale {
+  total_hectares_under_management: number;
+  total_vineyards: number;
+  total_active_paddocks: number;
+  total_paddocks_with_area: number;
+  average_hectares_per_vineyard: number;
+}
+
 // ---------- Hooks ----------
 
 async function rpc<T>(name: string, args?: Record<string, unknown>): Promise<T> {
