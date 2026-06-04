@@ -802,7 +802,7 @@ function WorkTaskDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isNew ? "New Task Log" : `Task log — ${dateRangeLabel(task!)}`}</SheetTitle>
+          <SheetTitle>{isNew ? "New Task Log" : `Edit Task Log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
