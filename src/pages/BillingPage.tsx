@@ -445,7 +445,7 @@ export default function BillingPage() {
         <div>direct invoices query subId: {subId ?? "(null)"}</div>
         <div>direct invoices row count: {directInvoices.length}</div>
         <div>
-          edge get-vinetrack-team-licences subscription.id:{" "}
+          edge get-vinetrack-billing-detail subscription.id:{" "}
           {billing?.subscription?.id ?? "(none)"}
         </div>
         <div>edge licences row count: {billing?.licences.length ?? 0}</div>
