@@ -377,38 +377,84 @@ export default function BillingPage() {
     }
   }
 
-  async function updateExtraSeats() {
+  function requestSeatsChange() {
     const target = Math.max(0, Math.floor(extraSeats));
+    setSeatsPaymentUrl(null);
     if (target === seatsPurchased) {
       setSeatsMessage("No change to extra seats.");
       return;
     }
+    if (target < seatsPurchased) {
+      setSeatsMessage(
+        "Reducing paid seats mid-cycle would create a credit or refund. Contact support to reduce paid seats before renewal.",
+      );
+      return;
+    }
+    setSeatsMessage(null);
+    setSeatsConfirmOpen(true);
+  }
+
+  async function confirmSeatsIncrease() {
+    const target = Math.max(0, Math.floor(extraSeats));
+    setSeatsConfirmOpen(false);
     try {
       setBusy("seats");
       setSeatsMessage(null);
+      setSeatsPaymentUrl(null);
       const { data: res, error: err } = await invokeWithVinetrackAuth(
         "update-vinetrack-team-seats",
-        { extra_seats: target },
+        { extra_seats: target, confirm: true },
       );
       if (err) throw err;
-      if ((res as any)?.error) throw new Error((res as any).error);
-      setSeatsMessage("Extra seats updated in Stripe. Waiting for billing sync…");
-      toast.success("Extra seats updated in Stripe. Waiting for billing sync…");
-      // Poll billing-detail for up to ~45s for seats_purchased to change.
+      const r = res as any;
+      if (r?.error) throw new Error(r.error);
+
+      const invoice = r?.invoice ?? null;
+      const payment = r?.payment ?? null;
+      const chargedNow = !!payment?.charged_immediately;
+      const requiresAction = !!payment?.requires_action;
+      const actionUrl: string | null =
+        payment?.next_action_url ?? invoice?.hosted_invoice_url ?? null;
+
+      if (requiresAction && actionUrl) {
+        setSeatsPaymentUrl(actionUrl);
+        setSeatsMessage(
+          "Stripe needs you to complete payment for the extra seats before they activate.",
+        );
+        toast.message("Payment action required to add extra seats.");
+      } else if (chargedNow) {
+        setSeatsMessage("Stripe charged your saved payment method. Extra seats pending sync…");
+        toast.success("Extra seats paid. Waiting for billing sync…");
+      } else {
+        setSeatsMessage("Extra seats pending payment/sync…");
+      }
+
+      // Poll billing-detail for up to ~60s for the webhook to confirm.
       const startedAt = Date.now();
       const poll = async () => {
-        billingFetchInFlight.current = false; // allow concurrent refresh
+        billingFetchInFlight.current = false;
         const fresh = await fetchBilling();
         await refetch();
         const newPurchased = fresh?.subscription?.seats_purchased ?? null;
-        if (newPurchased === target) {
+        const linkedInvoice = invoice?.id
+          ? (fresh?.invoices ?? []).find(
+              (i: any) => (i as any).external_invoice_id === invoice.id,
+            )
+          : null;
+        const invoicePaid = linkedInvoice
+          ? linkedInvoice.status === "paid"
+          : chargedNow && !requiresAction;
+        if (newPurchased === target && invoicePaid) {
           setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
+          setSeatsPaymentUrl(null);
           return;
         }
-        if (Date.now() - startedAt > 45_000) {
-          setSeatsMessage(
-            "Stripe updated, but billing sync is still pending. Refresh in a moment.",
-          );
+        if (Date.now() - startedAt > 60_000) {
+          if (!seatsPaymentUrl) {
+            setSeatsMessage(
+              "Stripe updated, but billing sync is still pending. Refresh in a moment.",
+            );
+          }
           return;
         }
         setTimeout(poll, 3_000);
