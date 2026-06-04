@@ -809,7 +809,7 @@ function WorkTaskDrawer({
           <div className="lg:col-span-2 space-y-4">
             <Section title="Task">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Paddocks">
+                <Field label="Blocks">
                   <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-between font-normal">
