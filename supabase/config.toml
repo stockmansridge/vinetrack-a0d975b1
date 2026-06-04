@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.update-vinetrack-team-seats]
 verify_jwt = false
+
+[functions.get-vinetrack-team-licences]
+verify_jwt = false
