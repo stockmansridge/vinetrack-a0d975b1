@@ -858,7 +858,7 @@ function WorkTaskDrawer({
               </div>
               {paddockMissingArea && (
                 <p className="text-xs text-destructive">
-                  One or more selected paddocks are missing area data, so the area total may be incomplete.
+                  One or more selected blocks are missing area data, so the total area and cost per ha may be incomplete.
                 </p>
               )}
               <Field label="Description">
