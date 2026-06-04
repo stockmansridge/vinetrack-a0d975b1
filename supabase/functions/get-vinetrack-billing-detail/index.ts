@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
   const { data: sub, error: subErr } = await admin
     .from("vinetrack_subscriptions")
     .select(
-      "id, owner_user_id, status, billing_provider, plan_id, plan_code, plan_tier, stripe_subscription_id, stripe_customer_id, primary_vineyard_id, seats_included, seats_purchased, current_period_start, current_period_end, trial_end, cancel_at_period_end, canceled_at, created_at, deleted_at, unlimited_licences, manual_grant_reason, manual_grant_expires_at, manual_grant_revoked_at, manual_grant_revoked_by",
+      "id, owner_user_id, status, billing_provider, plan_id, stripe_subscription_id, stripe_customer_id, primary_vineyard_id, seats_included, seats_purchased, current_period_start, current_period_end, trial_end, cancel_at_period_end, canceled_at, created_at, deleted_at, unlimited_licences, manual_grant_reason, manual_grant_expires_at, manual_grant_revoked_at, manual_grant_revoked_by",
     )
     .eq("owner_user_id", caller.id)
     .in("billing_provider", ["stripe", "manual"])
