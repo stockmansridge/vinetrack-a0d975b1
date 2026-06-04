@@ -518,7 +518,7 @@ export default function WorkTasksPage() {
         </Filter>
         <Filter label="Search">
           <Input
-            placeholder="Type, paddock, notes…"
+            placeholder="Type, block, notes…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-64"
