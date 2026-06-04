@@ -392,14 +392,15 @@ export default function BillingPage() {
       if ((res as any)?.error) throw new Error((res as any).error);
       setSeatsMessage("Extra seats updated in Stripe. Waiting for billing sync…");
       toast.success("Extra seats updated in Stripe. Waiting for billing sync…");
-      // Poll access for up to ~45s for seats_purchased to change.
+      // Poll billing-detail for up to ~45s for seats_purchased to change.
       const startedAt = Date.now();
       const poll = async () => {
-        const { data: refreshed } = await refetch();
-        const newPurchased = refreshed?.access?.seats_purchased ?? null;
+        billingFetchInFlight.current = false; // allow concurrent refresh
+        const fresh = await fetchBilling();
+        await refetch();
+        const newPurchased = fresh?.subscription?.seats_purchased ?? null;
         if (newPurchased === target) {
           setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
-          await fetchBilling();
           return;
         }
         if (Date.now() - startedAt > 45_000) {
