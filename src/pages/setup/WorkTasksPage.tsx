@@ -470,7 +470,7 @@ export default function WorkTasksPage() {
       <div className="flex flex-wrap items-end gap-2">
         <Filter label="From"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" /></Filter>
         <Filter label="To"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" /></Filter>
-        <Filter label="Paddock">
+        <Filter label="Block">
           <Select value={paddockId} onValueChange={setPaddockId}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
