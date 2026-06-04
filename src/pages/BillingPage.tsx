@@ -175,8 +175,27 @@ export default function BillingPage() {
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
   const [seatsMessage, setSeatsMessage] = useState<string | null>(null);
+  const [seatsMessageTone, setSeatsMessageTone] = useState<
+    "info" | "success" | "warning" | "error"
+  >("info");
   const [seatsConfirmOpen, setSeatsConfirmOpen] = useState(false);
   const [seatsPaymentUrl, setSeatsPaymentUrl] = useState<string | null>(null);
+  const [seatsPaymentAction, setSeatsPaymentAction] = useState<
+    "complete" | "manage" | null
+  >(null);
+  const [showDebug, setShowDebug] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("vt:billing:debug") === "1";
+  });
+  const toggleDebug = useCallback(() => {
+    setShowDebug((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("vt:billing:debug", next ? "1" : "0");
+      }
+      return next;
+    });
+  }, []);
 
   // After Stripe redirects back with ?checkout=success, poll for the webhook
   // to land the subscription/invoice rows. We refetch a few times then stop.
