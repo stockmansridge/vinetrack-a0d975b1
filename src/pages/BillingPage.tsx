@@ -175,8 +175,27 @@ export default function BillingPage() {
   const [newEmail, setNewEmail] = useState("");
   const [extraSeats, setExtraSeats] = useState(0);
   const [seatsMessage, setSeatsMessage] = useState<string | null>(null);
+  const [seatsMessageTone, setSeatsMessageTone] = useState<
+    "info" | "success" | "warning" | "error"
+  >("info");
   const [seatsConfirmOpen, setSeatsConfirmOpen] = useState(false);
   const [seatsPaymentUrl, setSeatsPaymentUrl] = useState<string | null>(null);
+  const [seatsPaymentAction, setSeatsPaymentAction] = useState<
+    "complete" | "manage" | null
+  >(null);
+  const [showDebug, setShowDebug] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("vt:billing:debug") === "1";
+  });
+  const toggleDebug = useCallback(() => {
+    setShowDebug((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("vt:billing:debug", next ? "1" : "0");
+      }
+      return next;
+    });
+  }, []);
 
   // After Stripe redirects back with ?checkout=success, poll for the webhook
   // to land the subscription/invoice rows. We refetch a few times then stop.
@@ -377,20 +396,34 @@ export default function BillingPage() {
     }
   }
 
+  function setSeatsStatus(
+    message: string | null,
+    tone: "info" | "success" | "warning" | "error" = "info",
+    action: "complete" | "manage" | null = null,
+    url: string | null = null,
+  ) {
+    setSeatsMessage(message);
+    setSeatsMessageTone(tone);
+    setSeatsPaymentAction(action);
+    setSeatsPaymentUrl(url);
+  }
+
   function requestSeatsChange() {
     const target = Math.max(0, Math.floor(extraSeats));
     setSeatsPaymentUrl(null);
+    setSeatsPaymentAction(null);
     if (target === seatsPurchased) {
-      setSeatsMessage("No change to extra seats.");
+      setSeatsStatus("No change to extra seats.", "info");
       return;
     }
     if (target < seatsPurchased) {
-      setSeatsMessage(
+      setSeatsStatus(
         "Reducing paid seats mid-cycle would create a credit or refund. Contact support to reduce paid seats before renewal.",
+        "warning",
       );
       return;
     }
-    setSeatsMessage(null);
+    setSeatsStatus(null);
     setSeatsConfirmOpen(true);
   }
 
@@ -399,8 +432,7 @@ export default function BillingPage() {
     setSeatsConfirmOpen(false);
     try {
       setBusy("seats");
-      setSeatsMessage(null);
-      setSeatsPaymentUrl(null);
+      setSeatsStatus(null);
       const { data: res, error: err } = await invokeWithVinetrackAuth(
         "update-vinetrack-team-seats",
         { extra_seats: target, confirm: true },
@@ -413,20 +445,35 @@ export default function BillingPage() {
       const payment = r?.payment ?? null;
       const chargedNow = !!payment?.charged_immediately;
       const requiresAction = !!payment?.requires_action;
+      const paymentFailed = !!payment?.failed || invoice?.status === "uncollectible";
+      const invoicePaidNow = invoice?.status === "paid" || chargedNow;
       const actionUrl: string | null =
         payment?.next_action_url ?? invoice?.hosted_invoice_url ?? null;
 
-      if (requiresAction && actionUrl) {
-        setSeatsPaymentUrl(actionUrl);
-        setSeatsMessage(
-          "Stripe needs you to complete payment for the extra seats before they activate.",
+      if (paymentFailed) {
+        setSeatsStatus(
+          "Payment failed. Update your payment method in Stripe.",
+          "error",
+          "manage",
+          null,
+        );
+        toast.error("Payment failed for extra seats.");
+      } else if (requiresAction && actionUrl) {
+        setSeatsStatus(
+          "Payment needs to be completed in Stripe.",
+          "warning",
+          "complete",
+          actionUrl,
         );
         toast.message("Payment action required to add extra seats.");
-      } else if (chargedNow) {
-        setSeatsMessage("Stripe charged your saved payment method. Extra seats pending sync…");
-        toast.success("Extra seats paid. Waiting for billing sync…");
+      } else if (invoicePaidNow) {
+        setSeatsStatus(
+          "Your saved payment method was charged successfully. Extra seats are now active.",
+          "success",
+        );
+        toast.success("Saved card charged. Extra seats active.");
       } else {
-        setSeatsMessage("Extra seats pending payment/sync…");
+        setSeatsStatus("Extra seats pending payment confirmation…", "info");
       }
 
       // Poll billing-detail for up to ~60s for the webhook to confirm.
@@ -443,16 +490,19 @@ export default function BillingPage() {
           : null;
         const invoicePaid = linkedInvoice
           ? linkedInvoice.status === "paid"
-          : chargedNow && !requiresAction;
+          : invoicePaidNow && !requiresAction;
         if (newPurchased === target && invoicePaid) {
-          setSeatsMessage(`Billing synced: ${target} extra seat(s) active.`);
-          setSeatsPaymentUrl(null);
+          setSeatsStatus(
+            "Payment received. Your extra user licences are active.",
+            "success",
+          );
           return;
         }
         if (Date.now() - startedAt > 60_000) {
-          if (!seatsPaymentUrl) {
-            setSeatsMessage(
+          if (!requiresAction && !paymentFailed) {
+            setSeatsStatus(
               "Stripe updated, but billing sync is still pending. Refresh in a moment.",
+              "info",
             );
           }
           return;
@@ -462,7 +512,7 @@ export default function BillingPage() {
       setTimeout(poll, 2_000);
     } catch (e: any) {
       const msg = e?.message || "Could not update seats.";
-      setSeatsMessage(`Error: ${msg}`);
+      setSeatsStatus(msg, "error");
       toast.error(msg);
     } finally {
       setBusy(null);
@@ -472,38 +522,48 @@ export default function BillingPage() {
   return (
     <div className="container mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-        <p className="text-sm text-muted-foreground">
-          Plan, licences and invoices for your VineTrack subscription.
-        </p>
-        <p className="text-xs text-muted-foreground font-mono">
-          [debug] Selected vineyard:{" "}
-          {selectedVineyardId
-            ? `${selectedVineyardName ?? "(unnamed)"} / ${selectedVineyardId}`
-            : "(none)"}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
+            <p className="text-sm text-muted-foreground">
+              Plan, licences and invoices for your VineTrack subscription.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={toggleDebug}>
+            {showDebug ? "Hide debug" : "Show debug"}
+          </Button>
+        </div>
+        {showDebug && (
+          <p className="text-xs text-muted-foreground font-mono">
+            [debug] Selected vineyard:{" "}
+            {selectedVineyardId
+              ? `${selectedVineyardName ?? "(unnamed)"} / ${selectedVineyardId}`
+              : "(none)"}
+          </p>
+        )}
       </header>
 
-      {/* Temporary debug block — remove once Billing data is confirmed stable. */}
-      <Card className="border-dashed bg-muted/30 p-4 text-xs font-mono space-y-1">
-        <div className="font-semibold not-italic">[debug] Billing data sources</div>
-        <div>access.subscription_id: {access?.subscription_id ?? "(null)"}</div>
-        <div>access.user_id: {access?.user_id ?? "(null)"}</div>
-        <div>access.current_period_end: {access?.current_period_end ?? "(null)"}</div>
-        <div>access.seats_purchased: {access?.seats_purchased ?? "(null)"}</div>
-        <div>direct licences query subId: {subId ?? "(null)"}</div>
-        <div>direct licences row count: {directLicences.length}</div>
-        <div>direct invoices query subId: {subId ?? "(null)"}</div>
-        <div>direct invoices row count: {directInvoices.length}</div>
-        <div>
-          edge get-vinetrack-billing-detail subscription.id:{" "}
-          {billing?.subscription?.id ?? "(none)"}
-        </div>
-        <div>edge licences row count: {billing?.licences.length ?? 0}</div>
-        <div>edge invoices row count: {billing?.invoices.length ?? 0}</div>
-        <div>edge error: {billingFetchError ?? "(none)"}</div>
-        <div>edge debug: {billing?.debug ? JSON.stringify(billing.debug) : "(none)"}</div>
-      </Card>
+      {showDebug && (
+        <Card className="border-dashed bg-muted/30 p-4 text-xs font-mono space-y-1">
+          <div className="font-semibold not-italic">[debug] Billing data sources</div>
+          <div>access.subscription_id: {access?.subscription_id ?? "(null)"}</div>
+          <div>access.user_id: {access?.user_id ?? "(null)"}</div>
+          <div>access.current_period_end: {access?.current_period_end ?? "(null)"}</div>
+          <div>access.seats_purchased: {access?.seats_purchased ?? "(null)"}</div>
+          <div>direct licences query subId: {subId ?? "(null)"}</div>
+          <div>direct licences row count: {directLicences.length}</div>
+          <div>direct invoices query subId: {subId ?? "(null)"}</div>
+          <div>direct invoices row count: {directInvoices.length}</div>
+          <div>
+            edge get-vinetrack-billing-detail subscription.id:{" "}
+            {billing?.subscription?.id ?? "(none)"}
+          </div>
+          <div>edge licences row count: {billing?.licences.length ?? 0}</div>
+          <div>edge invoices row count: {billing?.invoices.length ?? 0}</div>
+          <div>edge error: {billingFetchError ?? "(none)"}</div>
+          <div>edge debug: {billing?.debug ? JSON.stringify(billing.debug) : "(none)"}</div>
+        </Card>
+      )}
 
       {!selectedVineyardId && (
         <Alert variant="destructive">
@@ -799,6 +859,11 @@ export default function BillingPage() {
               <p className="mt-3 text-xs text-muted-foreground">
                 Extra licences are billed at $99/year ex GST per user via Stripe.
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Available seats can be assigned to new users. Removing a user
+                frees the seat for reassignment but does not automatically create
+                a refund.
+              </p>
             </Card>
           )}
 
@@ -944,6 +1009,7 @@ export default function BillingPage() {
           if (!open) {
             setSeatsMessage(null);
             setSeatsPaymentUrl(null);
+            setSeatsPaymentAction(null);
           }
         }}
       >
@@ -986,17 +1052,29 @@ export default function BillingPage() {
               </p>
             </div>
             {seatsMessage && (
-              <Alert>
+              <Alert
+                variant={seatsMessageTone === "error" ? "destructive" : "default"}
+              >
                 <AlertDescription>{seatsMessage}</AlertDescription>
               </Alert>
             )}
-            {seatsPaymentUrl && (
+            {seatsPaymentAction === "complete" && seatsPaymentUrl && (
               <Button
                 variant="default"
                 onClick={() => window.open(seatsPaymentUrl, "_blank", "noopener")}
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Complete payment in Stripe
+              </Button>
+            )}
+            {seatsPaymentAction === "manage" && (
+              <Button variant="default" onClick={openPortal} disabled={busy === "portal"}>
+                {busy === "portal" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Settings className="mr-2 h-4 w-4" />
+                )}
+                Manage billing
               </Button>
             )}
           </div>
@@ -1025,8 +1103,12 @@ export default function BillingPage() {
                 {Math.max(0, Math.floor(extraSeats)) - seatsPurchased}
               </strong>{" "}
               extra user licence(s). These are <strong>$99/year ex GST each</strong>{" "}
-              and will be prorated to your current Team renewal date. Stripe will
-              charge your saved payment method immediately.
+              and will be prorated to your current Team renewal date.
+            </p>
+            <p>
+              Stripe will try to charge your saved payment method immediately.
+              If your bank requires confirmation, you'll be sent to Stripe to
+              complete payment.
             </p>
             <p className="text-xs text-muted-foreground">
               New total extra paid seats:{" "}
