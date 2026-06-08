@@ -23,7 +23,7 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
-import { formatCell } from "@/pages/setup/ListPage";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailSheet from "@/components/PinDetailSheet";
 import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
