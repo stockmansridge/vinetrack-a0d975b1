@@ -237,6 +237,15 @@ export default function MaintenancePage() {
                     ))}
                   </SelectGroup>
                 ) : null}
+                {equipmentGroups?.vineyardMachines.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Vineyard Machines</SelectLabel>
+                    {equipmentGroups.vineyardMachines.map((o) => (
+                      <SelectItem key={`m-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
                 {equipmentGroups?.otherItems.length ? (
                   <SelectGroup>
                     <SelectSeparator />
@@ -257,16 +266,7 @@ export default function MaintenancePage() {
                 ) : null}
               </SelectContent>
             </Select>
-            <Button
-              asChild
-              size="icon"
-              variant="outline"
-              title="Manage Other Equipment & Assets"
-            >
-              <Link to="/setup/equipment-other">
-                <Plus className="h-4 w-4" />
-              </Link>
-            </Button>
+            <AddEquipmentMenu />
           </div>
         </div>
         <div className="space-y-1">
