@@ -94,7 +94,7 @@ export default function VineyardRegionSettingsPage() {
 
   const applyPreset = () => {
     if (!pendingCountry) return;
-    setDraft(COUNTRY_PRESETS[pendingCountry]);
+    setDraft((d) => ({ ...COUNTRY_PRESETS[pendingCountry], timezone: d.timezone }));
     setPendingCountry(null);
   };
 

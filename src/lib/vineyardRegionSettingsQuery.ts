@@ -27,6 +27,7 @@ export interface RegionSettings {
   spray_rate_area_unit: SprayRateAreaUnit;
   date_format: DateFormat;
   terminology_region: TerminologyRegion;
+  timezone: string | null;
 }
 
 export const AU_DEFAULTS: RegionSettings = {
@@ -39,6 +40,7 @@ export const AU_DEFAULTS: RegionSettings = {
   spray_rate_area_unit: "hectare",
   date_format: "DD/MM/YYYY",
   terminology_region: "AU_NZ",
+  timezone: null,
 };
 
 export const COUNTRY_OPTIONS: { code: CountryCode; name: string }[] = [
@@ -62,6 +64,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "DD/MM/YYYY",
     terminology_region: "AU_NZ",
+    timezone: null,
   },
   US: {
     country_code: "US",
@@ -73,6 +76,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "acre",
     date_format: "MM/DD/YYYY",
     terminology_region: "US_CA",
+    timezone: null,
   },
   CA: {
     country_code: "CA",
@@ -84,6 +88,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "YYYY-MM-DD",
     terminology_region: "US_CA",
+    timezone: null,
   },
   GB: {
     country_code: "GB",
@@ -95,6 +100,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "DD/MM/YYYY",
     terminology_region: "UK_ZA",
+    timezone: null,
   },
   ZA: {
     country_code: "ZA",
@@ -106,6 +112,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "DD/MM/YYYY",
     terminology_region: "UK_ZA",
+    timezone: null,
   },
 };
 
@@ -125,6 +132,7 @@ function applyAuDefaults(raw: Partial<RegionSettings> | null | undefined): Regio
     date_format: (r.date_format as DateFormat) ?? AU_DEFAULTS.date_format,
     terminology_region:
       (r.terminology_region as TerminologyRegion) ?? AU_DEFAULTS.terminology_region,
+    timezone: r.timezone ?? null,
   };
 }
 
@@ -147,6 +155,7 @@ export async function saveVineyardRegionSettings(
     p_vineyard_id: vineyardId,
     p_country_code: settings.country_code,
     p_currency_code: settings.currency_code,
+    p_timezone: settings.timezone ?? null,
     p_area_unit: settings.area_unit,
     p_volume_unit: settings.volume_unit,
     p_distance_unit: settings.distance_unit,
