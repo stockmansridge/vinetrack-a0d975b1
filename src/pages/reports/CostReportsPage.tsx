@@ -447,10 +447,10 @@ export default function CostReportsPage() {
             <TableRow>
               {(cOrder as CostCol[]).map((id) => {
                 const labels: Record<CostCol, string> = {
-                  season: "Season", block: "Block", variety: "Variety",
-                  area: "Treated area (ha)", yield: "Yield (t)",
+                  season: "Season", block: rf.blockLabel, variety: "Variety",
+                  area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
                   labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
-                  total: "Total", cost_ha: "Cost/ha", cost_t: "Cost/t",
+                  total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
                   trips: "Trips", status: "Status", warnings: "Warnings",
                 };
                 const rightCols = new Set<CostCol>(["area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips"]);
