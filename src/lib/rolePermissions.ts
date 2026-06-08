@@ -19,6 +19,7 @@ const ROUTE_ALLOW: Record<string, Role[]> = {
   "/team": ADMIN_ROLES,
   "/billing": ["owner"],
   "/setup/vineyard": ADMIN_ROLES,
+  "/setup/region-units": ADMIN_ROLES,
   "/setup/spray-equipment": ADMIN_ROLES,
   "/setup/equipment-other": ADMIN_ROLES,
   "/setup/chemicals": ADMIN_ROLES,

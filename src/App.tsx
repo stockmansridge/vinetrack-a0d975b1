@@ -46,6 +46,7 @@ import WeatherStatusPage from "./pages/setup/WeatherStatusPage";
 import VineyardVarietiesPage from "./pages/setup/VineyardVarietiesPage";
 import VineyardLocationPage from "./pages/setup/VineyardLocationPage";
 import VineyardSettingsPage from "./pages/setup/VineyardSettingsPage";
+import VineyardRegionSettingsPage from "./pages/setup/VineyardRegionSettingsPage";
 import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import TripReportsPage from "./pages/reports/TripReportsPage";
@@ -152,6 +153,7 @@ const App = () => (
                     <Route path="/setup/grape-varieties" element={<VineyardVarietiesPage />} />
                     <Route path="/setup/vineyard-location" element={<VineyardLocationPage />} />
                     <Route path="/setup/vineyard" element={<VineyardSettingsPage />} />
+                    <Route path="/setup/region-units" element={<VineyardRegionSettingsPage />} />
                     <Route path="/reports" element={<ReportsIndexPage />} />
                     <Route path="/reports/trips" element={<TripReportsPage />} />
                     <Route path="/reports/costs" element={<CostReportsPage />} />
