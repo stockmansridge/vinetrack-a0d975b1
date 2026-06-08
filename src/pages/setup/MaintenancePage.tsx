@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Table,
   TableBody,
@@ -76,6 +88,45 @@ import { formatDate } from "@/lib/dateFormat";
 
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
+
+type PickerGroup = {
+  key: string;
+  label: string;
+  options: { id: string; name: string }[];
+};
+
+const buildMaintenancePickerGroups = (
+  equipmentGroups?: EquipmentSelectorGroups,
+  legacyOnly: string[] = [],
+  includeLegacy = false,
+  currentValue?: string | null,
+  includeCurrentValue = false,
+): PickerGroup[] => {
+  const groups: PickerGroup[] = [
+    { key: "tractors", label: "Tractors", options: equipmentGroups?.tractors ?? [] },
+    { key: "spray", label: "Spray Equipment", options: equipmentGroups?.sprayEquipment ?? [] },
+    { key: "machines", label: "Vineyard Machines", options: equipmentGroups?.vineyardMachines ?? [] },
+    { key: "other", label: "Other Equipment & Assets", options: equipmentGroups?.otherItems ?? [] },
+  ].filter((group) => group.options.length > 0);
+
+  if (includeLegacy && legacyOnly.length > 0) {
+    groups.push({
+      key: "legacy",
+      label: "Historical (free text)",
+      options: legacyOnly.map((name) => ({ id: name, name })),
+    });
+  }
+
+  if (includeCurrentValue && currentValue && !groups.some((group) => group.options.some((option) => option.name === currentValue))) {
+    groups.push({
+      key: "current",
+      label: "Current value",
+      options: [{ id: currentValue, name: currentValue }],
+    });
+  }
+
+  return groups;
+};
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
