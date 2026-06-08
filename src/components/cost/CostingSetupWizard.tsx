@@ -205,13 +205,14 @@ export interface CostingSetupSummary {
 }
 
 export function useCostingSetupSummary(vineyardId: string | null): CostingSetupSummary {
+  const rf = useRegionFormatters();
   const { data } = useQuery({
     queryKey: ["costing-setup-counts", vineyardId],
     queryFn: () => fetchSetupCounts(vineyardId!),
     enabled: !!vineyardId,
   });
   if (!data) return { hasIssues: false, okCount: 0, totalCount: 0 };
-  const rows = buildRows(data);
+  const rows = buildRows(data, rf);
   const ok = rows.filter((r) => r.state === "ok").length;
   return { hasIssues: rows.some((r) => r.state !== "ok"), okCount: ok, totalCount: rows.length };
 }
