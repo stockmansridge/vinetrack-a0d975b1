@@ -97,51 +97,66 @@ export default function Dashboard() {
   const loading = paddocksQ.isLoading;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{vineyard?.vineyard_name ?? "Dashboard"}</h1>
-      </div>
+    <div className="space-y-6 md:space-y-8">
+      <PageHeader
+        title={vineyard?.vineyard_name ?? "Dashboard"}
+        description="Vineyard operations overview — paddocks, equipment, trips and team at a glance."
+        meta={
+          currentRole && (
+            <Badge
+              variant="secondary"
+              className="capitalize rounded-full bg-primary/10 text-primary border-0 px-2.5 py-0.5 text-xs font-medium"
+            >
+              {currentRole}
+            </Badge>
+          )
+        }
+      />
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
           label={rf.blocksLabel}
-          Icon={Map}
+          icon={Map}
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
           to="/paddocks"
         />
-        <StatCard
+        <MetricCard
           label="Area"
-          Icon={LayoutGrid}
+          icon={LayoutGrid}
+          tone="accent"
           value={loading ? "…" : summary.totalAreaHa > 0 ? rf.area(summary.totalAreaHa, 2) : "—"}
           hint={`From ${rf.blockLabel.toLowerCase()} polygons`}
         />
-        <StatCard
+        <MetricCard
           label="Total rows"
-          Icon={Ruler}
+          icon={Ruler}
+          tone="neutral"
           value={loading ? "…" : fmt(summary.totalRows)}
         />
-        <StatCard
+        <MetricCard
           label="Vines"
-          Icon={Grape}
+          icon={Grape}
+          tone="accent"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
           hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
         />
-        <StatCard
+        <MetricCard
           label="Tractors"
-          Icon={Tractor}
+          icon={Tractor}
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
           to="/setup/tractors"
         />
-        <StatCard
+        <MetricCard
           label="Spray equipment"
-          Icon={SprayCan}
+          icon={SprayCan}
+          tone="neutral"
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
           to="/setup/spray-equipment"
         />
-        <StatCard
+        <MetricCard
           label="Team members"
-          Icon={Users}
+          icon={Users}
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
           to="/team"
         />
@@ -149,9 +164,9 @@ export default function Dashboard() {
 
       <VineyardOverviewMap />
 
-      <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Daily management</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daily management</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
           <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
           <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} />
@@ -159,17 +174,17 @@ export default function Dashboard() {
           <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} />
           <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setup</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
           <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={SprayCan} />
           <QuickLink to="/team" label="Team" Icon={Users} />
         </div>
-      </div>
+      </section>
     </div>
   );
 }
