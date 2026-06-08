@@ -169,7 +169,7 @@ export function buildRainfallPdf(ctx: RainfallPdfContext): jsPDF {
   doc.text(`Date range: ${fmtDate(from)} – ${fmtDate(to)}`, titleX, y);
   y += 12;
   doc.text(
-    `Generated: ${format(new Date(), "PP p")}${tz() ? ` (${tz()})` : ""}`,
+    `Generated: ${fmtDateTime(new Date())}${tz() ? ` (${tz()})` : ""}`,
     titleX,
     y,
   );
