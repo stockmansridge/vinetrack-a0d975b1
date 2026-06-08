@@ -14,6 +14,7 @@ import {
 } from "@/lib/sprayJobsExport";
 
 import { useVineyard } from "@/context/VineyardContext";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -264,6 +265,7 @@ function JobsTable({
   templatesOnly?: boolean;
 }) {
   const { selectedVineyardId, memberships } = useVineyard();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const qc = useQueryClient();
@@ -289,7 +291,7 @@ function JobsTable({
   const handleExportRowPdf = async (job: SprayJob) => {
     try {
       const ids = await fetchSprayJobPaddockIds(job.id);
-      await exportSprayJobPdf(job, ids, lookupMaps, vineyardName);
+      await exportSprayJobPdf(job, ids, lookupMaps, vineyardName, formatters);
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
     }
@@ -314,9 +316,9 @@ function JobsTable({
     try {
       const padMap = await fetchJobPaddockMap(yearJobs.map((j) => j.id));
       if (kind === "pdf") {
-        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year);
+        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year, formatters);
       } else {
-        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year);
+        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year, formatters);
       }
     } catch (e: any) {
       toast({ title: "Export failed", description: e.message, variant: "destructive" });

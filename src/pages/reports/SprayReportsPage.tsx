@@ -207,9 +207,9 @@ export default function SprayReportsPage() {
     try {
       const paddockMap = await fetchJobPaddockMap(jobsForYear.map((j) => j.id));
       if (kind === "pdf") {
-        exportYearlySprayProgramPdf(jobsForYear, paddockMap, jobLookups, vineyardName, effectiveYear);
+        exportYearlySprayProgramPdf(jobsForYear, paddockMap, jobLookups, vineyardName, effectiveYear, formatters);
       } else {
-        exportYearlySprayProgramXlsx(jobsForYear, paddockMap, jobLookups, vineyardName, effectiveYear);
+        exportYearlySprayProgramXlsx(jobsForYear, paddockMap, jobLookups, vineyardName, effectiveYear, formatters);
       }
     } catch (e: any) {
       toast({ title: "Export failed", description: e.message, variant: "destructive" });

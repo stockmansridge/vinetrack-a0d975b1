@@ -1,10 +1,17 @@
-// Spray Jobs export helpers — single-job PDF and yearly program PDF/CSV.
+// Spray Jobs export helpers — single-job PDF and yearly program PDF/CSV/XLSX.
+//
+// Display/export only. Storage is canonical (L, L/ha, ha, km, km/h, raw
+// currency amounts) and is converted at export time using the vineyard's
+// Region & Units settings. Missing settings fall back to AU defaults.
+//
+// Chemical product `unit` fields (L/kg/g/mL) come from the manufacturer
+// label and are intentionally NOT converted.
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { SprayJob, SprayJobChemicalLine } from "./sprayJobsQuery";
-import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { AU_FORMATTERS, type RegionFormatters } from "./regionFormatters";
 import {
   fetchLinkedSprayRecords, recordTotalWaterLitres, recordChemicalNames,
 } from "./sprayJobsQuery";
@@ -12,11 +19,6 @@ import {
 const NR = "Not recorded";
 
 const fmtVal = (v: any): string => (v == null || v === "" ? NR : String(v));
-const fmtDate = (v?: string | null) => {
-  if (!v) return NR;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? v : formatDate(d);
-};
 
 const isFoliar = (op?: string | null) => (op ?? "").toLowerCase() === "foliar spray";
 
@@ -38,10 +40,11 @@ export interface JobLookups {
 
 const safeFile = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
 
-function chemLineRow(l: SprayJobChemicalLine): string[] {
+function chemLineRow(l: SprayJobChemicalLine, fmt: RegionFormatters): string[] {
   const name = l.name ?? "Unnamed";
+  // l.unit is the manufacturer/label unit — leave alone.
   const rate = l.rate != null ? `${l.rate}${l.unit ? ` ${l.unit}` : ""}` : NR;
-  const water = l.water_rate != null ? `${l.water_rate}` : "";
+  const water = l.water_rate != null ? fmt.sprayRate(l.water_rate) : "";
   return [name, rate, water || "—", l.notes ?? ""];
 }
 
@@ -76,7 +79,11 @@ export async function exportSprayJobPdf(
   paddockIds: string[],
   lookups: JobLookups,
   vineyardName?: string | null,
+  formatters?: RegionFormatters,
 ) {
+  const fmt = formatters ?? AU_FORMATTERS;
+  const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : NR);
+
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -91,7 +98,7 @@ export async function exportSprayJobPdf(
   doc.setFontSize(10);
   doc.setTextColor(90);
   doc.text(`Vineyard: ${fmtVal(vineyardName)}`, margin, 68);
-  doc.text(`Generated: ${formatDateTime()}`, pageWidth - margin, 68, { align: "right" });
+  doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 68, { align: "right" });
   doc.setDrawColor(200);
   doc.line(margin, 78, pageWidth - margin, 78);
   doc.setTextColor(0);
@@ -103,7 +110,7 @@ export async function exportSprayJobPdf(
     ["Operation type", opLabel(job.operation_type)],
     ["Target", fmtVal(job.target)],
     ["Growth stage", fmtVal(job.growth_stage_code)],
-    ["Paddocks/blocks", paddockNamesFor(paddockIds, lookups)],
+    [`${fmt.blocksLabel}/Paddocks`, paddockNamesFor(paddockIds, lookups)],
     ["Equipment", job.equipment_id ? fmtVal(lookups.equipmentNameById.get(job.equipment_id)) : NR],
     ["Tractor", job.tractor_id ? fmtVal(lookups.tractorNameById.get(job.tractor_id)) : NR],
     ["Operator", job.operator_user_id ? fmtVal(lookups.memberNameById.get(job.operator_user_id)) : NR],
@@ -129,10 +136,10 @@ export async function exportSprayJobPdf(
   doc.text("Chemicals", margin, y);
 
   const lines = job.chemical_lines ?? [];
-  const chemBody = lines.length ? lines.map(chemLineRow) : [[NR, "", "", ""]];
+  const chemBody = lines.length ? lines.map((l) => chemLineRow(l, fmt)) : [[NR, "", "", ""]];
   autoTable(doc, {
     startY: y + 6,
-    head: [["Product", "Rate", "Water (L)", "Notes"]],
+    head: [["Product", "Rate", `Water (${fmt.sprayRateUnitLabel})`, "Notes"]],
     body: chemBody,
     theme: "striped",
     styles: { fontSize: 9, cellPadding: 4, valign: "top" },
@@ -152,8 +159,14 @@ export async function exportSprayJobPdf(
       ["VSP canopy size", fmtVal(job.vsp_canopy_size)],
       ["VSP canopy density", fmtVal(job.vsp_canopy_density)],
       ["Row spacing (m)", job.row_spacing_metres != null ? String(job.row_spacing_metres) : NR],
-      ["Calculated water rate (L/ha)", job.water_volume != null ? String(job.water_volume) : NR],
-      ["Selected spray rate (L/ha)", job.spray_rate_per_ha != null ? String(job.spray_rate_per_ha) : NR],
+      [
+        `Calculated water rate (${fmt.sprayRateUnitLabel})`,
+        job.water_volume != null ? fmt.sprayRate(job.water_volume) : NR,
+      ],
+      [
+        `Selected spray rate (${fmt.sprayRateUnitLabel})`,
+        job.spray_rate_per_ha != null ? fmt.sprayRate(job.spray_rate_per_ha) : NR,
+      ],
       ["Concentration factor", job.concentration_factor != null ? Number(job.concentration_factor).toFixed(2) : NR],
     ];
     autoTable(doc, {
@@ -168,7 +181,6 @@ export async function exportSprayJobPdf(
     });
     y = (doc as any).lastAutoTable.finalY + 16;
   } else {
-    // For Banded Spray / Spreader: only show rate/water if present.
     const hasAny = job.water_volume != null || job.spray_rate_per_ha != null;
     if (hasAny) {
       if (y > pageHeight - 120) { doc.addPage(); y = 50; }
@@ -176,8 +188,12 @@ export async function exportSprayJobPdf(
       doc.setFontSize(11);
       doc.text("Application", margin, y);
       const ap: [string, string][] = [];
-      if (job.water_volume != null) ap.push(["Water volume (L/ha)", String(job.water_volume)]);
-      if (job.spray_rate_per_ha != null) ap.push(["Spray rate (L/ha)", String(job.spray_rate_per_ha)]);
+      if (job.water_volume != null) {
+        ap.push([`Water volume (${fmt.sprayRateUnitLabel})`, fmt.sprayRate(job.water_volume)]);
+      }
+      if (job.spray_rate_per_ha != null) {
+        ap.push([`Spray rate (${fmt.sprayRateUnitLabel})`, fmt.sprayRate(job.spray_rate_per_ha)]);
+      }
       autoTable(doc, {
         startY: y + 6,
         head: [["Field", "Value"]],
@@ -214,14 +230,17 @@ export async function exportSprayJobPdf(
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.text("Linked spray records (actual)", margin, y);
-      const rows = linked.map((r) => [
-        r.date ?? NR,
-        r.spray_reference ?? r.id.slice(0, 8),
-        r.operation_type ?? NR,
-        r.tractor ?? NR,
-        recordChemicalNames(r).join(", ") || NR,
-        recordTotalWaterLitres(r) != null ? `${recordTotalWaterLitres(r)} L` : NR,
-      ]);
+      const rows = linked.map((r) => {
+        const totalL = recordTotalWaterLitres(r);
+        return [
+          r.date ? fmtDate(r.date) : NR,
+          r.spray_reference ?? r.id.slice(0, 8),
+          r.operation_type ?? NR,
+          r.tractor ?? NR,
+          recordChemicalNames(r).join(", ") || NR,
+          totalL != null ? fmt.volume(totalL) : NR,
+        ];
+      });
       autoTable(doc, {
         startY: y + 6,
         head: [["Date", "Reference", "Operation", "Tractor", "Chemicals", "Water"]],
@@ -270,7 +289,11 @@ export function exportYearlySprayProgramPdf(
   lookups: JobLookups,
   vineyardName: string | null,
   year: number,
+  formatters?: RegionFormatters,
 ) {
+  const fmt = formatters ?? AU_FORMATTERS;
+  const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : NR);
+
   const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -285,7 +308,7 @@ export function exportYearlySprayProgramPdf(
   doc.setTextColor(90);
   doc.text(`Vineyard: ${fmtVal(vineyardName)}`, margin, 62);
   doc.text(`Total spray jobs: ${jobs.length}`, margin, 76);
-  doc.text(`Generated: ${formatDateTime()}`, pageWidth - margin, 62, { align: "right" });
+  doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 62, { align: "right" });
   doc.setDrawColor(200);
   doc.line(margin, 86, pageWidth - margin, 86);
   doc.setTextColor(0);
@@ -299,6 +322,7 @@ export function exportYearlySprayProgramPdf(
   const body = sorted.map((j) => {
     const chems = (j.chemical_lines ?? [])
       .map((l) => {
+        // l.unit = manufacturer/label unit — leave alone
         const r = l.rate != null ? ` (${l.rate}${l.unit ? " " + l.unit : ""})` : "";
         return `${l.name ?? "Unnamed"}${r}`;
       })
@@ -312,8 +336,8 @@ export function exportYearlySprayProgramPdf(
       fmtVal(j.growth_stage_code),
       paddockNamesFor(paddockMap.get(j.id), lookups),
       chems || NR,
-      j.water_volume != null ? String(j.water_volume) : NR,
-      j.spray_rate_per_ha != null ? String(j.spray_rate_per_ha) : NR,
+      j.water_volume != null ? fmt.sprayRate(j.water_volume) : NR,
+      j.spray_rate_per_ha != null ? fmt.sprayRate(j.spray_rate_per_ha) : NR,
       j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : NR,
       j.equipment_id ? fmtVal(lookups.equipmentNameById.get(j.equipment_id)) : NR,
       j.tractor_id ? fmtVal(lookups.tractorNameById.get(j.tractor_id)) : NR,
@@ -324,8 +348,10 @@ export function exportYearlySprayProgramPdf(
   autoTable(doc, {
     startY: 96,
     head: [[
-      "Planned date", "Status", "Job", "Operation", "Target", "Growth", "Paddocks",
-      "Chemicals", "Water L/ha", "Rate L/ha", "CF", "Equipment", "Tractor", "Operator",
+      "Planned date", "Status", "Job", "Operation", "Target", "Growth",
+      `${fmt.blocksLabel}/Paddocks`,
+      "Chemicals", `Water ${fmt.sprayRateUnitLabel}`, `Rate ${fmt.sprayRateUnitLabel}`,
+      "CF", "Equipment", "Tractor", "Operator",
     ]],
     body: body.length ? body : [["", "", "No spray jobs for this year.", "", "", "", "", "", "", "", "", "", "", ""]],
     theme: "striped",
@@ -375,16 +401,23 @@ export function exportYearlySprayProgramCsv(
   lookups: JobLookups,
   vineyardName: string | null,
   year: number,
+  formatters?: RegionFormatters,
 ) {
+  const fmt = formatters ?? AU_FORMATTERS;
+  const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : "");
+
   const sorted = [...jobs].sort((a, b) => {
     const da = a.planned_date ? new Date(a.planned_date).getTime() : Number.MAX_SAFE_INTEGER;
     const db = b.planned_date ? new Date(b.planned_date).getTime() : Number.MAX_SAFE_INTEGER;
     return da - db;
   });
 
+  const waterHeader = `water_volume_${fmt.sprayRateUnitLabel.replace("/", "_per_")}`;
+  const rateHeader = `spray_rate_${fmt.sprayRateUnitLabel.replace("/", "_per_")}`;
+
   const headers = [
     "planned_date", "status", "spray_job_name", "operation_type", "target",
-    "growth_stage", "paddocks", "chemicals", "water_volume", "spray_rate_per_ha",
+    "growth_stage", "paddocks", "chemicals", waterHeader, rateHeader,
     "concentration_factor", "equipment", "tractor", "operator", "notes",
   ];
 
@@ -396,7 +429,7 @@ export function exportYearlySprayProgramCsv(
       })
       .join("; ");
     return [
-      j.planned_date ?? "",
+      fmtDate(j.planned_date),
       j.status ?? "",
       j.name ?? "",
       opLabel(j.operation_type) === NR ? "" : opLabel(j.operation_type),
@@ -404,8 +437,8 @@ export function exportYearlySprayProgramCsv(
       j.growth_stage_code ?? "",
       (paddockMap.get(j.id) ?? []).map((id) => lookups.paddockNameById.get(id) ?? "").filter(Boolean).join("; "),
       chems,
-      j.water_volume ?? "",
-      j.spray_rate_per_ha ?? "",
+      j.water_volume != null ? fmt.sprayRate(j.water_volume) : "",
+      j.spray_rate_per_ha != null ? fmt.sprayRate(j.spray_rate_per_ha) : "",
       j.concentration_factor ?? "",
       j.equipment_id ? (lookups.equipmentNameById.get(j.equipment_id) ?? "") : "",
       j.tractor_id ? (lookups.tractorNameById.get(j.tractor_id) ?? "") : "",
@@ -448,29 +481,37 @@ export function exportYearlySprayProgramXlsx(
   lookups: JobLookups,
   vineyardName: string | null,
   year: number,
+  formatters?: RegionFormatters,
 ) {
+  const fmt = formatters ?? AU_FORMATTERS;
+  const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : "");
+
   const sorted = [...jobs].sort((a, b) => {
     const da = a.planned_date ? new Date(a.planned_date).getTime() : Number.MAX_SAFE_INTEGER;
     const db = b.planned_date ? new Date(b.planned_date).getTime() : Number.MAX_SAFE_INTEGER;
     return da - db;
   });
 
+  const waterCol = `Water ${fmt.sprayRateUnitLabel}`;
+  const rateCol = `Rate ${fmt.sprayRateUnitLabel}`;
+  const paddocksCol = `${fmt.blocksLabel}/Paddocks`;
+
   const programRows = sorted.map((j) => ({
-    "Planned date": j.planned_date ?? "",
+    "Planned date": fmtDate(j.planned_date),
     "Status": j.status ?? "",
     "Job": j.name ?? "",
     "Operation": opLabel(j.operation_type) === NR ? "" : opLabel(j.operation_type),
     "Target": j.target ?? "",
     "Growth stage": j.growth_stage_code ?? "",
-    "Paddocks": (paddockMap.get(j.id) ?? [])
+    [paddocksCol]: (paddockMap.get(j.id) ?? [])
       .map((id) => lookups.paddockNameById.get(id) ?? "")
       .filter(Boolean)
       .join("; "),
     "Chemicals": (j.chemical_lines ?? [])
       .map((l) => `${l.name ?? "Unnamed"}${l.rate != null ? ` (${l.rate}${l.unit ? " " + l.unit : ""})` : ""}`)
       .join("; "),
-    "Water L/ha": j.water_volume ?? "",
-    "Rate L/ha": j.spray_rate_per_ha ?? "",
+    [waterCol]: j.water_volume != null ? fmt.sprayRate(j.water_volume) : "",
+    [rateCol]: j.spray_rate_per_ha != null ? fmt.sprayRate(j.spray_rate_per_ha) : "",
     "Concentration factor": j.concentration_factor ?? "",
     "Equipment": j.equipment_id ? (lookups.equipmentNameById.get(j.equipment_id) ?? "") : "",
     "Tractor": j.tractor_id ? (lookups.tractorNameById.get(j.tractor_id) ?? "") : "",
@@ -479,6 +520,7 @@ export function exportYearlySprayProgramXlsx(
   }));
 
   // Chemical usage breakdown — one row per chemical line, suitable for pivot tables.
+  // l.unit (Rate Unit) is the manufacturer label unit — preserved verbatim.
   const chemicalRows: any[] = [];
   sorted.forEach((j) => {
     const paddocks = (paddockMap.get(j.id) ?? [])
@@ -487,15 +529,15 @@ export function exportYearlySprayProgramXlsx(
       .join("; ");
     (j.chemical_lines ?? []).forEach((l) => {
       chemicalRows.push({
-        "Planned date": j.planned_date ?? "",
+        "Planned date": fmtDate(j.planned_date),
         "Job": j.name ?? "",
         "Status": j.status ?? "",
         "Operation": opLabel(j.operation_type) === NR ? "" : opLabel(j.operation_type),
-        "Paddocks": paddocks,
+        [paddocksCol]: paddocks,
         "Chemical": l.name ?? "Unnamed",
         "Rate": l.rate ?? "",
-        "Unit": l.unit ?? "",
-        "Water rate": l.water_rate ?? "",
+        "Rate unit": l.unit ?? "",
+        [waterCol]: l.water_rate != null ? fmt.sprayRate(l.water_rate) : "",
         "Notes": l.notes ?? "",
       });
     });
@@ -507,7 +549,12 @@ export function exportYearlySprayProgramXlsx(
     { Field: "Vineyard", Value: vineyardName ?? "" },
     { Field: "Year", Value: year },
     { Field: "Total spray jobs", Value: jobs.length },
-    { Field: "Generated", Value: formatDateTime() },
+    { Field: "Country", Value: fmt.settings.country_code },
+    { Field: "Currency", Value: fmt.settings.currency_code },
+    { Field: "Area unit", Value: fmt.areaUnitLabel },
+    { Field: "Spray rate unit", Value: fmt.sprayRateUnitLabel },
+    { Field: "Date format", Value: fmt.settings.date_format },
+    { Field: "Generated", Value: fmt.dateTime(new Date()) },
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Summary");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(programRows), "Spray Program");
