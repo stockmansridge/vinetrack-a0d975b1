@@ -863,6 +863,63 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
+function EquipmentPicker({
+  value,
+  onValueChange,
+  groups,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  groups: PickerGroup[];
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = value.trim();
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate text-left text-foreground">
+            {selectedLabel || "Select item or machine"}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] p-0 z-[70]">
+        <Command className="bg-popover text-popover-foreground">
+          <CommandList className="max-h-80">
+            <CommandEmpty>No items or machines found.</CommandEmpty>
+            {groups.map((group) => (
+              <CommandGroup key={group.key} heading={group.label}>
+                {group.options.map((option) => (
+                  <CommandItem
+                    key={`${group.key}-${option.id}`}
+                    value={`${group.label} ${option.name}`}
+                    onSelect={() => {
+                      onValueChange(option.name);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className={value === option.name ? "h-4 w-4 opacity-100" : "h-4 w-4 opacity-0"} />
+                    <span>{option.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function AddEquipmentMenu() {
   const navigate = useNavigate();
   return (
