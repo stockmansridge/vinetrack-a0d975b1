@@ -260,7 +260,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
               <TableHead className="text-right">Engine hr basis</TableHead>
               <TableHead className="text-right">Duration basis</TableHead>
               <TableHead className="text-right">Rate missing</TableHead>
-              <TableHead className="text-right">Estimated litres</TableHead>
+              <TableHead className="text-right">Estimated fuel</TableHead>
               <TableHead className="text-right">Estimated cost</TableHead>
             </TableRow>
           </TableHeader>
