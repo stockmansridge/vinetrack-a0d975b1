@@ -866,6 +866,7 @@ function TripPanelBody({
   paddockName: string | null;
   swatchColor?: string;
 }) {
+  const rf = useRegionFormatters();
   const completed = Array.isArray(trip.completed_paths) ? trip.completed_paths.length : 0;
   const planned = Array.isArray(trip.row_sequence) ? trip.row_sequence.length : 0;
   return (
@@ -881,12 +882,12 @@ function TripPanelBody({
         </div>
       )}
       <Row label="Type" value={tripFnLabel(trip.trip_function)} />
-      <Row label="Block" value={paddockName ?? trip.paddock_name ?? "—"} />
+      <Row label={rf.blockLabel} value={paddockName ?? trip.paddock_name ?? "—"} />
       <Row label="Operator" value={trip.person_name ?? "—"} />
       <Row label="Started" value={fmtDateTime(trip.start_time)} />
       <Row label="Finished" value={trip.end_time ? fmtDateTime(trip.end_time) : "In progress"} />
       <Row label="Duration" value={fmtDuration(trip.start_time, trip.end_time)} />
-      <Row label="Distance" value={fmtDistance(trip.total_distance ?? null)} />
+      <Row label="Distance" value={fmtDistance(trip.total_distance ?? null, rf)} />
       {planned > 0 && (
         <Row label="Rows" value={`${completed} / ${planned}`} />
       )}
