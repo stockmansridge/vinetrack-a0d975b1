@@ -32,6 +32,7 @@ import {
   Bell,
   Flag,
   ChevronDown,
+  Globe2,
 } from "lucide-react";
 import {
   Collapsible,
