@@ -117,6 +117,7 @@ export default function Dashboard() {
         <MetricCard
           label={rf.blocksLabel}
           icon={Map}
+          tone="primary"
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
           to="/paddocks"
@@ -124,39 +125,41 @@ export default function Dashboard() {
         <MetricCard
           label="Area"
           icon={LayoutGrid}
-          tone="accent"
+          tone="primary"
           value={loading ? "…" : summary.totalAreaHa > 0 ? rf.area(summary.totalAreaHa, 2) : "—"}
           hint={`From ${rf.blockLabel.toLowerCase()} polygons`}
         />
         <MetricCard
           label="Total rows"
           icon={Ruler}
-          tone="neutral"
+          tone="accent"
           value={loading ? "…" : fmt(summary.totalRows)}
         />
         <MetricCard
           label="Vines"
           icon={Grape}
-          tone="accent"
+          tone="amber"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
           hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
         />
         <MetricCard
           label="Tractors"
           icon={Tractor}
+          tone="teal"
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
           to="/setup/tractors"
         />
         <MetricCard
           label="Spray equipment"
           icon={SprayCan}
-          tone="neutral"
+          tone="teal"
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
           to="/setup/spray-equipment"
         />
         <MetricCard
           label="Team members"
           icon={Users}
+          tone="purple"
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
           to="/team"
         />
