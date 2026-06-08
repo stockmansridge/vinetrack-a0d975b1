@@ -295,7 +295,8 @@ export default function TripReportsPage() {
   const handleExportCsv = () => {
     if (!rows.length) return;
     const csvRows = rows.map((t) => {
-      const tractorName = t.tractor_id ? (costTractors ?? []).find((x) => x.id === t.tractor_id)?.name ?? null : null;
+      const resolved = resolveTripMachine(t);
+      const tractorName = resolved.source === "none" ? null : resolved.name;
       return tripToCsvRow(
         t,
         padNameFor(t),
