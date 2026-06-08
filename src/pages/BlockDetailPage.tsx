@@ -24,6 +24,7 @@ import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
+import { formatTripNameLabel } from "@/lib/tripDisplay";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
