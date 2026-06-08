@@ -197,6 +197,20 @@ export default function MaintenancePage() {
     [legacyItemNames, groupedNames],
   );
 
+  const filterPickerGroups = useMemo(
+    () => buildMaintenancePickerGroups(equipmentGroups, legacyOnly, legacyOnly.length > 0),
+    [equipmentGroups, legacyOnly],
+  );
+
+  useEffect(() => {
+    if (!selectedVineyardId) return;
+    console.info("[MaintenancePage] equipment selector groups", filterPickerGroups.map((group) => ({
+      group: group.label,
+      optionCount: group.options.length,
+      optionLabels: group.options.map((option) => option.name),
+    })));
+  }, [filterPickerGroups, selectedVineyardId]);
+
   const rows = useMemo(() => {
     let list = logs.slice();
     list.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
@@ -271,50 +285,15 @@ export default function MaintenancePage() {
               <SelectTrigger className="w-64"><SelectValue placeholder="Any" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ANY}>Any item</SelectItem>
-                {equipmentGroups?.tractors.length ? (
-                  <SelectGroup>
-                    <SelectLabel>Tractors</SelectLabel>
-                    {equipmentGroups.tractors.map((o) => (
-                      <SelectItem key={`t-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                {filterPickerGroups.map((group, index) => (
+                  <SelectGroup key={group.key}>
+                    {index > 0 ? <SelectSeparator /> : null}
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((option) => (
+                      <SelectItem key={`${group.key}-${option.id}`} value={option.name}>{option.name}</SelectItem>
                     ))}
                   </SelectGroup>
-                ) : null}
-                {equipmentGroups?.sprayEquipment.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Spray Equipment</SelectLabel>
-                    {equipmentGroups.sprayEquipment.map((o) => (
-                      <SelectItem key={`s-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {equipmentGroups?.vineyardMachines.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Vineyard Machines</SelectLabel>
-                    {equipmentGroups.vineyardMachines.map((o) => (
-                      <SelectItem key={`m-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {equipmentGroups?.otherItems.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Other Equipment &amp; Assets</SelectLabel>
-                    {equipmentGroups.otherItems.map((o) => (
-                      <SelectItem key={`o-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {legacyOnly.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Historical (free text)</SelectLabel>
-                    {legacyOnly.map((n) => (
-                      <SelectItem key={`l-${n}`} value={n}>{n}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
+                ))}
               </SelectContent>
             </Select>
             <AddEquipmentMenu />
