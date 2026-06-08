@@ -138,7 +138,7 @@ export default function Dashboard() {
         <MetricCard
           label="Vines"
           icon={Grape}
-          tone="amber"
+          tone="white"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
           hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
         />

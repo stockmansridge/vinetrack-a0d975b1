@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral";
+export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral" | "white";
 
 export interface MetricCardProps {
   label: string;
@@ -24,6 +24,7 @@ const TONES: Record<MetricTone, string> = {
   amber: "bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200/70 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
   purple: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
   neutral: "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300",
+  white: "bg-white text-primary ring-1 ring-inset ring-border shadow-sm dark:bg-white dark:text-primary",
 };
 
 export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary" }: MetricCardProps) {
