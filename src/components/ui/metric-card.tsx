@@ -21,7 +21,7 @@ const TONES: Record<MetricTone, string> = {
   primary: "bg-primary/10 text-primary",
   accent: "bg-accent/15 text-accent",
   teal: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  amber: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  amber: "bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200/70 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
   purple: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
   neutral: "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300",
 };

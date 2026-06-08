@@ -24,7 +24,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
-import vinetrackLogo from "@/assets/vinetrack-logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 
@@ -84,8 +83,7 @@ export default function AppLayout() {
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1 rounded-full">
-                    <img src={vinetrackLogo} alt="" className="h-6 w-6 object-contain rounded-full" />
+                  <Button variant="ghost" size="sm" className="gap-1.5 rounded-full">
                     <span className="hidden sm:inline text-sm">{user?.email}</span>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
