@@ -712,7 +712,7 @@ function TripSheet({
             <Section title="Job record">
               <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
               <Field label="Title / details" value={fmt(trip.trip_title)} />
-              <Field label="Paddock / block" value={fmt(padName)} />
+              <Field label={formatters.blockLabel} value={fmt(padName)} />
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
