@@ -805,13 +805,14 @@ function EmptyPanel({
   showPins: boolean;
   showTrips: boolean;
 }) {
+  const rf = useRegionFormatters();
   return (
     <div className="space-y-3 p-4 text-sm">
       <div className="text-muted-foreground">
-        Click a block, trip route or pin on the map for details.
+        Click a {rf.blockLabel.toLowerCase()}, trip route or pin on the map for details.
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <Stat label="Blocks" value={paddockCount} />
+        <Stat label={rf.blocksLabel} value={paddockCount} />
         <Stat label="Recent trips" value={tripCount} muted={!showTrips} />
         <Stat label="Pins" value={pinCount} muted={!showPins} />
       </div>
