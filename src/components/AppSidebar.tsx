@@ -200,9 +200,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="px-4 py-4">
-        <div className="flex items-center gap-2">
-          <BrandMark circle logoUrl={logoUrl} size={40} alt={vineyardName ?? "VineTrack"} />
+      <SidebarHeader className="px-4 py-4 border-b border-sidebar-border">
+        <div className="flex items-center gap-2.5">
+          <BrandMark circle logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
           <div className="flex flex-col leading-tight min-w-0">
             <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
               {vineyardName ?? <BrandName />}
