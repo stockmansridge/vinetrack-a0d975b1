@@ -255,11 +255,11 @@ export default function DamageRecordsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Paddock</div>
+          <div className="text-xs text-muted-foreground">{rf.blockLabel}</div>
           <Select value={paddockId} onValueChange={setPaddockId}>
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>Any paddock</SelectItem>
+              <SelectItem value={ANY}>Any {rf.blockLabel.toLowerCase()}</SelectItem>
               {paddocks.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name ?? p.id}</SelectItem>
               ))}
