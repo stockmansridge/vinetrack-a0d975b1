@@ -201,13 +201,13 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <BrandMark circle logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
           <div className="flex flex-col leading-tight min-w-0">
-            <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
+            <span className="text-sm font-semibold tracking-tight text-foreground truncate">
               {vineyardName ?? <BrandName />}
             </span>
-            <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
+            <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Vineyard portal
             </span>
           </div>
