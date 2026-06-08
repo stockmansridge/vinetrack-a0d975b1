@@ -142,13 +142,23 @@ const fmtDate = (v?: string | null) => {
   return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtCost = (v?: number | null) =>
-  v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "AUD" });
+const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
+
+// AU-default fallbacks (overridden per-component by useRegionFormatters)
+const fmtDateAu = (v?: string | null) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return v;
+  return formatDate(d);
+};
+void fmtDateAu;
 
 export default function MaintenancePage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
   const canSeeCosts = useCanSeeCosts();
+  const rf = useRegionFormatters();
+  const { date: fmtDate, cost: fmtCost } = useMemo(() => mkMaintFmt(rf), [rf]);
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
