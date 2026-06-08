@@ -673,7 +673,7 @@ export default function BlockDetailPage() {
                   .map((t) => (
                     <TableRow key={t.id}>
                       <TableCell>{fmtDateTime(t.start_time)}</TableCell>
-                      <TableCell>{t.trip_title || tripFunctionLabel(t.trip_function) || "Trip"}</TableCell>
+                      <TableCell>{formatTripNameLabel(t.trip_title, t.tracking_pattern, tripFunctionLabel(t.trip_function) ?? "Trip")}</TableCell>
                       <TableCell>{tripFunctionLabel(t.trip_function) ?? "—"}</TableCell>
                       <TableCell>{t.person_name ?? "—"}</TableCell>
                       <TableCell className="text-right">
