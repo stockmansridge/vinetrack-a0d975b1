@@ -71,14 +71,17 @@ const SPRAY = "__spray__";
 const MAINT = "__maint__";
 
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
-const tripDisplayName = (t: Trip): string => {
-  if (t.trip_title && t.trip_title.trim()) return t.trip_title.trim();
-  const fn = tripFunctionLabel(t.trip_function);
-  if (fn) return fn;
-  if (t.tracking_pattern) return t.tracking_pattern;
-  if (t.paddock_name) return t.paddock_name;
-  return "—";
-};
+import {
+  formatTripPatternLabel,
+  formatTripNameLabel,
+  formatTripDurationLabel,
+} from "@/lib/tripDisplay";
+const tripDisplayName = (t: Trip): string =>
+  formatTripNameLabel(
+    t.trip_title,
+    t.tracking_pattern,
+    tripFunctionLabel(t.trip_function) ?? t.paddock_name ?? null,
+  );
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -93,15 +96,8 @@ const fmtDay = (v?: string | null) => {
   return formatDate(d);
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtDuration = (start?: string | null, end?: string | null) => {
-  if (!start || !end) return "—";
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (isNaN(ms) || ms < 0) return "—";
-  const mins = Math.round(ms / 60000);
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-};
+const fmtDuration = (start?: string | null, end?: string | null) =>
+  formatTripDurationLabel(start, end);
 const fmtKm = (m?: number | null) =>
   m == null ? "—" : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
 
@@ -383,7 +379,7 @@ export default function TripsPage() {
             <SelectTrigger className="w-44"><SelectValue placeholder="Any" /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>Any pattern</SelectItem>
-              {patterns.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+              {patterns.map((o) => (<SelectItem key={o} value={o}>{formatTripPatternLabel(o)}</SelectItem>))}
             </SelectContent>
           </Select>
         </div>
@@ -470,7 +466,7 @@ export default function TripsPage() {
                 name: <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>,
                 function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 paddock: <TableCell>{fmt(padName)}</TableCell>,
-                pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{t.tracking_pattern}</Badge> : "—"}</TableCell>,
+                pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{formatTripPatternLabel(t.tracking_pattern)}</Badge> : "—"}</TableCell>,
                 person: <TableCell>{fmt(t.person_name)}</TableCell>,
                 duration: <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>,
                 distance: <TableCell>{fmtKm(t.total_distance)}</TableCell>,
