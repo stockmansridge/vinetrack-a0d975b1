@@ -313,15 +313,22 @@ export default function TripsPage() {
           onClick={() => {
             const csvRows = rows.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
-              const tractor = t.tractor_id ? pageTractorById.get(t.tractor_id) ?? null : null;
-              const fe = computeFuelEstimate(t, tractor, canSeeCostsPage ? (pageFuel ?? []) : []);
+              const resolved = resolveMachineForRecord(
+                { machine_id: t.machine_id, tractor_id: t.tractor_id },
+                pageMachinesById,
+                pageTractorById,
+              );
+              const tractorShape: TractorLite | null = resolved.id
+                ? { id: resolved.id, name: resolved.name, fuel_usage_l_per_hour: resolved.fuel_l_per_hour }
+                : null;
+              const fe = computeFuelEstimate(t, tractorShape, canSeeCostsPage ? (pageFuel ?? []) : []);
               return tripToCsvRow(
                 t,
                 padName,
                 tripDisplayName(t),
                 tripFunctionLabel(t.trip_function),
                 null,
-                tractor?.name ?? null,
+                resolved.id ? resolved.name : null,
                 {
                   basisLabel: fe.basisLabel,
                   basis: fe.basis,
