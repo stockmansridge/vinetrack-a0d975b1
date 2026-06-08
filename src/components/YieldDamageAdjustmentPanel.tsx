@@ -220,8 +220,8 @@ export default function YieldDamageAdjustmentPanel({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Paddock</TableHead>
-                    <TableHead className="text-right">Block (ha)</TableHead>
-                    <TableHead className="text-right">Effective loss (ha)</TableHead>
+                    <TableHead className="text-right">Block ({rf.areaUnitLabel})</TableHead>
+                    <TableHead className="text-right">Effective loss ({rf.areaUnitLabel})</TableHead>
                     <TableHead className="text-right">Loss %</TableHead>
                     <TableHead className="text-right">Records</TableHead>
                   </TableRow>
@@ -230,8 +230,8 @@ export default function YieldDamageAdjustmentPanel({
                   {summary.rows.map((r) => (
                     <TableRow key={r.paddockId}>
                       <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell className="text-right">{fmt(r.blockHa)}</TableCell>
-                      <TableCell className="text-right">{fmt(r.effectiveHa)}</TableCell>
+                      <TableCell className="text-right">{areaVal(r.blockHa)}</TableCell>
+                      <TableCell className="text-right">{areaVal(r.effectiveHa)}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={r.lossPct >= 50 ? "destructive" : r.lossPct >= 20 ? "default" : "secondary"}>
                           {r.lossPct.toFixed(1)}%
