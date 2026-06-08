@@ -214,6 +214,7 @@ export function AppSidebar() {
       <SidebarContent>
         {renderGroup("Dashboard", visible(dashboard))}
         {renderGroup("Work", visible(work))}
+        {renderGroup("Equipment", visible(equipment), false)}
         {renderGroup("Tools", visible(tools))}
         {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports))}
         {renderGroup("Setup", visible(setup), false)}
