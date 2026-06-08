@@ -43,17 +43,31 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
-import { formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 
 const ANY = "__any__";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HA_PER_AC = 0.40468564224;
 
-function fmtMoney(v: number | null | undefined): string {
-  if (v == null || !isFinite(v)) return "—";
-  return v.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+function makeFmtMoney(rf: RegionFormatters) {
+  return (v: number | null | undefined): string =>
+    v == null || !isFinite(v) ? "—" : rf.currency(v, 0);
+}
+function makeFmtArea(rf: RegionFormatters) {
+  return (haValue: number | null | undefined, dp = 2): string =>
+    haValue == null || !isFinite(haValue) ? "—" : rf.area(haValue, dp);
+}
+function makeFmtCostPerArea(rf: RegionFormatters) {
+  const imperial = rf.areaUnitLabel === "ac";
+  return (perHa: number | null | undefined): string => {
+    if (perHa == null || !isFinite(perHa)) return "—";
+    const v = imperial ? perHa * HA_PER_AC : perHa;
+    return `${rf.currency(v, 0)} / ${rf.areaUnitLabel}`;
+  };
 }
 function fmtNum(v: number | null | undefined, dp = 2): string {
   if (v == null || !isFinite(v)) return "—";
@@ -110,6 +124,10 @@ function NoAccessCard() {
 export default function CostReportsPage() {
   const canSeeCosts = useCanSeeCosts();
   const { selectedVineyardId } = useVineyard();
+  const rf = useRegionFormatters();
+  const fmtMoney = useMemo(() => makeFmtMoney(rf), [rf]);
+  const fmtArea = useMemo(() => makeFmtArea(rf), [rf]);
+  const fmtMoneyPerArea = useMemo(() => makeFmtCostPerArea(rf), [rf]);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
@@ -398,12 +416,12 @@ export default function CostReportsPage() {
         <SummaryCard label="Total cost" value={fmtMoney(summary.total)} />
         <SummaryCard
           label="Treated area"
-          value={`${fmtNum(summary.area)} ha`}
-          info="Treated area is the accumulated mapped block area from the jobs/trips included in this report. If the same block is treated multiple times, its area contributes once per job. Example: a 2 ha block treated 3 times contributes 6 treated ha."
+          value={fmtArea(summary.area)}
+          info={`Treated area is the accumulated mapped ${rf.blockLabel.toLowerCase()} area from the jobs/trips included in this report. If the same ${rf.blockLabel.toLowerCase()} is treated multiple times, its area contributes once per job.`}
         />
         <SummaryCard
-          label="Cost / ha"
-          value={fmtMoney(summary.costPerHa)}
+          label={`Cost / ${rf.areaUnitLabel}`}
+          value={fmtMoneyPerArea(summary.costPerHa)}
           info="Total cost divided by treated area (cumulative across jobs)."
         />
         <SummaryCard label="Yield" value={`${fmtNum(summary.yieldT)} t`} />
@@ -414,7 +432,7 @@ export default function CostReportsPage() {
 
       <Card className="p-3 flex flex-wrap gap-2 items-center">
         <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
-        <FilterSelect label="Block" value={paddock} onChange={setPaddock} options={paddocks} />
+        <FilterSelect label={rf.blockLabel} value={paddock} onChange={setPaddock} options={paddocks} />
         <FilterSelect label="Variety" value={variety} onChange={setVariety} options={varieties} />
         <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} renderLabel={(v) => tripFunctionLabel(v) ?? v} />
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
@@ -429,10 +447,10 @@ export default function CostReportsPage() {
             <TableRow>
               {(cOrder as CostCol[]).map((id) => {
                 const labels: Record<CostCol, string> = {
-                  season: "Season", block: "Block", variety: "Variety",
-                  area: "Treated area (ha)", yield: "Yield (t)",
+                  season: "Season", block: rf.blockLabel, variety: "Variety",
+                  area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
                   labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
-                  total: "Total", cost_ha: "Cost/ha", cost_t: "Cost/t",
+                  total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
                   trips: "Trips", status: "Status", warnings: "Warnings",
                 };
                 const rightCols = new Set<CostCol>(["area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips"]);
@@ -482,14 +500,14 @@ export default function CostReportsPage() {
                     )}
                   </TableCell>
                 ),
-                area: <TableCell className="text-right">{fmtNum(g.allocation_area_ha)}</TableCell>,
+                area: <TableCell className="text-right">{fmtArea(g.allocation_area_ha)}</TableCell>,
                 yield: <TableCell className="text-right">{fmtNum(g.yield_tonnes)}</TableCell>,
                 labour: <TableCell className="text-right">{fmtMoney(g.labour_cost)}</TableCell>,
                 fuel: <TableCell className="text-right">{fmtMoney(g.fuel_cost)}</TableCell>,
                 chemical: <TableCell className="text-right">{fmtMoney(g.chemical_cost)}</TableCell>,
                 input: <TableCell className="text-right">{fmtMoney(g.input_cost)}</TableCell>,
                 total: <TableCell className="text-right font-medium">{fmtMoney(g.total_cost)}</TableCell>,
-                cost_ha: <TableCell className="text-right">{fmtMoney(g.cost_per_ha)}</TableCell>,
+                cost_ha: <TableCell className="text-right">{fmtMoneyPerArea(g.cost_per_ha)}</TableCell>,
                 cost_t: <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>,
                 trips: <TableCell className="text-right">{g.trip_count}</TableCell>,
                 status: <TableCell>{g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}</TableCell>,
@@ -521,7 +539,7 @@ export default function CostReportsPage() {
             <>
               <SheetHeader>
                 <SheetTitle>
-                  {drill.paddock_name ?? "Block"}
+                  {drill.paddock_name ?? rf.blockLabel}
                   {drill.variety ? ` · ${drill.variety}` : ""}
                 </SheetTitle>
                 <SheetDescription>
@@ -530,14 +548,14 @@ export default function CostReportsPage() {
               </SheetHeader>
 
               <div className="mt-4 space-y-2 text-sm">
-                <DetailRow label="Treated area" value={`${fmtNum(drill.allocation_area_ha)} ha`} />
+                <DetailRow label="Treated area" value={fmtArea(drill.allocation_area_ha)} />
                 <DetailRow label="Yield" value={`${fmtNum(drill.yield_tonnes)} t`} />
                 <DetailRow label="Labour" value={fmtMoney(drill.labour_cost)} />
                 <DetailRow label="Fuel" value={fmtMoney(drill.fuel_cost)} />
                 <DetailRow label="Chemical" value={fmtMoney(drill.chemical_cost)} />
                 <DetailRow label="Seed / input" value={fmtMoney(drill.input_cost)} />
                 <DetailRow label="Total" value={fmtMoney(drill.total_cost)} bold />
-                <DetailRow label="Cost / ha" value={fmtMoney(drill.cost_per_ha)} />
+                <DetailRow label={`Cost / ${rf.areaUnitLabel}`} value={fmtMoneyPerArea(drill.cost_per_ha)} />
                 <DetailRow label="Cost / tonne" value={fmtMoney(drill.cost_per_tonne)} />
               </div>
 
@@ -556,10 +574,10 @@ export default function CostReportsPage() {
                           {stale && <Badge variant="outline">Stale</Badge>}
                         </div>
                         <div className="text-muted-foreground">
-                          {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? formatDateTime(r.calculated_at) : "—"}
+                          {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? rf.dateTime(r.calculated_at) : "—"}
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
-                          <DetailRow label="Area" value={`${fmtNum(r.allocation_area_ha)} ha`} small />
+                          <DetailRow label="Area" value={fmtArea(r.allocation_area_ha)} small />
                           <DetailRow label="Total" value={fmtMoney(r.total_cost)} small bold />
                           <DetailRow label="Labour" value={fmtMoney(r.labour_cost)} small />
                           <DetailRow label="Fuel" value={fmtMoney(r.fuel_cost)} small />

@@ -25,24 +25,22 @@ import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 import type { TractorLite } from "@/lib/tripCosting";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 type GroupBy = "tractor" | "trip_function" | "block" | "operator";
 
 interface PaddockLite { id: string; name: string | null }
 
-function fmtMoney(v: number | null | undefined): string {
-  if (v == null || !isFinite(v)) return "—";
-  return v.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
-}
-function fmtL(v: number): string {
-  return `${v.toFixed(1)} L`;
-}
 function csvCell(v: any): string {
   const s = v == null ? "" : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string }) {
+  const rf = useRegionFormatters();
+  const fmtMoney = (v: number | null | undefined): string =>
+    v == null || !isFinite(v) ? "—" : rf.currency(v, 0);
+  const fmtL = (litres: number): string => rf.fuel(litres, 1);
   const [groupBy, setGroupBy] = useState<GroupBy>("tractor");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -231,7 +229,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
             <SelectContent>
               <SelectItem value="tractor">Tractor</SelectItem>
               <SelectItem value="trip_function">Trip function</SelectItem>
-              <SelectItem value="block">Paddock / block</SelectItem>
+              <SelectItem value="block">{rf.blockLabel}</SelectItem>
               <SelectItem value="operator">Operator</SelectItem>
             </SelectContent>
           </Select>
@@ -248,7 +246,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Trips</div><div className="text-lg font-semibold">{totals.trips}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Estimated litres</div><div className="text-lg font-semibold">{fmtL(totals.litres)}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Estimated fuel</div><div className="text-lg font-semibold">{fmtL(totals.litres)}</div></Card>
         <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Estimated cost</div><div className="text-lg font-semibold">{fmtMoney(totals.cost)}</div></Card>
         <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Rate missing</div><div className="text-lg font-semibold">{totals.rateMissing}</div></Card>
       </div>
@@ -262,7 +260,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
               <TableHead className="text-right">Engine hr basis</TableHead>
               <TableHead className="text-right">Duration basis</TableHead>
               <TableHead className="text-right">Rate missing</TableHead>
-              <TableHead className="text-right">Estimated litres</TableHead>
+              <TableHead className="text-right">Estimated fuel</TableHead>
               <TableHead className="text-right">Estimated cost</TableHead>
             </TableRow>
           </TableHeader>

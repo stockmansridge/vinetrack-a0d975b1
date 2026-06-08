@@ -10,6 +10,8 @@ import { CheckCircle2, AlertTriangle, ChevronRight, Loader2 } from "lucide-react
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 interface Props {
   vineyardId: string;
@@ -114,7 +116,7 @@ interface CheckRow {
   linkLabel?: string;
 }
 
-function buildRows(c: SetupCounts): CheckRow[] {
+function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
   const rateOk = c.operatorCategories > 0 && c.operatorCategoriesWithRate === c.operatorCategories;
   const memberOk = c.membersTotal > 0 && c.membersWithCategory === c.membersTotal;
   return [
@@ -178,17 +180,17 @@ function buildRows(c: SetupCounts): CheckRow[] {
       state: c.paddocks === 0 ? "empty"
         : c.paddocksWithPolygon === c.paddocks ? "ok" : "warn",
       detail: c.paddocks === 0
-        ? "No blocks/paddocks set up yet."
-        : `${c.paddocksWithPolygon} of ${c.paddocks} blocks have a mapped polygon. Trips must be linked to mapped blocks for cost per ha to calculate.`,
+        ? `No ${rf.blocksLabel.toLowerCase()} set up yet.`
+        : `${c.paddocksWithPolygon} of ${c.paddocks} ${rf.blocksLabel.toLowerCase()} have a mapped polygon. Trips must be linked to mapped ${rf.blocksLabel.toLowerCase()} for cost per ${rf.areaUnitLabel} to calculate.`,
       href: "/setup/paddocks",
-      linkLabel: "Blocks / paddocks",
+      linkLabel: rf.blocksLabel,
     },
     {
       key: "yield",
       title: "Yield tonnes",
       state: c.yieldRecords === 0 ? "empty" : "ok",
       detail: c.yieldRecords === 0
-        ? "No actual yield records yet. Cost per tonne needs at least one yield record per block & season."
+        ? `No actual yield records yet. Cost per tonne needs at least one yield record per ${rf.blockLabel.toLowerCase()} & season.`
         : `${c.yieldRecords} yield record(s) on file.`,
       href: "/yield",
       linkLabel: "Yield reports",
@@ -203,18 +205,20 @@ export interface CostingSetupSummary {
 }
 
 export function useCostingSetupSummary(vineyardId: string | null): CostingSetupSummary {
+  const rf = useRegionFormatters();
   const { data } = useQuery({
     queryKey: ["costing-setup-counts", vineyardId],
     queryFn: () => fetchSetupCounts(vineyardId!),
     enabled: !!vineyardId,
   });
   if (!data) return { hasIssues: false, okCount: 0, totalCount: 0 };
-  const rows = buildRows(data);
+  const rows = buildRows(data, rf);
   const ok = rows.filter((r) => r.state === "ok").length;
   return { hasIssues: rows.some((r) => r.state !== "ok"), okCount: ok, totalCount: rows.length };
 }
 
 export default function CostingSetupWizard({ vineyardId }: Props) {
+  const rf = useRegionFormatters();
   const { data, isLoading, error } = useQuery({
     queryKey: ["costing-setup-counts", vineyardId],
     queryFn: () => fetchSetupCounts(vineyardId),
@@ -227,13 +231,13 @@ export default function CostingSetupWizard({ vineyardId }: Props) {
         <div>
           <h2 className="font-semibold">Costing setup</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Complete these setup items so VineTrack can calculate cost by block,
-            variety, hectare and tonne.
+            Complete these setup items so VineTrack can calculate cost by {rf.blockLabel.toLowerCase()},
+            variety, {rf.areaUnitLabel === "ac" ? "acre" : "hectare"} and tonne.
           </p>
         </div>
         {data && (
           <Badge variant="outline" className="shrink-0">
-            {buildRows(data).filter((r) => r.state === "ok").length} / {buildRows(data).length} ready
+            {buildRows(data, rf).filter((r) => r.state === "ok").length} / {buildRows(data, rf).length} ready
           </Badge>
         )}
       </div>
@@ -252,7 +256,7 @@ export default function CostingSetupWizard({ vineyardId }: Props) {
 
       {data && (
         <ul className="divide-y">
-          {buildRows(data).map((row) => (
+          {buildRows(data, rf).map((row) => (
             <li key={row.key} className="py-2.5 flex items-start gap-3">
               <div className="mt-0.5 shrink-0">
                 {row.state === "ok"
