@@ -75,7 +75,7 @@ const work: NavItem[] = [
   { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
   { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
-  { title: "Tractor Fuel Logs", url: "/tractor-fuel-logs", icon: Fuel },
+  { title: "Fuel Logs", url: "/tractor-fuel-logs", icon: Fuel },
 ];
 
 // "Reports" — exports & compliance
