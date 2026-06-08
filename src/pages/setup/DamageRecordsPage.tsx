@@ -521,7 +521,7 @@ function DamageDetailSheet({
           <div className="mt-4 space-y-4 text-sm">
             <Section title="Observation">
               <Field label="Date observed" value={fmtDate(record.date_observed ?? record.date)} />
-              <Field label="Paddock" value={paddockName ?? "—"} />
+              <Field label={rf.blockLabel} value={paddockName ?? "—"} />
               <Field label="Row / path" value={fmt(record.row_number)} />
               <Field label="Side" value={fmt(record.side)} />
               <Field label="Damage type" value={damageTypeLabel(record.damage_type)} />
