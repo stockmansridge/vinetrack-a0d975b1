@@ -145,6 +145,7 @@ export default function VineyardOverviewMap({
   height = 520,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const rf = useRegionFormatters();
   const navigate = useNavigate();
   const [selection, setSelection] = useState<Selection>(null);
   const [showPaddocks, setShowPaddocks] = useState(true);
