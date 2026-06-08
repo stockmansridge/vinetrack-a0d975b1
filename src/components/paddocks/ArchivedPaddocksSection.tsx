@@ -87,7 +87,7 @@ export default function ArchivedPaddocksSection() {
                 <TableRow key={row.id}>
                   <TableCell>{row.name ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {row.deleted_at ? formatDate(row.deleted_at) : "—"}
+                    {row.deleted_at ? rf.date(row.deleted_at) : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
