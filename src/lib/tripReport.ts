@@ -1195,7 +1195,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   const totalPages = doc.getNumberOfPages();
   const tz =
     Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
-  const footer = `Generated ${formatDateTime()} (${tz}) • VineTrack`;
+  const footer = `Generated ${fmtR.dateTime(new Date())} (${tz}) • VineTrack`;
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(120);
