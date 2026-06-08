@@ -486,7 +486,7 @@ export default function LiveDashboardPage() {
                       <TableCell>{trip.person_name ?? "—"}</TableCell>
                       <TableCell>{trip.paddock_name ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">
-                        {trip.start_time ? format(new Date(trip.start_time), "p") : "—"}
+                        {trip.start_time ? fmtTime(trip.start_time) : "—"}
                       </TableCell>
                       <TableCell className="tabular-nums">
                         {fmtDuration(trip.start_time, trip.end_time)}
