@@ -2,73 +2,38 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount, fetchList } from "@/lib/queries";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
+import {
+  Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid,
+  ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route,
+} from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { MetricCard, PageHeader } from "@/components/ui/metric-card";
+import { Badge } from "@/components/ui/badge";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
 
-function StatCard({
-  label,
-  value,
-  Icon,
-  hint,
-  to,
-}: {
-  label: string;
-  value: React.ReactNode;
-  Icon: any;
-  hint?: string;
-  to?: string;
-}) {
-  const card = (
-    <Card
-      className={
-        to
-          ? "cursor-pointer transition hover:border-primary/50 hover:shadow-md hover:bg-muted/40"
-          : undefined
-      }
-    >
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-semibold">{value}</div>
-        {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
-      </CardContent>
-    </Card>
-  );
-  if (to) {
-    return (
-      <Link to={to} aria-label={`${label} — open`} className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        {card}
-      </Link>
-    );
-  }
-  return card;
-}
-
 const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }) => (
   <Link
     to={to}
-    className="group flex items-center justify-between rounded-md border bg-card px-4 py-3 text-sm hover:bg-muted/50 transition"
+    className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/50 hover:border-primary/30 transition"
   >
-    <span className="flex items-center gap-2">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      {label}
+    <span className="flex items-center gap-2.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="font-medium text-foreground">{label}</span>
     </span>
-    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition" />
+    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 group-hover:text-primary transition" />
   </Link>
 );
 
 export default function Dashboard() {
-  const { selectedVineyardId, memberships } = useVineyard();
+  const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const rf = useRegionFormatters();
   const vineyard = memberships.find((m) => m.vineyard_id === selectedVineyardId);
 
@@ -132,51 +97,66 @@ export default function Dashboard() {
   const loading = paddocksQ.isLoading;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{vineyard?.vineyard_name ?? "Dashboard"}</h1>
-      </div>
+    <div className="space-y-6 md:space-y-8">
+      <PageHeader
+        title={vineyard?.vineyard_name ?? "Dashboard"}
+        description="Vineyard operations overview — paddocks, equipment, trips and team at a glance."
+        meta={
+          currentRole && (
+            <Badge
+              variant="secondary"
+              className="capitalize rounded-full bg-primary/10 text-primary border-0 px-2.5 py-0.5 text-xs font-medium"
+            >
+              {currentRole}
+            </Badge>
+          )
+        }
+      />
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
           label={rf.blocksLabel}
-          Icon={Map}
+          icon={Map}
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
           to="/paddocks"
         />
-        <StatCard
+        <MetricCard
           label="Area"
-          Icon={LayoutGrid}
+          icon={LayoutGrid}
+          tone="accent"
           value={loading ? "…" : summary.totalAreaHa > 0 ? rf.area(summary.totalAreaHa, 2) : "—"}
           hint={`From ${rf.blockLabel.toLowerCase()} polygons`}
         />
-        <StatCard
+        <MetricCard
           label="Total rows"
-          Icon={Ruler}
+          icon={Ruler}
+          tone="neutral"
           value={loading ? "…" : fmt(summary.totalRows)}
         />
-        <StatCard
+        <MetricCard
           label="Vines"
-          Icon={Grape}
+          icon={Grape}
+          tone="accent"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
           hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
         />
-        <StatCard
+        <MetricCard
           label="Tractors"
-          Icon={Tractor}
+          icon={Tractor}
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
           to="/setup/tractors"
         />
-        <StatCard
+        <MetricCard
           label="Spray equipment"
-          Icon={SprayCan}
+          icon={SprayCan}
+          tone="neutral"
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
           to="/setup/spray-equipment"
         />
-        <StatCard
+        <MetricCard
           label="Team members"
-          Icon={Users}
+          icon={Users}
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
           to="/team"
         />
@@ -184,9 +164,9 @@ export default function Dashboard() {
 
       <VineyardOverviewMap />
 
-      <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Daily management</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daily management</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
           <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
           <QuickLink to="/spray-jobs" label="Spray Jobs" Icon={Layers} />
@@ -194,17 +174,17 @@ export default function Dashboard() {
           <QuickLink to="/pins" label="Pins / Repairs" Icon={MapPin} />
           <QuickLink to="/reports/documents" label="Documents & Exports" Icon={FolderOpen} />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setup</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
           <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={SprayCan} />
           <QuickLink to="/team" label="Team" Icon={Users} />
         </div>
-      </div>
+      </section>
     </div>
   );
 }

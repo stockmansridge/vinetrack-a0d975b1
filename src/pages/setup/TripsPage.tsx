@@ -290,15 +290,15 @@ export default function TripsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Trips</h1>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1.5">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Trips</h1>
           <p className="text-sm text-muted-foreground">
             Read-only. Soft-deleted trips are excluded.
           </p>
           {!isLoading && !error && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground">
               Showing {rows.length} of {trips.length} trips for this vineyard
               {data ? ` · source: ${data.source}` : ""}
               {data && (data.paddockFallbackCount || data.paddockJsonbFallbackCount)
@@ -310,6 +310,7 @@ export default function TripsPage() {
         <Button
           variant="outline"
           size="sm"
+          className="rounded-lg"
           disabled={rows.length === 0}
           onClick={() => {
             const csvRows = rows.map((t) => {
@@ -351,11 +352,11 @@ export default function TripsPage() {
       </div>
 
 
-      <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+      <div className="rounded-xl border border-amber-200/80 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/30 px-4 py-2.5 text-xs text-amber-900 dark:text-amber-200">
         Production data — read-only view. No edits, archives, or deletions are possible from this page.
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="rounded-2xl border border-border bg-card p-4 flex flex-wrap items-end gap-3">
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">From</div>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
