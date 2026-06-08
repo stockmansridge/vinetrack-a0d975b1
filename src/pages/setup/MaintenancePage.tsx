@@ -204,12 +204,24 @@ export default function MaintenancePage() {
 
   useEffect(() => {
     if (!selectedVineyardId) return;
+    console.info("[MaintenancePage] selectedVineyardId =", selectedVineyardId);
+    console.info("[MaintenancePage] raw source counts", {
+      tractors: equipmentGroups?.tractors.length ?? 0,
+      tractorsSample: equipmentGroups?.tractors.slice(0, 3).map((o) => o.name) ?? [],
+      sprayEquipment: equipmentGroups?.sprayEquipment.length ?? 0,
+      sprayEquipmentSample: equipmentGroups?.sprayEquipment.slice(0, 3).map((o) => o.name) ?? [],
+      vineyardMachines: equipmentGroups?.vineyardMachines.length ?? 0,
+      vineyardMachinesSample: equipmentGroups?.vineyardMachines.slice(0, 3).map((o) => o.name) ?? [],
+      otherItems: equipmentGroups?.otherItems.length ?? 0,
+      otherItemsSample: equipmentGroups?.otherItems.slice(0, 3).map((o) => o.name) ?? [],
+      legacyOnly: legacyOnly.length,
+    });
     console.info("[MaintenancePage] equipment selector groups", filterPickerGroups.map((group) => ({
       group: group.label,
       optionCount: group.options.length,
       optionLabels: group.options.map((option) => option.name),
     })));
-  }, [filterPickerGroups, selectedVineyardId]);
+  }, [filterPickerGroups, equipmentGroups, legacyOnly, selectedVineyardId]);
 
   const rows = useMemo(() => {
     let list = logs.slice();
