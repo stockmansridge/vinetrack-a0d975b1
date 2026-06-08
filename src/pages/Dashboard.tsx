@@ -199,7 +199,7 @@ export default function Dashboard() {
       <div>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <QuickLink to="/setup/paddocks" label="Paddocks" Icon={Map} />
+          <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
           <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={SprayCan} />
           <QuickLink to="/team" label="Team" Icon={Users} />
