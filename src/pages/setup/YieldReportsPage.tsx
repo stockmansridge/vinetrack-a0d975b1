@@ -590,7 +590,7 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
                   {b.avgBunchWeightKg != null && (
                     <Field label="Avg bunch weight (kg)" value={fmtNum(b.avgBunchWeightKg, 3)} />
                   )}
-                  {b.areaHa != null && <Field label="Area (ha)" value={fmtNum(b.areaHa)} />}
+                  {b.areaHa != null && <Field label="Area" value={areaVal(b.areaHa)} />}
                 </div>
                 {b.notes && (
                   <p className="text-xs text-muted-foreground whitespace-pre-wrap pt-1">{String(b.notes)}</p>
