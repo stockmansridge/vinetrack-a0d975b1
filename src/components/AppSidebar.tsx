@@ -183,9 +183,9 @@ export function AppSidebar() {
       <Collapsible defaultOpen={defaultOpen || hasActive} className="group/collapsible">
         <SidebarGroup>
           <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between hover:text-sidebar-foreground">
+            <CollapsibleTrigger className="flex w-full items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/55 hover:text-sidebar-foreground">
               {label}
-              <ChevronDown className="h-4 w-4 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
             </CollapsibleTrigger>
           </SidebarGroupLabel>
           <CollapsibleContent>
