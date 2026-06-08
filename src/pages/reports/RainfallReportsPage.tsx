@@ -289,7 +289,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
   const renderCell = (r: any, id: Col): React.ReactNode => {
     switch (id) {
       case "date":
-        return <TableCell>{r.date ? format(new Date(r.date), "PP") : "—"}</TableCell>;
+        return <TableCell>{r.date ? rf.date(new Date(r.date)) : "—"}</TableCell>;
       case "rainfall":
         return (
           <TableCell className="text-right tabular-nums">
