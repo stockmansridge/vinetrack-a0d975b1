@@ -78,17 +78,22 @@ const fmt = (n: any, d = 0) =>
     ? Number(n).toLocaleString(undefined, { maximumFractionDigits: d })
     : "—";
 
-const fmtDay = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "—" : formatDate(d);
-};
-
-const fmtDateTime = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "—" : formatDateTime(d);
-};
+function useBlockFormatters() {
+  const rf = useRegionFormatters();
+  return {
+    rf,
+    fmtDay: (v?: string | null) => {
+      if (!v) return "—";
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? "—" : rf.date(d);
+    },
+    fmtDateTime: (v?: string | null) => {
+      if (!v) return "—";
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? "—" : rf.dateTime(d);
+    },
+  };
+}
 
 export default function BlockDetailPage() {
   const { blockId } = useParams();
