@@ -103,7 +103,7 @@ const setup: NavItem[] = [
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
   { title: "Vineyard Machines", url: "/setup/vineyard-machines", icon: Tractor },
   { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
-  { title: "Other Equipment Items", url: "/setup/equipment-other", icon: Wrench },
+  { title: "Other Equipment & Assets", url: "/setup/equipment-other", icon: Wrench },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
   { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
   { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },

@@ -207,8 +207,9 @@ export default function VineyardMachinesPage() {
         <div>
           <h1 className="text-2xl font-semibold">Vineyard Machines</h1>
           <p className="text-sm text-muted-foreground">
-            Powered machines used directly for vineyard work. Costing only applies when a
-            machine is linked to a trip/job and has an approved default L/hr.
+            Tractors, ATVs, side-by-sides, harvesters, utility vehicles and other powered
+            machines used directly for vineyard work. Used for Fuel Log and job costing
+            where enabled.
           </p>
         </div>
         {canEdit && (

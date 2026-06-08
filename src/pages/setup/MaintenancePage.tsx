@@ -232,7 +232,7 @@ export default function MaintenancePage() {
                 {equipmentGroups?.otherItems.length ? (
                   <SelectGroup>
                     <SelectSeparator />
-                    <SelectLabel>Other Items</SelectLabel>
+                    <SelectLabel>Other Equipment &amp; Assets</SelectLabel>
                     {equipmentGroups.otherItems.map((o) => (
                       <SelectItem key={`o-${o.id}`} value={o.name}>{o.name}</SelectItem>
                     ))}
@@ -253,7 +253,7 @@ export default function MaintenancePage() {
               asChild
               size="icon"
               variant="outline"
-              title="Manage Other Equipment Items"
+              title="Manage Other Equipment & Assets"
             >
               <Link to="/setup/equipment-other">
                 <Plus className="h-4 w-4" />
@@ -675,7 +675,7 @@ function MaintenanceEditor({
                   {equipmentGroups?.otherItems.length ? (
                     <SelectGroup>
                       <SelectSeparator />
-                      <SelectLabel>Other Items</SelectLabel>
+                      <SelectLabel>Other Equipment &amp; Assets</SelectLabel>
                       {equipmentGroups.otherItems.map((o) => (
                         <SelectItem key={`eo-${o.id}`} value={o.name}>{o.name}</SelectItem>
                       ))}
@@ -699,13 +699,13 @@ function MaintenanceEditor({
                   ) : null}
                 </SelectContent>
               </Select>
-              <Button asChild size="icon" variant="outline" title="Manage Other Equipment Items">
+              <Button asChild size="icon" variant="outline" title="Manage Other Equipment & Assets">
                 <Link to="/setup/equipment-other"><Plus className="h-4 w-4" /></Link>
               </Button>
             </div>
             {!editing && (
               <p className="text-xs text-muted-foreground">
-                New records must use a Tractor, Spray Equipment item, or Other Item.
+                New records must use a Tractor, Spray Equipment item, or Other Equipment & Asset.
               </p>
             )}
           </div>
