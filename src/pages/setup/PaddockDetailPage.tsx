@@ -146,6 +146,7 @@ interface EditorProps {
 }
 
 function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDeleted }: EditorProps) {
+  const rf = useRegionFormatters();
   const metrics = useMemo(() => deriveMetrics(paddock), [paddock]);
   const initialPolygon = useMemo(() => parsePolygonPoints(paddock.polygon_points), [paddock]);
   const initialRows = useMemo(() => parseRows(paddock.rows), [paddock]);
