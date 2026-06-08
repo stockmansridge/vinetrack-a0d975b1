@@ -631,8 +631,8 @@ export default function VineyardOverviewMap({
               />
             ) : selectedPaddock ? (
               <PanelShell
-                title={selectedPaddock.paddock.name ?? "Unnamed block"}
-                subtitle="Block details"
+                title={selectedPaddock.paddock.name ?? `Unnamed ${rf.blockLabel.toLowerCase()}`}
+                subtitle={`${rf.blockLabel} details`}
                 onClose={() => setSelection(null)}
                 accentColor={selectedPaddock.color}
               >
