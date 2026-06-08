@@ -45,6 +45,7 @@ import {
   downloadTripPdf,
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { countTripPins } from "@/lib/tripPinCount";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
