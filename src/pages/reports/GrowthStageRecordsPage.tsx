@@ -35,7 +35,7 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   fetchGrowthStageRecords,
   summariseLatestByBlock,
@@ -45,11 +45,6 @@ import {
 
 const ANY = "__any__";
 
-const fmtDate = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? v : formatDate(d);
-};
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 
 export default function GrowthStageRecordsPage() {
