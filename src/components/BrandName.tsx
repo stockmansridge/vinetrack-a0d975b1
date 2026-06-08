@@ -21,7 +21,7 @@ export function BrandName({ className, suffix, suffixClassName }: BrandNameProps
         letterSpacing: "-0.015em",
       }}
     >
-      <span>Vine</span>
+      <span className="text-foreground">Vine</span>
       <span style={{ color: "#85B830" }}>Track</span>
       {suffix && (
         <span className={cn("ml-1.5", suffixClassName)}>{suffix}</span>
