@@ -192,6 +192,7 @@ export default function SprayReportsPage() {
         paddockName: null,
         operatorName: null,
         cost,
+        formatters,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
