@@ -78,10 +78,10 @@ export default function EquipmentOtherItemsPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Other equipment items</h1>
+          <h1 className="text-2xl font-semibold">Other Equipment & Assets</h1>
           <p className="text-sm text-muted-foreground">
-            Shared with iOS. Used on Maintenance to identify items that aren't
-            tractors or spray equipment. Archived rows are hidden.
+            Trailers, implements, tools, irrigation parts, workshop gear and other
+            non-fuel-tracked assets. Not used for Fuel Log or machine fuel costing.
           </p>
         </div>
         {canWrite && (
