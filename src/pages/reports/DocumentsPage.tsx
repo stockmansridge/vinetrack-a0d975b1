@@ -22,6 +22,7 @@ import { fetchSprayJobs, type SprayJob } from "@/lib/sprayJobsQuery";
 import { downloadTripPdf } from "@/lib/tripReport";
 import { countTripPins } from "@/lib/tripPinCount";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   downloadRainfallPdf,
   downloadRainfallCsv,
