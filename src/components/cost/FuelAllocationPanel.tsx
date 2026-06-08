@@ -246,7 +246,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Trips</div><div className="text-lg font-semibold">{totals.trips}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Estimated litres</div><div className="text-lg font-semibold">{fmtL(totals.litres)}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Estimated fuel</div><div className="text-lg font-semibold">{fmtL(totals.litres)}</div></Card>
         <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Estimated cost</div><div className="text-lg font-semibold">{fmtMoney(totals.cost)}</div></Card>
         <Card className="p-3"><div className="text-xs text-muted-foreground uppercase">Rate missing</div><div className="text-lg font-semibold">{totals.rateMissing}</div></Card>
       </div>
