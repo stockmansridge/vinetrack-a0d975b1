@@ -85,6 +85,13 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
+
+const mkMaintFmt = (rf: RegionFormatters) => ({
+  date: (v?: string | null) => (v ? rf.date(v) || "—" : "—"),
+  cost: (v?: number | null) => (v == null ? "—" : rf.currency(v)),
+});
 
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
@@ -128,20 +135,22 @@ const buildMaintenancePickerGroups = (
   return groups;
 };
 
-const fmtDate = (v?: string | null) => {
+const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
+// AU fallback retained but unused now that per-component formatters drive display.
+const _fmtDateAuFallback = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
   return formatDate(d);
 };
-const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtCost = (v?: number | null) =>
-  v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "AUD" });
+void _fmtDateAuFallback;
 
 export default function MaintenancePage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
   const canSeeCosts = useCanSeeCosts();
+  const rf = useRegionFormatters();
+  const { date: fmtDate, cost: fmtCost } = useMemo(() => mkMaintFmt(rf), [rf]);
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
@@ -443,6 +452,8 @@ function MaintenanceSheet({
   const { user } = useAuth();
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const rf = useRegionFormatters();
+  const { date: fmtDate, cost: fmtCost } = useMemo(() => mkMaintFmt(rf), [rf]);
 
   const delMut = useMutation({
     mutationFn: async () => {
