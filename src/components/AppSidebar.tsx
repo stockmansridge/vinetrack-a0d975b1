@@ -206,12 +206,12 @@ export function AppSidebar() {
       <SidebarHeader className="px-3 py-3 border-b border-sidebar-border">
         {collapsed ? (
           <div className="flex justify-center">
-            <BrandMark size={28} tile alt="VineTrack" />
+            <BrandMark size={30} tile={false} alt="VineTrack" />
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2.5 h-11">
-              <BrandMark size={30} tile alt="VineTrack" />
+            <div className="flex items-center gap-2 h-11">
+              <BrandMark size={32} tile={false} alt="VineTrack" />
               <BrandName className="text-[18px] font-semibold" />
             </div>
             {vineyardName && (

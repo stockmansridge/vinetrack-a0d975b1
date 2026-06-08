@@ -46,7 +46,7 @@ export function BrandMark({
       width={size}
       height={size}
       loading="lazy"
-      className="h-[70%] w-[70%] object-contain"
+      className="h-full w-full object-contain"
     />
   );
 
