@@ -57,6 +57,7 @@ import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
 import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { fetchAllVineyardMachines, resolveMachineForRecord, type VineyardMachine } from "@/lib/vineyardMachinesQuery";
 
 
 interface PaddockLite {
