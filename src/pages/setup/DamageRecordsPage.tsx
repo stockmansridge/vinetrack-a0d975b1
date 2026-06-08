@@ -322,7 +322,7 @@ export default function DamageRecordsPage() {
             <TableRow>
               {(dOrder as DmgCol[]).map((id) => {
                 const labels: Record<DmgCol, string> = {
-                  date: "Date observed", paddock: "Paddock", row: "Row / path", side: "Side",
+                  date: "Date observed", paddock: rf.blockLabel, row: "Row / path", side: "Side",
                   type: "Damage type", severity: "Severity", status: "Status",
                   damage_pct: "Damage %", operator: "Operator", notes: "Notes", photos: "Photos",
                 };
