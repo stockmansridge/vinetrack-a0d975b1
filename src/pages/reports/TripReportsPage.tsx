@@ -169,6 +169,27 @@ export default function TripReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
   });
+  const { data: tripMachines = [] } = useQuery<VineyardMachine[]>({
+    queryKey: ["trip-machines-all", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchAllVineyardMachines(selectedVineyardId!),
+  });
+  const tripMachinesById = useMemo(() => {
+    const m = new Map<string, VineyardMachine>();
+    (tripMachines ?? []).forEach((x) => m.set(x.id, x));
+    return m;
+  }, [tripMachines]);
+  const tripTractorsById = useMemo(() => {
+    const m = new Map<string, TractorLite>();
+    (costTractors ?? []).forEach((t) => m.set(t.id, t));
+    return m;
+  }, [costTractors]);
+  const resolveTripMachine = (t: Trip) =>
+    resolveMachineForRecord(
+      { machine_id: t.machine_id, tractor_id: t.tractor_id },
+      tripMachinesById,
+      tripTractorsById,
+    );
   const { data: costSavedChemicals } = useQuery({
     queryKey: ["cost-saved-chemicals", selectedVineyardId],
     enabled: costEnabled,
