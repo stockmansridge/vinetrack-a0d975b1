@@ -18,7 +18,7 @@ import type { TripCostBreakdown } from "./tripCosting";
 import { fmtHours, fmtTonnes } from "./tripCosting";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { composeSatelliteRouteImage } from "./satelliteRouteMap";
-import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { formatDate } from "@/lib/dateFormat";
 import { AU_FORMATTERS, type RegionFormatters } from "./regionFormatters";
 
 // Cache the logo data URL between exports.
