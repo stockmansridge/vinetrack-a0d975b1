@@ -340,7 +340,7 @@ export default function BlockDetailPage() {
             />
             <Field
               label="Area"
-              value={metrics && metrics.areaHa > 0 ? `${fmt(metrics.areaHa, 2)} ha` : "—"}
+              value={metrics && metrics.areaHa > 0 ? rf.area(metrics.areaHa, 2) : "—"}
             />
             <Field label="Rows" value={metrics ? fmt(metrics.rowCount) : "—"} />
             <Field
