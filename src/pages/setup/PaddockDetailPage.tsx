@@ -585,7 +585,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               </Field>
               <ReadOnly label="Row width" value={paddock.row_width ? `${paddock.row_width} m` : "—"} />
               <ReadOnly label="Emitters (est.)" value={fmt(metrics.emitterCount, 0)} />
-              <ReadOnly label={`L / ${rf.areaUnitLabel === "ac" ? "ha" : "ha"} / hr`} value={litresPerHaHr != null ? fmt(litresPerHaHr, 0) : "—"} />
+              <ReadOnly label="L / ha / hr" value={litresPerHaHr != null ? fmt(litresPerHaHr, 0) : "—"} />
               <ReadOnly label="mm / hr" value={mmPerHr != null ? fmt(mmPerHr, 3) : "—"} />
               {canEdit && (
                 <div className="sm:col-span-2 flex justify-end">
