@@ -218,6 +218,7 @@ export function useCostingSetupSummary(vineyardId: string | null): CostingSetupS
 }
 
 export default function CostingSetupWizard({ vineyardId }: Props) {
+  const rf = useRegionFormatters();
   const { data, isLoading, error } = useQuery({
     queryKey: ["costing-setup-counts", vineyardId],
     queryFn: () => fetchSetupCounts(vineyardId),
@@ -230,13 +231,13 @@ export default function CostingSetupWizard({ vineyardId }: Props) {
         <div>
           <h2 className="font-semibold">Costing setup</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Complete these setup items so VineTrack can calculate cost by block,
-            variety, hectare and tonne.
+            Complete these setup items so VineTrack can calculate cost by {rf.blockLabel.toLowerCase()},
+            variety, {rf.areaUnitLabel === "ac" ? "acre" : "hectare"} and tonne.
           </p>
         </div>
         {data && (
           <Badge variant="outline" className="shrink-0">
-            {buildRows(data).filter((r) => r.state === "ok").length} / {buildRows(data).length} ready
+            {buildRows(data, rf).filter((r) => r.state === "ok").length} / {buildRows(data, rf).length} ready
           </Badge>
         )}
       </div>
