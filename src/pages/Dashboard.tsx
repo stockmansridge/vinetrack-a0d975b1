@@ -20,10 +20,10 @@ const fmt = (n: number, digits = 0) =>
 const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }) => (
   <Link
     to={to}
-    className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/50 hover:border-primary/30 transition"
+    className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/40 hover:border-primary/30 transition"
   >
     <span className="flex items-center gap-2.5">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <Icon className="h-4 w-4" />
       </span>
       <span className="font-medium text-foreground">{label}</span>
