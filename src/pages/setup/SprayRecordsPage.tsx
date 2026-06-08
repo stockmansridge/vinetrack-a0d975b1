@@ -61,6 +61,7 @@ const ANY = "__any__";
 
 export default function SprayRecordsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [filter, setFilter] = useState("");
