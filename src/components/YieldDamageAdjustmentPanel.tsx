@@ -32,6 +32,7 @@ import {
   type DamageRecord,
 } from "@/lib/damageRecordsQuery";
 import { aggregateDamageByPaddock } from "@/lib/damageImpact";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 interface PaddockLite {
   id: string;
