@@ -256,11 +256,13 @@ export default function SprayRecordsPage() {
 function SprayRecordSheet({
   record,
   vineyardName,
+  formatters,
   open,
   onOpenChange,
 }: {
   record: SprayRecord | null;
   vineyardName?: string | null;
+  formatters?: import("@/lib/regionFormatters").RegionFormatters;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -278,7 +280,9 @@ function SprayRecordSheet({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => exportSprayRecordPdf(record, vineyardName)}
+                onClick={() =>
+                  exportSprayRecordPdf(record, vineyardName, { formatters })
+                }
                 className="gap-1.5"
               >
                 <FileDown className="h-3.5 w-3.5" /> Export PDF
