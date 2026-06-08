@@ -757,10 +757,11 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function BoundaryStep({
-  polygon, setPolygon, onBack, onNext,
+  polygon, setPolygon, areaText, onBack, onNext,
 }: {
   polygon: LatLng[];
   setPolygon: (p: LatLng[]) => void;
+  areaText: string;
   onBack: () => void;
   onNext: () => void;
 }) {
