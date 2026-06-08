@@ -107,8 +107,9 @@ export function createRegionFormatters(
   const speedUnitLabel = distImperial ? "mph" : "km/h";
   const sprayRateUnitLabel = `${volumeUnitLabel}/${rateImperial ? "ac" : "ha"}`;
 
-  const blockLabel = "Block";
-  const blocksLabel = "Blocks";
+  const isPaddockTerm = s.terminology_region === "AU_NZ";
+  const blockLabel = isPaddockTerm ? "Paddock" : "Block";
+  const blocksLabel = isPaddockTerm ? "Paddocks" : "Blocks";
 
   const dateLocale = localeFromDateFormat(s.date_format);
 

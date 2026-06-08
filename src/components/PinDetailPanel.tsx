@@ -7,7 +7,7 @@ import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
-import { formatDateTime as fmtDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 export interface PinRecord {
   id: string;
@@ -74,20 +74,8 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function formatDateTime(v?: string | null): string | null {
-  if (!v) return null;
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return null;
-  return fmtDateTime(d, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, onClose }: Props) {
+  const rf = useRegionFormatters();
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
@@ -126,9 +114,9 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
       (pin.completed_by_user_id ? "Unknown member" : "Not recorded");
   }
 
-  const createdAtDisplay = formatDateTime(pin.created_at) ?? "Not recorded";
+  const createdAtDisplay = rf.dateTime(pin.created_at) || "Not recorded";
   const completedAtDisplay = pin.is_completed
-    ? formatDateTime(pin.completed_at) ?? "Not recorded"
+    ? rf.dateTime(pin.completed_at) || "Not recorded"
     : "Not completed";
 
   const coords =
@@ -183,7 +171,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
 
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
-          <Field label="Paddock" value={paddockName} />
+          <Field label={rf.blockLabel} value={paddockName} />
           <Field label="On Row" value={formatAttachedRow(pin)} />
           <Field label="Driving row" value={formatDrivingPath(pin, paddockRowDirection)} />
           {!formatAttachedRow(pin) && !formatDrivingPath(pin, paddockRowDirection) && (
@@ -220,7 +208,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
             <div className="flex justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Updated at</span>
               <span className="text-right font-medium break-words">
-                {formatDateTime(pin.updated_at) ?? "—"}
+                {rf.dateTime(pin.updated_at) || "—"}
               </span>
             </div>
           )}
