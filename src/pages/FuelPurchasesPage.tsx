@@ -47,29 +47,38 @@ import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
-const fmtDate = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
-};
+const L_PER_US_GAL = 3.785411784;
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtCost = (v?: number | null) =>
-  v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "AUD" });
-const fmtLitres = (v?: number | null) =>
-  v == null ? "—" : `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`;
-const fmtCpl = (cost?: number | null, litres?: number | null) => {
-  if (cost == null || litres == null || litres <= 0) return "—";
-  return (cost / litres).toLocaleString(undefined, {
-    style: "currency",
-    currency: "AUD",
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 4,
-  }) + "/L";
+const mkFuelFmt = (rf: RegionFormatters) => {
+  const fuelImperial = rf.fuelUnitLabel === "gal";
+  return {
+    date: (v?: string | null) => (v ? rf.date(v) || "—" : "—"),
+    cost: (v?: number | null) => (v == null ? "—" : rf.currency(v)),
+    fuelQty: (litres?: number | null) => (litres == null ? "—" : rf.fuel(litres, 2)),
+    cpl: (cost?: number | null, litres?: number | null) => {
+      if (cost == null || litres == null || litres <= 0) return "—";
+      // cost per stored-litre → cost per fuel-unit
+      const perUnit = fuelImperial ? (cost / litres) * L_PER_US_GAL : cost / litres;
+      try {
+        return (
+          new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: rf.settings.currency_code,
+            currencyDisplay: "narrowSymbol",
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 4,
+          }).format(perUnit) + `/${rf.fuelUnitLabel}`
+        );
+      } catch {
+        return `${rf.settings.currency_code} ${perUnit.toFixed(3)}/${rf.fuelUnitLabel}`;
+      }
+    },
+  };
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
