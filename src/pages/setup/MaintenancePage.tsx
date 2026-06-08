@@ -842,3 +842,30 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
     </div>
   );
 }
+
+function AddEquipmentMenu() {
+  const navigate = useNavigate();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="outline" title="Add item / machine">
+          <Plus className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => navigate("/setup/tractors")}>
+          Add Tractor
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/setup/spray-equipment")}>
+          Add Spray Equipment
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/setup/vineyard-machines")}>
+          Add Vineyard Machine
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/setup/equipment-other")}>
+          Add Other Equipment & Asset
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
