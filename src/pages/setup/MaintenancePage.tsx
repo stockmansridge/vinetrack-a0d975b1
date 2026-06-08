@@ -721,7 +721,7 @@ function MaintenanceEditor({
             </div>
             {!editing && (
               <p className="text-xs text-muted-foreground">
-                New records must use a Tractor, Spray Equipment item, Vineyard Machine, or Other Equipment & Asset.
+                New records must use a Tractor, Spray Equipment item, Vineyard Machine, or Other Equipment & Assets.
               </p>
             )}
           </div>
@@ -863,7 +863,7 @@ function AddEquipmentMenu() {
           Add Vineyard Machine
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate("/setup/equipment-other")}>
-          Add Other Equipment & Asset
+          Add Other Equipment & Assets
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
