@@ -62,11 +62,10 @@ interface PaddockLite {
 }
 
 import { tripFunctionLabel as tripFn } from "@/lib/tripFunctionLabels";
+import { formatTripNameLabel } from "@/lib/tripDisplay";
 
-const tripDisplay = (t: Trip): string => {
-  if (t.trip_title?.trim()) return t.trip_title.trim();
-  return tripFn(t.trip_function) ?? t.tracking_pattern ?? "Trip";
-};
+const tripDisplay = (t: Trip): string =>
+  formatTripNameLabel(t.trip_title, t.tracking_pattern, tripFn(t.trip_function) ?? "Trip");
 
 type Status = "active" | "paused" | "finished" | "older";
 
