@@ -97,13 +97,9 @@ export function exportSprayRecordPdf(
   const { product, rate, water } = chemicalSummary(record.tanks, fmt);
 
   const speedVal =
-    record.average_speed != null && record.average_speed !== ""
-      ? fmt.speed(record.average_speed)
-      : NR;
+    record.average_speed != null ? fmt.speed(record.average_speed) || NR : NR;
   const windSpeedVal =
-    record.wind_speed != null && record.wind_speed !== ""
-      ? fmt.speed(record.wind_speed)
-      : NR;
+    record.wind_speed != null ? fmt.speed(record.wind_speed) || NR : NR;
 
   const rows: [string, string][] = [
     ["Date", fmtDate(record.date)],
