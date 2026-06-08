@@ -38,6 +38,7 @@ import {
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
 import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
