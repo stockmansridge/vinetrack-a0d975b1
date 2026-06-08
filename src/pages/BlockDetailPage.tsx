@@ -96,6 +96,7 @@ function useBlockFormatters() {
 }
 
 export default function BlockDetailPage() {
+  const { rf, fmtDay, fmtDateTime } = useBlockFormatters();
   const { blockId } = useParams();
   const navigate = useNavigate();
   const { selectedVineyardId, memberships } = useVineyard();
