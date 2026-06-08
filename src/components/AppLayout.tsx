@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import vinetrackLogo from "@/assets/vinetrack-logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
