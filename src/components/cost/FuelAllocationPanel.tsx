@@ -25,18 +25,12 @@ import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 import type { TractorLite } from "@/lib/tripCosting";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 type GroupBy = "tractor" | "trip_function" | "block" | "operator";
 
 interface PaddockLite { id: string; name: string | null }
 
-function fmtMoney(v: number | null | undefined): string {
-  if (v == null || !isFinite(v)) return "—";
-  return v.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
-}
-function fmtL(v: number): string {
-  return `${v.toFixed(1)} L`;
-}
 function csvCell(v: any): string {
   const s = v == null ? "" : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
