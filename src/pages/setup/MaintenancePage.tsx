@@ -133,6 +133,7 @@ export default function MaintenancePage() {
     const s = new Set<string>();
     equipmentGroups?.tractors.forEach((o) => s.add(o.name));
     equipmentGroups?.sprayEquipment.forEach((o) => s.add(o.name));
+    equipmentGroups?.vineyardMachines.forEach((o) => s.add(o.name));
     equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
     return s;
   }, [equipmentGroups]);
