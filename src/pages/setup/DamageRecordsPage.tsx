@@ -478,13 +478,14 @@ export default function DamageRecordsPage() {
 // ---------- Detail / read drawer ----------
 
 function DamageDetailSheet({
-  record, paddock, createdByName, open, canEdit, onOpenChange, onEdit, onArchive,
+  record, paddock, createdByName, open, canEdit, rf, onOpenChange, onEdit, onArchive,
 }: {
   record: DamageRecord | null;
   paddock: PaddockGeo | null;
   createdByName: string | null;
   open: boolean;
   canEdit: boolean;
+  rf: RegionFormatters;
   onOpenChange: (o: boolean) => void;
   onEdit: (r: DamageRecord) => void;
   onArchive: (r: DamageRecord) => void;
