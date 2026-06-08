@@ -92,18 +92,18 @@
 
     --map-accent: 210 90% 60%;
 
-    --border: 213 12% 22%;                /* #30363D */
+    --border: 213 12% 20%;                /* subtle slate */
     --input: 213 12% 22%;
     --ring: 80 58% 50%;
 
     /* Sidebar — distinct dark surface */
     --sidebar-background: 210 14% 10%;    /* #15191D */
-    --sidebar-foreground: 210 17% 96%;
-    --sidebar-primary: 80 58% 46%;
+    --sidebar-foreground: 210 12% 70%;
+    --sidebar-primary: 80 58% 50%;
     --sidebar-primary-foreground: 144 60% 8%;
-    --sidebar-accent: 213 14% 18%;        /* #262C33 */
-    --sidebar-accent-foreground: 210 17% 96%;
-    --sidebar-border: 213 12% 18%;
+    --sidebar-accent: 144 50% 16%;        /* deep green tint for active */
+    --sidebar-accent-foreground: 80 70% 65%;  /* bright brand green */
+    --sidebar-border: 213 12% 16%;
     --sidebar-ring: 80 58% 50%;
   }
 }
