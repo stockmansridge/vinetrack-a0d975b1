@@ -125,24 +125,25 @@ const DEFAULT_TASK_TYPES = [
   "Other",
 ];
 
-const fmtDate = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
-};
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const num = (v: any, digits = 2) =>
   v == null || v === "" || Number.isNaN(Number(v)) ? "—" : Number(v).toFixed(digits);
-const money = (v: any) =>
-  v == null || v === "" || Number.isNaN(Number(v)) ? "—" : `$${Number(v).toFixed(2)}`;
 
-const dateRangeLabel = (t: WorkTask) => {
-  const s = t.start_date ?? t.date ?? null;
-  const e = t.end_date ?? null;
-  if (!s && !e) return "—";
-  if (s && e && s !== e) return `${fmtDate(s)} → ${fmtDate(e)}`;
-  return fmtDate(s ?? e);
+const mkFmtDate = (rf: RegionFormatters) => (v?: string | null) => {
+  if (!v) return "—";
+  return rf.date(v) || "—";
+};
+const mkMoney = (rf: RegionFormatters) => (v: any) =>
+  v == null || v === "" || Number.isNaN(Number(v)) ? "—" : rf.currency(Number(v));
+const mkDateRangeLabel = (rf: RegionFormatters) => {
+  const fd = mkFmtDate(rf);
+  return (t: WorkTask) => {
+    const s = t.start_date ?? t.date ?? null;
+    const e = t.end_date ?? null;
+    if (!s && !e) return "—";
+    if (s && e && s !== e) return `${fd(s)} → ${fd(e)}`;
+    return fd(s ?? e);
+  };
 };
 const effectiveStart = (t: WorkTask) => t.start_date ?? t.date ?? null;
 const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? null;
