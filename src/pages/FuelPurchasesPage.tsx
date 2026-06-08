@@ -210,7 +210,7 @@ export default function FuelPurchasesPage() {
           <>
             <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
             <SummaryCard
-              label="Avg cost / litre"
+              label={`Avg cost / ${rf.fuelUnitLabel}`}
               value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
             />
           </>
