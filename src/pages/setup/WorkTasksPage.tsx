@@ -905,9 +905,9 @@ function WorkTaskDrawer({
                   totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
                 } />
               )}
-              <Field label="Area ha" value={areaNum == null ? "—" : num(areaNum)} />
+              <Field label="Area" value={areaNum == null ? "—" : rf.area(areaNum)} />
               {drawerCanSeeCosts && (
-                <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
+                <Field label={`Cost per ${areaUnit}`} value={costPerHa == null ? "—" : money(costPerHa)} />
               )}
               {drawerCanSeeCosts && <Separator className="my-2" />}
               {drawerCanSeeCosts && (
