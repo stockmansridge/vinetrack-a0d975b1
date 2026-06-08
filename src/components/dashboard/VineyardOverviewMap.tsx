@@ -68,7 +68,7 @@ const tripFnLabel = (v?: string | null) =>
 const tripColor = (v?: string | null) =>
   (v && TRIP_FUNCTION_COLORS[v]) || "#1E5AC8";
 const tripDisplay = (t: Trip) =>
-  t.trip_title?.trim() || tripFnLabel(t.trip_function);
+  formatTripNameLabel(t.trip_title, t.tracking_pattern, tripFnLabel(t.trip_function));
 
 // Distinct, stable color per-trip for the overview map.
 // Avoids paddock greens and common pin reds/yellows by sweeping HSL hues
