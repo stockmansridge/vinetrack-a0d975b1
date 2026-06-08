@@ -155,6 +155,7 @@ export default function WorkTasksPage() {
   const fmtDate = mkFmtDate(rf);
   const money = mkMoney(rf);
   const dateRangeLabel = mkDateRangeLabel(rf);
+  const areaUnit = rf.areaUnitLabel;
   const qc = useQueryClient();
 
   const canSoftDelete = currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
