@@ -236,7 +236,7 @@ export function buildRainfallPdf(ctx: RainfallPdfContext): jsPDF {
       const ph = doc.internal.pageSize.getHeight();
       doc.setFontSize(8);
       doc.setTextColor(120);
-      const footer = `Generated ${format(new Date(), "PP p")}${tz() ? ` (${tz()})` : ""} • VineTrack`;
+      const footer = `Generated ${fmtDateTime(new Date())}${tz() ? ` (${tz()})` : ""} • VineTrack`;
       doc.text(footer, margin, ph - 20);
       doc.setTextColor(0);
     },
