@@ -488,7 +488,7 @@ export default function BlockDetailPage() {
                                 </div>
                                 {t.total_distance != null && (
                                   <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                    {(t.total_distance / 1000).toFixed(2)} km
+                                    {rf.distance(t.total_distance / 1000, 2)}
                                   </Badge>
                                 )}
                               </div>
