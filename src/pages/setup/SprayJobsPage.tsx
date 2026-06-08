@@ -14,6 +14,7 @@ import {
 } from "@/lib/sprayJobsExport";
 
 import { useVineyard } from "@/context/VineyardContext";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
