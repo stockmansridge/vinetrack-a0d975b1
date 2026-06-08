@@ -558,7 +558,7 @@ export default function NewPaddockPage() {
               <SummaryRow label="Vineyard" value={vineyardName ?? selectedVineyardId ?? "—"} />
               <SummaryRow label="Boundary points" value={String(polygon.length)} />
               <SummaryRow label="Rows" value={String(generated.length)} />
-              <SummaryRow label="Area" value={`${fmt(areaHa, 2)} ha`} />
+              <SummaryRow label="Area" value={rf.area(areaHa, 2)} />
               <SummaryRow label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
               <SummaryRow label="Row direction" value={`${rowDirection}°`} />
               <SummaryRow label="Row width" value={`${rowWidth} m`} />
