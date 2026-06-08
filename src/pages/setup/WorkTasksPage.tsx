@@ -67,7 +67,8 @@ import {
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
 import { deriveMetrics } from "@/lib/paddockGeometry";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 interface PaddockLite {
   id: string;
@@ -124,24 +125,25 @@ const DEFAULT_TASK_TYPES = [
   "Other",
 ];
 
-const fmtDate = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
-};
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const num = (v: any, digits = 2) =>
   v == null || v === "" || Number.isNaN(Number(v)) ? "—" : Number(v).toFixed(digits);
-const money = (v: any) =>
-  v == null || v === "" || Number.isNaN(Number(v)) ? "—" : `$${Number(v).toFixed(2)}`;
 
-const dateRangeLabel = (t: WorkTask) => {
-  const s = t.start_date ?? t.date ?? null;
-  const e = t.end_date ?? null;
-  if (!s && !e) return "—";
-  if (s && e && s !== e) return `${fmtDate(s)} → ${fmtDate(e)}`;
-  return fmtDate(s ?? e);
+const mkFmtDate = (rf: RegionFormatters) => (v?: string | null) => {
+  if (!v) return "—";
+  return rf.date(v) || "—";
+};
+const mkMoney = (rf: RegionFormatters) => (v: any) =>
+  v == null || v === "" || Number.isNaN(Number(v)) ? "—" : rf.currency(Number(v));
+const mkDateRangeLabel = (rf: RegionFormatters) => {
+  const fd = mkFmtDate(rf);
+  return (t: WorkTask) => {
+    const s = t.start_date ?? t.date ?? null;
+    const e = t.end_date ?? null;
+    if (!s && !e) return "—";
+    if (s && e && s !== e) return `${fd(s)} → ${fd(e)}`;
+    return fd(s ?? e);
+  };
 };
 const effectiveStart = (t: WorkTask) => t.start_date ?? t.date ?? null;
 const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? null;
@@ -149,6 +151,11 @@ const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? nu
 export default function WorkTasksPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const money = mkMoney(rf);
+  const dateRangeLabel = mkDateRangeLabel(rf);
+  const areaUnit = rf.areaUnitLabel;
   const qc = useQueryClient();
 
   const canSoftDelete = currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
@@ -538,7 +545,7 @@ export default function WorkTasksPage() {
                 const align: "left" | "right" = (id === "area_ha" || id === "hours" || id === "cost") ? "right" : "left";
                 const labels: Record<WtCol, string> = {
                   date: "Date / range", paddock: "Blocks", task_type: "Type", status: "Status",
-                  area_ha: "Area ha", hours: "Hours", cost: "Cost", notes: "Notes",
+                  area_ha: "Area", hours: "Hours", cost: "Cost", notes: "Notes",
                 };
                 const sortable = id !== "notes";
                 return (
@@ -580,7 +587,7 @@ export default function WorkTasksPage() {
                 paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
                 task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
-                area_ha: <TableCell className="text-right">{num(effectiveTaskAreaHa(t))}</TableCell>,
+                area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
                 cost: (
                   <TableCell className="text-right">
@@ -675,6 +682,11 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const money = mkMoney(rf);
+  const dateRangeLabel = mkDateRangeLabel(rf);
+  const areaUnit = rf.areaUnitLabel;
 
   // Initial selection: prefer join rows, fallback to legacy single paddock_id.
   const initialPaddockIds = useMemo(() => {
@@ -831,7 +843,7 @@ function WorkTaskDrawer({
                           />
                           <span className="flex-1 text-sm">{p.name ?? p.id.slice(0, 8)}</span>
                           <span className="text-xs text-muted-foreground">
-                            {ha > 0 ? `${ha.toFixed(2)} ha` : "—"}
+                            {ha > 0 ? rf.area(ha) : "—"}
                           </span>
                         </label>
                         );
@@ -852,13 +864,13 @@ function WorkTaskDrawer({
                 <Field label="Date">
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </Field>
-                <Field label="Area ha (auto)">
+                <Field label={`Area ${areaUnit} (auto)`}>
                   <Input type="number" value={areaHaDisplay} readOnly disabled placeholder="—" />
                 </Field>
               </div>
               {paddockMissingArea && (
                 <p className="text-xs text-destructive">
-                  One or more selected blocks are missing area data, so the total area and cost per ha may be incomplete.
+                  One or more selected blocks are missing area data, so the total area and cost per {areaUnit} may be incomplete.
                 </p>
               )}
               <Field label="Description">
@@ -893,9 +905,9 @@ function WorkTaskDrawer({
                   totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
                 } />
               )}
-              <Field label="Area ha" value={areaNum == null ? "—" : num(areaNum)} />
+              <Field label="Area" value={areaNum == null ? "—" : rf.area(areaNum)} />
               {drawerCanSeeCosts && (
-                <Field label="Cost per ha" value={costPerHa == null ? "—" : money(costPerHa)} />
+                <Field label={`Cost per ${areaUnit}`} value={costPerHa == null ? "—" : money(costPerHa)} />
               )}
               {drawerCanSeeCosts && <Separator className="my-2" />}
               {drawerCanSeeCosts && (
@@ -909,18 +921,18 @@ function WorkTaskDrawer({
                     <thead>
                       <tr className="text-muted-foreground">
                         <th className="text-left font-normal px-2 py-1">Block</th>
-                        <th className="text-right font-normal px-2 py-1">Area ha</th>
+                        <th className="text-right font-normal px-2 py-1">Area</th>
                         <th className="text-right font-normal px-2 py-1">Share</th>
                         <th className="text-right font-normal px-2 py-1">Hours</th>
                         {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost</th>}
-                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost/ha</th>}
+                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">{`Cost/${areaUnit}`}</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {blockBreakdown.map((b) => (
                         <tr key={b.id} className="border-t">
                           <td className="px-2 py-1 truncate max-w-[8rem]" title={b.name}>{b.name}</td>
-                          <td className="px-2 py-1 text-right">{b.areaHa > 0 ? b.areaHa.toFixed(2) : "—"}</td>
+                          <td className="px-2 py-1 text-right">{b.areaHa > 0 ? rf.area(b.areaHa) : "—"}</td>
                           <td className="px-2 py-1 text-right">{(b.share * 100).toFixed(1)}%</td>
                           <td className="px-2 py-1 text-right">{b.allocHours.toFixed(2)}</td>
                           {drawerCanSeeCosts && <td className="px-2 py-1 text-right">{b.allocCost ? money(b.allocCost) : "—"}</td>}
@@ -1028,6 +1040,9 @@ function LabourLineRow({
   onCancel?: () => void;
 }) {
   const isNew = !line;
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const money = mkMoney(rf);
   const [editing, setEditing] = useState(isNew);
   const [workDate, setWorkDate] = useState(line?.work_date ?? "");
   const [workerType, setWorkerType] = useState(line?.worker_type ?? "");
