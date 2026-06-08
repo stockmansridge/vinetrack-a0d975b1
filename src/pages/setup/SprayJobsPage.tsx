@@ -265,6 +265,7 @@ function JobsTable({
   templatesOnly?: boolean;
 }) {
   const { selectedVineyardId, memberships } = useVineyard();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const qc = useQueryClient();
