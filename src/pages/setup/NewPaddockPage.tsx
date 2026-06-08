@@ -254,8 +254,8 @@ export default function NewPaddockPage() {
   const warnings = useMemo(() => {
     const w: string[] = [];
     const requestedRows = Number(rowsCount);
-    if (areaHa > 0 && areaHa < 0.05) w.push(`Area is very small (${areaHa.toFixed(3)} ha) — verify the boundary.`);
-    if (areaHa > 50) w.push(`Area is very large (${areaHa.toFixed(1)} ha) — verify the boundary.`);
+    if (areaHa > 0 && areaHa < 0.05) w.push(`Area is very small (${rf.area(areaHa, 3)}) — verify the boundary.`);
+    if (areaHa > 50) w.push(`Area is very large (${rf.area(areaHa, 1)}) — verify the boundary.`);
     if (Number.isFinite(requestedRows) && requestedRows > 0 && generated.length > 0 && generated.length < requestedRows) {
       w.push(`Generated ${generated.length} rows but ${requestedRows} were requested — some rows fall outside the polygon.`);
     }
