@@ -229,7 +229,7 @@ export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string
             <SelectContent>
               <SelectItem value="tractor">Tractor</SelectItem>
               <SelectItem value="trip_function">Trip function</SelectItem>
-              <SelectItem value="block">Paddock / block</SelectItem>
+              <SelectItem value="block">{rf.blockLabel}</SelectItem>
               <SelectItem value="operator">Operator</SelectItem>
             </SelectContent>
           </Select>
