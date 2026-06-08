@@ -32,6 +32,7 @@ import {
   type DamageRecord,
 } from "@/lib/damageRecordsQuery";
 import { aggregateDamageByPaddock } from "@/lib/damageImpact";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 interface PaddockLite {
   id: string;
@@ -62,6 +63,8 @@ export default function YieldDamageAdjustmentPanel({
   defaultEnabled = false,
 }: Props) {
   const [enabled, setEnabled] = useState(defaultEnabled);
+  const rf = useRegionFormatters();
+  const areaVal = (ha: number) => (Number.isFinite(ha) ? rf.area(ha) : "—");
 
   const paddocksQ = useQuery({
     queryKey: ["paddocks", vineyardId],
@@ -167,11 +170,11 @@ export default function YieldDamageAdjustmentPanel({
       {!loading && !error && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            <Stat label="Mapped damage area" value={`${fmt(summary.totalMappedHa)} ha`} />
-            <Stat label="Effective loss" value={`${fmt(summary.totalEffectiveHa)} ha`} />
+            <Stat label="Mapped damage area" value={areaVal(summary.totalMappedHa)} />
+            <Stat label="Effective loss" value={areaVal(summary.totalEffectiveHa)} />
             <Stat
               label="Vineyard area"
-              value={summary.totalBlockHa > 0 ? `${fmt(summary.totalBlockHa)} ha` : "—"}
+              value={summary.totalBlockHa > 0 ? areaVal(summary.totalBlockHa) : "—"}
             />
             <Stat
               label="Yield impact"
@@ -217,8 +220,8 @@ export default function YieldDamageAdjustmentPanel({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Paddock</TableHead>
-                    <TableHead className="text-right">Block (ha)</TableHead>
-                    <TableHead className="text-right">Effective loss (ha)</TableHead>
+                    <TableHead className="text-right">Block area</TableHead>
+                    <TableHead className="text-right">Effective loss</TableHead>
                     <TableHead className="text-right">Loss %</TableHead>
                     <TableHead className="text-right">Records</TableHead>
                   </TableRow>
@@ -227,8 +230,8 @@ export default function YieldDamageAdjustmentPanel({
                   {summary.rows.map((r) => (
                     <TableRow key={r.paddockId}>
                       <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell className="text-right">{fmt(r.blockHa)}</TableCell>
-                      <TableCell className="text-right">{fmt(r.effectiveHa)}</TableCell>
+                      <TableCell className="text-right">{areaVal(r.blockHa)}</TableCell>
+                      <TableCell className="text-right">{areaVal(r.effectiveHa)}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={r.lossPct >= 50 ? "destructive" : r.lossPct >= 20 ? "default" : "secondary"}>
                           {r.lossPct.toFixed(1)}%

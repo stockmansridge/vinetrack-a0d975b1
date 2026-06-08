@@ -37,24 +37,38 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const ANY = "__any__";
 
-const fmtDate = (v?: string | null) => {
+// Canonical conversion: 1 ha = 0.40468564224 ac, so 1 t/ha = 0.4047 t/ac.
+const HA_PER_AC = 0.40468564224;
+
+const mkFmtDate = (rf: RegionFormatters) => (v?: string | null) => {
   if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
+  return rf.date(v) || "—";
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtNum = (v?: number | null, digits = 2) =>
   v == null ? "—" : Number(v).toLocaleString(undefined, { maximumFractionDigits: digits });
+const mkAreaVal = (rf: RegionFormatters) => (ha?: number | null, dp = 2) =>
+  ha == null ? "—" : rf.area(ha, dp);
+const mkYieldPerArea = (rf: RegionFormatters) => (tPerHa?: number | null, dp = 2) => {
+  if (tPerHa == null) return "—";
+  const v = rf.areaUnitLabel === "ac" ? tPerHa * HA_PER_AC : tPerHa;
+  return `${fmtNum(v, dp)} t/${rf.areaUnitLabel}`;
+};
 
 type AnyRow = (YieldEstimationSession | HistoricalYieldRecord) & { __kind: "session" | "historical" };
 
 export default function YieldReportsPage() {
   const { selectedVineyardId } = useVineyard();
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const areaVal = mkAreaVal(rf);
+  const yieldPerArea = mkYieldPerArea(rf);
+  const areaUnit = rf.areaUnitLabel;
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -270,7 +284,7 @@ export default function YieldReportsPage() {
                       type: "Type",
                       season: "Season / year",
                       yield: "Total yield (t)",
-                      area: "Area (ha)",
+                      area: "Area",
                       status: "Status",
                     };
                     return (
@@ -310,7 +324,7 @@ export default function YieldReportsPage() {
                     ),
                     season: <TableCell>{isHist ? fmt(h.season ?? h.year) : "—"}</TableCell>,
                     yield: <TableCell>{isHist ? fmtNum(h.total_yield_tonnes) : "—"}</TableCell>,
-                    area: <TableCell>{isHist ? fmtNum(h.total_area_hectares) : "—"}</TableCell>,
+                    area: <TableCell>{isHist ? areaVal(h.total_area_hectares) : "—"}</TableCell>,
                     status: (
                       <TableCell>
                         {isHist
@@ -359,6 +373,8 @@ function YieldSheet({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -378,6 +394,10 @@ function YieldSheet({
 }
 
 function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const areaVal = mkAreaVal(rf);
+  const yieldPerArea = mkYieldPerArea(rf);
   const blocks = Array.isArray(row.block_results) ? row.block_results : null;
   return (
     <div className="mt-4 space-y-4 text-sm">
@@ -385,10 +405,10 @@ function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vin
         <Field label="Season" value={fmt(row.season)} />
         <Field label="Year" value={fmt(row.year)} />
         <Field label="Total yield (t)" value={fmtNum(row.total_yield_tonnes)} />
-        <Field label="Total area (ha)" value={fmtNum(row.total_area_hectares)} />
-        <Field label="t / ha" value={
+        <Field label="Total area" value={areaVal(row.total_area_hectares)} />
+        <Field label={`Yield per ${rf.areaUnitLabel}`} value={
           row.total_yield_tonnes != null && row.total_area_hectares
-            ? fmtNum(row.total_yield_tonnes / row.total_area_hectares)
+            ? yieldPerArea(row.total_yield_tonnes / row.total_area_hectares)
             : "—"
         } />
         <Field label="Archived at" value={fmtDate(row.archived_at)} />
@@ -531,6 +551,9 @@ function summarizeSession(payload: any) {
 }
 
 function SessionDetail({ row }: { row: YieldEstimationSession }) {
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const areaVal = mkAreaVal(rf);
   const summary = summarizeSession(row.payload);
   const showDev = import.meta.env.DEV;
 
@@ -567,7 +590,7 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
                   {b.avgBunchWeightKg != null && (
                     <Field label="Avg bunch weight (kg)" value={fmtNum(b.avgBunchWeightKg, 3)} />
                   )}
-                  {b.areaHa != null && <Field label="Area (ha)" value={fmtNum(b.areaHa)} />}
+                  {b.areaHa != null && <Field label="Area" value={areaVal(b.areaHa)} />}
                 </div>
                 {b.notes && (
                   <p className="text-xs text-muted-foreground whitespace-pre-wrap pt-1">{String(b.notes)}</p>
@@ -620,15 +643,15 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
           <div className="space-y-1.5">
             <p className="text-muted-foreground text-xs">
               Yield estimate not available yet — the session is missing the data required to
-              calculate tonnes / ha:
+              calculate tonnes / {rf.areaUnitLabel}:
             </p>
             <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
               {summary.missing.bunchWeight && <li>Average bunch weight (kg) per block</li>}
-              {summary.missing.area && <li>Block area (ha)</li>}
-              {summary.missing.vines && <li>Vines per hectare (planting density)</li>}
+              {summary.missing.area && <li>Block area ({rf.areaUnitLabel})</li>}
+              {summary.missing.vines && <li>Vines per {rf.areaUnitLabel === "ac" ? "acre" : "hectare"} (planting density)</li>}
             </ul>
             <p className="text-xs pt-1">
-              Per-vine sampling totals are shown above. Once bunch weight and vines / ha are
+              Per-vine sampling totals are shown above. Once bunch weight and vines / {rf.areaUnitLabel} are
               recorded, the tonnage estimate will appear here.
             </p>
           </div>
