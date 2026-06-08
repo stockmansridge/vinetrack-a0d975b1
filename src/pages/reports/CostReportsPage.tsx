@@ -416,12 +416,12 @@ export default function CostReportsPage() {
         <SummaryCard label="Total cost" value={fmtMoney(summary.total)} />
         <SummaryCard
           label="Treated area"
-          value={`${fmtNum(summary.area)} ha`}
-          info="Treated area is the accumulated mapped block area from the jobs/trips included in this report. If the same block is treated multiple times, its area contributes once per job. Example: a 2 ha block treated 3 times contributes 6 treated ha."
+          value={fmtArea(summary.area)}
+          info={`Treated area is the accumulated mapped ${rf.blockLabel.toLowerCase()} area from the jobs/trips included in this report. If the same ${rf.blockLabel.toLowerCase()} is treated multiple times, its area contributes once per job.`}
         />
         <SummaryCard
-          label="Cost / ha"
-          value={fmtMoney(summary.costPerHa)}
+          label={`Cost / ${rf.areaUnitLabel}`}
+          value={fmtMoneyPerArea(summary.costPerHa)}
           info="Total cost divided by treated area (cumulative across jobs)."
         />
         <SummaryCard label="Yield" value={`${fmtNum(summary.yieldT)} t`} />
@@ -432,7 +432,7 @@ export default function CostReportsPage() {
 
       <Card className="p-3 flex flex-wrap gap-2 items-center">
         <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
-        <FilterSelect label="Block" value={paddock} onChange={setPaddock} options={paddocks} />
+        <FilterSelect label={rf.blockLabel} value={paddock} onChange={setPaddock} options={paddocks} />
         <FilterSelect label="Variety" value={variety} onChange={setVariety} options={varieties} />
         <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} renderLabel={(v) => tripFunctionLabel(v) ?? v} />
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
