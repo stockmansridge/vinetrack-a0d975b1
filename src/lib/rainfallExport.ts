@@ -106,11 +106,22 @@ export interface RainfallPdfContext {
   to: Date;
   rows: RainfallDay[];
   logoDataUrl?: string | null;
+  rf?: RegionFormatters;
 }
 
-function fmtDate(d: string | Date): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return isNaN(date.getTime()) ? "—" : format(date, "PP");
+function makeFmtDate(rf: RegionFormatters) {
+  return (d: string | Date): string => {
+    const date = typeof d === "string" ? new Date(d) : d;
+    if (isNaN(date.getTime())) return "—";
+    return rf.date(date) || "—";
+  };
+}
+function makeFmtDateTime(rf: RegionFormatters) {
+  return (d: string | Date): string => {
+    const date = typeof d === "string" ? new Date(d) : d;
+    if (isNaN(date.getTime())) return "—";
+    return rf.dateTime(date) || "—";
+  };
 }
 
 function tz(): string {
