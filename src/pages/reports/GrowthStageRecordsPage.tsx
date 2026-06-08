@@ -50,6 +50,7 @@ const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 export default function GrowthStageRecordsPage() {
   const { selectedVineyardId } = useVineyard();
   const { resolve } = useTeamLookup(selectedVineyardId);
+  const rf = useRegionFormatters();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
