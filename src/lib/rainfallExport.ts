@@ -133,7 +133,10 @@ function tz(): string {
 }
 
 export function buildRainfallPdf(ctx: RainfallPdfContext): jsPDF {
-  const { vineyardName, from, to, rows, logoDataUrl } = ctx;
+  const { vineyardName, from, to, rows, logoDataUrl, rf: rfArg } = ctx;
+  const rf = rfArg ?? AU_FORMATTERS;
+  const fmtDate = makeFmtDate(rf);
+  const fmtDateTime = makeFmtDateTime(rf);
   const summary = summarizeRainfall(rows);
   const nullDays = rows.filter((r) => r.rainfall_mm == null).length;
 
