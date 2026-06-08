@@ -250,8 +250,9 @@ export async function downloadRainfallPdf(
   vineyardName: string,
   from: Date,
   to: Date,
+  rf?: RegionFormatters,
 ) {
   const logoDataUrl = await loadLogoDataUrl();
-  const doc = buildRainfallPdf({ vineyardName, from, to, rows, logoDataUrl });
+  const doc = buildRainfallPdf({ vineyardName, from, to, rows, logoDataUrl, rf });
   doc.save(`${rainfallFileBase(vineyardName, from, to)}.pdf`);
 }
