@@ -64,6 +64,11 @@ type AnyRow = (YieldEstimationSession | HistoricalYieldRecord) & { __kind: "sess
 
 export default function YieldReportsPage() {
   const { selectedVineyardId } = useVineyard();
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const areaVal = mkAreaVal(rf);
+  const yieldPerArea = mkYieldPerArea(rf);
+  const areaUnit = rf.areaUnitLabel;
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
