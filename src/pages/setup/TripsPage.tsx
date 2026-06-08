@@ -366,11 +366,11 @@ export default function TripsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Paddock</div>
+          <div className="text-xs text-muted-foreground">{formatters.blockLabel}</div>
           <Select value={paddockId} onValueChange={setPaddockId}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>Any paddock</SelectItem>
+              <SelectItem value={ANY}>Any {formatters.blockLabel.toLowerCase()}</SelectItem>
               {paddocks.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name ?? p.id.slice(0, 8)}</SelectItem>
               ))}
