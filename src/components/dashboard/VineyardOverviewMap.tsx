@@ -551,13 +551,13 @@ export default function VineyardOverviewMap({
         <div>
           <CardTitle className="text-base">Vineyard map</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Click a block to open its detail page. Click a trip or pin for details here.
+            Click a {rf.blockLabel.toLowerCase()} to open its detail page. Click a trip or pin for details here.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-xs">
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-            <Toggle label="Blocks" checked={showPaddocks} onChange={setShowPaddocks} />
+            <Toggle label={rf.blocksLabel} checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
           </div>
           <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
