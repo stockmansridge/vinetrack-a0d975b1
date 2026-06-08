@@ -233,7 +233,7 @@ export default function DocumentsPage() {
       });
 
     return out;
-  }, [trips, sprayJobs, paddockMap, vineyardName]);
+  }, [trips, sprayJobs, paddockMap, vineyardName, vineyardLogoUrl, formatters]);
 
   // Distinct trip functions present in current items (for filter dropdown).
   const tripFnOptions = useMemo(() => {
