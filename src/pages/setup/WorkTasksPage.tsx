@@ -67,7 +67,8 @@ import {
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
 import { deriveMetrics } from "@/lib/paddockGeometry";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 interface PaddockLite {
   id: string;
