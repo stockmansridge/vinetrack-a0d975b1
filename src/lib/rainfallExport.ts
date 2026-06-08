@@ -4,6 +4,7 @@ import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { sourceLabel, summarizeRainfall, type RainfallDay } from "./rainfallQuery";
+import { AU_FORMATTERS, type RegionFormatters } from "./regionFormatters";
 
 const SOURCE_PRIORITY_NOTE =
   "Source priority: Manual → Davis WeatherLink → Weather Underground → Open-Meteo";
