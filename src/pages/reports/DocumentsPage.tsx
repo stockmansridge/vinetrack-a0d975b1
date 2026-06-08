@@ -183,6 +183,7 @@ export default function DocumentsPage() {
             blockNames,
             pinCount,
             vineyardLogoUrl: vineyardLogoUrl ?? null,
+            formatters,
           });
         },
       });
