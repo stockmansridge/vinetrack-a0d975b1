@@ -316,9 +316,9 @@ function JobsTable({
     try {
       const padMap = await fetchJobPaddockMap(yearJobs.map((j) => j.id));
       if (kind === "pdf") {
-        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year);
+        exportYearlySprayProgramPdf(yearJobs, padMap, lookupMaps, vineyardName, year, formatters);
       } else {
-        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year);
+        exportYearlySprayProgramCsv(yearJobs, padMap, lookupMaps, vineyardName, year, formatters);
       }
     } catch (e: any) {
       toast({ title: "Export failed", description: e.message, variant: "destructive" });
