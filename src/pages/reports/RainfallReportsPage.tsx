@@ -148,7 +148,7 @@ export default function RainfallReportsPage() {
           </div>
         )}
         <div className="text-xs text-muted-foreground">
-          Range: {format(from, "PP")} → {format(to, "PP")}
+          Range: {rf.date(from)} → {rf.date(to)}
         </div>
       </Card>
 
