@@ -43,17 +43,31 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
-import { formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 
 const ANY = "__any__";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HA_PER_AC = 0.40468564224;
 
-function fmtMoney(v: number | null | undefined): string {
-  if (v == null || !isFinite(v)) return "—";
-  return v.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+function makeFmtMoney(rf: RegionFormatters) {
+  return (v: number | null | undefined): string =>
+    v == null || !isFinite(v) ? "—" : rf.currency(v, 0);
+}
+function makeFmtArea(rf: RegionFormatters) {
+  return (haValue: number | null | undefined, dp = 2): string =>
+    haValue == null || !isFinite(haValue) ? "—" : rf.area(haValue, dp);
+}
+function makeFmtCostPerArea(rf: RegionFormatters) {
+  const imperial = rf.areaUnitLabel === "ac";
+  return (perHa: number | null | undefined): string => {
+    if (perHa == null || !isFinite(perHa)) return "—";
+    const v = imperial ? perHa * HA_PER_AC : perHa;
+    return `${rf.currency(v, 0)} / ${rf.areaUnitLabel}`;
+  };
 }
 function fmtNum(v: number | null | undefined, dp = 2): string {
   if (v == null || !isFinite(v)) return "—";
