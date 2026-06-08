@@ -437,7 +437,7 @@ export default function LiveDashboardPage() {
                   <SortableTableHead active={liveSortDir("trip")} onSort={() => liveToggle("trip")}>Trip</SortableTableHead>
                   <SortableTableHead active={liveSortDir("status")} onSort={() => liveToggle("status")}>Status</SortableTableHead>
                   <SortableTableHead active={liveSortDir("operator")} onSort={() => liveToggle("operator")}>Operator</SortableTableHead>
-                  <SortableTableHead active={liveSortDir("block")} onSort={() => liveToggle("block")}>Block</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("block")} onSort={() => liveToggle("block")}>{rf.blockLabel}</SortableTableHead>
                   <SortableTableHead active={liveSortDir("started")} onSort={() => liveToggle("started")}>Started</SortableTableHead>
                   <SortableTableHead active={liveSortDir("duration")} onSort={() => liveToggle("duration")}>Duration</SortableTableHead>
                   <SortableTableHead active={liveSortDir("row")} onSort={() => liveToggle("row")}>Row</SortableTableHead>
