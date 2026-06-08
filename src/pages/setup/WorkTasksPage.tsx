@@ -681,6 +681,11 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const money = mkMoney(rf);
+  const dateRangeLabel = mkDateRangeLabel(rf);
+  const areaUnit = rf.areaUnitLabel;
 
   // Initial selection: prefer join rows, fallback to legacy single paddock_id.
   const initialPaddockIds = useMemo(() => {
