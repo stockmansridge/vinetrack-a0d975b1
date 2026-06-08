@@ -426,6 +426,7 @@ export default function DamageRecordsPage() {
         createdByName={resolve(selected?.created_by ?? null)}
         open={!!selected}
         canEdit={canEdit}
+        rf={rf}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={(r) => { setSelected(null); openEdit(r); }}
         onArchive={(r) => setArchiveTarget(r)}
