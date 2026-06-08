@@ -843,7 +843,7 @@ function WorkTaskDrawer({
                           />
                           <span className="flex-1 text-sm">{p.name ?? p.id.slice(0, 8)}</span>
                           <span className="text-xs text-muted-foreground">
-                            {ha > 0 ? `${ha.toFixed(2)} ha` : "—"}
+                            {ha > 0 ? rf.area(ha) : "—"}
                           </span>
                         </label>
                         );
