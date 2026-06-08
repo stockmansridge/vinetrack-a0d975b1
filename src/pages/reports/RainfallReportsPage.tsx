@@ -343,6 +343,7 @@ function DateField({
   value: Date | undefined;
   onChange: (d: Date | undefined) => void;
 }) {
+  const rf = useRegionFormatters();
   return (
     <Popover>
       <PopoverTrigger asChild>
