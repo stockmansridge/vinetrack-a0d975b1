@@ -163,7 +163,7 @@ export default function RainfallReportsPage() {
               ? `${summary.wettest.mm} mm`
               : "—"
           }
-          sub={summary.wettest ? format(new Date(summary.wettest.date), "PP") : undefined}
+          sub={summary.wettest ? rf.date(new Date(summary.wettest.date)) : undefined}
         />
         <SummaryCard
           label="Avg / rain day"
