@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { restorePaddock } from "@/lib/paddockMutations";
 import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 interface ArchivedRow {
   id: string;
