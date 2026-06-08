@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { CalendarIcon, CloudRain, Download, Info } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -12,6 +11,7 @@ import {
   type RangePreset,
 } from "@/lib/rainfallQuery";
 import { downloadRainfallPdf, downloadRainfallCsv } from "@/lib/rainfallExport";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +54,7 @@ const PRESETS: { value: RangePreset; label: string }[] = [
 
 export default function RainfallReportsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const rf = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? "Vineyard";
   const [preset, setPreset] = useState<RangePreset>("last30");
@@ -108,7 +109,7 @@ export default function RainfallReportsPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={() => downloadRainfallPdf(rows, vineyardName, from, to)}
+              onClick={() => downloadRainfallPdf(rows, vineyardName, from, to, rf)}
             >
               Download PDF
             </DropdownMenuItem>
@@ -147,7 +148,7 @@ export default function RainfallReportsPage() {
           </div>
         )}
         <div className="text-xs text-muted-foreground">
-          Range: {format(from, "PP")} → {format(to, "PP")}
+          Range: {rf.date(from)} → {rf.date(to)}
         </div>
       </Card>
 
@@ -162,7 +163,7 @@ export default function RainfallReportsPage() {
               ? `${summary.wettest.mm} mm`
               : "—"
           }
-          sub={summary.wettest ? format(new Date(summary.wettest.date), "PP") : undefined}
+          sub={summary.wettest ? rf.date(new Date(summary.wettest.date)) : undefined}
         />
         <SummaryCard
           label="Avg / rain day"
@@ -255,6 +256,7 @@ function RpcErrorState({ reason, message }: { reason: "rpc_missing" | "forbidden
 }
 
 function RainfallTable({ rows }: { rows: any[] }) {
+  const rf = useRegionFormatters();
   type RainSortKey = "date" | "rainfall" | "source" | "station" | "notes" | "updated";
   const { sorted, getSortDirection, toggleSort } = useSortableTable<any, RainSortKey>(rows, {
     accessors: {
@@ -287,7 +289,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
   const renderCell = (r: any, id: Col): React.ReactNode => {
     switch (id) {
       case "date":
-        return <TableCell>{r.date ? format(new Date(r.date), "PP") : "—"}</TableCell>;
+        return <TableCell>{r.date ? rf.date(new Date(r.date)) : "—"}</TableCell>;
       case "rainfall":
         return (
           <TableCell className="text-right tabular-nums">
@@ -303,7 +305,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
       case "updated":
         return (
           <TableCell className="text-xs text-muted-foreground">
-            {r.updated_at ? format(new Date(r.updated_at), "PP p") : "—"}
+            {r.updated_at ? rf.dateTime(new Date(r.updated_at)) : "—"}
           </TableCell>
         );
     }
@@ -341,6 +343,7 @@ function DateField({
   value: Date | undefined;
   onChange: (d: Date | undefined) => void;
 }) {
+  const rf = useRegionFormatters();
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -350,7 +353,7 @@ function DateField({
           className={cn("justify-start text-left font-normal", !value && "text-muted-foreground")}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {value ? format(value, "PP") : label}
+          {value ? rf.date(value) : label}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

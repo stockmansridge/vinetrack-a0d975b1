@@ -4,6 +4,7 @@ import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import logoUrl from "@/assets/vinetrack-leaf.png";
 import { sourceLabel, summarizeRainfall, type RainfallDay } from "./rainfallQuery";
+import { AU_FORMATTERS, type RegionFormatters } from "./regionFormatters";
 
 const SOURCE_PRIORITY_NOTE =
   "Source priority: Manual → Davis WeatherLink → Weather Underground → Open-Meteo";
@@ -105,11 +106,22 @@ export interface RainfallPdfContext {
   to: Date;
   rows: RainfallDay[];
   logoDataUrl?: string | null;
+  rf?: RegionFormatters;
 }
 
-function fmtDate(d: string | Date): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return isNaN(date.getTime()) ? "—" : format(date, "PP");
+function makeFmtDate(rf: RegionFormatters) {
+  return (d: string | Date): string => {
+    const date = typeof d === "string" ? new Date(d) : d;
+    if (isNaN(date.getTime())) return "—";
+    return rf.date(date) || "—";
+  };
+}
+function makeFmtDateTime(rf: RegionFormatters) {
+  return (d: string | Date): string => {
+    const date = typeof d === "string" ? new Date(d) : d;
+    if (isNaN(date.getTime())) return "—";
+    return rf.dateTime(date) || "—";
+  };
 }
 
 function tz(): string {
@@ -121,7 +133,10 @@ function tz(): string {
 }
 
 export function buildRainfallPdf(ctx: RainfallPdfContext): jsPDF {
-  const { vineyardName, from, to, rows, logoDataUrl } = ctx;
+  const { vineyardName, from, to, rows, logoDataUrl, rf: rfArg } = ctx;
+  const rf = rfArg ?? AU_FORMATTERS;
+  const fmtDate = makeFmtDate(rf);
+  const fmtDateTime = makeFmtDateTime(rf);
   const summary = summarizeRainfall(rows);
   const nullDays = rows.filter((r) => r.rainfall_mm == null).length;
 
@@ -154,7 +169,7 @@ export function buildRainfallPdf(ctx: RainfallPdfContext): jsPDF {
   doc.text(`Date range: ${fmtDate(from)} – ${fmtDate(to)}`, titleX, y);
   y += 12;
   doc.text(
-    `Generated: ${format(new Date(), "PP p")}${tz() ? ` (${tz()})` : ""}`,
+    `Generated: ${fmtDateTime(new Date())}${tz() ? ` (${tz()})` : ""}`,
     titleX,
     y,
   );
@@ -221,7 +236,7 @@ export function buildRainfallPdf(ctx: RainfallPdfContext): jsPDF {
       const ph = doc.internal.pageSize.getHeight();
       doc.setFontSize(8);
       doc.setTextColor(120);
-      const footer = `Generated ${format(new Date(), "PP p")}${tz() ? ` (${tz()})` : ""} • VineTrack`;
+      const footer = `Generated ${fmtDateTime(new Date())}${tz() ? ` (${tz()})` : ""} • VineTrack`;
       doc.text(footer, margin, ph - 20);
       doc.setTextColor(0);
     },
@@ -235,8 +250,9 @@ export async function downloadRainfallPdf(
   vineyardName: string,
   from: Date,
   to: Date,
+  rf?: RegionFormatters,
 ) {
   const logoDataUrl = await loadLogoDataUrl();
-  const doc = buildRainfallPdf({ vineyardName, from, to, rows, logoDataUrl });
+  const doc = buildRainfallPdf({ vineyardName, from, to, rows, logoDataUrl, rf });
   doc.save(`${rainfallFileBase(vineyardName, from, to)}.pdf`);
 }
