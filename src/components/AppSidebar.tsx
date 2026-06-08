@@ -156,9 +156,9 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={isActive(item.url)}
-          className="rounded-lg text-sidebar-foreground/80 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground dark:data-[active=true]:text-sidebar-primary-foreground dark:data-[active=true]:hover:text-sidebar-primary-foreground"
+          className="rounded-lg text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current"
         >
-          <NavLink to={item.url} className="flex items-center gap-2">
+          <NavLink to={item.url} className="flex items-center gap-2.5">
             <item.icon className="h-4 w-4" />
             <span className="flex-1 truncate">{item.title}</span>
             {item.url === "/admin/support-requests" && unresolvedSupport > 0 && (
