@@ -69,6 +69,7 @@ export default function PinsPage() {
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
+  const rf = useRegionFormatters();
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const resolvePerson = (raw?: string | null, userId?: string | null): string => {
     const fromId = userId ? resolve(userId) : null;
@@ -264,7 +265,7 @@ export default function PinsPage() {
     completedBy: hasAnyCompleted && !compact,
   };
   const pinLabels: Record<PinCol, string> = {
-    title: "Title", mode: "Type", paddock: "Paddock", row: "Row",
+    title: "Title", mode: "Type", paddock: rf.blockLabel, row: "Row",
     status: "Status", priority: "Priority", category: "Category", stage: "Stage",
     created: "Created", createdBy: "Created by", completed: "Completed", completedBy: "Completed by",
   };
@@ -293,7 +294,7 @@ export default function PinsPage() {
 
       {paddockFilter && (
         <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
-          <span className="text-muted-foreground">Filtered by block:</span>
+          <span className="text-muted-foreground">Filtered by {rf.blockLabel.toLowerCase()}:</span>
           <Badge variant="secondary">{paddockFilterName ?? paddockFilter.slice(0, 8)}</Badge>
           <Button
             variant="ghost"
@@ -459,9 +460,9 @@ export default function PinsPage() {
                   priority: <TableCell>{p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}</TableCell>,
                   category: <TableCell>{p.category ?? "—"}</TableCell>,
                   stage: <TableCell>{p.growth_stage_code ?? "—"}</TableCell>,
-                  created: <TableCell className="text-sm text-muted-foreground">{formatCell(p.created_at)}</TableCell>,
+                  created: <TableCell className="text-sm text-muted-foreground">{p.created_at ? rf.date(p.created_at) : "—"}</TableCell>,
                   createdBy: <TableCell className="text-sm">{createdBy}</TableCell>,
-                  completed: <TableCell className="text-sm text-muted-foreground">{(p as any).is_completed ? formatCell((p as any).completed_at) : "—"}</TableCell>,
+                  completed: <TableCell className="text-sm text-muted-foreground">{(p as any).is_completed ? ((p as any).completed_at ? rf.date((p as any).completed_at) : "—") : "—"}</TableCell>,
                   completedBy: <TableCell className="text-sm">{completedBy}</TableCell>,
                 };
                 return (
