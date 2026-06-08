@@ -54,26 +54,23 @@ const MAINT = "__maint__";
 // All known trip functions (matches TripsPage). "Maintenance" is a virtual
 // bucket covering every non-spray function.
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel } from "@/lib/tripFunctionLabels";
+import { formatTripNameLabel, formatTripDurationLabel, formatTripPatternLabel } from "@/lib/tripDisplay";
 
-const tripDisplayName = (t: Trip): string => {
-  if (t.trip_title?.trim()) return t.trip_title.trim();
-  return tripFunctionLabel(t.trip_function) ?? t.tracking_pattern ?? t.paddock_name ?? "Trip";
-};
+const tripDisplayName = (t: Trip): string =>
+  formatTripNameLabel(
+    t.trip_title,
+    t.tracking_pattern,
+    tripFunctionLabel(t.trip_function) ?? t.paddock_name ?? "Trip",
+  );
 
 const fmtDay = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   return isNaN(d.getTime()) ? "—" : format(d, "PP");
 };
-const fmtDuration = (s?: string | null, e?: string | null) => {
-  if (!s || !e) return "—";
-  const ms = new Date(e).getTime() - new Date(s).getTime();
-  if (isNaN(ms) || ms < 0) return "—";
-  const mins = Math.round(ms / 60000);
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-};
+const fmtDuration = (s?: string | null, e?: string | null) =>
+  formatTripDurationLabel(s, e);
+
 const fmtKm = (m?: number | null) =>
   m == null ? "—" : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
 
