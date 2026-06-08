@@ -194,6 +194,7 @@ const ANY = "__any__";
 
 export default function LiveDashboardPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const rf = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ??
     "Vineyard";
