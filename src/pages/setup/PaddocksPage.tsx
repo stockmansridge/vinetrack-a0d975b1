@@ -27,6 +27,40 @@ export default function PaddocksPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const { currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const rf = useRegionFormatters();
+  const paddockCols: ListColumn[] = useMemo(
+    () => [
+      { key: "name", label: "Name", render: (r) => r.name ?? "—" },
+      {
+        key: "area",
+        label: "Area",
+        render: (r) => {
+          const m = deriveMetrics(r);
+          return m.areaHa > 0 ? rf.area(m.areaHa, 2) : "—";
+        },
+        filterValue: (r) => String(deriveMetrics(r).areaHa.toFixed(2)),
+      },
+      {
+        key: "rows",
+        label: "Rows",
+        render: (r) => fmtNum(deriveMetrics(r).rowCount, 0),
+        filterValue: (r) => String(deriveMetrics(r).rowCount),
+      },
+      {
+        key: "row_length",
+        label: "Total row length (m)",
+        render: (r) => {
+          const m = deriveMetrics(r);
+          return m.totalRowLengthM > 0 ? fmtNum(m.totalRowLengthM, 0) : "—";
+        },
+        filterValue: (r) => String(Math.round(deriveMetrics(r).totalRowLengthM)),
+      },
+      { key: "vine_spacing", label: "Vine spacing (m)" },
+      { key: "intermediate_post_spacing", label: "Int. post spacing (m)" },
+      { key: "updated_at", label: "Updated" },
+    ],
+    [rf],
+  );
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
