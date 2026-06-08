@@ -47,8 +47,10 @@ function fmtRecordLabel(r: SprayRecord): string {
 export default function SprayReportsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const { toast } = useToast();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
+
 
   // ---- Lookups
   const { data: paddocks } = useQuery({
