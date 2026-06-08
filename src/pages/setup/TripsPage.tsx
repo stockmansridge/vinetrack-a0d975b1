@@ -155,6 +155,11 @@ export default function TripsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
   });
+  const { data: pageMachines = [] } = useQuery<VineyardMachine[]>({
+    queryKey: ["trips-page-machines", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchAllVineyardMachines(selectedVineyardId!),
+  });
   const { data: pageFuel = [] } = useQuery({
     queryKey: ["trips-page-fuel", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -168,6 +173,11 @@ export default function TripsPage() {
     (pageTractors ?? []).forEach((t) => m.set(t.id, t));
     return m;
   }, [pageTractors]);
+  const pageMachinesById = useMemo(() => {
+    const m = new Map<string, VineyardMachine>();
+    (pageMachines ?? []).forEach((x) => m.set(x.id, x));
+    return m;
+  }, [pageMachines]);
 
   const trips = data?.trips ?? [];
 
