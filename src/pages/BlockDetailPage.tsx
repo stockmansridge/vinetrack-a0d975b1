@@ -22,7 +22,7 @@ import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
-import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
