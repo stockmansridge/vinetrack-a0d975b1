@@ -47,6 +47,14 @@ import {
 } from "@/components/dashboard/LiveWeatherSummary";
 import { fetchLiveWeather } from "@/lib/weatherStatusQuery";
 import { fetchRainForecast, summarizeForecast } from "@/lib/rainForecastQuery";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+
+const fmtTime = (v: Date | string | number) => {
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
 
 interface PaddockLite {
   id: string;
