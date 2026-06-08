@@ -119,6 +119,7 @@ export default function DamageRecordsPage() {
   const { toast } = useToast();
   const { resolve } = useTeamLookup(selectedVineyardId);
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const rf = useRegionFormatters();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
