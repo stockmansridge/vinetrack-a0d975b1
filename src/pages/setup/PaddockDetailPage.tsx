@@ -340,7 +340,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{paddock.name ?? "Paddock"}</h1>
           <p className="text-sm text-muted-foreground">
-            {fmt(metrics.areaHa, 2)} ha · {metrics.rowCount} rows
+            {rf.area(metrics.areaHa, 2)} · {metrics.rowCount} rows
           </p>
         </div>
         {!canEdit && <Badge variant="secondary">Read-only</Badge>}
