@@ -155,6 +155,7 @@ export async function saveVineyardRegionSettings(
     p_vineyard_id: vineyardId,
     p_country_code: settings.country_code,
     p_currency_code: settings.currency_code,
+    p_timezone: settings.timezone ?? null,
     p_area_unit: settings.area_unit,
     p_volume_unit: settings.volume_unit,
     p_distance_unit: settings.distance_unit,
