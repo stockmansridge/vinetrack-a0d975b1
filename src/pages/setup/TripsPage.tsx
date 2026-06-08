@@ -715,7 +715,7 @@ function TripSheet({
             </Section>
             {fuelEstimate && (
               <Section title="Fuel estimate">
-                <Field label="Tractor" value={fmt(tractorName)} />
+                <Field label="Machine" value={fmt(tractorName)} />
                 <Field label="Trip function" value={fmt(tripFunctionLabel(trip.trip_function))} />
                 <Field label="Basis" value={fuelEstimate.basisLabel} />
                 {fuelEstimate.basis === "engine_hours" && (
