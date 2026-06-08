@@ -636,6 +636,26 @@ function MaintenanceEditor({
     equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
     return s.has(editing.item_name);
   }, [editing, equipmentGroups]);
+  const pickerGroups = useMemo(
+    () =>
+      buildMaintenancePickerGroups(
+        equipmentGroups,
+        legacyOnly,
+        allowLegacyInPicker,
+        editing?.item_name,
+        allowLegacyInPicker && !!editing?.item_name && !editingNameInActive && !legacyOnly.includes(editing.item_name),
+      ),
+    [allowLegacyInPicker, editing?.item_name, editingNameInActive, equipmentGroups, legacyOnly],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    console.info("[MaintenanceEditor] equipment selector groups", pickerGroups.map((group) => ({
+      group: group.label,
+      optionCount: group.options.length,
+      optionLabels: group.options.map((option) => option.name),
+    })));
+  }, [open, pickerGroups]);
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -712,62 +732,11 @@ function MaintenanceEditor({
           <div className="space-y-1.5">
             <Label>Item / Machine *</Label>
             <div className="flex items-center gap-1">
-              <Select value={itemName || undefined} onValueChange={setItemName}>
-                <SelectTrigger><SelectValue placeholder="Select item or machine" /></SelectTrigger>
-                <SelectContent>
-                  {equipmentGroups?.tractors.length ? (
-                    <SelectGroup>
-                      <SelectLabel>Tractors</SelectLabel>
-                      {equipmentGroups.tractors.map((o) => (
-                        <SelectItem key={`et-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {equipmentGroups?.sprayEquipment.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Spray Equipment</SelectLabel>
-                      {equipmentGroups.sprayEquipment.map((o) => (
-                        <SelectItem key={`es-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {equipmentGroups?.vineyardMachines.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Vineyard Machines</SelectLabel>
-                      {equipmentGroups.vineyardMachines.map((o) => (
-                        <SelectItem key={`em-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {equipmentGroups?.otherItems.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Other Equipment &amp; Assets</SelectLabel>
-                      {equipmentGroups.otherItems.map((o) => (
-                        <SelectItem key={`eo-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {allowLegacyInPicker && legacyOnly.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Historical (free text)</SelectLabel>
-                      {legacyOnly.map((n) => (
-                        <SelectItem key={`el-${n}`} value={n}>{n}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {allowLegacyInPicker && editing?.item_name && !editingNameInActive && !legacyOnly.includes(editing.item_name) ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Current value</SelectLabel>
-                      <SelectItem value={editing.item_name}>{editing.item_name}</SelectItem>
-                    </SelectGroup>
-                  ) : null}
-                </SelectContent>
-              </Select>
+              <EquipmentPicker
+                value={itemName}
+                onValueChange={setItemName}
+                groups={pickerGroups}
+              />
               <AddEquipmentMenu />
             </div>
             {!editing && (
