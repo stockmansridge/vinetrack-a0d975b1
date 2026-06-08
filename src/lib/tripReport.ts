@@ -762,6 +762,8 @@ export interface TripPdfContext {
   paddockNameById?: Map<string, string | null | undefined>;
   /** Owner/manager-only trip cost breakdown. Caller MUST gate on useCanSeeCosts(). */
   cost?: TripCostBreakdown | null;
+  /** Region & Units formatters; falls back to AU defaults when omitted. */
+  formatters?: RegionFormatters;
 }
 
 
