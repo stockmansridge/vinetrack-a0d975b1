@@ -827,7 +827,7 @@ function TripSheet({
               <Field label="Partial" value={String(cov?.partial ?? 0)} />
               <Field label="Skipped" value={String(cov?.skipped ?? skipped)} />
               <Field label="Manually marked complete" value={String(cov?.manuallyMarkedComplete ?? 0)} />
-              <Field label="Total distance" value={fmtKm(trip.total_distance)} />
+              <Field label="Total distance" value={trip.total_distance == null ? "—" : formatters.distance(Number(trip.total_distance) / 1000, 2)} />
               <Field label="Path points" value={points == null ? "—" : String(points)} />
               <Field label="Pins" value={pins == null ? "—" : String(pins)} />
             </Section>
