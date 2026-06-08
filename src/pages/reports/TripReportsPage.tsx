@@ -19,6 +19,7 @@ import {
   downloadCsv,
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { computeTripCost, type TractorLite } from "@/lib/tripCosting";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
