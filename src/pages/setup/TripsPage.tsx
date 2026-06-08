@@ -692,6 +692,7 @@ function TripSheet({
                     vineyardLogoUrl: vineyardLogoUrl ?? null,
                     paddockNameById,
                     cost: canSeeCosts ? cost : null,
+                    formatters,
                   });
                 }}
               >
