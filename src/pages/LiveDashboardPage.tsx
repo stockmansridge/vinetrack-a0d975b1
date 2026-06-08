@@ -395,7 +395,7 @@ export default function LiveDashboardPage() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search trip, operator, block…"
+          placeholder={`Search trip, operator, ${rf.blockLabel.toLowerCase()}…`}
           className="w-[220px]"
         />
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
