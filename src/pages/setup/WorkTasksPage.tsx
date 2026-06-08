@@ -151,6 +151,10 @@ const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? nu
 export default function WorkTasksPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const money = mkMoney(rf);
+  const dateRangeLabel = mkDateRangeLabel(rf);
   const qc = useQueryClient();
 
   const canSoftDelete = currentRole === "owner" || currentRole === "manager" || currentRole === "supervisor";
