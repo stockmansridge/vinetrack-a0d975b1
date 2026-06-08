@@ -121,8 +121,11 @@ const fmtDuration = (start?: string | null, end?: string | null) => {
   const m = mins % 60;
   return h ? `${h}h ${m}m` : `${m}m`;
 };
-const fmtDistance = (m?: number | null) =>
-  Number.isFinite(Number(m)) ? `${(Number(m) / 1000).toFixed(2)} km` : "—";
+const fmtDistance = (m?: number | null, rf?: RegionFormatters) => {
+  const km = Number(m);
+  if (!Number.isFinite(km)) return "—";
+  return rf ? rf.distance(km / 1000, 2) : `${(km / 1000).toFixed(2)} km`;
+};
 
 // ---------- Selection model ----------
 
