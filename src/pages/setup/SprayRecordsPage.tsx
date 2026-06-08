@@ -244,6 +244,7 @@ export default function SprayRecordsPage() {
       <SprayRecordSheet
         record={selected}
         vineyardName={vineyardName}
+        formatters={formatters}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
