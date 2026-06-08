@@ -712,7 +712,7 @@ function TripSheet({
             <Section title="Job record">
               <Field label="Trip type / function" value={fmt(tripFunctionLabel(trip.trip_function))} />
               <Field label="Title / details" value={fmt(trip.trip_title)} />
-              <Field label="Paddock / block" value={fmt(padName)} />
+              <Field label={formatters.blockLabel} value={fmt(padName)} />
               <Field label="Pattern" value={fmt(trip.tracking_pattern)} />
               <Field label="Person" value={fmt(trip.person_name)} />
             </Section>
@@ -807,8 +807,8 @@ function TripSheet({
                 )}
                 <div className="border-t my-2" />
                 <Field label="Estimated total" value={cost.total != null ? fmtCurrency(cost.total) : "—"} />
-                <Field label="Treated area" value={cost.treatedAreaHa != null ? fmtHa(cost.treatedAreaHa) : "—"} />
-                <Field label="Cost per ha" value={cost.costPerHa != null ? `${fmtCurrency(cost.costPerHa)} / ha` : "Unavailable"} />
+                <Field label="Treated area" value={cost.treatedAreaHa != null ? formatters.area(cost.treatedAreaHa) : "—"} />
+                <Field label={`Cost per ${formatters.areaUnitLabel}`} value={cost.costPerHa != null ? `${fmtCurrency(formatters.areaUnitLabel === "ac" ? cost.costPerHa * 0.40468564224 : cost.costPerHa)} / ${formatters.areaUnitLabel}` : "Unavailable"} />
                 <Field label="Yield tonnes" value={cost.yieldTonnes != null ? fmtTonnes(cost.yieldTonnes) : "Unavailable"} />
                 <Field label="Cost per tonne" value={cost.costPerTonne != null ? `${fmtCurrency(cost.costPerTonne)} / t` : "Unavailable"} />
                 {cost.warnings.length > 0 && (
@@ -827,7 +827,7 @@ function TripSheet({
               <Field label="Partial" value={String(cov?.partial ?? 0)} />
               <Field label="Skipped" value={String(cov?.skipped ?? skipped)} />
               <Field label="Manually marked complete" value={String(cov?.manuallyMarkedComplete ?? 0)} />
-              <Field label="Total distance" value={fmtKm(trip.total_distance)} />
+              <Field label="Total distance" value={trip.total_distance == null ? "—" : formatters.distance(Number(trip.total_distance) / 1000, 2)} />
               <Field label="Path points" value={points == null ? "—" : String(points)} />
               <Field label="Pins" value={pins == null ? "—" : String(pins)} />
             </Section>

@@ -23,6 +23,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, MapPin, RotateCcw, Undo2, Copy, AlertTriangle, Info, Minus, Plus } from "lucide-react";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 import {
   generateRows,
@@ -97,6 +98,7 @@ export default function NewPaddockPage() {
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const [saving, setSaving] = useState(false);
+  const rf = useRegionFormatters();
 
   const [step, setStep] = useState<Step>("details");
 
@@ -252,8 +254,8 @@ export default function NewPaddockPage() {
   const warnings = useMemo(() => {
     const w: string[] = [];
     const requestedRows = Number(rowsCount);
-    if (areaHa > 0 && areaHa < 0.05) w.push(`Area is very small (${areaHa.toFixed(3)} ha) — verify the boundary.`);
-    if (areaHa > 50) w.push(`Area is very large (${areaHa.toFixed(1)} ha) — verify the boundary.`);
+    if (areaHa > 0 && areaHa < 0.05) w.push(`Area is very small (${rf.area(areaHa, 3)}) — verify the boundary.`);
+    if (areaHa > 50) w.push(`Area is very large (${rf.area(areaHa, 1)}) — verify the boundary.`);
     if (Number.isFinite(requestedRows) && requestedRows > 0 && generated.length > 0 && generated.length < requestedRows) {
       w.push(`Generated ${generated.length} rows but ${requestedRows} were requested — some rows fall outside the polygon.`);
     }
@@ -371,6 +373,7 @@ export default function NewPaddockPage() {
         <BoundaryStep
           polygon={polygon}
           setPolygon={setPolygon}
+          areaText={rf.area(polygonAreaHectares(polygon), 2)}
           onBack={() => setStep("details")}
           onNext={() => setStep("rows")}
         />
@@ -414,7 +417,7 @@ export default function NewPaddockPage() {
               </details>
 
               <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
-                <Metric label="Area" value={`${fmt(areaHa, 2)} ha`} />
+                <Metric label="Area" value={rf.area(areaHa, 2)} />
                 <Metric label="Rows generated" value={fmt(generated.length, 0)} />
                 <Metric label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
                 {effectiveVineCount != null && <Metric label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
@@ -556,7 +559,7 @@ export default function NewPaddockPage() {
               <SummaryRow label="Vineyard" value={vineyardName ?? selectedVineyardId ?? "—"} />
               <SummaryRow label="Boundary points" value={String(polygon.length)} />
               <SummaryRow label="Rows" value={String(generated.length)} />
-              <SummaryRow label="Area" value={`${fmt(areaHa, 2)} ha`} />
+              <SummaryRow label="Area" value={rf.area(areaHa, 2)} />
               <SummaryRow label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
               <SummaryRow label="Row direction" value={`${rowDirection}°`} />
               <SummaryRow label="Row width" value={`${rowWidth} m`} />
@@ -754,10 +757,11 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function BoundaryStep({
-  polygon, setPolygon, onBack, onNext,
+  polygon, setPolygon, areaText, onBack, onNext,
 }: {
   polygon: LatLng[];
   setPolygon: (p: LatLng[]) => void;
+  areaText: string;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -789,7 +793,7 @@ function BoundaryStep({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <Metric label="Points" value={String(polygon.length)} />
-          <Metric label="Area" value={`${fmt(polygonAreaHectares(polygon), 2)} ha`} />
+          <Metric label="Area" value={areaText} />
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1" onClick={() => setPolygon(polygon.slice(0, -1))} disabled={!polygon.length}>
               <Undo2 className="h-3.5 w-3.5" /> Undo

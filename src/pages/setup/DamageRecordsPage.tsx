@@ -74,6 +74,8 @@ import DamageMapView from "@/components/DamageMapView";
 import DamagePolygonEditor from "@/components/DamagePolygonEditor";
 import OpenExternalMapButton from "@/components/OpenExternalMapButton";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const ANY = "__any__";
 
@@ -117,6 +119,7 @@ export default function DamageRecordsPage() {
   const { toast } = useToast();
   const { resolve } = useTeamLookup(selectedVineyardId);
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const rf = useRegionFormatters();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -252,11 +255,11 @@ export default function DamageRecordsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Paddock</div>
+          <div className="text-xs text-muted-foreground">{rf.blockLabel}</div>
           <Select value={paddockId} onValueChange={setPaddockId}>
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>Any paddock</SelectItem>
+              <SelectItem value={ANY}>Any {rf.blockLabel.toLowerCase()}</SelectItem>
               {paddocks.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name ?? p.id}</SelectItem>
               ))}
@@ -319,7 +322,7 @@ export default function DamageRecordsPage() {
             <TableRow>
               {(dOrder as DmgCol[]).map((id) => {
                 const labels: Record<DmgCol, string> = {
-                  date: "Date observed", paddock: "Paddock", row: "Row / path", side: "Side",
+                  date: "Date observed", paddock: rf.blockLabel, row: "Row / path", side: "Side",
                   type: "Damage type", severity: "Severity", status: "Status",
                   damage_pct: "Damage %", operator: "Operator", notes: "Notes", photos: "Photos",
                 };
@@ -423,6 +426,7 @@ export default function DamageRecordsPage() {
         createdByName={resolve(selected?.created_by ?? null)}
         open={!!selected}
         canEdit={canEdit}
+        rf={rf}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={(r) => { setSelected(null); openEdit(r); }}
         onArchive={(r) => setArchiveTarget(r)}
@@ -474,13 +478,14 @@ export default function DamageRecordsPage() {
 // ---------- Detail / read drawer ----------
 
 function DamageDetailSheet({
-  record, paddock, createdByName, open, canEdit, onOpenChange, onEdit, onArchive,
+  record, paddock, createdByName, open, canEdit, rf, onOpenChange, onEdit, onArchive,
 }: {
   record: DamageRecord | null;
   paddock: PaddockGeo | null;
   createdByName: string | null;
   open: boolean;
   canEdit: boolean;
+  rf: RegionFormatters;
   onOpenChange: (o: boolean) => void;
   onEdit: (r: DamageRecord) => void;
   onArchive: (r: DamageRecord) => void;
@@ -516,7 +521,7 @@ function DamageDetailSheet({
           <div className="mt-4 space-y-4 text-sm">
             <Section title="Observation">
               <Field label="Date observed" value={fmtDate(record.date_observed ?? record.date)} />
-              <Field label="Paddock" value={paddockName ?? "—"} />
+              <Field label={rf.blockLabel} value={paddockName ?? "—"} />
               <Field label="Row / path" value={fmt(record.row_number)} />
               <Field label="Side" value={fmt(record.side)} />
               <Field label="Damage type" value={damageTypeLabel(record.damage_type)} />
@@ -537,19 +542,19 @@ function DamageDetailSheet({
                   <div className="mt-3 grid gap-1.5 text-sm">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#2E7D32" }} />
-                      Paddock
+                      {rf.blockLabel}
                       <span className="ml-3 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#E53935" }} />
                       Damage area
                     </div>
-                    <Field label="Block area" value={`${impact.blockAreaHa.toFixed(2)} ha`} />
+                    <Field label={`${rf.blockLabel} area`} value={rf.area(impact.blockAreaHa, 2)} />
                     <Field
                       label="Damaged area"
-                      value={impact.hasPolygon ? `${impact.damagedAreaHa.toFixed(2)} ha` : "Whole block (no polygon)"}
+                      value={impact.hasPolygon ? rf.area(impact.damagedAreaHa, 2) : `Whole ${rf.blockLabel.toLowerCase()} (no polygon)`}
                     />
                     <Field label="Damage intensity" value={`${impact.damagePercent}%`} />
-                    <Field label="Effective loss" value={`${impact.effectiveAreaHa.toFixed(2)} ha`} />
+                    <Field label="Effective loss" value={rf.area(impact.effectiveAreaHa, 2)} />
                     <Field
-                      label="Block yield impact"
+                      label={`${rf.blockLabel} yield impact`}
                       value={impact.blockAreaHa > 0 ? `${impact.blockLossPct.toFixed(1)}%` : "—"}
                     />
                   </div>
@@ -714,6 +719,7 @@ function DamageEditSheet({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
+  const rf = useRegionFormatters();
   const [form, setForm] = useState<FormState>(emptyForm());
   const [polygon, setPolygon] = useState<LatLng[]>([]);
   const [polygonOutside, setPolygonOutside] = useState(false);
@@ -853,13 +859,13 @@ function DamageEditSheet({
                     height={300}
                   />
                   <div className="mt-3 grid gap-1 text-sm">
-                    <Field label="Block area" value={`${blockAreaHa.toFixed(2)} ha`} />
+                    <Field label={`${rf.blockLabel} area`} value={rf.area(blockAreaHa, 2)} />
                     {polygon.length >= 3 ? (
                       <>
-                        <Field label="Damage polygon area" value={`${damageAreaHa.toFixed(2)} ha`} />
-                        <Field label="Effective loss (at this %)" value={`${liveEffectiveHa.toFixed(2)} ha`} />
+                        <Field label="Damage polygon area" value={rf.area(damageAreaHa, 2)} />
+                        <Field label="Effective loss (at this %)" value={rf.area(liveEffectiveHa, 2)} />
                         <Field
-                          label="Block yield impact"
+                          label={`${rf.blockLabel} yield impact`}
                           value={blockAreaHa > 0 ? `${liveBlockLossPct.toFixed(1)}%` : "—"}
                         />
                       </>
