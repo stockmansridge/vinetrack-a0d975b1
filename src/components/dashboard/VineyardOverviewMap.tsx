@@ -42,6 +42,8 @@ import {
 import { PaddockDetailContent } from "@/components/PaddockDetailPanel";
 import type { PinRecord } from "@/components/PinDetailPanel";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 // ---------- Trip function helpers ----------
 
