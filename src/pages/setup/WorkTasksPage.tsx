@@ -1039,6 +1039,9 @@ function LabourLineRow({
   onCancel?: () => void;
 }) {
   const isNew = !line;
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const money = mkMoney(rf);
   const [editing, setEditing] = useState(isNew);
   const [workDate, setWorkDate] = useState(line?.work_date ?? "");
   const [workerType, setWorkerType] = useState(line?.worker_type ?? "");
