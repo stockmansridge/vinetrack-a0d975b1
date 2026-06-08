@@ -2,68 +2,33 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount, fetchList } from "@/lib/queries";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid, ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route } from "lucide-react";
+import {
+  Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid,
+  ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route,
+} from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { MetricCard, PageHeader } from "@/components/ui/metric-card";
+import { Badge } from "@/components/ui/badge";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
 
-function StatCard({
-  label,
-  value,
-  Icon,
-  hint,
-  to,
-}: {
-  label: string;
-  value: React.ReactNode;
-  Icon: any;
-  hint?: string;
-  to?: string;
-}) {
-  const card = (
-    <Card
-      className={
-        to
-          ? "cursor-pointer transition hover:border-primary/50 hover:shadow-md hover:bg-muted/40"
-          : undefined
-      }
-    >
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-semibold">{value}</div>
-        {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
-      </CardContent>
-    </Card>
-  );
-  if (to) {
-    return (
-      <Link to={to} aria-label={`${label} — open`} className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        {card}
-      </Link>
-    );
-  }
-  return card;
-}
-
 const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }) => (
   <Link
     to={to}
-    className="group flex items-center justify-between rounded-md border bg-card px-4 py-3 text-sm hover:bg-muted/50 transition"
+    className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/50 hover:border-primary/30 transition"
   >
-    <span className="flex items-center gap-2">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      {label}
+    <span className="flex items-center gap-2.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="font-medium text-foreground">{label}</span>
     </span>
-    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition" />
+    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 group-hover:text-primary transition" />
   </Link>
 );
 
