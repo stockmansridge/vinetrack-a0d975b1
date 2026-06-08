@@ -2,7 +2,7 @@
 // Read-only; uses fetchTripsForVineyard. Auto-refreshes every 45s.
 import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   Activity,
   PauseCircle,
@@ -47,6 +47,14 @@ import {
 } from "@/components/dashboard/LiveWeatherSummary";
 import { fetchLiveWeather } from "@/lib/weatherStatusQuery";
 import { fetchRainForecast, summarizeForecast } from "@/lib/rainForecastQuery";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+
+const fmtTime = (v: Date | string | number) => {
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
 
 interface PaddockLite {
   id: string;
@@ -186,6 +194,7 @@ const ANY = "__any__";
 
 export default function LiveDashboardPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const rf = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ??
     "Vineyard";
@@ -354,7 +363,7 @@ export default function LiveDashboardPage() {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>
             Last refreshed:{" "}
-            {lastRefresh ? format(lastRefresh, "p") : "—"}
+            {lastRefresh ? fmtTime(lastRefresh) : "—"}
           </span>
           <Button
             size="sm"
@@ -386,7 +395,7 @@ export default function LiveDashboardPage() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search trip, operator, block…"
+          placeholder={`Search trip, operator, ${rf.blockLabel.toLowerCase()}…`}
           className="w-[220px]"
         />
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
@@ -428,7 +437,7 @@ export default function LiveDashboardPage() {
                   <SortableTableHead active={liveSortDir("trip")} onSort={() => liveToggle("trip")}>Trip</SortableTableHead>
                   <SortableTableHead active={liveSortDir("status")} onSort={() => liveToggle("status")}>Status</SortableTableHead>
                   <SortableTableHead active={liveSortDir("operator")} onSort={() => liveToggle("operator")}>Operator</SortableTableHead>
-                  <SortableTableHead active={liveSortDir("block")} onSort={() => liveToggle("block")}>Block</SortableTableHead>
+                  <SortableTableHead active={liveSortDir("block")} onSort={() => liveToggle("block")}>{rf.blockLabel}</SortableTableHead>
                   <SortableTableHead active={liveSortDir("started")} onSort={() => liveToggle("started")}>Started</SortableTableHead>
                   <SortableTableHead active={liveSortDir("duration")} onSort={() => liveToggle("duration")}>Duration</SortableTableHead>
                   <SortableTableHead active={liveSortDir("row")} onSort={() => liveToggle("row")}>Row</SortableTableHead>
@@ -477,7 +486,7 @@ export default function LiveDashboardPage() {
                       <TableCell>{trip.person_name ?? "—"}</TableCell>
                       <TableCell>{trip.paddock_name ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">
-                        {trip.start_time ? format(new Date(trip.start_time), "p") : "—"}
+                        {trip.start_time ? fmtTime(trip.start_time) : "—"}
                       </TableCell>
                       <TableCell className="tabular-nums">
                         {fmtDuration(trip.start_time, trip.end_time)}
@@ -512,7 +521,7 @@ export default function LiveDashboardPage() {
                 {feed.map((e, i) => (
                   <li key={i} className="text-xs border-l-2 border-primary/40 pl-2">
                     <div className="text-muted-foreground">
-                      {format(new Date(e.ts), "p")} · {e.trip}
+                      {fmtTime(e.ts)} · {e.trip}
                     </div>
                     <div>{e.label}</div>
                   </li>

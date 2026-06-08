@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
@@ -68,6 +69,7 @@ const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }
 
 export default function Dashboard() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const rf = useRegionFormatters();
   const vineyard = memberships.find((m) => m.vineyard_id === selectedVineyardId);
 
   const paddocksQ = useQuery({
@@ -137,17 +139,17 @@ export default function Dashboard() {
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Paddocks"
+          label={rf.blocksLabel}
           Icon={Map}
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
           to="/paddocks"
         />
         <StatCard
-          label="Area (ha)"
+          label="Area"
           Icon={LayoutGrid}
-          value={loading ? "…" : summary.totalAreaHa > 0 ? fmt(summary.totalAreaHa, 2) : "—"}
-          hint="From paddock polygons"
+          value={loading ? "…" : summary.totalAreaHa > 0 ? rf.area(summary.totalAreaHa, 2) : "—"}
+          hint={`From ${rf.blockLabel.toLowerCase()} polygons`}
         />
         <StatCard
           label="Total rows"
@@ -197,7 +199,7 @@ export default function Dashboard() {
       <div>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Setup</h2>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <QuickLink to="/setup/paddocks" label="Paddocks" Icon={Map} />
+          <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
           <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={SprayCan} />
           <QuickLink to="/team" label="Team" Icon={Users} />

@@ -42,6 +42,8 @@ import {
 import { PaddockDetailContent } from "@/components/PaddockDetailPanel";
 import type { PinRecord } from "@/components/PinDetailPanel";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 // ---------- Trip function helpers ----------
 
@@ -119,8 +121,11 @@ const fmtDuration = (start?: string | null, end?: string | null) => {
   const m = mins % 60;
   return h ? `${h}h ${m}m` : `${m}m`;
 };
-const fmtDistance = (m?: number | null) =>
-  Number.isFinite(Number(m)) ? `${(Number(m) / 1000).toFixed(2)} km` : "—";
+const fmtDistance = (m?: number | null, rf?: RegionFormatters) => {
+  const km = Number(m);
+  if (!Number.isFinite(km)) return "—";
+  return rf ? rf.distance(km / 1000, 2) : `${(km / 1000).toFixed(2)} km`;
+};
 
 // ---------- Selection model ----------
 
@@ -140,6 +145,7 @@ export default function VineyardOverviewMap({
   height = 520,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const rf = useRegionFormatters();
   const navigate = useNavigate();
   const [selection, setSelection] = useState<Selection>(null);
   const [showPaddocks, setShowPaddocks] = useState(true);
@@ -545,13 +551,13 @@ export default function VineyardOverviewMap({
         <div>
           <CardTitle className="text-base">Vineyard map</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Click a block to open its detail page. Click a trip or pin for details here.
+            Click a {rf.blockLabel.toLowerCase()} to open its detail page. Click a trip or pin for details here.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-xs">
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-            <Toggle label="Blocks" checked={showPaddocks} onChange={setShowPaddocks} />
+            <Toggle label={rf.blocksLabel} checked={showPaddocks} onChange={setShowPaddocks} />
             <Toggle label="Trips" checked={showTrips} onChange={setShowTrips} />
           </div>
           <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as typeof pinFilter)}>
@@ -607,7 +613,7 @@ export default function VineyardOverviewMap({
             )}
             {mapReady && parsedPaddocks.length === 0 && !paddocksQ.isLoading && (
               <div className="pointer-events-none absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/90 px-3 py-1 text-xs text-muted-foreground">
-                No block map data available
+                No {rf.blockLabel.toLowerCase()} map data available
               </div>
             )}
           </div>
@@ -625,8 +631,8 @@ export default function VineyardOverviewMap({
               />
             ) : selectedPaddock ? (
               <PanelShell
-                title={selectedPaddock.paddock.name ?? "Unnamed block"}
-                subtitle="Block details"
+                title={selectedPaddock.paddock.name ?? `Unnamed ${rf.blockLabel.toLowerCase()}`}
+                subtitle={`${rf.blockLabel} details`}
                 onClose={() => setSelection(null)}
                 accentColor={selectedPaddock.color}
               >
@@ -799,13 +805,14 @@ function EmptyPanel({
   showPins: boolean;
   showTrips: boolean;
 }) {
+  const rf = useRegionFormatters();
   return (
     <div className="space-y-3 p-4 text-sm">
       <div className="text-muted-foreground">
-        Click a block, trip route or pin on the map for details.
+        Click a {rf.blockLabel.toLowerCase()}, trip route or pin on the map for details.
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <Stat label="Blocks" value={paddockCount} />
+        <Stat label={rf.blocksLabel} value={paddockCount} />
         <Stat label="Recent trips" value={tripCount} muted={!showTrips} />
         <Stat label="Pins" value={pinCount} muted={!showPins} />
       </div>
@@ -859,6 +866,7 @@ function TripPanelBody({
   paddockName: string | null;
   swatchColor?: string;
 }) {
+  const rf = useRegionFormatters();
   const completed = Array.isArray(trip.completed_paths) ? trip.completed_paths.length : 0;
   const planned = Array.isArray(trip.row_sequence) ? trip.row_sequence.length : 0;
   return (
@@ -874,12 +882,12 @@ function TripPanelBody({
         </div>
       )}
       <Row label="Type" value={tripFnLabel(trip.trip_function)} />
-      <Row label="Block" value={paddockName ?? trip.paddock_name ?? "—"} />
+      <Row label={rf.blockLabel} value={paddockName ?? trip.paddock_name ?? "—"} />
       <Row label="Operator" value={trip.person_name ?? "—"} />
       <Row label="Started" value={fmtDateTime(trip.start_time)} />
       <Row label="Finished" value={trip.end_time ? fmtDateTime(trip.end_time) : "In progress"} />
       <Row label="Duration" value={fmtDuration(trip.start_time, trip.end_time)} />
-      <Row label="Distance" value={fmtDistance(trip.total_distance ?? null)} />
+      <Row label="Distance" value={fmtDistance(trip.total_distance ?? null, rf)} />
       {planned > 0 && (
         <Row label="Rows" value={`${completed} / ${planned}`} />
       )}
@@ -905,6 +913,7 @@ function PinPanelBody({
   paddockName: string | null;
   paddockRowDirection?: number | null;
 }) {
+  const rf = useRegionFormatters();
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl = pin.photo_url ?? pin.image_url ?? pin.attachment_url ?? null;
@@ -949,7 +958,7 @@ function PinPanelBody({
       )}
       <Row label="Type" value={pin.button_name ?? pin.title ?? pin.mode ?? pin.category ?? "—"} />
       <Row label="Status" value={pin.status ?? (pin.is_completed ? "Completed" : "Open")} />
-      <Row label="Block" value={paddockName ?? "—"} />
+      <Row label={rf.blockLabel} value={paddockName ?? "—"} />
       {formatAttachedRow(pin as any) && (
         <Row label="On Row" value={formatAttachedRow(pin as any)} />
       )}
