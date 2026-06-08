@@ -176,7 +176,7 @@ export default function GrowthStageRecordsPage() {
       {summary.length > 0 && (
         <Card className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-            Latest stage by block
+            Latest stage by {rf.blockLabel.toLowerCase()}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
             {summary.map((s) => (
@@ -190,7 +190,7 @@ export default function GrowthStageRecordsPage() {
                     {s.variety ?? "Variety —"}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {fmtDate(s.latest_date)}
+                    {s.latest_date ? rf.date(s.latest_date) : "—"}
                     {s.days_since != null ? ` · ${s.days_since}d ago` : ""}
                   </div>
                 </div>
