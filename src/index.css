@@ -44,19 +44,19 @@
     /* Borders / inputs / focus */
     --border: 96 13% 90%;                 /* #E3E8E1 */
     --input: 96 17% 88%;                  /* #DDE5DA */
-    --ring: 80 58% 46%;                   /* accent green focus ring */
+    --ring: 144 92% 16%;                  /* brand green focus ring */
 
-    --radius: 0.875rem;                   /* 14px — iOS-ish soft corners */
+    --radius: 0.625rem;                   /* 10px — modern SaaS, slightly sharper */
 
-    /* Sidebar — light SaaS surface (modern light mode) */
+    /* Sidebar — light SaaS surface */
     --sidebar-background: 0 0% 100%;          /* #FFFFFF */
-    --sidebar-foreground: 143 33% 14%;        /* deep ink */
-    --sidebar-primary: 144 92% 16%;           /* primary green for active text */
+    --sidebar-foreground: 143 20% 32%;        /* refined ink */
+    --sidebar-primary: 144 92% 16%;           /* primary green for active */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 144 50% 94%;            /* soft green pill for active item */
-    --sidebar-accent-foreground: 144 92% 16%;
-    --sidebar-border: 96 13% 92%;             /* matches --border */
-    --sidebar-ring: 80 58% 46%;
+    --sidebar-accent: 144 55% 92%;            /* soft green tint for active row */
+    --sidebar-accent-foreground: 144 92% 16%; /* strong brand green */
+    --sidebar-border: 96 13% 92%;
+    --sidebar-ring: 144 92% 16%;
   }
 
   .dark {
