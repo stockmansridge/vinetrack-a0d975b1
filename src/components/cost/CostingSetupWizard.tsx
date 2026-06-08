@@ -10,6 +10,8 @@ import { CheckCircle2, AlertTriangle, ChevronRight, Loader2 } from "lucide-react
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 interface Props {
   vineyardId: string;
