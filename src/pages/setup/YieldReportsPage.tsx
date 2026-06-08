@@ -643,12 +643,12 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
           <div className="space-y-1.5">
             <p className="text-muted-foreground text-xs">
               Yield estimate not available yet — the session is missing the data required to
-              calculate tonnes / ha:
+              calculate tonnes / {rf.areaUnitLabel}:
             </p>
             <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
               {summary.missing.bunchWeight && <li>Average bunch weight (kg) per block</li>}
-              {summary.missing.area && <li>Block area (ha)</li>}
-              {summary.missing.vines && <li>Vines per hectare (planting density)</li>}
+              {summary.missing.area && <li>Block area ({rf.areaUnitLabel})</li>}
+              {summary.missing.vines && <li>Vines per {rf.areaUnitLabel === "ac" ? "acre" : "hectare"} (planting density)</li>}
             </ul>
             <p className="text-xs pt-1">
               Per-vine sampling totals are shown above. Once bunch weight and vines / ha are
