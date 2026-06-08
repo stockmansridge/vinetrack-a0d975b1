@@ -48,14 +48,14 @@
 
     --radius: 0.875rem;                   /* 14px — iOS-ish soft corners */
 
-    /* Sidebar — dark vineyard green identity */
-    --sidebar-background: 144 92% 16%;    /* #034D21 */
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 80 58% 46%;        /* accent green */
+    /* Sidebar — light SaaS surface (modern light mode) */
+    --sidebar-background: 0 0% 100%;          /* #FFFFFF */
+    --sidebar-foreground: 143 33% 14%;        /* deep ink */
+    --sidebar-primary: 144 92% 16%;           /* primary green for active text */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 80 50% 28%;         /* active item soft green */
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 144 60% 22%;
+    --sidebar-accent: 144 50% 94%;            /* soft green pill for active item */
+    --sidebar-accent-foreground: 144 92% 16%;
+    --sidebar-border: 96 13% 92%;             /* matches --border */
     --sidebar-ring: 80 58% 46%;
   }
 
