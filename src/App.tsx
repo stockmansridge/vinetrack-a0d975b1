@@ -120,6 +120,10 @@ const App = () => (
                       element={<DetailPage table="tractors" title="Tractor detail" basePath="/setup/tractors" />}
                     />
                     <Route
+                      path="/setup/vineyard-machines"
+                      element={<VineyardMachinesPage />}
+                    />
+                    <Route
                       path="/setup/spray-equipment"
                       element={<SprayEquipmentPage />}
                     />
