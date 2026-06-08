@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { CalendarIcon, CloudRain, Download, Info } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -12,6 +11,7 @@ import {
   type RangePreset,
 } from "@/lib/rainfallQuery";
 import { downloadRainfallPdf, downloadRainfallCsv } from "@/lib/rainfallExport";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   DropdownMenu,
   DropdownMenuContent,
