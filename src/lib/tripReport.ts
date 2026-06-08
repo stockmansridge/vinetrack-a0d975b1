@@ -913,6 +913,17 @@ function tripTitle(ctx: TripPdfContext, t: Trip): string {
 export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: string | null }): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
+  const fmtR = ctx.formatters ?? AU_FORMATTERS;
+  const fmtDateR = (v?: string | null) => (v ? (fmtR.date(v) || "—") : "—");
+  const fmtDistanceR = (m?: number | null) =>
+    m == null ? "—" : fmtR.distance(m / 1000, 2);
+  const fmtAvgSpeedR = (m?: number | null, start?: string | null, end?: string | null) => {
+    if (m == null || !start || !end) return "—";
+    const sec = (new Date(end).getTime() - new Date(start).getTime()) / 1000;
+    if (!isFinite(sec) || sec <= 0) return "—";
+    const kmh = m / 1000 / (sec / 3600);
+    return fmtR.speed(kmh, 1);
+  };
   let y = 48;
 
   // 1. Header — vineyard logo if available, else VineTrack fallback
@@ -942,19 +953,19 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ctx.blockNames && ctx.blockNames.length
       ? ctx.blockNames.join(", ")
       : ctx.paddockName ?? "—";
-  const blockLabel = ctx.blockNames && ctx.blockNames.length > 1 ? "Blocks" : "Block";
+  const blockLabel = ctx.blockNames && ctx.blockNames.length > 1 ? fmtR.blocksLabel : fmtR.blockLabel;
   const tripDetailsRows: [string, string][] = [
     ["Vineyard", fmt(ctx.vineyardName)],
     [blockLabel, fmt(blocks)],
     ["Trip type", fmt(ctx.tripFunctionLabel ?? t.trip_function)],
     ["Trip name", fmt(t.trip_title)],
     ["Operator", fmt(t.person_name)],
-    ["Date", fmtDate(t.start_time)],
+    ["Date", fmtDateR(t.start_time)],
     ["Start time", fmtTime(t.start_time)],
     ["Finish time", fmtTime(t.end_time)],
     ["Duration", fmtDuration(t.start_time, t.end_time)],
-    ["Distance", fmtDistance(t.total_distance)],
-    ["Average speed", fmtAvgSpeed(t.total_distance, t.start_time, t.end_time)],
+    ["Distance", fmtDistanceR(t.total_distance)],
+    ["Average speed", fmtAvgSpeedR(t.total_distance, t.start_time, t.end_time)],
     ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
   ];
