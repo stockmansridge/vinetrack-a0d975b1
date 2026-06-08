@@ -170,11 +170,11 @@ export default function YieldDamageAdjustmentPanel({
       {!loading && !error && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            <Stat label="Mapped damage area" value={`${fmt(summary.totalMappedHa)} ha`} />
-            <Stat label="Effective loss" value={`${fmt(summary.totalEffectiveHa)} ha`} />
+            <Stat label="Mapped damage area" value={areaVal(summary.totalMappedHa)} />
+            <Stat label="Effective loss" value={areaVal(summary.totalEffectiveHa)} />
             <Stat
               label="Vineyard area"
-              value={summary.totalBlockHa > 0 ? `${fmt(summary.totalBlockHa)} ha` : "—"}
+              value={summary.totalBlockHa > 0 ? areaVal(summary.totalBlockHa) : "—"}
             />
             <Stat
               label="Yield impact"
