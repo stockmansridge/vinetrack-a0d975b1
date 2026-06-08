@@ -63,6 +63,8 @@ export default function YieldDamageAdjustmentPanel({
   defaultEnabled = false,
 }: Props) {
   const [enabled, setEnabled] = useState(defaultEnabled);
+  const rf = useRegionFormatters();
+  const areaVal = (ha: number) => (Number.isFinite(ha) ? rf.area(ha) : "—");
 
   const paddocksQ = useQuery({
     queryKey: ["paddocks", vineyardId],
