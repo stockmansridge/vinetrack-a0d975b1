@@ -521,7 +521,7 @@ export default function LiveDashboardPage() {
                 {feed.map((e, i) => (
                   <li key={i} className="text-xs border-l-2 border-primary/40 pl-2">
                     <div className="text-muted-foreground">
-                      {format(new Date(e.ts), "p")} · {e.trip}
+                      {fmtTime(e.ts)} · {e.trip}
                     </div>
                     <div>{e.label}</div>
                   </li>
