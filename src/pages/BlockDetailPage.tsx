@@ -677,7 +677,7 @@ export default function BlockDetailPage() {
                       <TableCell>{t.person_name ?? "—"}</TableCell>
                       <TableCell className="text-right">
                         {t.total_distance != null
-                          ? `${(t.total_distance / 1000).toFixed(2)} km`
+                          ? rf.distance(t.total_distance / 1000, 2)
                           : "—"}
                       </TableCell>
                     </TableRow>
