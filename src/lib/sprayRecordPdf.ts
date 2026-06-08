@@ -2,8 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { SprayRecord } from "./sprayRecordsQuery";
 import type { TripCostBreakdown } from "./tripCosting";
-import { fmtCurrency, fmtHa, fmtHours, fmtTonnes } from "./tripCosting";
-import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { AU_FORMATTERS, type RegionFormatters } from "./regionFormatters";
 
 const NR = "Not recorded";
 
@@ -12,31 +11,10 @@ const fmtVal = (v: any): string => {
   return String(v);
 };
 
-const fmtDate = (v?: string | null) => {
-  if (!v) return NR;
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
-};
-
-const fmtDateTime = (v?: string | null) => {
-  if (!v) return NR;
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDateTime(d);
-};
-
-const fmtTime = (v?: string | null) => {
-  if (!v) return NR;
-  if (/^\d{2}:\d{2}/.test(v)) return v.slice(0, 5);
-  const d = new Date(v);
-  if (!isNaN(d.getTime())) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  return v;
-};
-
-function chemicalSummary(tanks: any): { product: string; rate: string; water: string } {
+function chemicalSummary(
+  tanks: any,
+  fmt: RegionFormatters,
+): { product: string; rate: string; water: string } {
   const arr = Array.isArray(tanks) ? tanks : tanks ? [tanks] : [];
   if (arr.length === 0) return { product: NR, rate: NR, water: NR };
 
@@ -46,12 +24,13 @@ function chemicalSummary(tanks: any): { product: string; rate: string; water: st
 
   arr.forEach((t: any, i: number) => {
     const w = t?.water_volume;
-    if (w != null) waters.push(`Tank ${i + 1}: ${w} L`);
+    if (w != null) waters.push(`Tank ${i + 1}: ${fmt.volume(w)}`);
     const chems = Array.isArray(t?.chemicals) ? t.chemicals : [];
     chems.forEach((c: any) => {
       const name = c?.name ?? c?.chemical_name ?? c?.product ?? null;
       if (name) products.push(String(name));
       const rate = c?.dose ?? c?.rate ?? c?.amount ?? null;
+      // chemical product unit (L/kg/g/mL) is a manufacturer label — leave alone
       const unit = c?.unit ?? "";
       if (rate != null) rates.push(`${name ?? "Chem"}: ${rate}${unit ? " " + unit : ""}`);
     });
@@ -69,6 +48,8 @@ export interface SprayRecordPdfContext {
   operatorName?: string | null;
   /** Owner/manager-only trip cost breakdown for the linked trip. Caller MUST gate. */
   cost?: TripCostBreakdown | null;
+  /** Region & Units formatters. Falls back to AU defaults if omitted. */
+  formatters?: RegionFormatters;
 }
 
 export function exportSprayRecordPdf(
@@ -76,6 +57,19 @@ export function exportSprayRecordPdf(
   vineyardName?: string | null,
   context?: SprayRecordPdfContext,
 ) {
+  const fmt = context?.formatters ?? AU_FORMATTERS;
+  const fmtDate = (v?: string | null) => (v ? fmt.date(v) || v : NR);
+  const fmtDateTime = (v?: string | null) => (v ? fmt.dateTime(v) || v : NR);
+  const fmtTime = (v?: string | null) => {
+    if (!v) return NR;
+    if (/^\d{2}:\d{2}/.test(v)) return v.slice(0, 5);
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    return v;
+  };
+
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -91,7 +85,7 @@ export function exportSprayRecordPdf(
   doc.setTextColor(90);
   doc.text(`Vineyard: ${fmtVal(vineyardName)}`, margin, 68);
   doc.text(
-    `Generated: ${formatDateTime()}`,
+    `Generated: ${fmt.dateTime(new Date())}`,
     pageWidth - margin,
     68,
     { align: "right" },
@@ -100,7 +94,16 @@ export function exportSprayRecordPdf(
   doc.line(margin, 78, pageWidth - margin, 78);
   doc.setTextColor(0);
 
-  const { product, rate, water } = chemicalSummary(record.tanks);
+  const { product, rate, water } = chemicalSummary(record.tanks, fmt);
+
+  const speedVal =
+    record.average_speed != null && record.average_speed !== ""
+      ? fmt.speed(record.average_speed)
+      : NR;
+  const windSpeedVal =
+    record.wind_speed != null && record.wind_speed !== ""
+      ? fmt.speed(record.wind_speed)
+      : NR;
 
   const rows: [string, string][] = [
     ["Date", fmtDate(record.date)],
@@ -108,18 +111,18 @@ export function exportSprayRecordPdf(
     ["End time", fmtTime(record.end_time)],
     ["Operation type", fmtVal(record.operation_type)],
     ["Reference", fmtVal(record.spray_reference)],
-    ["Block / Paddock", fmtVal(context?.paddockName)],
+    [`${fmt.blockLabel} / Paddock`, fmtVal(context?.paddockName)],
     ["Operator", fmtVal(context?.operatorName)],
     ["Tractor", fmtVal(record.tractor)],
     ["Tractor gear", fmtVal(record.tractor_gear)],
     ["Equipment", fmtVal(record.equipment_type)],
     ["Fans / Jets", fmtVal(record.number_of_fans_jets)],
-    ["Average speed", fmtVal(record.average_speed)],
+    ["Average speed", speedVal],
     ["Chemical / Product", product],
     ["Rate", rate],
     ["Water volume", water],
     ["Temperature (°C)", fmtVal(record.temperature)],
-    ["Wind speed", fmtVal(record.wind_speed)],
+    ["Wind speed", windSpeedVal],
     ["Wind direction", fmtVal(record.wind_direction)],
     ["Humidity (%)", fmtVal(record.humidity)],
   ];
@@ -176,7 +179,7 @@ export function exportSprayRecordPdf(
       if (chems.length === 0) {
         tankRows.push([
           `Tank ${i + 1}${t?.tank_number ? ` (#${t.tank_number})` : ""}`,
-          t?.water_volume != null ? `${t.water_volume} L` : NR,
+          t?.water_volume != null ? fmt.volume(t.water_volume) : NR,
           NR,
           NR,
         ]);
@@ -186,7 +189,7 @@ export function exportSprayRecordPdf(
             ci === 0
               ? `Tank ${i + 1}${t?.tank_number ? ` (#${t.tank_number})` : ""}`
               : "",
-            ci === 0 && t?.water_volume != null ? `${t.water_volume} L` : "",
+            ci === 0 && t?.water_volume != null ? fmt.volume(t.water_volume) : "",
             String(c?.name ?? c?.chemical_name ?? "Chemical"),
             `${c?.dose ?? c?.rate ?? c?.amount ?? ""} ${c?.unit ?? ""}`.trim() || NR,
           ]);
@@ -218,30 +221,44 @@ export function exportSprayRecordPdf(
     const labourLabel = `Labour${c.labour.categoryName ? ` (${c.labour.categoryName})` : ""}`;
     const labourValue =
       c.labour.cost != null
-        ? `${fmtCurrency(c.labour.cost)}${c.labour.ratePerHour != null ? ` · ${fmtCurrency(c.labour.ratePerHour)}/h` : ""}`
+        ? `${fmt.currency(c.labour.cost)}${c.labour.ratePerHour != null ? ` · ${fmt.currency(c.labour.ratePerHour)}/h` : ""}`
         : NR;
     const fuelValue =
       c.fuel.cost != null
-        ? `${fmtCurrency(c.fuel.cost)}${c.fuel.litres != null ? ` · ${c.fuel.litres.toFixed(1)} L` : ""}${c.fuel.costPerLitre != null ? ` @ ${fmtCurrency(c.fuel.costPerLitre)}/L` : ""}`
+        ? `${fmt.currency(c.fuel.cost)}${c.fuel.litres != null ? ` · ${fmt.fuel(c.fuel.litres)}` : ""}${c.fuel.costPerLitre != null ? ` @ ${fmt.currency(c.fuel.costPerLitre)}/${fmt.fuelUnitLabel}` : ""}`
         : NR;
     const chemLabel = `Chemicals${c.chemicals.lineCount ? ` (${c.chemicals.lineCount} line${c.chemicals.lineCount === 1 ? "" : "s"})` : ""}`;
     const body: any[][] = [
-      ["Active hours", fmtHours(c.activeHours)],
+      ["Active hours", c.activeHours != null ? `${c.activeHours.toFixed(2)} h` : NR],
       [labourLabel, labourValue],
       ["Fuel", fuelValue],
-      [chemLabel, c.chemicals.cost != null ? fmtCurrency(c.chemicals.cost) : NR],
+      [chemLabel, c.chemicals.cost != null ? fmt.currency(c.chemicals.cost) : NR],
     ];
     if (c.inputs.lineCount > 0) {
       body.push([
         `Seed / inputs (${c.inputs.lineCount} line${c.inputs.lineCount === 1 ? "" : "s"})`,
-        c.inputs.cost != null ? fmtCurrency(c.inputs.cost) : NR,
+        c.inputs.cost != null ? fmt.currency(c.inputs.cost) : NR,
       ]);
     }
-    body.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : NR]);
-    body.push(["Treated area", c.treatedAreaHa != null ? fmtHa(c.treatedAreaHa) : "— (treated area missing)"]);
-    body.push(["Cost per ha", c.costPerHa != null ? `${fmtCurrency(c.costPerHa)} / ha` : "Unavailable"]);
-    body.push(["Yield tonnes", c.yieldTonnes != null ? fmtTonnes(c.yieldTonnes) : "Unavailable"]);
-    body.push(["Cost per tonne", c.costPerTonne != null ? `${fmtCurrency(c.costPerTonne)} / t` : "Unavailable"]);
+    body.push(["Estimated total", c.total != null ? fmt.currency(c.total) : NR]);
+    body.push([
+      "Treated area",
+      c.treatedAreaHa != null ? fmt.area(c.treatedAreaHa) : "— (treated area missing)",
+    ]);
+    body.push([
+      `Cost per ${fmt.areaUnitLabel}`,
+      c.costPerHa != null
+        ? `${fmt.currency(c.costPerHa)} / ${fmt.areaUnitLabel}`
+        : "Unavailable",
+    ]);
+    body.push([
+      "Yield tonnes",
+      c.yieldTonnes != null ? `${c.yieldTonnes.toFixed(2)} t` : "Unavailable",
+    ]);
+    body.push([
+      "Cost per tonne",
+      c.costPerTonne != null ? `${fmt.currency(c.costPerTonne)} / t` : "Unavailable",
+    ]);
     autoTable(doc, {
       startY: y + 6,
       head: [["Field", "Value"]],
