@@ -913,6 +913,7 @@ function PinPanelBody({
   paddockName: string | null;
   paddockRowDirection?: number | null;
 }) {
+  const rf = useRegionFormatters();
   const style = pinStyle(pin.mode, pin.button_color, pin.category);
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl = pin.photo_url ?? pin.image_url ?? pin.attachment_url ?? null;
