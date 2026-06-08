@@ -414,7 +414,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <div className="text-muted-foreground">
                   Points: <span className="font-medium text-foreground">{polygon.length}</span>
-                  {" · "}Area: <span className="font-medium text-foreground">{fmt(liveAreaHa, 3)} ha</span>
+                  {" · "}Area: <span className="font-medium text-foreground">{rf.area(liveAreaHa, 3)}</span>
                 </div>
                 {canEdit && (
                   <div className="flex gap-2">
