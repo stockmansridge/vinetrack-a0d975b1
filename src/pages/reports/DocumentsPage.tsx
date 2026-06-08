@@ -107,6 +107,7 @@ export default function DocumentsPage() {
     "Vineyard";
 
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const formatters = useRegionFormatters();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ReportType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceKind>("all");
