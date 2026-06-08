@@ -74,7 +74,8 @@ import DamageMapView from "@/components/DamageMapView";
 import DamagePolygonEditor from "@/components/DamagePolygonEditor";
 import OpenExternalMapButton from "@/components/OpenExternalMapButton";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
-import { useRegionFormatters, type RegionFormatters } from "@/lib/useRegionFormatters";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const ANY = "__any__";
 
