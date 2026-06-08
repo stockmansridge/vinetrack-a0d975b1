@@ -256,6 +256,7 @@ function RpcErrorState({ reason, message }: { reason: "rpc_missing" | "forbidden
 }
 
 function RainfallTable({ rows }: { rows: any[] }) {
+  const rf = useRegionFormatters();
   type RainSortKey = "date" | "rainfall" | "source" | "station" | "notes" | "updated";
   const { sorted, getSortDirection, toggleSort } = useSortableTable<any, RainSortKey>(rows, {
     accessors: {
