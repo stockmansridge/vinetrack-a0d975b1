@@ -719,6 +719,7 @@ function DamageEditSheet({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
+  const rf = useRegionFormatters();
   const [form, setForm] = useState<FormState>(emptyForm());
   const [polygon, setPolygon] = useState<LatLng[]>([]);
   const [polygonOutside, setPolygonOutside] = useState(false);
