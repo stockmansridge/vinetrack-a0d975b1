@@ -681,6 +681,15 @@ function MaintenanceEditor({
                       ))}
                     </SelectGroup>
                   ) : null}
+                  {equipmentGroups?.vineyardMachines.length ? (
+                    <SelectGroup>
+                      <SelectSeparator />
+                      <SelectLabel>Vineyard Machines</SelectLabel>
+                      {equipmentGroups.vineyardMachines.map((o) => (
+                        <SelectItem key={`em-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ) : null}
                   {equipmentGroups?.otherItems.length ? (
                     <SelectGroup>
                       <SelectSeparator />
@@ -708,16 +717,15 @@ function MaintenanceEditor({
                   ) : null}
                 </SelectContent>
               </Select>
-              <Button asChild size="icon" variant="outline" title="Manage Other Equipment & Assets">
-                <Link to="/setup/equipment-other"><Plus className="h-4 w-4" /></Link>
-              </Button>
+              <AddEquipmentMenu />
             </div>
             {!editing && (
               <p className="text-xs text-muted-foreground">
-                New records must use a Tractor, Spray Equipment item, or Other Equipment & Asset.
+                New records must use a Tractor, Spray Equipment item, Vineyard Machine, or Other Equipment & Asset.
               </p>
             )}
           </div>
+
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
