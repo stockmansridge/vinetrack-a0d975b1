@@ -859,13 +859,13 @@ function DamageEditSheet({
                     height={300}
                   />
                   <div className="mt-3 grid gap-1 text-sm">
-                    <Field label="Block area" value={`${blockAreaHa.toFixed(2)} ha`} />
+                    <Field label={`${rf.blockLabel} area`} value={rf.area(blockAreaHa, 2)} />
                     {polygon.length >= 3 ? (
                       <>
-                        <Field label="Damage polygon area" value={`${damageAreaHa.toFixed(2)} ha`} />
-                        <Field label="Effective loss (at this %)" value={`${liveEffectiveHa.toFixed(2)} ha`} />
+                        <Field label="Damage polygon area" value={rf.area(damageAreaHa, 2)} />
+                        <Field label="Effective loss (at this %)" value={rf.area(liveEffectiveHa, 2)} />
                         <Field
-                          label="Block yield impact"
+                          label={`${rf.blockLabel} yield impact`}
                           value={blockAreaHa > 0 ? `${liveBlockLossPct.toFixed(1)}%` : "—"}
                         />
                       </>
