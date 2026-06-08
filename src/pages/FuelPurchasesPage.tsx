@@ -382,7 +382,7 @@ function FuelSheet({
               <Field label="Date" value={fmtDate(record.date)} />
               <Field label="Volume" value={fmtLitres(record.volume_litres)} />
               {canSeeCosts && <Field label="Total cost" value={fmtCost(record.total_cost)} />}
-              {canSeeCosts && <Field label="Cost / litre" value={fmtCpl(record.total_cost, record.volume_litres)} />}
+              {canSeeCosts && <Field label={`Cost / ${rf.fuelUnitLabel}`} value={fmtCpl(record.total_cost, record.volume_litres)} />}
             </Section>
             <Section title="Meta">
               <Field label="Entered by" value={fmt(resolveUser(record.created_by))} />
