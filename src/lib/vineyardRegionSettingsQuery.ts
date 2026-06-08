@@ -132,6 +132,7 @@ function applyAuDefaults(raw: Partial<RegionSettings> | null | undefined): Regio
     date_format: (r.date_format as DateFormat) ?? AU_DEFAULTS.date_format,
     terminology_region:
       (r.terminology_region as TerminologyRegion) ?? AU_DEFAULTS.terminology_region,
+    timezone: r.timezone ?? null,
   };
 }
 
