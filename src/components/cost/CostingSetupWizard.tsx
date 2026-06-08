@@ -116,7 +116,7 @@ interface CheckRow {
   linkLabel?: string;
 }
 
-function buildRows(c: SetupCounts): CheckRow[] {
+function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
   const rateOk = c.operatorCategories > 0 && c.operatorCategoriesWithRate === c.operatorCategories;
   const memberOk = c.membersTotal > 0 && c.membersWithCategory === c.membersTotal;
   return [
