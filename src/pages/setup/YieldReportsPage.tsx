@@ -284,7 +284,7 @@ export default function YieldReportsPage() {
                       type: "Type",
                       season: "Season / year",
                       yield: "Total yield (t)",
-                      area: "Area (ha)",
+                      area: "Area",
                       status: "Status",
                     };
                     return (
