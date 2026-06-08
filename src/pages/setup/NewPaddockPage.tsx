@@ -373,6 +373,7 @@ export default function NewPaddockPage() {
         <BoundaryStep
           polygon={polygon}
           setPolygon={setPolygon}
+          areaText={rf.area(polygonAreaHectares(polygon), 2)}
           onBack={() => setStep("details")}
           onNext={() => setStep("rows")}
         />
