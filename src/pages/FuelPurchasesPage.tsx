@@ -94,6 +94,9 @@ export default function FuelPurchasesPage() {
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
   const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
+  const rf = useRegionFormatters();
+  const ff = useMemo(() => mkFuelFmt(rf), [rf]);
+  const { date: fmtDate, fuelQty: fmtLitres, cost: fmtCost, cpl: fmtCpl } = ff;
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
