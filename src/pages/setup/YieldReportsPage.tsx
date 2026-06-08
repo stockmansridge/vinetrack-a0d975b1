@@ -651,7 +651,7 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
               {summary.missing.vines && <li>Vines per {rf.areaUnitLabel === "ac" ? "acre" : "hectare"} (planting density)</li>}
             </ul>
             <p className="text-xs pt-1">
-              Per-vine sampling totals are shown above. Once bunch weight and vines / ha are
+              Per-vine sampling totals are shown above. Once bunch weight and vines / {rf.areaUnitLabel} are
               recorded, the tonnage estimate will appear here.
             </p>
           </div>
