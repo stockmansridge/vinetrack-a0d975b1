@@ -452,6 +452,8 @@ function MaintenanceSheet({
   const { user } = useAuth();
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const rf = useRegionFormatters();
+  const { date: fmtDate, cost: fmtCost } = useMemo(() => mkMaintFmt(rf), [rf]);
 
   const delMut = useMutation({
     mutationFn: async () => {
