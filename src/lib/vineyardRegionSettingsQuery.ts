@@ -27,6 +27,7 @@ export interface RegionSettings {
   spray_rate_area_unit: SprayRateAreaUnit;
   date_format: DateFormat;
   terminology_region: TerminologyRegion;
+  timezone: string | null;
 }
 
 export const AU_DEFAULTS: RegionSettings = {
@@ -39,6 +40,7 @@ export const AU_DEFAULTS: RegionSettings = {
   spray_rate_area_unit: "hectare",
   date_format: "DD/MM/YYYY",
   terminology_region: "AU_NZ",
+  timezone: null,
 };
 
 export const COUNTRY_OPTIONS: { code: CountryCode; name: string }[] = [
