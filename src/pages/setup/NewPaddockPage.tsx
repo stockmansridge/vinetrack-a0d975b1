@@ -791,7 +791,7 @@ function BoundaryStep({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <Metric label="Points" value={String(polygon.length)} />
-          <Metric label="Area" value={`${fmt(polygonAreaHectares(polygon), 2)} ha`} />
+          <Metric label="Area" value={rf.area(polygonAreaHectares(polygon), 2)} />
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1" onClick={() => setPolygon(polygon.slice(0, -1))} disabled={!polygon.length}>
               <Undo2 className="h-3.5 w-3.5" /> Undo
