@@ -286,6 +286,7 @@ export default function TripReportsPage() {
         pinCount,
         vineyardLogoUrl: vineyardLogoUrl ?? null,
         cost: computeCostFor(t),
+        formatters,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
