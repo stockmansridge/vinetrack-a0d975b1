@@ -146,19 +146,20 @@ export async function softDeleteEquipmentItem(
 export interface EquipmentSelectorOption {
   id: string;
   name: string;
-  source: "tractor" | "spray_equipment" | "other";
+  source: "tractor" | "spray_equipment" | "vineyard_machine" | "other";
 }
 
 export interface EquipmentSelectorGroups {
   tractors: EquipmentSelectorOption[];
   sprayEquipment: EquipmentSelectorOption[];
+  vineyardMachines: EquipmentSelectorOption[];
   otherItems: EquipmentSelectorOption[];
 }
 
 export async function fetchEquipmentSelectorOptions(
   vineyardId: string,
 ): Promise<EquipmentSelectorGroups> {
-  const [tractors, spray, other] = await Promise.all([
+  const [tractors, spray, machines, other] = await Promise.all([
     supabase
       .from("tractors")
       .select("id,name")
@@ -169,10 +170,26 @@ export async function fetchEquipmentSelectorOptions(
       .select("id,name")
       .eq("vineyard_id", vineyardId)
       .is("deleted_at", null),
+    supabase
+      .from("vineyard_machines")
+      .select("id,name,legacy_tractor_id,deleted_at")
+      .eq("vineyard_id", vineyardId)
+      .is("deleted_at", null)
+      .is("legacy_tractor_id", null),
     fetchEquipmentItemsForVineyard(vineyardId, "other"),
   ]);
   if (tractors.error) throw tractors.error;
   if (spray.error) throw spray.error;
+  // vineyard_machines may not exist in some envs — degrade gracefully.
+  let machinesData: { id: string; name: string | null }[] = [];
+  if (machines.error) {
+    const msg = (machines.error.message || "").toLowerCase();
+    if (!(msg.includes("does not exist") || msg.includes("not found"))) {
+      throw machines.error;
+    }
+  } else {
+    machinesData = (machines.data ?? []) as any[];
+  }
 
   const map = (
     rows: { id: string; name: string | null }[],
@@ -186,6 +203,7 @@ export async function fetchEquipmentSelectorOptions(
   return {
     tractors: map((tractors.data ?? []) as any[], "tractor"),
     sprayEquipment: map((spray.data ?? []) as any[], "spray_equipment"),
+    vineyardMachines: map(machinesData, "vineyard_machine"),
     otherItems: map(
       other.map((o) => ({ id: o.id, name: o.name })),
       "other",
