@@ -38,6 +38,7 @@ import {
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
 import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -60,6 +61,7 @@ const ANY = "__any__";
 
 export default function SprayRecordsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [filter, setFilter] = useState("");
@@ -242,6 +244,7 @@ export default function SprayRecordsPage() {
       <SprayRecordSheet
         record={selected}
         vineyardName={vineyardName}
+        formatters={formatters}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
@@ -253,11 +256,13 @@ export default function SprayRecordsPage() {
 function SprayRecordSheet({
   record,
   vineyardName,
+  formatters,
   open,
   onOpenChange,
 }: {
   record: SprayRecord | null;
   vineyardName?: string | null;
+  formatters?: import("@/lib/regionFormatters").RegionFormatters;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -275,7 +280,9 @@ function SprayRecordSheet({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => exportSprayRecordPdf(record, vineyardName)}
+                onClick={() =>
+                  exportSprayRecordPdf(record, vineyardName, { formatters })
+                }
                 className="gap-1.5"
               >
                 <FileDown className="h-3.5 w-3.5" /> Export PDF

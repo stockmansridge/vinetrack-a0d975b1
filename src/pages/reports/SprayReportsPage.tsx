@@ -19,6 +19,7 @@ import {
   fetchSprayRecordsForVineyard, type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   exportYearlySprayProgramPdf,
   exportYearlySprayProgramXlsx,
@@ -46,8 +47,10 @@ function fmtRecordLabel(r: SprayRecord): string {
 export default function SprayReportsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const { toast } = useToast();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
+
 
   // ---- Lookups
   const { data: paddocks } = useQuery({
@@ -189,6 +192,7 @@ export default function SprayReportsPage() {
         paddockName: null,
         operatorName: null,
         cost,
+        formatters,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
