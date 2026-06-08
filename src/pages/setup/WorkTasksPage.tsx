@@ -864,13 +864,13 @@ function WorkTaskDrawer({
                 <Field label="Date">
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </Field>
-                <Field label="Area ha (auto)">
+                <Field label={`Area ${areaUnit} (auto)`}>
                   <Input type="number" value={areaHaDisplay} readOnly disabled placeholder="—" />
                 </Field>
               </div>
               {paddockMissingArea && (
                 <p className="text-xs text-destructive">
-                  One or more selected blocks are missing area data, so the total area and cost per ha may be incomplete.
+                  One or more selected blocks are missing area data, so the total area and cost per {areaUnit} may be incomplete.
                 </p>
               )}
               <Field label="Description">
