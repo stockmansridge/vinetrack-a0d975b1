@@ -545,7 +545,7 @@ export default function WorkTasksPage() {
                 const align: "left" | "right" = (id === "area_ha" || id === "hours" || id === "cost") ? "right" : "left";
                 const labels: Record<WtCol, string> = {
                   date: "Date / range", paddock: "Blocks", task_type: "Type", status: "Status",
-                  area_ha: "Area ha", hours: "Hours", cost: "Cost", notes: "Notes",
+                  area_ha: `Area ${areaUnit}`, hours: "Hours", cost: "Cost", notes: "Notes",
                 };
                 const sortable = id !== "notes";
                 return (
