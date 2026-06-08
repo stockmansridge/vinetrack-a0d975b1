@@ -256,7 +256,7 @@ export default function CostingSetupWizard({ vineyardId }: Props) {
 
       {data && (
         <ul className="divide-y">
-          {buildRows(data).map((row) => (
+          {buildRows(data, rf).map((row) => (
             <li key={row.key} className="py-2.5 flex items-start gap-3">
               <div className="mt-0.5 shrink-0">
                 {row.state === "ok"
