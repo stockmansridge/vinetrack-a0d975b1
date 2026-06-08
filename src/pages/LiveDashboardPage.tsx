@@ -363,7 +363,7 @@ export default function LiveDashboardPage() {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>
             Last refreshed:{" "}
-            {lastRefresh ? format(lastRefresh, "p") : "—"}
+            {lastRefresh ? fmtTime(lastRefresh) : "—"}
           </span>
           <Button
             size="sm"
