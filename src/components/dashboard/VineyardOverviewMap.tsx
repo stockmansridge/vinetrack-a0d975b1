@@ -613,7 +613,7 @@ export default function VineyardOverviewMap({
             )}
             {mapReady && parsedPaddocks.length === 0 && !paddocksQ.isLoading && (
               <div className="pointer-events-none absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/90 px-3 py-1 text-xs text-muted-foreground">
-                No block map data available
+                No {rf.blockLabel.toLowerCase()} map data available
               </div>
             )}
           </div>
