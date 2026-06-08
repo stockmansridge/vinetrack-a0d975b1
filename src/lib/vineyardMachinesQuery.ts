@@ -68,7 +68,8 @@ export async function fetchActiveVineyardMachines(
     .from("vineyard_machines")
     .select("*")
     .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .is("legacy_tractor_id", null);
   if (error) {
     // Table may not exist yet in some envs — degrade gracefully.
     const msg = (error.message || "").toLowerCase();

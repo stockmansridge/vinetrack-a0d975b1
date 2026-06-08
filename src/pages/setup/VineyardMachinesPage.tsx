@@ -207,9 +207,8 @@ export default function VineyardMachinesPage() {
         <div>
           <h1 className="text-2xl font-semibold">Vineyard Machines</h1>
           <p className="text-sm text-muted-foreground">
-            Tractors, ATVs, side-by-sides, harvesters, utility vehicles and other powered
-            machines used directly for vineyard work. Used for Fuel Log and job costing
-            where enabled.
+            ATVs, side-by-sides, harvesters, utility vehicles and other powered
+            vineyard machines. Used for Fuel Log and job costing where enabled.
           </p>
         </div>
         {canEdit && (
