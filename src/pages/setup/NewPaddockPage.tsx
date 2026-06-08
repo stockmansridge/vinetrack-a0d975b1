@@ -98,6 +98,7 @@ export default function NewPaddockPage() {
   const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const [saving, setSaving] = useState(false);
+  const rf = useRegionFormatters();
 
   const [step, setStep] = useState<Step>("details");
 
