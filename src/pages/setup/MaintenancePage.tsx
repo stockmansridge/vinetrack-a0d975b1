@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Table,
   TableBody,
@@ -76,6 +88,45 @@ import { formatDate } from "@/lib/dateFormat";
 
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
+
+type PickerGroup = {
+  key: string;
+  label: string;
+  options: { id: string; name: string }[];
+};
+
+const buildMaintenancePickerGroups = (
+  equipmentGroups?: EquipmentSelectorGroups,
+  legacyOnly: string[] = [],
+  includeLegacy = false,
+  currentValue?: string | null,
+  includeCurrentValue = false,
+): PickerGroup[] => {
+  const groups: PickerGroup[] = [
+    { key: "tractors", label: "Tractors", options: equipmentGroups?.tractors ?? [] },
+    { key: "spray", label: "Spray Equipment", options: equipmentGroups?.sprayEquipment ?? [] },
+    { key: "machines", label: "Vineyard Machines", options: equipmentGroups?.vineyardMachines ?? [] },
+    { key: "other", label: "Other Equipment & Assets", options: equipmentGroups?.otherItems ?? [] },
+  ].filter((group) => group.options.length > 0);
+
+  if (includeLegacy && legacyOnly.length > 0) {
+    groups.push({
+      key: "legacy",
+      label: "Historical (free text)",
+      options: legacyOnly.map((name) => ({ id: name, name })),
+    });
+  }
+
+  if (includeCurrentValue && currentValue && !groups.some((group) => group.options.some((option) => option.name === currentValue))) {
+    groups.push({
+      key: "current",
+      label: "Current value",
+      options: [{ id: currentValue, name: currentValue }],
+    });
+  }
+
+  return groups;
+};
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -145,6 +196,20 @@ export default function MaintenancePage() {
         .sort((a, b) => a.localeCompare(b)),
     [legacyItemNames, groupedNames],
   );
+
+  const filterPickerGroups = useMemo(
+    () => buildMaintenancePickerGroups(equipmentGroups, legacyOnly, legacyOnly.length > 0),
+    [equipmentGroups, legacyOnly],
+  );
+
+  useEffect(() => {
+    if (!selectedVineyardId) return;
+    console.info("[MaintenancePage] equipment selector groups", filterPickerGroups.map((group) => ({
+      group: group.label,
+      optionCount: group.options.length,
+      optionLabels: group.options.map((option) => option.name),
+    })));
+  }, [filterPickerGroups, selectedVineyardId]);
 
   const rows = useMemo(() => {
     let list = logs.slice();
@@ -220,50 +285,15 @@ export default function MaintenancePage() {
               <SelectTrigger className="w-64"><SelectValue placeholder="Any" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ANY}>Any item</SelectItem>
-                {equipmentGroups?.tractors.length ? (
-                  <SelectGroup>
-                    <SelectLabel>Tractors</SelectLabel>
-                    {equipmentGroups.tractors.map((o) => (
-                      <SelectItem key={`t-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                {filterPickerGroups.map((group, index) => (
+                  <SelectGroup key={group.key}>
+                    {index > 0 ? <SelectSeparator /> : null}
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((option) => (
+                      <SelectItem key={`${group.key}-${option.id}`} value={option.name}>{option.name}</SelectItem>
                     ))}
                   </SelectGroup>
-                ) : null}
-                {equipmentGroups?.sprayEquipment.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Spray Equipment</SelectLabel>
-                    {equipmentGroups.sprayEquipment.map((o) => (
-                      <SelectItem key={`s-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {equipmentGroups?.vineyardMachines.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Vineyard Machines</SelectLabel>
-                    {equipmentGroups.vineyardMachines.map((o) => (
-                      <SelectItem key={`m-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {equipmentGroups?.otherItems.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Other Equipment &amp; Assets</SelectLabel>
-                    {equipmentGroups.otherItems.map((o) => (
-                      <SelectItem key={`o-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {legacyOnly.length ? (
-                  <SelectGroup>
-                    <SelectSeparator />
-                    <SelectLabel>Historical (free text)</SelectLabel>
-                    {legacyOnly.map((n) => (
-                      <SelectItem key={`l-${n}`} value={n}>{n}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
+                ))}
               </SelectContent>
             </Select>
             <AddEquipmentMenu />
@@ -585,6 +615,26 @@ function MaintenanceEditor({
     equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
     return s.has(editing.item_name);
   }, [editing, equipmentGroups]);
+  const pickerGroups = useMemo(
+    () =>
+      buildMaintenancePickerGroups(
+        equipmentGroups,
+        legacyOnly,
+        allowLegacyInPicker,
+        editing?.item_name,
+        allowLegacyInPicker && !!editing?.item_name && !editingNameInActive && !legacyOnly.includes(editing.item_name),
+      ),
+    [allowLegacyInPicker, editing?.item_name, editingNameInActive, equipmentGroups, legacyOnly],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    console.info("[MaintenanceEditor] equipment selector groups", pickerGroups.map((group) => ({
+      group: group.label,
+      optionCount: group.options.length,
+      optionLabels: group.options.map((option) => option.name),
+    })));
+  }, [open, pickerGroups]);
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -661,62 +711,11 @@ function MaintenanceEditor({
           <div className="space-y-1.5">
             <Label>Item / Machine *</Label>
             <div className="flex items-center gap-1">
-              <Select value={itemName || undefined} onValueChange={setItemName}>
-                <SelectTrigger><SelectValue placeholder="Select item or machine" /></SelectTrigger>
-                <SelectContent>
-                  {equipmentGroups?.tractors.length ? (
-                    <SelectGroup>
-                      <SelectLabel>Tractors</SelectLabel>
-                      {equipmentGroups.tractors.map((o) => (
-                        <SelectItem key={`et-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {equipmentGroups?.sprayEquipment.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Spray Equipment</SelectLabel>
-                      {equipmentGroups.sprayEquipment.map((o) => (
-                        <SelectItem key={`es-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {equipmentGroups?.vineyardMachines.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Vineyard Machines</SelectLabel>
-                      {equipmentGroups.vineyardMachines.map((o) => (
-                        <SelectItem key={`em-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {equipmentGroups?.otherItems.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Other Equipment &amp; Assets</SelectLabel>
-                      {equipmentGroups.otherItems.map((o) => (
-                        <SelectItem key={`eo-${o.id}`} value={o.name}>{o.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {allowLegacyInPicker && legacyOnly.length ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Historical (free text)</SelectLabel>
-                      {legacyOnly.map((n) => (
-                        <SelectItem key={`el-${n}`} value={n}>{n}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {allowLegacyInPicker && editing?.item_name && !editingNameInActive && !legacyOnly.includes(editing.item_name) ? (
-                    <SelectGroup>
-                      <SelectSeparator />
-                      <SelectLabel>Current value</SelectLabel>
-                      <SelectItem value={editing.item_name}>{editing.item_name}</SelectItem>
-                    </SelectGroup>
-                  ) : null}
-                </SelectContent>
-              </Select>
+              <EquipmentPicker
+                value={itemName}
+                onValueChange={setItemName}
+                groups={pickerGroups}
+              />
               <AddEquipmentMenu />
             </div>
             {!editing && (
@@ -840,6 +839,63 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
       <span className="text-muted-foreground">{label}</span>
       <span className={mono ? "font-mono text-xs break-all text-right" : "text-right"}>{value}</span>
     </div>
+  );
+}
+
+function EquipmentPicker({
+  value,
+  onValueChange,
+  groups,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  groups: PickerGroup[];
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = value.trim();
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate text-left text-foreground">
+            {selectedLabel || "Select item or machine"}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] p-0 z-[70]">
+        <Command className="bg-popover text-popover-foreground">
+          <CommandList className="max-h-80">
+            <CommandEmpty>No items or machines found.</CommandEmpty>
+            {groups.map((group) => (
+              <CommandGroup key={group.key} heading={group.label}>
+                {group.options.map((option) => (
+                  <CommandItem
+                    key={`${group.key}-${option.id}`}
+                    value={`${group.label} ${option.name}`}
+                    onSelect={() => {
+                      onValueChange(option.name);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className={value === option.name ? "h-4 w-4 opacity-100" : "h-4 w-4 opacity-0"} />
+                    <span>{option.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
