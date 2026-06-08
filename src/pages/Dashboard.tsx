@@ -20,10 +20,10 @@ const fmt = (n: number, digits = 0) =>
 const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }) => (
   <Link
     to={to}
-    className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/50 hover:border-primary/30 transition"
+    className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/40 hover:border-primary/30 transition"
   >
     <span className="flex items-center gap-2.5">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <Icon className="h-4 w-4" />
       </span>
       <span className="font-medium text-foreground">{label}</span>
@@ -117,6 +117,7 @@ export default function Dashboard() {
         <MetricCard
           label={rf.blocksLabel}
           icon={Map}
+          tone="primary"
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
           to="/paddocks"
@@ -124,39 +125,41 @@ export default function Dashboard() {
         <MetricCard
           label="Area"
           icon={LayoutGrid}
-          tone="accent"
+          tone="primary"
           value={loading ? "…" : summary.totalAreaHa > 0 ? rf.area(summary.totalAreaHa, 2) : "—"}
           hint={`From ${rf.blockLabel.toLowerCase()} polygons`}
         />
         <MetricCard
           label="Total rows"
           icon={Ruler}
-          tone="neutral"
+          tone="accent"
           value={loading ? "…" : fmt(summary.totalRows)}
         />
         <MetricCard
           label="Vines"
           icon={Grape}
-          tone="accent"
+          tone="amber"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
           hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
         />
         <MetricCard
           label="Tractors"
           icon={Tractor}
+          tone="teal"
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
           to="/setup/tractors"
         />
         <MetricCard
           label="Spray equipment"
           icon={SprayCan}
-          tone="neutral"
+          tone="teal"
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
           to="/setup/spray-equipment"
         />
         <MetricCard
           label="Team members"
           icon={Users}
+          tone="purple"
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
           to="/team"
         />
@@ -165,7 +168,7 @@ export default function Dashboard() {
       <VineyardOverviewMap />
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daily management</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Daily management</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
           <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
@@ -177,7 +180,7 @@ export default function Dashboard() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setup</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Setup</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />

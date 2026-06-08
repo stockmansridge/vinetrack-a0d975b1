@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral";
+
 export interface MetricCardProps {
   label: string;
   value: React.ReactNode;
@@ -11,30 +13,38 @@ export interface MetricCardProps {
   hint?: string;
   to?: string;
   /** Tone of the icon badge. Defaults to primary green. */
-  tone?: "primary" | "accent" | "neutral";
+  tone?: MetricTone;
 }
 
-const TONES: Record<NonNullable<MetricCardProps["tone"]>, string> = {
+// Controlled, intentional palette. No "disabled-looking" greys.
+const TONES: Record<MetricTone, string> = {
   primary: "bg-primary/10 text-primary",
   accent: "bg-accent/15 text-accent",
-  neutral: "bg-muted text-muted-foreground",
+  teal: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  amber: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  purple: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+  neutral: "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300",
 };
 
 export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary" }: MetricCardProps) {
   const body = (
     <div
       className={cn(
-        "h-full rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,32,22,0.04)] transition",
+        "h-full rounded-xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,32,22,0.04)] transition",
         to && "hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5",
       )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", TONES[tone])}>
+        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", TONES[tone])}>
           <Icon className="h-5 w-5" strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-semibold leading-tight tracking-tight text-foreground">{value}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            {label}
+          </div>
+          <div className="mt-1 text-[26px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+            {value}
+          </div>
           {hint && <div className="mt-1 text-xs text-muted-foreground line-clamp-2">{hint}</div>}
         </div>
       </div>
@@ -45,7 +55,7 @@ export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary
       <Link
         to={to}
         aria-label={`${label} — open`}
-        className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {body}
       </Link>
@@ -66,11 +76,13 @@ export function PageHeader({ title, description, actions, meta }: PageHeaderProp
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
+          <h1 className="text-[26px] md:text-[28px] font-semibold tracking-tight text-foreground leading-tight">
+            {title}
+          </h1>
           {meta}
         </div>
         {description && (
-          <p className="text-sm text-muted-foreground max-w-2xl">{description}</p>
+          <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">{description}</p>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

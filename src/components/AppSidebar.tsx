@@ -156,9 +156,9 @@ export function AppSidebar() {
         <SidebarMenuButton
           asChild
           isActive={isActive(item.url)}
-          className="rounded-lg text-sidebar-foreground/80 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground dark:data-[active=true]:text-sidebar-primary-foreground dark:data-[active=true]:hover:text-sidebar-primary-foreground"
+          className="rounded-lg text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_2px_0_0_hsl(var(--sidebar-primary))] data-[active=true]:hover:bg-sidebar-accent data-[active=true]:hover:text-sidebar-accent-foreground [&_svg]:text-current"
         >
-          <NavLink to={item.url} className="flex items-center gap-2">
+          <NavLink to={item.url} className="flex items-center gap-2.5">
             <item.icon className="h-4 w-4" />
             <span className="flex-1 truncate">{item.title}</span>
             {item.url === "/admin/support-requests" && unresolvedSupport > 0 && (
@@ -183,9 +183,9 @@ export function AppSidebar() {
       <Collapsible defaultOpen={defaultOpen || hasActive} className="group/collapsible">
         <SidebarGroup>
           <SidebarGroupLabel asChild>
-            <CollapsibleTrigger className="flex w-full items-center justify-between hover:text-sidebar-foreground">
+            <CollapsibleTrigger className="flex w-full items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/55 hover:text-sidebar-foreground">
               {label}
-              <ChevronDown className="h-4 w-4 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
             </CollapsibleTrigger>
           </SidebarGroupLabel>
           <CollapsibleContent>
@@ -201,13 +201,13 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-4 py-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <BrandMark circle logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
           <div className="flex flex-col leading-tight min-w-0">
-            <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
+            <span className="text-sm font-semibold tracking-tight text-foreground truncate">
               {vineyardName ?? <BrandName />}
             </span>
-            <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
+            <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Vineyard portal
             </span>
           </div>
@@ -229,7 +229,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setSupportOpen(true)}
-              className="rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              className="rounded-lg text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground [&_svg]:text-current"
             >
               <LifeBuoy className="h-4 w-4" />
               <span>Contact support</span>
