@@ -359,12 +359,12 @@ export default function TractorFuelLogsPage() {
               <TableHead>Date / time</TableHead>
               <TableHead>Machine</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead className="text-right">Litres</TableHead>
+              <TableHead className="text-right">{rf.fuelUnitLabel === "gal" ? "Gallons" : "Litres"}</TableHead>
               <TableHead className="text-right">Engine hrs</TableHead>
-              <TableHead className="text-right">L/hr</TableHead>
+              <TableHead className="text-right">{rf.fuelUnitLabel}/hr</TableHead>
               <TableHead>Rate status</TableHead>
               <TableHead>Operator</TableHead>
-              {canSeeCosts && <TableHead className="text-right">Cost/L</TableHead>}
+              {canSeeCosts && <TableHead className="text-right">Cost/{rf.fuelUnitLabel}</TableHead>}
               {canSeeCosts && <TableHead className="text-right">Total</TableHead>}
               <TableHead>Full?</TableHead>
               <TableHead>Notes</TableHead>
