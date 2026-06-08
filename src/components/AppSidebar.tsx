@@ -229,7 +229,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setSupportOpen(true)}
-              className="rounded-xl hover:bg-[hsl(80_58%_46%/0.10)] hover:text-white"
+              className="rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             >
               <LifeBuoy className="h-4 w-4" />
               <span>Contact support</span>
