@@ -168,7 +168,7 @@ export default function Dashboard() {
       <VineyardOverviewMap />
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daily management</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Daily management</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <QuickLink to="/dashboard/live" label="Live Dashboard" Icon={Activity} />
           <QuickLink to="/trips" label="Today's Trips" Icon={Sprout} />
@@ -180,7 +180,7 @@ export default function Dashboard() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setup</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Setup</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
           <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
