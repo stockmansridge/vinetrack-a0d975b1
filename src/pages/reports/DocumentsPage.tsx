@@ -22,6 +22,7 @@ import { fetchSprayJobs, type SprayJob } from "@/lib/sprayJobsQuery";
 import { downloadTripPdf } from "@/lib/tripReport";
 import { countTripPins } from "@/lib/tripPinCount";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   downloadRainfallPdf,
   downloadRainfallCsv,
@@ -106,6 +107,7 @@ export default function DocumentsPage() {
     "Vineyard";
 
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const formatters = useRegionFormatters();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ReportType>("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | SourceKind>("all");
@@ -181,6 +183,7 @@ export default function DocumentsPage() {
             blockNames,
             pinCount,
             vineyardLogoUrl: vineyardLogoUrl ?? null,
+            formatters,
           });
         },
       });
@@ -230,7 +233,7 @@ export default function DocumentsPage() {
       });
 
     return out;
-  }, [trips, sprayJobs, paddockMap, vineyardName]);
+  }, [trips, sprayJobs, paddockMap, vineyardName, vineyardLogoUrl, formatters]);
 
   // Distinct trip functions present in current items (for filter dropdown).
   const tripFnOptions = useMemo(() => {

@@ -45,6 +45,7 @@ import {
   downloadTripPdf,
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { countTripPins } from "@/lib/tripPinCount";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
@@ -522,6 +523,7 @@ function TripSheet({
   onOpenChange: (o: boolean) => void;
 }) {
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
@@ -690,6 +692,7 @@ function TripSheet({
                     vineyardLogoUrl: vineyardLogoUrl ?? null,
                     paddockNameById,
                     cost: canSeeCosts ? cost : null,
+                    formatters,
                   });
                 }}
               >

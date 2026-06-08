@@ -19,6 +19,7 @@ import {
   downloadCsv,
 } from "@/lib/tripReport";
 import { useVineyardLogo } from "@/hooks/useVineyardLogo";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { computeTripCost, type TractorLite } from "@/lib/tripCosting";
 import { fetchOperatorCategoriesForVineyard } from "@/lib/operatorCategoriesQuery";
@@ -86,6 +87,7 @@ export default function TripReportsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const { toast } = useToast();
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
 
@@ -284,6 +286,7 @@ export default function TripReportsPage() {
         pinCount,
         vineyardLogoUrl: vineyardLogoUrl ?? null,
         cost: computeCostFor(t),
+        formatters,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
