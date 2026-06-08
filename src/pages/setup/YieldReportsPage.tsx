@@ -394,6 +394,10 @@ function YieldSheet({
 }
 
 function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const areaVal = mkAreaVal(rf);
+  const yieldPerArea = mkYieldPerArea(rf);
   const blocks = Array.isArray(row.block_results) ? row.block_results : null;
   return (
     <div className="mt-4 space-y-4 text-sm">
@@ -401,10 +405,10 @@ function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vin
         <Field label="Season" value={fmt(row.season)} />
         <Field label="Year" value={fmt(row.year)} />
         <Field label="Total yield (t)" value={fmtNum(row.total_yield_tonnes)} />
-        <Field label="Total area (ha)" value={fmtNum(row.total_area_hectares)} />
-        <Field label="t / ha" value={
+        <Field label="Total area" value={areaVal(row.total_area_hectares)} />
+        <Field label={`Yield per ${rf.areaUnitLabel}`} value={
           row.total_yield_tonnes != null && row.total_area_hectares
-            ? fmtNum(row.total_yield_tonnes / row.total_area_hectares)
+            ? yieldPerArea(row.total_yield_tonnes / row.total_area_hectares)
             : "—"
         } />
         <Field label="Archived at" value={fmtDate(row.archived_at)} />
