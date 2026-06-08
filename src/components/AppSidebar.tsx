@@ -55,6 +55,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
@@ -149,6 +150,8 @@ export function AppSidebar() {
   const isActive = (p: string) => pathname === p;
   const visible = (items: NavItem[]) =>
     items.filter((i) => canAccessRoute(i.url, currentRole));
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
 
   const renderItems = (items: NavItem[]) =>
     items.map((item) => (
@@ -200,25 +203,39 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="px-4 py-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <BrandMark circle logoUrl={logoUrl} size={36} alt={vineyardName ?? "VineTrack"} />
-          <div className="flex flex-col leading-tight min-w-0">
-            <span className="text-sm font-semibold tracking-tight text-foreground truncate">
-              {vineyardName ?? <BrandName />}
-            </span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-              Vineyard portal
-            </span>
+      <SidebarHeader className="px-3 py-3 border-b border-sidebar-border">
+        {collapsed ? (
+          <div className="flex justify-center">
+            <BrandMark size={32} tile alt="VineTrack" />
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5">
+              <BrandMark size={26} tile alt="VineTrack" />
+              <BrandName className="text-[15px]" />
+            </div>
+            {vineyardName && (
+              <div className="mt-2.5 pt-2.5 border-t border-sidebar-border flex items-center gap-2.5">
+                <BrandMark circle logoUrl={logoUrl} size={28} alt={vineyardName} />
+                <div className="flex flex-col leading-tight min-w-0">
+                  <span className="text-[13px] font-semibold tracking-tight text-foreground truncate">
+                    {vineyardName}
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                    Vineyard portal
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </SidebarHeader>
       <SidebarContent>
         {renderGroup("Dashboard", visible(dashboard))}
         {renderGroup("Work", visible(work))}
         {renderGroup("Equipment", visible(equipment), false)}
-        {renderGroup("Tools", visible(tools))}
-        {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports))}
+        {renderGroup("Tools", visible(tools), false)}
+        {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports), false)}
         {renderGroup("Setup", visible(setup), false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
