@@ -35,6 +35,7 @@ async function fetchArchivedPaddocks(vineyardId: string): Promise<ArchivedRow[]>
 }
 
 export default function ArchivedPaddocksSection() {
+  const rf = useRegionFormatters();
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const qc = useQueryClient();
