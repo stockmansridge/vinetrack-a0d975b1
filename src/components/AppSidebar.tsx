@@ -74,8 +74,15 @@ const work: NavItem[] = [
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
-  { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
-  { title: "Fuel Logs", url: "/tractor-fuel-logs", icon: Fuel },
+];
+
+// "Equipment" — physical assets and fuel
+const equipment: NavItem[] = [
+  { title: "Tractors", url: "/setup/tractors", icon: Tractor },
+  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
+  { title: "Vineyard Machines", url: "/setup/vineyard-machines", icon: Tractor },
+  { title: "Other Equipment & Assets", url: "/setup/equipment-other", icon: Wrench },
+  { title: "Fuel", url: "/fuel", icon: Fuel },
 ];
 
 // "Reports" — exports & compliance
@@ -100,10 +107,6 @@ const setup: NavItem[] = [
   { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
   { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
-  { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Vineyard Machines", url: "/setup/vineyard-machines", icon: Tractor },
-  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
-  { title: "Other Equipment & Assets", url: "/setup/equipment-other", icon: Wrench },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
   { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
   { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
