@@ -37,6 +37,10 @@ function csvCell(v: any): string {
 }
 
 export default function FuelAllocationPanel({ vineyardId }: { vineyardId: string }) {
+  const rf = useRegionFormatters();
+  const fmtMoney = (v: number | null | undefined): string =>
+    v == null || !isFinite(v) ? "—" : rf.currency(v, 0);
+  const fmtL = (litres: number): string => rf.fuel(litres, 1);
   const [groupBy, setGroupBy] = useState<GroupBy>("tractor");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
