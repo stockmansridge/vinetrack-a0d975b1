@@ -29,6 +29,14 @@ import {
   type TractorFuelLog,
   type LhrResult,
 } from "@/lib/tractorFuelLogsQuery";
+import {
+  fetchAllVineyardMachines,
+  resolveMachineForRecord,
+  MACHINE_TYPES,
+  MACHINE_TYPE_LABELS,
+  type MachineType,
+  type VineyardMachine,
+} from "@/lib/vineyardMachinesQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { formatDate } from "@/lib/dateFormat";
 
@@ -95,9 +103,10 @@ export default function TractorFuelLogsPage() {
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [tractorFilter, setTractorFilter] = useState<string>("all");
+  const [machineFilter, setMachineFilter] = useState<string>("all"); // key = source:id
+  const [machineTypeFilter, setMachineTypeFilter] = useState<string>("all");
   const [operatorFilter, setOperatorFilter] = useState<string>("all");
-  const [fullFilter, setFullFilter] = useState<string>("all"); // all | full | not_full
+  const [fullFilter, setFullFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
   const { data: logs, isLoading, error } = useQuery({
@@ -112,17 +121,29 @@ export default function TractorFuelLogsPage() {
     queryFn: () => fetchTractorsForVineyard(selectedVineyardId!),
   });
 
-  const tractorName = useMemo(() => {
-    const m = new Map<string, string>();
-    (tractors ?? []).forEach((t) => m.set(t.id, t.name ?? "Unnamed tractor"));
-    return (id: string | null) => (id ? m.get(id) ?? "Unknown tractor" : "—");
+  const { data: machines } = useQuery<VineyardMachine[]>({
+    queryKey: ["vineyard_machines-all", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchAllVineyardMachines(selectedVineyardId!),
+  });
+
+  const machinesById = useMemo(() => {
+    const m = new Map<string, VineyardMachine>();
+    (machines ?? []).forEach((x) => m.set(x.id, x));
+    return m;
+  }, [machines]);
+
+  const tractorsById = useMemo(() => {
+    const m = new Map<string, { id: string; name?: string | null }>();
+    (tractors ?? []).forEach((t) => m.set(t.id, t));
+    return m;
   }, [tractors]);
 
-  // Compute L/hr across ALL logs (unfiltered) so the previous-fill lookup
-  // still works correctly when filters narrow the list.
+  const resolveLog = (log: TractorFuelLog) =>
+    resolveMachineForRecord({ machine_id: log.machine_id, tractor_id: log.tractor_id }, machinesById, tractorsById);
+
   const lhrMap = useMemo(() => buildLhrMap(logs ?? []), [logs]);
 
-  // Operator label for filter + display.
   const operatorLabel = (log: TractorFuelLog) =>
     resolve(log.operator_user_id, log.operator_name) ?? log.operator_name ?? "—";
 
@@ -135,6 +156,31 @@ export default function TractorFuelLogsPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [logs, resolve]);
 
+  // Machine filter options: union of active machines + legacy tractors actually referenced.
+  const machineFilterOptions = useMemo(() => {
+    const opts: { key: string; label: string; type: string }[] = [];
+    const activeMachines = (machines ?? []).filter((m) => !m.deleted_at);
+    activeMachines.forEach((m) =>
+      opts.push({
+        key: `machine:${m.id}`,
+        label: `${m.name ?? "Unnamed"} (${MACHINE_TYPE_LABELS[m.machine_type as MachineType] ?? m.machine_type})`,
+        type: m.machine_type,
+      }),
+    );
+    (tractors ?? []).forEach((t) =>
+      opts.push({ key: `tractor:${t.id}`, label: `${t.name ?? "Unnamed tractor"} (Tractor)`, type: "tractor" }),
+    );
+    return opts.sort((a, b) => a.label.localeCompare(b.label));
+  }, [machines, tractors]);
+
+  const matchesMachineFilter = (log: TractorFuelLog) => {
+    if (machineFilter === "all") return true;
+    const [src, id] = machineFilter.split(":");
+    if (src === "machine") return log.machine_id === id;
+    if (src === "tractor") return !log.machine_id && log.tractor_id === id;
+    return true;
+  };
+
   const rows = useMemo(() => {
     let list = (logs ?? []).slice();
     if (from) list = list.filter((l) => (l.fill_datetime ?? "") >= from);
@@ -142,32 +188,30 @@ export default function TractorFuelLogsPage() {
       const toEnd = `${to}T23:59:59`;
       list = list.filter((l) => (l.fill_datetime ?? "") <= toEnd);
     }
-    if (tractorFilter !== "all") list = list.filter((l) => l.tractor_id === tractorFilter);
+    list = list.filter(matchesMachineFilter);
+    if (machineTypeFilter !== "all") {
+      list = list.filter((l) => resolveLog(l).type === machineTypeFilter);
+    }
     if (operatorFilter !== "all") list = list.filter((l) => operatorLabel(l) === operatorFilter);
     if (fullFilter === "full") list = list.filter((l) => l.filled_to_full === true);
     if (fullFilter === "not_full") list = list.filter((l) => l.filled_to_full !== true);
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter((l) =>
-        [
-          tractorName(l.tractor_id),
-          operatorLabel(l),
-          l.notes,
-          l.litres_added,
-          l.engine_hours,
-        ]
-          .some((v) => String(v ?? "").toLowerCase().includes(q)),
-      );
+      list = list.filter((l) => {
+        const r = resolveLog(l);
+        return [r.name, r.typeLabel, operatorLabel(l), l.notes, l.litres_added, l.engine_hours]
+          .some((v) => String(v ?? "").toLowerCase().includes(q));
+      });
     }
-    // Newest first
     list.sort((a, b) => (b.fill_datetime ?? "").localeCompare(a.fill_datetime ?? ""));
     return list;
-  }, [logs, from, to, tractorFilter, operatorFilter, fullFilter, search, tractorName, resolve]);
+  }, [logs, from, to, machineFilter, machineTypeFilter, operatorFilter, fullFilter, search, machinesById, tractorsById, resolve]);
 
   const exportCsv = () => {
     const header = [
       "fill_datetime",
-      "tractor",
+      "machine_name",
+      "machine_type",
       "litres_added",
       "engine_hours",
       "litres_per_hour",
@@ -180,9 +224,11 @@ export default function TractorFuelLogsPage() {
     const lines = [header.join(",")];
     for (const r of rows) {
       const lhr = lhrMap.get(r.id) ?? { litresPerHour: null, status: "cannot_calculate" as const };
+      const res = resolveLog(r);
       const row = [
         r.fill_datetime ?? "",
-        tractorName(r.tractor_id),
+        res.name,
+        res.typeLabel,
         r.litres_added ?? "",
         r.engine_hours ?? "",
         lhr.litresPerHour != null ? lhr.litresPerHour.toFixed(3) : "",
@@ -198,19 +244,22 @@ export default function TractorFuelLogsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `tractor-fuel-logs-${todayIso()}.csv`;
+    a.download = `fuel-logs-${todayIso()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const colCount = canSeeCosts ? 12 : 10;
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Tractor fuel logs</h1>
+          <h1 className="text-2xl font-semibold">Fuel Logs / Machine</h1>
           <p className="text-sm text-muted-foreground">
-            Read-only view of tractor fill records synced from iPhone. L/hr is calculated
-            display-only from the previous fill for each tractor.
+            Read-only view of vineyard machine fill records synced from iPhone. L/hr is
+            calculated display-only from the previous fill for each machine. Fuel logs do
+            not directly allocate costs to blocks or reports.
           </p>
         </div>
         <div className="flex gap-2">
@@ -230,13 +279,25 @@ export default function TractorFuelLogsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Tractor</div>
-          <Select value={tractorFilter} onValueChange={setTractorFilter}>
-            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <div className="text-xs text-muted-foreground">Machine</div>
+          <Select value={machineFilter} onValueChange={setMachineFilter}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All tractors</SelectItem>
-              {(tractors ?? []).map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name ?? "Unnamed"}</SelectItem>
+              <SelectItem value="all">All machines</SelectItem>
+              {machineFilterOptions.map((o) => (
+                <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Machine type</div>
+          <Select value={machineTypeFilter} onValueChange={setMachineTypeFilter}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {MACHINE_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>{MACHINE_TYPE_LABELS[t]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -267,7 +328,7 @@ export default function TractorFuelLogsPage() {
         <div className="space-y-1 ml-auto">
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
-            placeholder="Tractor, operator, notes…"
+            placeholder="Machine, operator, notes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-64"
@@ -280,7 +341,8 @@ export default function TractorFuelLogsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Date / time</TableHead>
-              <TableHead>Tractor</TableHead>
+              <TableHead>Machine</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead className="text-right">Litres</TableHead>
               <TableHead className="text-right">Engine hrs</TableHead>
               <TableHead className="text-right">L/hr</TableHead>
@@ -295,31 +357,33 @@ export default function TractorFuelLogsPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={canSeeCosts ? 11 : 9} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={colCount} className="text-center text-muted-foreground py-6">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={canSeeCosts ? 11 : 9} className="text-center text-destructive py-6">
+                <TableCell colSpan={colCount} className="text-center text-destructive py-6">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canSeeCosts ? 11 : 9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
                   No fuel logs found.
                 </TableCell>
               </TableRow>
             )}
             {rows.map((r) => {
               const lhr = lhrMap.get(r.id) ?? { litresPerHour: null, status: "cannot_calculate" as const };
+              const res = resolveLog(r);
               return (
                 <TableRow key={r.id}>
                   <TableCell className="whitespace-nowrap">{fmtDateTime(r.fill_datetime)}</TableCell>
-                  <TableCell>{tractorName(r.tractor_id)}</TableCell>
+                  <TableCell>{res.name}</TableCell>
+                  <TableCell>{res.typeLabel}</TableCell>
                   <TableCell className="text-right">{fmtLitres(r.litres_added)}</TableCell>
                   <TableCell className="text-right">{fmtHrs(r.engine_hours)}</TableCell>
                   <TableCell className="text-right">{fmtLhr(lhr.litresPerHour)}</TableCell>
