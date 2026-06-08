@@ -70,6 +70,7 @@ import VarietyAllocationEditor, {
 } from "@/components/varieties/VarietyAllocationEditor";
 import SoilProfileSection from "@/components/soil/SoilProfileSection";
 import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmt = (n: any, d = 2) =>
   Number.isFinite(Number(n)) ? Number(n).toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
