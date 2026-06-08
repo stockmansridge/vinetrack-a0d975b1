@@ -445,6 +445,7 @@ function RainfallExports({
   vineyardId: string;
   vineyardName: string;
 }) {
+  const rf = useRegionFormatters();
   const [preset, setPreset] = useState<"last30" | "last365" | "currentYear">(
     "last30",
   );
@@ -456,7 +457,7 @@ function RainfallExports({
       const { from, to } = rangeForPreset(preset);
       const res = await fetchDailyRainfall(vineyardId, from, to);
       const rows = res.ok ? res.rows : [];
-      if (fmt === "pdf") await downloadRainfallPdf(rows, vineyardName, from, to);
+      if (fmt === "pdf") await downloadRainfallPdf(rows, vineyardName, from, to, rf);
       else downloadRainfallCsv(rows, vineyardName, from, to);
     } finally {
       setBusy(null);
