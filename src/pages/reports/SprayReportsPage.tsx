@@ -19,6 +19,7 @@ import {
   fetchSprayRecordsForVineyard, type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
   exportYearlySprayProgramPdf,
   exportYearlySprayProgramXlsx,
