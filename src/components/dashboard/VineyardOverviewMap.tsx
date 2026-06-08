@@ -15,6 +15,7 @@ import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { extractPathPoints } from "@/lib/tripReport";
+import { formatTripNameLabel } from "@/lib/tripDisplay";
 import {
   deriveMetrics,
   parsePolygonPoints,
