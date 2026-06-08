@@ -921,18 +921,18 @@ function WorkTaskDrawer({
                     <thead>
                       <tr className="text-muted-foreground">
                         <th className="text-left font-normal px-2 py-1">Block</th>
-                        <th className="text-right font-normal px-2 py-1">Area ha</th>
+                        <th className="text-right font-normal px-2 py-1">Area</th>
                         <th className="text-right font-normal px-2 py-1">Share</th>
                         <th className="text-right font-normal px-2 py-1">Hours</th>
                         {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost</th>}
-                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">Cost/ha</th>}
+                        {drawerCanSeeCosts && <th className="text-right font-normal px-2 py-1">{`Cost/${areaUnit}`}</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {blockBreakdown.map((b) => (
                         <tr key={b.id} className="border-t">
                           <td className="px-2 py-1 truncate max-w-[8rem]" title={b.name}>{b.name}</td>
-                          <td className="px-2 py-1 text-right">{b.areaHa > 0 ? b.areaHa.toFixed(2) : "—"}</td>
+                          <td className="px-2 py-1 text-right">{b.areaHa > 0 ? rf.area(b.areaHa) : "—"}</td>
                           <td className="px-2 py-1 text-right">{(b.share * 100).toFixed(1)}%</td>
                           <td className="px-2 py-1 text-right">{b.allocHours.toFixed(2)}</td>
                           {drawerCanSeeCosts && <td className="px-2 py-1 text-right">{b.allocCost ? money(b.allocCost) : "—"}</td>}
