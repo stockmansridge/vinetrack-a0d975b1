@@ -64,6 +64,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "DD/MM/YYYY",
     terminology_region: "AU_NZ",
+    timezone: null,
   },
   US: {
     country_code: "US",
@@ -75,6 +76,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "acre",
     date_format: "MM/DD/YYYY",
     terminology_region: "US_CA",
+    timezone: null,
   },
   CA: {
     country_code: "CA",
@@ -86,6 +88,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "YYYY-MM-DD",
     terminology_region: "US_CA",
+    timezone: null,
   },
   GB: {
     country_code: "GB",
@@ -97,6 +100,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "DD/MM/YYYY",
     terminology_region: "UK_ZA",
+    timezone: null,
   },
   ZA: {
     country_code: "ZA",
@@ -108,6 +112,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     spray_rate_area_unit: "hectare",
     date_format: "DD/MM/YYYY",
     terminology_region: "UK_ZA",
+    timezone: null,
   },
 };
 
