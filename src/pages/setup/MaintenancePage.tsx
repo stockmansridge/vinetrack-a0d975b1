@@ -135,23 +135,15 @@ const buildMaintenancePickerGroups = (
   return groups;
 };
 
-const fmtDate = (v?: string | null) => {
+const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
+// AU fallback retained but unused now that per-component formatters drive display.
+const _fmtDateAuFallback = (v?: string | null) => {
   if (!v) return "—";
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
   return formatDate(d);
 };
-const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-
-// AU-default fallbacks (overridden per-component by useRegionFormatters)
-const fmtDateAu = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
-};
-void fmtDateAu;
+void _fmtDateAuFallback;
 
 export default function MaintenancePage() {
   const { selectedVineyardId, currentRole } = useVineyard();
