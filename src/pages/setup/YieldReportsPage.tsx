@@ -37,19 +37,28 @@ import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const ANY = "__any__";
 
-const fmtDate = (v?: string | null) => {
+// Canonical conversion: 1 ha = 0.40468564224 ac, so 1 t/ha = 0.4047 t/ac.
+const HA_PER_AC = 0.40468564224;
+
+const mkFmtDate = (rf: RegionFormatters) => (v?: string | null) => {
   if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
+  return rf.date(v) || "—";
 };
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 const fmtNum = (v?: number | null, digits = 2) =>
   v == null ? "—" : Number(v).toLocaleString(undefined, { maximumFractionDigits: digits });
+const mkAreaVal = (rf: RegionFormatters) => (ha?: number | null, dp = 2) =>
+  ha == null ? "—" : rf.area(ha, dp);
+const mkYieldPerArea = (rf: RegionFormatters) => (tPerHa?: number | null, dp = 2) => {
+  if (tPerHa == null) return "—";
+  const v = rf.areaUnitLabel === "ac" ? tPerHa * HA_PER_AC : tPerHa;
+  return `${fmtNum(v, dp)} t/${rf.areaUnitLabel}`;
+};
 
 type AnyRow = (YieldEstimationSession | HistoricalYieldRecord) & { __kind: "session" | "historical" };
 
