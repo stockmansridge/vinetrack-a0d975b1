@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useNavigate } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -126,6 +133,7 @@ export default function MaintenancePage() {
     const s = new Set<string>();
     equipmentGroups?.tractors.forEach((o) => s.add(o.name));
     equipmentGroups?.sprayEquipment.forEach((o) => s.add(o.name));
+    equipmentGroups?.vineyardMachines.forEach((o) => s.add(o.name));
     equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
     return s;
   }, [equipmentGroups]);
@@ -229,6 +237,15 @@ export default function MaintenancePage() {
                     ))}
                   </SelectGroup>
                 ) : null}
+                {equipmentGroups?.vineyardMachines.length ? (
+                  <SelectGroup>
+                    <SelectSeparator />
+                    <SelectLabel>Vineyard Machines</SelectLabel>
+                    {equipmentGroups.vineyardMachines.map((o) => (
+                      <SelectItem key={`m-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
                 {equipmentGroups?.otherItems.length ? (
                   <SelectGroup>
                     <SelectSeparator />
@@ -249,16 +266,7 @@ export default function MaintenancePage() {
                 ) : null}
               </SelectContent>
             </Select>
-            <Button
-              asChild
-              size="icon"
-              variant="outline"
-              title="Manage Other Equipment & Assets"
-            >
-              <Link to="/setup/equipment-other">
-                <Plus className="h-4 w-4" />
-              </Link>
-            </Button>
+            <AddEquipmentMenu />
           </div>
         </div>
         <div className="space-y-1">
@@ -573,6 +581,7 @@ function MaintenanceEditor({
     const s = new Set<string>();
     equipmentGroups?.tractors.forEach((o) => s.add(o.name));
     equipmentGroups?.sprayEquipment.forEach((o) => s.add(o.name));
+    equipmentGroups?.vineyardMachines.forEach((o) => s.add(o.name));
     equipmentGroups?.otherItems.forEach((o) => s.add(o.name));
     return s.has(editing.item_name);
   }, [editing, equipmentGroups]);
@@ -672,6 +681,15 @@ function MaintenanceEditor({
                       ))}
                     </SelectGroup>
                   ) : null}
+                  {equipmentGroups?.vineyardMachines.length ? (
+                    <SelectGroup>
+                      <SelectSeparator />
+                      <SelectLabel>Vineyard Machines</SelectLabel>
+                      {equipmentGroups.vineyardMachines.map((o) => (
+                        <SelectItem key={`em-${o.id}`} value={o.name}>{o.name}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ) : null}
                   {equipmentGroups?.otherItems.length ? (
                     <SelectGroup>
                       <SelectSeparator />
@@ -699,16 +717,15 @@ function MaintenanceEditor({
                   ) : null}
                 </SelectContent>
               </Select>
-              <Button asChild size="icon" variant="outline" title="Manage Other Equipment & Assets">
-                <Link to="/setup/equipment-other"><Plus className="h-4 w-4" /></Link>
-              </Button>
+              <AddEquipmentMenu />
             </div>
             {!editing && (
               <p className="text-xs text-muted-foreground">
-                New records must use a Tractor, Spray Equipment item, or Other Equipment & Asset.
+                New records must use a Tractor, Spray Equipment item, Vineyard Machine, or Other Equipment & Assets.
               </p>
             )}
           </div>
+
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -823,5 +840,32 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
       <span className="text-muted-foreground">{label}</span>
       <span className={mono ? "font-mono text-xs break-all text-right" : "text-right"}>{value}</span>
     </div>
+  );
+}
+
+function AddEquipmentMenu() {
+  const navigate = useNavigate();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="outline" title="Add item / machine">
+          <Plus className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => navigate("/setup/tractors")}>
+          Add Tractor
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/setup/spray-equipment")}>
+          Add Spray Equipment
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/setup/vineyard-machines")}>
+          Add Vineyard Machine
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/setup/equipment-other")}>
+          Add Other Equipment & Assets
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
