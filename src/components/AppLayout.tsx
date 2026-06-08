@@ -45,11 +45,11 @@ export default function AppLayout() {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="relative h-14 flex items-center gap-3 border-b bg-card/80 backdrop-blur px-4">
+          <header className="sticky top-0 z-30 h-16 flex items-center gap-3 border-b border-border bg-card/90 backdrop-blur px-4 md:px-6">
             <SidebarTrigger />
             <div className="flex items-center gap-2">
               <Select value={selectedVineyardId ?? undefined} onValueChange={selectVineyard}>
-                <SelectTrigger className="w-[240px] rounded-lg">
+                <SelectTrigger className="w-[220px] rounded-lg">
                   <SelectValue placeholder="Select vineyard" />
                 </SelectTrigger>
                 <SelectContent>
@@ -61,25 +61,32 @@ export default function AppLayout() {
                 </SelectContent>
               </Select>
               {currentRole && (
-                <Badge variant="secondary" className="capitalize">
+                <Badge
+                  variant="secondary"
+                  className="capitalize rounded-full bg-secondary text-secondary-foreground border border-border/60 px-2.5 py-0.5 font-medium"
+                >
                   {currentRole}
                 </Badge>
               )}
             </div>
-            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
-              <img src={vinetrackLogo} alt="VineTrack" className="h-7 w-7 object-contain" />
-              <span className="text-base">
-                <BrandName />
-              </span>
+            <div className="hidden lg:flex items-center flex-1 justify-center px-6">
+              <div className="relative w-full max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search VineTrack…"
+                  className="pl-9 h-9 rounded-full bg-muted/60 border-transparent focus-visible:bg-card focus-visible:border-input"
+                />
+              </div>
             </div>
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-2">
               <SupportAlertPill />
               <ThemeToggle />
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1 rounded-full">
-                    <span className="hidden sm:inline">{user?.email}</span>
+                    <img src={vinetrackLogo} alt="" className="h-6 w-6 object-contain rounded-full" />
+                    <span className="hidden sm:inline text-sm">{user?.email}</span>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -91,7 +98,7 @@ export default function AppLayout() {
           </header>
           <PortalInfoBanner />
           <PendingInvitesBanner />
-          <main className="flex-1 p-6 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
+          <main className="flex-1 p-4 md:p-6 lg:p-8 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
             <Outlet />
           </main>
         </div>
