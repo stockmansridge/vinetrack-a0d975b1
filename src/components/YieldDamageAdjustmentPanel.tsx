@@ -220,8 +220,8 @@ export default function YieldDamageAdjustmentPanel({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Paddock</TableHead>
-                    <TableHead className="text-right">Block ({rf.areaUnitLabel})</TableHead>
-                    <TableHead className="text-right">Effective loss ({rf.areaUnitLabel})</TableHead>
+                    <TableHead className="text-right">Block area</TableHead>
+                    <TableHead className="text-right">Effective loss</TableHead>
                     <TableHead className="text-right">Loss %</TableHead>
                     <TableHead className="text-right">Records</TableHead>
                   </TableRow>
