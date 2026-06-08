@@ -10,6 +10,7 @@ export interface TractorFuelLog {
   id: string;
   vineyard_id: string;
   tractor_id: string | null;
+  machine_id: string | null;
   fill_datetime: string | null;
   litres_added: number | null;
   engine_hours: number | null;
