@@ -551,6 +551,9 @@ function summarizeSession(payload: any) {
 }
 
 function SessionDetail({ row }: { row: YieldEstimationSession }) {
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const areaVal = mkAreaVal(rf);
   const summary = summarizeSession(row.payload);
   const showDev = import.meta.env.DEV;
 
