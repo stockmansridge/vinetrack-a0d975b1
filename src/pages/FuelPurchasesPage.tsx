@@ -249,9 +249,9 @@ export default function FuelPurchasesPage() {
                 if ((id === "total" || id === "cpl") && !canSeeCosts) return null;
                 const labels: Record<FuelCol, string> = {
                   date: "Date",
-                  volume: "Volume (L)",
+                  volume: `Volume (${rf.fuelUnitLabel})`,
                   total: "Total cost",
-                  cpl: "Cost / L",
+                  cpl: `Cost / ${rf.fuelUnitLabel}`,
                   by: "Entered by",
                   updated: "Updated",
                 };
