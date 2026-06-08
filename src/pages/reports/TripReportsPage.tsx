@@ -87,6 +87,7 @@ export default function TripReportsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
   const { toast } = useToast();
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const formatters = useRegionFormatters();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
 
