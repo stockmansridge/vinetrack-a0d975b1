@@ -500,14 +500,14 @@ export default function CostReportsPage() {
                     )}
                   </TableCell>
                 ),
-                area: <TableCell className="text-right">{fmtNum(g.allocation_area_ha)}</TableCell>,
+                area: <TableCell className="text-right">{fmtArea(g.allocation_area_ha)}</TableCell>,
                 yield: <TableCell className="text-right">{fmtNum(g.yield_tonnes)}</TableCell>,
                 labour: <TableCell className="text-right">{fmtMoney(g.labour_cost)}</TableCell>,
                 fuel: <TableCell className="text-right">{fmtMoney(g.fuel_cost)}</TableCell>,
                 chemical: <TableCell className="text-right">{fmtMoney(g.chemical_cost)}</TableCell>,
                 input: <TableCell className="text-right">{fmtMoney(g.input_cost)}</TableCell>,
                 total: <TableCell className="text-right font-medium">{fmtMoney(g.total_cost)}</TableCell>,
-                cost_ha: <TableCell className="text-right">{fmtMoney(g.cost_per_ha)}</TableCell>,
+                cost_ha: <TableCell className="text-right">{fmtMoneyPerArea(g.cost_per_ha)}</TableCell>,
                 cost_t: <TableCell className="text-right">{fmtMoney(g.cost_per_tonne)}</TableCell>,
                 trips: <TableCell className="text-right">{g.trip_count}</TableCell>,
                 status: <TableCell>{g.status ? <Badge variant="outline">{g.status}</Badge> : "—"}</TableCell>,
