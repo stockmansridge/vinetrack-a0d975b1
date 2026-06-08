@@ -69,6 +69,7 @@ const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }
 
 export default function Dashboard() {
   const { selectedVineyardId, memberships } = useVineyard();
+  const rf = useRegionFormatters();
   const vineyard = memberships.find((m) => m.vineyard_id === selectedVineyardId);
 
   const paddocksQ = useQuery({
