@@ -291,7 +291,7 @@ function JobsTable({
   const handleExportRowPdf = async (job: SprayJob) => {
     try {
       const ids = await fetchSprayJobPaddockIds(job.id);
-      await exportSprayJobPdf(job, ids, lookupMaps, vineyardName);
+      await exportSprayJobPdf(job, ids, lookupMaps, vineyardName, formatters);
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
     }
