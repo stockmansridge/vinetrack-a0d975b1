@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { format } from "date-fns";
+
 import {
   Download,
   ExternalLink,
@@ -94,11 +94,6 @@ const tripDisplay = (t: Trip): string => {
   return tripFn(t.trip_function) ?? t.tracking_pattern ?? t.paddock_name ?? "Trip";
 };
 
-const fmtDay = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "—" : format(d, "PP");
-};
 
 export default function DocumentsPage() {
   const { selectedVineyardId, memberships } = useVineyard();
@@ -158,7 +153,7 @@ export default function DocumentsPage() {
           ? t.paddock_name ?? null
           : padIds.length === 1
             ? paddockMap.get(padIds[0]) ?? t.paddock_name ?? null
-            : `${padIds.length} blocks`;
+            : `${padIds.length} ${formatters.blocksLabel.toLowerCase()}`;
       const blockNames = padIds
         .map((id) => paddockMap.get(id))
         .filter(Boolean) as string[];
@@ -338,7 +333,7 @@ export default function DocumentsPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, type or block…"
+              placeholder={`Search by name, type or ${formatters.blockLabel.toLowerCase()}…`}
               className="pl-8"
             />
           </div>
@@ -366,10 +361,10 @@ export default function DocumentsPage() {
           </Select>
           <Select value={paddockFilter} onValueChange={setPaddockFilter}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Block / paddock" />
+              <SelectValue placeholder={formatters.blockLabel} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__any__">All blocks</SelectItem>
+              <SelectItem value="__any__">All {formatters.blocksLabel.toLowerCase()}</SelectItem>
               {paddocks.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name ?? "—"}
@@ -418,6 +413,8 @@ export default function DocumentsPage() {
         getSortDirection={getSortDirection}
         toggleSort={toggleSort}
         vineyardId={selectedVineyardId}
+        blockLabel={formatters.blockLabel}
+        formatDate={(v) => (v ? formatters.date(v) : "—")}
       />
 {/* end library */}
 
@@ -521,13 +518,15 @@ type LibRow = {
 type DocSortKey = "name" | "type" | "vineyard" | "block" | "related" | "date" | "source";
 
 function DocumentsLibraryTable({
-  loading, rows, getSortDirection, toggleSort, vineyardId,
+  loading, rows, getSortDirection, toggleSort, vineyardId, blockLabel, formatDate,
 }: {
   loading: boolean;
   rows: LibRow[];
   getSortDirection: (k: DocSortKey) => "asc" | "desc" | null;
   toggleSort: (k: DocSortKey) => void;
   vineyardId: string | null;
+  blockLabel: string;
+  formatDate: (v?: string | null) => string;
 }) {
   const DOC_COLS = ["name","type","vineyard","block","related","date","source"] as const;
   type DocCol = (typeof DOC_COLS)[number];
@@ -537,7 +536,7 @@ function DocumentsLibraryTable({
     { vineyardId },
   );
   const labels: Record<DocCol, string> = {
-    name: "Name", type: "Type", vineyard: "Vineyard", block: "Block",
+    name: "Name", type: "Type", vineyard: "Vineyard", block: blockLabel,
     related: "Related", date: "Date", source: "Source",
   };
   return (
@@ -576,7 +575,7 @@ function DocumentsLibraryTable({
                 vineyard: <TableCell>{it.vineyardName}</TableCell>,
                 block: <TableCell>{it.paddockName ?? "—"}</TableCell>,
                 related: <TableCell className="text-muted-foreground">{it.related ?? "—"}</TableCell>,
-                date: <TableCell className="text-muted-foreground">{fmtDay(it.createdAt)}</TableCell>,
+                date: <TableCell className="text-muted-foreground">{formatDate(it.createdAt)}</TableCell>,
                 source: <TableCell><Badge variant={it.source === "portal" ? "outline" : "default"}>{it.source === "portal" ? "Portal" : "iOS"}</Badge></TableCell>,
               };
               return (
