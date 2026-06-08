@@ -1095,20 +1095,23 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
   // 6. Estimated trip cost — owner/manager only (caller gates).
   if (ctx.cost) {
     const c = ctx.cost;
+    const cur = fmtR.currency;
+    const fuelLabel = fmtR.fuelUnitLabel;
+    const areaLabel = fmtR.areaUnitLabel;
     y = sectionHeader(doc, "Estimated trip cost", y);
     const labourLabel = `Labour${c.labour.categoryName ? ` (${c.labour.categoryName})` : ""}`;
     const labourValue =
       c.labour.cost != null
-        ? `${fmtCurrency(c.labour.cost)}${c.labour.ratePerHour != null ? ` · ${fmtCurrency(c.labour.ratePerHour)}/h` : ""}`
+        ? `${cur(c.labour.cost)}${c.labour.ratePerHour != null ? ` · ${cur(c.labour.ratePerHour)}/h` : ""}`
         : "—";
     const fuelValue =
       c.fuel.cost != null
-        ? `${fmtCurrency(c.fuel.cost)}${c.fuel.litres != null ? ` · ${c.fuel.litres.toFixed(1)} L` : ""}${c.fuel.costPerLitre != null ? ` @ ${fmtCurrency(c.fuel.costPerLitre)}/L` : ""}`
+        ? `${cur(c.fuel.cost)}${c.fuel.litres != null ? ` · ${fmtR.fuel(c.fuel.litres)}` : ""}${c.fuel.costPerLitre != null ? ` @ ${cur(c.fuel.costPerLitre)}/${fuelLabel}` : ""}`
         : c.fuel.litres != null
-          ? `${c.fuel.litres.toFixed(1)} L (no cost/L on file)`
+          ? `${fmtR.fuel(c.fuel.litres)} (no cost/${fuelLabel} on file)`
           : "—";
     const chemLabel = `Chemicals${c.chemicals.lineCount ? ` (${c.chemicals.lineCount} line${c.chemicals.lineCount === 1 ? "" : "s"})` : ""}`;
-    const chemValue = c.chemicals.cost != null ? fmtCurrency(c.chemicals.cost) : "—";
+    const chemValue = c.chemicals.cost != null ? cur(c.chemicals.cost) : "—";
     const rows: [string, string][] = [
       ["Active hours", fmtHours(c.activeHours)],
       [labourLabel, labourValue],
@@ -1118,14 +1121,14 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     if (c.inputs.lineCount > 0) {
       rows.push([
         `Seed / inputs (${c.inputs.lineCount} line${c.inputs.lineCount === 1 ? "" : "s"})`,
-        c.inputs.cost != null ? fmtCurrency(c.inputs.cost) : "—",
+        c.inputs.cost != null ? cur(c.inputs.cost) : "—",
       ]);
     }
-    rows.push(["Estimated total", c.total != null ? fmtCurrency(c.total) : "—"]);
-    rows.push(["Treated area", c.treatedAreaHa != null ? fmtHa(c.treatedAreaHa) : "— (treated area missing)"]);
-    rows.push(["Cost per ha", c.costPerHa != null ? fmtCurrency(c.costPerHa) + " / ha" : "Unavailable"]);
+    rows.push(["Estimated total", c.total != null ? cur(c.total) : "—"]);
+    rows.push(["Treated area", c.treatedAreaHa != null ? fmtR.area(c.treatedAreaHa) : "— (treated area missing)"]);
+    rows.push([`Cost per ${areaLabel}`, c.costPerHa != null ? `${cur(c.costPerHa)} / ${areaLabel}` : "Unavailable"]);
     rows.push(["Yield tonnes", c.yieldTonnes != null ? fmtTonnes(c.yieldTonnes) : "Unavailable"]);
-    rows.push(["Cost per tonne", c.costPerTonne != null ? fmtCurrency(c.costPerTonne) + " / t" : "Unavailable"]);
+    rows.push(["Cost per tonne", c.costPerTonne != null ? cur(c.costPerTonne) + " / t" : "Unavailable"]);
     y = renderFieldList(doc, rows, y);
     if (c.warnings.length > 0) {
       y = ensureSpace(doc, y, 20 + c.warnings.length * 12);
