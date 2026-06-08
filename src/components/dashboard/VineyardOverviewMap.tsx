@@ -958,7 +958,7 @@ function PinPanelBody({
       )}
       <Row label="Type" value={pin.button_name ?? pin.title ?? pin.mode ?? pin.category ?? "—"} />
       <Row label="Status" value={pin.status ?? (pin.is_completed ? "Completed" : "Open")} />
-      <Row label="Block" value={paddockName ?? "—"} />
+      <Row label={rf.blockLabel} value={paddockName ?? "—"} />
       {formatAttachedRow(pin as any) && (
         <Row label="On Row" value={formatAttachedRow(pin as any)} />
       )}
