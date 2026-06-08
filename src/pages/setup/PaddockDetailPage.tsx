@@ -70,6 +70,7 @@ import VarietyAllocationEditor, {
 } from "@/components/varieties/VarietyAllocationEditor";
 import SoilProfileSection from "@/components/soil/SoilProfileSection";
 import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmt = (n: any, d = 2) =>
   Number.isFinite(Number(n)) ? Number(n).toLocaleString(undefined, { maximumFractionDigits: d }) : "—";
@@ -145,6 +146,7 @@ interface EditorProps {
 }
 
 function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDeleted }: EditorProps) {
+  const rf = useRegionFormatters();
   const metrics = useMemo(() => deriveMetrics(paddock), [paddock]);
   const initialPolygon = useMemo(() => parsePolygonPoints(paddock.polygon_points), [paddock]);
   const initialRows = useMemo(() => parseRows(paddock.rows), [paddock]);
@@ -338,7 +340,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{paddock.name ?? "Paddock"}</h1>
           <p className="text-sm text-muted-foreground">
-            {fmt(metrics.areaHa, 2)} ha · {metrics.rowCount} rows
+            {rf.area(metrics.areaHa, 2)} · {metrics.rowCount} rows
           </p>
         </div>
         {!canEdit && <Badge variant="secondary">Read-only</Badge>}
@@ -377,7 +379,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                   disabled={!canEdit}
                 />
               </Field>
-              <ReadOnly label="Area" value={`${fmt(metrics.areaHa, 3)} ha`} />
+              <ReadOnly label="Area" value={rf.area(metrics.areaHa, 3)} />
               <ReadOnly label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
               {canEdit && (
                 <div className="sm:col-span-2 flex justify-end">
@@ -412,7 +414,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <div className="text-muted-foreground">
                   Points: <span className="font-medium text-foreground">{polygon.length}</span>
-                  {" · "}Area: <span className="font-medium text-foreground">{fmt(liveAreaHa, 3)} ha</span>
+                  {" · "}Area: <span className="font-medium text-foreground">{rf.area(liveAreaHa, 3)}</span>
                 </div>
                 {canEdit && (
                   <div className="flex gap-2">

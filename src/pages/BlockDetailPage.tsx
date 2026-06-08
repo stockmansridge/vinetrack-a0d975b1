@@ -22,7 +22,7 @@ import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchGrowthStageRecords } from "@/lib/growthStageRecordsQuery";
 import { fetchWorkTasksForVineyard } from "@/lib/workTasksQuery";
-import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { tripFunctionLabel } from "@/lib/tripFunctionLabels";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,19 +78,25 @@ const fmt = (n: any, d = 0) =>
     ? Number(n).toLocaleString(undefined, { maximumFractionDigits: d })
     : "—";
 
-const fmtDay = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "—" : formatDate(d);
-};
-
-const fmtDateTime = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "—" : formatDateTime(d);
-};
+function useBlockFormatters() {
+  const rf = useRegionFormatters();
+  return {
+    rf,
+    fmtDay: (v?: string | null) => {
+      if (!v) return "—";
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? "—" : rf.date(d);
+    },
+    fmtDateTime: (v?: string | null) => {
+      if (!v) return "—";
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? "—" : rf.dateTime(d);
+    },
+  };
+}
 
 export default function BlockDetailPage() {
+  const { rf, fmtDay, fmtDateTime } = useBlockFormatters();
   const { blockId } = useParams();
   const navigate = useNavigate();
   const { selectedVineyardId, memberships } = useVineyard();
@@ -334,7 +340,7 @@ export default function BlockDetailPage() {
             />
             <Field
               label="Area"
-              value={metrics && metrics.areaHa > 0 ? `${fmt(metrics.areaHa, 2)} ha` : "—"}
+              value={metrics && metrics.areaHa > 0 ? rf.area(metrics.areaHa, 2) : "—"}
             />
             <Field label="Rows" value={metrics ? fmt(metrics.rowCount) : "—"} />
             <Field
@@ -482,7 +488,7 @@ export default function BlockDetailPage() {
                                 </div>
                                 {t.total_distance != null && (
                                   <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                    {(t.total_distance / 1000).toFixed(2)} km
+                                    {rf.distance(t.total_distance / 1000, 2)}
                                   </Badge>
                                 )}
                               </div>
@@ -671,7 +677,7 @@ export default function BlockDetailPage() {
                       <TableCell>{t.person_name ?? "—"}</TableCell>
                       <TableCell className="text-right">
                         {t.total_distance != null
-                          ? `${(t.total_distance / 1000).toFixed(2)} km`
+                          ? rf.distance(t.total_distance / 1000, 2)
                           : "—"}
                       </TableCell>
                     </TableRow>

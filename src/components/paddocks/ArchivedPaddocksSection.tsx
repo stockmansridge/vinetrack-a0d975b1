@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { restorePaddock } from "@/lib/paddockMutations";
 import { refreshPaddockQueries } from "@/lib/paddockQueryInvalidation";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 interface ArchivedRow {
   id: string;
@@ -35,6 +35,7 @@ async function fetchArchivedPaddocks(vineyardId: string): Promise<ArchivedRow[]>
 }
 
 export default function ArchivedPaddocksSection() {
+  const rf = useRegionFormatters();
   const { selectedVineyardId, currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const qc = useQueryClient();
@@ -86,7 +87,7 @@ export default function ArchivedPaddocksSection() {
                 <TableRow key={row.id}>
                   <TableCell>{row.name ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {row.deleted_at ? formatDate(row.deleted_at) : "—"}
+                    {row.deleted_at ? rf.date(row.deleted_at) : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

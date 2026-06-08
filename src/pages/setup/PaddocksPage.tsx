@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import ListPage, { type ListColumn } from "@/pages/setup/ListPage";
 import PaddockMapView from "@/components/PaddockMapView";
@@ -17,46 +17,50 @@ import PaddockBoundaryImportDialog from "@/components/paddocks/PaddockBoundaryIm
 import PaddockBoundaryExportDialog from "@/components/paddocks/PaddockBoundaryExportDialog";
 import PaddockFullBlockBackupDialog from "@/components/paddocks/PaddockFullBlockBackupDialog";
 import ArchivedPaddocksSection from "@/components/paddocks/ArchivedPaddocksSection";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmtNum = (n: number, digits = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
-
-const paddockCols: ListColumn[] = [
-  { key: "name", label: "Name", render: (r) => r.name ?? "—" },
-  {
-    key: "area_ha",
-    label: "Area (ha)",
-    render: (r) => {
-      const m = deriveMetrics(r);
-      return m.areaHa > 0 ? fmtNum(m.areaHa, 2) : "—";
-    },
-    filterValue: (r) => String(deriveMetrics(r).areaHa.toFixed(2)),
-  },
-  {
-    key: "rows",
-    label: "Rows",
-    render: (r) => fmtNum(deriveMetrics(r).rowCount, 0),
-    filterValue: (r) => String(deriveMetrics(r).rowCount),
-  },
-  {
-    key: "row_length",
-    label: "Total row length (m)",
-    render: (r) => {
-      const m = deriveMetrics(r);
-      return m.totalRowLengthM > 0 ? fmtNum(m.totalRowLengthM, 0) : "—";
-    },
-    filterValue: (r) => String(Math.round(deriveMetrics(r).totalRowLengthM)),
-  },
-  { key: "vine_spacing", label: "Vine spacing (m)" },
-  { key: "intermediate_post_spacing", label: "Int. post spacing (m)" },
-  { key: "updated_at", label: "Updated" },
-];
 
 export default function PaddocksPage() {
   const [tab, setTab] = useState("table");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const { currentRole } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const rf = useRegionFormatters();
+  const paddockCols: ListColumn[] = useMemo(
+    () => [
+      { key: "name", label: "Name", render: (r) => r.name ?? "—" },
+      {
+        key: "area",
+        label: "Area",
+        render: (r) => {
+          const m = deriveMetrics(r);
+          return m.areaHa > 0 ? rf.area(m.areaHa, 2) : "—";
+        },
+        filterValue: (r) => String(deriveMetrics(r).areaHa.toFixed(2)),
+      },
+      {
+        key: "rows",
+        label: "Rows",
+        render: (r) => fmtNum(deriveMetrics(r).rowCount, 0),
+        filterValue: (r) => String(deriveMetrics(r).rowCount),
+      },
+      {
+        key: "row_length",
+        label: "Total row length (m)",
+        render: (r) => {
+          const m = deriveMetrics(r);
+          return m.totalRowLengthM > 0 ? fmtNum(m.totalRowLengthM, 0) : "—";
+        },
+        filterValue: (r) => String(Math.round(deriveMetrics(r).totalRowLengthM)),
+      },
+      { key: "vine_spacing", label: "Vine spacing (m)" },
+      { key: "intermediate_post_spacing", label: "Int. post spacing (m)" },
+      { key: "updated_at", label: "Updated" },
+    ],
+    [rf],
+  );
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
