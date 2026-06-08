@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
