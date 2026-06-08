@@ -416,7 +416,7 @@ export default function NewPaddockPage() {
               </details>
 
               <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
-                <Metric label="Area" value={`${fmt(areaHa, 2)} ha`} />
+                <Metric label="Area" value={rf.area(areaHa, 2)} />
                 <Metric label="Rows generated" value={fmt(generated.length, 0)} />
                 <Metric label="Total row length" value={`${fmt(totalRowLengthM, 0)} m`} />
                 {effectiveVineCount != null && <Metric label="Estimated vines" value={fmt(effectiveVineCount, 0)} />}
