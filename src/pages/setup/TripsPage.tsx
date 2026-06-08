@@ -523,6 +523,7 @@ function TripSheet({
   onOpenChange: (o: boolean) => void;
 }) {
   const { data: vineyardLogoUrl } = useVineyardLogo();
+  const formatters = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
   const padName = trip?.paddock_name ?? (trip?.paddock_id ? paddockNameById.get(trip.paddock_id) ?? null : null);
   const points = arrayLen(trip?.path_points);
