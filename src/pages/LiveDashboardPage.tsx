@@ -2,7 +2,7 @@
 // Read-only; uses fetchTripsForVineyard. Auto-refreshes every 45s.
 import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   Activity,
   PauseCircle,
