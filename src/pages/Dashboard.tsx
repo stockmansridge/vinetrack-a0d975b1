@@ -139,17 +139,17 @@ export default function Dashboard() {
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Paddocks"
+          label={rf.blocksLabel}
           Icon={Map}
           value={loading ? "…" : fmt(summary.paddocks)}
           hint={loading ? undefined : `${summary.mapped} mapped`}
           to="/paddocks"
         />
         <StatCard
-          label="Area (ha)"
+          label="Area"
           Icon={LayoutGrid}
-          value={loading ? "…" : summary.totalAreaHa > 0 ? fmt(summary.totalAreaHa, 2) : "—"}
-          hint="From paddock polygons"
+          value={loading ? "…" : summary.totalAreaHa > 0 ? rf.area(summary.totalAreaHa, 2) : "—"}
+          hint={`From ${rf.blockLabel.toLowerCase()} polygons`}
         />
         <StatCard
           label="Total rows"
