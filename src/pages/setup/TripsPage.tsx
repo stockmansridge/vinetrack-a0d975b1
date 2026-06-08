@@ -57,6 +57,7 @@ import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
 import { computeTripCost, fmtCurrency, fmtHa, fmtHours, fmtTonnes, type TractorLite } from "@/lib/tripCosting";
 import { computeFuelEstimate } from "@/lib/fuelEstimate";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { fetchAllVineyardMachines, resolveMachineForRecord, type VineyardMachine } from "@/lib/vineyardMachinesQuery";
 
 
 interface PaddockLite {
@@ -154,6 +155,11 @@ export default function TripsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
   });
+  const { data: pageMachines = [] } = useQuery<VineyardMachine[]>({
+    queryKey: ["trips-page-machines", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchAllVineyardMachines(selectedVineyardId!),
+  });
   const { data: pageFuel = [] } = useQuery({
     queryKey: ["trips-page-fuel", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -167,6 +173,11 @@ export default function TripsPage() {
     (pageTractors ?? []).forEach((t) => m.set(t.id, t));
     return m;
   }, [pageTractors]);
+  const pageMachinesById = useMemo(() => {
+    const m = new Map<string, VineyardMachine>();
+    (pageMachines ?? []).forEach((x) => m.set(x.id, x));
+    return m;
+  }, [pageMachines]);
 
   const trips = data?.trips ?? [];
 
@@ -302,15 +313,22 @@ export default function TripsPage() {
           onClick={() => {
             const csvRows = rows.map((t) => {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
-              const tractor = t.tractor_id ? pageTractorById.get(t.tractor_id) ?? null : null;
-              const fe = computeFuelEstimate(t, tractor, canSeeCostsPage ? (pageFuel ?? []) : []);
+              const resolved = resolveMachineForRecord(
+                { machine_id: t.machine_id, tractor_id: t.tractor_id },
+                pageMachinesById,
+                pageTractorById,
+              );
+              const tractorShape: TractorLite | null = resolved.id
+                ? { id: resolved.id, name: resolved.name, fuel_usage_l_per_hour: resolved.fuel_l_per_hour }
+                : null;
+              const fe = computeFuelEstimate(t, tractorShape, canSeeCostsPage ? (pageFuel ?? []) : []);
               return tripToCsvRow(
                 t,
                 padName,
                 tripDisplayName(t),
                 tripFunctionLabel(t.trip_function),
                 null,
-                tractor?.name ?? null,
+                resolved.id ? resolved.name : null,
                 {
                   basisLabel: fe.basisLabel,
                   basis: fe.basis,
@@ -580,16 +598,43 @@ function TripSheet({
     },
   });
 
-  const fuelEstimate = useMemo(() => {
-    if (!trip || !trip.tractor_id) return null;
-    const tractor = (allTractors ?? []).find((t) => t.id === trip.tractor_id) ?? null;
-    return computeFuelEstimate(trip, tractor, allFuel ?? []);
-  }, [trip, allTractors, allFuel]);
+  const { data: allMachines = [] } = useQuery<VineyardMachine[]>({
+    queryKey: ["trip-machines", vineyardId],
+    enabled: fuelEnabled,
+    queryFn: () => fetchAllVineyardMachines(vineyardId!),
+  });
 
-  const tractorName = useMemo(() => {
-    if (!trip?.tractor_id) return null;
-    return (allTractors ?? []).find((t) => t.id === trip.tractor_id)?.name ?? null;
-  }, [trip, allTractors]);
+  const allMachinesById = useMemo(() => {
+    const m = new Map<string, VineyardMachine>();
+    (allMachines ?? []).forEach((x) => m.set(x.id, x));
+    return m;
+  }, [allMachines]);
+  const allTractorsById = useMemo(() => {
+    const m = new Map<string, TractorLite>();
+    (allTractors ?? []).forEach((t) => m.set(t.id, t));
+    return m;
+  }, [allTractors]);
+
+  const resolvedMachine = useMemo(() => {
+    if (!trip) return null;
+    return resolveMachineForRecord(
+      { machine_id: trip.machine_id, tractor_id: trip.tractor_id },
+      allMachinesById,
+      allTractorsById,
+    );
+  }, [trip, allMachinesById, allTractorsById]);
+
+  const fuelEstimate = useMemo(() => {
+    if (!trip || !resolvedMachine || resolvedMachine.source === "none") return null;
+    const tractorShape: TractorLite = {
+      id: resolvedMachine.id ?? "",
+      name: resolvedMachine.name,
+      fuel_usage_l_per_hour: resolvedMachine.fuel_l_per_hour,
+    };
+    return computeFuelEstimate(trip, tractorShape, allFuel ?? []);
+  }, [trip, resolvedMachine, allFuel]);
+
+  const tractorName = resolvedMachine?.name ?? null;
 
   const cost = useMemo(() => {
     if (!trip || !canSeeCosts) return null;
@@ -670,7 +715,7 @@ function TripSheet({
             </Section>
             {fuelEstimate && (
               <Section title="Fuel estimate">
-                <Field label="Tractor" value={fmt(tractorName)} />
+                <Field label="Machine" value={fmt(tractorName)} />
                 <Field label="Trip function" value={fmt(tripFunctionLabel(trip.trip_function))} />
                 <Field label="Basis" value={fuelEstimate.basisLabel} />
                 {fuelEstimate.basis === "engine_hours" && (

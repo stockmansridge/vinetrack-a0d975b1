@@ -75,7 +75,7 @@ const work: NavItem[] = [
   { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
   { title: "Fuel Purchases", url: "/fuel-purchases", icon: Fuel },
-  { title: "Tractor Fuel Logs", url: "/tractor-fuel-logs", icon: Fuel },
+  { title: "Fuel Logs", url: "/tractor-fuel-logs", icon: Fuel },
 ];
 
 // "Reports" — exports & compliance
@@ -101,6 +101,7 @@ const setup: NavItem[] = [
   { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
+  { title: "Vineyard Machines", url: "/setup/vineyard-machines", icon: Tractor },
   { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
   { title: "Other Equipment Items", url: "/setup/equipment-other", icon: Wrench },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },

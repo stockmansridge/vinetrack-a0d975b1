@@ -28,6 +28,7 @@ import { fetchSprayRecordsForVineyard } from "@/lib/sprayRecordsQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { fetchSavedInputsForVineyard } from "@/lib/savedInputsQuery";
 import { fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
+import { fetchAllVineyardMachines, resolveMachineForRecord, type VineyardMachine } from "@/lib/vineyardMachinesQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -168,6 +169,27 @@ export default function TripReportsPage() {
     enabled: costEnabled,
     queryFn: () => fetchList<TractorLite>("tractors", selectedVineyardId!),
   });
+  const { data: tripMachines = [] } = useQuery<VineyardMachine[]>({
+    queryKey: ["trip-machines-all", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchAllVineyardMachines(selectedVineyardId!),
+  });
+  const tripMachinesById = useMemo(() => {
+    const m = new Map<string, VineyardMachine>();
+    (tripMachines ?? []).forEach((x) => m.set(x.id, x));
+    return m;
+  }, [tripMachines]);
+  const tripTractorsById = useMemo(() => {
+    const m = new Map<string, TractorLite>();
+    (costTractors ?? []).forEach((t) => m.set(t.id, t));
+    return m;
+  }, [costTractors]);
+  const resolveTripMachine = (t: Trip) =>
+    resolveMachineForRecord(
+      { machine_id: t.machine_id, tractor_id: t.tractor_id },
+      tripMachinesById,
+      tripTractorsById,
+    );
   const { data: costSavedChemicals } = useQuery({
     queryKey: ["cost-saved-chemicals", selectedVineyardId],
     enabled: costEnabled,
@@ -273,7 +295,8 @@ export default function TripReportsPage() {
   const handleExportCsv = () => {
     if (!rows.length) return;
     const csvRows = rows.map((t) => {
-      const tractorName = t.tractor_id ? (costTractors ?? []).find((x) => x.id === t.tractor_id)?.name ?? null : null;
+      const resolved = resolveTripMachine(t);
+      const tractorName = resolved.source === "none" ? null : resolved.name;
       return tripToCsvRow(
         t,
         padNameFor(t),

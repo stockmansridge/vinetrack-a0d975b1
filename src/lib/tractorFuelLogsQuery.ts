@@ -10,6 +10,7 @@ export interface TractorFuelLog {
   id: string;
   vineyard_id: string;
   tractor_id: string | null;
+  machine_id: string | null;
   fill_datetime: string | null;
   litres_added: number | null;
   engine_hours: number | null;
@@ -114,23 +115,25 @@ export function computeLitresPerHour(
  */
 export function buildLhrMap(logs: TractorFuelLog[]): Map<string, LhrResult> {
   const map = new Map<string, LhrResult>();
-  const byTractor = new Map<string, TractorFuelLog[]>();
+  const byMachine = new Map<string, TractorFuelLog[]>();
   for (const log of logs) {
-    if (!log.tractor_id) continue;
-    const arr = byTractor.get(log.tractor_id) ?? [];
+    const key = log.machine_id ?? log.tractor_id;
+    if (!key) continue;
+    const arr = byMachine.get(key) ?? [];
     arr.push(log);
-    byTractor.set(log.tractor_id, arr);
+    byMachine.set(key, arr);
   }
-  for (const arr of byTractor.values()) {
+  for (const arr of byMachine.values()) {
     arr.sort((a, b) => (a.fill_datetime ?? "").localeCompare(b.fill_datetime ?? ""));
     for (let i = 0; i < arr.length; i++) {
       const prev = i > 0 ? arr[i - 1] : null;
       map.set(arr[i].id, computeLitresPerHour(arr[i], prev));
     }
   }
-  // Logs without a tractor: no calculation possible.
   for (const log of logs) {
-    if (!log.tractor_id) map.set(log.id, { litresPerHour: null, status: "cannot_calculate", reason: "no tractor" });
+    if (!log.machine_id && !log.tractor_id) {
+      map.set(log.id, { litresPerHour: null, status: "cannot_calculate", reason: "no machine" });
+    }
   }
   return map;
 }

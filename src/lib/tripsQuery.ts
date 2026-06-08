@@ -47,6 +47,7 @@ export interface Trip {
   person_name?: string | null;
   // Phase 2 costing links (Rork):
   tractor_id?: string | null;
+  machine_id?: string | null;
   operator_user_id?: string | null;
   operator_category_id?: string | null;
   trip_function?: string | null;
