@@ -542,19 +542,19 @@ function DamageDetailSheet({
                   <div className="mt-3 grid gap-1.5 text-sm">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#2E7D32" }} />
-                      Paddock
+                      {rf.blockLabel}
                       <span className="ml-3 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#E53935" }} />
                       Damage area
                     </div>
-                    <Field label="Block area" value={`${impact.blockAreaHa.toFixed(2)} ha`} />
+                    <Field label={`${rf.blockLabel} area`} value={rf.area(impact.blockAreaHa, 2)} />
                     <Field
                       label="Damaged area"
-                      value={impact.hasPolygon ? `${impact.damagedAreaHa.toFixed(2)} ha` : "Whole block (no polygon)"}
+                      value={impact.hasPolygon ? rf.area(impact.damagedAreaHa, 2) : `Whole ${rf.blockLabel.toLowerCase()} (no polygon)`}
                     />
                     <Field label="Damage intensity" value={`${impact.damagePercent}%`} />
-                    <Field label="Effective loss" value={`${impact.effectiveAreaHa.toFixed(2)} ha`} />
+                    <Field label="Effective loss" value={rf.area(impact.effectiveAreaHa, 2)} />
                     <Field
-                      label="Block yield impact"
+                      label={`${rf.blockLabel} yield impact`}
                       value={impact.blockAreaHa > 0 ? `${impact.blockLossPct.toFixed(1)}%` : "—"}
                     />
                   </div>
