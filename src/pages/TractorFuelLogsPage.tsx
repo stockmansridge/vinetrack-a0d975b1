@@ -113,6 +113,9 @@ export default function TractorFuelLogsPage() {
   const { selectedVineyardId } = useVineyard();
   const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
+  const rf = useRegionFormatters();
+  const { fuelDateTime: fmtDateTime, fuelQty: fmtLitres, fuelRate: fmtLhr, cost: fmtCost, cpl: fmtCpl } =
+    useMemo(() => makeFuelHelpers(rf), [rf]);
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
