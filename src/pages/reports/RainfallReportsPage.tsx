@@ -305,7 +305,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
       case "updated":
         return (
           <TableCell className="text-xs text-muted-foreground">
-            {r.updated_at ? format(new Date(r.updated_at), "PP p") : "—"}
+            {r.updated_at ? rf.dateTime(new Date(r.updated_at)) : "—"}
           </TableCell>
         );
     }
