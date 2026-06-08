@@ -379,7 +379,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                   disabled={!canEdit}
                 />
               </Field>
-              <ReadOnly label="Area" value={`${fmt(metrics.areaHa, 3)} ha`} />
+              <ReadOnly label="Area" value={rf.area(metrics.areaHa, 3)} />
               <ReadOnly label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
               {canEdit && (
                 <div className="sm:col-span-2 flex justify-end">
