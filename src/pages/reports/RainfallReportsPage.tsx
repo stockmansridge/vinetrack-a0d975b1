@@ -110,6 +110,7 @@ export default function RainfallReportsPage() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onClick={() => downloadRainfallPdf(rows, vineyardName, from, to, rf)}
+            >
               Download PDF
             </DropdownMenuItem>
             <DropdownMenuItem
