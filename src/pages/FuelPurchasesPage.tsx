@@ -351,6 +351,8 @@ function FuelSheet({
   const { user } = useAuth();
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const rf = useRegionFormatters();
+  const { date: fmtDate, fuelQty: fmtLitres, cost: fmtCost, cpl: fmtCpl } = useMemo(() => mkFuelFmt(rf), [rf]);
 
   const delMut = useMutation({
     mutationFn: async () => {
