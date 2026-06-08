@@ -446,6 +446,8 @@ function FuelEditor({
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const rf = useRegionFormatters();
+  const { cpl: fmtCpl } = useMemo(() => mkFuelFmt(rf), [rf]);
 
   const [date, setDate] = useState<string>(todayIso());
   const [litres, setLitres] = useState<string>("");
