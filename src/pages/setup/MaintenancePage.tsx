@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useNavigate as _useNavigateUnused } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
