@@ -213,11 +213,11 @@ export default function GrowthStageRecordsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Block</div>
+          <div className="text-xs text-muted-foreground">{rf.blockLabel}</div>
           <Select value={block} onValueChange={setBlock}>
             <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>All blocks</SelectItem>
+              <SelectItem value={ANY}>All {rf.blocksLabel.toLowerCase()}</SelectItem>
               {blocks.map((b) => (
                 <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
               ))}
@@ -263,7 +263,7 @@ export default function GrowthStageRecordsPage() {
         <div className="space-y-1 ml-auto">
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
-            placeholder="Block, variety, notes…"
+            placeholder={`${rf.blockLabel}, variety, notes…`}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-72"
@@ -280,7 +280,7 @@ export default function GrowthStageRecordsPage() {
             <TableRow>
               {(gsOrder as GsCol[]).map((id) => {
                 const labels: Record<GsCol, string> = {
-                  date: "Date", block: "Block", variety: "Variety",
+                  date: "Date", block: rf.blockLabel, variety: "Variety",
                   stage: "E-L stage", notes: "Notes", photo: "Photo", operator: "Operator",
                 };
                 const sortable = id !== "notes";
@@ -309,7 +309,7 @@ export default function GrowthStageRecordsPage() {
             )}
             {gsSorted.map((r) => {
               const cellMap: Record<GsCol, React.ReactNode> = {
-                date: <TableCell>{fmtDate(r.date)}</TableCell>,
+                date: <TableCell>{r.date ? rf.date(r.date) : "—"}</TableCell>,
                 block: <TableCell>{fmt(r.paddock_name)}</TableCell>,
                 variety: <TableCell>{fmt(r.variety)}</TableCell>,
                 stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">E-L {r.growth_stage_code}</Badge> : "—"}</TableCell>,
@@ -348,18 +348,19 @@ function DetailSheet({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const rf = useRegionFormatters();
   const photos = record?.photo_paths?.length ? record.photo_paths : (record?.photo_path ? [record.photo_path] : []);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Growth stage — {fmtDate(record?.date)}</SheetTitle>
+          <SheetTitle>Growth stage — {record?.date ? rf.date(record.date) : "—"}</SheetTitle>
         </SheetHeader>
         {record && (
           <div className="mt-4 space-y-4 text-sm">
             <Section title="Observation">
-              <Field label="Date" value={fmtDate(record.date)} />
-              <Field label="Block" value={fmt(record.paddock_name)} />
+              <Field label="Date" value={record.date ? rf.date(record.date) : "—"} />
+              <Field label={rf.blockLabel} value={fmt(record.paddock_name)} />
               <Field label="Variety" value={fmt(record.variety)} />
               <Field label="E-L stage" value={record.growth_stage_code ? `E-L ${record.growth_stage_code}` : "—"} />
               {record.growth_stage_label && (
@@ -389,8 +390,8 @@ function DetailSheet({
             </Section>
             <Section title="Meta">
               <Field label="Created by" value={operatorName(record.created_by)} />
-              <Field label="Created" value={fmtDate(record.created_at)} />
-              <Field label="Updated" value={fmtDate(record.updated_at)} />
+              <Field label="Created" value={record.created_at ? rf.dateTime(record.created_at) : "—"} />
+              <Field label="Updated" value={record.updated_at ? rf.dateTime(record.updated_at) : "—"} />
               <Field label="Record ID" value={record.id} mono />
             </Section>
           </div>
