@@ -124,6 +124,10 @@ function NoAccessCard() {
 export default function CostReportsPage() {
   const canSeeCosts = useCanSeeCosts();
   const { selectedVineyardId } = useVineyard();
+  const rf = useRegionFormatters();
+  const fmtMoney = useMemo(() => makeFmtMoney(rf), [rf]);
+  const fmtArea = useMemo(() => makeFmtArea(rf), [rf]);
+  const fmtMoneyPerArea = useMemo(() => makeFmtCostPerArea(rf), [rf]);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
