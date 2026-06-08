@@ -539,7 +539,7 @@ export default function CostReportsPage() {
             <>
               <SheetHeader>
                 <SheetTitle>
-                  {drill.paddock_name ?? "Block"}
+                  {drill.paddock_name ?? rf.blockLabel}
                   {drill.variety ? ` · ${drill.variety}` : ""}
                 </SheetTitle>
                 <SheetDescription>
@@ -548,14 +548,14 @@ export default function CostReportsPage() {
               </SheetHeader>
 
               <div className="mt-4 space-y-2 text-sm">
-                <DetailRow label="Treated area" value={`${fmtNum(drill.allocation_area_ha)} ha`} />
+                <DetailRow label="Treated area" value={fmtArea(drill.allocation_area_ha)} />
                 <DetailRow label="Yield" value={`${fmtNum(drill.yield_tonnes)} t`} />
                 <DetailRow label="Labour" value={fmtMoney(drill.labour_cost)} />
                 <DetailRow label="Fuel" value={fmtMoney(drill.fuel_cost)} />
                 <DetailRow label="Chemical" value={fmtMoney(drill.chemical_cost)} />
                 <DetailRow label="Seed / input" value={fmtMoney(drill.input_cost)} />
                 <DetailRow label="Total" value={fmtMoney(drill.total_cost)} bold />
-                <DetailRow label="Cost / ha" value={fmtMoney(drill.cost_per_ha)} />
+                <DetailRow label={`Cost / ${rf.areaUnitLabel}`} value={fmtMoneyPerArea(drill.cost_per_ha)} />
                 <DetailRow label="Cost / tonne" value={fmtMoney(drill.cost_per_tonne)} />
               </div>
 
@@ -574,10 +574,10 @@ export default function CostReportsPage() {
                           {stale && <Badge variant="outline">Stale</Badge>}
                         </div>
                         <div className="text-muted-foreground">
-                          {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? formatDateTime(r.calculated_at) : "—"}
+                          {tripFunctionLabel(r.trip_function) ?? "trip"} · {r.calculated_at ? rf.dateTime(r.calculated_at) : "—"}
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
-                          <DetailRow label="Area" value={`${fmtNum(r.allocation_area_ha)} ha`} small />
+                          <DetailRow label="Area" value={fmtArea(r.allocation_area_ha)} small />
                           <DetailRow label="Total" value={fmtMoney(r.total_cost)} small bold />
                           <DetailRow label="Labour" value={fmtMoney(r.labour_cost)} small />
                           <DetailRow label="Fuel" value={fmtMoney(r.fuel_cost)} small />
