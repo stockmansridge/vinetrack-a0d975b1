@@ -180,17 +180,17 @@ function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
       state: c.paddocks === 0 ? "empty"
         : c.paddocksWithPolygon === c.paddocks ? "ok" : "warn",
       detail: c.paddocks === 0
-        ? "No blocks/paddocks set up yet."
-        : `${c.paddocksWithPolygon} of ${c.paddocks} blocks have a mapped polygon. Trips must be linked to mapped blocks for cost per ha to calculate.`,
+        ? `No ${rf.blocksLabel.toLowerCase()} set up yet.`
+        : `${c.paddocksWithPolygon} of ${c.paddocks} ${rf.blocksLabel.toLowerCase()} have a mapped polygon. Trips must be linked to mapped ${rf.blocksLabel.toLowerCase()} for cost per ${rf.areaUnitLabel} to calculate.`,
       href: "/setup/paddocks",
-      linkLabel: "Blocks / paddocks",
+      linkLabel: rf.blocksLabel,
     },
     {
       key: "yield",
       title: "Yield tonnes",
       state: c.yieldRecords === 0 ? "empty" : "ok",
       detail: c.yieldRecords === 0
-        ? "No actual yield records yet. Cost per tonne needs at least one yield record per block & season."
+        ? `No actual yield records yet. Cost per tonne needs at least one yield record per ${rf.blockLabel.toLowerCase()} & season.`
         : `${c.yieldRecords} yield record(s) on file.`,
       href: "/yield",
       linkLabel: "Yield reports",
