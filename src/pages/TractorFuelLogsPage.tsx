@@ -38,31 +38,44 @@ import {
   type VineyardMachine,
 } from "@/lib/vineyardMachinesQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
+const L_PER_US_GAL = 3.785411784;
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtDateTime = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return `${formatDate(d)} ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
-};
 const fmtNum = (v?: number | null, digits = 2) =>
   v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: 0 });
-const fmtLitres = (v?: number | null) => (v == null ? "—" : `${fmtNum(v, 2)} L`);
 const fmtHrs = (v?: number | null) => (v == null ? "—" : `${fmtNum(v, 1)} h`);
-const fmtLhr = (v?: number | null) => (v == null ? "—" : `${fmtNum(v, 2)} L/h`);
-const fmtCost = (v?: number | null) =>
-  v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "AUD" });
-const fmtCpl = (v?: number | null) =>
-  v == null
-    ? "—"
-    : v.toLocaleString(undefined, {
-        style: "currency",
-        currency: "AUD",
-        minimumFractionDigits: 3,
-        maximumFractionDigits: 4,
-      }) + "/L";
+
+function makeFuelHelpers(rf: RegionFormatters) {
+  const imperial = rf.fuelUnitLabel === "gal";
+  const toFuelUnits = (litres: number) => (imperial ? litres / L_PER_US_GAL : litres);
+  return {
+    fuelDateTime: (v?: string | null) => (v ? rf.dateTime(v) || "—" : "—"),
+    fuelQty: (litres?: number | null) =>
+      litres == null ? "—" : rf.fuel(litres, 2),
+    fuelRate: (litresPerHour?: number | null) =>
+      litresPerHour == null ? "—" : `${fmtNum(toFuelUnits(litresPerHour), 2)} ${rf.fuelUnitLabel}/h`,
+    cost: (v?: number | null) => (v == null ? "—" : rf.currency(v)),
+    cpl: (costPerLitre?: number | null) => {
+      if (costPerLitre == null) return "—";
+      const perUnit = imperial ? costPerLitre * L_PER_US_GAL : costPerLitre;
+      try {
+        return (
+          new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: rf.settings.currency_code,
+            currencyDisplay: "narrowSymbol",
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 4,
+          }).format(perUnit) + `/${rf.fuelUnitLabel}`
+        );
+      } catch {
+        return `${rf.settings.currency_code} ${perUnit.toFixed(3)}/${rf.fuelUnitLabel}`;
+      }
+    },
+  };
+}
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -100,6 +113,9 @@ export default function TractorFuelLogsPage() {
   const { selectedVineyardId } = useVineyard();
   const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
+  const rf = useRegionFormatters();
+  const { fuelDateTime: fmtDateTime, fuelQty: fmtLitres, fuelRate: fmtLhr, cost: fmtCost, cpl: fmtCpl } =
+    useMemo(() => makeFuelHelpers(rf), [rf]);
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -343,12 +359,12 @@ export default function TractorFuelLogsPage() {
               <TableHead>Date / time</TableHead>
               <TableHead>Machine</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead className="text-right">Litres</TableHead>
+              <TableHead className="text-right">{rf.fuelUnitLabel === "gal" ? "Gallons" : "Litres"}</TableHead>
               <TableHead className="text-right">Engine hrs</TableHead>
-              <TableHead className="text-right">L/hr</TableHead>
+              <TableHead className="text-right">{rf.fuelUnitLabel}/hr</TableHead>
               <TableHead>Rate status</TableHead>
               <TableHead>Operator</TableHead>
-              {canSeeCosts && <TableHead className="text-right">Cost/L</TableHead>}
+              {canSeeCosts && <TableHead className="text-right">Cost/{rf.fuelUnitLabel}</TableHead>}
               {canSeeCosts && <TableHead className="text-right">Total</TableHead>}
               <TableHead>Full?</TableHead>
               <TableHead>Notes</TableHead>

@@ -47,29 +47,38 @@ import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
-import { formatDate } from "@/lib/dateFormat";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import type { RegionFormatters } from "@/lib/regionFormatters";
 
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
-const fmtDate = (v?: string | null) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return formatDate(d);
-};
+const L_PER_US_GAL = 3.785411784;
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
-const fmtCost = (v?: number | null) =>
-  v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "AUD" });
-const fmtLitres = (v?: number | null) =>
-  v == null ? "—" : `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`;
-const fmtCpl = (cost?: number | null, litres?: number | null) => {
-  if (cost == null || litres == null || litres <= 0) return "—";
-  return (cost / litres).toLocaleString(undefined, {
-    style: "currency",
-    currency: "AUD",
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 4,
-  }) + "/L";
+const mkFuelFmt = (rf: RegionFormatters) => {
+  const fuelImperial = rf.fuelUnitLabel === "gal";
+  return {
+    date: (v?: string | null) => (v ? rf.date(v) || "—" : "—"),
+    cost: (v?: number | null) => (v == null ? "—" : rf.currency(v)),
+    fuelQty: (litres?: number | null) => (litres == null ? "—" : rf.fuel(litres, 2)),
+    cpl: (cost?: number | null, litres?: number | null) => {
+      if (cost == null || litres == null || litres <= 0) return "—";
+      // cost per stored-litre → cost per fuel-unit
+      const perUnit = fuelImperial ? (cost / litres) * L_PER_US_GAL : cost / litres;
+      try {
+        return (
+          new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: rf.settings.currency_code,
+            currencyDisplay: "narrowSymbol",
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 4,
+          }).format(perUnit) + `/${rf.fuelUnitLabel}`
+        );
+      } catch {
+        return `${rf.settings.currency_code} ${perUnit.toFixed(3)}/${rf.fuelUnitLabel}`;
+      }
+    },
+  };
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -85,6 +94,9 @@ export default function FuelPurchasesPage() {
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
   const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
+  const rf = useRegionFormatters();
+  const ff = useMemo(() => mkFuelFmt(rf), [rf]);
+  const { date: fmtDate, fuelQty: fmtLitres, cost: fmtCost, cpl: fmtCpl } = ff;
 
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
@@ -193,12 +205,12 @@ export default function FuelPurchasesPage() {
 
       <div className={`grid gap-3 sm:grid-cols-2 ${canSeeCosts ? "lg:grid-cols-4" : "lg:grid-cols-2"}`}>
         <SummaryCard label="Purchases" value={String(summary.count)} />
-        <SummaryCard label="Total litres" value={fmtLitres(summary.totalLitres)} />
+        <SummaryCard label={`Total ${rf.fuelUnitLabel === "gal" ? "gallons" : "litres"}`} value={fmtLitres(summary.totalLitres)} />
         {canSeeCosts && (
           <>
             <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
             <SummaryCard
-              label="Avg cost / litre"
+              label={`Avg cost / ${rf.fuelUnitLabel}`}
               value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
             />
           </>
@@ -237,9 +249,9 @@ export default function FuelPurchasesPage() {
                 if ((id === "total" || id === "cpl") && !canSeeCosts) return null;
                 const labels: Record<FuelCol, string> = {
                   date: "Date",
-                  volume: "Volume (L)",
+                  volume: `Volume (${rf.fuelUnitLabel})`,
                   total: "Total cost",
-                  cpl: "Cost / L",
+                  cpl: `Cost / ${rf.fuelUnitLabel}`,
                   by: "Entered by",
                   updated: "Updated",
                 };
@@ -339,6 +351,8 @@ function FuelSheet({
   const { user } = useAuth();
   const { toast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const rf = useRegionFormatters();
+  const { date: fmtDate, fuelQty: fmtLitres, cost: fmtCost, cpl: fmtCpl } = useMemo(() => mkFuelFmt(rf), [rf]);
 
   const delMut = useMutation({
     mutationFn: async () => {
@@ -368,7 +382,7 @@ function FuelSheet({
               <Field label="Date" value={fmtDate(record.date)} />
               <Field label="Volume" value={fmtLitres(record.volume_litres)} />
               {canSeeCosts && <Field label="Total cost" value={fmtCost(record.total_cost)} />}
-              {canSeeCosts && <Field label="Cost / litre" value={fmtCpl(record.total_cost, record.volume_litres)} />}
+              {canSeeCosts && <Field label={`Cost / ${rf.fuelUnitLabel}`} value={fmtCpl(record.total_cost, record.volume_litres)} />}
             </Section>
             <Section title="Meta">
               <Field label="Entered by" value={fmt(resolveUser(record.created_by))} />
@@ -432,6 +446,8 @@ function FuelEditor({
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const rf = useRegionFormatters();
+  const { cpl: fmtCpl } = useMemo(() => mkFuelFmt(rf), [rf]);
 
   const [date, setDate] = useState<string>(todayIso());
   const [litres, setLitres] = useState<string>("");
