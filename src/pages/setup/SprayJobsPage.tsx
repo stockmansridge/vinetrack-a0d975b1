@@ -935,7 +935,7 @@ function SprayJobSheet({
           {/* Paddocks */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label>Paddocks / blocks</Label>
+              <Label>Blocks</Label>
               <Popover open={paddocksOpen} onOpenChange={setPaddocksOpen}>
                 <PopoverTrigger asChild>
                   <Button type="button" size="sm" variant="outline">
@@ -1036,7 +1036,7 @@ function SprayJobSheet({
                   <span>
                     {meanRowSpacing != null
                       ? `Mean from selected paddocks: ${meanRowSpacing.toFixed(2)} m`
-                      : "Select paddocks with row spacing data or enter row spacing manually."}
+                      : "Select blocks with row spacing data or enter row spacing manually."}
                   </span>
                   {rowSpacingOverridden && (
                     <button
@@ -1116,7 +1116,7 @@ function SprayJobSheet({
                 <div className="font-medium">
                   {computedWaterVolume != null
                     ? `${Math.round(computedWaterVolume).toLocaleString()} L`
-                    : "Total water volume requires paddock area."}
+                    : "Total water volume requires block area."}
                 </div>
               </div>
             </div>
@@ -1559,7 +1559,7 @@ function TankMixPreview({
       const water = sprayRate != null && m.areaHa > 0 ? m.areaHa * sprayRate : null;
       return {
         id: p.id,
-        name: p.name ?? "Unnamed paddock",
+        name: p.name ?? "Unnamed block",
         areaHa: m.areaHa || null,
         water,
       };
@@ -1567,7 +1567,7 @@ function TankMixPreview({
   }, [selectedPaddocks, sprayRate]);
 
   const missing: string[] = [];
-  if (totalAreaHa == null) missing.push("paddocks with area");
+  if (totalAreaHa == null) missing.push("blocks with area");
   if (sprayRate == null) missing.push("water rate (L/ha)");
   if (tankCapacityL == null) missing.push("equipment with tank capacity");
 
@@ -1648,7 +1648,7 @@ function TankMixPreview({
             <table className="w-full text-xs">
               <thead className="text-muted-foreground">
                 <tr className="border-b">
-                  <th className="text-left py-1 pr-2">Paddock</th>
+                  <th className="text-left py-1 pr-2">Block</th>
                   <th className="text-right py-1 pr-2">Area</th>
                   <th className="text-right py-1">Water</th>
                 </tr>

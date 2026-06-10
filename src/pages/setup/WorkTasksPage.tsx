@@ -2192,7 +2192,7 @@ function LinkedTripsSection({
             <PopoverContent align="start" className="w-[28rem] p-0 z-[70]">
               <div className="p-2 border-b">
                 <Input
-                  placeholder="Search by name, function, machine, paddock, date…"
+                  placeholder="Search by name, function, machine, block, date…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-8 text-xs"

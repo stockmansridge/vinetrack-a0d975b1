@@ -195,7 +195,7 @@ export default function NewPaddockPage() {
   const validation = useMemo(() => {
     const errors: string[] = [];
     if (!selectedVineyardId) errors.push("No vineyard selected.");
-    if (!name.trim()) errors.push("Paddock name is required.");
+    if (!name.trim()) errors.push("Block name is required.");
     if (polygon.length < 3) errors.push("Boundary needs at least 3 points.");
     const dir = Number(rowDirection);
     if (!Number.isFinite(dir) || dir < 0 || dir > 360) errors.push("Row direction must be 0–360°.");
@@ -287,7 +287,7 @@ export default function NewPaddockPage() {
         <Alert variant="destructive">
           <AlertTitle>Not authorised</AlertTitle>
           <AlertDescription>
-            Only owners and managers can create paddocks.
+            Only owners and managers can create blocks.
           </AlertDescription>
         </Alert>
       </div>
@@ -308,7 +308,7 @@ export default function NewPaddockPage() {
     try {
       const { error } = await supabase.from("paddocks").insert(payload as any);
       if (error) throw error;
-      toast({ title: "Paddock created", description: payload.name });
+      toast({ title: "Block created", description: payload.name });
       qc.invalidateQueries({ queryKey: ["paddocks"] });
       qc.invalidateQueries({ queryKey: ["vineyard_variety_usage"] });
       navigate("/setup/paddocks");
@@ -350,7 +350,7 @@ export default function NewPaddockPage() {
         <Card>
           <CardHeader>
             <CardTitle>Basic details</CardTitle>
-            <CardDescription>Give the paddock a name. Planting year is optional.</CardDescription>
+            <CardDescription>Give the block a name. Planting year is optional.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -539,7 +539,7 @@ export default function NewPaddockPage() {
           <CardHeader>
             <CardTitle>Review</CardTitle>
             <CardDescription>
-              Confirm the paddock details before saving.
+              Confirm the block details before saving.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -608,7 +608,7 @@ export default function NewPaddockPage() {
                 onClick={onSavePressed}
                 disabled={!isValid || saving}
               >
-                {saving ? "Saving…" : "Save paddock"}
+                {saving ? "Saving…" : "Save block"}
               </Button>
             </div>
           </CardContent>
@@ -653,7 +653,7 @@ function StepNav({
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        These steps map to the edit tabs: Overview · Boundary · Rows · Varieties · Trellis · Irrigation · Soil. Soil can be set after saving from the paddock detail page.
+        These steps map to the edit tabs: Overview · Boundary · Rows · Varieties · Trellis · Irrigation · Soil. Soil can be set after saving from the block detail page.
       </p>
     </div>
   );

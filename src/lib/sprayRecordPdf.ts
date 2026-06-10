@@ -111,7 +111,7 @@ export function exportSprayRecordPdf(
     ["End time", fmtTime(record.end_time)],
     ["Operation type", fmtVal(record.operation_type)],
     ["Reference", fmtVal(record.spray_reference)],
-    [`${fmt.blockLabel} / Paddock`, fmtVal(context?.paddockName)],
+    [fmt.blockLabel, fmtVal(context?.paddockName)],
     ["Operator", fmtVal(context?.operatorName)],
     ["Tractor", fmtVal(context?.tractorName ?? record.tractor)],
     ["Tractor gear", fmtVal(record.tractor_gear)],

@@ -296,7 +296,7 @@ export function resolveTreatedAreaHa(
 ): { areaHa: number | null; matched: number; total: number; warning: string | null } {
   const ids = tripPaddockIds(trip);
   if (ids.length === 0) {
-    return { areaHa: null, matched: 0, total: 0, warning: "No paddock linked to this trip — treated area unknown." };
+    return { areaHa: null, matched: 0, total: 0, warning: "No block linked to this trip — treated area unknown." };
   }
   const byId = new Map(paddocks.map((p) => [p.id, p] as const));
   let area = 0;
