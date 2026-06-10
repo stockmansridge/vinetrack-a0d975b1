@@ -110,14 +110,6 @@ type PickerGroup = {
   options: PickerOption[];
 };
 
-const GROUP_SOURCE_BY_KEY: Record<string, MaintenanceEquipmentSource> = {
-  tractors: "tractor",
-  spray: "spray_equipment",
-  machines: "vineyard_machine",
-  other: "equipment_item",
-  legacy: "free_text",
-  current: "free_text",
-};
 
 const toPickerOptions = (
   arr: { id: string; name: string }[] | undefined,
