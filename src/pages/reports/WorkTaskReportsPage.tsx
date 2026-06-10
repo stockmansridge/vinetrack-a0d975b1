@@ -837,6 +837,25 @@ export default function WorkTaskReportsPage() {
   // "Unallocated" bucket so totals still reconcile against the task summary.
   // If a single block has no resolvable area but the task does, that block
   // contributes 0 cost and is flagged "Missing block area".
+  interface AllocContribution {
+    taskId: string;
+    date: string | null;
+    taskType: string;
+    description: string | null;
+    share: number | null; // null = unallocated (no area share)
+    areaHa: number | null; // hectares allocated to this block from this task
+    labourHours: number;
+    machineHours: number;
+    linkedTripCount: number;
+    manualLabourCost: number;
+    machineCharge: number;
+    machineFuel: number;
+    linkedTripTotal: number;
+    totalCost: number;
+    hasOverlapWarning: boolean;
+    reason: string | null; // populated for unallocated / missing-area contributions
+  }
+
   interface AllocRow {
     key: string;
     paddockId: string | null;
@@ -856,6 +875,7 @@ export default function WorkTaskReportsPage() {
     hasMissingTaskArea: boolean;
     hasMissingBlockArea: boolean;
     isUnallocated: boolean;
+    contributions: AllocContribution[];
   }
 
   const allocationRows = useMemo<AllocRow[]>(() => {
@@ -883,16 +903,28 @@ export default function WorkTaskReportsPage() {
           hasMissingTaskArea: false,
           hasMissingBlockArea: false,
           isUnallocated,
+          contributions: [],
         };
         map.set(key, row);
       }
       return row;
     };
 
+    const baseContrib = (r: TaskRow): Omit<AllocContribution,
+      "share" | "areaHa" | "labourHours" | "machineHours" | "linkedTripCount" |
+      "manualLabourCost" | "machineCharge" | "machineFuel" | "linkedTripTotal" |
+      "totalCost" | "reason"
+    > => ({
+      taskId: r.task.id,
+      date: r.date,
+      taskType: r.taskType,
+      description: r.task.description ?? r.task.notes ?? null,
+      hasOverlapWarning: r.hasWarning,
+    });
+
     filtered.forEach((r) => {
       const totalHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalAreaHa : null;
 
-      // Build per-paddock area list, mirroring drawer/report precedence.
       const links: Array<{ paddockId: string; areaHa: number | null }> = r.taskPaddocks.length
         ? r.taskPaddocks.map((p) => {
             const a = Number(p.area_ha);
@@ -919,10 +951,20 @@ export default function WorkTaskReportsPage() {
         row.totalCost += r.totalCost;
         row.hasMissingTaskArea = true;
         if (r.hasWarning) row.hasOverlapWarning = true;
+        row.contributions.push({
+          ...baseContrib(r),
+          share: null, areaHa: null,
+          labourHours: r.labourHours, machineHours: r.machineHours,
+          linkedTripCount: r.linkedTripCount,
+          manualLabourCost: r.manualLabourCost, machineCharge: r.machineCharge,
+          machineFuel: r.machineFuel, linkedTripTotal: r.linkedTripTotal,
+          totalCost: r.totalCost,
+          reason: "Missing task area",
+        });
         return;
       }
 
-      // Case 2: no linked paddocks at all → Unallocated.
+      // Case 2: no linked paddocks → Unallocated.
       if (!links.length) {
         const row = ensure(null, "Unallocated", true);
         row.taskIds.add(r.task.id);
@@ -935,6 +977,16 @@ export default function WorkTaskReportsPage() {
         row.linkedTripTotal += r.linkedTripTotal;
         row.totalCost += r.totalCost;
         if (r.hasWarning) row.hasOverlapWarning = true;
+        row.contributions.push({
+          ...baseContrib(r),
+          share: null, areaHa: null,
+          labourHours: r.labourHours, machineHours: r.machineHours,
+          linkedTripCount: r.linkedTripCount,
+          manualLabourCost: r.manualLabourCost, machineCharge: r.machineCharge,
+          machineFuel: r.machineFuel, linkedTripTotal: r.linkedTripTotal,
+          totalCost: r.totalCost,
+          reason: "No linked blocks",
+        });
         return;
       }
 
@@ -946,9 +998,17 @@ export default function WorkTaskReportsPage() {
         if (r.hasWarning) row.hasOverlapWarning = true;
 
         if (areaHa == null || !(areaHa > 0)) {
-          // Block contributes 0 cost but is still listed with a flag.
           row.hasMissingBlockArea = true;
           row.linkedTripCount += r.linkedTripCount > 0 ? 1 : 0;
+          row.contributions.push({
+            ...baseContrib(r),
+            share: null, areaHa: null,
+            labourHours: 0, machineHours: 0,
+            linkedTripCount: r.linkedTripCount > 0 ? 1 : 0,
+            manualLabourCost: 0, machineCharge: 0, machineFuel: 0,
+            linkedTripTotal: 0, totalCost: 0,
+            reason: "Missing block area",
+          });
           return;
         }
         const share = areaHa / totalHa;
@@ -962,6 +1022,28 @@ export default function WorkTaskReportsPage() {
         row.machineFuel += r.machineFuel * share;
         row.linkedTripTotal += r.linkedTripTotal * share;
         row.totalCost += r.totalCost * share;
+        row.contributions.push({
+          ...baseContrib(r),
+          share, areaHa,
+          labourHours: r.labourHours * share,
+          machineHours: r.machineHours * share,
+          linkedTripCount: r.linkedTripCount > 0 ? 1 : 0,
+          manualLabourCost: r.manualLabourCost * share,
+          machineCharge: r.machineCharge * share,
+          machineFuel: r.machineFuel * share,
+          linkedTripTotal: r.linkedTripTotal * share,
+          totalCost: r.totalCost * share,
+          reason: null,
+        });
+      });
+    });
+
+    // Sort contributions newest first within each row.
+    map.forEach((row) => {
+      row.contributions.sort((a, b) => {
+        const ad = a.date ? new Date(a.date).getTime() : 0;
+        const bd = b.date ? new Date(b.date).getTime() : 0;
+        return bd - ad;
       });
     });
 
@@ -972,6 +1054,7 @@ export default function WorkTaskReportsPage() {
       return a.name.localeCompare(b.name);
     });
   }, [filtered, paddockAreaById, paddockNameById]);
+
 
   const allocationTotals = useMemo(() => {
     return allocationRows.reduce(
