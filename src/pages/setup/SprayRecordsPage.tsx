@@ -342,9 +342,9 @@ function SprayRecordSheet({
             </Section>
 
             <Section title="Equipment">
-              <Field label="Tractor" value={fmt(record.tractor)} />
+              <Field label="Tractor" value={fmt(resolvedTractor)} />
               <Field label="Tractor gear" value={fmt(record.tractor_gear)} />
-              <Field label="Equipment" value={fmt(record.equipment_type)} />
+              <Field label="Equipment" value={fmt(resolvedEquipment)} />
               <Field label="Fans/jets" value={fmt(record.number_of_fans_jets)} />
               <Field label="Avg speed" value={fmt(record.average_speed)} />
             </Section>
