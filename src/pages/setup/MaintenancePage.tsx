@@ -279,28 +279,30 @@ export default function MaintenancePage() {
     })));
   }, [filterPickerGroups, equipmentGroups, legacyOnly, selectedVineyardId]);
 
+  const resolveName = (l: MaintenanceLog) => resolveMaintenanceItemName(l, equipmentGroups);
+
   const rows = useMemo(() => {
     let list = logs.slice();
     list.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     if (from) list = list.filter((l) => (l.date ?? "") >= from);
     if (to) list = list.filter((l) => (l.date ?? "") <= to);
-    if (item !== ANY) list = list.filter((l) => l.item_name === item);
+    if (item !== ANY) list = list.filter((l) => resolveMaintenanceItemName(l, equipmentGroups) === item || l.item_name === item);
     if (completion === "finalized") list = list.filter((l) => l.is_finalized);
     if (completion === "open") list = list.filter((l) => !l.is_finalized);
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((l) =>
-        [l.item_name, l.work_completed, l.parts_used, l.date]
+        [resolveMaintenanceItemName(l, equipmentGroups), l.item_name, l.work_completed, l.parts_used, l.date]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
     return list;
-  }, [logs, filter, from, to, item, completion]);
+  }, [logs, filter, from, to, item, completion, equipmentGroups]);
 
   const { sorted: rowsSorted, getSortDirection: mDir, toggleSort: mToggle } = useSortableTable<MaintenanceLog, MaintCol>(rows, {
     accessors: {
       date: (r) => r.date ?? null,
-      item: (r) => r.item_name ?? null,
+      item: (r) => resolveMaintenanceItemName(r, equipmentGroups) || r.item_name || null,
       work: (r) => r.work_completed ?? null,
       hours: (r) => (r.hours as any) ?? null,
       machine_hours: (r) => (r.machine_hours as any) ?? null,
