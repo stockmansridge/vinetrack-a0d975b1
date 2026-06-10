@@ -17,10 +17,12 @@
 // Cost columns and dollar amounts are gated by useCanSeeCosts(). Nothing is
 // written back to the database; trip_cost_allocations and Cost Reports totals
 // are untouched.
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Download, Info, Search, AlertTriangle } from "lucide-react";
+import {
+  Download, Info, Search, AlertTriangle, ChevronDown, ChevronRight,
+} from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +37,9 @@ import {
 } from "@/lib/workTasksQuery";
 import {
   fetchWorkTaskMachineLinesForVineyard,
+  resolveMachineLineEquipmentName,
   type WorkTaskMachineLine,
+  type MachineLineEquipmentLookups,
 } from "@/lib/workTaskMachineLinesQuery";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import {
