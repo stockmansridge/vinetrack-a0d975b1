@@ -145,6 +145,22 @@ export default function TripsPage() {
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
   });
 
+  // Stage 4B — resolve trips.work_task_id → display label. Read-only.
+  const { data: workTasksResult } = useQuery({
+    queryKey: ["work_tasks", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksResult?.tasks ?? []).forEach((t) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksResult]);
+
+
   // Tractors + fuel purchases (page-level) so CSV export can include fuel
   // estimate columns for every row without needing to open each trip.
   const canSeeCostsPage = useCanSeeCosts();
