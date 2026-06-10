@@ -58,6 +58,7 @@ interface WorkTask {
   date?: string | null;
   task_type?: string | null;
   description?: string | null;
+  is_archived?: boolean | null;
 }
 
 interface MachineLine {
@@ -107,6 +108,7 @@ interface SprayRow {
   temperature?: number | null;
   wind_speed?: number | null;
   humidity?: number | null;
+  is_template?: boolean | null;
 }
 
 interface MaintRow {
@@ -117,6 +119,7 @@ interface MaintRow {
   date?: string | null;
   parts_cost?: number | null;
   labour_cost?: number | null;
+  is_archived?: boolean | null;
 }
 
 interface PinRow {
@@ -222,7 +225,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<WorkTask>(
       "work_tasks",
       vineyardId,
-      "id,paddock_id,paddock_name,area_ha,date,task_type,description",
+      "id,paddock_id,paddock_name,area_ha,date,task_type,description,is_archived",
     ),
     selectAll<MachineLine>(
       "work_task_machine_lines",
@@ -248,12 +251,12 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<SprayRow>(
       "spray_records",
       vineyardId,
-      "id,trip_id,date,spray_reference,machine_id,tractor_id,spray_equipment_id,tractor,equipment_type,temperature,wind_speed,humidity",
+      "id,trip_id,date,spray_reference,machine_id,tractor_id,spray_equipment_id,tractor,equipment_type,temperature,wind_speed,humidity,is_template",
     ),
     selectAll<MaintRow>(
       "maintenance_logs",
       vineyardId,
-      "id,item_name,equipment_source,equipment_ref_id,date,parts_cost,labour_cost",
+      "id,item_name,equipment_source,equipment_ref_id,date,parts_cost,labour_cost,is_archived",
     ),
     selectAll<PinRow>(
       "pins",
@@ -276,8 +279,17 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<EquipRow>("equipment_items", vineyardId, "id,name"),
   ]);
 
+  // Strip records that are out-of-scope for diagnostics:
+  //  - spray templates (is_template = true) — they intentionally have no
+  //    weather / no trip / often no stable equipment.
+  //  - archived work_tasks and maintenance_logs — these are hidden from the
+  //    operational pages and should not contribute to "issue" counts.
+  const sprayRecords = sprays.filter((s) => !s.is_template);
+  const activeWorkTasks = workTasks.filter((t) => !t.is_archived);
+  const activeMaint = maint.filter((m) => !m.is_archived);
+
   const paddockById = new Map(paddocks.map((p) => [p.id, p]));
-  const workTaskById = new Map(workTasks.map((t) => [t.id, t]));
+  const workTaskById = new Map(activeWorkTasks.map((t) => [t.id, t]));
   const tripById = new Map(trips.map((t) => [t.id, t]));
   const taskName = (t?: WorkTask) =>
     t?.task_type || t?.description?.slice(0, 60) || t?.id?.slice(0, 8) || "—";
@@ -302,7 +314,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
 
   // ---------- Work Tasks ----------
   {
-    const orphans = workTasks.filter(
+    const orphans = activeWorkTasks.filter(
       (t) => !t.paddock_id && !taskHasLinkedPaddock.has(t.id),
     );
     push({
@@ -322,16 +334,24 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const noArea = workTasks.filter(
-      (t) => t.area_ha == null || Number(t.area_ha) <= 0,
+    // "No resolved area" — only count tasks where area can't be derived
+    // anywhere. If the task has linked Blocks via work_task_paddocks the
+    // reporting layer can derive area from those, so don't flag it. Severity
+    // lowered to info: tasks with linked Blocks but null area_ha are common
+    // and reports already cope with this.
+    const noArea = activeWorkTasks.filter(
+      (t) =>
+        (t.area_ha == null || Number(t.area_ha) <= 0) &&
+        !taskHasLinkedPaddock.has(t.id) &&
+        !t.paddock_id,
     );
     push({
       group: "Work Tasks",
       key: "wt_no_area",
       name: "Work Tasks with no resolved area",
-      severity: "warning",
-      explanation: "No area_ha is set, which reduces accuracy of per-hectare reporting.",
-      suggestedAction: "Set Block area on the Work Task, or ensure linked Blocks have polygons.",
+      severity: "info",
+      explanation: "No area_ha is set and no Block is linked, so per-hectare reporting can't be derived.",
+      suggestedAction: "Set Block area on the Work Task, or link one or more Blocks with polygons.",
       count: noArea.length,
       details: cap(
         noArea.map((t) => ({
@@ -522,7 +542,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
 
   // ---------- Spray ----------
   {
-    const noMachineId = sprays.filter((s) => !s.machine_id && !s.tractor_id);
+    const noMachineId = sprayRecords.filter((s) => !s.machine_id && !s.tractor_id);
     push({
       group: "Spray",
       key: "spray_no_machine",
@@ -539,7 +559,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const noSprayEquip = sprays.filter((s) => !s.spray_equipment_id);
+    const noSprayEquip = sprayRecords.filter((s) => !s.spray_equipment_id);
     push({
       group: "Spray",
       key: "spray_no_equipment",
@@ -556,7 +576,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const orphanTrip = sprays.filter(
+    const orphanTrip = sprayRecords.filter(
       (s) => s.trip_id && !tripById.has(s.trip_id),
     );
     push({
@@ -576,7 +596,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const noWeather = sprays.filter(
+    const noWeather = sprayRecords.filter(
       (s) => s.temperature == null && s.wind_speed == null && s.humidity == null,
     );
     push({
@@ -595,7 +615,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const legacyFreeText = sprays.filter(
+    const legacyFreeText = sprayRecords.filter(
       (s) => !s.machine_id && !s.tractor_id && !s.spray_equipment_id && (s.tractor || s.equipment_type),
     );
     push({
@@ -617,7 +637,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
 
   // ---------- Maintenance ----------
   {
-    const freeText = maint.filter((m) => m.equipment_source === "free_text");
+    const freeText = activeMaint.filter((m) => m.equipment_source === "free_text");
     push({
       group: "Maintenance",
       key: "maint_free_text",
@@ -634,7 +654,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const missingRefId = maint.filter(
+    const missingRefId = activeMaint.filter(
       (m) =>
         m.equipment_source &&
         m.equipment_source !== "free_text" &&
@@ -657,7 +677,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const danglingRefId = maint.filter(
+    const danglingRefId = activeMaint.filter(
       (m) =>
         m.equipment_source &&
         m.equipment_source !== "free_text" &&
@@ -681,7 +701,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const missingDateOrCost = maint.filter(
+    const missingDateOrCost = activeMaint.filter(
       (m) =>
         !m.date ||
         ((m.parts_cost ?? 0) === 0 && (m.labour_cost ?? 0) === 0),
@@ -790,9 +810,9 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       group: "Pins",
       key: "pin_no_row",
       name: "Pins with no row/path attachment",
-      severity: "warning",
-      explanation: "No row or driving path attached. Row-level pin overlays won't render.",
-      suggestedAction: "Snap the pin to a row in iOS.",
+      severity: "info",
+      explanation: "No row or driving path attached. Row-level overlays won't render, but free-placement pins (gates, observations) are legitimately rowless.",
+      suggestedAction: "If this pin is meant to sit on a row, snap it to a row in iOS.",
       count: pinNoRow.length,
       details: cap(
         pinNoRow.map((p) => ({
@@ -951,7 +971,14 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     };
     ingest(tractors, "Tractor");
     ingest(sprayEquipment, "Spray Equipment");
-    ingest(vineyardMachines, "Vineyard Machine");
+    // Exclude vineyard_machines that are pure migration shims for a legacy
+    // tractor row (legacy_tractor_id is set) — those intentionally share the
+    // same display name as the underlying tractor and would otherwise spam
+    // the duplicate-name list during the Vineyard Machines rollout.
+    ingest(
+      vineyardMachines.filter((m) => !m.legacy_tractor_id),
+      "Vineyard Machine",
+    );
     ingest(equipmentItems, "Other Equipment");
     const dupNameDetails: IssueDetail[] = [];
     let dupNameCount = 0;
@@ -993,7 +1020,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
         label: m.equipment_name_snapshot ?? undefined,
       }),
     );
-    sprays.forEach((s) => {
+    sprayRecords.forEach((s) => {
       add(s.tractor_id, { src: "spray.tractor_id", recordId: s.id, date: s.date });
       add(s.machine_id, { src: "spray.machine_id", recordId: s.id, date: s.date });
       add(s.spray_equipment_id, { src: "spray.spray_equipment_id", recordId: s.id, date: s.date });
@@ -1066,8 +1093,8 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       machineLines: machineLines.length,
       labourLines: labourLines.length,
       trips: trips.length,
-      sprayRecords: sprays.length,
-      maintenance: maint.length,
+      sprayRecords: sprayRecords.length,
+      maintenance: activeMaint.length,
       pins: pins.length,
       tractorFuelLogs: fuelLogs.length,
       fuelPurchases: fuelPurchases.length,
