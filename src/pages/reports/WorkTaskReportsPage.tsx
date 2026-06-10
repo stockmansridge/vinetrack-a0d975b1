@@ -80,6 +80,7 @@ interface TaskRow {
   blockNames: string[];
   blocksLabel: string;
   paddockIds: string[];
+  totalAreaHa: number | null;
   labourHours: number;
   machineHours: number;
   machineEntries: number;
@@ -94,6 +95,10 @@ interface TaskRow {
   hasManualMachine: boolean;
   hasWarning: boolean;
 }
+
+// Conversion factor used internally for cost-per-area when the vineyard is set
+// to acres. Storage stays in hectares; this is display-only.
+const HA_PER_AC = 0.40468564224;
 
 export default function WorkTaskReportsPage() {
   const { selectedVineyardId } = useVineyard();
