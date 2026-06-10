@@ -704,6 +704,15 @@ function TripSheet({
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{trip ? tripDisplayName(trip) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
+          {trip?.work_task_id && (
+            <div className="pt-1">
+              <Badge variant="outline" className="font-normal">
+                {workTaskLabelById.get(trip.work_task_id)
+                  ? `Task: ${workTaskLabelById.get(trip.work_task_id)}`
+                  : "Task linked"}
+              </Badge>
+            </div>
+          )}
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">
