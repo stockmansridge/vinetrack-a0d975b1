@@ -488,6 +488,7 @@ function MaintenanceSheet({
   open,
   canWrite,
   canSeeCosts,
+  equipmentGroups,
   onOpenChange,
   onEdit,
 }: {
@@ -495,6 +496,7 @@ function MaintenanceSheet({
   open: boolean;
   canWrite: boolean;
   canSeeCosts: boolean;
+  equipmentGroups?: EquipmentSelectorGroups;
   onOpenChange: (o: boolean) => void;
   onEdit: (l: MaintenanceLog) => void;
 }) {
