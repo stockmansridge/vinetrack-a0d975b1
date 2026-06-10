@@ -340,7 +340,7 @@ export default function WorkTaskReportsPage() {
 
   const downloadCsv = () => {
     const baseCols = [
-      "Date", "Task type", "Blocks", "Labour hours", "Machine hours",
+      "Date", "Task type", "Blocks", "Labour hours", "manual_machine_hours",
       "Linked trips", "Machine entries", "Warning",
     ];
     const costCols = [
