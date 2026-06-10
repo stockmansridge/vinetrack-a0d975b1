@@ -98,6 +98,11 @@ interface TaskRow {
   hasLinkedTrips: boolean;
   hasManualMachine: boolean;
   hasWarning: boolean;
+  // Source records for the expandable details panel:
+  labourLines: WorkTaskLabourLine[];
+  machineLines: WorkTaskMachineLine[];
+  taskPaddocks: WorkTaskPaddock[];
+  trips: Trip[];
 }
 
 // Conversion factor used internally for cost-per-area when the vineyard is set
