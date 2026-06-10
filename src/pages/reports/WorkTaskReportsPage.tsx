@@ -925,7 +925,7 @@ function ExpandedRowDetails({
                       <div>End: <span className="text-foreground">{fmtDateTime(t.end_time)}</span></div>
                       <div>Duration: <span className="text-foreground">{fmtHours(dur)}</span></div>
                       {(t.machine_id || t.tractor_id) && (
-                        <div>Machine: <span className="text-foreground">{t.machine_id ? "Machine" : "Tractor"}</span></div>
+                        <div>Machine: <span className="text-foreground">{resolveTripEquipmentName(t, machineLookups)}</span></div>
                       )}
                       {t.person_name && (
                         <div>Operator: <span className="text-foreground">{t.person_name}</span></div>
