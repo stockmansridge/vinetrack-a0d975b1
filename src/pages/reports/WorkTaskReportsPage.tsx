@@ -542,6 +542,7 @@ export default function WorkTaskReportsPage() {
               <TableHead>Date</TableHead>
               <TableHead>Task type</TableHead>
               <TableHead>Blocks</TableHead>
+              <TableHead className="text-right">Area</TableHead>
               <TableHead className="text-right">Labour hrs</TableHead>
               <TableHead className="text-right">Machine hrs</TableHead>
               <TableHead className="text-right">Linked trips</TableHead>
@@ -552,6 +553,7 @@ export default function WorkTaskReportsPage() {
                   <TableHead className="text-right">Machine fuel</TableHead>
                   <TableHead className="text-right">Linked GPS trips</TableHead>
                   <TableHead className="text-right">Total cost</TableHead>
+                  <TableHead className="text-right">{costPerAreaLabel}</TableHead>
                 </>
               ) : (
                 <TableHead className="text-right">Machine entries</TableHead>
@@ -562,7 +564,7 @@ export default function WorkTaskReportsPage() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canSeeCosts ? 12 : 8} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 14 : 9} className="text-center text-sm text-muted-foreground py-8">
                   {loading ? "Loading…" : "No work tasks match the current filters."}
                 </TableCell>
               </TableRow>
@@ -571,6 +573,7 @@ export default function WorkTaskReportsPage() {
                 <TableCell className="whitespace-nowrap">{fmtDay(r.date)}</TableCell>
                 <TableCell>{r.taskType}</TableCell>
                 <TableCell className="max-w-[280px] truncate" title={r.blocksLabel}>{r.blocksLabel}</TableCell>
+                <TableCell className="text-right tabular-nums">{areaDisplay(r.totalAreaHa)}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
@@ -581,6 +584,7 @@ export default function WorkTaskReportsPage() {
                     <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
                     <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{costPerAreaDisplay(r.totalCost, r.totalAreaHa)}</TableCell>
                   </>
                 ) : (
                   <TableCell className="text-right tabular-nums">{r.machineEntries}</TableCell>
@@ -603,6 +607,9 @@ export default function WorkTaskReportsPage() {
             <TableBody>
               <TableRow className="bg-muted/30">
                 <TableCell colSpan={3} className="font-medium">Totals (filtered)</TableCell>
+                <TableCell className="text-right tabular-nums font-medium">
+                  {totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—"}
+                </TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.labourHours.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.machineHours.toFixed(2)}</TableCell>
                 <TableCell />
@@ -613,6 +620,9 @@ export default function WorkTaskReportsPage() {
                     <TableCell className="text-right tabular-nums font-medium">{money(totals.machineFuel)}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{money(totals.linkedTripTotal)}</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">{money(totals.totalCost)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—"}
+                    </TableCell>
                   </>
                 ) : (
                   <TableCell />
