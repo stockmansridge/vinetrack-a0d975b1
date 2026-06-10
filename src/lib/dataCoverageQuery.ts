@@ -284,9 +284,9 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
   //    weather / no trip / often no stable equipment.
   //  - archived work_tasks and maintenance_logs — these are hidden from the
   //    operational pages and should not contribute to "issue" counts.
-  const sprayRecords = sprays.filter((s) => !s.is_template);
+  const sprayRecords = sprayRecords.filter((s) => !s.is_template);
   const activeWorkTasks = workTasks.filter((t) => !t.is_archived);
-  const activeMaint = maint.filter((m) => !m.is_archived);
+  const activeMaint = activeMaint.filter((m) => !m.is_archived);
 
   const paddockById = new Map(paddocks.map((p) => [p.id, p]));
   const workTaskById = new Map(activeWorkTasks.map((t) => [t.id, t]));
@@ -542,7 +542,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
 
   // ---------- Spray ----------
   {
-    const noMachineId = sprays.filter((s) => !s.machine_id && !s.tractor_id);
+    const noMachineId = sprayRecords.filter((s) => !s.machine_id && !s.tractor_id);
     push({
       group: "Spray",
       key: "spray_no_machine",
@@ -559,7 +559,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const noSprayEquip = sprays.filter((s) => !s.spray_equipment_id);
+    const noSprayEquip = sprayRecords.filter((s) => !s.spray_equipment_id);
     push({
       group: "Spray",
       key: "spray_no_equipment",
@@ -576,7 +576,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const orphanTrip = sprays.filter(
+    const orphanTrip = sprayRecords.filter(
       (s) => s.trip_id && !tripById.has(s.trip_id),
     );
     push({
@@ -596,7 +596,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const noWeather = sprays.filter(
+    const noWeather = sprayRecords.filter(
       (s) => s.temperature == null && s.wind_speed == null && s.humidity == null,
     );
     push({
@@ -615,7 +615,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const legacyFreeText = sprays.filter(
+    const legacyFreeText = sprayRecords.filter(
       (s) => !s.machine_id && !s.tractor_id && !s.spray_equipment_id && (s.tractor || s.equipment_type),
     );
     push({
@@ -637,7 +637,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
 
   // ---------- Maintenance ----------
   {
-    const freeText = maint.filter((m) => m.equipment_source === "free_text");
+    const freeText = activeMaint.filter((m) => m.equipment_source === "free_text");
     push({
       group: "Maintenance",
       key: "maint_free_text",
@@ -654,7 +654,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const missingRefId = maint.filter(
+    const missingRefId = activeMaint.filter(
       (m) =>
         m.equipment_source &&
         m.equipment_source !== "free_text" &&
@@ -677,7 +677,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const danglingRefId = maint.filter(
+    const danglingRefId = activeMaint.filter(
       (m) =>
         m.equipment_source &&
         m.equipment_source !== "free_text" &&
@@ -701,7 +701,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const missingDateOrCost = maint.filter(
+    const missingDateOrCost = activeMaint.filter(
       (m) =>
         !m.date ||
         ((m.parts_cost ?? 0) === 0 && (m.labour_cost ?? 0) === 0),
@@ -1013,7 +1013,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
         label: m.equipment_name_snapshot ?? undefined,
       }),
     );
-    sprays.forEach((s) => {
+    sprayRecords.forEach((s) => {
       add(s.tractor_id, { src: "spray.tractor_id", recordId: s.id, date: s.date });
       add(s.machine_id, { src: "spray.machine_id", recordId: s.id, date: s.date });
       add(s.spray_equipment_id, { src: "spray.spray_equipment_id", recordId: s.id, date: s.date });
