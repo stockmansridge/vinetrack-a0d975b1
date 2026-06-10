@@ -539,6 +539,7 @@ function arrayLen(v: any): number | null {
 function TripSheet({
   trip,
   paddockNameById,
+  workTaskLabelById,
   vineyardName,
   vineyardId,
   open,
@@ -546,6 +547,7 @@ function TripSheet({
 }: {
   trip: Trip | null;
   paddockNameById: Map<string, string | null>;
+  workTaskLabelById: Map<string, string>;
   vineyardName: string | null;
   vineyardId: string | null;
   open: boolean;
