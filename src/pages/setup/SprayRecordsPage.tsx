@@ -37,6 +37,12 @@ import {
   type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import {
+  resolveSprayTractorName,
+  resolveSprayEquipmentName,
+  type SprayEquipmentLookups,
+} from "@/lib/sprayRecordEquipment";
+import { fetchList } from "@/lib/queries";
 import { formatDate } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
