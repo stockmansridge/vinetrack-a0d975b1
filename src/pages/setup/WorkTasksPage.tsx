@@ -66,6 +66,17 @@ import {
   mergeTaskTypeNames,
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
+import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import {
+  fetchWorkTaskMachineLinesForVineyard,
+  resolveMachineLineEquipmentName,
+  type WorkTaskMachineLine,
+} from "@/lib/workTaskMachineLinesQuery";
+import {
+  formatTripNameLabel,
+  formatTripFunctionLabel,
+  formatTripDurationLabel,
+} from "@/lib/tripDisplay";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
@@ -236,6 +247,75 @@ export default function WorkTasksPage() {
     staleTime: 0,
     refetchOnMount: "always",
   });
+
+  // SQL 102 — trips can now link back to a work task via work_task_id.
+  // Read-only awareness only at this stage; no linking UI.
+  const { data: tripsResult } = useQuery({
+    queryKey: ["trips", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const trips: Trip[] = tripsResult?.trips ?? [];
+
+  // SQL 103 — manually-entered machine usage attached to a work task.
+  const { data: machineLines = [] } = useQuery({
+    queryKey: ["work_task_machine_lines", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTaskMachineLinesForVineyard(selectedVineyardId!),
+  });
+
+  // Equipment lookups for resolveMachineLineEquipmentName().
+  const { data: vineyardMachines = [] } = useQuery({
+    queryKey: ["vineyard_machines-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("vineyard_machines", selectedVineyardId!),
+  });
+  const { data: tractorsList = [] } = useQuery({
+    queryKey: ["tractors-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("tractors", selectedVineyardId!),
+  });
+  const { data: sprayEquipmentList = [] } = useQuery({
+    queryKey: ["spray_equipment-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("spray_equipment", selectedVineyardId!),
+  });
+  const { data: equipmentItemsList = [] } = useQuery({
+    queryKey: ["equipment_items-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("equipment_items", selectedVineyardId!),
+  });
+  const machineLookups = useMemo(
+    () => ({
+      machines: vineyardMachines,
+      tractors: tractorsList,
+      sprayEquipment: sprayEquipmentList,
+      equipmentItems: equipmentItemsList,
+    }),
+    [vineyardMachines, tractorsList, sprayEquipmentList, equipmentItemsList],
+  );
+
+  const tripsByTask = useMemo(() => {
+    const m = new Map<string, Trip[]>();
+    trips.forEach((t) => {
+      if (!t.work_task_id) return;
+      const arr = m.get(t.work_task_id) ?? [];
+      arr.push(t);
+      m.set(t.work_task_id, arr);
+    });
+    return m;
+  }, [trips]);
+
+  const machineLinesByTask = useMemo(() => {
+    const m = new Map<string, WorkTaskMachineLine[]>();
+    machineLines.forEach((l) => {
+      if (l.deleted_at) return;
+      const arr = m.get(l.work_task_id) ?? [];
+      arr.push(l);
+      m.set(l.work_task_id, arr);
+    });
+    return m;
+  }, [machineLines]);
 
   const tasks = data?.tasks ?? [];
 
@@ -582,10 +662,24 @@ export default function WorkTasksPage() {
                     : `${padIds.length} blocks`;
               const tot = totalsByTask.get(t.id);
               const summary = (t.description ?? t.notes ?? "").trim();
+              const linkedTripsCount = tripsByTask.get(t.id)?.length ?? 0;
+              const machineLineCount = machineLinesByTask.get(t.id)?.length ?? 0;
+              const relIndicator = (linkedTripsCount > 0 || machineLineCount > 0) ? (
+                <div className="mt-1 flex gap-1 text-[10px] text-muted-foreground">
+                  {linkedTripsCount > 0 && <span>Trips: {linkedTripsCount}</span>}
+                  {linkedTripsCount > 0 && machineLineCount > 0 && <span>·</span>}
+                  {machineLineCount > 0 && <span>Machine: {machineLineCount}</span>}
+                </div>
+              ) : null;
               const cellMap: Record<WtCol, React.ReactNode> = {
                 date: <TableCell>{dateRangeLabel(t)}</TableCell>,
                 paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
-                task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
+                task_type: (
+                  <TableCell>
+                    {t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}
+                    {relIndicator}
+                  </TableCell>
+                ),
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
                 area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
@@ -619,6 +713,9 @@ export default function WorkTasksPage() {
         categories={categories}
         syncedTaskTypes={syncedTaskTypes}
         labourLines={selected ? linesByTask.get(selected.id) ?? [] : []}
+        linkedTrips={selected ? tripsByTask.get(selected.id) ?? [] : []}
+        machineLines={selected ? machineLinesByTask.get(selected.id) ?? [] : []}
+        machineLookups={machineLookups}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
@@ -640,6 +737,9 @@ export default function WorkTasksPage() {
         categories={categories}
         syncedTaskTypes={syncedTaskTypes}
         labourLines={[]}
+        linkedTrips={[]}
+        machineLines={[]}
+        machineLookups={machineLookups}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
@@ -672,6 +772,14 @@ interface DrawerProps {
   categories: OperatorCategory[];
   syncedTaskTypes: WorkTaskType[];
   labourLines: WorkTaskLabourLine[];
+  linkedTrips: Trip[];
+  machineLines: WorkTaskMachineLine[];
+  machineLookups: {
+    machines: ReadonlyArray<{ id: string; name?: string | null }>;
+    tractors: ReadonlyArray<{ id: string; name?: string | null }>;
+    sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
+    equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
+  };
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
@@ -679,7 +787,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, machineLines, machineLookups, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
   const rf = useRegionFormatters();
@@ -942,6 +1050,73 @@ function WorkTaskDrawer({
                     </tbody>
                   </table>
                 </div>
+              </Section>
+            )}
+            {!isNew && task && (
+              <Section title="Linked Trips">
+                {linkedTrips.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No linked trips</div>
+                ) : (
+                  <div className="space-y-2">
+                    {linkedTrips
+                      .slice()
+                      .sort((a, b) => (b.start_time ?? "").localeCompare(a.start_time ?? ""))
+                      .map((tr) => {
+                        const name = formatTripNameLabel(tr.trip_title, tr.tracking_pattern, tr.paddock_name);
+                        const fn = formatTripFunctionLabel(tr.trip_function);
+                        const dur = formatTripDurationLabel(tr.start_time, tr.end_time);
+                        const machineId = tr.machine_id ?? tr.tractor_id ?? null;
+                        const machineName =
+                          machineLookups.machines.find((m) => m.id === machineId)?.name ??
+                          machineLookups.tractors.find((m) => m.id === machineId)?.name ??
+                          null;
+                        return (
+                          <div key={tr.id} className="rounded border bg-muted/30 p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium truncate">{name}</span>
+                              <span className="text-muted-foreground shrink-0">{fmtDate(tr.start_time)}</span>
+                            </div>
+                            <div className="mt-0.5 text-muted-foreground truncate">
+                              {fn !== "—" && <>{fn}</>}
+                              {machineName && <> · {machineName}</>}
+                              {dur !== "—" && <> · {dur}</>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </Section>
+            )}
+            {!isNew && task && (
+              <Section title="Manual Machine Work">
+                {machineLines.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No manual machine work</div>
+                ) : (
+                  <div className="space-y-2">
+                    {machineLines
+                      .slice()
+                      .sort((a, b) => (b.work_date ?? "").localeCompare(a.work_date ?? ""))
+                      .map((ml) => {
+                        const eqName =
+                          resolveMachineLineEquipmentName(ml, machineLookups) ?? "Unknown equipment";
+                        const hours = ml.duration_hours ?? ml.engine_hours_used ?? null;
+                        return (
+                          <div key={ml.id} className="rounded border bg-muted/30 p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium truncate">{eqName}</span>
+                              <span className="text-muted-foreground shrink-0">{fmtDate(ml.work_date)}</span>
+                            </div>
+                            <div className="mt-0.5 text-muted-foreground truncate">
+                              {hours != null && <>{num(hours)} h</>}
+                              {ml.entry_source && <> · {ml.entry_source}</>}
+                              {ml.notes && <> · {ml.notes}</>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </Section>
             )}
             {!isNew && task && (
