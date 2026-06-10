@@ -767,10 +767,16 @@ export default function WorkTaskReportsPage() {
           <div className="text-xs text-muted-foreground">
             {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
           </div>
-          <Button size="sm" onClick={downloadCsv} disabled={!filtered.length}>
-            <Download className="h-3.5 w-3.5 mr-1" />
-            Export CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!filtered.length}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export PDF
+            </Button>
+            <Button size="sm" onClick={downloadCsv} disabled={!filtered.length}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
+          </div>
         </div>
       </Card>
 
