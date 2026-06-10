@@ -96,11 +96,32 @@ const mkMaintFmt = (rf: RegionFormatters) => ({
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
+type PickerOption = {
+  id: string;
+  name: string;
+  source: MaintenanceEquipmentSource;
+};
+
 type PickerGroup = {
   key: string;
   label: string;
-  options: { id: string; name: string }[];
+  source: MaintenanceEquipmentSource;
+  options: PickerOption[];
 };
+
+const GROUP_SOURCE_BY_KEY: Record<string, MaintenanceEquipmentSource> = {
+  tractors: "tractor",
+  spray: "spray_equipment",
+  machines: "vineyard_machine",
+  other: "equipment_item",
+  legacy: "free_text",
+  current: "free_text",
+};
+
+const toPickerOptions = (
+  arr: { id: string; name: string }[] | undefined,
+  source: MaintenanceEquipmentSource,
+): PickerOption[] => (arr ?? []).map((o) => ({ id: o.id, name: o.name, source }));
 
 const buildMaintenancePickerGroups = (
   equipmentGroups?: EquipmentSelectorGroups,
@@ -110,17 +131,18 @@ const buildMaintenancePickerGroups = (
   includeCurrentValue = false,
 ): PickerGroup[] => {
   const groups: PickerGroup[] = [
-    { key: "tractors", label: "Tractors", options: equipmentGroups?.tractors ?? [] },
-    { key: "spray", label: "Spray Equipment", options: equipmentGroups?.sprayEquipment ?? [] },
-    { key: "machines", label: "Vineyard Machines", options: equipmentGroups?.vineyardMachines ?? [] },
-    { key: "other", label: "Other Equipment & Assets", options: equipmentGroups?.otherItems ?? [] },
+    { key: "tractors", label: "Tractors", source: "tractor", options: toPickerOptions(equipmentGroups?.tractors, "tractor") },
+    { key: "spray", label: "Spray Equipment", source: "spray_equipment", options: toPickerOptions(equipmentGroups?.sprayEquipment, "spray_equipment") },
+    { key: "machines", label: "Vineyard Machines", source: "vineyard_machine", options: toPickerOptions(equipmentGroups?.vineyardMachines, "vineyard_machine") },
+    { key: "other", label: "Other Equipment & Assets", source: "equipment_item", options: toPickerOptions(equipmentGroups?.otherItems, "equipment_item") },
   ].filter((group) => group.options.length > 0);
 
   if (includeLegacy && legacyOnly.length > 0) {
     groups.push({
       key: "legacy",
       label: "Historical (free text)",
-      options: legacyOnly.map((name) => ({ id: name, name })),
+      source: "free_text",
+      options: legacyOnly.map((name) => ({ id: name, name, source: "free_text" as const })),
     });
   }
 
@@ -128,12 +150,36 @@ const buildMaintenancePickerGroups = (
     groups.push({
       key: "current",
       label: "Current value",
-      options: [{ id: currentValue, name: currentValue }],
+      source: "free_text",
+      options: [{ id: currentValue, name: currentValue, source: "free_text" }],
     });
   }
 
   return groups;
 };
+
+// Resolve the display name for a maintenance log using equipment_source +
+// equipment_ref_id when present, falling back to item_name otherwise.
+function resolveMaintenanceItemName(
+  log: Pick<MaintenanceLog, "item_name" | "equipment_source" | "equipment_ref_id">,
+  equipmentGroups?: EquipmentSelectorGroups,
+): string {
+  const src = log.equipment_source as MaintenanceEquipmentSource | null | undefined;
+  const refId = log.equipment_ref_id;
+  if (src && refId && equipmentGroups) {
+    const pool =
+      src === "tractor" ? equipmentGroups.tractors
+      : src === "spray_equipment" ? equipmentGroups.sprayEquipment
+      : src === "vineyard_machine" ? equipmentGroups.vineyardMachines
+      : src === "equipment_item" ? equipmentGroups.otherItems
+      : null;
+    if (pool) {
+      const match = pool.find((o) => o.id === refId);
+      if (match?.name) return match.name;
+    }
+  }
+  return log.item_name ?? "";
+}
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 // AU fallback retained but unused now that per-component formatters drive display.
