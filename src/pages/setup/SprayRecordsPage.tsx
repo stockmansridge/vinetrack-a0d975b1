@@ -294,15 +294,19 @@ function SprayRecordSheet({
   record,
   vineyardName,
   formatters,
+  lookups,
   open,
   onOpenChange,
 }: {
   record: SprayRecord | null;
   vineyardName?: string | null;
   formatters?: import("@/lib/regionFormatters").RegionFormatters;
+  lookups: SprayEquipmentLookups;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const resolvedTractor = record ? resolveSprayTractorName(record, lookups) : null;
+  const resolvedEquipment = record ? resolveSprayEquipmentName(record, lookups) : null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -318,7 +322,11 @@ function SprayRecordSheet({
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  exportSprayRecordPdf(record, vineyardName, { formatters })
+                  exportSprayRecordPdf(record, vineyardName, {
+                    formatters,
+                    tractorName: resolvedTractor,
+                    equipmentName: resolvedEquipment,
+                  })
                 }
                 className="gap-1.5"
               >
