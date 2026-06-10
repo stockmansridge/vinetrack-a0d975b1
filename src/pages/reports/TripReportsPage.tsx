@@ -307,6 +307,7 @@ export default function TripReportsPage() {
         vineyardLogoUrl: vineyardLogoUrl ?? null,
         cost: computeCostFor(t),
         formatters,
+        linkedTaskLabel: t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "Task linked" : null,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
