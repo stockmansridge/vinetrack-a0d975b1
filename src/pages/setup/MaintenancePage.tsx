@@ -436,7 +436,7 @@ export default function MaintenancePage() {
               const cost = (l.parts_cost ?? 0) + (l.labour_cost ?? 0);
               const cellMap: Record<MaintCol, React.ReactNode> = {
                 date: <TableCell>{fmtDate(l.date)}</TableCell>,
-                item: <TableCell>{fmt(l.item_name)}</TableCell>,
+                item: <TableCell>{fmt(resolveName(l) || l.item_name)}</TableCell>,
                 work: <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>,
                 hours: <TableCell>{fmt(l.hours)}</TableCell>,
                 machine_hours: <TableCell>{fmt(l.machine_hours)}</TableCell>,
