@@ -790,6 +790,8 @@ interface DrawerProps {
   syncedTaskTypes: WorkTaskType[];
   labourLines: WorkTaskLabourLine[];
   linkedTrips: Trip[];
+  allTrips: Trip[];
+  paddockNameById: Map<string, string | null>;
   machineLines: WorkTaskMachineLine[];
   machineLookups: {
     machines: ReadonlyArray<{ id: string; name?: string | null }>;
