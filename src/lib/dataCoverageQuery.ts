@@ -971,7 +971,14 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     };
     ingest(tractors, "Tractor");
     ingest(sprayEquipment, "Spray Equipment");
-    ingest(vineyardMachines, "Vineyard Machine");
+    // Exclude vineyard_machines that are pure migration shims for a legacy
+    // tractor row (legacy_tractor_id is set) — those intentionally share the
+    // same display name as the underlying tractor and would otherwise spam
+    // the duplicate-name list during the Vineyard Machines rollout.
+    ingest(
+      vineyardMachines.filter((m) => !m.legacy_tractor_id),
+      "Vineyard Machine",
+    );
     ingest(equipmentItems, "Other Equipment");
     const dupNameDetails: IssueDetail[] = [];
     let dupNameCount = 0;
