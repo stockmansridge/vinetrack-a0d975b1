@@ -70,7 +70,12 @@ import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import {
   fetchWorkTaskMachineLinesForVineyard,
   resolveMachineLineEquipmentName,
+  createWorkTaskMachineLine,
+  updateWorkTaskMachineLine,
+  softDeleteWorkTaskMachineLine,
+  describeMachineLineWriteError,
   type WorkTaskMachineLine,
+  type WorkTaskMachineEquipmentSource,
 } from "@/lib/workTaskMachineLinesQuery";
 import {
   formatTripNameLabel,
