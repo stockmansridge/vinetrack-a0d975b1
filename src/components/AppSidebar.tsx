@@ -90,6 +90,7 @@ const equipment: NavItem[] = [
 // "Reports" — exports & compliance
 const reports: NavItem[] = [
   { title: "Trip Reports", url: "/reports/trips", icon: Route },
+  { title: "Work Task Reports", url: "/reports/work-tasks", icon: ClipboardList },
   { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
   { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
   { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
