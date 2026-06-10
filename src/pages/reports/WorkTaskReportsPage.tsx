@@ -820,6 +820,236 @@ export default function WorkTaskReportsPage() {
     toast({ title: "Excel exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
   };
 
+  // -------------------- Block / paddock allocation (Stage 5H) --------------------
+  // Per-task area-share allocation, aggregated by block/paddock across the
+  // currently filtered task set. Read-only — nothing is written back to the
+  // database and the existing task-level roll-up is untouched.
+  //
+  // For each task in `filtered`:
+  //   totalTaskAreaHa = the same area precedence used in the task summary
+  //     (task.area_ha > 0  →  Σ work_task_paddocks.area_ha > 0  →  Σ paddock entity area_ha > 0  → null)
+  //   for each linked paddock:
+  //     paddockAreaHa = work_task_paddocks.area_ha (if > 0) else paddock.area_ha (if > 0) else null
+  //     share         = paddockAreaHa / totalTaskAreaHa
+  //     allocated*    = task* × share
+  //
+  // If totalTaskAreaHa is missing/zero, the whole task is added to an
+  // "Unallocated" bucket so totals still reconcile against the task summary.
+  // If a single block has no resolvable area but the task does, that block
+  // contributes 0 cost and is flagged "Missing block area".
+  interface AllocRow {
+    key: string;
+    paddockId: string | null;
+    name: string;
+    taskIds: Set<string>;
+    areaHa: number; // sum of resolved paddock areas (hectares); 0 for unallocated
+    hasAnyArea: boolean;
+    labourHours: number;
+    machineHours: number;
+    linkedTripCount: number;
+    manualLabourCost: number;
+    machineCharge: number;
+    machineFuel: number;
+    linkedTripTotal: number;
+    totalCost: number;
+    hasOverlapWarning: boolean;
+    hasMissingTaskArea: boolean;
+    hasMissingBlockArea: boolean;
+    isUnallocated: boolean;
+  }
+
+  const allocationRows = useMemo<AllocRow[]>(() => {
+    const map = new Map<string, AllocRow>();
+    const ensure = (paddockId: string | null, name: string, isUnallocated: boolean): AllocRow => {
+      const key = paddockId ?? "__unallocated__";
+      let row = map.get(key);
+      if (!row) {
+        row = {
+          key,
+          paddockId,
+          name,
+          taskIds: new Set<string>(),
+          areaHa: 0,
+          hasAnyArea: false,
+          labourHours: 0,
+          machineHours: 0,
+          linkedTripCount: 0,
+          manualLabourCost: 0,
+          machineCharge: 0,
+          machineFuel: 0,
+          linkedTripTotal: 0,
+          totalCost: 0,
+          hasOverlapWarning: false,
+          hasMissingTaskArea: false,
+          hasMissingBlockArea: false,
+          isUnallocated,
+        };
+        map.set(key, row);
+      }
+      return row;
+    };
+
+    filtered.forEach((r) => {
+      const totalHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalAreaHa : null;
+
+      // Build per-paddock area list, mirroring drawer/report precedence.
+      const links: Array<{ paddockId: string; areaHa: number | null }> = r.taskPaddocks.length
+        ? r.taskPaddocks.map((p) => {
+            const a = Number(p.area_ha);
+            const fromLink = Number.isFinite(a) && a > 0 ? a : null;
+            const fallback = paddockAreaById.get(p.paddock_id) ?? null;
+            return { paddockId: p.paddock_id, areaHa: fromLink ?? (fallback && fallback > 0 ? fallback : null) };
+          })
+        : r.paddockIds.map((id) => {
+            const fallback = paddockAreaById.get(id) ?? null;
+            return { paddockId: id, areaHa: fallback && fallback > 0 ? fallback : null };
+          });
+
+      // Case 1: task area unresolved → entire task → Unallocated bucket.
+      if (totalHa == null) {
+        const row = ensure(null, "Unallocated", true);
+        row.taskIds.add(r.task.id);
+        row.labourHours += r.labourHours;
+        row.machineHours += r.machineHours;
+        row.linkedTripCount += r.linkedTripCount;
+        row.manualLabourCost += r.manualLabourCost;
+        row.machineCharge += r.machineCharge;
+        row.machineFuel += r.machineFuel;
+        row.linkedTripTotal += r.linkedTripTotal;
+        row.totalCost += r.totalCost;
+        row.hasMissingTaskArea = true;
+        if (r.hasWarning) row.hasOverlapWarning = true;
+        return;
+      }
+
+      // Case 2: no linked paddocks at all → Unallocated.
+      if (!links.length) {
+        const row = ensure(null, "Unallocated", true);
+        row.taskIds.add(r.task.id);
+        row.labourHours += r.labourHours;
+        row.machineHours += r.machineHours;
+        row.linkedTripCount += r.linkedTripCount;
+        row.manualLabourCost += r.manualLabourCost;
+        row.machineCharge += r.machineCharge;
+        row.machineFuel += r.machineFuel;
+        row.linkedTripTotal += r.linkedTripTotal;
+        row.totalCost += r.totalCost;
+        if (r.hasWarning) row.hasOverlapWarning = true;
+        return;
+      }
+
+      // Case 3: per-paddock allocation by area share.
+      links.forEach(({ paddockId: pid, areaHa }) => {
+        const name = paddockNameById.get(pid) ?? "—";
+        const row = ensure(pid, name, false);
+        row.taskIds.add(r.task.id);
+        if (r.hasWarning) row.hasOverlapWarning = true;
+
+        if (areaHa == null || !(areaHa > 0)) {
+          // Block contributes 0 cost but is still listed with a flag.
+          row.hasMissingBlockArea = true;
+          row.linkedTripCount += r.linkedTripCount > 0 ? 1 : 0;
+          return;
+        }
+        const share = areaHa / totalHa;
+        row.areaHa += areaHa;
+        row.hasAnyArea = true;
+        row.labourHours += r.labourHours * share;
+        row.machineHours += r.machineHours * share;
+        row.linkedTripCount += r.linkedTripCount > 0 ? 1 : 0;
+        row.manualLabourCost += r.manualLabourCost * share;
+        row.machineCharge += r.machineCharge * share;
+        row.machineFuel += r.machineFuel * share;
+        row.linkedTripTotal += r.linkedTripTotal * share;
+        row.totalCost += r.totalCost * share;
+      });
+    });
+
+    // Sort: real blocks alphabetically, Unallocated last.
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isUnallocated && !b.isUnallocated) return 1;
+      if (!a.isUnallocated && b.isUnallocated) return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filtered, paddockAreaById, paddockNameById]);
+
+  const allocationTotals = useMemo(() => {
+    return allocationRows.reduce(
+      (acc, r) => ({
+        areaHa: acc.areaHa + r.areaHa,
+        hasAnyArea: acc.hasAnyArea || r.hasAnyArea,
+        labourHours: acc.labourHours + r.labourHours,
+        machineHours: acc.machineHours + r.machineHours,
+        manualLabourCost: acc.manualLabourCost + r.manualLabourCost,
+        machineCharge: acc.machineCharge + r.machineCharge,
+        machineFuel: acc.machineFuel + r.machineFuel,
+        linkedTripTotal: acc.linkedTripTotal + r.linkedTripTotal,
+        totalCost: acc.totalCost + r.totalCost,
+      }),
+      { areaHa: 0, hasAnyArea: false, labourHours: 0, machineHours: 0, manualLabourCost: 0, machineCharge: 0, machineFuel: 0, linkedTripTotal: 0, totalCost: 0 },
+    );
+  }, [allocationRows]);
+
+  const allocationStatus = (r: AllocRow): string => {
+    const parts: string[] = [];
+    if (r.isUnallocated || r.hasMissingTaskArea) parts.push(r.hasMissingTaskArea ? "Missing task area" : "Unallocated");
+    if (r.hasMissingBlockArea) parts.push("Missing block area");
+    if (r.hasOverlapWarning) parts.push("Review overlap");
+    return parts.length ? parts.join(" • ") : "OK";
+  };
+
+  const downloadAllocationCsv = () => {
+    const baseCols = [
+      "Block", "Task count", "area_display", "area_unit",
+      "Labour hours (allocated)", "Manual machine hours (allocated)",
+      "Linked trips", "Status",
+    ];
+    const costCols = [
+      "Manual labour cost", "Machine charge", "Machine fuel",
+      "Linked GPS trip cost", "Total allocated cost",
+      "cost_per_area", "cost_per_area_unit",
+    ];
+    const header = canSeeCosts ? [...baseCols, ...costCols] : baseCols;
+    const lines = [header.map(csvSafe).join(",")];
+    allocationRows.forEach((r) => {
+      const areaDisp = r.hasAnyArea ? areaToDisplayUnit(r.areaHa) : null;
+      const perHa = r.hasAnyArea && r.areaHa > 0 ? r.totalCost / r.areaHa : null;
+      const perDisp = perHa == null ? null : (areaImperial ? perHa * HA_PER_AC : perHa);
+      const base = [
+        r.name,
+        r.taskIds.size,
+        areaDisp == null ? "" : areaDisp.toFixed(2),
+        r.hasAnyArea ? areaUnit : "",
+        r.labourHours.toFixed(2),
+        r.machineHours.toFixed(2),
+        r.linkedTripCount,
+        allocationStatus(r),
+      ];
+      const costs = canSeeCosts ? [
+        r.manualLabourCost.toFixed(2),
+        r.machineCharge.toFixed(2),
+        r.machineFuel.toFixed(2),
+        r.linkedTripTotal.toFixed(2),
+        r.totalCost.toFixed(2),
+        perDisp == null ? "" : perDisp.toFixed(2),
+        perDisp == null ? "" : `${fmt.settings.currency_code}/${areaUnit}`,
+      ] : [];
+      lines.push([...base, ...costs].map(csvSafe).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `work-task-block-allocation-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "CSV exported", description: `${allocationRows.length} block row${allocationRows.length === 1 ? "" : "s"} exported.` });
+  };
+  // Toggle + Block + count + area + labour + machine + linked + status + (cost ? 6 : 0)
+  const allocColSpan = 8 + (canSeeCosts ? 6 : 0);
+
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
     wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && allocQ.isLoading);
