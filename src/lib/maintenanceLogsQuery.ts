@@ -16,10 +16,19 @@
 // so soft-delete writes `deleted_at` directly.
 import { supabase } from "@/integrations/ios-supabase/client";
 
+export type MaintenanceEquipmentSource =
+  | "vineyard_machine"
+  | "tractor"
+  | "spray_equipment"
+  | "equipment_item"
+  | "free_text";
+
 export interface MaintenanceLog {
   id: string;
   vineyard_id: string;
   item_name?: string | null;
+  equipment_source?: MaintenanceEquipmentSource | string | null;
+  equipment_ref_id?: string | null;
   hours?: number | null;
   machine_hours?: number | null;
   work_completed?: string | null;
@@ -81,6 +90,8 @@ export interface MaintenanceLogWriteInput {
   vineyard_id: string;
   item_name: string;
   date: string;
+  equipment_source?: MaintenanceEquipmentSource | null;
+  equipment_ref_id?: string | null;
   hours?: number | null;
   machine_hours?: number | null;
   work_completed?: string | null;
@@ -98,6 +109,8 @@ export async function createMaintenanceLog(
   const payload: Record<string, unknown> = {
     vineyard_id: input.vineyard_id,
     item_name: input.item_name,
+    equipment_source: input.equipment_source ?? "free_text",
+    equipment_ref_id: input.equipment_ref_id ?? null,
     date: input.date,
     hours: input.hours ?? null,
     machine_hours: input.machine_hours ?? null,
@@ -142,6 +155,8 @@ export async function updateMaintenanceLog(
     sync_version: nextVersion,
   };
   if (input.item_name !== undefined) patch.item_name = input.item_name;
+  if (input.equipment_source !== undefined) patch.equipment_source = input.equipment_source;
+  if (input.equipment_ref_id !== undefined) patch.equipment_ref_id = input.equipment_ref_id;
   if (input.date !== undefined) patch.date = input.date;
   if (input.hours !== undefined) patch.hours = input.hours;
   if (input.machine_hours !== undefined) patch.machine_hours = input.machine_hours;

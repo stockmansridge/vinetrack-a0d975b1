@@ -74,6 +74,7 @@ import {
   softDeleteMaintenanceLog,
   describeWriteError,
   type MaintenanceLog,
+  type MaintenanceEquipmentSource,
 } from "@/lib/maintenanceLogsQuery";
 import {
   fetchEquipmentSelectorOptions,
@@ -96,11 +97,24 @@ const mkMaintFmt = (rf: RegionFormatters) => ({
 const ANY = "__any__";
 const WRITE_ROLES = new Set(["owner", "manager", "supervisor"]);
 
+type PickerOption = {
+  id: string;
+  name: string;
+  source: MaintenanceEquipmentSource;
+};
+
 type PickerGroup = {
   key: string;
   label: string;
-  options: { id: string; name: string }[];
+  source: MaintenanceEquipmentSource;
+  options: PickerOption[];
 };
+
+
+const toPickerOptions = (
+  arr: { id: string; name: string }[] | undefined,
+  source: MaintenanceEquipmentSource,
+): PickerOption[] => (arr ?? []).map((o) => ({ id: o.id, name: o.name, source }));
 
 const buildMaintenancePickerGroups = (
   equipmentGroups?: EquipmentSelectorGroups,
@@ -109,18 +123,19 @@ const buildMaintenancePickerGroups = (
   currentValue?: string | null,
   includeCurrentValue = false,
 ): PickerGroup[] => {
-  const groups: PickerGroup[] = [
-    { key: "tractors", label: "Tractors", options: equipmentGroups?.tractors ?? [] },
-    { key: "spray", label: "Spray Equipment", options: equipmentGroups?.sprayEquipment ?? [] },
-    { key: "machines", label: "Vineyard Machines", options: equipmentGroups?.vineyardMachines ?? [] },
-    { key: "other", label: "Other Equipment & Assets", options: equipmentGroups?.otherItems ?? [] },
-  ].filter((group) => group.options.length > 0);
+  const groups: PickerGroup[] = ([
+    { key: "tractors", label: "Tractors", source: "tractor" as const, options: toPickerOptions(equipmentGroups?.tractors, "tractor") },
+    { key: "spray", label: "Spray Equipment", source: "spray_equipment" as const, options: toPickerOptions(equipmentGroups?.sprayEquipment, "spray_equipment") },
+    { key: "machines", label: "Vineyard Machines", source: "vineyard_machine" as const, options: toPickerOptions(equipmentGroups?.vineyardMachines, "vineyard_machine") },
+    { key: "other", label: "Other Equipment & Assets", source: "equipment_item" as const, options: toPickerOptions(equipmentGroups?.otherItems, "equipment_item") },
+  ] as PickerGroup[]).filter((group) => group.options.length > 0);
 
   if (includeLegacy && legacyOnly.length > 0) {
     groups.push({
       key: "legacy",
       label: "Historical (free text)",
-      options: legacyOnly.map((name) => ({ id: name, name })),
+      source: "free_text",
+      options: legacyOnly.map((name) => ({ id: name, name, source: "free_text" as const })),
     });
   }
 
@@ -128,12 +143,36 @@ const buildMaintenancePickerGroups = (
     groups.push({
       key: "current",
       label: "Current value",
-      options: [{ id: currentValue, name: currentValue }],
+      source: "free_text",
+      options: [{ id: currentValue, name: currentValue, source: "free_text" }],
     });
   }
 
   return groups;
 };
+
+// Resolve the display name for a maintenance log using equipment_source +
+// equipment_ref_id when present, falling back to item_name otherwise.
+function resolveMaintenanceItemName(
+  log: Pick<MaintenanceLog, "item_name" | "equipment_source" | "equipment_ref_id">,
+  equipmentGroups?: EquipmentSelectorGroups,
+): string {
+  const src = log.equipment_source as MaintenanceEquipmentSource | null | undefined;
+  const refId = log.equipment_ref_id;
+  if (src && refId && equipmentGroups) {
+    const pool =
+      src === "tractor" ? equipmentGroups.tractors
+      : src === "spray_equipment" ? equipmentGroups.sprayEquipment
+      : src === "vineyard_machine" ? equipmentGroups.vineyardMachines
+      : src === "equipment_item" ? equipmentGroups.otherItems
+      : null;
+    if (pool) {
+      const match = pool.find((o) => o.id === refId);
+      if (match?.name) return match.name;
+    }
+  }
+  return log.item_name ?? "";
+}
 
 const fmt = (v: any) => (v == null || v === "" ? "—" : String(v));
 // AU fallback retained but unused now that per-component formatters drive display.
@@ -232,28 +271,30 @@ export default function MaintenancePage() {
     })));
   }, [filterPickerGroups, equipmentGroups, legacyOnly, selectedVineyardId]);
 
+  const resolveName = (l: MaintenanceLog) => resolveMaintenanceItemName(l, equipmentGroups);
+
   const rows = useMemo(() => {
     let list = logs.slice();
     list.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     if (from) list = list.filter((l) => (l.date ?? "") >= from);
     if (to) list = list.filter((l) => (l.date ?? "") <= to);
-    if (item !== ANY) list = list.filter((l) => l.item_name === item);
+    if (item !== ANY) list = list.filter((l) => resolveMaintenanceItemName(l, equipmentGroups) === item || l.item_name === item);
     if (completion === "finalized") list = list.filter((l) => l.is_finalized);
     if (completion === "open") list = list.filter((l) => !l.is_finalized);
     if (filter.trim()) {
       const f = filter.toLowerCase();
       list = list.filter((l) =>
-        [l.item_name, l.work_completed, l.parts_used, l.date]
+        [resolveMaintenanceItemName(l, equipmentGroups), l.item_name, l.work_completed, l.parts_used, l.date]
           .some((v) => String(v ?? "").toLowerCase().includes(f)),
       );
     }
     return list;
-  }, [logs, filter, from, to, item, completion]);
+  }, [logs, filter, from, to, item, completion, equipmentGroups]);
 
   const { sorted: rowsSorted, getSortDirection: mDir, toggleSort: mToggle } = useSortableTable<MaintenanceLog, MaintCol>(rows, {
     accessors: {
       date: (r) => r.date ?? null,
-      item: (r) => r.item_name ?? null,
+      item: (r) => resolveMaintenanceItemName(r, equipmentGroups) || r.item_name || null,
       work: (r) => r.work_completed ?? null,
       hours: (r) => (r.hours as any) ?? null,
       machine_hours: (r) => (r.machine_hours as any) ?? null,
@@ -387,7 +428,7 @@ export default function MaintenancePage() {
               const cost = (l.parts_cost ?? 0) + (l.labour_cost ?? 0);
               const cellMap: Record<MaintCol, React.ReactNode> = {
                 date: <TableCell>{fmtDate(l.date)}</TableCell>,
-                item: <TableCell>{fmt(l.item_name)}</TableCell>,
+                item: <TableCell>{fmt(resolveName(l) || l.item_name)}</TableCell>,
                 work: <TableCell className="max-w-[280px] truncate">{fmt(l.work_completed)}</TableCell>,
                 hours: <TableCell>{fmt(l.hours)}</TableCell>,
                 machine_hours: <TableCell>{fmt(l.machine_hours)}</TableCell>,
@@ -417,6 +458,7 @@ export default function MaintenancePage() {
         open={!!selected}
         canWrite={canWrite}
         canSeeCosts={canSeeCosts}
+        equipmentGroups={equipmentGroups}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={openEdit}
       />
@@ -438,6 +480,7 @@ function MaintenanceSheet({
   open,
   canWrite,
   canSeeCosts,
+  equipmentGroups,
   onOpenChange,
   onEdit,
 }: {
@@ -445,6 +488,7 @@ function MaintenanceSheet({
   open: boolean;
   canWrite: boolean;
   canSeeCosts: boolean;
+  equipmentGroups?: EquipmentSelectorGroups;
   onOpenChange: (o: boolean) => void;
   onEdit: (l: MaintenanceLog) => void;
 }) {
@@ -481,7 +525,7 @@ function MaintenanceSheet({
           <div className="mt-4 space-y-4 text-sm">
             <Section title="Record">
               <Field label="Date" value={fmtDate(log.date)} />
-              <Field label="Item" value={fmt(log.item_name)} />
+              <Field label="Item" value={fmt(resolveMaintenanceItemName(log, equipmentGroups) || log.item_name)} />
               <Field label="Hours" value={fmt(log.hours)} />
               {log.machine_hours != null && (
                 <Field label="Machine hours" value={fmt(log.machine_hours)} />
@@ -592,6 +636,8 @@ function MaintenanceEditor({
   const qc = useQueryClient();
 
   const [itemName, setItemName] = useState<string>("");
+  const [equipmentSource, setEquipmentSource] = useState<MaintenanceEquipmentSource>("free_text");
+  const [equipmentRefId, setEquipmentRefId] = useState<string | null>(null);
   const [date, setDate] = useState<string>(todayIso());
   const [hours, setHours] = useState<string>("");
   const [machineHours, setMachineHours] = useState<string>("");
@@ -604,7 +650,11 @@ function MaintenanceEditor({
   useEffect(() => {
     if (!open) return;
     if (editing) {
-      setItemName(editing.item_name ?? "");
+      // Prefer resolved display name from new equipment link fields, else item_name.
+      const resolved = resolveMaintenanceItemName(editing, equipmentGroups);
+      setItemName(resolved || editing.item_name || "");
+      setEquipmentSource(((editing.equipment_source as MaintenanceEquipmentSource) ?? "free_text"));
+      setEquipmentRefId(editing.equipment_ref_id ?? null);
       setDate(editing.date ?? todayIso());
       setHours(editing.hours == null ? "" : String(editing.hours));
       setMachineHours(editing.machine_hours == null ? "" : String(editing.machine_hours));
@@ -615,6 +665,8 @@ function MaintenanceEditor({
       setFinalized(!!editing.is_finalized);
     } else {
       setItemName("");
+      setEquipmentSource("free_text");
+      setEquipmentRefId(null);
       setDate(todayIso());
       setHours("");
       setMachineHours("");
@@ -624,7 +676,7 @@ function MaintenanceEditor({
       setLabourCost("");
       setFinalized(false);
     }
-  }, [open, editing]);
+  }, [open, editing, equipmentGroups]);
 
   // Allow legacy values for editing only (existing records); for new records
   // we restrict to current Tractors / Spray Equipment / Other Items.
@@ -667,6 +719,8 @@ function MaintenanceEditor({
       return createMaintenanceLog({
         vineyard_id: selectedVineyardId,
         item_name: itemName,
+        equipment_source: equipmentSource,
+        equipment_ref_id: equipmentSource === "free_text" ? null : equipmentRefId,
         date,
         hours: numOrNull(hours),
         machine_hours: numOrNull(machineHours),
@@ -697,6 +751,8 @@ function MaintenanceEditor({
         id: editing.id,
         vineyard_id: editing.vineyard_id,
         item_name: itemName,
+        equipment_source: equipmentSource,
+        equipment_ref_id: equipmentSource === "free_text" ? null : equipmentRefId,
         date,
         hours: numOrNull(hours),
         machine_hours: numOrNull(machineHours),
@@ -736,7 +792,11 @@ function MaintenanceEditor({
             <div className="flex items-center gap-1">
               <EquipmentPicker
                 value={itemName}
-                onValueChange={setItemName}
+                onSelectOption={(opt) => {
+                  setItemName(opt.name);
+                  setEquipmentSource(opt.source);
+                  setEquipmentRefId(opt.source === "free_text" ? null : opt.id);
+                }}
                 groups={pickerGroups}
               />
               <AddEquipmentMenu />
@@ -867,11 +927,11 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 function EquipmentPicker({
   value,
-  onValueChange,
+  onSelectOption,
   groups,
 }: {
   value: string;
-  onValueChange: (value: string) => void;
+  onSelectOption: (opt: PickerOption) => void;
   groups: PickerGroup[];
 }) {
   const [open, setOpen] = useState(false);
@@ -904,7 +964,7 @@ function EquipmentPicker({
                     key={`${group.key}-${option.id}`}
                     value={`${group.label} ${option.name}`}
                     onSelect={() => {
-                      onValueChange(option.name);
+                      onSelectOption(option);
                       setOpen(false);
                     }}
                     className="flex items-center gap-2"
