@@ -1089,35 +1089,15 @@ function WorkTaskDrawer({
               </Section>
             )}
             {!isNew && task && (
-              <Section title="Manual Machine Work">
-                {machineLines.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No manual machine work</div>
-                ) : (
-                  <div className="space-y-2">
-                    {machineLines
-                      .slice()
-                      .sort((a, b) => (b.work_date ?? "").localeCompare(a.work_date ?? ""))
-                      .map((ml) => {
-                        const eqName =
-                          resolveMachineLineEquipmentName(ml, machineLookups) ?? "Unknown equipment";
-                        const hours = ml.duration_hours ?? ml.engine_hours_used ?? null;
-                        return (
-                          <div key={ml.id} className="rounded border bg-muted/30 p-2 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium truncate">{eqName}</span>
-                              <span className="text-muted-foreground shrink-0">{fmtDate(ml.work_date)}</span>
-                            </div>
-                            <div className="mt-0.5 text-muted-foreground truncate">
-                              {hours != null && <>{num(hours)} h</>}
-                              {ml.entry_source && <> · {ml.entry_source}</>}
-                              {ml.notes && <> · {ml.notes}</>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </Section>
+              <MachineWorkSection
+                workTaskId={task.id}
+                vineyardId={vineyardId}
+                lines={machineLines}
+                lookups={machineLookups}
+                canEdit={canSoftDelete}
+                canDelete={canSoftDelete}
+                userId={userId}
+              />
             )}
             {!isNew && task && (
               <Section title="Meta">
