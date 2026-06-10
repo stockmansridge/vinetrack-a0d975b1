@@ -74,6 +74,7 @@ import {
   softDeleteMaintenanceLog,
   describeWriteError,
   type MaintenanceLog,
+  type MaintenanceEquipmentSource,
 } from "@/lib/maintenanceLogsQuery";
 import {
   fetchEquipmentSelectorOptions,
