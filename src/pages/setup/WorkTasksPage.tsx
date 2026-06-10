@@ -753,8 +753,10 @@ export default function WorkTasksPage() {
         syncedTaskTypes={syncedTaskTypes}
         labourLines={[]}
         linkedTrips={[]}
+        allTrips={trips}
         machineLines={[]}
         machineLookups={machineLookups}
+        paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
