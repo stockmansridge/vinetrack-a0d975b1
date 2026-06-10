@@ -236,6 +236,20 @@ export default function WorkTaskReportsPage() {
         ? blockNames.join(", ")
         : (task.paddock_name ?? "—");
 
+      // Area roll-up (hectares, canonical). Prefer work_task_paddocks.area_ha;
+      // fall back to the task's own area_ha if none of the paddock rows have a
+      // value. Display unit conversion happens at render/export time via
+      // useRegionFormatters().
+      const paddockAreaSum = taskPaddocks.reduce(
+        (s, p) => s + (p.area_ha != null ? num(p.area_ha) : 0), 0,
+      );
+      const anyPaddockArea = taskPaddocks.some((p) => p.area_ha != null);
+      let totalAreaHa: number | null = anyPaddockArea ? paddockAreaSum : null;
+      if (totalAreaHa == null && task.area_ha != null) {
+        totalAreaHa = num(task.area_ha);
+      }
+      if (totalAreaHa != null && !(totalAreaHa > 0)) totalAreaHa = null;
+
       const manualLabourCost = labour.reduce((s, l) => s + num(l.total_cost), 0);
       const labourHours = labour.reduce((s, l) => s + num(l.total_hours), 0);
       const machineCharge = machine.reduce((s, l) => s + num(l.total_machine_cost), 0);
@@ -265,6 +279,7 @@ export default function WorkTaskReportsPage() {
         blockNames,
         blocksLabel,
         paddockIds: pIds,
+        totalAreaHa,
         labourHours,
         machineHours,
         machineEntries: machine.length,
