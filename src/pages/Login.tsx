@@ -54,7 +54,7 @@ export default function Login() {
     <>
       <PageHead
         title="Sign in to VineTrack"
-        description="Sign in to the VineTrack vineyard management portal to manage paddocks, spray records, work tasks and your team."
+        description="Sign in to the VineTrack vineyard management portal to manage blocks, spray records, work tasks and your team."
         path="/login"
       />
       <div

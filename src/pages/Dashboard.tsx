@@ -100,7 +100,7 @@ export default function Dashboard() {
     <div className="space-y-6 md:space-y-8">
       <PageHeader
         title={vineyard?.vineyard_name ?? "Dashboard"}
-        description="Vineyard operations overview — paddocks, equipment, trips and team at a glance."
+        description="Vineyard operations overview — blocks, equipment, trips and team at a glance."
         meta={
           currentRole && (
             <Badge
@@ -140,7 +140,7 @@ export default function Dashboard() {
           icon={Grape}
           tone="white"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
-          hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some paddocks missing data"}
+          hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some blocks missing data"}
         />
         <MetricCard
           label="Tractors"

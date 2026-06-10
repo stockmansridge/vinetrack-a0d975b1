@@ -73,7 +73,7 @@ export default function PaddocksPage() {
           {canEdit && (
             <Button asChild size="sm" className="gap-1">
               <Link to="/setup/paddocks/new">
-                <Plus className="h-4 w-4" /> New paddock
+                <Plus className="h-4 w-4" /> New block
               </Link>
             </Button>
           )}
