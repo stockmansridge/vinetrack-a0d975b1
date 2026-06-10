@@ -11,6 +11,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { countTripPins } from "@/lib/tripPinCount";
 import {
   downloadTripPdf,
