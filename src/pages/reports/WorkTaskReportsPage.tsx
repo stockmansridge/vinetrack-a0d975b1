@@ -538,9 +538,11 @@ export default function WorkTaskReportsPage() {
                 )}
                 <TableCell>
                   {r.hasWarning ? (
-                    <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
-                      <AlertTriangle className="h-3 w-3" /> Review
-                    </Badge>
+                    <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+                      <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Review
+                      </Badge>
+                    </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
@@ -574,9 +576,8 @@ export default function WorkTaskReportsPage() {
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        Warning shown when a task has linked GPS trips and machine entries
-        sourced from missed_trip, trip_failed or correction — these may
-        overlap. Review before relying on the combined total.
+        Review: linked GPS trips and manual correction/missed machine entries
+        may overlap.
       </p>
     </div>
   );
