@@ -132,6 +132,8 @@ export default function WorkTaskReportsPage() {
     if (haValue == null) return null;
     return areaImperial ? haValue / HA_PER_AC : haValue;
   };
+  // Toggle column + 7 base + (cost ? 6 : 1) + status.
+  const totalColSpan = 1 + 7 + (canSeeCosts ? 6 : 1) + 1;
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
