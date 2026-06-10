@@ -106,6 +106,23 @@ export default function WorkTaskReportsPage() {
   const canSeeCosts = useCanSeeCosts();
   const fmt = useRegionFormatters();
   const money = (n: number) => fmt.currency(n);
+  const areaImperial = fmt.settings.area_unit === "acres";
+  const areaUnit = fmt.areaUnitLabel; // "ha" | "ac"
+  const costPerAreaLabel = `Cost / ${areaUnit}`;
+  const areaDisplay = (haValue: number | null) =>
+    haValue == null ? "—" : fmt.area(haValue);
+  const costPerAreaDisplay = (totalCost: number, haValue: number | null) => {
+    if (!canSeeCosts) return "—";
+    if (haValue == null || !(haValue > 0)) return "—";
+    if (!Number.isFinite(totalCost)) return "—";
+    const perHa = totalCost / haValue;
+    const perDisplay = areaImperial ? perHa * HA_PER_AC : perHa;
+    return fmt.currency(perDisplay);
+  };
+  const areaToDisplayUnit = (haValue: number | null): number | null => {
+    if (haValue == null) return null;
+    return areaImperial ? haValue / HA_PER_AC : haValue;
+  };
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
