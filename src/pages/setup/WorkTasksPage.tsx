@@ -91,6 +91,10 @@ import {
   type WorkTaskMachineEquipmentSource,
 } from "@/lib/workTaskMachineLinesQuery";
 import {
+  fetchTripCostAllocationsForVineyard,
+  type TripCostAllocation,
+} from "@/lib/tripCostAllocationsQuery";
+import {
   formatTripNameLabel,
   formatTripFunctionLabel,
   formatTripDurationLabel,
@@ -334,6 +338,25 @@ export default function WorkTasksPage() {
     });
     return m;
   }, [machineLines]);
+
+  // Stage 4A — read-only cost summary roll-up. Only fetched when the current
+  // role is permitted to see cost data; RLS is the ultimate authority and an
+  // empty array is the normal case if denied.
+  const { data: tripCostAllocations = [] } = useQuery({
+    queryKey: ["trip_cost_allocations", selectedVineyardId],
+    enabled: !!selectedVineyardId && canSeeCosts,
+    queryFn: () => fetchTripCostAllocationsForVineyard(selectedVineyardId!),
+  });
+  const allocByTripId = useMemo(() => {
+    const m = new Map<string, TripCostAllocation[]>();
+    tripCostAllocations.forEach((a) => {
+      if (!a.trip_id) return;
+      const arr = m.get(a.trip_id) ?? [];
+      arr.push(a);
+      m.set(a.trip_id, arr);
+    });
+    return m;
+  }, [tripCostAllocations]);
 
   const tasks = data?.tasks ?? [];
 
@@ -735,6 +758,8 @@ export default function WorkTasksPage() {
         allTrips={trips}
         machineLines={selected ? machineLinesByTask.get(selected.id) ?? [] : []}
         machineLookups={machineLookups}
+        allocByTripId={allocByTripId}
+        canSeeCosts={canSeeCosts}
         paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
@@ -761,6 +786,8 @@ export default function WorkTasksPage() {
         allTrips={trips}
         machineLines={[]}
         machineLookups={machineLookups}
+        allocByTripId={allocByTripId}
+        canSeeCosts={canSeeCosts}
         paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
@@ -804,6 +831,8 @@ interface DrawerProps {
     sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
     equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
   };
+  allocByTripId: Map<string, TripCostAllocation[]>;
+  canSeeCosts: boolean;
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
@@ -811,7 +840,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
   const rf = useRegionFormatters();
@@ -1095,6 +1124,16 @@ function WorkTaskDrawer({
                 canEdit={canSoftDelete}
                 canDelete={canSoftDelete}
                 userId={userId}
+              />
+            )}
+            {!isNew && task && (
+              <WorkTaskSummarySection
+                labourLines={visibleLines}
+                machineLines={machineLines}
+                linkedTrips={linkedTrips}
+                allocByTripId={allocByTripId}
+                canSeeCosts={canSeeCosts}
+                money={money}
               />
             )}
             {!isNew && task && (
@@ -2188,5 +2227,145 @@ function LinkedTripsSection({
         </div>
       )}
     </Section>
+  );
+}
+
+// ============================================================================
+// Stage 4A — read-only Work Task cost / operational summary.
+//
+// Aggregates four data sources into a single roll-up panel:
+//   • manual labour       — work_task_labour_lines.total_cost / total_hours
+//   • manual machine work — work_task_machine_lines (total_machine_cost
+//     + fuel_cost are treated as independent fields and summed separately)
+//   • linked GPS trips    — trips with work_task_id = this task
+//   • trip_cost_allocations — joined to the linked trips by trip_id
+//
+// Cost figures are shown ONLY to roles permitted to view cost data
+// (useCanSeeCosts). Non-cost roles see an operational summary only and a
+// fallback notice. Nothing is written back to the database.
+// ============================================================================
+function WorkTaskSummarySection({
+  labourLines,
+  machineLines,
+  linkedTrips,
+  allocByTripId,
+  canSeeCosts,
+  money,
+}: {
+  labourLines: WorkTaskLabourLine[];
+  machineLines: WorkTaskMachineLine[];
+  linkedTrips: Trip[];
+  allocByTripId: Map<string, TripCostAllocation[]>;
+  canSeeCosts: boolean;
+  money: (n: number) => string;
+}) {
+  const summary = useMemo(() => {
+    const num = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const visibleLabour = labourLines.filter((l) => !l.deleted_at);
+    const manualLabourCost = visibleLabour.reduce((s, l) => s + num(l.total_cost), 0);
+    const manualLabourHours = visibleLabour.reduce((s, l) => s + num(l.total_hours), 0);
+
+    const visibleMachine = machineLines.filter((l) => !l.deleted_at);
+    const machineCharge = visibleMachine.reduce((s, l) => s + num(l.total_machine_cost), 0);
+    const machineFuel = visibleMachine.reduce((s, l) => s + num(l.fuel_cost), 0);
+    const machineHours = visibleMachine.reduce(
+      (s, l) => s + num(l.duration_hours ?? l.engine_hours_used),
+      0,
+    );
+
+    let linkedTripTotal = 0;
+    let linkedTripLabour = 0;
+    let linkedTripFuel = 0;
+    let linkedTripChemical = 0;
+    let linkedTripInput = 0;
+    linkedTrips.forEach((t) => {
+      const allocs = allocByTripId.get(t.id) ?? [];
+      allocs.forEach((a) => {
+        linkedTripTotal += num(a.total_cost);
+        linkedTripLabour += num(a.labour_cost);
+        linkedTripFuel += num(a.fuel_cost);
+        linkedTripChemical += num(a.chemical_cost);
+        linkedTripInput += num(a.input_cost);
+      });
+    });
+
+    const manualMachineTotal = machineCharge + machineFuel;
+    const total = manualLabourCost + manualMachineTotal + linkedTripTotal;
+
+    // Double-counting risk: linked GPS trip + a "non-manual" machine line
+    // (i.e. one capturing a missed/failed/corrected GPS trip).
+    const overlapSources = new Set(["missed_trip", "trip_failed", "correction"]);
+    const overlapRisk =
+      linkedTrips.length > 0 &&
+      visibleMachine.some((l) => overlapSources.has(String(l.entry_source ?? "")));
+
+    return {
+      manualLabourCost,
+      manualLabourHours,
+      machineCharge,
+      machineFuel,
+      manualMachineTotal,
+      machineHours,
+      linkedTripCount: linkedTrips.length,
+      machineLineCount: visibleMachine.length,
+      linkedTripTotal,
+      linkedTripLabour,
+      linkedTripFuel,
+      linkedTripChemical,
+      linkedTripInput,
+      total,
+      overlapRisk,
+    };
+  }, [labourLines, machineLines, linkedTrips, allocByTripId]);
+
+  return (
+    <Section title="Work Task summary">
+      {canSeeCosts ? (
+        <div className="space-y-1.5 text-sm">
+          <SummaryRow label="Manual labour" value={money(summary.manualLabourCost)} />
+          <SummaryRow label="Manual machine charge" value={money(summary.machineCharge)} />
+          <SummaryRow label="Manual machine fuel" value={money(summary.machineFuel)} />
+          <SummaryRow label="Linked GPS trips" value={money(summary.linkedTripTotal)} />
+          <p className="text-xs text-muted-foreground pl-1">
+            Linked GPS trip costs may include operator labour, fuel, chemicals
+            and inputs.
+          </p>
+          <Separator className="my-2" />
+          <SummaryRow label="Total" value={money(summary.total)} bold />
+          <p className="text-[11px] text-muted-foreground pt-1">
+            Read-only roll-up. Not written back to the database; reports remain unchanged.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-1.5 text-sm">
+          <SummaryRow label="Manual labour hours" value={summary.manualLabourHours.toFixed(2)} />
+          <SummaryRow label="Manual machine hours" value={summary.machineHours.toFixed(2)} />
+          <SummaryRow label="Manual machine entries" value={String(summary.machineLineCount)} />
+          <SummaryRow label="Linked GPS trips" value={String(summary.linkedTripCount)} />
+          <p className="text-xs text-muted-foreground pt-1">
+            Trip costs are available to authorised cost-reporting roles.
+          </p>
+        </div>
+      )}
+      {summary.overlapRisk && (
+        <div className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+          This task has both linked GPS trips and manual machine entries.
+          Check that the manual entries are not duplicating tracked trip work.
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function SummaryRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className={bold ? "font-medium" : "text-muted-foreground"}>{label}</span>
+      <span className={bold ? "font-semibold tabular-nums" : "tabular-nums"}>{value}</span>
+    </div>
   );
 }
