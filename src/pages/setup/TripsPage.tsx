@@ -32,6 +32,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { Button } from "@/components/ui/button";
 import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 import {
@@ -143,6 +144,22 @@ export default function TripsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
   });
+
+  // Stage 4B — resolve trips.work_task_id → display label. Read-only.
+  const { data: workTasksResult } = useQuery({
+    queryKey: ["work_tasks", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksResult?.tasks ?? []).forEach((t) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksResult]);
+
 
   // Tractors + fuel purchases (page-level) so CSV export can include fuel
   // estimate columns for every row without needing to open each trip.
@@ -461,9 +478,23 @@ export default function TripsPage() {
               const padName = t.paddock_name ?? (t.paddock_id ? paddockNameById.get(t.paddock_id) ?? null : null);
               const s = tripStatus(t);
               const fnLabel = tripFunctionLabel(t.trip_function);
+              const linkedTaskLabel = t.work_task_id
+                ? workTaskLabelById.get(t.work_task_id) ?? null
+                : null;
               const cellMap: Record<TripsCol, React.ReactNode> = {
                 start: <TableCell>{fmtDate(t.start_time)}</TableCell>,
-                name: <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>,
+                name: (
+                  <TableCell className="font-medium">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>{tripDisplayName(t)}</span>
+                      {t.work_task_id && (
+                        <Badge variant="outline" className="font-normal">
+                          {linkedTaskLabel ? `Task: ${linkedTaskLabel}` : "Task linked"}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                ),
                 function: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 paddock: <TableCell>{fmt(padName)}</TableCell>,
                 pattern: <TableCell>{t.tracking_pattern ? <Badge variant="secondary">{formatTripPatternLabel(t.tracking_pattern)}</Badge> : "—"}</TableCell>,
@@ -491,6 +522,7 @@ export default function TripsPage() {
       <TripSheet
         trip={selected}
         paddockNameById={paddockNameById}
+        workTaskLabelById={workTaskLabelById}
         vineyardName={vineyardName}
         vineyardId={selectedVineyardId}
         open={!!selected}
@@ -507,6 +539,7 @@ function arrayLen(v: any): number | null {
 function TripSheet({
   trip,
   paddockNameById,
+  workTaskLabelById,
   vineyardName,
   vineyardId,
   open,
@@ -514,6 +547,7 @@ function TripSheet({
 }: {
   trip: Trip | null;
   paddockNameById: Map<string, string | null>;
+  workTaskLabelById: Map<string, string>;
   vineyardName: string | null;
   vineyardId: string | null;
   open: boolean;
@@ -670,6 +704,15 @@ function TripSheet({
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{trip ? tripDisplayName(trip) : "Trip"} — {fmtDay(trip?.start_time)}</SheetTitle>
+          {trip?.work_task_id && (
+            <div className="pt-1">
+              <Badge variant="outline" className="font-normal">
+                {workTaskLabelById.get(trip.work_task_id)
+                  ? `Task: ${workTaskLabelById.get(trip.work_task_id)}`
+                  : "Task linked"}
+              </Badge>
+            </div>
+          )}
         </SheetHeader>
         {trip && (
           <div className="mt-4 space-y-4 text-sm">

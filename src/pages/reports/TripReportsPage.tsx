@@ -11,6 +11,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { countTripPins } from "@/lib/tripPinCount";
 import {
   downloadTripPdf,
@@ -139,6 +140,21 @@ export default function TripReportsPage() {
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
   });
   const trips = data?.trips ?? [];
+
+  // Stage 4B — resolve work_task_id → label for read-only chips.
+  const { data: workTasksResult } = useQuery({
+    queryKey: ["work_tasks", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksResult?.tasks ?? []).forEach((t) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksResult]);
 
   // Cost inputs — fetched only for owners/managers.
   const canSeeCosts = useCanSeeCosts();
@@ -441,6 +457,7 @@ export default function TripReportsPage() {
         exportingId={exportingId}
         padNameFor={padNameFor}
         selectedVineyardId={selectedVineyardId}
+        workTaskLabelById={workTaskLabelById}
       />
 
       <Card className="p-4 bg-muted/30 flex items-start gap-2">
@@ -468,7 +485,7 @@ type TrCol = (typeof TR_COLS)[number];
 
 function TripReportsTable({
   rows, isLoading, error, expanded, toggleExpand,
-  handleExportPdf, exportingId, padNameFor, selectedVineyardId,
+  handleExportPdf, exportingId, padNameFor, selectedVineyardId, workTaskLabelById,
 }: {
   rows: Trip[];
   isLoading: boolean;
@@ -479,6 +496,7 @@ function TripReportsTable({
   exportingId: string | null;
   padNameFor: (t: Trip) => string | null;
   selectedVineyardId: string | null;
+  workTaskLabelById: Map<string, string>;
 }) {
   const { order, moveColumn, reset } = useColumnOrder(
     "trip_reports_table",
@@ -546,7 +564,20 @@ function TripReportsTable({
               const cellMap: Record<TrCol, React.ReactNode> = {
                 date: <TableCell>{fmtDay(t.start_time)}</TableCell>,
                 type: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
-                name: <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>,
+                name: (
+                  <TableCell className="font-medium">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>{tripDisplayName(t)}</span>
+                      {t.work_task_id && (
+                        <Badge variant="outline" className="font-normal">
+                          {workTaskLabelById.get(t.work_task_id)
+                            ? `Task: ${workTaskLabelById.get(t.work_task_id)}`
+                            : "Task linked"}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                ),
                 block: <TableCell>{padNameFor(t) ?? "—"}</TableCell>,
                 operator: <TableCell>{t.person_name ?? "—"}</TableCell>,
                 duration: <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>,
