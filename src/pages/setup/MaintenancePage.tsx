@@ -644,6 +644,8 @@ function MaintenanceEditor({
   const qc = useQueryClient();
 
   const [itemName, setItemName] = useState<string>("");
+  const [equipmentSource, setEquipmentSource] = useState<MaintenanceEquipmentSource>("free_text");
+  const [equipmentRefId, setEquipmentRefId] = useState<string | null>(null);
   const [date, setDate] = useState<string>(todayIso());
   const [hours, setHours] = useState<string>("");
   const [machineHours, setMachineHours] = useState<string>("");
@@ -656,7 +658,11 @@ function MaintenanceEditor({
   useEffect(() => {
     if (!open) return;
     if (editing) {
-      setItemName(editing.item_name ?? "");
+      // Prefer resolved display name from new equipment link fields, else item_name.
+      const resolved = resolveMaintenanceItemName(editing, equipmentGroups);
+      setItemName(resolved || editing.item_name || "");
+      setEquipmentSource(((editing.equipment_source as MaintenanceEquipmentSource) ?? "free_text"));
+      setEquipmentRefId(editing.equipment_ref_id ?? null);
       setDate(editing.date ?? todayIso());
       setHours(editing.hours == null ? "" : String(editing.hours));
       setMachineHours(editing.machine_hours == null ? "" : String(editing.machine_hours));
@@ -667,6 +673,8 @@ function MaintenanceEditor({
       setFinalized(!!editing.is_finalized);
     } else {
       setItemName("");
+      setEquipmentSource("free_text");
+      setEquipmentRefId(null);
       setDate(todayIso());
       setHours("");
       setMachineHours("");
@@ -676,7 +684,7 @@ function MaintenanceEditor({
       setLabourCost("");
       setFinalized(false);
     }
-  }, [open, editing]);
+  }, [open, editing, equipmentGroups]);
 
   // Allow legacy values for editing only (existing records); for new records
   // we restrict to current Tractors / Spray Equipment / Other Items.
