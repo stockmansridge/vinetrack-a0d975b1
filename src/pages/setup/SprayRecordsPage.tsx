@@ -281,6 +281,7 @@ export default function SprayRecordsPage() {
         record={selected}
         vineyardName={vineyardName}
         formatters={formatters}
+        lookups={lookups}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
