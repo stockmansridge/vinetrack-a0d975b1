@@ -141,6 +141,13 @@ export default function WorkTaskReportsPage() {
   const [hasLinked, setHasLinked] = useState<string>(ANY); // any | yes | no
   const [hasManualMachine, setHasManualMachine] = useState<string>(ANY);
   const [warningOnly, setWarningOnly] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   const enabled = !!selectedVineyardId;
 
