@@ -935,11 +935,11 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 function EquipmentPicker({
   value,
-  onValueChange,
+  onSelectOption,
   groups,
 }: {
   value: string;
-  onValueChange: (value: string) => void;
+  onSelectOption: (opt: PickerOption) => void;
   groups: PickerGroup[];
 }) {
   const [open, setOpen] = useState(false);
@@ -972,7 +972,7 @@ function EquipmentPicker({
                     key={`${group.key}-${option.id}`}
                     value={`${group.label} ${option.name}`}
                     onSelect={() => {
-                      onValueChange(option.name);
+                      onSelectOption(option);
                       setOpen(false);
                     }}
                     className="flex items-center gap-2"
