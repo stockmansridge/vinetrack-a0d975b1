@@ -810,9 +810,9 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       group: "Pins",
       key: "pin_no_row",
       name: "Pins with no row/path attachment",
-      severity: "warning",
-      explanation: "No row or driving path attached. Row-level pin overlays won't render.",
-      suggestedAction: "Snap the pin to a row in iOS.",
+      severity: "info",
+      explanation: "No row or driving path attached. Row-level overlays won't render, but free-placement pins (gates, observations) are legitimately rowless.",
+      suggestedAction: "If this pin is meant to sit on a row, snap it to a row in iOS.",
       count: pinNoRow.length,
       details: cap(
         pinNoRow.map((p) => ({
