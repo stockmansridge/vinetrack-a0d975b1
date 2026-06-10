@@ -484,7 +484,7 @@ type TrCol = (typeof TR_COLS)[number];
 
 function TripReportsTable({
   rows, isLoading, error, expanded, toggleExpand,
-  handleExportPdf, exportingId, padNameFor, selectedVineyardId,
+  handleExportPdf, exportingId, padNameFor, selectedVineyardId, workTaskLabelById,
 }: {
   rows: Trip[];
   isLoading: boolean;
@@ -495,6 +495,7 @@ function TripReportsTable({
   exportingId: string | null;
   padNameFor: (t: Trip) => string | null;
   selectedVineyardId: string | null;
+  workTaskLabelById: Map<string, string>;
 }) {
   const { order, moveColumn, reset } = useColumnOrder(
     "trip_reports_table",
