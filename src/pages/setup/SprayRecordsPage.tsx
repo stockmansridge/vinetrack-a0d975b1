@@ -37,6 +37,12 @@ import {
   type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
+import {
+  resolveSprayTractorName,
+  resolveSprayEquipmentName,
+  type SprayEquipmentLookups,
+} from "@/lib/sprayRecordEquipment";
+import { fetchList } from "@/lib/queries";
 import { formatDate } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
@@ -78,6 +84,26 @@ export default function SprayRecordsPage() {
 
   const records = data?.records ?? [];
 
+  const { data: machines } = useQuery({
+    queryKey: ["vineyard_machines-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("vineyard_machines", selectedVineyardId!),
+  });
+  const { data: tractors } = useQuery({
+    queryKey: ["tractors-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("tractors", selectedVineyardId!),
+  });
+  const { data: sprayEquipment } = useQuery({
+    queryKey: ["spray_equipment-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("spray_equipment", selectedVineyardId!),
+  });
+  const lookups: SprayEquipmentLookups = useMemo(
+    () => ({ machines: machines ?? [], tractors: tractors ?? [], sprayEquipment: sprayEquipment ?? [] }),
+    [machines, tractors, sprayEquipment],
+  );
+
   const operationTypes = useMemo(() => {
     const s = new Set<string>();
     records.forEach((r) => r.operation_type && s.add(r.operation_type));
@@ -96,13 +122,23 @@ export default function SprayRecordsPage() {
     if (opType !== ANY) list = list.filter((r) => r.operation_type === opType);
     if (filter.trim()) {
       const f = filter.toLowerCase();
-      list = list.filter((r) =>
-        [r.date, r.tractor, r.spray_reference, r.operation_type, r.equipment_type, r.notes]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      list = list.filter((r) => {
+        const resolvedTractor = resolveSprayTractorName(r, lookups);
+        const resolvedEquipment = resolveSprayEquipmentName(r, lookups);
+        return [
+          r.date,
+          r.tractor,
+          resolvedTractor,
+          r.spray_reference,
+          r.operation_type,
+          r.equipment_type,
+          resolvedEquipment,
+          r.notes,
+        ].some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
-  }, [records, filter, from, to, opType]);
+  }, [records, filter, from, to, opType, lookups]);
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
@@ -225,8 +261,8 @@ export default function SprayRecordsPage() {
                   {r.operation_type ? <Badge variant="secondary">{r.operation_type}</Badge> : "—"}
                 </TableCell>
                 <TableCell>{fmt(r.spray_reference)}</TableCell>
-                <TableCell>{fmt(r.tractor)}</TableCell>
-                <TableCell>{fmt(r.equipment_type)}</TableCell>
+                <TableCell>{fmt(resolveSprayTractorName(r, lookups))}</TableCell>
+                <TableCell>{fmt(resolveSprayEquipmentName(r, lookups))}</TableCell>
                 <TableCell>{fmt(r.temperature)}</TableCell>
                 <TableCell>
                   {r.wind_speed != null
@@ -245,6 +281,7 @@ export default function SprayRecordsPage() {
         record={selected}
         vineyardName={vineyardName}
         formatters={formatters}
+        lookups={lookups}
         open={!!selected}
         onOpenChange={(o) => !o && setSelected(null)}
       />
@@ -257,15 +294,19 @@ function SprayRecordSheet({
   record,
   vineyardName,
   formatters,
+  lookups,
   open,
   onOpenChange,
 }: {
   record: SprayRecord | null;
   vineyardName?: string | null;
   formatters?: import("@/lib/regionFormatters").RegionFormatters;
+  lookups: SprayEquipmentLookups;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  const resolvedTractor = record ? resolveSprayTractorName(record, lookups) : null;
+  const resolvedEquipment = record ? resolveSprayEquipmentName(record, lookups) : null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -281,7 +322,11 @@ function SprayRecordSheet({
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  exportSprayRecordPdf(record, vineyardName, { formatters })
+                  exportSprayRecordPdf(record, vineyardName, {
+                    formatters,
+                    tractorName: resolvedTractor,
+                    equipmentName: resolvedEquipment,
+                  })
                 }
                 className="gap-1.5"
               >
@@ -297,9 +342,9 @@ function SprayRecordSheet({
             </Section>
 
             <Section title="Equipment">
-              <Field label="Tractor" value={fmt(record.tractor)} />
+              <Field label="Tractor" value={fmt(resolvedTractor)} />
               <Field label="Tractor gear" value={fmt(record.tractor_gear)} />
-              <Field label="Equipment" value={fmt(record.equipment_type)} />
+              <Field label="Equipment" value={fmt(resolvedEquipment)} />
               <Field label="Fans/jets" value={fmt(record.number_of_fans_jets)} />
               <Field label="Avg speed" value={fmt(record.average_speed)} />
             </Section>

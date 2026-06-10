@@ -18,6 +18,11 @@ import {
 import {
   fetchSprayRecordsForVineyard, type SprayRecord,
 } from "@/lib/sprayRecordsQuery";
+import {
+  resolveSprayTractorName,
+  resolveSprayEquipmentName,
+  type SprayEquipmentLookups,
+} from "@/lib/sprayRecordEquipment";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
@@ -73,6 +78,19 @@ export default function SprayReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchVineyardTeamMembers(selectedVineyardId!),
   });
+  const { data: machines } = useQuery({
+    queryKey: ["vineyard_machines-list", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList("vineyard_machines", selectedVineyardId!),
+  });
+  const sprayEquipmentLookups: SprayEquipmentLookups = useMemo(
+    () => ({
+      machines: (machines ?? []) as any,
+      tractors: (tractors ?? []) as any,
+      sprayEquipment: (equipment ?? []) as any,
+    }),
+    [machines, tractors, equipment],
+  );
 
   const jobLookups: JobLookups = useMemo(() => ({
     paddockNameById: new Map((paddocks ?? []).map((p: any) => [p.id, p.name ?? p.block_name ?? "Unnamed"])),
@@ -193,6 +211,8 @@ export default function SprayReportsPage() {
         operatorName: null,
         cost,
         formatters,
+        tractorName: resolveSprayTractorName(selectedRecord, sprayEquipmentLookups),
+        equipmentName: resolveSprayEquipmentName(selectedRecord, sprayEquipmentLookups),
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });

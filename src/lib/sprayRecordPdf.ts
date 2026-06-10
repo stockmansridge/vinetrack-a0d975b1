@@ -50,6 +50,10 @@ export interface SprayRecordPdfContext {
   cost?: TripCostBreakdown | null;
   /** Region & Units formatters. Falls back to AU defaults if omitted. */
   formatters?: RegionFormatters;
+  /** Resolved tractor/machine display name (machine_id → tractor_id → text). */
+  tractorName?: string | null;
+  /** Resolved spray equipment display name (spray_equipment_id → text). */
+  equipmentName?: string | null;
 }
 
 export function exportSprayRecordPdf(
@@ -109,9 +113,9 @@ export function exportSprayRecordPdf(
     ["Reference", fmtVal(record.spray_reference)],
     [`${fmt.blockLabel} / Paddock`, fmtVal(context?.paddockName)],
     ["Operator", fmtVal(context?.operatorName)],
-    ["Tractor", fmtVal(record.tractor)],
+    ["Tractor", fmtVal(context?.tractorName ?? record.tractor)],
     ["Tractor gear", fmtVal(record.tractor_gear)],
-    ["Equipment", fmtVal(record.equipment_type)],
+    ["Equipment", fmtVal(context?.equipmentName ?? record.equipment_type)],
     ["Fans / Jets", fmtVal(record.number_of_fans_jets)],
     ["Average speed", speedVal],
     ["Chemical / Product", product],
