@@ -51,6 +51,7 @@ import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import TripReportsPage from "./pages/reports/TripReportsPage";
 import WorkTaskReportsPage from "./pages/reports/WorkTaskReportsPage";
+import DataCoveragePage from "./pages/reports/DataCoveragePage";
 import CostReportsPage from "./pages/reports/CostReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
