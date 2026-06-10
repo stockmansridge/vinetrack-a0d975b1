@@ -190,6 +190,35 @@ export default function WorkTaskReportsPage() {
     enabled: enabled && canSeeCosts,
   });
 
+  // Equipment lookups for resolveMachineLineEquipmentName() — used in
+  // expanded row details to display human-readable equipment names.
+  const vineyardMachinesQ = useQuery({
+    queryKey: ["vineyard_machines-lite", selectedVineyardId],
+    enabled,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("vineyard_machines", selectedVineyardId!),
+  });
+  const tractorsQ = useQuery({
+    queryKey: ["tractors-lite", selectedVineyardId],
+    enabled,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("tractors", selectedVineyardId!),
+  });
+  const sprayEquipmentQ = useQuery({
+    queryKey: ["spray_equipment-lite", selectedVineyardId],
+    enabled,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("spray_equipment", selectedVineyardId!),
+  });
+  const equipmentItemsQ = useQuery({
+    queryKey: ["equipment_items-lite", selectedVineyardId],
+    enabled,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("equipment_items", selectedVineyardId!),
+  });
+  const machineLookups: MachineLineEquipmentLookups = useMemo(() => ({
+    machines: vineyardMachinesQ.data ?? [],
+    tractors: tractorsQ.data ?? [],
+    sprayEquipment: sprayEquipmentQ.data ?? [],
+    equipmentItems: equipmentItemsQ.data ?? [],
+  }), [vineyardMachinesQ.data, tractorsQ.data, sprayEquipmentQ.data, equipmentItemsQ.data]);
+
   const paddockNameById = useMemo(() => {
     const m = new Map<string, string>();
     paddocks.forEach((p) => m.set(p.id, p.name ?? "—"));
