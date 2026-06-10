@@ -967,6 +967,36 @@ function WorkTaskDrawer({
     },
   });
 
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const deleteTask = useMutation({
+    mutationFn: async () => {
+      if (!task?.id) throw new Error("No task selected");
+      return hardDeleteWorkTask(task.id);
+    },
+    onSuccess: (res) => {
+      const r = res.removed;
+      const bits: string[] = [];
+      if (r.labour_lines) bits.push(`${r.labour_lines} labour line${r.labour_lines === 1 ? "" : "s"}`);
+      if (r.machine_lines) bits.push(`${r.machine_lines} machine/fuel line${r.machine_lines === 1 ? "" : "s"}`);
+      if (r.paddock_links) bits.push(`${r.paddock_links} block link${r.paddock_links === 1 ? "" : "s"}`);
+      if (r.trips_unlinked) bits.push(`${r.trips_unlinked} trip${r.trips_unlinked === 1 ? "" : "s"} unlinked`);
+      toast({
+        title: "Work task permanently deleted",
+        description: bits.length ? `Also removed: ${bits.join(", ")}.` : undefined,
+      });
+      setConfirmDeleteOpen(false);
+      onSaved();
+      onOpenChange(false);
+    },
+    onError: (e: any) => {
+      const raw = String(e?.message ?? "");
+      const friendly = /permission denied|row-level security/i.test(raw)
+        ? "You don't have permission to delete this task."
+        : raw || "Could not delete this work task.";
+      toast({ title: "Delete failed", description: friendly, variant: "destructive" });
+    },
+  });
+
   const drawerCanSeeCosts = useCanSeeCosts();
   const visibleLines = labourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
