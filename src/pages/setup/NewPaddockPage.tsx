@@ -514,7 +514,7 @@ export default function NewPaddockPage() {
           <CardHeader>
             <CardTitle>Soil</CardTitle>
             <CardDescription>
-              Soil profile is configured after the paddock is saved.
+              Soil profile is configured after the block is saved.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -522,7 +522,7 @@ export default function NewPaddockPage() {
               <Info className="h-4 w-4" />
               <AlertTitle>Available after save</AlertTitle>
               <AlertDescription className="text-xs">
-                Once the paddock has been saved, open it from the Paddocks list and use the Soil tab
+                Once the block has been saved, open it from the Blocks list and use the Soil tab
                 to fetch NSW SEED soil data automatically (requires a boundary) or enter values manually.
               </AlertDescription>
             </Alert>
