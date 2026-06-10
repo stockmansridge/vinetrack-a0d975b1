@@ -78,6 +78,19 @@ export default function SprayReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchVineyardTeamMembers(selectedVineyardId!),
   });
+  const { data: machines } = useQuery({
+    queryKey: ["vineyard_machines-list", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList("vineyard_machines", selectedVineyardId!),
+  });
+  const sprayEquipmentLookups: SprayEquipmentLookups = useMemo(
+    () => ({
+      machines: (machines ?? []) as any,
+      tractors: (tractors ?? []) as any,
+      sprayEquipment: (equipment ?? []) as any,
+    }),
+    [machines, tractors, equipment],
+  );
 
   const jobLookups: JobLookups = useMemo(() => ({
     paddockNameById: new Map((paddocks ?? []).map((p: any) => [p.id, p.name ?? p.block_name ?? "Unnamed"])),
