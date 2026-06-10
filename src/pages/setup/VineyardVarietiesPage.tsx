@@ -259,7 +259,7 @@ export default function VineyardVarietiesPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate("/setup/paddocks")} className="gap-1">
-          <ArrowLeft className="h-4 w-4" /> Paddocks
+          <ArrowLeft className="h-4 w-4" /> Blocks
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight">Vineyard grape varieties</h1>
       </div>

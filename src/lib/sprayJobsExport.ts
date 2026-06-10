@@ -110,7 +110,7 @@ export async function exportSprayJobPdf(
     ["Operation type", opLabel(job.operation_type)],
     ["Target", fmtVal(job.target)],
     ["Growth stage", fmtVal(job.growth_stage_code)],
-    [`${fmt.blocksLabel}/Paddocks`, paddockNamesFor(paddockIds, lookups)],
+    [fmt.blocksLabel, paddockNamesFor(paddockIds, lookups)],
     ["Equipment", job.equipment_id ? fmtVal(lookups.equipmentNameById.get(job.equipment_id)) : NR],
     ["Tractor", job.tractor_id ? fmtVal(lookups.tractorNameById.get(job.tractor_id)) : NR],
     ["Operator", job.operator_user_id ? fmtVal(lookups.memberNameById.get(job.operator_user_id)) : NR],
@@ -349,7 +349,7 @@ export function exportYearlySprayProgramPdf(
     startY: 96,
     head: [[
       "Planned date", "Status", "Job", "Operation", "Target", "Growth",
-      `${fmt.blocksLabel}/Paddocks`,
+      fmt.blocksLabel,
       "Chemicals", `Water ${fmt.sprayRateUnitLabel}`, `Rate ${fmt.sprayRateUnitLabel}`,
       "CF", "Equipment", "Tractor", "Operator",
     ]],
@@ -494,7 +494,7 @@ export function exportYearlySprayProgramXlsx(
 
   const waterCol = `Water ${fmt.sprayRateUnitLabel}`;
   const rateCol = `Rate ${fmt.sprayRateUnitLabel}`;
-  const paddocksCol = `${fmt.blocksLabel}/Paddocks`;
+  const paddocksCol = fmt.blocksLabel;
 
   const programRows = sorted.map((j) => ({
     "Planned date": fmtDate(j.planned_date),

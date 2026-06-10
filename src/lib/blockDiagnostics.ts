@@ -121,7 +121,7 @@ export function diagnosePaddock(
 
   if (!paddock.deleted_at) {
     if (pts.length === 0) {
-      issues.push({ severity: "critical", category: "geometry", code: "no_polygon", summary: "Missing polygon geometry", suggestion: "Draw block boundary in Paddock Setup." });
+      issues.push({ severity: "critical", category: "geometry", code: "no_polygon", summary: "Missing polygon geometry", suggestion: "Draw block boundary in Block Setup." });
     } else if (validCount < 3) {
       issues.push({ severity: "critical", category: "geometry", code: "too_few_points", summary: `Polygon has only ${validCount} valid points (need ≥3)` });
     }
@@ -172,7 +172,7 @@ export function diagnosePaddock(
 
   if (!paddock.deleted_at) {
     if (actualCount === 0) {
-      issues.push({ severity: "warning", category: "rows", code: "no_rows", summary: "No row setup", suggestion: "Generate rows from Paddock Setup." });
+      issues.push({ severity: "warning", category: "rows", code: "no_rows", summary: "No row setup", suggestion: "Generate rows from Block Setup." });
     } else {
       if (storedCount != null && storedCount !== actualCount) {
         issues.push({ severity: "warning", category: "rows", code: "row_count_mismatch", summary: `Row count mismatch (stored ${storedCount}, actual ${actualCount})` });

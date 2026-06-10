@@ -324,7 +324,7 @@ export default function VineyardSettingsPage() {
                 <div className="text-sm font-medium">Archive vineyard</div>
                 <p className="text-xs text-muted-foreground max-w-md">
                   Hides this vineyard from normal use across Lovable and iOS.
-                  Paddocks, trips, spray records, pins and reports are kept.
+                  Blocks, trips, spray records, pins and reports are kept.
                 </p>
               </div>
             </div>
