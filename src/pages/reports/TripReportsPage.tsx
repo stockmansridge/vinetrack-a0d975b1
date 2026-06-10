@@ -141,6 +141,21 @@ export default function TripReportsPage() {
   });
   const trips = data?.trips ?? [];
 
+  // Stage 4B — resolve work_task_id → label for read-only chips.
+  const { data: workTasksResult } = useQuery({
+    queryKey: ["work_tasks", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksResult?.tasks ?? []).forEach((t) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksResult]);
+
   // Cost inputs — fetched only for owners/managers.
   const canSeeCosts = useCanSeeCosts();
   const costEnabled = !!selectedVineyardId && canSeeCosts;
