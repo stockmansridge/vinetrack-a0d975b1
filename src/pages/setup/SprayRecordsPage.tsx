@@ -122,10 +122,20 @@ export default function SprayRecordsPage() {
     if (opType !== ANY) list = list.filter((r) => r.operation_type === opType);
     if (filter.trim()) {
       const f = filter.toLowerCase();
-      list = list.filter((r) =>
-        [r.date, r.tractor, r.spray_reference, r.operation_type, r.equipment_type, r.notes]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      list = list.filter((r) => {
+        const resolvedTractor = resolveSprayTractorName(r, lookups);
+        const resolvedEquipment = resolveSprayEquipmentName(r, lookups);
+        return [
+          r.date,
+          r.tractor,
+          resolvedTractor,
+          r.spray_reference,
+          r.operation_type,
+          r.equipment_type,
+          resolvedEquipment,
+          r.notes,
+        ].some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
   }, [records, filter, from, to, opType]);
