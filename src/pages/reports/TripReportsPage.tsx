@@ -434,6 +434,22 @@ export default function TripReportsPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Linked task</div>
+            <Select value={linkedTask} onValueChange={setLinkedTask}>
+              <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>Any (linked or not)</SelectItem>
+                <SelectItem value="__any_linked__">Any linked task</SelectItem>
+                <SelectItem value="__none__">Not linked</SelectItem>
+                {Array.from(workTaskLabelById.entries())
+                  .sort((a, b) => a[1].localeCompare(b[1]))
+                  .map(([id, label]) => (
+                    <SelectItem key={id} value={id}>{label}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1 ml-auto">
             <div className="text-xs text-muted-foreground">Search</div>
             <div className="relative">
