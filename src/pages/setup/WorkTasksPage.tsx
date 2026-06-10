@@ -74,7 +74,12 @@ import {
   mergeTaskTypeNames,
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
-import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import {
+  fetchTripsForVineyard,
+  setTripWorkTaskId,
+  describeTripLinkError,
+  type Trip,
+} from "@/lib/tripsQuery";
 import {
   fetchWorkTaskMachineLinesForVineyard,
   resolveMachineLineEquipmentName,
@@ -727,8 +732,10 @@ export default function WorkTasksPage() {
         syncedTaskTypes={syncedTaskTypes}
         labourLines={selected ? linesByTask.get(selected.id) ?? [] : []}
         linkedTrips={selected ? tripsByTask.get(selected.id) ?? [] : []}
+        allTrips={trips}
         machineLines={selected ? machineLinesByTask.get(selected.id) ?? [] : []}
         machineLookups={machineLookups}
+        paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
@@ -751,8 +758,10 @@ export default function WorkTasksPage() {
         syncedTaskTypes={syncedTaskTypes}
         labourLines={[]}
         linkedTrips={[]}
+        allTrips={trips}
         machineLines={[]}
         machineLookups={machineLookups}
+        paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
@@ -786,6 +795,8 @@ interface DrawerProps {
   syncedTaskTypes: WorkTaskType[];
   labourLines: WorkTaskLabourLine[];
   linkedTrips: Trip[];
+  allTrips: Trip[];
+  paddockNameById: Map<string, string | null>;
   machineLines: WorkTaskMachineLine[];
   machineLookups: {
     machines: ReadonlyArray<{ id: string; name?: string | null }>;
@@ -800,7 +811,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, machineLines, machineLookups, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
   const rf = useRegionFormatters();
@@ -1066,40 +1077,14 @@ function WorkTaskDrawer({
               </Section>
             )}
             {!isNew && task && (
-              <Section title="Linked Trips">
-                {linkedTrips.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No linked trips</div>
-                ) : (
-                  <div className="space-y-2">
-                    {linkedTrips
-                      .slice()
-                      .sort((a, b) => (b.start_time ?? "").localeCompare(a.start_time ?? ""))
-                      .map((tr) => {
-                        const name = formatTripNameLabel(tr.trip_title, tr.tracking_pattern, tr.paddock_name);
-                        const fn = formatTripFunctionLabel(tr.trip_function);
-                        const dur = formatTripDurationLabel(tr.start_time, tr.end_time);
-                        const machineId = tr.machine_id ?? tr.tractor_id ?? null;
-                        const machineName =
-                          machineLookups.machines.find((m) => m.id === machineId)?.name ??
-                          machineLookups.tractors.find((m) => m.id === machineId)?.name ??
-                          null;
-                        return (
-                          <div key={tr.id} className="rounded border bg-muted/30 p-2 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium truncate">{name}</span>
-                              <span className="text-muted-foreground shrink-0">{fmtDate(tr.start_time)}</span>
-                            </div>
-                            <div className="mt-0.5 text-muted-foreground truncate">
-                              {fn !== "—" && <>{fn}</>}
-                              {machineName && <> · {machineName}</>}
-                              {dur !== "—" && <> · {dur}</>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </Section>
+              <LinkedTripsSection
+                workTaskId={task.id}
+                linkedTrips={linkedTrips}
+                allTrips={allTrips}
+                machineLookups={machineLookups}
+                canEdit={canSoftDelete}
+                userId={userId}
+              />
             )}
             {!isNew && task && (
               <MachineWorkSection
@@ -1979,5 +1964,229 @@ function MachineLineForm({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ------------------- Linked Trips section (Stage 3C) -------------------
+
+function tripMachineName(
+  tr: Trip,
+  lookups: { machines: ReadonlyArray<{ id: string; name?: string | null }>; tractors: ReadonlyArray<{ id: string; name?: string | null }> },
+): string | null {
+  const id = tr.machine_id ?? tr.tractor_id ?? null;
+  if (!id) return null;
+  return (
+    lookups.machines.find((m) => m.id === id)?.name ??
+    lookups.tractors.find((m) => m.id === id)?.name ??
+    null
+  );
+}
+
+function LinkedTripsSection({
+  workTaskId,
+  linkedTrips,
+  allTrips,
+  machineLookups,
+  canEdit,
+  userId,
+}: {
+  workTaskId: string;
+  linkedTrips: Trip[];
+  allTrips: Trip[];
+  machineLookups: {
+    machines: ReadonlyArray<{ id: string; name?: string | null }>;
+    tractors: ReadonlyArray<{ id: string; name?: string | null }>;
+    sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
+    equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
+  };
+  canEdit: boolean;
+  userId: string | null;
+}) {
+  const qc = useQueryClient();
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const invalidateTrips = () =>
+    qc.invalidateQueries({ queryKey: ["trips"] });
+
+  const linkMutation = useMutation({
+    mutationFn: async (tr: Trip) => {
+      await setTripWorkTaskId({
+        tripId: tr.id,
+        workTaskId,
+        currentSyncVersion: (tr as any).sync_version ?? 0,
+        userId,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Trip linked" });
+      setPickerOpen(false);
+      setSearch("");
+      invalidateTrips();
+    },
+    onError: (e) =>
+      toast({ title: "Link failed", description: describeTripLinkError(e), variant: "destructive" }),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (tr: Trip) => {
+      await setTripWorkTaskId({
+        tripId: tr.id,
+        workTaskId: null,
+        currentSyncVersion: (tr as any).sync_version ?? 0,
+        userId,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Trip unlinked" });
+      invalidateTrips();
+    },
+    onError: (e) =>
+      toast({ title: "Unlink failed", description: describeTripLinkError(e), variant: "destructive" }),
+  });
+
+  // Unlinked pool: only trips with NO existing work_task_id (Stage 3C v1
+  // explicitly forbids reassigning a trip already attached to another task).
+  const unlinkedPool = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const pool = allTrips
+      .filter((t) => !t.work_task_id)
+      .slice()
+      .sort((a, b) => (b.start_time ?? "").localeCompare(a.start_time ?? ""));
+    if (!term) return pool;
+    return pool.filter((tr) => {
+      const name = formatTripNameLabel(tr.trip_title, tr.tracking_pattern, tr.paddock_name).toLowerCase();
+      const fn = formatTripFunctionLabel(tr.trip_function).toLowerCase();
+      const pad = (tr.paddock_name ?? "").toLowerCase();
+      const machine = (tripMachineName(tr, machineLookups) ?? "").toLowerCase();
+      const date = (tr.start_time ?? "").toLowerCase();
+      return [name, fn, pad, machine, date].some((s) => s.includes(term));
+    });
+  }, [allTrips, search, machineLookups]);
+
+  return (
+    <Section title="Linked Trips">
+      {linkedTrips.length === 0 ? (
+        <div className="text-xs text-muted-foreground">No linked trips</div>
+      ) : (
+        <div className="space-y-2">
+          {linkedTrips
+            .slice()
+            .sort((a, b) => (b.start_time ?? "").localeCompare(a.start_time ?? ""))
+            .map((tr) => {
+              const name = formatTripNameLabel(tr.trip_title, tr.tracking_pattern, tr.paddock_name);
+              const fn = formatTripFunctionLabel(tr.trip_function);
+              const dur = formatTripDurationLabel(tr.start_time, tr.end_time);
+              const machineName = tripMachineName(tr, machineLookups);
+              return (
+                <div key={tr.id} className="rounded border bg-muted/30 p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium truncate">{name}</span>
+                    <span className="text-muted-foreground shrink-0">{fmtDate(tr.start_time)}</span>
+                  </div>
+                  <div className="mt-0.5 text-muted-foreground truncate">
+                    {fn !== "—" && <>{fn}</>}
+                    {machineName && <> · {machineName}</>}
+                    {dur !== "—" && <> · {dur}</>}
+                    {tr.paddock_name && <> · {tr.paddock_name}</>}
+                  </div>
+                  {canEdit && (
+                    <div className="mt-1 flex gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-[11px] text-destructive"
+                        disabled={unlinkMutation.isPending}
+                        onClick={() => {
+                          if (confirm("Unlink this trip from the work task?")) {
+                            unlinkMutation.mutate(tr);
+                          }
+                        }}
+                      >
+                        Unlink
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="mt-2">
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" size="sm">
+                <Plus className="h-3 w-3 mr-1" />
+                Link Trip
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-[28rem] p-0 z-[70]">
+              <div className="p-2 border-b">
+                <Input
+                  placeholder="Search by name, function, machine, paddock, date…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {unlinkedPool.length === 0 ? (
+                  <div className="p-3 text-xs text-muted-foreground">
+                    No unlinked trips available.
+                  </div>
+                ) : (
+                  unlinkedPool.slice(0, 200).map((tr) => {
+                    const name = formatTripNameLabel(tr.trip_title, tr.tracking_pattern, tr.paddock_name);
+                    const fn = formatTripFunctionLabel(tr.trip_function);
+                    const dur = formatTripDurationLabel(tr.start_time, tr.end_time);
+                    const machineName = tripMachineName(tr, machineLookups);
+                    return (
+                      <button
+                        key={tr.id}
+                        type="button"
+                        className="block w-full text-left p-2 border-b hover:bg-muted text-xs disabled:opacity-50"
+                        disabled={linkMutation.isPending}
+                        onClick={() => {
+                          if (!workTaskId) {
+                            toast({
+                              title: "Cannot link",
+                              description: "No work task selected.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          linkMutation.mutate(tr);
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium truncate">{name}</span>
+                          <span className="text-muted-foreground shrink-0">{fmtDate(tr.start_time)}</span>
+                        </div>
+                        <div className="mt-0.5 text-muted-foreground truncate">
+                          {fn !== "—" && <>{fn}</>}
+                          {machineName && <> · {machineName}</>}
+                          {dur !== "—" && <> · {dur}</>}
+                          {tr.paddock_name && <> · {tr.paddock_name}</>}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+                {unlinkedPool.length > 200 && (
+                  <div className="p-2 text-[11px] text-muted-foreground">
+                    Showing first 200 — narrow the search to see more.
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
+    </Section>
   );
 }

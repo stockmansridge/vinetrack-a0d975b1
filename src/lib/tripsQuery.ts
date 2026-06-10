@@ -153,3 +153,41 @@ export async function fetchTripsForVineyard(
   };
 }
 
+
+// ------------------- Writes (work_task linkage only) -------------------
+//
+// Stage 3C — link/unlink an existing trip to a work task. This helper ONLY
+// touches `work_task_id` (plus the minimal sync columns). It must never
+// overwrite tracking data, path points, costing fields, etc.
+
+const tripsNowIso = () => new Date().toISOString();
+
+export async function setTripWorkTaskId(params: {
+  tripId: string;
+  workTaskId: string | null;
+  currentSyncVersion?: number | null;
+  userId?: string | null;
+}): Promise<void> {
+  const { tripId, workTaskId, currentSyncVersion, userId } = params;
+  const ts = tripsNowIso();
+  const nextVersion = (currentSyncVersion ?? 0) + 1;
+  const { error } = await supabase
+    .from("trips")
+    .update({
+      work_task_id: workTaskId,
+      updated_by: userId ?? null,
+      client_updated_at: ts,
+      sync_version: nextVersion,
+    })
+    .eq("id", tripId);
+  if (error) throw error;
+}
+
+export function describeTripLinkError(err: unknown): string {
+  const e = err as { message?: string } | null;
+  const msg = e?.message ?? String(err ?? "");
+  if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
+    return "You don't have permission to link or unlink this trip. Only owners, managers, or supervisors can change trip links.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
