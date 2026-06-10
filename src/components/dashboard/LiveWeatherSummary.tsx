@@ -1,6 +1,7 @@
 // Live Weather + Rain Forecast summary card for the Live Dashboard.
 // Read-only. Uses safe RPCs only — no direct provider calls from the browser.
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   CloudRain,
