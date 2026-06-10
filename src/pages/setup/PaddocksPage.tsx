@@ -82,7 +82,7 @@ export default function PaddocksPage() {
       <TabsContent value="table" className="mt-0">
         <ListPage
           table="paddocks"
-          title="Paddocks"
+          title="Blocks"
           columns={paddockCols}
           basePath="/setup/paddocks"
         />
