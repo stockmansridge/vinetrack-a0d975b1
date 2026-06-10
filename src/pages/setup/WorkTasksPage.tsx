@@ -991,13 +991,13 @@ function WorkTaskDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
+      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[70vw] sm:max-w-[1200px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{isNew ? "New Task Log" : `Edit Task Log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 space-y-4">
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-4">
+          <div className="space-y-4 min-w-0">
             <Section title="Task">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Blocks">
