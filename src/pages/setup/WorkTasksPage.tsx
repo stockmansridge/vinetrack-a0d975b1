@@ -737,6 +737,9 @@ export default function WorkTasksPage() {
         categories={categories}
         syncedTaskTypes={syncedTaskTypes}
         labourLines={[]}
+        linkedTrips={[]}
+        machineLines={[]}
+        machineLookups={machineLookups}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
