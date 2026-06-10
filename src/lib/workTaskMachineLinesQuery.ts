@@ -85,6 +85,147 @@ export async function fetchWorkTaskMachineLinesForVineyard(
   return (data ?? []) as WorkTaskMachineLine[];
 }
 
+// ------------------- Writes -------------------
+
+const nowIso = () => new Date().toISOString();
+
+const num = (v: unknown): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+export interface WorkTaskMachineLineWriteInput {
+  vineyard_id: string;
+  work_task_id: string;
+  work_date: string;
+  equipment_source: WorkTaskMachineEquipmentSource;
+  equipment_ref_id?: string | null;
+  equipment_name_snapshot: string;
+  operator_user_id?: string | null;
+  operator_category_id?: string | null;
+  duration_hours?: number | null;
+  engine_hours_used?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  start_engine_hours?: number | null;
+  end_engine_hours?: number | null;
+  fuel_litres?: number | null;
+  fuel_cost?: number | null;
+  hourly_machine_rate?: number | null;
+  total_machine_cost?: number | null;
+  entry_source?: string | null;
+  notes?: string | null;
+  user_id?: string | null;
+}
+
+const toPayload = (i: WorkTaskMachineLineWriteInput) => ({
+  vineyard_id: i.vineyard_id,
+  work_task_id: i.work_task_id,
+  work_date: i.work_date,
+  equipment_source: i.equipment_source,
+  equipment_ref_id: i.equipment_ref_id ?? null,
+  equipment_name_snapshot: i.equipment_name_snapshot,
+  operator_user_id: i.operator_user_id ?? null,
+  operator_category_id: i.operator_category_id ?? null,
+  duration_hours: num(i.duration_hours),
+  engine_hours_used: num(i.engine_hours_used),
+  start_time: i.start_time ?? null,
+  end_time: i.end_time ?? null,
+  start_engine_hours: num(i.start_engine_hours),
+  end_engine_hours: num(i.end_engine_hours),
+  fuel_litres: num(i.fuel_litres),
+  fuel_cost: num(i.fuel_cost),
+  hourly_machine_rate: num(i.hourly_machine_rate),
+  total_machine_cost: num(i.total_machine_cost),
+  entry_source: i.entry_source ?? "manual",
+  notes: i.notes ?? null,
+});
+
+export async function createWorkTaskMachineLine(
+  input: WorkTaskMachineLineWriteInput,
+): Promise<WorkTaskMachineLine> {
+  const ts = nowIso();
+  const payload = {
+    ...toPayload(input),
+    deleted_at: null,
+    client_updated_at: ts,
+    sync_version: 1,
+    created_by: input.user_id ?? null,
+    updated_by: input.user_id ?? null,
+  } as Record<string, unknown>;
+  const { data, error } = await supabase
+    .from("work_task_machine_lines")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTaskMachineLine;
+}
+
+export interface UpdateWorkTaskMachineLineInput extends WorkTaskMachineLineWriteInput {
+  id: string;
+  current_sync_version?: number | null;
+}
+
+export async function updateWorkTaskMachineLine(
+  input: UpdateWorkTaskMachineLineInput,
+): Promise<WorkTaskMachineLine> {
+  const ts = nowIso();
+  const nextVersion = (input.current_sync_version ?? 0) + 1;
+  const payload = {
+    ...toPayload(input),
+    client_updated_at: ts,
+    sync_version: nextVersion,
+    updated_by: input.user_id ?? null,
+  } as Record<string, unknown>;
+  const { data, error } = await supabase
+    .from("work_task_machine_lines")
+    .update(payload)
+    .eq("id", input.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as WorkTaskMachineLine;
+}
+
+/**
+ * Soft-delete a machine line. Tries the dedicated RPC first (mirroring the
+ * labour-line pattern); if the RPC is not deployed, falls back to a direct
+ * UPDATE of deleted_at. RLS on the iOS project is the authority for whether
+ * the calling user is permitted to do this.
+ */
+export async function softDeleteWorkTaskMachineLine(
+  id: string,
+  userId?: string | null,
+  currentSyncVersion?: number | null,
+): Promise<void> {
+  const rpc = await supabase.rpc("soft_delete_work_task_machine_line", { p_id: id });
+  if (!rpc.error) return;
+  const ts = nowIso();
+  const nextVersion = (currentSyncVersion ?? 0) + 1;
+  const { error } = await supabase
+    .from("work_task_machine_lines")
+    .update({
+      deleted_at: ts,
+      client_updated_at: ts,
+      sync_version: nextVersion,
+      updated_by: userId ?? null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export function describeMachineLineWriteError(err: unknown): string {
+  const e = err as { message?: string } | null;
+  const msg = e?.message ?? String(err ?? "");
+  if (/row-level security|permission denied|RLS|42501/i.test(msg)) {
+    return "You don't have permission to make this change. Only owners, managers, or supervisors can edit machine work.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
+
 // ------------------- Equipment name resolver -------------------
 
 export interface MachineLineEquipmentLookups {

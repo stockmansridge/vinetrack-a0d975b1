@@ -42,6 +42,14 @@ import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { Fragment } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { ChevronsUpDown, Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2, Download } from "lucide-react";
@@ -70,7 +78,12 @@ import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
 import {
   fetchWorkTaskMachineLinesForVineyard,
   resolveMachineLineEquipmentName,
+  createWorkTaskMachineLine,
+  updateWorkTaskMachineLine,
+  softDeleteWorkTaskMachineLine,
+  describeMachineLineWriteError,
   type WorkTaskMachineLine,
+  type WorkTaskMachineEquipmentSource,
 } from "@/lib/workTaskMachineLinesQuery";
 import {
   formatTripNameLabel,
@@ -1089,35 +1102,15 @@ function WorkTaskDrawer({
               </Section>
             )}
             {!isNew && task && (
-              <Section title="Manual Machine Work">
-                {machineLines.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No manual machine work</div>
-                ) : (
-                  <div className="space-y-2">
-                    {machineLines
-                      .slice()
-                      .sort((a, b) => (b.work_date ?? "").localeCompare(a.work_date ?? ""))
-                      .map((ml) => {
-                        const eqName =
-                          resolveMachineLineEquipmentName(ml, machineLookups) ?? "Unknown equipment";
-                        const hours = ml.duration_hours ?? ml.engine_hours_used ?? null;
-                        return (
-                          <div key={ml.id} className="rounded border bg-muted/30 p-2 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium truncate">{eqName}</span>
-                              <span className="text-muted-foreground shrink-0">{fmtDate(ml.work_date)}</span>
-                            </div>
-                            <div className="mt-0.5 text-muted-foreground truncate">
-                              {hours != null && <>{num(hours)} h</>}
-                              {ml.entry_source && <> · {ml.entry_source}</>}
-                              {ml.notes && <> · {ml.notes}</>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </Section>
+              <MachineWorkSection
+                workTaskId={task.id}
+                vineyardId={vineyardId}
+                lines={machineLines}
+                lookups={machineLookups}
+                canEdit={canSoftDelete}
+                canDelete={canSoftDelete}
+                userId={userId}
+              />
             )}
             {!isNew && task && (
               <Section title="Meta">
@@ -1471,6 +1464,520 @@ function TaskTypeSelect({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ------------------- Manual Machine Work editor -------------------
+
+const ENTRY_SOURCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "manual", label: "Manual entry" },
+  { value: "missed_trip", label: "Missed trip" },
+  { value: "trip_failed", label: "Trip failed" },
+  { value: "correction", label: "Correction" },
+];
+
+type MachinePickerOption = {
+  id: string | null; // null for free-text
+  name: string;
+  source: WorkTaskMachineEquipmentSource;
+};
+
+type MachinePickerGroup = {
+  key: string;
+  label: string;
+  options: MachinePickerOption[];
+};
+
+interface MachineLookups {
+  machines: ReadonlyArray<{ id: string; name?: string | null }>;
+  tractors: ReadonlyArray<{ id: string; name?: string | null }>;
+  sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
+  equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
+}
+
+function buildMachinePickerGroups(lookups: MachineLookups): MachinePickerGroup[] {
+  const toOpts = (
+    arr: ReadonlyArray<{ id: string; name?: string | null }>,
+    source: WorkTaskMachineEquipmentSource,
+  ): MachinePickerOption[] =>
+    arr
+      .filter((r) => (r.name ?? "").trim().length > 0)
+      .map((r) => ({ id: r.id, name: (r.name ?? "").trim(), source }));
+
+  return [
+    { key: "machines", label: "Vineyard Machines", options: toOpts(lookups.machines, "vineyard_machine") },
+    { key: "tractors", label: "Tractors", options: toOpts(lookups.tractors, "tractor") },
+    { key: "spray", label: "Spray Equipment", options: toOpts(lookups.sprayEquipment, "spray_equipment") },
+    { key: "other", label: "Other Equipment & Assets", options: toOpts(lookups.equipmentItems, "equipment_item") },
+  ].filter((g) => g.options.length > 0);
+}
+
+interface MachineEquipmentPickerProps {
+  value: string;
+  groups: MachinePickerGroup[];
+  onSelect: (opt: MachinePickerOption) => void;
+}
+
+function MachineEquipmentPicker({ value, groups, onSelect }: MachineEquipmentPickerProps) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate text-left text-foreground">
+            {value.trim() || "Select equipment"}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] p-0 z-[70]">
+        <Command className="bg-popover text-popover-foreground">
+          <CommandList className="max-h-80">
+            <CommandEmpty>No equipment found.</CommandEmpty>
+            {groups.map((group) => (
+              <CommandGroup key={group.key} heading={group.label}>
+                {group.options.map((option) => (
+                  <CommandItem
+                    key={`${group.key}-${option.id}`}
+                    value={`${group.label} ${option.name}`}
+                    onSelect={() => {
+                      onSelect(option);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className={value === option.name ? "h-4 w-4 opacity-100" : "h-4 w-4 opacity-0"} />
+                    <span>{option.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+interface MachineLineFormState {
+  equipment_source: WorkTaskMachineEquipmentSource;
+  equipment_ref_id: string | null;
+  equipment_name_snapshot: string;
+  work_date: string;
+  duration_hours: string;
+  engine_hours_used: string;
+  entry_source: string;
+  notes: string;
+  fuel_litres: string;
+  fuel_cost: string;
+  hourly_machine_rate: string;
+  total_machine_cost: string;
+}
+
+const emptyForm = (): MachineLineFormState => ({
+  equipment_source: "free_text",
+  equipment_ref_id: null,
+  equipment_name_snapshot: "",
+  work_date: new Date().toISOString().slice(0, 10),
+  duration_hours: "",
+  engine_hours_used: "",
+  entry_source: "manual",
+  notes: "",
+  fuel_litres: "",
+  fuel_cost: "",
+  hourly_machine_rate: "",
+  total_machine_cost: "",
+});
+
+const formFromLine = (l: WorkTaskMachineLine): MachineLineFormState => ({
+  equipment_source: ((l.equipment_source as WorkTaskMachineEquipmentSource) ?? "free_text"),
+  equipment_ref_id: l.equipment_ref_id ?? null,
+  equipment_name_snapshot: l.equipment_name_snapshot ?? "",
+  work_date: l.work_date ?? new Date().toISOString().slice(0, 10),
+  duration_hours: l.duration_hours == null ? "" : String(l.duration_hours),
+  engine_hours_used: l.engine_hours_used == null ? "" : String(l.engine_hours_used),
+  entry_source: (l.entry_source ?? "manual"),
+  notes: l.notes ?? "",
+  fuel_litres: l.fuel_litres == null ? "" : String(l.fuel_litres),
+  fuel_cost: l.fuel_cost == null ? "" : String(l.fuel_cost),
+  hourly_machine_rate: l.hourly_machine_rate == null ? "" : String(l.hourly_machine_rate),
+  total_machine_cost: l.total_machine_cost == null ? "" : String(l.total_machine_cost),
+});
+
+function MachineWorkSection({
+  workTaskId,
+  vineyardId,
+  lines,
+  lookups,
+  canEdit,
+  canDelete,
+  userId,
+}: {
+  workTaskId: string;
+  vineyardId: string | null;
+  lines: WorkTaskMachineLine[];
+  lookups: MachineLookups;
+  canEdit: boolean;
+  canDelete: boolean;
+  userId: string | null;
+}) {
+  const qc = useQueryClient();
+  const rf = useRegionFormatters();
+  const fmtDate = mkFmtDate(rf);
+  const [editingId, setEditingId] = useState<string | null>(null); // id, or "__new__"
+  const [form, setForm] = useState<MachineLineFormState>(emptyForm());
+  const groups = useMemo(() => buildMachinePickerGroups(lookups), [lookups]);
+
+  const startCreate = () => {
+    setForm(emptyForm());
+    setEditingId("__new__");
+  };
+  const startEdit = (l: WorkTaskMachineLine) => {
+    setForm(formFromLine(l));
+    setEditingId(l.id);
+  };
+  const cancel = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+  };
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ["work_task_machine_lines", vineyardId] });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!vineyardId) throw new Error("No vineyard selected");
+      const name = form.equipment_name_snapshot.trim();
+      if (!form.work_date) throw new Error("Work date is required");
+      if (!name) throw new Error("Equipment is required");
+      const dur = form.duration_hours.trim();
+      const eng = form.engine_hours_used.trim();
+      if (!dur && !eng) {
+        throw new Error("Enter duration hours or engine hours used");
+      }
+      const input = {
+        vineyard_id: vineyardId,
+        work_task_id: workTaskId,
+        work_date: form.work_date,
+        equipment_source: form.equipment_source,
+        equipment_ref_id: form.equipment_source === "free_text" ? null : form.equipment_ref_id,
+        equipment_name_snapshot: name,
+        duration_hours: dur ? Number(dur) : null,
+        engine_hours_used: eng ? Number(eng) : null,
+        entry_source: form.entry_source || "manual",
+        notes: form.notes.trim() || null,
+        fuel_litres: form.fuel_litres ? Number(form.fuel_litres) : null,
+        fuel_cost: form.fuel_cost ? Number(form.fuel_cost) : null,
+        hourly_machine_rate: form.hourly_machine_rate ? Number(form.hourly_machine_rate) : null,
+        total_machine_cost: form.total_machine_cost ? Number(form.total_machine_cost) : null,
+        user_id: userId,
+      };
+      if (editingId && editingId !== "__new__") {
+        const existing = lines.find((l) => l.id === editingId);
+        await updateWorkTaskMachineLine({
+          ...input,
+          id: editingId,
+          current_sync_version: existing?.sync_version ?? 0,
+        });
+      } else {
+        await createWorkTaskMachineLine(input);
+      }
+    },
+    onSuccess: () => {
+      toast({ title: editingId === "__new__" ? "Machine work added" : "Machine work updated" });
+      cancel();
+      invalidate();
+    },
+    onError: (e) =>
+      toast({
+        title: "Save failed",
+        description: describeMachineLineWriteError(e),
+        variant: "destructive",
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (line: WorkTaskMachineLine) => {
+      await softDeleteWorkTaskMachineLine(line.id, userId, line.sync_version ?? 0);
+    },
+    onSuccess: () => {
+      toast({ title: "Machine work removed" });
+      invalidate();
+    },
+    onError: (e) =>
+      toast({
+        title: "Delete failed",
+        description: describeMachineLineWriteError(e),
+        variant: "destructive",
+      }),
+  });
+
+  return (
+    <Section title="Manual Machine Work">
+      {lines.length === 0 && editingId !== "__new__" ? (
+        <div className="text-xs text-muted-foreground">No manual machine work</div>
+      ) : (
+        <div className="space-y-2">
+          {lines
+            .slice()
+            .sort((a, b) => (b.work_date ?? "").localeCompare(a.work_date ?? ""))
+            .map((ml) => {
+              const eqName =
+                resolveMachineLineEquipmentName(ml, lookups) ??
+                ml.equipment_name_snapshot ??
+                "Unknown equipment";
+              const hours = ml.duration_hours ?? ml.engine_hours_used ?? null;
+              const isEditing = editingId === ml.id;
+              if (isEditing) {
+                return (
+                  <MachineLineForm
+                    key={ml.id}
+                    form={form}
+                    setForm={setForm}
+                    groups={groups}
+                    onSave={() => saveMutation.mutate()}
+                    onCancel={cancel}
+                    saving={saveMutation.isPending}
+                  />
+                );
+              }
+              return (
+                <div key={ml.id} className="rounded border bg-muted/30 p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium truncate">{eqName}</span>
+                    <span className="text-muted-foreground shrink-0">{fmtDate(ml.work_date)}</span>
+                  </div>
+                  <div className="mt-0.5 text-muted-foreground truncate">
+                    {hours != null && <>{num(hours)} h</>}
+                    {ml.entry_source && <> · {ml.entry_source}</>}
+                    {ml.notes && <> · {ml.notes}</>}
+                  </div>
+                  {(canEdit || canDelete) && (
+                    <div className="mt-1 flex gap-2">
+                      {canEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => startEdit(ml)}
+                          disabled={editingId !== null}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px] text-destructive"
+                          onClick={() => {
+                            if (confirm("Remove this machine work entry?")) {
+                              deleteMutation.mutate(ml);
+                            }
+                          }}
+                          disabled={editingId !== null || deleteMutation.isPending}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          {editingId === "__new__" && (
+            <MachineLineForm
+              form={form}
+              setForm={setForm}
+              groups={groups}
+              onSave={() => saveMutation.mutate()}
+              onCancel={cancel}
+              saving={saveMutation.isPending}
+            />
+          )}
+        </div>
+      )}
+      {canEdit && editingId === null && (
+        <div className="mt-2">
+          <Button type="button" variant="outline" size="sm" onClick={startCreate}>
+            <Plus className="h-3 w-3 mr-1" />
+            Add Machine Work
+          </Button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function MachineLineForm({
+  form,
+  setForm,
+  groups,
+  onSave,
+  onCancel,
+  saving,
+}: {
+  form: MachineLineFormState;
+  setForm: (f: MachineLineFormState | ((p: MachineLineFormState) => MachineLineFormState)) => void;
+  groups: MachinePickerGroup[];
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const update = (patch: Partial<MachineLineFormState>) =>
+    setForm((prev) => ({ ...prev, ...patch }));
+
+  return (
+    <div className="rounded border bg-background p-3 space-y-3">
+      <div className="space-y-1">
+        <Label className="text-xs">Equipment *</Label>
+        <MachineEquipmentPicker
+          value={form.equipment_name_snapshot}
+          groups={groups}
+          onSelect={(opt) =>
+            update({
+              equipment_source: opt.source,
+              equipment_ref_id: opt.id,
+              equipment_name_snapshot: opt.name,
+            })
+          }
+        />
+        <Input
+          placeholder="…or type equipment name"
+          value={form.equipment_name_snapshot}
+          maxLength={120}
+          onChange={(e) => {
+            const v = e.target.value;
+            // Free-typing clears any FK link so we don't lie about identity.
+            update({
+              equipment_name_snapshot: v,
+              equipment_source: "free_text",
+              equipment_ref_id: null,
+            });
+          }}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">Work date *</Label>
+          <Input
+            type="date"
+            value={form.work_date}
+            onChange={(e) => update({ work_date: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Entry source</Label>
+          <Select
+            value={form.entry_source}
+            onValueChange={(v) => update({ entry_source: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ENTRY_SOURCE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Duration (h)</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={form.duration_hours}
+            onChange={(e) => update({ duration_hours: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Engine hours used</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={form.engine_hours_used}
+            onChange={(e) => update({ engine_hours_used: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Fuel (L)</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={form.fuel_litres}
+            onChange={(e) => update({ fuel_litres: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Fuel cost</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={form.fuel_cost}
+            onChange={(e) => update({ fuel_cost: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Hourly machine rate</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={form.hourly_machine_rate}
+            onChange={(e) => update({ hourly_machine_rate: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Total machine cost</Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={form.total_machine_cost}
+            onChange={(e) => update({ total_machine_cost: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">Notes</Label>
+        <Textarea
+          rows={2}
+          value={form.notes}
+          maxLength={500}
+          onChange={(e) => update({ notes: e.target.value })}
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <Button type="button" size="sm" onClick={onSave} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }
