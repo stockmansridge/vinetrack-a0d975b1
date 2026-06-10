@@ -729,3 +729,259 @@ export default function WorkTaskReportsPage() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Expanded row: per-task audit detail. Pure presentation — no mutations.
+// ---------------------------------------------------------------------------
+
+interface ExpandedRowDetailsProps {
+  row: TaskRow;
+  canSeeCosts: boolean;
+  fmt: ReturnType<typeof useRegionFormatters>;
+  areaImperial: boolean;
+  paddockNameById: Map<string, string>;
+  machineLookups: MachineLineEquipmentLookups;
+  allocByTripId: Map<string, TripCostAllocation[]>;
+  money: (n: number) => string;
+}
+
+function ExpandedRowDetails({
+  row, canSeeCosts, fmt, paddockNameById, machineLookups, allocByTripId, money,
+}: ExpandedRowDetailsProps) {
+  const fmtDateTime = (v?: string | null) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "—" : format(d, "PP p");
+  };
+  const fmtDateShort = (v?: string | null) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "—" : format(d, "PP");
+  };
+  const durationHrs = (a?: string | null, b?: string | null): number | null => {
+    if (!a || !b) return null;
+    const ms = new Date(b).getTime() - new Date(a).getTime();
+    return Number.isFinite(ms) && ms > 0 ? ms / 3_600_000 : null;
+  };
+  const numOrNull = (v: unknown): number | null => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const fmtHours = (n: number | null) => n == null ? "—" : `${n.toFixed(2)} h`;
+  const fmtLitres = (n: number | null) => n == null ? "—" : fmt.fuel(n);
+
+  const sectionHeader = (title: string, count: number) => (
+    <div className="flex items-center justify-between mb-2">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      <span className="text-[11px] text-muted-foreground">
+        {count} {count === 1 ? "entry" : "entries"}
+      </span>
+    </div>
+  );
+
+  const emptyState = (text: string) => (
+    <div className="text-xs text-muted-foreground italic py-2">{text}</div>
+  );
+
+  const paddockRows = row.taskPaddocks.length
+    ? row.taskPaddocks.map((p) => ({
+        id: p.id,
+        name: paddockNameById.get(p.paddock_id) ?? "—",
+        areaHa: p.area_ha != null ? Number(p.area_ha) : null,
+      }))
+    : row.paddockIds.map((id) => ({
+        id,
+        name: paddockNameById.get(id) ?? "—",
+        areaHa: null as number | null,
+      }));
+  const totalAreaForShare = row.totalAreaHa && row.totalAreaHa > 0 ? row.totalAreaHa : null;
+
+  return (
+    <div className="space-y-3">
+      {row.hasWarning && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>Review: linked GPS trips and manual correction/missed machine entries may overlap.</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Labour lines */}
+        <Card className="p-3">
+          {sectionHeader("Labour lines", row.labourLines.length)}
+          {row.labourLines.length === 0 ? emptyState("No manual labour entries recorded.") : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Workers</TableHead>
+                    <TableHead className="text-right">Hrs/worker</TableHead>
+                    <TableHead className="text-right">Total hrs</TableHead>
+                    {canSeeCosts && <TableHead className="text-right">Rate</TableHead>}
+                    {canSeeCosts && <TableHead className="text-right">Total cost</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {row.labourLines.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="text-xs">
+                        {l.worker_type?.trim() || l.operator_category_id || "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">
+                        {l.worker_count ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">
+                        {l.hours_per_worker != null ? Number(l.hours_per_worker).toFixed(2) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">
+                        {l.total_hours != null ? Number(l.total_hours).toFixed(2) : "—"}
+                      </TableCell>
+                      {canSeeCosts && (
+                        <TableCell className="text-right tabular-nums text-xs">
+                          {l.hourly_rate != null ? money(Number(l.hourly_rate)) : "—"}
+                        </TableCell>
+                      )}
+                      {canSeeCosts && (
+                        <TableCell className="text-right tabular-nums text-xs">
+                          {l.total_cost != null ? money(Number(l.total_cost)) : "—"}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </Card>
+
+        {/* Manual machine lines */}
+        <Card className="p-3">
+          {sectionHeader("Manual machine lines", row.machineLines.length)}
+          {row.machineLines.length === 0 ? emptyState("No manual machine entries recorded.") : (
+            <div className="space-y-2">
+              {row.machineLines.map((m) => {
+                const name = resolveMachineLineEquipmentName(m, machineLookups) ?? "—";
+                return (
+                  <div key={m.id} className="rounded-md border bg-background/50 p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium truncate">{name}</span>
+                      {m.entry_source && (
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                          {m.entry_source}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-muted-foreground">
+                      <div>Work date: <span className="text-foreground">{fmtDateShort(m.work_date)}</span></div>
+                      <div>Duration: <span className="text-foreground">{fmtHours(numOrNull(m.duration_hours))}</span></div>
+                      <div>Engine hrs: <span className="text-foreground">{fmtHours(numOrNull(m.engine_hours_used))}</span></div>
+                      <div>Fuel: <span className="text-foreground">{fmtLitres(numOrNull(m.fuel_litres))}</span></div>
+                      {canSeeCosts && (
+                        <div>Machine charge: <span className="text-foreground">{m.total_machine_cost != null ? money(Number(m.total_machine_cost)) : "—"}</span></div>
+                      )}
+                      {canSeeCosts && (
+                        <div>Fuel cost: <span className="text-foreground">{m.fuel_cost != null ? money(Number(m.fuel_cost)) : "—"}</span></div>
+                      )}
+                    </div>
+                    {m.notes && <div className="text-foreground/80">Note: {m.notes}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Linked GPS trips */}
+        <Card className="p-3">
+          {sectionHeader("Linked GPS trips", row.trips.length)}
+          {row.trips.length === 0 ? emptyState("No GPS trips linked to this task.") : (
+            <div className="space-y-2">
+              {row.trips.map((t) => {
+                const allocs = allocByTripId.get(t.id) ?? [];
+                const tripTotal = allocs.reduce((s, a) => s + Number(a.total_cost ?? 0), 0);
+                const labourTotal = allocs.reduce((s, a) => s + Number(a.labour_cost ?? 0), 0);
+                const fuelTotal = allocs.reduce((s, a) => s + Number(a.fuel_cost ?? 0), 0);
+                const chemTotal = allocs.reduce((s, a) => s + Number(a.chemical_cost ?? 0), 0);
+                const inputTotal = allocs.reduce((s, a) => s + Number(a.input_cost ?? 0), 0);
+                const engineDur = (t.start_engine_hours != null && t.end_engine_hours != null)
+                  ? Number(t.end_engine_hours) - Number(t.start_engine_hours)
+                  : null;
+                const dur = engineDur != null && Number.isFinite(engineDur) && engineDur > 0
+                  ? engineDur
+                  : durationHrs(t.start_time, t.end_time);
+                const title = t.trip_title?.trim() || t.trip_function?.trim() || "Trip";
+                return (
+                  <div key={t.id} className="rounded-md border bg-background/50 p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium truncate">{title}</span>
+                      {canSeeCosts && (
+                        <span className="tabular-nums font-medium">{money(tripTotal)}</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-muted-foreground">
+                      <div>Start: <span className="text-foreground">{fmtDateTime(t.start_time)}</span></div>
+                      <div>End: <span className="text-foreground">{fmtDateTime(t.end_time)}</span></div>
+                      <div>Duration: <span className="text-foreground">{fmtHours(dur)}</span></div>
+                      {(t.machine_id || t.tractor_id) && (
+                        <div>Machine: <span className="text-foreground">{t.machine_id ? "Machine" : "Tractor"}</span></div>
+                      )}
+                      {t.person_name && (
+                        <div>Operator: <span className="text-foreground">{t.person_name}</span></div>
+                      )}
+                    </div>
+                    {canSeeCosts && allocs.length > 0 && (
+                      <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>Labour {money(labourTotal)}</span>
+                        <span>Fuel {money(fuelTotal)}</span>
+                        <span>Chem {money(chemTotal)}</span>
+                        <span>Inputs {money(inputTotal)}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Paddock / block breakdown */}
+        <Card className="p-3">
+          {sectionHeader(`${fmt.blocksLabel} breakdown`, paddockRows.length)}
+          {paddockRows.length === 0 ? emptyState(`No ${fmt.blocksLabel.toLowerCase()} linked to this task.`) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{fmt.blockLabel}</TableHead>
+                    <TableHead className="text-right">Area</TableHead>
+                    <TableHead className="text-right">Share</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paddockRows.map((p) => {
+                    const share = totalAreaForShare && p.areaHa != null
+                      ? (p.areaHa / totalAreaForShare) * 100
+                      : null;
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="text-xs">{p.name}</TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">
+                          {p.areaHa == null ? "—" : fmt.area(p.areaHa)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">
+                          {share == null ? "—" : `${share.toFixed(0)}%`}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
