@@ -131,12 +131,12 @@ const buildMaintenancePickerGroups = (
   currentValue?: string | null,
   includeCurrentValue = false,
 ): PickerGroup[] => {
-  const groups: PickerGroup[] = [
-    { key: "tractors", label: "Tractors", source: "tractor", options: toPickerOptions(equipmentGroups?.tractors, "tractor") },
-    { key: "spray", label: "Spray Equipment", source: "spray_equipment", options: toPickerOptions(equipmentGroups?.sprayEquipment, "spray_equipment") },
-    { key: "machines", label: "Vineyard Machines", source: "vineyard_machine", options: toPickerOptions(equipmentGroups?.vineyardMachines, "vineyard_machine") },
-    { key: "other", label: "Other Equipment & Assets", source: "equipment_item", options: toPickerOptions(equipmentGroups?.otherItems, "equipment_item") },
-  ].filter((group) => group.options.length > 0);
+  const groups: PickerGroup[] = ([
+    { key: "tractors", label: "Tractors", source: "tractor" as const, options: toPickerOptions(equipmentGroups?.tractors, "tractor") },
+    { key: "spray", label: "Spray Equipment", source: "spray_equipment" as const, options: toPickerOptions(equipmentGroups?.sprayEquipment, "spray_equipment") },
+    { key: "machines", label: "Vineyard Machines", source: "vineyard_machine" as const, options: toPickerOptions(equipmentGroups?.vineyardMachines, "vineyard_machine") },
+    { key: "other", label: "Other Equipment & Assets", source: "equipment_item" as const, options: toPickerOptions(equipmentGroups?.otherItems, "equipment_item") },
+  ] as PickerGroup[]).filter((group) => group.options.length > 0);
 
   if (includeLegacy && legacyOnly.length > 0) {
     groups.push({
