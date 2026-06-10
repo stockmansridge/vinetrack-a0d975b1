@@ -315,7 +315,7 @@ export function resolveTreatedAreaHa(
       areaHa: null,
       matched: 0,
       total: ids.length,
-      warning: "Treated paddock polygons unavailable — treated area unknown.",
+      warning: "Treated block polygons unavailable — treated area unknown.",
     };
   }
   if (matched < ids.length) {
