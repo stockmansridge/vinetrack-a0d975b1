@@ -1438,6 +1438,7 @@ export default function WorkTaskReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>{fmt.blockLabel}</TableHead>
                   <TableHead className="text-right">Tasks</TableHead>
                   <TableHead className="text-right">Area</TableHead>
@@ -1467,46 +1468,77 @@ export default function WorkTaskReportsPage() {
                 ) : allocationRows.map((r) => {
                   const status = allocationStatus(r);
                   const isReview = status !== "OK";
+                  const isOpen = allocExpanded.has(r.key);
                   return (
-                    <TableRow key={r.key} className={r.isUnallocated ? "bg-muted/20" : undefined}>
-                      <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.taskIds.size}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {r.hasAnyArea ? areaDisplay(r.areaHa) : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
-                      {canSeeCosts && (
-                        <>
-                          <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—"}
-                          </TableCell>
-                        </>
-                      )}
-                      <TableCell>
-                        {isReview ? (
-                          <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
-                            <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
-                              <AlertTriangle className="h-3 w-3" /> {status}
-                            </Badge>
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">OK</span>
+                    <Fragment key={r.key}>
+                      <TableRow className={r.isUnallocated ? "bg-muted/20" : undefined}>
+                        <TableCell className="p-1 align-middle">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={isOpen ? "Collapse contributing tasks" : "Expand contributing tasks"}
+                            aria-expanded={isOpen}
+                            onClick={() => toggleAllocExpanded(r.key)}
+                          >
+                            {isOpen
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="font-medium">{r.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.taskIds.size}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.hasAnyArea ? areaDisplay(r.areaHa) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
+                        {canSeeCosts && (
+                          <>
+                            <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
+                            <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—"}
+                            </TableCell>
+                          </>
                         )}
-                      </TableCell>
-                    </TableRow>
+                        <TableCell>
+                          {isReview ? (
+                            <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+                              <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+                                <AlertTriangle className="h-3 w-3" /> {status}
+                              </Badge>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">OK</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isOpen && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={allocColSpan} className="p-3 sm:p-4">
+                            <AllocationContributions
+                              row={r}
+                              canSeeCosts={canSeeCosts}
+                              money={money}
+                              areaDisplay={areaDisplay}
+                              costPerAreaDisplay={costPerAreaDisplay}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   );
                 })}
               </TableBody>
               {allocationRows.length > 0 && (
                 <TableBody>
                   <TableRow className="bg-muted/30">
+                    <TableCell />
                     <TableCell className="font-medium">Totals (filtered)</TableCell>
                     <TableCell />
                     <TableCell className="text-right tabular-nums font-medium">
