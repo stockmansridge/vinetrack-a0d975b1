@@ -1130,8 +1130,19 @@ export default function WorkTaskReportsPage() {
     URL.revokeObjectURL(url);
     toast({ title: "CSV exported", description: `${allocationRows.length} block row${allocationRows.length === 1 ? "" : "s"} exported.` });
   };
-  // Block + Tasks + Area + Labour + Machine + Linked + Status = 7 base; cost adds 6.
-  const allocColSpan = 7 + (canSeeCosts ? 6 : 0);
+  // Toggle + Block + Tasks + Area + Labour + Machine + Linked + Status = 8 base; cost adds 6.
+  const allocColSpan = 8 + (canSeeCosts ? 6 : 0);
+
+  // Independent expand state for allocation rows (keyed by row.key, e.g. paddockId
+  // or "__unallocated__"). Kept separate from `expanded` so opening an allocation
+  // row doesn't toggle a task row in the other tab.
+  const [allocExpanded, setAllocExpanded] = useState<Set<string>>(() => new Set());
+  const toggleAllocExpanded = (key: string) =>
+    setAllocExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
 
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
