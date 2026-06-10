@@ -890,6 +890,11 @@ function WorkTaskDrawer({
   const saveTask = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard selected");
+      if (!startDate) {
+        const err = new Error("Task date is required. Please choose a date before creating the task.");
+        (err as any).__validation = true;
+        throw err;
+      }
       const padNames = selectedPaddocks.map((p) => p.name ?? p.id.slice(0, 8)).join(", ");
       const input = {
         id: task?.id,
@@ -934,7 +939,20 @@ function WorkTaskDrawer({
       onSaved();
       if (!isNew) onOpenChange(false);
     },
-    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      const raw = String(e?.message ?? "");
+      let friendly = raw;
+      if (e?.__validation) {
+        friendly = raw;
+      } else if (/null value in column "?date"?/i.test(raw)) {
+        friendly = "Task date is required. Please choose a date before creating the task.";
+      } else if (/violates not-null constraint/i.test(raw)) {
+        friendly = "A required field is missing. Please check the form and try again.";
+      } else if (/permission denied|row-level security/i.test(raw)) {
+        friendly = "You don't have permission to save this task.";
+      }
+      toast({ title: "Save failed", description: friendly, variant: "destructive" });
+    },
   });
 
   const drawerCanSeeCosts = useCanSeeCosts();
@@ -973,7 +991,7 @@ function WorkTaskDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{isNew ? "New Task Log" : `Edit Task Log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
@@ -1125,6 +1143,13 @@ function WorkTaskDrawer({
                 canDelete={canSoftDelete}
                 userId={userId}
               />
+            )}
+            {isNew && (
+              <Section title="Manual Machine Work">
+                <div className="text-xs text-muted-foreground">
+                  Save the task first, then add manual machine work.
+                </div>
+              </Section>
             )}
             {!isNew && task && (
               <WorkTaskSummarySection
