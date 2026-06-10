@@ -727,6 +727,8 @@ function MaintenanceEditor({
       return createMaintenanceLog({
         vineyard_id: selectedVineyardId,
         item_name: itemName,
+        equipment_source: equipmentSource,
+        equipment_ref_id: equipmentSource === "free_text" ? null : equipmentRefId,
         date,
         hours: numOrNull(hours),
         machine_hours: numOrNull(machineHours),
