@@ -260,6 +260,19 @@ export default function WorkTaskReportsPage() {
     return m;
   }, [paddocks]);
 
+  // Legacy paddock-area fallback (matches Work Task drawer's effectiveTaskAreaHa
+  // resolver — see src/pages/setup/WorkTasksPage.tsx). Some iPhone-created task
+  // logs only have paddock_id and no work_task_paddocks rows, so we fall back
+  // to the paddock entity's own area_ha.
+  const paddockAreaById = useMemo(() => {
+    const m = new Map<string, number>();
+    paddocks.forEach((p) => {
+      const v = p.area_ha == null ? NaN : Number(p.area_ha);
+      if (Number.isFinite(v) && v > 0) m.set(p.id, v);
+    });
+    return m;
+  }, [paddocks]);
+
   const labourByTask = useMemo(() => {
     const m = new Map<string, WorkTaskLabourLine[]>();
     (labourQ.data ?? []).forEach((l) => {
