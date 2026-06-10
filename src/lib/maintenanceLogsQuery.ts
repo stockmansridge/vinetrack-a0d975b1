@@ -155,6 +155,8 @@ export async function updateMaintenanceLog(
     sync_version: nextVersion,
   };
   if (input.item_name !== undefined) patch.item_name = input.item_name;
+  if (input.equipment_source !== undefined) patch.equipment_source = input.equipment_source;
+  if (input.equipment_ref_id !== undefined) patch.equipment_ref_id = input.equipment_ref_id;
   if (input.date !== undefined) patch.date = input.date;
   if (input.hours !== undefined) patch.hours = input.hours;
   if (input.machine_hours !== undefined) patch.machine_hours = input.machine_hours;
