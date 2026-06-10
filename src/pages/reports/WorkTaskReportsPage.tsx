@@ -380,15 +380,21 @@ export default function WorkTaskReportsPage() {
   const downloadCsv = () => {
     const baseCols = [
       "Date", "Task type", "Blocks", "Labour hours", "manual_machine_hours",
-      "Linked trips", "Machine entries", "Warning",
+      "Linked trips", "Machine entries",
+      "area_display", "area_unit",
+      "Warning",
     ];
     const costCols = [
       "Manual labour cost", "Machine charge", "Machine fuel",
       "Linked GPS trip cost", "Total cost",
+      "cost_per_area", "cost_per_area_unit",
     ];
     const header = canSeeCosts ? [...baseCols, ...costCols] : baseCols;
     const lines = [header.map(csvSafe).join(",")];
     filtered.forEach((r) => {
+      const areaDisp = areaToDisplayUnit(r.totalAreaHa);
+      const perHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalCost / r.totalAreaHa : null;
+      const perDisp = perHa == null ? null : (areaImperial ? perHa * HA_PER_AC : perHa);
       const base = [
         r.date ?? "",
         r.taskType,
@@ -397,6 +403,8 @@ export default function WorkTaskReportsPage() {
         r.machineHours.toFixed(2),
         r.linkedTripCount,
         r.machineEntries,
+        areaDisp == null ? "" : areaDisp.toFixed(2),
+        r.totalAreaHa == null ? "" : areaUnit,
         r.hasWarning ? "Review" : "",
       ];
       const costs = canSeeCosts ? [
@@ -405,6 +413,8 @@ export default function WorkTaskReportsPage() {
         r.machineFuel.toFixed(2),
         r.linkedTripTotal.toFixed(2),
         r.totalCost.toFixed(2),
+        perDisp == null ? "" : perDisp.toFixed(2),
+        perDisp == null ? "" : `${fmt.settings.currency_code}/${areaUnit}`,
       ] : [];
       lines.push([...base, ...costs].map(csvSafe).join(","));
     });
