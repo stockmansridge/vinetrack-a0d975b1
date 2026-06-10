@@ -319,6 +319,10 @@ export default function WorkTaskReportsPage() {
         hasLinkedTrips,
         hasManualMachine,
         hasWarning: overlap,
+        labourLines: labour,
+        machineLines: machine,
+        taskPaddocks,
+        trips,
       };
     });
   }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById]);
