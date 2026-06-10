@@ -16,10 +16,19 @@
 // so soft-delete writes `deleted_at` directly.
 import { supabase } from "@/integrations/ios-supabase/client";
 
+export type MaintenanceEquipmentSource =
+  | "vineyard_machine"
+  | "tractor"
+  | "spray_equipment"
+  | "equipment_item"
+  | "free_text";
+
 export interface MaintenanceLog {
   id: string;
   vineyard_id: string;
   item_name?: string | null;
+  equipment_source?: MaintenanceEquipmentSource | string | null;
+  equipment_ref_id?: string | null;
   hours?: number | null;
   machine_hours?: number | null;
   work_completed?: string | null;
