@@ -38,7 +38,7 @@ export const TEMPLATE_HEADER_ROW_INDEX = 2;
 export const TEMPLATE_FIRST_DATA_EXCEL_ROW = TEMPLATE_HEADER_ROW_INDEX + 2;
 
 export const REQUIRED_HEADERS = [
-  "Job Name", "Paddocks", "Chemical 1 Name",
+  "Job Name", "Blocks", "Chemical 1 Name",
 ] as const;
 
 const CHEM_SUFFIXES = ["Name", "Rate", "Unit"];

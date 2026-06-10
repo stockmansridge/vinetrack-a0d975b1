@@ -36,7 +36,7 @@ function exampleRows(): any[][] {
   set(job, "Job Name", "EL23 PM Cover Spray");
   set(job, "Planned Date", "2026-11-12");
   set(job, "Make Template", "No");
-  set(job, "Paddocks", "Block A; Block B");
+  set(job, "Blocks", "Block A; Block B");
   set(job, "Operation Type", "Fungicide");
   set(job, "Growth Stage", "EL23");
   set(job, "Water Rate (L/ha)", 500);
@@ -57,7 +57,7 @@ function exampleRows(): any[][] {
   set(tmpl, "Job Name", "Standard PM Cover Template");
   set(tmpl, "Planned Date", "");
   set(tmpl, "Make Template", "Yes");
-  set(tmpl, "Paddocks", "Block A");
+  set(tmpl, "Blocks", "Block A");
   set(tmpl, "Operation Type", "Fungicide");
   set(tmpl, "Growth Stage", "EL23");
   set(tmpl, "Water Rate (L/ha)", 500);
@@ -142,7 +142,7 @@ export async function downloadSprayProgramTemplate(opts: {
     ];
   });
   const blocksSheet = aoaSheet([
-    ["Copy block names from column A into the Paddocks column of the Spray Program sheet. Separate multiple blocks with a semicolon."],
+    ["Copy block names from column A into the Blocks column of the Spray Program sheet. Separate multiple blocks with a semicolon."],
     [],
     blockHeaders,
     ...blockBody,
@@ -237,7 +237,7 @@ export async function downloadSprayProgramTemplate(opts: {
     ["Operation Type (recommended)", RECOMMENDED_OPERATION_TYPES.join(", ")],
     ["Chemical Unit", ALLOWED_UNITS.join(", ")],
     ["Growth Stage", "EL0 through EL47 (uppercase, no space, e.g. EL23)"],
-    ["Paddocks separator", "Semicolon (;) — names must match Blocks tab exactly"],
+    ["Blocks separator", "Semicolon (;) — names must match Blocks tab exactly"],
     ["Max chemicals per job", String(MAX_CHEMICALS)],
   ];
   const instSheet = aoaSheet(inst);
