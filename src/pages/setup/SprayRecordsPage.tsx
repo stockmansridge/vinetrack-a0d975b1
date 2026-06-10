@@ -84,6 +84,26 @@ export default function SprayRecordsPage() {
 
   const records = data?.records ?? [];
 
+  const { data: machines } = useQuery({
+    queryKey: ["vineyard_machines-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("vineyard_machines", selectedVineyardId!),
+  });
+  const { data: tractors } = useQuery({
+    queryKey: ["tractors-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("tractors", selectedVineyardId!),
+  });
+  const { data: sprayEquipment } = useQuery({
+    queryKey: ["spray_equipment-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("spray_equipment", selectedVineyardId!),
+  });
+  const lookups: SprayEquipmentLookups = useMemo(
+    () => ({ machines: machines ?? [], tractors: tractors ?? [], sprayEquipment: sprayEquipment ?? [] }),
+    [machines, tractors, sprayEquipment],
+  );
+
   const operationTypes = useMemo(() => {
     const s = new Set<string>();
     records.forEach((r) => r.operation_type && s.add(r.operation_type));
