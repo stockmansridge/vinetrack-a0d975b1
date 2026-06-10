@@ -142,7 +142,8 @@ function resolveTripEquipmentName(
 }
 
 export default function WorkTaskReportsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName = memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const { toast } = useToast();
   const canSeeCosts = useCanSeeCosts();
   const fmt = useRegionFormatters();
