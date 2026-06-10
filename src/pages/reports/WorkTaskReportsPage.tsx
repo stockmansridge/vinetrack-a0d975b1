@@ -64,6 +64,47 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
+interface AllocContribution {
+  taskId: string;
+  date: string | null;
+  taskType: string;
+  description: string | null;
+  share: number | null; // null = unallocated (no area share)
+  areaHa: number | null; // hectares allocated to this block from this task
+  labourHours: number;
+  machineHours: number;
+  linkedTripCount: number;
+  manualLabourCost: number;
+  machineCharge: number;
+  machineFuel: number;
+  linkedTripTotal: number;
+  totalCost: number;
+  hasOverlapWarning: boolean;
+  reason: string | null; // populated for unallocated / missing-area contributions
+}
+
+interface AllocRow {
+  key: string;
+  paddockId: string | null;
+  name: string;
+  taskIds: Set<string>;
+  areaHa: number;
+  hasAnyArea: boolean;
+  labourHours: number;
+  machineHours: number;
+  linkedTripCount: number;
+  manualLabourCost: number;
+  machineCharge: number;
+  machineFuel: number;
+  linkedTripTotal: number;
+  totalCost: number;
+  hasOverlapWarning: boolean;
+  hasMissingTaskArea: boolean;
+  hasMissingBlockArea: boolean;
+  isUnallocated: boolean;
+  contributions: AllocContribution[];
+}
+
 const ANY = "__any__";
 const OVERLAP_SOURCES = new Set(["missed_trip", "trip_failed", "correction"]);
 
@@ -837,26 +878,8 @@ export default function WorkTaskReportsPage() {
   // "Unallocated" bucket so totals still reconcile against the task summary.
   // If a single block has no resolvable area but the task does, that block
   // contributes 0 cost and is flagged "Missing block area".
-  interface AllocRow {
-    key: string;
-    paddockId: string | null;
-    name: string;
-    taskIds: Set<string>;
-    areaHa: number; // sum of resolved paddock areas (hectares); 0 for unallocated
-    hasAnyArea: boolean;
-    labourHours: number;
-    machineHours: number;
-    linkedTripCount: number;
-    manualLabourCost: number;
-    machineCharge: number;
-    machineFuel: number;
-    linkedTripTotal: number;
-    totalCost: number;
-    hasOverlapWarning: boolean;
-    hasMissingTaskArea: boolean;
-    hasMissingBlockArea: boolean;
-    isUnallocated: boolean;
-  }
+  // Allocation types are declared at module scope (see below) so the
+  // AllocationContributions helper component can share them.
 
   const allocationRows = useMemo<AllocRow[]>(() => {
     const map = new Map<string, AllocRow>();
@@ -883,16 +906,28 @@ export default function WorkTaskReportsPage() {
           hasMissingTaskArea: false,
           hasMissingBlockArea: false,
           isUnallocated,
+          contributions: [],
         };
         map.set(key, row);
       }
       return row;
     };
 
+    const baseContrib = (r: TaskRow): Omit<AllocContribution,
+      "share" | "areaHa" | "labourHours" | "machineHours" | "linkedTripCount" |
+      "manualLabourCost" | "machineCharge" | "machineFuel" | "linkedTripTotal" |
+      "totalCost" | "reason"
+    > => ({
+      taskId: r.task.id,
+      date: r.date,
+      taskType: r.taskType,
+      description: r.task.description ?? r.task.notes ?? null,
+      hasOverlapWarning: r.hasWarning,
+    });
+
     filtered.forEach((r) => {
       const totalHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalAreaHa : null;
 
-      // Build per-paddock area list, mirroring drawer/report precedence.
       const links: Array<{ paddockId: string; areaHa: number | null }> = r.taskPaddocks.length
         ? r.taskPaddocks.map((p) => {
             const a = Number(p.area_ha);
@@ -919,10 +954,20 @@ export default function WorkTaskReportsPage() {
         row.totalCost += r.totalCost;
         row.hasMissingTaskArea = true;
         if (r.hasWarning) row.hasOverlapWarning = true;
+        row.contributions.push({
+          ...baseContrib(r),
+          share: null, areaHa: null,
+          labourHours: r.labourHours, machineHours: r.machineHours,
+          linkedTripCount: r.linkedTripCount,
+          manualLabourCost: r.manualLabourCost, machineCharge: r.machineCharge,
+          machineFuel: r.machineFuel, linkedTripTotal: r.linkedTripTotal,
+          totalCost: r.totalCost,
+          reason: "Missing task area",
+        });
         return;
       }
 
-      // Case 2: no linked paddocks at all → Unallocated.
+      // Case 2: no linked paddocks → Unallocated.
       if (!links.length) {
         const row = ensure(null, "Unallocated", true);
         row.taskIds.add(r.task.id);
@@ -935,6 +980,16 @@ export default function WorkTaskReportsPage() {
         row.linkedTripTotal += r.linkedTripTotal;
         row.totalCost += r.totalCost;
         if (r.hasWarning) row.hasOverlapWarning = true;
+        row.contributions.push({
+          ...baseContrib(r),
+          share: null, areaHa: null,
+          labourHours: r.labourHours, machineHours: r.machineHours,
+          linkedTripCount: r.linkedTripCount,
+          manualLabourCost: r.manualLabourCost, machineCharge: r.machineCharge,
+          machineFuel: r.machineFuel, linkedTripTotal: r.linkedTripTotal,
+          totalCost: r.totalCost,
+          reason: "No linked blocks",
+        });
         return;
       }
 
@@ -946,9 +1001,17 @@ export default function WorkTaskReportsPage() {
         if (r.hasWarning) row.hasOverlapWarning = true;
 
         if (areaHa == null || !(areaHa > 0)) {
-          // Block contributes 0 cost but is still listed with a flag.
           row.hasMissingBlockArea = true;
           row.linkedTripCount += r.linkedTripCount > 0 ? 1 : 0;
+          row.contributions.push({
+            ...baseContrib(r),
+            share: null, areaHa: null,
+            labourHours: 0, machineHours: 0,
+            linkedTripCount: r.linkedTripCount > 0 ? 1 : 0,
+            manualLabourCost: 0, machineCharge: 0, machineFuel: 0,
+            linkedTripTotal: 0, totalCost: 0,
+            reason: "Missing block area",
+          });
           return;
         }
         const share = areaHa / totalHa;
@@ -962,6 +1025,28 @@ export default function WorkTaskReportsPage() {
         row.machineFuel += r.machineFuel * share;
         row.linkedTripTotal += r.linkedTripTotal * share;
         row.totalCost += r.totalCost * share;
+        row.contributions.push({
+          ...baseContrib(r),
+          share, areaHa,
+          labourHours: r.labourHours * share,
+          machineHours: r.machineHours * share,
+          linkedTripCount: r.linkedTripCount > 0 ? 1 : 0,
+          manualLabourCost: r.manualLabourCost * share,
+          machineCharge: r.machineCharge * share,
+          machineFuel: r.machineFuel * share,
+          linkedTripTotal: r.linkedTripTotal * share,
+          totalCost: r.totalCost * share,
+          reason: null,
+        });
+      });
+    });
+
+    // Sort contributions newest first within each row.
+    map.forEach((row) => {
+      row.contributions.sort((a, b) => {
+        const ad = a.date ? new Date(a.date).getTime() : 0;
+        const bd = b.date ? new Date(b.date).getTime() : 0;
+        return bd - ad;
       });
     });
 
@@ -972,6 +1057,7 @@ export default function WorkTaskReportsPage() {
       return a.name.localeCompare(b.name);
     });
   }, [filtered, paddockAreaById, paddockNameById]);
+
 
   const allocationTotals = useMemo(() => {
     return allocationRows.reduce(
@@ -1047,8 +1133,19 @@ export default function WorkTaskReportsPage() {
     URL.revokeObjectURL(url);
     toast({ title: "CSV exported", description: `${allocationRows.length} block row${allocationRows.length === 1 ? "" : "s"} exported.` });
   };
-  // Block + Tasks + Area + Labour + Machine + Linked + Status = 7 base; cost adds 6.
-  const allocColSpan = 7 + (canSeeCosts ? 6 : 0);
+  // Toggle + Block + Tasks + Area + Labour + Machine + Linked + Status = 8 base; cost adds 6.
+  const allocColSpan = 8 + (canSeeCosts ? 6 : 0);
+
+  // Independent expand state for allocation rows (keyed by row.key, e.g. paddockId
+  // or "__unallocated__"). Kept separate from `expanded` so opening an allocation
+  // row doesn't toggle a task row in the other tab.
+  const [allocExpanded, setAllocExpanded] = useState<Set<string>>(() => new Set());
+  const toggleAllocExpanded = (key: string) =>
+    setAllocExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
 
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
@@ -1344,6 +1441,7 @@ export default function WorkTaskReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>{fmt.blockLabel}</TableHead>
                   <TableHead className="text-right">Tasks</TableHead>
                   <TableHead className="text-right">Area</TableHead>
@@ -1373,46 +1471,77 @@ export default function WorkTaskReportsPage() {
                 ) : allocationRows.map((r) => {
                   const status = allocationStatus(r);
                   const isReview = status !== "OK";
+                  const isOpen = allocExpanded.has(r.key);
                   return (
-                    <TableRow key={r.key} className={r.isUnallocated ? "bg-muted/20" : undefined}>
-                      <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.taskIds.size}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {r.hasAnyArea ? areaDisplay(r.areaHa) : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
-                      {canSeeCosts && (
-                        <>
-                          <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—"}
-                          </TableCell>
-                        </>
-                      )}
-                      <TableCell>
-                        {isReview ? (
-                          <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
-                            <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
-                              <AlertTriangle className="h-3 w-3" /> {status}
-                            </Badge>
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">OK</span>
+                    <Fragment key={r.key}>
+                      <TableRow className={r.isUnallocated ? "bg-muted/20" : undefined}>
+                        <TableCell className="p-1 align-middle">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={isOpen ? "Collapse contributing tasks" : "Expand contributing tasks"}
+                            aria-expanded={isOpen}
+                            onClick={() => toggleAllocExpanded(r.key)}
+                          >
+                            {isOpen
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="font-medium">{r.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.taskIds.size}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.hasAnyArea ? areaDisplay(r.areaHa) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
+                        {canSeeCosts && (
+                          <>
+                            <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
+                            <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—"}
+                            </TableCell>
+                          </>
                         )}
-                      </TableCell>
-                    </TableRow>
+                        <TableCell>
+                          {isReview ? (
+                            <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+                              <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+                                <AlertTriangle className="h-3 w-3" /> {status}
+                              </Badge>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">OK</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isOpen && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={allocColSpan} className="p-3 sm:p-4">
+                            <AllocationContributions
+                              row={r}
+                              canSeeCosts={canSeeCosts}
+                              money={money}
+                              areaDisplay={areaDisplay}
+                              costPerAreaDisplay={costPerAreaDisplay}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   );
                 })}
               </TableBody>
               {allocationRows.length > 0 && (
                 <TableBody>
                   <TableRow className="bg-muted/30">
+                    <TableCell />
                     <TableCell className="font-medium">Totals (filtered)</TableCell>
                     <TableCell />
                     <TableCell className="text-right tabular-nums font-medium">
@@ -1701,6 +1830,170 @@ function ExpandedRowDetails({
             </div>
           )}
         </Card>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Block/Paddock allocation — expanded row showing which Work Tasks contributed
+// to that block's allocated totals. Pure presentation — no mutations.
+// Stage 5H.1.
+// ---------------------------------------------------------------------------
+
+interface AllocationContributionsProps {
+  row: AllocRow;
+  canSeeCosts: boolean;
+  money: (n: number) => string;
+  areaDisplay: (haValue: number | null) => string;
+  costPerAreaDisplay: (totalCost: number, haValue: number | null) => string;
+}
+
+function AllocationContributions({
+  row, canSeeCosts, money, areaDisplay, costPerAreaDisplay,
+}: AllocationContributionsProps) {
+  const fmtDate = (v: string | null) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "—" : format(d, "PP");
+  };
+
+  if (row.contributions.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground italic py-2">
+        No contributing tasks.
+      </div>
+    );
+  }
+
+  const anyOverlap = row.contributions.some((c) => c.hasOverlapWarning);
+
+  return (
+    <div className="space-y-3">
+      {anyOverlap && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>Review: linked GPS trips and manual correction/missed machine entries may overlap.</span>
+        </div>
+      )}
+
+      {/* Desktop / tablet: compact table. */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Task type</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="text-right">Share</TableHead>
+              <TableHead className="text-right">Area</TableHead>
+              <TableHead className="text-right">Labour hrs</TableHead>
+              <TableHead className="text-right">Machine hrs</TableHead>
+              <TableHead className="text-right">Linked trips</TableHead>
+              {canSeeCosts && (
+                <>
+                  <TableHead className="text-right">Manual labour</TableHead>
+                  <TableHead className="text-right">Machine charge</TableHead>
+                  <TableHead className="text-right">Machine fuel</TableHead>
+                  <TableHead className="text-right">Linked GPS trips</TableHead>
+                  <TableHead className="text-right">Total cost</TableHead>
+                  <TableHead className="text-right">Cost / area</TableHead>
+                </>
+              )}
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {row.contributions.map((c) => {
+              const statusParts: string[] = [];
+              if (c.reason) statusParts.push(c.reason);
+              if (c.hasOverlapWarning) statusParts.push("Review overlap");
+              const status = statusParts.length ? statusParts.join(" • ") : "OK";
+              const isReview = status !== "OK";
+              return (
+                <TableRow key={c.taskId}>
+                  <TableCell className="text-xs whitespace-nowrap">{fmtDate(c.date)}</TableCell>
+                  <TableCell className="text-xs">{c.taskType}</TableCell>
+                  <TableCell className="text-xs max-w-[240px] truncate" title={c.description ?? ""}>
+                    {c.description ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {c.share == null ? "—" : `${(c.share * 100).toFixed(1)}%`}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {c.areaHa == null ? "—" : areaDisplay(c.areaHa)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{c.labourHours.toFixed(2)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{c.machineHours.toFixed(2)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{c.linkedTripCount}</TableCell>
+                  {canSeeCosts && (
+                    <>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.manualLabourCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.machineCharge)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.machineFuel)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.linkedTripTotal)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs font-medium">{money(c.totalCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">
+                        {costPerAreaDisplay(c.totalCost, c.areaHa)}
+                      </TableCell>
+                    </>
+                  )}
+                  <TableCell>
+                    {isReview ? (
+                      <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 text-[10px] py-0 px-1.5">
+                        {status}
+                      </Badge>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">OK</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Mobile: stacked cards. */}
+      <div className="md:hidden space-y-2">
+        {row.contributions.map((c) => {
+          const statusParts: string[] = [];
+          if (c.reason) statusParts.push(c.reason);
+          if (c.hasOverlapWarning) statusParts.push("Review overlap");
+          const status = statusParts.length ? statusParts.join(" • ") : null;
+          return (
+            <div key={c.taskId} className="rounded-md border bg-background/50 p-2 text-xs space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{c.taskType}</span>
+                <span className="text-muted-foreground">{fmtDate(c.date)}</span>
+              </div>
+              {c.description && (
+                <div className="text-foreground/80 line-clamp-2">{c.description}</div>
+              )}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+                <div>Share: <span className="text-foreground">{c.share == null ? "—" : `${(c.share * 100).toFixed(1)}%`}</span></div>
+                <div>Area: <span className="text-foreground">{c.areaHa == null ? "—" : areaDisplay(c.areaHa)}</span></div>
+                <div>Labour: <span className="text-foreground">{c.labourHours.toFixed(2)} h</span></div>
+                <div>Machine: <span className="text-foreground">{c.machineHours.toFixed(2)} h</span></div>
+                <div>Linked trips: <span className="text-foreground">{c.linkedTripCount}</span></div>
+                {canSeeCosts && (
+                  <>
+                    <div>Manual labour: <span className="text-foreground">{money(c.manualLabourCost)}</span></div>
+                    <div>Machine charge: <span className="text-foreground">{money(c.machineCharge)}</span></div>
+                    <div>Machine fuel: <span className="text-foreground">{money(c.machineFuel)}</span></div>
+                    <div>Linked GPS: <span className="text-foreground">{money(c.linkedTripTotal)}</span></div>
+                    <div className="col-span-2">Total: <span className="text-foreground font-medium">{money(c.totalCost)}</span> · <span className="text-foreground">{costPerAreaDisplay(c.totalCost, c.areaHa)}</span></div>
+                  </>
+                )}
+              </div>
+              {status && (
+                <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 text-[10px] py-0 px-1.5">
+                  {status}
+                </Badge>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
