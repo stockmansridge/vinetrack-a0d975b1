@@ -466,6 +466,7 @@ export default function MaintenancePage() {
         open={!!selected}
         canWrite={canWrite}
         canSeeCosts={canSeeCosts}
+        equipmentGroups={equipmentGroups}
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={openEdit}
       />
