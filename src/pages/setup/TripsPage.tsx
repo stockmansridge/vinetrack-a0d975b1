@@ -356,6 +356,7 @@ export default function TripsPage() {
                   cost: canSeeCostsPage ? fe.cost : null,
                   warnings: fe.warnings,
                 },
+                t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "Task linked" : null,
               );
             });
             downloadCsv(`trips_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
