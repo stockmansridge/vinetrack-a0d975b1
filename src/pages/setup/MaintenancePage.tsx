@@ -533,7 +533,7 @@ function MaintenanceSheet({
           <div className="mt-4 space-y-4 text-sm">
             <Section title="Record">
               <Field label="Date" value={fmtDate(log.date)} />
-              <Field label="Item" value={fmt(log.item_name)} />
+              <Field label="Item" value={fmt(resolveMaintenanceItemName(log, equipmentGroups) || log.item_name)} />
               <Field label="Hours" value={fmt(log.hours)} />
               {log.machine_hours != null && (
                 <Field label="Machine hours" value={fmt(log.machine_hours)} />
