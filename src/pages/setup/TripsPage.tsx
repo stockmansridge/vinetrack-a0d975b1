@@ -735,6 +735,7 @@ function TripSheet({
                     paddockNameById,
                     cost: canSeeCosts ? cost : null,
                     formatters,
+                    linkedTaskLabel: trip.work_task_id ? workTaskLabelById.get(trip.work_task_id) ?? "Task linked" : null,
                   });
                 }}
               >
