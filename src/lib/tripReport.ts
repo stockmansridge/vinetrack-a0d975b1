@@ -973,6 +973,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Average speed", fmtAvgSpeedR(t.total_distance, t.start_time, t.end_time)],
     ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
+    ...(ctx.linkedTaskLabel ? ([["Linked task", ctx.linkedTaskLabel]] as [string, string][]) : []),
   ];
   y = renderFieldList(doc, tripDetailsRows, y);
   y += 6;
