@@ -840,7 +840,7 @@ interface DrawerProps {
 }
 
 function WorkTaskDrawer({
-  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, canSoftDelete, userId, vineyardId, onSaved,
+  task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
   const rf = useRegionFormatters();
