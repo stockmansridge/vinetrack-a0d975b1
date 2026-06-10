@@ -428,3 +428,89 @@ export async function softDeleteLabourLine(id: string, userId?: string | null): 
     .eq("id", id);
   if (error) throw error;
 }
+
+// ------------------- Hard delete -------------------
+
+export interface HardDeleteWorkTaskResult {
+  via: "rpc" | "client_cascade";
+  removed: {
+    labour_lines: number;
+    machine_lines: number;
+    paddock_links: number;
+    trips_unlinked: number;
+  };
+}
+
+/**
+ * Permanently deletes a work task and every child row that references it
+ * (labour lines, machine/equipment + fuel lines, block links), and unlinks
+ * any GPS trips that were attached to the task (trips themselves are
+ * standalone GPS records and are preserved).
+ *
+ * Prefers an atomic server-side RPC (`hard_delete_work_task`) when deployed
+ * on the iOS Supabase project; otherwise falls back to ordered client-side
+ * deletes. RLS on the iOS project is the authority for whether the caller
+ * is permitted to perform the delete.
+ */
+export async function hardDeleteWorkTask(
+  workTaskId: string,
+): Promise<HardDeleteWorkTaskResult> {
+  // Try atomic RPC first.
+  const rpc = await (supabase as any).rpc("hard_delete_work_task", {
+    p_work_task_id: workTaskId,
+  });
+  if (!rpc.error) {
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+    return {
+      via: "rpc",
+      removed: {
+        labour_lines: Number(row?.labour_lines ?? 0),
+        machine_lines: Number(row?.machine_lines ?? 0),
+        paddock_links: Number(row?.paddock_links ?? 0),
+        trips_unlinked: Number(row?.trips_unlinked ?? 0),
+      },
+    };
+  }
+
+  // Fallback: sequential hard deletes. Children first, then task.
+  const counts = { labour_lines: 0, machine_lines: 0, paddock_links: 0, trips_unlinked: 0 };
+
+  const labour = await supabase
+    .from("work_task_labour_lines")
+    .delete({ count: "exact" })
+    .eq("work_task_id", workTaskId);
+  if (labour.error) throw labour.error;
+  counts.labour_lines = labour.count ?? 0;
+
+  const machine = await supabase
+    .from("work_task_machine_lines")
+    .delete({ count: "exact" })
+    .eq("work_task_id", workTaskId);
+  if (machine.error) throw machine.error;
+  counts.machine_lines = machine.count ?? 0;
+
+  const padLinks = await supabase
+    .from("work_task_paddocks")
+    .delete({ count: "exact" })
+    .eq("work_task_id", workTaskId);
+  if (padLinks.error) throw padLinks.error;
+  counts.paddock_links = padLinks.count ?? 0;
+
+  // Unlink any GPS trips that referenced this task. Trips themselves are
+  // independent records and must not be deleted.
+  const unlink = await supabase
+    .from("trips")
+    .update({ work_task_id: null, client_updated_at: nowIso() })
+    .eq("work_task_id", workTaskId)
+    .select("id");
+  if (unlink.error) throw unlink.error;
+  counts.trips_unlinked = unlink.data?.length ?? 0;
+
+  const task = await supabase
+    .from("work_tasks")
+    .delete()
+    .eq("id", workTaskId);
+  if (task.error) throw task.error;
+
+  return { via: "client_cascade", removed: counts };
+}
