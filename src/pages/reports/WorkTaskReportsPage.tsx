@@ -80,6 +80,7 @@ interface TaskRow {
   blockNames: string[];
   blocksLabel: string;
   paddockIds: string[];
+  totalAreaHa: number | null;
   labourHours: number;
   machineHours: number;
   machineEntries: number;
@@ -95,12 +96,33 @@ interface TaskRow {
   hasWarning: boolean;
 }
 
+// Conversion factor used internally for cost-per-area when the vineyard is set
+// to acres. Storage stays in hectares; this is display-only.
+const HA_PER_AC = 0.40468564224;
+
 export default function WorkTaskReportsPage() {
   const { selectedVineyardId } = useVineyard();
   const { toast } = useToast();
   const canSeeCosts = useCanSeeCosts();
   const fmt = useRegionFormatters();
   const money = (n: number) => fmt.currency(n);
+  const areaImperial = fmt.settings.area_unit === "acres";
+  const areaUnit = fmt.areaUnitLabel; // "ha" | "ac"
+  const costPerAreaLabel = `Cost / ${areaUnit}`;
+  const areaDisplay = (haValue: number | null) =>
+    haValue == null ? "—" : fmt.area(haValue);
+  const costPerAreaDisplay = (totalCost: number, haValue: number | null) => {
+    if (!canSeeCosts) return "—";
+    if (haValue == null || !(haValue > 0)) return "—";
+    if (!Number.isFinite(totalCost)) return "—";
+    const perHa = totalCost / haValue;
+    const perDisplay = areaImperial ? perHa * HA_PER_AC : perHa;
+    return fmt.currency(perDisplay);
+  };
+  const areaToDisplayUnit = (haValue: number | null): number | null => {
+    if (haValue == null) return null;
+    return areaImperial ? haValue / HA_PER_AC : haValue;
+  };
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -231,6 +253,20 @@ export default function WorkTaskReportsPage() {
         ? blockNames.join(", ")
         : (task.paddock_name ?? "—");
 
+      // Area roll-up (hectares, canonical). Prefer work_task_paddocks.area_ha;
+      // fall back to the task's own area_ha if none of the paddock rows have a
+      // value. Display unit conversion happens at render/export time via
+      // useRegionFormatters().
+      const paddockAreaSum = taskPaddocks.reduce(
+        (s, p) => s + (p.area_ha != null ? num(p.area_ha) : 0), 0,
+      );
+      const anyPaddockArea = taskPaddocks.some((p) => p.area_ha != null);
+      let totalAreaHa: number | null = anyPaddockArea ? paddockAreaSum : null;
+      if (totalAreaHa == null && task.area_ha != null) {
+        totalAreaHa = num(task.area_ha);
+      }
+      if (totalAreaHa != null && !(totalAreaHa > 0)) totalAreaHa = null;
+
       const manualLabourCost = labour.reduce((s, l) => s + num(l.total_cost), 0);
       const labourHours = labour.reduce((s, l) => s + num(l.total_hours), 0);
       const machineCharge = machine.reduce((s, l) => s + num(l.total_machine_cost), 0);
@@ -260,6 +296,7 @@ export default function WorkTaskReportsPage() {
         blockNames,
         blocksLabel,
         paddockIds: pIds,
+        totalAreaHa,
         labourHours,
         machineHours,
         machineEntries: machine.length,
@@ -323,13 +360,15 @@ export default function WorkTaskReportsPage() {
       (acc, r) => ({
         labourHours: acc.labourHours + r.labourHours,
         machineHours: acc.machineHours + r.machineHours,
+        totalAreaHa: acc.totalAreaHa + (r.totalAreaHa ?? 0),
+        anyArea: acc.anyArea || r.totalAreaHa != null,
         manualLabourCost: acc.manualLabourCost + r.manualLabourCost,
         machineCharge: acc.machineCharge + r.machineCharge,
         machineFuel: acc.machineFuel + r.machineFuel,
         linkedTripTotal: acc.linkedTripTotal + r.linkedTripTotal,
         totalCost: acc.totalCost + r.totalCost,
       }),
-      { labourHours: 0, machineHours: 0, manualLabourCost: 0, machineCharge: 0, machineFuel: 0, linkedTripTotal: 0, totalCost: 0 },
+      { labourHours: 0, machineHours: 0, totalAreaHa: 0, anyArea: false, manualLabourCost: 0, machineCharge: 0, machineFuel: 0, linkedTripTotal: 0, totalCost: 0 },
     );
   }, [filtered]);
 
@@ -341,15 +380,21 @@ export default function WorkTaskReportsPage() {
   const downloadCsv = () => {
     const baseCols = [
       "Date", "Task type", "Blocks", "Labour hours", "manual_machine_hours",
-      "Linked trips", "Machine entries", "Warning",
+      "Linked trips", "Machine entries",
+      "area_display", "area_unit",
+      "Warning",
     ];
     const costCols = [
       "Manual labour cost", "Machine charge", "Machine fuel",
       "Linked GPS trip cost", "Total cost",
+      "cost_per_area", "cost_per_area_unit",
     ];
     const header = canSeeCosts ? [...baseCols, ...costCols] : baseCols;
     const lines = [header.map(csvSafe).join(",")];
     filtered.forEach((r) => {
+      const areaDisp = areaToDisplayUnit(r.totalAreaHa);
+      const perHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalCost / r.totalAreaHa : null;
+      const perDisp = perHa == null ? null : (areaImperial ? perHa * HA_PER_AC : perHa);
       const base = [
         r.date ?? "",
         r.taskType,
@@ -358,6 +403,8 @@ export default function WorkTaskReportsPage() {
         r.machineHours.toFixed(2),
         r.linkedTripCount,
         r.machineEntries,
+        areaDisp == null ? "" : areaDisp.toFixed(2),
+        r.totalAreaHa == null ? "" : areaUnit,
         r.hasWarning ? "Review" : "",
       ];
       const costs = canSeeCosts ? [
@@ -366,6 +413,8 @@ export default function WorkTaskReportsPage() {
         r.machineFuel.toFixed(2),
         r.linkedTripTotal.toFixed(2),
         r.totalCost.toFixed(2),
+        perDisp == null ? "" : perDisp.toFixed(2),
+        perDisp == null ? "" : `${fmt.settings.currency_code}/${areaUnit}`,
       ] : [];
       lines.push([...base, ...costs].map(csvSafe).join(","));
     });
@@ -493,6 +542,7 @@ export default function WorkTaskReportsPage() {
               <TableHead>Date</TableHead>
               <TableHead>Task type</TableHead>
               <TableHead>Blocks</TableHead>
+              <TableHead className="text-right">Area</TableHead>
               <TableHead className="text-right">Labour hrs</TableHead>
               <TableHead className="text-right">Machine hrs</TableHead>
               <TableHead className="text-right">Linked trips</TableHead>
@@ -503,6 +553,7 @@ export default function WorkTaskReportsPage() {
                   <TableHead className="text-right">Machine fuel</TableHead>
                   <TableHead className="text-right">Linked GPS trips</TableHead>
                   <TableHead className="text-right">Total cost</TableHead>
+                  <TableHead className="text-right">{costPerAreaLabel}</TableHead>
                 </>
               ) : (
                 <TableHead className="text-right">Machine entries</TableHead>
@@ -513,7 +564,7 @@ export default function WorkTaskReportsPage() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canSeeCosts ? 12 : 8} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={canSeeCosts ? 14 : 9} className="text-center text-sm text-muted-foreground py-8">
                   {loading ? "Loading…" : "No work tasks match the current filters."}
                 </TableCell>
               </TableRow>
@@ -522,6 +573,7 @@ export default function WorkTaskReportsPage() {
                 <TableCell className="whitespace-nowrap">{fmtDay(r.date)}</TableCell>
                 <TableCell>{r.taskType}</TableCell>
                 <TableCell className="max-w-[280px] truncate" title={r.blocksLabel}>{r.blocksLabel}</TableCell>
+                <TableCell className="text-right tabular-nums">{areaDisplay(r.totalAreaHa)}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
@@ -532,6 +584,7 @@ export default function WorkTaskReportsPage() {
                     <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
                     <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{costPerAreaDisplay(r.totalCost, r.totalAreaHa)}</TableCell>
                   </>
                 ) : (
                   <TableCell className="text-right tabular-nums">{r.machineEntries}</TableCell>
@@ -554,6 +607,9 @@ export default function WorkTaskReportsPage() {
             <TableBody>
               <TableRow className="bg-muted/30">
                 <TableCell colSpan={3} className="font-medium">Totals (filtered)</TableCell>
+                <TableCell className="text-right tabular-nums font-medium">
+                  {totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—"}
+                </TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.labourHours.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.machineHours.toFixed(2)}</TableCell>
                 <TableCell />
@@ -564,6 +620,9 @@ export default function WorkTaskReportsPage() {
                     <TableCell className="text-right tabular-nums font-medium">{money(totals.machineFuel)}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{money(totals.linkedTripTotal)}</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">{money(totals.totalCost)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—"}
+                    </TableCell>
                   </>
                 ) : (
                   <TableCell />
