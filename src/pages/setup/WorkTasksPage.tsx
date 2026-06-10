@@ -91,6 +91,10 @@ import {
   type WorkTaskMachineEquipmentSource,
 } from "@/lib/workTaskMachineLinesQuery";
 import {
+  fetchTripCostAllocationsForVineyard,
+  type TripCostAllocation,
+} from "@/lib/tripCostAllocationsQuery";
+import {
   formatTripNameLabel,
   formatTripFunctionLabel,
   formatTripDurationLabel,
