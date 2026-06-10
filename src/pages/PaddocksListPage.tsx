@@ -122,15 +122,15 @@ export default function PaddocksListPage() {
 
         {paddocksQ.isLoading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">
-            Loading paddocks…
+            Loading blocks…
           </div>
         ) : paddocksQ.error ? (
           <div className="text-sm text-destructive py-8 text-center">
-            Failed to load paddocks.
+            Failed to load blocks.
           </div>
         ) : rows.length === 0 ? (
           <div className="text-sm text-muted-foreground py-8 text-center">
-            No paddocks found.
+            No blocks found.
           </div>
         ) : (
           <div className="overflow-x-auto">
