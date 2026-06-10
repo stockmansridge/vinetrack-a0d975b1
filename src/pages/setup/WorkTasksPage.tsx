@@ -248,6 +248,75 @@ export default function WorkTasksPage() {
     refetchOnMount: "always",
   });
 
+  // SQL 102 — trips can now link back to a work task via work_task_id.
+  // Read-only awareness only at this stage; no linking UI.
+  const { data: tripsResult } = useQuery({
+    queryKey: ["trips", selectedVineyardId, paddockIds.length],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
+  });
+  const trips: Trip[] = tripsResult?.trips ?? [];
+
+  // SQL 103 — manually-entered machine usage attached to a work task.
+  const { data: machineLines = [] } = useQuery({
+    queryKey: ["work_task_machine_lines", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTaskMachineLinesForVineyard(selectedVineyardId!),
+  });
+
+  // Equipment lookups for resolveMachineLineEquipmentName().
+  const { data: vineyardMachines = [] } = useQuery({
+    queryKey: ["vineyard_machines-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("vineyard_machines", selectedVineyardId!),
+  });
+  const { data: tractorsList = [] } = useQuery({
+    queryKey: ["tractors-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("tractors", selectedVineyardId!),
+  });
+  const { data: sprayEquipmentList = [] } = useQuery({
+    queryKey: ["spray_equipment-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("spray_equipment", selectedVineyardId!),
+  });
+  const { data: equipmentItemsList = [] } = useQuery({
+    queryKey: ["equipment_items-lite", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchList<{ id: string; name?: string | null }>("equipment_items", selectedVineyardId!),
+  });
+  const machineLookups = useMemo(
+    () => ({
+      machines: vineyardMachines,
+      tractors: tractorsList,
+      sprayEquipment: sprayEquipmentList,
+      equipmentItems: equipmentItemsList,
+    }),
+    [vineyardMachines, tractorsList, sprayEquipmentList, equipmentItemsList],
+  );
+
+  const tripsByTask = useMemo(() => {
+    const m = new Map<string, Trip[]>();
+    trips.forEach((t) => {
+      if (!t.work_task_id) return;
+      const arr = m.get(t.work_task_id) ?? [];
+      arr.push(t);
+      m.set(t.work_task_id, arr);
+    });
+    return m;
+  }, [trips]);
+
+  const machineLinesByTask = useMemo(() => {
+    const m = new Map<string, WorkTaskMachineLine[]>();
+    machineLines.forEach((l) => {
+      if (l.deleted_at) return;
+      const arr = m.get(l.work_task_id) ?? [];
+      arr.push(l);
+      m.set(l.work_task_id, arr);
+    });
+    return m;
+  }, [machineLines]);
+
   const tasks = data?.tasks ?? [];
 
   const paddocksByTask = useMemo(() => {
