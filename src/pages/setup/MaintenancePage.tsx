@@ -800,7 +800,11 @@ function MaintenanceEditor({
             <div className="flex items-center gap-1">
               <EquipmentPicker
                 value={itemName}
-                onValueChange={setItemName}
+                onSelectOption={(opt) => {
+                  setItemName(opt.name);
+                  setEquipmentSource(opt.source);
+                  setEquipmentRefId(opt.source === "free_text" ? null : opt.id);
+                }}
                 groups={pickerGroups}
               />
               <AddEquipmentMenu />
