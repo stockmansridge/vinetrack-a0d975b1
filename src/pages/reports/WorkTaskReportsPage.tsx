@@ -418,7 +418,7 @@ export default function WorkTaskReportsPage() {
         trips,
       };
     });
-  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById]);
+  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById, paddockAreaById]);
 
   const taskTypeOptions = useMemo(() => {
     const set = new Set<string>();
