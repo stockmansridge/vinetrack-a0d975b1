@@ -1144,11 +1144,20 @@ export default function WorkTaskReportsPage() {
             </label>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-muted-foreground">
-            {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="text-xs text-muted-foreground">
+          {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
+        </div>
+      </Card>
+
+      <Tabs defaultValue="task-summary" className="space-y-3">
+        <TabsList>
+          <TabsTrigger value="task-summary">Task Summary</TabsTrigger>
+          <TabsTrigger value="block-allocation">{fmt.blockLabel} Allocation</TabsTrigger>
+        </TabsList>
+
+        {/* -------------------- Task Summary tab (existing view) -------------------- */}
+        <TabsContent value="task-summary" className="space-y-3 mt-0">
+          <div className="flex items-center justify-end gap-2">
             <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!filtered.length}>
               <Download className="h-3.5 w-3.5 mr-1" />
               Export PDF
@@ -1162,149 +1171,281 @@ export default function WorkTaskReportsPage() {
               Export CSV
             </Button>
           </div>
-        </div>
-      </Card>
 
-      <Card className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8" />
-              <TableHead>Date</TableHead>
-              <TableHead>Task type</TableHead>
-              <TableHead>Blocks</TableHead>
-              <TableHead className="text-right">Area</TableHead>
-              <TableHead className="text-right">Labour hrs</TableHead>
-              <TableHead className="text-right">Machine hrs</TableHead>
-              <TableHead className="text-right">Linked trips</TableHead>
-              {canSeeCosts ? (
-                <>
-                  <TableHead className="text-right">Manual labour</TableHead>
-                  <TableHead className="text-right">Machine charge</TableHead>
-                  <TableHead className="text-right">Machine fuel</TableHead>
-                  <TableHead className="text-right">Linked GPS trips</TableHead>
-                  <TableHead className="text-right">Total cost</TableHead>
-                  <TableHead className="text-right">{costPerAreaLabel}</TableHead>
-                </>
-              ) : (
-                <TableHead className="text-right">Machine entries</TableHead>
-              )}
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={totalColSpan} className="text-center text-sm text-muted-foreground py-8">
-                  {loading ? "Loading…" : "No work tasks match the current filters."}
-                </TableCell>
-              </TableRow>
-            ) : filtered.map((r) => {
-              const isOpen = expanded.has(r.task.id);
-              return (
-                <Fragment key={r.task.id}>
+          <Card className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8" />
+                  <TableHead>Date</TableHead>
+                  <TableHead>Task type</TableHead>
+                  <TableHead>{fmt.blocksLabel}</TableHead>
+                  <TableHead className="text-right">Area</TableHead>
+                  <TableHead className="text-right">Labour hrs</TableHead>
+                  <TableHead className="text-right">Machine hrs</TableHead>
+                  <TableHead className="text-right">Linked trips</TableHead>
+                  {canSeeCosts ? (
+                    <>
+                      <TableHead className="text-right">Manual labour</TableHead>
+                      <TableHead className="text-right">Machine charge</TableHead>
+                      <TableHead className="text-right">Machine fuel</TableHead>
+                      <TableHead className="text-right">Linked GPS trips</TableHead>
+                      <TableHead className="text-right">Total cost</TableHead>
+                      <TableHead className="text-right">{costPerAreaLabel}</TableHead>
+                    </>
+                  ) : (
+                    <TableHead className="text-right">Machine entries</TableHead>
+                  )}
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell className="p-1 align-middle">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        aria-label={isOpen ? "Collapse details" : "Expand details"}
-                        aria-expanded={isOpen}
-                        onClick={() => toggleExpanded(r.task.id)}
-                      >
-                        {isOpen
-                          ? <ChevronDown className="h-4 w-4" />
-                          : <ChevronRight className="h-4 w-4" />}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{fmtDay(r.date)}</TableCell>
-                    <TableCell>{r.taskType}</TableCell>
-                    <TableCell className="max-w-[280px] truncate" title={r.blocksLabel}>{r.blocksLabel}</TableCell>
-                    <TableCell className="text-right tabular-nums">{areaDisplay(r.totalAreaHa)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
-                    {canSeeCosts ? (
-                      <>
-                        <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{costPerAreaDisplay(r.totalCost, r.totalAreaHa)}</TableCell>
-                      </>
-                    ) : (
-                      <TableCell className="text-right tabular-nums">{r.machineEntries}</TableCell>
-                    )}
-                    <TableCell>
-                      {r.hasWarning ? (
-                        <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
-                          <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
-                            <AlertTriangle className="h-3 w-3" /> Review
-                          </Badge>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                    <TableCell colSpan={totalColSpan} className="text-center text-sm text-muted-foreground py-8">
+                      {loading ? "Loading…" : "No work tasks match the current filters."}
                     </TableCell>
                   </TableRow>
-                  {isOpen && (
-                    <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={totalColSpan} className="p-3 sm:p-4">
-                        <ExpandedRowDetails
-                          row={r}
-                          canSeeCosts={canSeeCosts}
-                          fmt={fmt}
-                          areaImperial={areaImperial}
-                          paddockNameById={paddockNameById}
-                          machineLookups={machineLookups}
-                          allocByTripId={allocByTripId}
-                          money={money}
-                        />
+                ) : filtered.map((r) => {
+                  const isOpen = expanded.has(r.task.id);
+                  return (
+                    <Fragment key={r.task.id}>
+                      <TableRow>
+                        <TableCell className="p-1 align-middle">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={isOpen ? "Collapse details" : "Expand details"}
+                            aria-expanded={isOpen}
+                            onClick={() => toggleExpanded(r.task.id)}
+                          >
+                            {isOpen
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">{fmtDay(r.date)}</TableCell>
+                        <TableCell>{r.taskType}</TableCell>
+                        <TableCell className="max-w-[280px] truncate" title={r.blocksLabel}>{r.blocksLabel}</TableCell>
+                        <TableCell className="text-right tabular-nums">{areaDisplay(r.totalAreaHa)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
+                        {canSeeCosts ? (
+                          <>
+                            <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
+                            <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{costPerAreaDisplay(r.totalCost, r.totalAreaHa)}</TableCell>
+                          </>
+                        ) : (
+                          <TableCell className="text-right tabular-nums">{r.machineEntries}</TableCell>
+                        )}
+                        <TableCell>
+                          {r.hasWarning ? (
+                            <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+                              <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+                                <AlertTriangle className="h-3 w-3" /> Review
+                              </Badge>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isOpen && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={totalColSpan} className="p-3 sm:p-4">
+                            <ExpandedRowDetails
+                              row={r}
+                              canSeeCosts={canSeeCosts}
+                              fmt={fmt}
+                              areaImperial={areaImperial}
+                              paddockNameById={paddockNameById}
+                              machineLookups={machineLookups}
+                              allocByTripId={allocByTripId}
+                              money={money}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
+              {filtered.length > 0 && (
+                <TableBody>
+                  <TableRow className="bg-muted/30">
+                    <TableCell />
+                    <TableCell colSpan={3} className="font-medium">Totals (filtered)</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{totals.labourHours.toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{totals.machineHours.toFixed(2)}</TableCell>
+                    <TableCell />
+                    {canSeeCosts ? (
+                      <>
+                        <TableCell className="text-right tabular-nums font-medium">{money(totals.manualLabourCost)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{money(totals.machineCharge)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{money(totals.machineFuel)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{money(totals.linkedTripTotal)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{money(totals.totalCost)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—"}
+                        </TableCell>
+                      </>
+                    ) : (
+                      <TableCell />
+                    )}
+                    <TableCell />
+                  </TableRow>
+                </TableBody>
+              )}
+            </Table>
+          </Card>
+
+          <p className="text-[11px] text-muted-foreground">
+            Review: linked GPS trips and manual correction/missed machine entries
+            may overlap.
+          </p>
+        </TabsContent>
+
+        {/* -------------------- Block Allocation tab (Stage 5H) -------------------- */}
+        <TabsContent value="block-allocation" className="space-y-3 mt-0">
+          <Card className="p-3 space-y-1">
+            <p className="text-xs text-muted-foreground flex items-start gap-1">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {`${fmt.blockLabel} allocation is estimated by area share of each Work Task. Values are calculated for reporting and are not written back to the database.`}
+            </p>
+            {canSeeCosts && (
+              <p className="text-xs text-muted-foreground flex items-start gap-1">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                Linked GPS trip costs may include operator labour, fuel, chemicals
+                and inputs.
+              </p>
+            )}
+          </Card>
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs text-muted-foreground">
+              {loading ? "Loading…" : `${allocationRows.length} ${fmt.blockLabel.toLowerCase()} row${allocationRows.length === 1 ? "" : "s"} from ${filtered.length} task${filtered.length === 1 ? "" : "s"}`}
+            </div>
+            <Button size="sm" onClick={downloadAllocationCsv} disabled={!allocationRows.length}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
+          </div>
+
+          <Card className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{fmt.blockLabel}</TableHead>
+                  <TableHead className="text-right">Tasks</TableHead>
+                  <TableHead className="text-right">Area</TableHead>
+                  <TableHead className="text-right">Labour hrs</TableHead>
+                  <TableHead className="text-right">Machine hrs</TableHead>
+                  <TableHead className="text-right">Linked trips</TableHead>
+                  {canSeeCosts && (
+                    <>
+                      <TableHead className="text-right">Manual labour</TableHead>
+                      <TableHead className="text-right">Machine charge</TableHead>
+                      <TableHead className="text-right">Machine fuel</TableHead>
+                      <TableHead className="text-right">Linked GPS trips</TableHead>
+                      <TableHead className="text-right">Total allocated cost</TableHead>
+                      <TableHead className="text-right">{costPerAreaLabel}</TableHead>
+                    </>
+                  )}
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allocationRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={allocColSpan} className="text-center text-sm text-muted-foreground py-8">
+                      {loading ? "Loading…" : `No ${fmt.blockLabel.toLowerCase()} rows for the current filters.`}
+                    </TableCell>
+                  </TableRow>
+                ) : allocationRows.map((r) => {
+                  const status = allocationStatus(r);
+                  const isReview = status !== "OK";
+                  return (
+                    <TableRow key={r.key} className={r.isUnallocated ? "bg-muted/20" : undefined}>
+                      <TableCell className="font-medium">{r.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{r.taskIds.size}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {r.hasAnyArea ? areaDisplay(r.areaHa) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
+                      {canSeeCosts && (
+                        <>
+                          <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
+                          <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—"}
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell>
+                        {isReview ? (
+                          <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+                            <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+                              <AlertTriangle className="h-3 w-3" /> {status}
+                            </Badge>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">OK</span>
+                        )}
                       </TableCell>
                     </TableRow>
-                  )}
-                </Fragment>
-              );
-            })}
-          </TableBody>
-          {filtered.length > 0 && (
-            <TableBody>
-              <TableRow className="bg-muted/30">
-                <TableCell />
-                <TableCell colSpan={3} className="font-medium">Totals (filtered)</TableCell>
-                <TableCell className="text-right tabular-nums font-medium">
-                  {totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—"}
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-medium">{totals.labourHours.toFixed(2)}</TableCell>
-                <TableCell className="text-right tabular-nums font-medium">{totals.machineHours.toFixed(2)}</TableCell>
-                <TableCell />
-                {canSeeCosts ? (
-                  <>
-                    <TableCell className="text-right tabular-nums font-medium">{money(totals.manualLabourCost)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{money(totals.machineCharge)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{money(totals.machineFuel)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{money(totals.linkedTripTotal)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-semibold">{money(totals.totalCost)}</TableCell>
+                  );
+                })}
+              </TableBody>
+              {allocationRows.length > 0 && (
+                <TableBody>
+                  <TableRow className="bg-muted/30">
+                    <TableCell className="font-medium">Totals (filtered)</TableCell>
+                    <TableCell />
                     <TableCell className="text-right tabular-nums font-medium">
-                      {totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—"}
+                      {allocationTotals.hasAnyArea ? areaDisplay(allocationTotals.areaHa) : "—"}
                     </TableCell>
-                  </>
-                ) : (
-                  <TableCell />
-                )}
-                <TableCell />
-              </TableRow>
-            </TableBody>
-          )}
-        </Table>
-      </Card>
+                    <TableCell className="text-right tabular-nums font-medium">{allocationTotals.labourHours.toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{allocationTotals.machineHours.toFixed(2)}</TableCell>
+                    <TableCell />
+                    {canSeeCosts && (
+                      <>
+                        <TableCell className="text-right tabular-nums font-medium">{money(allocationTotals.manualLabourCost)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{money(allocationTotals.machineCharge)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{money(allocationTotals.machineFuel)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{money(allocationTotals.linkedTripTotal)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{money(allocationTotals.totalCost)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {allocationTotals.hasAnyArea ? costPerAreaDisplay(allocationTotals.totalCost, allocationTotals.areaHa) : "—"}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell />
+                  </TableRow>
+                </TableBody>
+              )}
+            </Table>
+          </Card>
 
-      <p className="text-[11px] text-muted-foreground">
-        Review: linked GPS trips and manual correction/missed machine entries
-        may overlap.
-      </p>
+          <p className="text-[11px] text-muted-foreground">
+            Review: linked GPS trips and manual correction/missed machine entries
+            may overlap.
+          </p>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
