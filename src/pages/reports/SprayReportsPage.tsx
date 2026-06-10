@@ -23,10 +23,6 @@ import {
   resolveSprayEquipmentName,
   type SprayEquipmentLookups,
 } from "@/lib/sprayRecordEquipment";
-import * as __pdfPlaceholder from "@/lib/sprayRecordPdf"; void __pdfPlaceholder; // no-op to keep imports tidy
-import {
-  __noop_placeholder as __noop2,
-} from "@/lib/sprayRecordsQuery";
 import { exportSprayRecordPdf } from "@/lib/sprayRecordPdf";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
