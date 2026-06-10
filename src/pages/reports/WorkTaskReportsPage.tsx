@@ -61,7 +61,7 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 
-interface PaddockLite { id: string; name: string | null }
+interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
 const ANY = "__any__";
 const OVERLAP_SOURCES = new Set(["missed_trip", "trip_failed", "correction"]);
@@ -260,6 +260,19 @@ export default function WorkTaskReportsPage() {
     return m;
   }, [paddocks]);
 
+  // Legacy paddock-area fallback (matches Work Task drawer's effectiveTaskAreaHa
+  // resolver — see src/pages/setup/WorkTasksPage.tsx). Some iPhone-created task
+  // logs only have paddock_id and no work_task_paddocks rows, so we fall back
+  // to the paddock entity's own area_ha.
+  const paddockAreaById = useMemo(() => {
+    const m = new Map<string, number>();
+    paddocks.forEach((p) => {
+      const v = p.area_ha == null ? NaN : Number(p.area_ha);
+      if (Number.isFinite(v) && v > 0) m.set(p.id, v);
+    });
+    return m;
+  }, [paddocks]);
+
   const labourByTask = useMemo(() => {
     const m = new Map<string, WorkTaskLabourLine[]>();
     (labourQ.data ?? []).forEach((l) => {
@@ -333,19 +346,28 @@ export default function WorkTaskReportsPage() {
         ? blockNames.join(", ")
         : (task.paddock_name ?? "—");
 
-      // Area roll-up (hectares, canonical). Prefer work_task_paddocks.area_ha;
-      // fall back to the task's own area_ha if none of the paddock rows have a
-      // value. Display unit conversion happens at render/export time via
-      // useRegionFormatters().
-      const paddockAreaSum = taskPaddocks.reduce(
-        (s, p) => s + (p.area_ha != null ? num(p.area_ha) : 0), 0,
-      );
-      const anyPaddockArea = taskPaddocks.some((p) => p.area_ha != null);
-      let totalAreaHa: number | null = anyPaddockArea ? paddockAreaSum : null;
-      if (totalAreaHa == null && task.area_ha != null) {
-        totalAreaHa = num(task.area_ha);
+      // Area roll-up (hectares, canonical). Mirrors effectiveTaskAreaHa() in
+      // the Work Task drawer so report and drawer agree:
+      //   1) task.area_ha if positive
+      //   2) Σ work_task_paddocks.area_ha (positive values only)
+      //   3) Σ paddock entity area_ha by paddock_id (legacy iPhone task logs)
+      //   4) null
+      // Display unit conversion happens at render/export time.
+      let totalAreaHa: number | null = null;
+      const storedTaskArea = task.area_ha == null ? NaN : Number(task.area_ha);
+      if (Number.isFinite(storedTaskArea) && storedTaskArea > 0) {
+        totalAreaHa = storedTaskArea;
       }
-      if (totalAreaHa != null && !(totalAreaHa > 0)) totalAreaHa = null;
+      if (totalAreaHa == null && taskPaddocks.length) {
+        const sum = taskPaddocks.reduce(
+          (s, p) => s + (Number(p.area_ha) > 0 ? Number(p.area_ha) : 0), 0,
+        );
+        if (sum > 0) totalAreaHa = sum;
+      }
+      if (totalAreaHa == null && pIds.length) {
+        const sum = pIds.reduce((s, id) => s + (paddockAreaById.get(id) ?? 0), 0);
+        if (sum > 0) totalAreaHa = sum;
+      }
 
       const manualLabourCost = labour.reduce((s, l) => s + num(l.total_cost), 0);
       const labourHours = labour.reduce((s, l) => s + num(l.total_hours), 0);
@@ -396,7 +418,7 @@ export default function WorkTaskReportsPage() {
         trips,
       };
     });
-  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById]);
+  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById, paddockAreaById]);
 
   const taskTypeOptions = useMemo(() => {
     const set = new Set<string>();
