@@ -347,7 +347,7 @@ export default function AppleMapPaddockMap({ onUnavailable }: AppleMapPaddockMap
           <MapSourceBadge source="apple" />
           {(isLoading || !mapReady) && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground bg-background/60">
-              {!mapReady ? "Loading Apple Maps…" : "Rendering paddocks…"}
+              {!mapReady ? "Loading Apple Maps…" : "Rendering blocks…"}
             </div>
           )}
           {error && (

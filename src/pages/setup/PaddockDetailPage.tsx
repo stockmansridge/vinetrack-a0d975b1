@@ -103,7 +103,7 @@ export default function PaddockDetailPage() {
         <BackLink />
         <Alert variant="destructive">
           <AlertTitle>Not found</AlertTitle>
-          <AlertDescription>{(error as Error)?.message ?? "Paddock not found."}</AlertDescription>
+          <AlertDescription>{(error as Error)?.message ?? "Block not found."}</AlertDescription>
         </Alert>
       </div>
     );
@@ -130,7 +130,7 @@ function BackLink() {
   return (
     <Button variant="ghost" size="sm" asChild>
       <Link to="/setup/paddocks">
-        <ArrowLeft className="h-4 w-4 mr-1" /> Back to paddocks
+        <ArrowLeft className="h-4 w-4 mr-1" /> Back to blocks
       </Link>
     </Button>
   );
@@ -324,7 +324,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
     setSaving(true);
     try {
       await updatePaddock(paddock.id, { ...patch, updated_by: userId });
-      toast({ title: "Saved", description: paddock.name ?? "Paddock updated" });
+      toast({ title: "Saved", description: paddock.name ?? "Block updated" });
       onSaved();
     } catch (err: any) {
       toast({ title: "Save failed", description: err?.message ?? String(err), variant: "destructive" });
@@ -338,7 +338,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
       <BackLink />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{paddock.name ?? "Paddock"}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{paddock.name ?? "Block"}</h1>
           <p className="text-sm text-muted-foreground">
             {rf.area(metrics.areaHa, 2)} · {metrics.rowCount} rows
           </p>
@@ -363,7 +363,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
           <Card>
             <CardHeader>
               <CardTitle>Overview</CardTitle>
-              <CardDescription>Basic paddock details.</CardDescription>
+              <CardDescription>Basic block details.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <Field label="Name">
@@ -447,7 +447,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Row setup</CardTitle>
-                <CardDescription>Same generator as iOS &amp; New Paddock.</CardDescription>
+                <CardDescription>Same generator as iOS &amp; New Block.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <NumField label="Row direction (°)" value={rowDirection} onChange={setRowDirection} step="0.5" disabled={!canEdit} />
@@ -551,7 +551,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                   <Info className="h-4 w-4" />
                   <AlertTitle>Additional trellis fields</AlertTitle>
                   <AlertDescription className="text-xs">
-                    Trellis type, end-post and wire configuration are not yet in the shared paddock schema.
+                    Trellis type, end-post and wire configuration are not yet in the shared block schema.
                     Backend changes are required before they can be edited here.
                   </AlertDescription>
                 </Alert>
@@ -699,7 +699,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
       await archivePaddock(paddock.id);
       await refreshPaddockQueries(qc, paddock.vineyard_id ?? null);
       toast({
-        title: "Paddock archived",
+        title: "Block archived",
         description: `${paddock.name} is hidden from active lists. Historical records remain intact.`,
       });
       setArchiveOpen(false);
@@ -716,7 +716,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
     try {
       await hardDeletePaddock(paddock.id);
       await refreshPaddockQueries(qc, paddock.vineyard_id ?? null);
-      toast({ title: "Paddock permanently deleted", description: paddock.name });
+      toast({ title: "Block permanently deleted", description: paddock.name });
       setDeleteOpen(false);
       onDeleted();
     } catch (err: any) {
@@ -733,8 +733,8 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
           <AlertTriangle className="h-5 w-5" /> Danger zone
         </CardTitle>
         <CardDescription>
-          Archive paddocks you no longer use. Permanent delete is only available for paddocks with no
-          linked records (e.g. test paddocks or those created in error).
+          Archive blocks you no longer use. Permanent delete is only available for blocks with no
+          linked records (e.g. test blocks or those created in error).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -749,7 +749,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
                 <Info className="h-4 w-4" />
                 <AlertTitle>Linked records found ({counts.total})</AlertTitle>
                 <AlertDescription>
-                  This paddock has linked records, so it cannot be permanently deleted. You can archive
+                  This block has linked records, so it cannot be permanently deleted. You can archive
                   it instead so historical records remain intact.
                   <ul className="text-xs list-disc pl-5 mt-2 space-y-0.5">
                     <CountLine label="Trips" n={counts.trips} />
@@ -768,7 +768,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
                 <Info className="h-4 w-4" />
                 <AlertTitle>No linked records</AlertTitle>
                 <AlertDescription>
-                  This paddock has no trips, pins, spray, task, yield or other linked records, so it
+                  This block has no trips, pins, spray, task, yield or other linked records, so it
                   can be permanently deleted. You can also archive it if you'd prefer to keep the
                   record.
                 </AlertDescription>
@@ -777,7 +777,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
 
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="gap-1" onClick={() => setArchiveOpen(true)}>
-                <Archive className="h-4 w-4" /> Archive paddock
+                <Archive className="h-4 w-4" /> Archive block
               </Button>
               {!hasLinked && (
                 <Button variant="destructive" className="gap-1" onClick={() => { setConfirmName(""); setDeleteOpen(true); }}>
@@ -797,14 +797,14 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
             <DialogDescription>
               {paddock.name} will be hidden from active paddock pickers and new jobs. Historical reports,
               trips, pins and other linked records will continue to display correctly. You can restore it
-              later from the Archived paddocks list.
+              later from the Archived blocks list.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setArchiveOpen(false)} disabled={busy}>Cancel</Button>
             <Button onClick={handleArchive} disabled={busy} className="gap-1">
               <Archive className="h-4 w-4" />
-              {busy ? "Archiving…" : "Archive paddock"}
+              {busy ? "Archiving…" : "Archive block"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -814,7 +814,7 @@ function DangerZone({ paddock, onDeleted }: { paddock: any; onDeleted: () => voi
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete paddock permanently?</DialogTitle>
+            <DialogTitle>Delete block permanently?</DialogTitle>
             <DialogDescription>
               This permanently removes {paddock.name} from both Lovable and iOS. This action cannot be
               undone.

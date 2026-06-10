@@ -272,7 +272,7 @@ export default function DamagePolygonEditor({
           <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] text-foreground shadow">
             {drawing
               ? value.length === 0
-                ? "Tap on the paddock to start drawing the damage polygon"
+                ? "Tap on the block to start drawing the damage polygon"
                 : `Tap to add vertex · drag a marker to adjust (${value.length} pts)`
               : "Drag markers to adjust · enable Draw to add more vertices"}
           </div>

@@ -37,7 +37,7 @@ export default function AppLayout() {
         <title>VineTrack portal — vineyard operations</title>
         <meta
           name="description"
-          content="Manage paddocks, spray records, work tasks, maintenance and your team inside the VineTrack vineyard portal."
+          content="Manage blocks, spray records, work tasks, maintenance and your team inside the VineTrack vineyard portal."
         />
         <meta name="robots" content="noindex" />
       </Helmet>

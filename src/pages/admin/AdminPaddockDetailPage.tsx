@@ -37,7 +37,7 @@ export default function AdminPaddockDetailPage() {
 
   return (
     <AdminGate>
-      <AdminPageHeader title={p?.name ?? "Paddock"} back={`/admin/vineyards/${id}`} />
+      <AdminPageHeader title={p?.name ?? "Block"} back={`/admin/vineyards/${id}`} />
       <AdminError error={error} />
       {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
       {p && (

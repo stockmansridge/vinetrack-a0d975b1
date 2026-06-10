@@ -325,7 +325,7 @@ export default function PaddockDetailPanel(props: Props & { onClose: () => void 
     <Sheet open onOpenChange={(o) => !o && props.onClose()}>
       <SheetContent side="right" className="w-[420px] sm:w-[420px] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{props.paddock.name ?? "Unnamed paddock"}</SheetTitle>
+          <SheetTitle>{props.paddock.name ?? "Unnamed block"}</SheetTitle>
           <SheetDescription>Read-only paddock details</SheetDescription>
         </SheetHeader>
         <div className="mt-4">

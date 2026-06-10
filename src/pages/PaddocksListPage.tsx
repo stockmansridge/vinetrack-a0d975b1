@@ -95,7 +95,7 @@ export default function PaddocksListPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Paddocks</h1>
+          <h1 className="text-2xl font-semibold">Blocks</h1>
           <p className="text-sm text-muted-foreground">
             All blocks for this vineyard. Click a row to open block detail.
           </p>
@@ -103,7 +103,7 @@ export default function PaddocksListPage() {
         {canManage && (
           <Button asChild variant="outline" size="sm">
             <Link to="/setup/paddocks">
-              <Settings2 className="h-4 w-4 mr-1" /> Manage paddock setup
+              <Settings2 className="h-4 w-4 mr-1" /> Manage block setup
             </Link>
           </Button>
         )}
@@ -113,7 +113,7 @@ export default function PaddocksListPage() {
         <div className="relative max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search paddock or variety…"
+            placeholder="Search block or variety…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
@@ -122,15 +122,15 @@ export default function PaddocksListPage() {
 
         {paddocksQ.isLoading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">
-            Loading paddocks…
+            Loading blocks…
           </div>
         ) : paddocksQ.error ? (
           <div className="text-sm text-destructive py-8 text-center">
-            Failed to load paddocks.
+            Failed to load blocks.
           </div>
         ) : rows.length === 0 ? (
           <div className="text-sm text-muted-foreground py-8 text-center">
-            No paddocks found.
+            No blocks found.
           </div>
         ) : (
           <div className="overflow-x-auto">

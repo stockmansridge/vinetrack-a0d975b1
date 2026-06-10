@@ -165,7 +165,7 @@ export default function PaddockImportExportDialog() {
         {view === "home" && (
           <>
             <DialogHeader>
-              <DialogTitle>Paddocks export & import</DialogTitle>
+              <DialogTitle>Blocks export & import</DialogTitle>
               <DialogDescription>
                 Export your block setup as CSV, download a blank template, or
                 import a CSV to add or update paddocks in <b>{vineyardName}</b>.

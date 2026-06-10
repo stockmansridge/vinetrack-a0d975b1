@@ -381,7 +381,7 @@ export default function TripsPage() {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Paddock</div>
+          <div className="text-xs text-muted-foreground">Block</div>
           <Select value={paddockId} onValueChange={setPaddockId}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Any" /></SelectTrigger>
             <SelectContent>
@@ -431,7 +431,7 @@ export default function TripsPage() {
         <div className="space-y-1 ml-auto">
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
-            placeholder="Paddock, pattern, person…"
+            placeholder="Block, pattern, person…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-72"
@@ -449,7 +449,7 @@ export default function TripsPage() {
             <TableRow>
               {(tripsOrder as TripsCol[]).map((id) => {
                 const labels: Record<TripsCol, string> = {
-                  start: "Start", name: "Name", function: "Function", paddock: "Paddock",
+                  start: "Start", name: "Name", function: "Function", paddock: "Block",
                   pattern: "Pattern", person: "Person", duration: "Duration", distance: "Distance", status: "Status",
                 };
                 const sk: any = id;

@@ -70,7 +70,7 @@ export async function hardDeletePaddock(paddockId: string) {
   const counts = await fetchLinkedRecordCounts(paddockId);
   if (counts.total > 0) {
     throw new Error(
-      "This paddock has linked records and cannot be permanently deleted. Archive it instead."
+      "This block has linked records and cannot be permanently deleted. Archive it instead."
     );
   }
 

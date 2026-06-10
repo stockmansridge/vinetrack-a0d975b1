@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const coverage = [
   {
-    table: "Paddocks",
+    table: "Blocks",
     fields: [
       "name", "polygon_points", "rows", "variety_allocations",
       "row_direction", "row_width", "row_offset", "intermediate_post_spacing",

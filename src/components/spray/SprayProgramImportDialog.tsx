@@ -143,7 +143,7 @@ export function SprayProgramImportDialog({
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead>Paddocks</TableHead>
+                    <TableHead>Blocks</TableHead>
                     <TableHead>Chemicals</TableHead>
                     <TableHead>Notes / Issues</TableHead>
                   </TableRow>

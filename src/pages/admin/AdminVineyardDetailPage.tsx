@@ -74,7 +74,7 @@ export default function AdminVineyardDetailPage() {
               <div><div className="text-xs text-muted-foreground">Country</div>{v.country ?? "—"}</div>
               <div><div className="text-xs text-muted-foreground">Members</div>{v.member_count}</div>
               <div><div className="text-xs text-muted-foreground">Pending invites</div>{v.pending_invites}</div>
-              <div><div className="text-xs text-muted-foreground">Paddocks</div>{(paddocksQ.data ?? []).filter((p) => !p.deleted_at).length}</div>
+              <div><div className="text-xs text-muted-foreground">Blocks</div>{(paddocksQ.data ?? []).filter((p) => !p.deleted_at).length}</div>
               <div><div className="text-xs text-muted-foreground">Created</div>{formatDate(v.created_at)}</div>
               <div><div className="text-xs text-muted-foreground">Status</div>{v.deleted_at ? <ArchivedBadge /> : "Active"}</div>
             </div>
@@ -82,7 +82,7 @@ export default function AdminVineyardDetailPage() {
           </Card>
 
           <Card className="p-4">
-            <h2 className="font-semibold mb-2">Paddocks</h2>
+            <h2 className="font-semibold mb-2">Blocks</h2>
             {paddocksQ.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
             {!paddocksQ.isLoading && (paddocksQ.data ?? []).length === 0 && <AdminEmpty>No paddocks.</AdminEmpty>}
             <div className="divide-y">

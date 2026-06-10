@@ -219,7 +219,7 @@ export default function YieldDamageAdjustmentPanel({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Paddock</TableHead>
+                    <TableHead>Block</TableHead>
                     <TableHead className="text-right">Block area</TableHead>
                     <TableHead className="text-right">Effective loss</TableHead>
                     <TableHead className="text-right">Loss %</TableHead>

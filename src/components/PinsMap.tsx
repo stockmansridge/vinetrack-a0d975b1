@@ -173,8 +173,8 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
           {!isLoading && !error && !hasMap && (
             <div className="h-full flex items-center justify-center text-muted-foreground text-center px-4">
               {pins.length === 0
-                ? "No pins recorded for this vineyard yet. No paddock geometry to display."
-                : "No mapped pins or paddock geometry found."}
+                ? "No pins recorded for this vineyard yet. No block geometry to display."
+                : "No mapped pins or block geometry found."}
             </div>
           )}
           {!isLoading && !error && hasMap && (

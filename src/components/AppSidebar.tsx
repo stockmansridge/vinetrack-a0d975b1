@@ -109,7 +109,7 @@ const setup: NavItem[] = [
   { title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
   { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
   { title: "Region & Units", url: "/setup/region-units", icon: Globe2 },
-  { title: "Paddocks / Blocks", url: "/setup/paddocks", icon: Map },
+  { title: "Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
   { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },

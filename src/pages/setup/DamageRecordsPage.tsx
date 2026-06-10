@@ -786,7 +786,7 @@ function DamageEditSheet({
     mutationFn: async () => {
       const payload = buildPayload();
       if (!payload) throw new Error("No vineyard selected");
-      if (!payload.paddock_id) throw new Error("Paddock is required");
+      if (!payload.paddock_id) throw new Error("Block is required");
       if (!payload.date_observed) throw new Error("Date observed is required");
       if (!payload.damage_type) throw new Error("Damage type is required");
       if (!payload.severity) throw new Error("Severity is required");
@@ -831,9 +831,9 @@ function DamageEditSheet({
         </div>
 
         <div className="mt-4 grid gap-3">
-          <Row label="Paddock / block" required>
+          <Row label="Block" required>
             <Select value={form.paddock_id} onValueChange={(v) => set("paddock_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Select paddock" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select block" /></SelectTrigger>
               <SelectContent>
                 {paddocks.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name ?? p.id}</SelectItem>
