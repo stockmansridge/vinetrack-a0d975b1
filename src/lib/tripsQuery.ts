@@ -52,6 +52,10 @@ export interface Trip {
   operator_category_id?: string | null;
   trip_function?: string | null;
   trip_title?: string | null;
+  // SQL 102: optional link back to the parent work_tasks row. Nullable —
+  // legacy trips have no parent task. Read-only at the portal data layer for
+  // now (no linking UI yet).
+  work_task_id?: string | null;
   manual_correction_events?: string[] | null;
   seeding_details?: any;
   // Phase 3 — optional engine-hour fields written by iOS at start/finish.
