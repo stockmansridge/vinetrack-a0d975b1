@@ -138,7 +138,7 @@ export default function SprayRecordsPage() {
       });
     }
     return list;
-  }, [records, filter, from, to, opType]);
+  }, [records, filter, from, to, opType, lookups]);
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
