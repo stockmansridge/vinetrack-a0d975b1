@@ -1834,3 +1834,167 @@ function ExpandedRowDetails({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Block/Paddock allocation — expanded row showing which Work Tasks contributed
+// to that block's allocated totals. Pure presentation — no mutations.
+// Stage 5H.1.
+// ---------------------------------------------------------------------------
+
+interface AllocationContributionsProps {
+  row: AllocRow;
+  canSeeCosts: boolean;
+  money: (n: number) => string;
+  areaDisplay: (haValue: number | null) => string;
+  costPerAreaDisplay: (totalCost: number, haValue: number | null) => string;
+}
+
+function AllocationContributions({
+  row, canSeeCosts, money, areaDisplay, costPerAreaDisplay,
+}: AllocationContributionsProps) {
+  const fmtDate = (v: string | null) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "—" : format(d, "PP");
+  };
+
+  if (row.contributions.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground italic py-2">
+        No contributing tasks.
+      </div>
+    );
+  }
+
+  const anyOverlap = row.contributions.some((c) => c.hasOverlapWarning);
+
+  return (
+    <div className="space-y-3">
+      {anyOverlap && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>Review: linked GPS trips and manual correction/missed machine entries may overlap.</span>
+        </div>
+      )}
+
+      {/* Desktop / tablet: compact table. */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Task type</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="text-right">Share</TableHead>
+              <TableHead className="text-right">Area</TableHead>
+              <TableHead className="text-right">Labour hrs</TableHead>
+              <TableHead className="text-right">Machine hrs</TableHead>
+              <TableHead className="text-right">Linked trips</TableHead>
+              {canSeeCosts && (
+                <>
+                  <TableHead className="text-right">Manual labour</TableHead>
+                  <TableHead className="text-right">Machine charge</TableHead>
+                  <TableHead className="text-right">Machine fuel</TableHead>
+                  <TableHead className="text-right">Linked GPS trips</TableHead>
+                  <TableHead className="text-right">Total cost</TableHead>
+                  <TableHead className="text-right">Cost / area</TableHead>
+                </>
+              )}
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {row.contributions.map((c) => {
+              const statusParts: string[] = [];
+              if (c.reason) statusParts.push(c.reason);
+              if (c.hasOverlapWarning) statusParts.push("Review overlap");
+              const status = statusParts.length ? statusParts.join(" • ") : "OK";
+              const isReview = status !== "OK";
+              return (
+                <TableRow key={c.taskId}>
+                  <TableCell className="text-xs whitespace-nowrap">{fmtDate(c.date)}</TableCell>
+                  <TableCell className="text-xs">{c.taskType}</TableCell>
+                  <TableCell className="text-xs max-w-[240px] truncate" title={c.description ?? ""}>
+                    {c.description ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {c.share == null ? "—" : `${(c.share * 100).toFixed(1)}%`}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {c.areaHa == null ? "—" : areaDisplay(c.areaHa)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{c.labourHours.toFixed(2)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{c.machineHours.toFixed(2)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{c.linkedTripCount}</TableCell>
+                  {canSeeCosts && (
+                    <>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.manualLabourCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.machineCharge)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.machineFuel)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{money(c.linkedTripTotal)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs font-medium">{money(c.totalCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">
+                        {costPerAreaDisplay(c.totalCost, c.areaHa)}
+                      </TableCell>
+                    </>
+                  )}
+                  <TableCell>
+                    {isReview ? (
+                      <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 text-[10px] py-0 px-1.5">
+                        {status}
+                      </Badge>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">OK</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Mobile: stacked cards. */}
+      <div className="md:hidden space-y-2">
+        {row.contributions.map((c) => {
+          const statusParts: string[] = [];
+          if (c.reason) statusParts.push(c.reason);
+          if (c.hasOverlapWarning) statusParts.push("Review overlap");
+          const status = statusParts.length ? statusParts.join(" • ") : null;
+          return (
+            <div key={c.taskId} className="rounded-md border bg-background/50 p-2 text-xs space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{c.taskType}</span>
+                <span className="text-muted-foreground">{fmtDate(c.date)}</span>
+              </div>
+              {c.description && (
+                <div className="text-foreground/80 line-clamp-2">{c.description}</div>
+              )}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+                <div>Share: <span className="text-foreground">{c.share == null ? "—" : `${(c.share * 100).toFixed(1)}%`}</span></div>
+                <div>Area: <span className="text-foreground">{c.areaHa == null ? "—" : areaDisplay(c.areaHa)}</span></div>
+                <div>Labour: <span className="text-foreground">{c.labourHours.toFixed(2)} h</span></div>
+                <div>Machine: <span className="text-foreground">{c.machineHours.toFixed(2)} h</span></div>
+                <div>Linked trips: <span className="text-foreground">{c.linkedTripCount}</span></div>
+                {canSeeCosts && (
+                  <>
+                    <div>Manual labour: <span className="text-foreground">{money(c.manualLabourCost)}</span></div>
+                    <div>Machine charge: <span className="text-foreground">{money(c.machineCharge)}</span></div>
+                    <div>Machine fuel: <span className="text-foreground">{money(c.machineFuel)}</span></div>
+                    <div>Linked GPS: <span className="text-foreground">{money(c.linkedTripTotal)}</span></div>
+                    <div className="col-span-2">Total: <span className="text-foreground font-medium">{money(c.totalCost)}</span> · <span className="text-foreground">{costPerAreaDisplay(c.totalCost, c.areaHa)}</span></div>
+                  </>
+                )}
+              </div>
+              {status && (
+                <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 text-[10px] py-0 px-1.5">
+                  {status}
+                </Badge>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
