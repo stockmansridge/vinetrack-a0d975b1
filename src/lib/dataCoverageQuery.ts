@@ -284,9 +284,9 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
   //    weather / no trip / often no stable equipment.
   //  - archived work_tasks and maintenance_logs — these are hidden from the
   //    operational pages and should not contribute to "issue" counts.
-  const sprayRecords = sprayRecords.filter((s) => !s.is_template);
+  const sprayRecords = sprays.filter((s) => !s.is_template);
   const activeWorkTasks = workTasks.filter((t) => !t.is_archived);
-  const activeMaint = activeMaint.filter((m) => !m.is_archived);
+  const activeMaint = maint.filter((m) => !m.is_archived);
 
   const paddockById = new Map(paddocks.map((p) => [p.id, p]));
   const workTaskById = new Map(activeWorkTasks.map((t) => [t.id, t]));
