@@ -758,6 +758,8 @@ export default function WorkTasksPage() {
         allTrips={trips}
         machineLines={selected ? machineLinesByTask.get(selected.id) ?? [] : []}
         machineLookups={machineLookups}
+        allocByTripId={allocByTripId}
+        canSeeCosts={canSeeCosts}
         paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
