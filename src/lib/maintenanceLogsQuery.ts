@@ -90,6 +90,8 @@ export interface MaintenanceLogWriteInput {
   vineyard_id: string;
   item_name: string;
   date: string;
+  equipment_source?: MaintenanceEquipmentSource | null;
+  equipment_ref_id?: string | null;
   hours?: number | null;
   machine_hours?: number | null;
   work_completed?: string | null;
