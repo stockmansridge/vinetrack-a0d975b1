@@ -1047,8 +1047,8 @@ export default function WorkTaskReportsPage() {
     URL.revokeObjectURL(url);
     toast({ title: "CSV exported", description: `${allocationRows.length} block row${allocationRows.length === 1 ? "" : "s"} exported.` });
   };
-  // Toggle + Block + count + area + labour + machine + linked + status + (cost ? 6 : 0)
-  const allocColSpan = 8 + (canSeeCosts ? 6 : 0);
+  // Block + Tasks + Area + Labour + Machine + Linked + Status = 7 base; cost adds 6.
+  const allocColSpan = 7 + (canSeeCosts ? 6 : 0);
 
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
