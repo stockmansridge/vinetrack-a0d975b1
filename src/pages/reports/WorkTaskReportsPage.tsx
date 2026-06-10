@@ -514,6 +514,161 @@ export default function WorkTaskReportsPage() {
     toast({ title: "CSV exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
   };
 
+  // -------------------- PDF export --------------------
+  // Renders the currently filtered task rows. Uses jsPDF + autoTable to match
+  // the convention established in sprayJobsExport.ts. Display-only — does not
+  // mutate any data. Regional formatters drive area/cost-per-area labels and
+  // currency formatting; cost columns are gated by canSeeCosts.
+  const downloadPdf = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+    const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 32;
+
+    // Header band.
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("Work Task Report", margin, 42);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(`Vineyard: ${vineyardName ?? "—"}`, margin, 58);
+    doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 58, { align: "right" });
+    doc.setDrawColor(200);
+    doc.line(margin, 66, pageWidth - margin, 66);
+    doc.setTextColor(0);
+
+    // Active filters summary.
+    const filterParts: string[] = [];
+    if (from || to) filterParts.push(`Date: ${from || "…"} → ${to || "…"}`);
+    if (taskType !== ANY) filterParts.push(`Task type: ${taskType}`);
+    if (paddockId !== ANY) {
+      filterParts.push(`${fmt.blockLabel}: ${paddockNameById.get(paddockId) ?? paddockId}`);
+    }
+    if (hasLinked !== ANY) filterParts.push(`Linked trips: ${hasLinked === "yes" ? "with" : "without"}`);
+    if (hasManualMachine !== ANY) filterParts.push(`Manual machine work: ${hasManualMachine === "yes" ? "with" : "without"}`);
+    if (warningOnly) filterParts.push("Warnings only");
+    const filterLine = filterParts.length ? filterParts.join("  •  ") : "No filters applied";
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    const wrapped = doc.splitTextToSize(`Filters: ${filterLine}`, pageWidth - margin * 2);
+    doc.text(wrapped, margin, 80);
+    const headerBottom = 80 + wrapped.length * 10;
+    doc.setTextColor(0);
+
+    // Build columns and rows mirroring the on-screen report.
+    const head: string[] = [
+      "Date", "Task type", `${fmt.blocksLabel}`, `Area (${fmt.areaUnitLabel})`,
+      "Labour hrs", "Machine hrs", "Linked trips",
+    ];
+    if (canSeeCosts) {
+      head.push(
+        "Manual labour", "Machine charge", "Machine fuel",
+        "Linked GPS trips", "Total cost", `Cost / ${fmt.areaUnitLabel}`,
+      );
+    } else {
+      head.push("Machine entries");
+    }
+    head.push("Status");
+
+    const body: string[][] = filtered.map((r) => {
+      const base = [
+        r.date ? fmt.date(r.date) : "—",
+        r.taskType,
+        r.blocksLabel,
+        areaDisplay(r.totalAreaHa),
+        r.labourHours.toFixed(2),
+        r.machineHours.toFixed(2),
+        String(r.linkedTripCount),
+      ];
+      if (canSeeCosts) {
+        base.push(
+          money(r.manualLabourCost),
+          money(r.machineCharge),
+          money(r.machineFuel),
+          money(r.linkedTripTotal),
+          money(r.totalCost),
+          costPerAreaDisplay(r.totalCost, r.totalAreaHa),
+        );
+      } else {
+        base.push(String(r.machineEntries));
+      }
+      base.push(r.hasWarning ? "Review" : "—");
+      return base;
+    });
+
+    // Totals row.
+    const totalsRow: string[] = [
+      "Totals (filtered)", "", "",
+      totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—",
+      totals.labourHours.toFixed(2),
+      totals.machineHours.toFixed(2),
+      "",
+    ];
+    if (canSeeCosts) {
+      totalsRow.push(
+        money(totals.manualLabourCost),
+        money(totals.machineCharge),
+        money(totals.machineFuel),
+        money(totals.linkedTripTotal),
+        money(totals.totalCost),
+        totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—",
+      );
+    } else {
+      totalsRow.push("");
+    }
+    totalsRow.push("");
+
+    const numericColsCost = canSeeCosts
+      ? new Set([3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+      : new Set([3, 4, 5, 6, 7]);
+
+    autoTable(doc, {
+      startY: headerBottom + 8,
+      head: [head],
+      body,
+      foot: filtered.length ? [totalsRow] : undefined,
+      theme: "grid",
+      styles: { fontSize: 7.5, cellPadding: 3, valign: "top", overflow: "linebreak" },
+      headStyles: { fillColor: [60, 90, 60], textColor: 255, halign: "left" },
+      footStyles: { fillColor: [235, 235, 235], textColor: 30, fontStyle: "bold" },
+      margin: { left: margin, right: margin, bottom: 50 },
+      columnStyles: Object.fromEntries(
+        [...numericColsCost].map((i) => [i, { halign: "right" }]),
+      ),
+      didDrawPage: () => {
+        // Footer: warning text + page number on every page.
+        const pageH = doc.internal.pageSize.getHeight();
+        const pageW = doc.internal.pageSize.getWidth();
+        doc.setFontSize(7);
+        doc.setTextColor(110);
+        const note = "Review: linked GPS trips and manual correction/missed machine entries may overlap.";
+        doc.text(note, margin, pageH - 22);
+        const pageNum = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+        doc.text(`Page ${pageNum}`, pageW - margin, pageH - 22, { align: "right" });
+        doc.setTextColor(0);
+      },
+    });
+
+    // Empty-state body.
+    if (!filtered.length) {
+      const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 18;
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text("No work tasks match the current filters.", margin, y);
+      doc.setTextColor(0);
+    }
+    void pageHeight; // touched by didDrawPage via doc.internal
+
+    const safeName = (vineyardName ?? "vineyard").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+    doc.save(`work-task-report-${safeName}-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    toast({ title: "PDF exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
+  };
+
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
     wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && allocQ.isLoading);
