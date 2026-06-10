@@ -1144,6 +1144,13 @@ function WorkTaskDrawer({
                 userId={userId}
               />
             )}
+            {isNew && (
+              <Section title="Manual Machine Work">
+                <div className="text-xs text-muted-foreground">
+                  Save the task first, then add manual machine work.
+                </div>
+              </Section>
+            )}
             {!isNew && task && (
               <WorkTaskSummarySection
                 labourLines={visibleLines}
