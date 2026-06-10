@@ -112,6 +112,23 @@ export async function fetchWorkTasksForVineyard(
   };
 }
 
+/**
+ * Short human-readable label for a work task, used in trip-facing chips and
+ * other read-only references. Falls back gracefully when fields are sparse.
+ */
+export function workTaskShortLabel(
+  task: Pick<WorkTask, "task_type" | "description" | "date" | "start_date"> | null | undefined,
+): string {
+  if (!task) return "";
+  const tt = task.task_type?.trim();
+  if (tt) return tt;
+  const desc = task.description?.trim();
+  if (desc) return desc.length > 40 ? desc.slice(0, 37) + "…" : desc;
+  const d = task.start_date ?? task.date;
+  if (d) return `Task on ${d}`;
+  return "Task";
+}
+
 export async function fetchLabourLinesForVineyard(
   vineyardId: string,
 ): Promise<WorkTaskLabourLine[]> {
