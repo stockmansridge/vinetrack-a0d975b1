@@ -63,11 +63,23 @@ import {
   createLabourLine,
   updateLabourLine,
   softDeleteLabourLine,
+  hardDeleteWorkTask,
   type WorkTask,
   type WorkTaskLabourLine,
   type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   fetchWorkTaskTypesForVineyard,
   createWorkTaskType,
@@ -955,6 +967,36 @@ function WorkTaskDrawer({
     },
   });
 
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const deleteTask = useMutation({
+    mutationFn: async () => {
+      if (!task?.id) throw new Error("No task selected");
+      return hardDeleteWorkTask(task.id);
+    },
+    onSuccess: (res) => {
+      const r = res.removed;
+      const bits: string[] = [];
+      if (r.labour_lines) bits.push(`${r.labour_lines} labour line${r.labour_lines === 1 ? "" : "s"}`);
+      if (r.machine_lines) bits.push(`${r.machine_lines} machine/fuel line${r.machine_lines === 1 ? "" : "s"}`);
+      if (r.paddock_links) bits.push(`${r.paddock_links} block link${r.paddock_links === 1 ? "" : "s"}`);
+      if (r.trips_unlinked) bits.push(`${r.trips_unlinked} trip${r.trips_unlinked === 1 ? "" : "s"} unlinked`);
+      toast({
+        title: "Work task permanently deleted",
+        description: bits.length ? `Also removed: ${bits.join(", ")}.` : undefined,
+      });
+      setConfirmDeleteOpen(false);
+      onSaved();
+      onOpenChange(false);
+    },
+    onError: (e: any) => {
+      const raw = String(e?.message ?? "");
+      const friendly = /permission denied|row-level security/i.test(raw)
+        ? "You don't have permission to delete this task."
+        : raw || "Could not delete this work task.";
+      toast({ title: "Delete failed", description: friendly, variant: "destructive" });
+    },
+  });
+
   const drawerCanSeeCosts = useCanSeeCosts();
   const visibleLines = labourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
@@ -1172,11 +1214,49 @@ function WorkTaskDrawer({
           </div>
         </div>
 
-        <SheetFooter className="mt-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending}>
-            {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
-          </Button>
+        <SheetFooter className="mt-4 sm:justify-between gap-2">
+          <div>
+            {!isNew && task && canSoftDelete && (
+              <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    disabled={deleteTask.isPending || saveTask.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    {deleteTask.isPending ? "Deleting…" : "Permanently delete"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Permanently delete this Work Task?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will also remove linked fuel usage, labour costs, machine costs,
+                      and other cost records created from this task, and unlink any GPS
+                      trips that referenced it (trip records themselves are preserved).
+                      This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deleteTask.isPending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => { e.preventDefault(); deleteTask.mutate(); }}
+                      disabled={deleteTask.isPending}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Permanently Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+            <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
+              {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
+            </Button>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>
