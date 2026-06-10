@@ -241,13 +241,14 @@ export default function TripsPage() {
     }
     if (filter.trim()) {
       const f = filter.toLowerCase();
-      list = list.filter((t) =>
-        [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      list = list.filter((t) => {
+        const taskLbl = t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "" : "";
+        return [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name, taskLbl]
+          .some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
-  }, [trips, filter, from, to, paddockId, pattern, status, tripFn]);
+  }, [trips, filter, from, to, paddockId, pattern, status, tripFn, workTaskLabelById]);
 
   type TripSortKey = "start" | "name" | "function" | "paddock" | "pattern" | "person" | "duration" | "distance" | "status";
   const durationMs = (s?: string | null, e?: string | null) => {
