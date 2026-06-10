@@ -991,7 +991,7 @@ function WorkTaskDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[70vw] sm:max-w-[1200px] overflow-y-auto">
+      <SheetContent className="w-screen sm:w-[95vw] md:w-[90vw] lg:w-[50vw] sm:max-w-[1000px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{isNew ? "New Task Log" : `Edit Task Log — ${dateRangeLabel(task!)}`}</SheetTitle>
         </SheetHeader>
