@@ -1681,10 +1681,20 @@ export default function WorkTaskReportsPage() {
             <div className="text-xs text-muted-foreground">
               {loading ? "Loading…" : `${allocationRows.length} ${fmt.blockLabel.toLowerCase()} row${allocationRows.length === 1 ? "" : "s"} from ${filtered.length} task${filtered.length === 1 ? "" : "s"}`}
             </div>
-            <Button size="sm" onClick={downloadAllocationCsv} disabled={!allocationRows.length}>
-              <Download className="h-3.5 w-3.5 mr-1" />
-              Export CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={downloadAllocationPdf} disabled={!allocationRows.length}>
+                <Download className="h-3.5 w-3.5 mr-1" />
+                Export PDF
+              </Button>
+              <Button size="sm" variant="outline" onClick={downloadAllocationExcel} disabled={!allocationRows.length}>
+                <Download className="h-3.5 w-3.5 mr-1" />
+                Export Excel
+              </Button>
+              <Button size="sm" onClick={downloadAllocationCsv} disabled={!allocationRows.length}>
+                <Download className="h-3.5 w-3.5 mr-1" />
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           <Card className="overflow-x-auto">
