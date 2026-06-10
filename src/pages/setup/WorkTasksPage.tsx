@@ -1076,7 +1076,7 @@ function WorkTaskDrawer({
             />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <Section title="Totals">
               <Field label="Total labour hours" value={num(totalHours)} />
               {drawerCanSeeCosts && (
