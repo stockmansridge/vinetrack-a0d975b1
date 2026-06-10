@@ -651,6 +651,7 @@ export function tripToCsvRow(
   cost?: TripCostBreakdown | null,
   tractorName?: string | null,
   fuelOnly?: { basisLabel: string; basis: string; engineHourDelta: number | null; activeHours: number | null; litresPerHour: number | null; litres: number | null; costPerLitre: number | null; cost: number | null; warnings: string[] } | null,
+  linkedTaskLabel?: string | null,
 ): Record<string, string> {
   const cov = summarizeCoverage(t);
   const base: Record<string, string> = {
@@ -665,6 +666,7 @@ export function tripToCsvRow(
     paddock: paddockName ?? "",
     pattern: t.tracking_pattern ?? "",
     person: t.person_name ?? "",
+    linked_task: linkedTaskLabel ?? "",
     total_distance_m: t.total_distance == null ? "" : String(t.total_distance),
     total_planned: String(cov.totalPlanned),
     completed: String(cov.completed),
@@ -676,6 +678,7 @@ export function tripToCsvRow(
       : "",
     seeding_details: t.seeding_details ? JSON.stringify(t.seeding_details) : "",
   };
+
   if (cost) {
     const num = (n: number | null | undefined) => (n == null || !isFinite(n) ? "" : n.toFixed(2));
     base.active_hours = num(cost.activeHours);
@@ -764,6 +767,8 @@ export interface TripPdfContext {
   cost?: TripCostBreakdown | null;
   /** Region & Units formatters; falls back to AU defaults when omitted. */
   formatters?: RegionFormatters;
+  /** Read-only linked Work Task label, when trip.work_task_id is set. */
+  linkedTaskLabel?: string | null;
 }
 
 
@@ -968,6 +973,7 @@ export function buildTripPdf(t: Trip, ctx: TripPdfContext & { logoDataUrl?: stri
     ["Average speed", fmtAvgSpeedR(t.total_distance, t.start_time, t.end_time)],
     ["Pattern", formatPatternLabel(t.tracking_pattern)],
     ["Pins logged", ctx.pinCount == null ? fmt(len(t.pin_ids) || null) : String(ctx.pinCount)],
+    ...(ctx.linkedTaskLabel ? ([["Linked task", ctx.linkedTaskLabel]] as [string, string][]) : []),
   ];
   y = renderFieldList(doc, tripDetailsRows, y);
   y += 6;

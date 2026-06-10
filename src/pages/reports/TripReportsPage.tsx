@@ -96,6 +96,7 @@ export default function TripReportsPage() {
   const [tripFn, setTripFn] = useState<string>(ANY);
   const [operator, setOperator] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
+  const [linkedTask, setLinkedTask] = useState<string>(ANY);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [period, setPeriod] = useState<string>("all");
 
@@ -265,15 +266,21 @@ export default function TripReportsPage() {
     }
     if (operator !== ANY) list = list.filter((t) => t.person_name === operator);
     if (status !== ANY) list = list.filter((t) => tripStatus(t) === status);
+    if (linkedTask !== ANY) {
+      if (linkedTask === "__none__") list = list.filter((t) => !t.work_task_id);
+      else if (linkedTask === "__any_linked__") list = list.filter((t) => !!t.work_task_id);
+      else list = list.filter((t) => t.work_task_id === linkedTask);
+    }
     if (search.trim()) {
       const f = search.toLowerCase();
-      list = list.filter((t) =>
-        [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      list = list.filter((t) => {
+        const taskLbl = t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "" : "";
+        return [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name, taskLbl]
+          .some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
-  }, [trips, search, from, to, paddockId, tripFn, operator, status]);
+  }, [trips, search, from, to, paddockId, tripFn, operator, status, linkedTask, workTaskLabelById]);
 
   const blockNamesFor = (t: Trip): string[] => {
     const ids = Array.isArray(t.paddock_ids) ? (t.paddock_ids as string[]) : t.paddock_id ? [t.paddock_id] : [];
@@ -300,6 +307,7 @@ export default function TripReportsPage() {
         vineyardLogoUrl: vineyardLogoUrl ?? null,
         cost: computeCostFor(t),
         formatters,
+        linkedTaskLabel: t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "Task linked" : null,
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
@@ -320,6 +328,8 @@ export default function TripReportsPage() {
         tripFunctionLabel(t.trip_function),
         computeCostFor(t),
         tractorName,
+        null,
+        t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "Task linked" : null,
       );
     });
     downloadCsv(`TripReports_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
@@ -421,6 +431,22 @@ export default function TripReportsPage() {
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="paused">Paused</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Linked task</div>
+            <Select value={linkedTask} onValueChange={setLinkedTask}>
+              <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>Any (linked or not)</SelectItem>
+                <SelectItem value="__any_linked__">Any linked task</SelectItem>
+                <SelectItem value="__none__">Not linked</SelectItem>
+                {Array.from(workTaskLabelById.entries())
+                  .sort((a, b) => a[1].localeCompare(b[1]))
+                  .map(([id, label]) => (
+                    <SelectItem key={id} value={id}>{label}</SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

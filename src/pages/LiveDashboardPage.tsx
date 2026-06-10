@@ -15,6 +15,7 @@ import {
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { extractPathPoints, parseCorrections } from "@/lib/tripReport";
 import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 
@@ -215,6 +216,21 @@ export default function LiveDashboardPage() {
   });
   const allTrips = tripsQ.data?.trips ?? [];
   const lastRefresh = tripsQ.dataUpdatedAt ? new Date(tripsQ.dataUpdatedAt) : null;
+
+  // Stage 4C — resolve trips.work_task_id → display label for read-only chip.
+  const workTasksQ = useQuery({
+    queryKey: ["work_tasks", selectedVineyardId, paddocks.map((p) => p.id).join(",")],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddocks.map((p) => p.id)),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksQ.data?.tasks ?? []).forEach((t) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksQ.data]);
 
   // Weather context for per-trip badges. The full <LiveWeatherSummary /> card
   // also fetches these; React Query dedupes by key so this is a single network
@@ -474,7 +490,16 @@ export default function LiveDashboardPage() {
                       onClick={() => setSelectedTripId(trip.id)}
                     >
                       <TableCell className="font-medium">
-                        <div>{tripDisplay(trip)}</div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>{tripDisplay(trip)}</span>
+                          {trip.work_task_id && (
+                            <Badge variant="outline" className="font-normal">
+                              {workTaskLabelById.get(trip.work_task_id)
+                                ? `Task: ${workTaskLabelById.get(trip.work_task_id)}`
+                                : "Task linked"}
+                            </Badge>
+                          )}
+                        </div>
                         {trip.trip_title && (
                           <div className="text-xs text-muted-foreground">
                             {tripFn(trip.trip_function) ?? "—"}
