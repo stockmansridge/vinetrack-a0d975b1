@@ -786,6 +786,8 @@ export default function WorkTasksPage() {
         allTrips={trips}
         machineLines={[]}
         machineLookups={machineLookups}
+        allocByTripId={allocByTripId}
+        canSeeCosts={canSeeCosts}
         paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
