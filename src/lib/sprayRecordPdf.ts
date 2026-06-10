@@ -50,6 +50,10 @@ export interface SprayRecordPdfContext {
   cost?: TripCostBreakdown | null;
   /** Region & Units formatters. Falls back to AU defaults if omitted. */
   formatters?: RegionFormatters;
+  /** Resolved tractor/machine display name (machine_id → tractor_id → text). */
+  tractorName?: string | null;
+  /** Resolved spray equipment display name (spray_equipment_id → text). */
+  equipmentName?: string | null;
 }
 
 export function exportSprayRecordPdf(
