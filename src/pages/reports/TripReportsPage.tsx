@@ -457,6 +457,7 @@ export default function TripReportsPage() {
         exportingId={exportingId}
         padNameFor={padNameFor}
         selectedVineyardId={selectedVineyardId}
+        workTaskLabelById={workTaskLabelById}
       />
 
       <Card className="p-4 bg-muted/30 flex items-start gap-2">
