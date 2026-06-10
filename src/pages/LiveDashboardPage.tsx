@@ -15,6 +15,7 @@ import {
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import { fetchWorkTasksForVineyard, workTaskShortLabel } from "@/lib/workTasksQuery";
 import { extractPathPoints, parseCorrections } from "@/lib/tripReport";
 import TripRouteAppleMap from "@/components/TripRouteAppleMap";
 
