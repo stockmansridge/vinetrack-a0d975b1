@@ -64,6 +64,47 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
+interface AllocContribution {
+  taskId: string;
+  date: string | null;
+  taskType: string;
+  description: string | null;
+  share: number | null; // null = unallocated (no area share)
+  areaHa: number | null; // hectares allocated to this block from this task
+  labourHours: number;
+  machineHours: number;
+  linkedTripCount: number;
+  manualLabourCost: number;
+  machineCharge: number;
+  machineFuel: number;
+  linkedTripTotal: number;
+  totalCost: number;
+  hasOverlapWarning: boolean;
+  reason: string | null; // populated for unallocated / missing-area contributions
+}
+
+interface AllocRow {
+  key: string;
+  paddockId: string | null;
+  name: string;
+  taskIds: Set<string>;
+  areaHa: number;
+  hasAnyArea: boolean;
+  labourHours: number;
+  machineHours: number;
+  linkedTripCount: number;
+  manualLabourCost: number;
+  machineCharge: number;
+  machineFuel: number;
+  linkedTripTotal: number;
+  totalCost: number;
+  hasOverlapWarning: boolean;
+  hasMissingTaskArea: boolean;
+  hasMissingBlockArea: boolean;
+  isUnallocated: boolean;
+  contributions: AllocContribution[];
+}
+
 const ANY = "__any__";
 const OVERLAP_SOURCES = new Set(["missed_trip", "trip_failed", "correction"]);
 
