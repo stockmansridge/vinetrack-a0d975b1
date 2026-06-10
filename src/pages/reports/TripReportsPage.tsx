@@ -562,7 +562,20 @@ function TripReportsTable({
               const cellMap: Record<TrCol, React.ReactNode> = {
                 date: <TableCell>{fmtDay(t.start_time)}</TableCell>,
                 type: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
-                name: <TableCell className="font-medium">{tripDisplayName(t)}</TableCell>,
+                name: (
+                  <TableCell className="font-medium">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>{tripDisplayName(t)}</span>
+                      {t.work_task_id && (
+                        <Badge variant="outline" className="font-normal">
+                          {workTaskLabelById.get(t.work_task_id)
+                            ? `Task: ${workTaskLabelById.get(t.work_task_id)}`
+                            : "Task linked"}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                ),
                 block: <TableCell>{padNameFor(t) ?? "—"}</TableCell>,
                 operator: <TableCell>{t.person_name ?? "—"}</TableCell>,
                 duration: <TableCell>{fmtDuration(t.start_time, t.end_time)}</TableCell>,
