@@ -261,8 +261,8 @@ export default function SprayRecordsPage() {
                   {r.operation_type ? <Badge variant="secondary">{r.operation_type}</Badge> : "—"}
                 </TableCell>
                 <TableCell>{fmt(r.spray_reference)}</TableCell>
-                <TableCell>{fmt(r.tractor)}</TableCell>
-                <TableCell>{fmt(r.equipment_type)}</TableCell>
+                <TableCell>{fmt(resolveSprayTractorName(r, lookups))}</TableCell>
+                <TableCell>{fmt(resolveSprayEquipmentName(r, lookups))}</TableCell>
                 <TableCell>{fmt(r.temperature)}</TableCell>
                 <TableCell>
                   {r.wind_speed != null
