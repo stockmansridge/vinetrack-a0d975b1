@@ -100,6 +100,7 @@ const reports: NavItem[] = [
 // Owner/manager-only reports (financial)
 const reportsAdmin: NavItem[] = [
   { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
+  { title: "Data Coverage", url: "/reports/data-coverage", icon: Database },
 ];
 
 // "Setup" — vineyard configuration
