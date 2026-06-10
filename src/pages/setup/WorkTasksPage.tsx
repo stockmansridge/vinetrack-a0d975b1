@@ -727,8 +727,10 @@ export default function WorkTasksPage() {
         syncedTaskTypes={syncedTaskTypes}
         labourLines={selected ? linesByTask.get(selected.id) ?? [] : []}
         linkedTrips={selected ? tripsByTask.get(selected.id) ?? [] : []}
+        allTrips={trips}
         machineLines={selected ? machineLinesByTask.get(selected.id) ?? [] : []}
         machineLookups={machineLookups}
+        paddockNameById={paddockNameById}
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
