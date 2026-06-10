@@ -328,6 +328,8 @@ export default function TripReportsPage() {
         tripFunctionLabel(t.trip_function),
         computeCostFor(t),
         tractorName,
+        null,
+        t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "Task linked" : null,
       );
     });
     downloadCsv(`TripReports_${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(csvRows));
