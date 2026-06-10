@@ -1053,6 +1053,73 @@ function WorkTaskDrawer({
               </Section>
             )}
             {!isNew && task && (
+              <Section title="Linked Trips">
+                {linkedTrips.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No linked trips</div>
+                ) : (
+                  <div className="space-y-2">
+                    {linkedTrips
+                      .slice()
+                      .sort((a, b) => (b.start_time ?? "").localeCompare(a.start_time ?? ""))
+                      .map((tr) => {
+                        const name = formatTripNameLabel(tr.trip_title, tr.tracking_pattern, tr.paddock_name);
+                        const fn = formatTripFunctionLabel(tr.trip_function);
+                        const dur = formatTripDurationLabel(tr.start_time, tr.end_time);
+                        const machineId = tr.machine_id ?? tr.tractor_id ?? null;
+                        const machineName =
+                          machineLookups.machines.find((m) => m.id === machineId)?.name ??
+                          machineLookups.tractors.find((m) => m.id === machineId)?.name ??
+                          null;
+                        return (
+                          <div key={tr.id} className="rounded border bg-muted/30 p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium truncate">{name}</span>
+                              <span className="text-muted-foreground shrink-0">{fmtDate(tr.start_time)}</span>
+                            </div>
+                            <div className="mt-0.5 text-muted-foreground truncate">
+                              {fn !== "—" && <>{fn}</>}
+                              {machineName && <> · {machineName}</>}
+                              {dur !== "—" && <> · {dur}</>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </Section>
+            )}
+            {!isNew && task && (
+              <Section title="Manual Machine Work">
+                {machineLines.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No manual machine work</div>
+                ) : (
+                  <div className="space-y-2">
+                    {machineLines
+                      .slice()
+                      .sort((a, b) => (b.work_date ?? "").localeCompare(a.work_date ?? ""))
+                      .map((ml) => {
+                        const eqName =
+                          resolveMachineLineEquipmentName(ml, machineLookups) ?? "Unknown equipment";
+                        const hours = ml.duration_hours ?? ml.engine_hours_used ?? null;
+                        return (
+                          <div key={ml.id} className="rounded border bg-muted/30 p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium truncate">{eqName}</span>
+                              <span className="text-muted-foreground shrink-0">{fmtDate(ml.work_date)}</span>
+                            </div>
+                            <div className="mt-0.5 text-muted-foreground truncate">
+                              {hours != null && <>{num(hours)} h</>}
+                              {ml.entry_source && <> · {ml.entry_source}</>}
+                              {ml.notes && <> · {ml.notes}</>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </Section>
+            )}
+            {!isNew && task && (
               <Section title="Meta">
                 <Field label="Created" value={fmtDate(task.created_at)} />
                 <Field label="Updated" value={fmtDate(task.updated_at)} />
