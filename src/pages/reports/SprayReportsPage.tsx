@@ -211,6 +211,8 @@ export default function SprayReportsPage() {
         operatorName: null,
         cost,
         formatters,
+        tractorName: resolveSprayTractorName(selectedRecord, sprayEquipmentLookups),
+        equipmentName: resolveSprayEquipmentName(selectedRecord, sprayEquipmentLookups),
       });
     } catch (e: any) {
       toast({ title: "PDF export failed", description: e.message, variant: "destructive" });
