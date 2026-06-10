@@ -100,7 +100,7 @@ export default function WorkTaskReportsPage() {
   const { toast } = useToast();
   const canSeeCosts = useCanSeeCosts();
   const fmt = useRegionFormatters();
-  const money = (n: number) => fmt.formatCurrency(n);
+  const money = (n: number) => fmt.currency(n);
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -142,9 +142,9 @@ export default function WorkTaskReportsPage() {
     enabled,
   });
   const tripsQ = useQuery({
-    queryKey: ["trips", selectedVineyardId],
-    queryFn: () => fetchTripsForVineyard(selectedVineyardId!),
-    enabled,
+    queryKey: ["trips", selectedVineyardId, paddockIds.length],
+    queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
+    enabled: enabled && paddocksQ.isSuccess,
   });
   const allocQ = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
@@ -193,7 +193,7 @@ export default function WorkTaskReportsPage() {
 
   const tripsByTask = useMemo(() => {
     const m = new Map<string, Trip[]>();
-    (tripsQ.data ?? []).forEach((t) => {
+    (tripsQ.data?.trips ?? []).forEach((t) => {
       if (!t.work_task_id) return;
       const arr = m.get(t.work_task_id) ?? [];
       arr.push(t);
