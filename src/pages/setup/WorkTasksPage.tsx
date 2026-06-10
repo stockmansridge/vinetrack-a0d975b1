@@ -1127,6 +1127,16 @@ function WorkTaskDrawer({
               />
             )}
             {!isNew && task && (
+              <WorkTaskSummarySection
+                labourLines={visibleLines}
+                machineLines={machineLines}
+                linkedTrips={linkedTrips}
+                allocByTripId={allocByTripId}
+                canSeeCosts={canSeeCosts}
+                money={money}
+              />
+            )}
+            {!isNew && task && (
               <Section title="Meta">
                 <Field label="Created" value={fmtDate(task.created_at)} />
                 <Field label="Updated" value={fmtDate(task.updated_at)} />
