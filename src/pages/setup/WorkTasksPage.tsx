@@ -772,6 +772,14 @@ interface DrawerProps {
   categories: OperatorCategory[];
   syncedTaskTypes: WorkTaskType[];
   labourLines: WorkTaskLabourLine[];
+  linkedTrips: Trip[];
+  machineLines: WorkTaskMachineLine[];
+  machineLookups: {
+    machines: ReadonlyArray<{ id: string; name?: string | null }>;
+    tractors: ReadonlyArray<{ id: string; name?: string | null }>;
+    sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
+    equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
+  };
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
