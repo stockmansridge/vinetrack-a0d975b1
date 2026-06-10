@@ -109,6 +109,8 @@ export async function createMaintenanceLog(
   const payload: Record<string, unknown> = {
     vineyard_id: input.vineyard_id,
     item_name: input.item_name,
+    equipment_source: input.equipment_source ?? "free_text",
+    equipment_ref_id: input.equipment_ref_id ?? null,
     date: input.date,
     hours: input.hours ?? null,
     machine_hours: input.machine_hours ?? null,
