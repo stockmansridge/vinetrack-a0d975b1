@@ -339,6 +339,25 @@ export default function WorkTasksPage() {
     return m;
   }, [machineLines]);
 
+  // Stage 4A — read-only cost summary roll-up. Only fetched when the current
+  // role is permitted to see cost data; RLS is the ultimate authority and an
+  // empty array is the normal case if denied.
+  const { data: tripCostAllocations = [] } = useQuery({
+    queryKey: ["trip_cost_allocations", selectedVineyardId],
+    enabled: !!selectedVineyardId && canSeeCosts,
+    queryFn: () => fetchTripCostAllocationsForVineyard(selectedVineyardId!),
+  });
+  const allocByTripId = useMemo(() => {
+    const m = new Map<string, TripCostAllocation[]>();
+    tripCostAllocations.forEach((a) => {
+      if (!a.trip_id) return;
+      const arr = m.get(a.trip_id) ?? [];
+      arr.push(a);
+      m.set(a.trip_id, arr);
+    });
+    return m;
+  }, [tripCostAllocations]);
+
   const tasks = data?.tasks ?? [];
 
   const paddocksByTask = useMemo(() => {
