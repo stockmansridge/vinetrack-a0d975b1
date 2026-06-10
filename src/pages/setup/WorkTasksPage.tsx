@@ -1255,6 +1255,8 @@ function WorkTaskDrawer({
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
             <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
               {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
+            </Button>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>
