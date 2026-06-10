@@ -225,7 +225,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<WorkTask>(
       "work_tasks",
       vineyardId,
-      "id,paddock_id,paddock_name,area_ha,date,task_type,description",
+      "id,paddock_id,paddock_name,area_ha,date,task_type,description,is_archived",
     ),
     selectAll<MachineLine>(
       "work_task_machine_lines",
@@ -251,12 +251,12 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<SprayRow>(
       "spray_records",
       vineyardId,
-      "id,trip_id,date,spray_reference,machine_id,tractor_id,spray_equipment_id,tractor,equipment_type,temperature,wind_speed,humidity",
+      "id,trip_id,date,spray_reference,machine_id,tractor_id,spray_equipment_id,tractor,equipment_type,temperature,wind_speed,humidity,is_template",
     ),
     selectAll<MaintRow>(
       "maintenance_logs",
       vineyardId,
-      "id,item_name,equipment_source,equipment_ref_id,date,parts_cost,labour_cost",
+      "id,item_name,equipment_source,equipment_ref_id,date,parts_cost,labour_cost,is_archived",
     ),
     selectAll<PinRow>(
       "pins",
