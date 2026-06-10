@@ -336,11 +336,11 @@ export default function NewPaddockPage() {
 
       <Alert className="border-primary/30 bg-primary/5">
         <Info className="h-4 w-4 text-primary" />
-        <AlertTitle>Recommended: one paddock per variety</AlertTitle>
+        <AlertTitle>Recommended: one block per variety</AlertTitle>
         <AlertDescription className="text-xs">
-          For best accuracy, create a separate paddock/block for each grape variety where practical.
+          For best accuracy, create a separate block for each grape variety where practical.
           Mixed-variety blocks are supported, but costing, yield and row-based calculations are
-          currently most reliable with one variety per paddock.
+          currently most reliable with one variety per block.
         </AlertDescription>
       </Alert>
 
