@@ -58,6 +58,7 @@ interface WorkTask {
   date?: string | null;
   task_type?: string | null;
   description?: string | null;
+  is_archived?: boolean | null;
 }
 
 interface MachineLine {
