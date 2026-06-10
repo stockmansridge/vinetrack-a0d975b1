@@ -109,6 +109,38 @@ interface TaskRow {
 // to acres. Storage stays in hectares; this is display-only.
 const HA_PER_AC = 0.40468564224;
 
+/**
+ * Resolve the display name for a Trip's machine/tractor.
+ *
+ *   trip.machine_id  → vineyard_machines.name
+ *   trip.tractor_id  → tractors.name
+ *
+ * Falls back to a plain "Machine"/"Tractor" indicator when the referenced
+ * record is missing (deleted, not yet loaded, or hidden by RLS) — keeps the
+ * UI safe rather than dropping the row.
+ */
+function resolveTripEquipmentName(
+  trip: Pick<Trip, "machine_id" | "tractor_id">,
+  lookups: MachineLineEquipmentLookups,
+): string {
+  const findName = (
+    rows: ReadonlyArray<{ id: string; name?: string | null }> | null | undefined,
+    id: string | null | undefined,
+  ): string | null => {
+    if (!id || !rows) return null;
+    const hit = rows.find((r) => r.id === id);
+    const n = hit?.name?.trim();
+    return n ? n : null;
+  };
+  if (trip.machine_id) {
+    return findName(lookups.machines, trip.machine_id) ?? "Machine";
+  }
+  if (trip.tractor_id) {
+    return findName(lookups.tractors, trip.tractor_id) ?? "Tractor";
+  }
+  return "—";
+}
+
 export default function WorkTaskReportsPage() {
   const { selectedVineyardId } = useVineyard();
   const { toast } = useToast();
@@ -925,7 +957,7 @@ function ExpandedRowDetails({
                       <div>End: <span className="text-foreground">{fmtDateTime(t.end_time)}</span></div>
                       <div>Duration: <span className="text-foreground">{fmtHours(dur)}</span></div>
                       {(t.machine_id || t.tractor_id) && (
-                        <div>Machine: <span className="text-foreground">{t.machine_id ? "Machine" : "Tractor"}</span></div>
+                        <div>Machine: <span className="text-foreground">{resolveTripEquipmentName(t, machineLookups)}</span></div>
                       )}
                       {t.person_name && (
                         <div>Operator: <span className="text-foreground">{t.person_name}</span></div>
