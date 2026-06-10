@@ -107,9 +107,12 @@ export function createRegionFormatters(
   const speedUnitLabel = distImperial ? "mph" : "km/h";
   const sprayRateUnitLabel = `${volumeUnitLabel}/${rateImperial ? "ac" : "ha"}`;
 
-  const isPaddockTerm = s.terminology_region === "AU_NZ";
-  const blockLabel = isPaddockTerm ? "Paddock" : "Block";
-  const blocksLabel = isPaddockTerm ? "Paddocks" : "Blocks";
+  // Customer-facing terminology is standardised on "Block" across all regions.
+  // The `terminology_region` setting is preserved in storage but no longer
+  // varies the UI label — see docs in stage 5I terminology cleanup.
+  void s.terminology_region;
+  const blockLabel = "Block";
+  const blocksLabel = "Blocks";
 
   const dateLocale = localeFromDateFormat(s.date_format);
 
