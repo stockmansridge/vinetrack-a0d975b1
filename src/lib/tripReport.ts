@@ -767,6 +767,8 @@ export interface TripPdfContext {
   cost?: TripCostBreakdown | null;
   /** Region & Units formatters; falls back to AU defaults when omitted. */
   formatters?: RegionFormatters;
+  /** Read-only linked Work Task label, when trip.work_task_id is set. */
+  linkedTaskLabel?: string | null;
 }
 
 
