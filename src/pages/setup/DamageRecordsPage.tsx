@@ -831,9 +831,9 @@ function DamageEditSheet({
         </div>
 
         <div className="mt-4 grid gap-3">
-          <Row label="Paddock / block" required>
+          <Row label="Block" required>
             <Select value={form.paddock_id} onValueChange={(v) => set("paddock_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Select paddock" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select block" /></SelectTrigger>
               <SelectContent>
                 {paddocks.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name ?? p.id}</SelectItem>
