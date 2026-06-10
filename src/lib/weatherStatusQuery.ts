@@ -339,8 +339,11 @@ export interface LiveWeatherReading {
   observed_at?: string | null;
   temperature_c?: number | null;
   humidity_pct?: number | null;
+  /** Current/instantaneous wind speed (Davis 1-min avg), km/h. */
   wind_speed_kmh?: number | null;
   wind_direction_deg?: number | null;
+  /** Peak gust over recent window if the RPC exposes it, km/h. Optional. */
+  wind_gust_kmh?: number | null;
   rain_today_mm?: number | null;
   rain_rate_mm_per_hr?: number | null;
 }
@@ -378,6 +381,8 @@ export async function fetchLiveWeather(vineyardId: string): Promise<LiveWeatherR
       humidity_pct: row.humidity_pct ?? row.humidity ?? null,
       wind_speed_kmh: row.wind_speed_kmh ?? row.wind_speed ?? null,
       wind_direction_deg: row.wind_direction_deg ?? row.wind_direction ?? null,
+      wind_gust_kmh:
+        row.wind_gust_kmh ?? row.wind_gust ?? row.wind_speed_hi_kmh ?? null,
       rain_today_mm: row.rain_today_mm ?? row.rain_today ?? null,
       rain_rate_mm_per_hr: row.rain_rate_mm_per_hr ?? row.rain_rate ?? null,
     },
