@@ -303,7 +303,7 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
         </div>
 
         {observationsOk && reading ? (
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             <Metric
               Icon={Thermometer}
               label="Temperature"
@@ -319,6 +319,15 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
               label="Current wind"
               value={wind != null ? `${fmt(wind, 1)} km/h` : "—"}
               hint={dir}
+            />
+            <Metric
+              Icon={Wind}
+              label="Current gust"
+              value={
+                reading.wind_gust_kmh != null
+                  ? `${fmt(reading.wind_gust_kmh, 1)} km/h`
+                  : "—"
+              }
             />
             <Metric
               Icon={CloudRain}
