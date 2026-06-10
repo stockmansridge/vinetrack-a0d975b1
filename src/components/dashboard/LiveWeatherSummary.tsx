@@ -1,6 +1,7 @@
 // Live Weather + Rain Forecast summary card for the Live Dashboard.
 // Read-only. Uses safe RPCs only — no direct provider calls from the browser.
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   CloudRain,
@@ -142,9 +143,59 @@ export function LiveWeatherSummary({ vineyardId, refetchIntervalMs = 45_000 }: P
   const forecastLabel = forecastInfo.label;
 
   const refreshing = weatherQ.isFetching || forecastQ.isFetching;
-  const refreshAll = () => {
-    weatherQ.refetch();
-    forecastQ.refetch();
+  const refreshAll = async () => {
+    // Capture the observed_at we currently have so we can detect whether the
+    // backend's cached snapshot actually moved forward. The portal cannot
+    // force the upstream provider (Davis / WillyWeather) to push new data —
+    // it can only re-read `get_vineyard_current_weather`. If the row hasn't
+    // moved, we tell the user instead of silently doing nothing.
+    const previousObservedAt =
+      weatherQ.data && weatherQ.data.available
+        ? weatherQ.data.reading.observed_at ?? null
+        : null;
+    try {
+      const [next] = await Promise.all([
+        weatherQ.refetch({ cancelRefetch: true }),
+        forecastQ.refetch({ cancelRefetch: true }),
+      ]);
+      const result = next.data;
+      if (!result) {
+        toast({
+          title: "Weather refresh failed",
+          description: "No response from the weather service.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (result.available === false) {
+        const why =
+          result.reason === "rpc_missing"
+            ? "Server-side weather function is not deployed."
+            : result.reason === "not_configured"
+              ? "No weather provider is configured for this vineyard."
+              : result.reason === "no_data"
+                ? "Weather provider has no observations yet."
+                : result.message || "Live readings could not be fetched.";
+        toast({ title: "Weather unavailable", description: why, variant: "destructive" });
+        return;
+      }
+      const nextObservedAt = result.reading.observed_at ?? null;
+      if (previousObservedAt && nextObservedAt === previousObservedAt) {
+        toast({
+          title: "No newer weather data",
+          description:
+            "Weather provider returned no newer data. The vineyard's weather station hasn't reported since the last update.",
+        });
+      } else {
+        toast({ title: "Weather updated" });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Weather refresh failed",
+        description: e?.message ?? "Unexpected error.",
+        variant: "destructive",
+      });
+    }
   };
 
   const headerRight = (
