@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, CloudRain, FolderOpen, ArrowRight, Route } from "lucide-react";
+import { FileText, CloudRain, FolderOpen, ArrowRight, Route, ClipboardList } from "lucide-react";
 
 const sections = [
   {
@@ -10,6 +10,14 @@ const sections = [
     description:
       "Per-trip PDF reports for every trip type — Maintenance, Spray, Seeding, Mowing, Harrowing, Canopy Work and Custom jobs.",
     icon: Route,
+    status: "Available",
+  },
+  {
+    to: "/reports/work-tasks",
+    title: "Work Task Reports",
+    description:
+      "Task-level roll-up of manual labour, manual machine work and linked GPS trips. Read-only — does not affect Cost Reports.",
+    icon: ClipboardList,
     status: "Available",
   },
   {
