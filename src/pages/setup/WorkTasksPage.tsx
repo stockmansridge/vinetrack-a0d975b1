@@ -1214,11 +1214,47 @@ function WorkTaskDrawer({
           </div>
         </div>
 
-        <SheetFooter className="mt-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending}>
-            {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
-          </Button>
+        <SheetFooter className="mt-4 sm:justify-between gap-2">
+          <div>
+            {!isNew && task && canSoftDelete && (
+              <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    disabled={deleteTask.isPending || saveTask.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    {deleteTask.isPending ? "Deleting…" : "Permanently delete"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Permanently delete this Work Task?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will also remove linked fuel usage, labour costs, machine costs,
+                      and other cost records created from this task, and unlink any GPS
+                      trips that referenced it (trip records themselves are preserved).
+                      This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deleteTask.isPending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => { e.preventDefault(); deleteTask.mutate(); }}
+                      disabled={deleteTask.isPending}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Permanently Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+            <Button onClick={() => saveTask.mutate()} disabled={saveTask.isPending || deleteTask.isPending}>
+              {saveTask.isPending ? "Saving…" : isNew ? "Create Task Log" : "Save changes"}
         </SheetFooter>
       </SheetContent>
     </Sheet>
