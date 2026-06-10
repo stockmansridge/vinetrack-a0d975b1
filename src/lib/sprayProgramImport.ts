@@ -48,7 +48,7 @@ export function templateHeaders(): string[] {
     "Job Name",
     "Planned Date",
     "Make Template",
-    "Paddocks",
+    "Blocks",
     "Operation Type",
     "Growth Stage",
     "Water Rate (L/ha)",
@@ -249,11 +249,12 @@ export async function parseAndValidate(
       errors.push("Planned Date is required (unless Make Template = Yes)");
     }
 
-    const paddocksRaw = str(get("Paddocks"));
+    // Accept either "Blocks" (new) or "Paddocks" (legacy) header for backward compat.
+    const paddocksRaw = str(get("Blocks") ?? get("Paddocks"));
     const paddockNames: string[] = [];
     const paddockIds: string[] = [];
     if (!paddocksRaw) {
-      errors.push("Paddocks is required");
+      errors.push("Blocks is required");
     } else {
       const names = Array.from(new Set(
         paddocksRaw.split(";").map((x) => x.trim()).filter(Boolean),
@@ -261,7 +262,7 @@ export async function parseAndValidate(
       for (const nm of names) {
         const hit = ctx.paddocks.get(nm.toLowerCase());
         if (!hit) {
-          errors.push(`Paddock "${nm}" not found in this vineyard`);
+          errors.push(`Block "${nm}" not found in this vineyard`);
         } else {
           paddockNames.push(hit.name);
           paddockIds.push(hit.id);
