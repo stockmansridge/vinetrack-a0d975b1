@@ -662,10 +662,24 @@ export default function WorkTasksPage() {
                     : `${padIds.length} blocks`;
               const tot = totalsByTask.get(t.id);
               const summary = (t.description ?? t.notes ?? "").trim();
+              const linkedTripsCount = tripsByTask.get(t.id)?.length ?? 0;
+              const machineLineCount = machineLinesByTask.get(t.id)?.length ?? 0;
+              const relIndicator = (linkedTripsCount > 0 || machineLineCount > 0) ? (
+                <div className="mt-1 flex gap-1 text-[10px] text-muted-foreground">
+                  {linkedTripsCount > 0 && <span>Trips: {linkedTripsCount}</span>}
+                  {linkedTripsCount > 0 && machineLineCount > 0 && <span>·</span>}
+                  {machineLineCount > 0 && <span>Machine: {machineLineCount}</span>}
+                </div>
+              ) : null;
               const cellMap: Record<WtCol, React.ReactNode> = {
                 date: <TableCell>{dateRangeLabel(t)}</TableCell>,
                 paddock: <TableCell title={padNamesFull || undefined}>{blockCellLabel}</TableCell>,
-                task_type: <TableCell>{t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}</TableCell>,
+                task_type: (
+                  <TableCell>
+                    {t.task_type ? <Badge variant="secondary">{t.task_type}</Badge> : "—"}
+                    {relIndicator}
+                  </TableCell>
+                ),
                 status: <TableCell>{t.status ? <Badge variant="outline">{t.status}</Badge> : "—"}</TableCell>,
                 area_ha: <TableCell className="text-right">{(() => { const v = effectiveTaskAreaHa(t); return v == null ? "—" : rf.area(v); })()}</TableCell>,
                 hours: <TableCell className="text-right">{num(tot?.hours ?? 0)}</TableCell>,
