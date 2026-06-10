@@ -837,46 +837,8 @@ export default function WorkTaskReportsPage() {
   // "Unallocated" bucket so totals still reconcile against the task summary.
   // If a single block has no resolvable area but the task does, that block
   // contributes 0 cost and is flagged "Missing block area".
-  interface AllocContribution {
-    taskId: string;
-    date: string | null;
-    taskType: string;
-    description: string | null;
-    share: number | null; // null = unallocated (no area share)
-    areaHa: number | null; // hectares allocated to this block from this task
-    labourHours: number;
-    machineHours: number;
-    linkedTripCount: number;
-    manualLabourCost: number;
-    machineCharge: number;
-    machineFuel: number;
-    linkedTripTotal: number;
-    totalCost: number;
-    hasOverlapWarning: boolean;
-    reason: string | null; // populated for unallocated / missing-area contributions
-  }
-
-  interface AllocRow {
-    key: string;
-    paddockId: string | null;
-    name: string;
-    taskIds: Set<string>;
-    areaHa: number; // sum of resolved paddock areas (hectares); 0 for unallocated
-    hasAnyArea: boolean;
-    labourHours: number;
-    machineHours: number;
-    linkedTripCount: number;
-    manualLabourCost: number;
-    machineCharge: number;
-    machineFuel: number;
-    linkedTripTotal: number;
-    totalCost: number;
-    hasOverlapWarning: boolean;
-    hasMissingTaskArea: boolean;
-    hasMissingBlockArea: boolean;
-    isUnallocated: boolean;
-    contributions: AllocContribution[];
-  }
+  // Allocation types are declared at module scope (see below) so the
+  // AllocationContributions helper component can share them.
 
   const allocationRows = useMemo<AllocRow[]>(() => {
     const map = new Map<string, AllocRow>();
