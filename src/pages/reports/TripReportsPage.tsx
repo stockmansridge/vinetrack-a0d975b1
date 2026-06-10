@@ -266,15 +266,21 @@ export default function TripReportsPage() {
     }
     if (operator !== ANY) list = list.filter((t) => t.person_name === operator);
     if (status !== ANY) list = list.filter((t) => tripStatus(t) === status);
+    if (linkedTask !== ANY) {
+      if (linkedTask === "__none__") list = list.filter((t) => !t.work_task_id);
+      else if (linkedTask === "__any_linked__") list = list.filter((t) => !!t.work_task_id);
+      else list = list.filter((t) => t.work_task_id === linkedTask);
+    }
     if (search.trim()) {
       const f = search.toLowerCase();
-      list = list.filter((t) =>
-        [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name]
-          .some((v) => String(v ?? "").toLowerCase().includes(f)),
-      );
+      list = list.filter((t) => {
+        const taskLbl = t.work_task_id ? workTaskLabelById.get(t.work_task_id) ?? "" : "";
+        return [t.trip_title, tripFunctionLabel(t.trip_function), t.paddock_name, t.tracking_pattern, t.person_name, taskLbl]
+          .some((v) => String(v ?? "").toLowerCase().includes(f));
+      });
     }
     return list;
-  }, [trips, search, from, to, paddockId, tripFn, operator, status]);
+  }, [trips, search, from, to, paddockId, tripFn, operator, status, linkedTask, workTaskLabelById]);
 
   const blockNamesFor = (t: Trip): string[] => {
     const ids = Array.isArray(t.paddock_ids) ? (t.paddock_ids as string[]) : t.paddock_id ? [t.paddock_id] : [];
