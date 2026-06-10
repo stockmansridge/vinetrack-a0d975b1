@@ -217,6 +217,21 @@ export default function LiveDashboardPage() {
   const allTrips = tripsQ.data?.trips ?? [];
   const lastRefresh = tripsQ.dataUpdatedAt ? new Date(tripsQ.dataUpdatedAt) : null;
 
+  // Stage 4C — resolve trips.work_task_id → display label for read-only chip.
+  const workTasksQ = useQuery({
+    queryKey: ["work_tasks", selectedVineyardId, paddocks.map((p) => p.id).join(",")],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchWorkTasksForVineyard(selectedVineyardId!, paddocks.map((p) => p.id)),
+  });
+  const workTaskLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (workTasksQ.data?.tasks ?? []).forEach((t) => {
+      const lbl = workTaskShortLabel(t);
+      if (lbl) m.set(t.id, lbl);
+    });
+    return m;
+  }, [workTasksQ.data]);
+
   // Weather context for per-trip badges. The full <LiveWeatherSummary /> card
   // also fetches these; React Query dedupes by key so this is a single network
   // call per refresh cycle.
