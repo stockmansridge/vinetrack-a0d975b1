@@ -490,7 +490,16 @@ export default function LiveDashboardPage() {
                       onClick={() => setSelectedTripId(trip.id)}
                     >
                       <TableCell className="font-medium">
-                        <div>{tripDisplay(trip)}</div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>{tripDisplay(trip)}</span>
+                          {trip.work_task_id && (
+                            <Badge variant="outline" className="font-normal">
+                              {workTaskLabelById.get(trip.work_task_id)
+                                ? `Task: ${workTaskLabelById.get(trip.work_task_id)}`
+                                : "Task linked"}
+                            </Badge>
+                          )}
+                        </div>
                         {trip.trip_title && (
                           <div className="text-xs text-muted-foreground">
                             {tripFn(trip.trip_function) ?? "—"}
