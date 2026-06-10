@@ -63,11 +63,23 @@ import {
   createLabourLine,
   updateLabourLine,
   softDeleteLabourLine,
+  hardDeleteWorkTask,
   type WorkTask,
   type WorkTaskLabourLine,
   type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   fetchWorkTaskTypesForVineyard,
   createWorkTaskType,
