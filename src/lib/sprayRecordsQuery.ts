@@ -26,6 +26,10 @@ export interface SprayRecord {
   equipment_type?: string | null;
   tractor?: string | null;
   tractor_gear?: string | null;
+  // Migration-safe stable equipment FKs (SQL 101). Text snapshots above remain.
+  machine_id?: string | null;
+  tractor_id?: string | null;
+  spray_equipment_id?: string | null;
   is_template?: boolean | null;
   operation_type?: string | null;
   tanks?: any;
