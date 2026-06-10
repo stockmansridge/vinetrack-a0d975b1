@@ -691,6 +691,134 @@ export default function WorkTaskReportsPage() {
     toast({ title: "PDF exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
   };
 
+  // -------------------- Excel export --------------------
+  // Mirrors the on-screen report / PDF columns and role gating. Uses SheetJS
+  // (xlsx) which is already a project dependency (see sprayJobsExport.ts).
+  // Read-only — does not mutate any data. Cost columns are gated by canSeeCosts.
+  const downloadExcel = async () => {
+    const XLSX = await import("xlsx");
+    const areaLabel = fmt.areaUnitLabel;
+    const currency = fmt.settings.currency_code;
+
+    // Meta rows above the table.
+    const meta: (string | number)[][] = [
+      ["Work Task Report"],
+      [`Vineyard: ${vineyardName ?? "—"}`],
+      [`Generated: ${fmt.dateTime(new Date())}`],
+    ];
+    const filterParts: string[] = [];
+    if (from || to) filterParts.push(`Date: ${from || "…"} → ${to || "…"}`);
+    if (taskType !== ANY) filterParts.push(`Task type: ${taskType}`);
+    if (paddockId !== ANY) filterParts.push(`${fmt.blockLabel}: ${paddockNameById.get(paddockId) ?? paddockId}`);
+    if (hasLinked !== ANY) filterParts.push(`Linked trips: ${hasLinked === "yes" ? "with" : "without"}`);
+    if (hasManualMachine !== ANY) filterParts.push(`Manual machine work: ${hasManualMachine === "yes" ? "with" : "without"}`);
+    if (warningOnly) filterParts.push("Warnings only");
+    meta.push([`Filters: ${filterParts.length ? filterParts.join("  •  ") : "No filters applied"}`]);
+    meta.push([]);
+
+    const head: string[] = [
+      "Date", "Task type", fmt.blocksLabel, `Area (${areaLabel})`,
+      "Labour hours", "Manual machine hours", "Linked trips",
+    ];
+    if (canSeeCosts) {
+      head.push(
+        `Manual labour cost (${currency})`,
+        `Machine charge (${currency})`,
+        `Machine fuel (${currency})`,
+        `Linked GPS trip cost (${currency})`,
+        `Total cost (${currency})`,
+        `Cost / ${areaLabel} (${currency}/${areaLabel})`,
+      );
+    } else {
+      head.push("Machine entries");
+    }
+    head.push("Status");
+
+    const body: (string | number)[][] = filtered.map((r) => {
+      const areaDisp = areaToDisplayUnit(r.totalAreaHa);
+      const perHa = r.totalAreaHa && r.totalAreaHa > 0 ? r.totalCost / r.totalAreaHa : null;
+      const perDisp = perHa == null ? null : (areaImperial ? perHa * HA_PER_AC : perHa);
+      const base: (string | number)[] = [
+        r.date ?? "",
+        r.taskType,
+        r.blocksLabel,
+        areaDisp == null ? "" : Number(areaDisp.toFixed(2)),
+        Number(r.labourHours.toFixed(2)),
+        Number(r.machineHours.toFixed(2)),
+        r.linkedTripCount,
+      ];
+      if (canSeeCosts) {
+        base.push(
+          Number(r.manualLabourCost.toFixed(2)),
+          Number(r.machineCharge.toFixed(2)),
+          Number(r.machineFuel.toFixed(2)),
+          Number(r.linkedTripTotal.toFixed(2)),
+          Number(r.totalCost.toFixed(2)),
+          perDisp == null ? "" : Number(perDisp.toFixed(2)),
+        );
+      } else {
+        base.push(r.machineEntries);
+      }
+      base.push(r.hasWarning ? "Review" : "");
+      return base;
+    });
+
+    const totalsRow: (string | number)[] = [
+      "Totals (filtered)", "", "",
+      totals.anyArea ? Number((areaToDisplayUnit(totals.totalAreaHa) ?? 0).toFixed(2)) : "",
+      Number(totals.labourHours.toFixed(2)),
+      Number(totals.machineHours.toFixed(2)),
+      "",
+    ];
+    if (canSeeCosts) {
+      const perHaTot = totals.totalAreaHa > 0 ? totals.totalCost / totals.totalAreaHa : null;
+      const perDispTot = perHaTot == null ? null : (areaImperial ? perHaTot * HA_PER_AC : perHaTot);
+      totalsRow.push(
+        Number(totals.manualLabourCost.toFixed(2)),
+        Number(totals.machineCharge.toFixed(2)),
+        Number(totals.machineFuel.toFixed(2)),
+        Number(totals.linkedTripTotal.toFixed(2)),
+        Number(totals.totalCost.toFixed(2)),
+        perDispTot == null ? "" : Number(perDispTot.toFixed(2)),
+      );
+    } else {
+      totalsRow.push("");
+    }
+    totalsRow.push("");
+
+    const footerRows: (string | number)[][] = [
+      [],
+      ["Review: linked GPS trips and manual correction/missed machine entries may overlap."],
+    ];
+
+    const aoa: (string | number)[][] = [
+      ...meta,
+      head,
+      ...body,
+      ...(filtered.length ? [totalsRow] : []),
+      ...footerRows,
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // Column widths.
+    const widths = head.map((h) => ({ wch: Math.max(12, Math.min(28, h.length + 2)) }));
+    widths[0] = { wch: 12 };
+    widths[1] = { wch: 18 };
+    widths[2] = { wch: 28 };
+    ws["!cols"] = widths;
+    // Freeze header row (meta rows = 5, header row index = 5 → freeze at row 6).
+    ws["!freeze"] = { xSplit: 0, ySplit: meta.length + 1 };
+    (ws as unknown as { "!freeze"?: unknown })["!freeze"];
+    // SheetJS uses '!freeze' via views; set via worksheet view metadata:
+    (ws as unknown as Record<string, unknown>)["!views"] = [{ state: "frozen", ySplit: meta.length + 1 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Work Task Report");
+    const safeName = (vineyardName ?? "vineyard").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+    XLSX.writeFile(wb, `work-task-report-${safeName}-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    toast({ title: "Excel exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
+  };
+
   const loading =
     tasksQ.isLoading || labourQ.isLoading || machineQ.isLoading ||
     wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && allocQ.isLoading);
@@ -793,6 +921,10 @@ export default function WorkTaskReportsPage() {
             <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!filtered.length}>
               <Download className="h-3.5 w-3.5 mr-1" />
               Export PDF
+            </Button>
+            <Button size="sm" variant="outline" onClick={downloadExcel} disabled={!filtered.length}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export Excel
             </Button>
             <Button size="sm" onClick={downloadCsv} disabled={!filtered.length}>
               <Download className="h-3.5 w-3.5 mr-1" />
