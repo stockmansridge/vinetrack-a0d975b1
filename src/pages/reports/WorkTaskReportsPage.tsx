@@ -360,13 +360,15 @@ export default function WorkTaskReportsPage() {
       (acc, r) => ({
         labourHours: acc.labourHours + r.labourHours,
         machineHours: acc.machineHours + r.machineHours,
+        totalAreaHa: acc.totalAreaHa + (r.totalAreaHa ?? 0),
+        anyArea: acc.anyArea || r.totalAreaHa != null,
         manualLabourCost: acc.manualLabourCost + r.manualLabourCost,
         machineCharge: acc.machineCharge + r.machineCharge,
         machineFuel: acc.machineFuel + r.machineFuel,
         linkedTripTotal: acc.linkedTripTotal + r.linkedTripTotal,
         totalCost: acc.totalCost + r.totalCost,
       }),
-      { labourHours: 0, machineHours: 0, manualLabourCost: 0, machineCharge: 0, machineFuel: 0, linkedTripTotal: 0, totalCost: 0 },
+      { labourHours: 0, machineHours: 0, totalAreaHa: 0, anyArea: false, manualLabourCost: 0, machineCharge: 0, machineFuel: 0, linkedTripTotal: 0, totalCost: 0 },
     );
   }, [filtered]);
 
