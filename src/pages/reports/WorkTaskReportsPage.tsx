@@ -1133,6 +1133,256 @@ export default function WorkTaskReportsPage() {
     URL.revokeObjectURL(url);
     toast({ title: "CSV exported", description: `${allocationRows.length} block row${allocationRows.length === 1 ? "" : "s"} exported.` });
   };
+
+  // Build the filter-summary line that appears in both PDF and Excel exports.
+  const buildFilterSummary = (): string => {
+    const parts: string[] = [];
+    if (from || to) parts.push(`Date: ${from || "…"} → ${to || "…"}`);
+    if (taskType !== ANY) parts.push(`Task type: ${taskType}`);
+    if (paddockId !== ANY) parts.push(`${fmt.blockLabel}: ${paddockNameById.get(paddockId) ?? paddockId}`);
+    if (hasLinked !== ANY) parts.push(`Linked trips: ${hasLinked === "yes" ? "with" : "without"}`);
+    if (hasManualMachine !== ANY) parts.push(`Manual machine work: ${hasManualMachine === "yes" ? "with" : "without"}`);
+    if (warningOnly) parts.push("Warnings only");
+    return parts.length ? parts.join("  •  ") : "No filters applied";
+  };
+
+  const allocationTitle = `Work Task ${fmt.blockLabel} Allocation`;
+  const allocationExplanation = `${fmt.blockLabel} allocation is estimated by area share of each Work Task. Values are calculated for reporting and are not written back to the database.`;
+  const allocationWarningNote = "Review: linked GPS trips and manual correction/missed machine entries may overlap.";
+
+  // -------------------- Allocation PDF export --------------------
+  const downloadAllocationPdf = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+    const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 32;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(allocationTitle, margin, 42);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(`Vineyard: ${vineyardName ?? "—"}`, margin, 58);
+    doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 58, { align: "right" });
+    doc.setDrawColor(200);
+    doc.line(margin, 66, pageWidth - margin, 66);
+    doc.setTextColor(0);
+
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    const filterWrapped = doc.splitTextToSize(`Filters: ${buildFilterSummary()}`, pageWidth - margin * 2);
+    doc.text(filterWrapped, margin, 80);
+    let cursorY = 80 + filterWrapped.length * 10;
+    const explanationWrapped = doc.splitTextToSize(allocationExplanation, pageWidth - margin * 2);
+    doc.text(explanationWrapped, margin, cursorY + 4);
+    cursorY = cursorY + 4 + explanationWrapped.length * 10;
+    doc.setTextColor(0);
+
+    const head: string[] = [
+      fmt.blockLabel, "Tasks", `Area (${fmt.areaUnitLabel})`,
+      "Labour hrs", "Machine hrs", "Linked trips",
+    ];
+    if (canSeeCosts) {
+      head.push(
+        "Manual labour", "Machine charge", "Machine fuel",
+        "Linked GPS trips", "Total cost", `Cost / ${fmt.areaUnitLabel}`,
+      );
+    }
+    head.push("Status");
+
+    const body: string[][] = allocationRows.map((r) => {
+      const base: string[] = [
+        r.name,
+        String(r.taskIds.size),
+        r.hasAnyArea ? areaDisplay(r.areaHa) : "—",
+        r.labourHours.toFixed(2),
+        r.machineHours.toFixed(2),
+        String(r.linkedTripCount),
+      ];
+      if (canSeeCosts) {
+        base.push(
+          money(r.manualLabourCost),
+          money(r.machineCharge),
+          money(r.machineFuel),
+          money(r.linkedTripTotal),
+          money(r.totalCost),
+          r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—",
+        );
+      }
+      base.push(allocationStatus(r));
+      return base;
+    });
+
+    const totalsRow: string[] = [
+      "Totals (filtered)", "",
+      allocationTotals.hasAnyArea ? areaDisplay(allocationTotals.areaHa) : "—",
+      allocationTotals.labourHours.toFixed(2),
+      allocationTotals.machineHours.toFixed(2),
+      "",
+    ];
+    if (canSeeCosts) {
+      totalsRow.push(
+        money(allocationTotals.manualLabourCost),
+        money(allocationTotals.machineCharge),
+        money(allocationTotals.machineFuel),
+        money(allocationTotals.linkedTripTotal),
+        money(allocationTotals.totalCost),
+        allocationTotals.hasAnyArea ? costPerAreaDisplay(allocationTotals.totalCost, allocationTotals.areaHa) : "—",
+      );
+    }
+    totalsRow.push("");
+
+    // Numeric columns (right-align). Base numeric: 1 (Tasks) .. 5 (Linked trips).
+    const numericCols = canSeeCosts
+      ? new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+      : new Set([1, 2, 3, 4, 5]);
+
+    autoTable(doc, {
+      startY: cursorY + 8,
+      head: [head],
+      body,
+      foot: allocationRows.length ? [totalsRow] : undefined,
+      theme: "grid",
+      styles: { fontSize: 7.5, cellPadding: 3, valign: "top", overflow: "linebreak" },
+      headStyles: { fillColor: [60, 90, 60], textColor: 255, halign: "left" },
+      footStyles: { fillColor: [235, 235, 235], textColor: 30, fontStyle: "bold" },
+      margin: { left: margin, right: margin, bottom: 50 },
+      columnStyles: Object.fromEntries(
+        [...numericCols].map((i) => [i, { halign: "right" }]),
+      ),
+      didDrawPage: () => {
+        const pageH = doc.internal.pageSize.getHeight();
+        const pageW = doc.internal.pageSize.getWidth();
+        doc.setFontSize(7);
+        doc.setTextColor(110);
+        doc.text(allocationWarningNote, margin, pageH - 22);
+        const pageNum = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+        doc.text(`Page ${pageNum}`, pageW - margin, pageH - 22, { align: "right" });
+        doc.setTextColor(0);
+      },
+    });
+
+    if (!allocationRows.length) {
+      const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 18;
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(`No ${fmt.blockLabel.toLowerCase()} rows match the current filters.`, margin, y);
+      doc.setTextColor(0);
+    }
+
+    const safeName = (vineyardName ?? "vineyard").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+    doc.save(`work-task-${fmt.blockLabel.toLowerCase()}-allocation-${safeName}-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    toast({ title: "PDF exported", description: `${allocationRows.length} row${allocationRows.length === 1 ? "" : "s"} exported.` });
+  };
+
+  // -------------------- Allocation Excel export --------------------
+  const downloadAllocationExcel = async () => {
+    const XLSX = await import("xlsx");
+    const areaLabel = fmt.areaUnitLabel;
+    const currency = fmt.settings.currency_code;
+
+    const meta: (string | number)[][] = [
+      [allocationTitle],
+      [`Vineyard: ${vineyardName ?? "—"}`],
+      [`Generated: ${fmt.dateTime(new Date())}`],
+      [`Filters: ${buildFilterSummary()}`],
+      [allocationExplanation],
+      [],
+    ];
+
+    const head: string[] = [
+      fmt.blockLabel, "Tasks", `Area (${areaLabel})`,
+      "Labour hours (allocated)", "Manual machine hours (allocated)", "Linked trips",
+    ];
+    if (canSeeCosts) {
+      head.push(
+        `Manual labour cost (${currency})`,
+        `Machine charge (${currency})`,
+        `Machine fuel (${currency})`,
+        `Linked GPS trip cost (${currency})`,
+        `Total allocated cost (${currency})`,
+        `Cost / ${areaLabel} (${currency}/${areaLabel})`,
+      );
+    }
+    head.push("Status");
+
+    const body: (string | number)[][] = allocationRows.map((r) => {
+      const areaDisp = r.hasAnyArea ? areaToDisplayUnit(r.areaHa) : null;
+      const perHa = r.hasAnyArea && r.areaHa > 0 ? r.totalCost / r.areaHa : null;
+      const perDisp = perHa == null ? null : (areaImperial ? perHa * HA_PER_AC : perHa);
+      const base: (string | number)[] = [
+        r.name,
+        r.taskIds.size,
+        areaDisp == null ? "" : Number(areaDisp.toFixed(2)),
+        Number(r.labourHours.toFixed(2)),
+        Number(r.machineHours.toFixed(2)),
+        r.linkedTripCount,
+      ];
+      if (canSeeCosts) {
+        base.push(
+          Number(r.manualLabourCost.toFixed(2)),
+          Number(r.machineCharge.toFixed(2)),
+          Number(r.machineFuel.toFixed(2)),
+          Number(r.linkedTripTotal.toFixed(2)),
+          Number(r.totalCost.toFixed(2)),
+          perDisp == null ? "" : Number(perDisp.toFixed(2)),
+        );
+      }
+      base.push(allocationStatus(r));
+      return base;
+    });
+
+    const totalsRow: (string | number)[] = [
+      "Totals (filtered)", "",
+      allocationTotals.hasAnyArea ? Number((areaToDisplayUnit(allocationTotals.areaHa) ?? 0).toFixed(2)) : "",
+      Number(allocationTotals.labourHours.toFixed(2)),
+      Number(allocationTotals.machineHours.toFixed(2)),
+      "",
+    ];
+    if (canSeeCosts) {
+      const perHaTot = allocationTotals.areaHa > 0 ? allocationTotals.totalCost / allocationTotals.areaHa : null;
+      const perDispTot = perHaTot == null ? null : (areaImperial ? perHaTot * HA_PER_AC : perHaTot);
+      totalsRow.push(
+        Number(allocationTotals.manualLabourCost.toFixed(2)),
+        Number(allocationTotals.machineCharge.toFixed(2)),
+        Number(allocationTotals.machineFuel.toFixed(2)),
+        Number(allocationTotals.linkedTripTotal.toFixed(2)),
+        Number(allocationTotals.totalCost.toFixed(2)),
+        perDispTot == null ? "" : Number(perDispTot.toFixed(2)),
+      );
+    }
+    totalsRow.push("");
+
+    const footerRows: (string | number)[][] = [
+      [],
+      [allocationWarningNote],
+    ];
+
+    const aoa: (string | number)[][] = [
+      ...meta,
+      head,
+      ...body,
+      ...(allocationRows.length ? [totalsRow] : []),
+      ...footerRows,
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const widths = head.map((h) => ({ wch: Math.max(12, Math.min(28, h.length + 2)) }));
+    widths[0] = { wch: 28 };
+    ws["!cols"] = widths;
+    (ws as unknown as Record<string, unknown>)["!views"] = [{ state: "frozen", ySplit: meta.length + 1 }];
+
+    const wb = XLSX.utils.book_new();
+    const sheetName = `${fmt.blockLabel} Allocation`.slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const safeName = (vineyardName ?? "vineyard").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+    XLSX.writeFile(wb, `work-task-${fmt.blockLabel.toLowerCase()}-allocation-${safeName}-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    toast({ title: "Excel exported", description: `${allocationRows.length} row${allocationRows.length === 1 ? "" : "s"} exported.` });
+  };
   // Toggle + Block + Tasks + Area + Labour + Machine + Linked + Status = 8 base; cost adds 6.
   const allocColSpan = 8 + (canSeeCosts ? 6 : 0);
 
