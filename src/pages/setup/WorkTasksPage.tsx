@@ -831,6 +831,8 @@ interface DrawerProps {
     sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
     equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
   };
+  allocByTripId: Map<string, TripCostAllocation[]>;
+  canSeeCosts: boolean;
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
