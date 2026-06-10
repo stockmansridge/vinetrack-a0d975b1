@@ -108,6 +108,7 @@ interface SprayRow {
   temperature?: number | null;
   wind_speed?: number | null;
   humidity?: number | null;
+  is_template?: boolean | null;
 }
 
 interface MaintRow {
@@ -118,6 +119,7 @@ interface MaintRow {
   date?: string | null;
   parts_cost?: number | null;
   labour_cost?: number | null;
+  is_archived?: boolean | null;
 }
 
 interface PinRow {
