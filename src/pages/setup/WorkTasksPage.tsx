@@ -74,7 +74,12 @@ import {
   mergeTaskTypeNames,
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
-import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import {
+  fetchTripsForVineyard,
+  setTripWorkTaskId,
+  describeTripLinkError,
+  type Trip,
+} from "@/lib/tripsQuery";
 import {
   fetchWorkTaskMachineLinesForVineyard,
   resolveMachineLineEquipmentName,
