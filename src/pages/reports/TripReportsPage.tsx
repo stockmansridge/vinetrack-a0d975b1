@@ -96,6 +96,7 @@ export default function TripReportsPage() {
   const [tripFn, setTripFn] = useState<string>(ANY);
   const [operator, setOperator] = useState<string>(ANY);
   const [status, setStatus] = useState<string>(ANY);
+  const [linkedTask, setLinkedTask] = useState<string>(ANY);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [period, setPeriod] = useState<string>("all");
 
