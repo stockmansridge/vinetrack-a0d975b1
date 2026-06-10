@@ -314,7 +314,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
 
   // ---------- Work Tasks ----------
   {
-    const orphans = workTasks.filter(
+    const orphans = activeWorkTasks.filter(
       (t) => !t.paddock_id && !taskHasLinkedPaddock.has(t.id),
     );
     push({
@@ -334,16 +334,24 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       ),
     });
 
-    const noArea = workTasks.filter(
-      (t) => t.area_ha == null || Number(t.area_ha) <= 0,
+    // "No resolved area" — only count tasks where area can't be derived
+    // anywhere. If the task has linked Blocks via work_task_paddocks the
+    // reporting layer can derive area from those, so don't flag it. Severity
+    // lowered to info: tasks with linked Blocks but null area_ha are common
+    // and reports already cope with this.
+    const noArea = activeWorkTasks.filter(
+      (t) =>
+        (t.area_ha == null || Number(t.area_ha) <= 0) &&
+        !taskHasLinkedPaddock.has(t.id) &&
+        !t.paddock_id,
     );
     push({
       group: "Work Tasks",
       key: "wt_no_area",
       name: "Work Tasks with no resolved area",
-      severity: "warning",
-      explanation: "No area_ha is set, which reduces accuracy of per-hectare reporting.",
-      suggestedAction: "Set Block area on the Work Task, or ensure linked Blocks have polygons.",
+      severity: "info",
+      explanation: "No area_ha is set and no Block is linked, so per-hectare reporting can't be derived.",
+      suggestedAction: "Set Block area on the Work Task, or link one or more Blocks with polygons.",
       count: noArea.length,
       details: cap(
         noArea.map((t) => ({
