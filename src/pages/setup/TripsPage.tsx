@@ -522,6 +522,7 @@ export default function TripsPage() {
       <TripSheet
         trip={selected}
         paddockNameById={paddockNameById}
+        workTaskLabelById={workTaskLabelById}
         vineyardName={vineyardName}
         vineyardId={selectedVineyardId}
         open={!!selected}
