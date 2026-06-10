@@ -66,6 +66,17 @@ import {
   mergeTaskTypeNames,
   type WorkTaskType,
 } from "@/lib/workTaskTypesQuery";
+import { fetchTripsForVineyard, type Trip } from "@/lib/tripsQuery";
+import {
+  fetchWorkTaskMachineLinesForVineyard,
+  resolveMachineLineEquipmentName,
+  type WorkTaskMachineLine,
+} from "@/lib/workTaskMachineLinesQuery";
+import {
+  formatTripNameLabel,
+  formatTripFunctionLabel,
+  formatTripDurationLabel,
+} from "@/lib/tripDisplay";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
