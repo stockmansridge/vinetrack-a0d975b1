@@ -59,9 +59,84 @@ function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-function IssueRow({ issue }: { issue: Issue }) {
+/**
+ * Resolve a navigation target for an affected record. We deliberately do NOT
+ * invent new edit forms; we only navigate to existing list/detail surfaces.
+ * Most list pages have a local filter, so a "Copy ID" affordance is offered
+ * alongside "Open" so the user can paste the id into the filter box.
+ *
+ * Returns null when no safe surface exists (composite keys, equipment
+ * cross-table issues).
+ */
+function resolveOpenHref(issue: Issue, detail: IssueDetail): string | null {
+  switch (issue.key) {
+    case "block_no_area":
+    case "block_no_rows":
+    case "block_no_variety":
+    case "block_bad_variety_sum":
+      return `/setup/paddocks/${detail.id}`;
+    case "pin_no_block":
+    case "pin_no_row":
+    case "pin_deleted_block":
+      return "/pins";
+    case "pin_dup_risk": {
+      const pid = detail.id.split("|")[0];
+      return pid ? `/setup/paddocks/${pid}` : "/pins";
+    }
+    case "trip_no_block":
+    case "trip_no_machine":
+    case "trip_no_operator":
+    case "trip_deleted_task":
+    case "trip_bad_duration":
+      return "/trips";
+    case "wt_no_block":
+    case "wt_no_area":
+    case "wt_machine_no_stable_id":
+    case "wt_trips_with_corrections":
+    case "wt_labour_missing_category":
+      return "/work-tasks";
+    case "spray_no_machine":
+    case "spray_no_equipment":
+    case "spray_orphan_trip":
+    case "spray_no_weather":
+    case "spray_legacy_free_text":
+      return "/spray-records";
+    case "maint_free_text":
+    case "maint_missing_ref":
+    case "maint_dangling_ref":
+    case "maint_missing_date_cost":
+      return "/maintenance";
+    case "fuel_no_equip":
+    case "fuel_legacy_tractor_only":
+      return "/tractor-fuel-logs";
+    case "fuel_purchase_missing":
+      return "/fuel-purchases";
+    case "equip_legacy_tractor_machine":
+      return "/setup/vineyard-machines";
+    case "equip_dup_name":
+    case "equip_missing_ref":
+    default:
+      return null;
+  }
+}
+
+function IssueRow({
+  issue,
+  onOpen,
+}: {
+  issue: Issue;
+  onOpen: (href: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const canExpand = issue.details.length > 0;
+  const copyId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      toast({ title: "Copied", description: "Record ID copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: id, variant: "destructive" });
+    }
+  };
   return (
     <>
       <TableRow>
@@ -102,16 +177,62 @@ function IssueRow({ issue }: { issue: Issue }) {
           <TableCell colSpan={3} className="bg-muted/30">
             <div className="text-xs text-muted-foreground mb-2">
               Showing {issue.details.length} of {issue.count} affected record(s).
+              Use <span className="font-medium">Open</span> to jump to the related
+              page, or <span className="font-medium">Copy ID</span> to paste into a
+              filter.
             </div>
-            <ul className="text-sm space-y-1">
-              {issue.details.map((d) => (
-                <li key={d.id} className="flex items-baseline gap-2">
-                  <span className="font-medium">{d.label}</span>
-                  {d.context && (
-                    <span className="text-muted-foreground text-xs">— {d.context}</span>
-                  )}
-                </li>
-              ))}
+            <ul className="text-sm divide-y divide-border/60">
+              {issue.details.map((d) => {
+                const href = resolveOpenHref(issue, d);
+                return (
+                  <li key={d.id} className="flex items-center gap-3 py-1.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate">
+                        <span className="font-medium">{d.label}</span>
+                        {d.context && (
+                          <span className="text-muted-foreground text-xs ml-2">
+                            — {d.context}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground/80 font-mono truncate">
+                        {d.id}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => copyId(d.id)}
+                        title="Copy ID"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copy ID
+                      </Button>
+                      {href ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => onOpen(href)}
+                          title={`Open ${href}`}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Open
+                        </Button>
+                      ) : (
+                        <span
+                          className="text-[10px] text-muted-foreground px-2"
+                          title="No direct edit surface — review manually using the ID above."
+                        >
+                          Review manually
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </TableCell>
         </TableRow>
