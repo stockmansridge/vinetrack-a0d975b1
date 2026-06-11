@@ -272,6 +272,7 @@ function SummaryCard({
 
 export default function DataCoveragePage() {
   const { selectedVineyardId } = useVineyard();
+  const navigate = useNavigate();
   const query = useQuery({
     queryKey: ["data-coverage", selectedVineyardId],
     enabled: !!selectedVineyardId,
