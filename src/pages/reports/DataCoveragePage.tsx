@@ -421,7 +421,7 @@ export default function DataCoveragePage() {
                       </TableHeader>
                       <TableBody>
                         {issues.map((i) => (
-                          <IssueRow key={i.key} issue={i} />
+                          <IssueRow key={i.key} issue={i} onOpen={navigate} />
                         ))}
                       </TableBody>
                     </Table>
