@@ -1,16 +1,19 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import {
   runDataCoverage,
   dataCoverageCsv,
   type Issue,
+  type IssueDetail,
   type IssueGroup,
   type Severity,
 } from "@/lib/dataCoverageQuery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 import {
   Table,
   TableBody,
@@ -19,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronDown, ChevronRight, Download, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download, ExternalLink, RefreshCw } from "lucide-react";
 
 const SEVERITY_ORDER: Record<Severity, number> = {
   critical: 0,
