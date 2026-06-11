@@ -787,10 +787,12 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     push({
       group: "Pins",
       key: "pin_no_block",
-      name: "Pins with no Block",
-      severity: "critical",
-      explanation: "Pin has no paddock_id, so it can't appear under a Block in reports.",
-      suggestedAction: "Open the pin and assign it to a Block.",
+      name: "Pins not attached to a Block",
+      severity: "info",
+      explanation:
+        "Some pins are intentionally used as general information markers (gates, observations, hazards) and may not need a Block. Review only if the pin should appear in Block-based views.",
+      suggestedAction:
+        "Open the pin and attach a Block only if it should be reported against a specific Block.",
       count: pinNoBlock.length,
       details: cap(
         pinNoBlock.map((p) => ({
