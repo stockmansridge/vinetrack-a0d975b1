@@ -638,6 +638,22 @@ export default function VineyardOverviewMap({
                 Map unavailable — {mapError}
               </div>
             )}
+            {mapReady && pinColorMode === "age" && showPins && (
+              <div className="pointer-events-none absolute right-3 bottom-3 rounded-md bg-background/90 px-3 py-2 text-[11px] shadow-md border">
+                <div className="mb-1 font-semibold">Pin age</div>
+                <ul className="space-y-0.5">
+                  {(["new", "recent", "aging", "old", "unknown"] as PinAgeBucket[]).map((b) => (
+                    <li key={b} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full border border-white/70"
+                        style={{ background: PIN_AGE_COLOURS[b] }}
+                      />
+                      <span className="text-muted-foreground">{PIN_AGE_LABELS[b]}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {mapReady && parsedPaddocks.length === 0 && !paddocksQ.isLoading && (
               <div className="pointer-events-none absolute inset-x-0 top-2 mx-auto w-fit rounded bg-background/90 px-3 py-1 text-xs text-muted-foreground">
                 No {rf.blockLabel.toLowerCase()} map data available
