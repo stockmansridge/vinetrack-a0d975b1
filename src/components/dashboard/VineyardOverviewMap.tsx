@@ -162,6 +162,8 @@ export default function VineyardOverviewMap({
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [pinColorMode, setPinColorMode] = useState<"default" | "age">("default");
+  const [overview3D, setOverview3D] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
