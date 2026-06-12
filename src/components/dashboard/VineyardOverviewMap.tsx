@@ -743,16 +743,24 @@ function Toggle({
   label,
   checked,
   onChange,
+  disabled,
+  title,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
-    <Label className="flex items-center gap-1.5 cursor-pointer text-xs font-normal">
+    <Label
+      className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+      title={title}
+    >
       <Switch
         checked={checked}
         onCheckedChange={onChange}
+        disabled={disabled}
         className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
       />
       {label}
