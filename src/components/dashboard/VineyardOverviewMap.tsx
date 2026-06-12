@@ -45,6 +45,12 @@ import type { PinRecord } from "@/components/PinDetailPanel";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import {
+  PIN_AGE_COLOURS,
+  PIN_AGE_LABELS,
+  pinAgeColor,
+  type PinAgeBucket,
+} from "@/lib/pinAge";
 
 // ---------- Trip function helpers ----------
 
