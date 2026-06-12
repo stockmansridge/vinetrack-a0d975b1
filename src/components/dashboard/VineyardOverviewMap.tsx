@@ -595,6 +595,8 @@ export default function VineyardOverviewMap({
             label="3D Overview"
             checked={overview3D}
             onChange={setOverview3D}
+            disabled
+            title="3D Overview is not yet supported by Apple MapKit JS — coming soon"
           />
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
