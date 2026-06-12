@@ -582,6 +582,20 @@ export default function VineyardOverviewMap({
               <SelectItem value="hidden">Pins: Hide</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={pinColorMode} onValueChange={(v) => setPinColorMode(v as "default" | "age")}>
+            <SelectTrigger className="h-8 w-[150px] text-xs" title="Pin colour mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Pin colour: Default</SelectItem>
+              <SelectItem value="age">Pin colour: By age</SelectItem>
+            </SelectContent>
+          </Select>
+          <Toggle
+            label="3D Overview"
+            checked={overview3D}
+            onChange={setOverview3D}
+          />
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue />
