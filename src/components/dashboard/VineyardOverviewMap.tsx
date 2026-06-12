@@ -455,6 +455,7 @@ export default function VineyardOverviewMap({
         if (!validPt({ lat, lng })) continue;
         allPts.push({ lat, lng });
         const style = pinStyle(pin.mode, pin.button_color, pin.category);
+        const fill = pinColorMode === "age" ? pinAgeColor((pin as any).created_at) : style.hex;
         const isSelected =
           selection?.kind === "pin" && selection.id === pin.id;
         const id = pin.id;
@@ -463,7 +464,7 @@ export default function VineyardOverviewMap({
           () => {
             const el = document.createElement("div");
             const size = isSelected ? 16 : 12;
-            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${style.hex};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer;`;
+            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${fill};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer;`;
             el.title = pinDisplayTitle(pin);
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
