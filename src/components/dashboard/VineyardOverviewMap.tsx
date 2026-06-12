@@ -162,6 +162,8 @@ export default function VineyardOverviewMap({
   const [days, setDays] = useState<number>(daysDefault);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [pinColorMode, setPinColorMode] = useState<"default" | "age">("default");
+  const [overview3D, setOverview3D] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -453,6 +455,7 @@ export default function VineyardOverviewMap({
         if (!validPt({ lat, lng })) continue;
         allPts.push({ lat, lng });
         const style = pinStyle(pin.mode, pin.button_color, pin.category);
+        const fill = pinColorMode === "age" ? pinAgeColor((pin as any).created_at) : style.hex;
         const isSelected =
           selection?.kind === "pin" && selection.id === pin.id;
         const id = pin.id;
@@ -461,7 +464,7 @@ export default function VineyardOverviewMap({
           () => {
             const el = document.createElement("div");
             const size = isSelected ? 16 : 12;
-            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${style.hex};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer;`;
+            el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${fill};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer;`;
             el.title = pinDisplayTitle(pin);
             el.addEventListener("click", (ev) => {
               ev.stopPropagation();
@@ -503,6 +506,7 @@ export default function VineyardOverviewMap({
     showPaddocks,
     showTrips,
     showPins,
+    pinColorMode,
     selection,
     vineyardExtent,
     fitToBounds,
@@ -578,6 +582,22 @@ export default function VineyardOverviewMap({
               <SelectItem value="hidden">Pins: Hide</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={pinColorMode} onValueChange={(v) => setPinColorMode(v as "default" | "age")}>
+            <SelectTrigger className="h-8 w-[150px] text-xs" title="Pin colour mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Pin colour: Default</SelectItem>
+              <SelectItem value="age">Pin colour: By age</SelectItem>
+            </SelectContent>
+          </Select>
+          <Toggle
+            label="3D Overview"
+            checked={overview3D}
+            onChange={setOverview3D}
+            disabled
+            title="3D Overview is not yet supported by Apple MapKit JS — coming soon"
+          />
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue />
@@ -616,6 +636,22 @@ export default function VineyardOverviewMap({
             {mapError && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-destructive bg-background/80 px-4 text-center">
                 Map unavailable — {mapError}
+              </div>
+            )}
+            {mapReady && pinColorMode === "age" && showPins && (
+              <div className="pointer-events-none absolute right-3 bottom-3 rounded-md bg-background/90 px-3 py-2 text-[11px] shadow-md border">
+                <div className="mb-1 font-semibold">Pin age</div>
+                <ul className="space-y-0.5">
+                  {(["new", "recent", "aging", "old", "unknown"] as PinAgeBucket[]).map((b) => (
+                    <li key={b} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full border border-white/70"
+                        style={{ background: PIN_AGE_COLOURS[b] }}
+                      />
+                      <span className="text-muted-foreground">{PIN_AGE_LABELS[b]}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {mapReady && parsedPaddocks.length === 0 && !paddocksQ.isLoading && (
@@ -725,16 +761,24 @@ function Toggle({
   label,
   checked,
   onChange,
+  disabled,
+  title,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
-    <Label className="flex items-center gap-1.5 cursor-pointer text-xs font-normal">
+    <Label
+      className={`flex items-center gap-1.5 text-xs font-normal ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+      title={title}
+    >
       <Switch
         checked={checked}
         onCheckedChange={onChange}
+        disabled={disabled}
         className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
       />
       {label}
