@@ -163,7 +163,7 @@ export default function VineyardOverviewMap({
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [pinColorMode, setPinColorMode] = useState<"default" | "age">("default");
-  const [overview3D, setOverview3D] = useState(false);
+  
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -583,7 +583,7 @@ export default function VineyardOverviewMap({
             </SelectContent>
           </Select>
           <Select value={pinColorMode} onValueChange={(v) => setPinColorMode(v as "default" | "age")}>
-            <SelectTrigger className="h-8 w-[150px] text-xs" title="Pin colour mode">
+            <SelectTrigger className="h-8 w-[190px] text-xs" title="Pin colour mode">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -591,13 +591,6 @@ export default function VineyardOverviewMap({
               <SelectItem value="age">Pin colour: By age</SelectItem>
             </SelectContent>
           </Select>
-          <Toggle
-            label="3D Overview"
-            checked={overview3D}
-            onChange={setOverview3D}
-            disabled
-            title="3D Overview is not yet supported by Apple MapKit JS — coming soon"
-          />
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue />
