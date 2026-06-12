@@ -506,6 +506,7 @@ export default function VineyardOverviewMap({
     showPaddocks,
     showTrips,
     showPins,
+    pinColorMode,
     selection,
     vineyardExtent,
     fitToBounds,
