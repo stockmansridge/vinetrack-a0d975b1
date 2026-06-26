@@ -204,6 +204,16 @@ Deno.serve(async (req) => {
             page_path: body.page_path ?? null,
             browser_info: body.browser_info ?? null,
             attachments: signedUrls,
+            // Deep link into the admin portal. Falls back to the production
+            // portal URL when the caller is iOS/Android (no Origin header that
+            // matches the web portal).
+            admin_url: `${
+              (() => {
+                const origin = req.headers.get("origin") ?? "";
+                const isPortal = /^https?:\/\/(localhost|.*vinetrack\.com\.au)/i.test(origin);
+                return isPortal ? origin : "https://portal.vinetrack.com.au";
+              })()
+            }/admin/support-requests/${requestId}`,
           },
         }),
       });
