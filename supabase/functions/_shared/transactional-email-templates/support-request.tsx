@@ -65,6 +65,7 @@ function SupportRequestEmail(props: SupportRequestProps) {
     page_path,
     browser_info,
     attachments = [],
+    admin_url,
   } = props
 
   return (
