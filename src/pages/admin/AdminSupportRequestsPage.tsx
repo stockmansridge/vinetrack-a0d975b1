@@ -281,6 +281,8 @@ function DetailSheet({
 
 export default function AdminSupportRequestsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { id: routeId } = useParams<{ id?: string }>();
   const { data = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin", "support-requests"],
     queryFn: fetchSupportRequests,
@@ -292,7 +294,19 @@ export default function AdminSupportRequestsPage() {
   const [emailFilter, setEmailFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [vineyardFilter, setVineyardFilter] = useState<string>("all");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(routeId ?? null);
+
+  // Keep openId synced with the URL param so deep-link emails open the sheet
+  // and Back/Forward navigation works as expected.
+  useEffect(() => {
+    setOpenId(routeId ?? null);
+  }, [routeId]);
+
+  const setOpen = (id: string | null) => {
+    setOpenId(id);
+    if (id) navigate(`/admin/support-requests/${id}`, { replace: false });
+    else navigate(`/admin/support-requests`, { replace: false });
+  };
 
   const categories = useMemo(
     () =>
