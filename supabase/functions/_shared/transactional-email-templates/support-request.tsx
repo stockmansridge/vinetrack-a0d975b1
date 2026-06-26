@@ -99,6 +99,26 @@ function SupportRequestEmail(props: SupportRequestProps) {
             Type: <strong>{request_type}</strong>
           </Text>
 
+          {admin_url && (
+            <Section style={{ margin: '0 0 20px' }}>
+              <Link
+                href={admin_url}
+                style={{
+                  display: 'inline-block',
+                  background: '#1a73e8',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                Open this support case in the admin portal
+              </Link>
+            </Section>
+          )}
+
           <Section>
             <Text style={labelStyle}>Subject</Text>
             <Text style={valueStyle}>{subject}</Text>
