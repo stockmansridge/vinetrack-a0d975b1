@@ -206,5 +206,6 @@ export const template = {
     page_path: '/work-tasks',
     browser_info: 'Mozilla/5.0 ...',
     attachments: [{ name: 'screenshot.png', url: 'https://example.com/sample.png' }],
+    admin_url: 'https://portal.vinetrack.com.au/admin/support-requests/00000000-0000-0000-0000-000000000000',
   } satisfies SupportRequestProps,
 } satisfies TemplateEntry
