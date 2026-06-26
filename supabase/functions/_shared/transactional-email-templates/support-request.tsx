@@ -32,6 +32,7 @@ interface SupportRequestProps {
   page_path?: string | null
   browser_info?: string | null
   attachments?: AttachmentLink[]
+  admin_url?: string | null
 }
 
 const labelStyle: React.CSSProperties = {
