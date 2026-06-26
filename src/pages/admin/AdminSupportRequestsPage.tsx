@@ -500,7 +500,7 @@ export default function AdminSupportRequestsPage() {
       <DetailSheet
         row={selected}
         open={!!selected}
-        onOpenChange={(v) => !v && setOpenId(null)}
+        onOpenChange={(v) => !v && setOpen(null)}
         onStatusChange={(s) => selected && statusMut.mutate({ id: selected.id, status: s })}
         saving={statusMut.isPending}
       />
