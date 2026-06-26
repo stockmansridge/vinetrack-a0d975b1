@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { Card } from "@/components/ui/card";
@@ -280,6 +281,8 @@ function DetailSheet({
 
 export default function AdminSupportRequestsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { id: routeId } = useParams<{ id?: string }>();
   const { data = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin", "support-requests"],
     queryFn: fetchSupportRequests,
@@ -291,7 +294,19 @@ export default function AdminSupportRequestsPage() {
   const [emailFilter, setEmailFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [vineyardFilter, setVineyardFilter] = useState<string>("all");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(routeId ?? null);
+
+  // Keep openId synced with the URL param so deep-link emails open the sheet
+  // and Back/Forward navigation works as expected.
+  useEffect(() => {
+    setOpenId(routeId ?? null);
+  }, [routeId]);
+
+  const setOpen = (id: string | null) => {
+    setOpenId(id);
+    if (id) navigate(`/admin/support-requests/${id}`, { replace: false });
+    else navigate(`/admin/support-requests`, { replace: false });
+  };
 
   const categories = useMemo(
     () =>
@@ -432,7 +447,7 @@ export default function AdminSupportRequestsPage() {
               return (
                 <button
                   key={r.id}
-                  onClick={() => setOpenId(r.id)}
+                  onClick={() => setOpen(r.id)}
                   className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-start gap-3">
@@ -485,7 +500,7 @@ export default function AdminSupportRequestsPage() {
       <DetailSheet
         row={selected}
         open={!!selected}
-        onOpenChange={(v) => !v && setOpenId(null)}
+        onOpenChange={(v) => !v && setOpen(null)}
         onStatusChange={(s) => selected && statusMut.mutate({ id: selected.id, status: s })}
         saving={statusMut.isPending}
       />

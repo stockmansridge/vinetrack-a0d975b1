@@ -32,6 +32,7 @@ interface SupportRequestProps {
   page_path?: string | null
   browser_info?: string | null
   attachments?: AttachmentLink[]
+  admin_url?: string | null
 }
 
 const labelStyle: React.CSSProperties = {
@@ -64,6 +65,7 @@ function SupportRequestEmail(props: SupportRequestProps) {
     page_path,
     browser_info,
     attachments = [],
+    admin_url,
   } = props
 
   return (
@@ -96,6 +98,26 @@ function SupportRequestEmail(props: SupportRequestProps) {
           <Text style={{ margin: '0 0 20px', color: '#666', fontSize: '13px' }}>
             Type: <strong>{request_type}</strong>
           </Text>
+
+          {admin_url && (
+            <Section style={{ margin: '0 0 20px' }}>
+              <Link
+                href={admin_url}
+                style={{
+                  display: 'inline-block',
+                  background: '#1a73e8',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                Open this support case in the admin portal
+              </Link>
+            </Section>
+          )}
 
           <Section>
             <Text style={labelStyle}>Subject</Text>
@@ -184,5 +206,6 @@ export const template = {
     page_path: '/work-tasks',
     browser_info: 'Mozilla/5.0 ...',
     attachments: [{ name: 'screenshot.png', url: 'https://example.com/sample.png' }],
+    admin_url: 'https://portal.vinetrack.com.au/admin/support-requests/00000000-0000-0000-0000-000000000000',
   } satisfies SupportRequestProps,
 } satisfies TemplateEntry
