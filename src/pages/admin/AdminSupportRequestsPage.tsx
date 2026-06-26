@@ -447,7 +447,7 @@ export default function AdminSupportRequestsPage() {
               return (
                 <button
                   key={r.id}
-                  onClick={() => setOpenId(r.id)}
+                  onClick={() => setOpen(r.id)}
                   className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-start gap-3">
