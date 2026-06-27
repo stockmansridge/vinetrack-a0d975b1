@@ -341,7 +341,7 @@ export default function AdminSupportRequestsPage() {
     const q = search.trim().toLowerCase();
     return data
       .filter((r) => {
-        if (statusFilter !== "all" && (r.status ?? "") !== statusFilter) return false;
+        if (statusFilter.size > 0 && !statusFilter.has(r.status ?? "")) return false;
         if (emailFilter !== "all" && (r.email_status ?? "") !== emailFilter) return false;
         const cat = r.category ?? r.request_type ?? "";
         if (categoryFilter !== "all" && cat !== categoryFilter) return false;
