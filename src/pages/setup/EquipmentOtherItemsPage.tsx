@@ -365,16 +365,29 @@ function ItemEditor({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="ei-serial">Serial number</Label>
-            <Input
-              id="ei-serial"
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              placeholder="Optional"
-              maxLength={120}
-              disabled={!canWrite}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ei-serial">Serial number</Label>
+              <Input
+                id="ei-serial"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="Optional"
+                maxLength={120}
+                disabled={!canWrite}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ei-vin">VIN number</Label>
+              <Input
+                id="ei-vin"
+                value={vinNumber}
+                onChange={(e) => setVinNumber(e.target.value)}
+                placeholder="Optional"
+                maxLength={120}
+                disabled={!canWrite}
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
