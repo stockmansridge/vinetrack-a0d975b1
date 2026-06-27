@@ -39,12 +39,15 @@ import {
 import { Plus, Pencil, Archive } from "lucide-react";
 import { z } from "zod";
 import { formatDate } from "@/lib/dateFormat";
+import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
 
 interface SprayEquipment {
   id: string;
   vineyard_id: string;
   name: string | null;
   tank_capacity_litres: number | null;
+  serial_number: string | null;
+  vin_number: string | null;
   updated_at?: string | null;
 }
 
@@ -63,9 +66,11 @@ const schema = z.object({
 type FormState = {
   name: string;
   tank_capacity_litres: string;
+  serial_number: string;
+  vin_number: string;
 };
 
-const emptyForm: FormState = { name: "", tank_capacity_litres: "" };
+const emptyForm: FormState = { name: "", tank_capacity_litres: "", serial_number: "", vin_number: "" };
 
 const fmtCell = (v: any) => {
   if (v == null || v === "") return "—";
@@ -122,6 +127,8 @@ export default function SprayEquipmentPage() {
       name: s.name ?? "",
       tank_capacity_litres:
         s.tank_capacity_litres != null ? String(s.tank_capacity_litres) : "",
+      serial_number: s.serial_number ?? "",
+      vin_number: s.vin_number ?? "",
     });
     setErrors({});
     setDialogOpen(true);
@@ -159,9 +166,12 @@ export default function SprayEquipmentPage() {
     setSubmitting(true);
     try {
       if (editing) {
+        const trimOrNull = (v: string) => (v.trim() === "" ? null : v.trim());
         const updatePayload = {
           name: form.name.trim(),
           tank_capacity_litres: Number(form.tank_capacity_litres),
+          serial_number: trimOrNull(form.serial_number),
+          vin_number: trimOrNull(form.vin_number),
           updated_by: user.id,
           client_updated_at: nowIso,
         };
@@ -174,11 +184,14 @@ export default function SprayEquipmentPage() {
         toast.success("Spray equipment updated");
       } else {
         const id = crypto.randomUUID();
+        const trimOrNull = (v: string) => (v.trim() === "" ? null : v.trim());
         const insertPayload = {
           id,
           vineyard_id: selectedVineyardId,
           name: form.name.trim(),
           tank_capacity_litres: Number(form.tank_capacity_litres),
+          serial_number: trimOrNull(form.serial_number),
+          vin_number: trimOrNull(form.vin_number),
           created_by: user.id,
           updated_by: user.id,
           client_updated_at: nowIso,
