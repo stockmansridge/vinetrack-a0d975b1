@@ -49,6 +49,8 @@ export interface VineyardMachine {
   available_for_job_costing: boolean | null;
   fuel_usage_l_per_hour: number | null;
   notes: string | null;
+  serial_number: string | null;
+  vin_number: string | null;
   legacy_tractor_id: string | null;
   created_by: string | null;
   updated_by: string | null;
@@ -106,6 +108,8 @@ export interface CreateVineyardMachineInput {
   available_for_job_costing: boolean;
   fuel_usage_l_per_hour: number | null;
   notes?: string | null;
+  serial_number?: string | null;
+  vin_number?: string | null;
   user_id: string | null;
 }
 
@@ -121,6 +125,8 @@ export async function createVineyardMachine(
     available_for_job_costing: input.available_for_job_costing,
     fuel_usage_l_per_hour: input.fuel_usage_l_per_hour,
     notes: input.notes ?? null,
+    serial_number: input.serial_number ?? null,
+    vin_number: input.vin_number ?? null,
     legacy_tractor_id: null,
     created_by: input.user_id,
     updated_by: input.user_id,
@@ -145,6 +151,8 @@ export interface UpdateVineyardMachineInput {
   available_for_job_costing?: boolean;
   fuel_usage_l_per_hour?: number | null;
   notes?: string | null;
+  serial_number?: string | null;
+  vin_number?: string | null;
   user_id: string | null;
   current_sync_version?: number | null;
 }
@@ -167,6 +175,8 @@ export async function updateVineyardMachine(
   if (input.fuel_usage_l_per_hour !== undefined)
     patch.fuel_usage_l_per_hour = input.fuel_usage_l_per_hour;
   if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.serial_number !== undefined) patch.serial_number = input.serial_number;
+  if (input.vin_number !== undefined) patch.vin_number = input.vin_number;
 
   const { data, error } = await supabase
     .from("vineyard_machines")

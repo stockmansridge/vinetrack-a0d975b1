@@ -53,6 +53,7 @@ import {
   updateVineyardMachine,
   softDeleteVineyardMachine,
 } from "@/lib/vineyardMachinesQuery";
+import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
 
 type FormState = {
   name: string;
@@ -61,6 +62,8 @@ type FormState = {
   available_for_job_costing: boolean;
   fuel_usage_l_per_hour: string;
   notes: string;
+  serial_number: string;
+  vin_number: string;
 };
 
 const emptyForm: FormState = {
@@ -70,6 +73,8 @@ const emptyForm: FormState = {
   available_for_job_costing: true,
   fuel_usage_l_per_hour: "",
   notes: "",
+  serial_number: "",
+  vin_number: "",
 };
 
 const fmtNum = (v?: number | null) =>
@@ -124,6 +129,8 @@ export default function VineyardMachinesPage() {
       available_for_job_costing: m.available_for_job_costing ?? true,
       fuel_usage_l_per_hour: m.fuel_usage_l_per_hour != null ? String(m.fuel_usage_l_per_hour) : "",
       notes: m.notes ?? "",
+      serial_number: m.serial_number ?? "",
+      vin_number: m.vin_number ?? "",
     });
     setDialogOpen(true);
   };
@@ -147,6 +154,8 @@ export default function VineyardMachinesPage() {
     }
     setSubmitting(true);
     try {
+      const sn = form.serial_number.trim() || null;
+      const vn = form.vin_number.trim() || null;
       if (editing) {
         await updateVineyardMachine({
           id: editing.id,
@@ -156,6 +165,8 @@ export default function VineyardMachinesPage() {
           available_for_job_costing: form.available_for_job_costing,
           fuel_usage_l_per_hour: lhr,
           notes: form.notes.trim() || null,
+          serial_number: sn,
+          vin_number: vn,
           user_id: user?.id ?? null,
           current_sync_version: editing.sync_version,
         });
@@ -169,6 +180,8 @@ export default function VineyardMachinesPage() {
           available_for_job_costing: form.available_for_job_costing,
           fuel_usage_l_per_hour: lhr,
           notes: form.notes.trim() || null,
+          serial_number: sn,
+          vin_number: vn,
           user_id: user?.id ?? null,
         });
         toast.success("Machine created");
@@ -261,9 +274,16 @@ export default function VineyardMachinesPage() {
               return (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">
-                    {r.name}
-                    {isLegacy && (
-                      <Badge variant="outline" className="ml-2">Managed in Tractors</Badge>
+                    <div>
+                      {r.name}
+                      {isLegacy && (
+                        <Badge variant="outline" className="ml-2">Managed in Tractors</Badge>
+                      )}
+                    </div>
+                    {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
+                      <div className="text-xs text-muted-foreground font-normal">
+                        {equipmentIdSubtitle(r.serial_number, r.vin_number)}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>{MACHINE_TYPE_LABELS[r.machine_type as MachineType] ?? r.machine_type}</TableCell>
@@ -363,6 +383,26 @@ export default function VineyardMachinesPage() {
                   onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                   maxLength={500}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Serial number</Label>
+                  <Input
+                    value={form.serial_number}
+                    onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>VIN number</Label>
+                  <Input
+                    value={form.vin_number}
+                    onChange={(e) => setForm((f) => ({ ...f, vin_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </div>
               </div>
             </div>
             <DialogFooter>

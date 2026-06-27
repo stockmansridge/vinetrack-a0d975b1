@@ -40,6 +40,7 @@ import {
 import { Plus, Pencil, Sparkles, Archive } from "lucide-react";
 import { z } from "zod";
 import { formatDate } from "@/lib/dateFormat";
+import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
 
 interface Tractor {
   id: string;
@@ -49,6 +50,8 @@ interface Tractor {
   model: string | null;
   model_year: number | null;
   fuel_usage_l_per_hour: number | null;
+  serial_number: string | null;
+  vin_number: string | null;
   updated_at?: string | null;
 }
 
@@ -86,6 +89,8 @@ type FormState = {
   model: string;
   model_year: string;
   fuel_usage_l_per_hour: string;
+  serial_number: string;
+  vin_number: string;
 };
 
 const emptyForm: FormState = {
@@ -94,6 +99,8 @@ const emptyForm: FormState = {
   model: "",
   model_year: "",
   fuel_usage_l_per_hour: String(DEFAULT_FUEL_L_PER_HOUR),
+  serial_number: "",
+  vin_number: "",
 };
 
 const fmtCell = (v: any) => {
@@ -158,6 +165,8 @@ export default function TractorsPage() {
       model_year: t.model_year != null ? String(t.model_year) : "",
       fuel_usage_l_per_hour:
         t.fuel_usage_l_per_hour != null ? String(t.fuel_usage_l_per_hour) : "",
+      serial_number: t.serial_number ?? "",
+      vin_number: t.vin_number ?? "",
     });
     setErrors({});
     setSuggestion(null);
@@ -256,6 +265,8 @@ export default function TractorsPage() {
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
           fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
+          serial_number: trimmedOrNull(form.serial_number),
+          vin_number: trimmedOrNull(form.vin_number),
           updated_by: user.id,
           client_updated_at: nowIso,
         };
@@ -276,6 +287,8 @@ export default function TractorsPage() {
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
           fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
+          serial_number: trimmedOrNull(form.serial_number),
+          vin_number: trimmedOrNull(form.vin_number),
           created_by: user.id,
           updated_by: user.id,
           client_updated_at: nowIso,
@@ -408,7 +421,14 @@ export default function TractorsPage() {
                 className="cursor-pointer"
                 onClick={() => navigate(`/setup/tractors/${r.id}`)}
               >
-                <TableCell className="font-medium">{fmtCell(r.name)}</TableCell>
+                <TableCell className="font-medium">
+                  <div>{fmtCell(r.name)}</div>
+                  {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
+                    <div className="text-xs text-muted-foreground font-normal">
+                      {equipmentIdSubtitle(r.serial_number, r.vin_number)}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>{fmtCell(r.brand)}</TableCell>
                 <TableCell>{fmtCell(r.model)}</TableCell>
                 <TableCell>{fmtCell(r.model_year)}</TableCell>
@@ -504,6 +524,24 @@ export default function TractorsPage() {
                       }))
                     }
                     required
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Serial number">
+                  <Input
+                    value={form.serial_number}
+                    onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="VIN number">
+                  <Input
+                    value={form.vin_number}
+                    onChange={(e) => setForm((f) => ({ ...f, vin_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
                   />
                 </Field>
               </div>
