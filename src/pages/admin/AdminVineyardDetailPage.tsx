@@ -1,13 +1,30 @@
+import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { MapContainer, TileLayer, Polygon, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAdminVineyards, useAdminVineyardPaddocks, type AdminPaddock } from "@/lib/adminApi";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty, ArchivedBadge, formatDate } from "./_shared";
+import MapSourceBadge from "@/components/MapSourceBadge";
 
-function PolygonsPreview({ paddocks, height = 320 }: { paddocks: AdminPaddock[]; height?: number }) {
+function FitToPolys({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!bounds) return;
+    try {
+      const lb = L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.2);
+      map.fitBounds(lb, { padding: [16, 16] });
+    } catch { /* noop */ }
+  }, [bounds, map]);
+  return null;
+}
+
+function PolygonsPreview({ paddocks, height = 420 }: { paddocks: AdminPaddock[]; height?: number }) {
   const polys = paddocks
     .filter((p) => !p.deleted_at && (p.polygon_points?.length ?? 0) >= 3)
-    .map((p) => p.polygon_points!);
+    .map((p) => p.polygon_points!.map((pt) => [pt.latitude, pt.longitude] as [number, number]));
   if (polys.length === 0) {
     return (
       <div className="flex items-center justify-center text-xs text-muted-foreground border rounded h-40">
@@ -15,36 +32,33 @@ function PolygonsPreview({ paddocks, height = 320 }: { paddocks: AdminPaddock[];
       </div>
     );
   }
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  polys.forEach((pts) =>
-    pts.forEach((pt) => {
-      if (pt.latitude < minLat) minLat = pt.latitude;
-      if (pt.latitude > maxLat) maxLat = pt.latitude;
-      if (pt.longitude < minLng) minLng = pt.longitude;
-      if (pt.longitude > maxLng) maxLng = pt.longitude;
-    }),
-  );
-  const padX = (maxLng - minLng) * 0.05 || 0.0001;
-  const padY = (maxLat - minLat) * 0.05 || 0.0001;
-  minLat -= padY; maxLat += padY; minLng -= padX; maxLng += padX;
-  const W = 800, H = height;
-  const project = (lat: number, lng: number) => {
-    const x = ((lng - minLng) / (maxLng - minLng)) * W;
-    const y = H - ((lat - minLat) / (maxLat - minLat)) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  };
+  const all = polys.flat();
+  const bounds: L.LatLngBoundsExpression = all as any;
+  const center: [number, number] = [all[0][0], all[0][1]];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto bg-muted/30 rounded border">
-      {polys.map((pts, i) => (
-        <polygon
-          key={i}
-          points={pts.map((p) => project(p.latitude, p.longitude)).join(" ")}
-          fill="hsl(var(--primary) / 0.25)"
-          stroke="hsl(var(--primary))"
-          strokeWidth={1.5}
+    <div className="relative rounded border overflow-hidden" style={{ height }}>
+      <MapContainer
+        center={center}
+        zoom={15}
+        style={{ height: "100%", width: "100%" }}
+        scrollWheelZoom
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://www.esri.com/">Esri</a>'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
         />
-      ))}
-    </svg>
+        {polys.map((pts, i) => (
+          <Polygon
+            key={i}
+            positions={pts}
+            pathOptions={{ color: "#A3E635", weight: 2, fillColor: "#A3E635", fillOpacity: 0.35 }}
+          />
+        ))}
+        <FitToPolys bounds={bounds} />
+      </MapContainer>
+      <MapSourceBadge source="fallback" />
+    </div>
   );
 }
 
