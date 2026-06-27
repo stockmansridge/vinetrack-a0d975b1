@@ -421,7 +421,14 @@ export default function TractorsPage() {
                 className="cursor-pointer"
                 onClick={() => navigate(`/setup/tractors/${r.id}`)}
               >
-                <TableCell className="font-medium">{fmtCell(r.name)}</TableCell>
+                <TableCell className="font-medium">
+                  <div>{fmtCell(r.name)}</div>
+                  {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
+                    <div className="text-xs text-muted-foreground font-normal">
+                      {equipmentIdSubtitle(r.serial_number, r.vin_number)}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>{fmtCell(r.brand)}</TableCell>
                 <TableCell>{fmtCell(r.model)}</TableCell>
                 <TableCell>{fmtCell(r.model_year)}</TableCell>
