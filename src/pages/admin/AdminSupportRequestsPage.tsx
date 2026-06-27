@@ -14,7 +14,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Paperclip, ExternalLink, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Paperclip, ExternalLink, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   AdminGate,
@@ -290,7 +298,9 @@ export default function AdminSupportRequestsPage() {
   });
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(
+    () => new Set(["new", "in_progress", "resolved"]),
+  );
   const [emailFilter, setEmailFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [vineyardFilter, setVineyardFilter] = useState<string>("all");
@@ -331,7 +341,7 @@ export default function AdminSupportRequestsPage() {
     const q = search.trim().toLowerCase();
     return data
       .filter((r) => {
-        if (statusFilter !== "all" && (r.status ?? "") !== statusFilter) return false;
+        if (statusFilter.size > 0 && !statusFilter.has(r.status ?? "")) return false;
         if (emailFilter !== "all" && (r.email_status ?? "") !== emailFilter) return false;
         const cat = r.category ?? r.request_type ?? "";
         if (categoryFilter !== "all" && cat !== categoryFilter) return false;
@@ -388,15 +398,44 @@ export default function AdminSupportRequestsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="h-9 max-w-sm"
           />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9">
+                Status: {statusFilter.size === 0
+                  ? "none"
+                  : statusFilter.size === STATUS_OPTIONS.length
+                    ? "all"
+                    : Array.from(statusFilter).join(", ")}
+                <ChevronDown className="h-4 w-4 ml-1 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
               {STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={statusFilter.has(s)}
+                  onCheckedChange={(checked) => {
+                    setStatusFilter((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.add(s);
+                      else next.delete(s);
+                      return next;
+                    });
+                  }}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {s}
+                </DropdownMenuCheckboxItem>
               ))}
-            </SelectContent>
-          </Select>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setStatusFilter(new Set(STATUS_OPTIONS))}>
+                Select all
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter(new Set())}>
+                Clear
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Select value={emailFilter} onValueChange={setEmailFilter}>
             <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Email status" /></SelectTrigger>
             <SelectContent>
