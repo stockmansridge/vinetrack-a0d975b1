@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           templateName: EMAIL_TEMPLATE,
           // Fallback recipient — overridden by the template's fixed `to`.
-          recipientEmail: "jonathan@stockmansridge.com.au",
+          recipientEmail: "support@vinetrack.com.au",
           purpose: "transactional",
           idempotencyKey: `support_request:${requestId}`,
           templateData: {
