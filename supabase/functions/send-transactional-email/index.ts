@@ -321,6 +321,11 @@ Deno.serve(async (req) => {
       ? template.subject(templateData)
       : template.subject
 
+  const supportRequestId =
+    templateName === 'support_request' && typeof templateData.request_id === 'string'
+      ? templateData.request_id
+      : undefined
+
   // 5. Enqueue the pre-rendered email for async processing by the dispatcher.
   // The dispatcher (process-email-queue) handles sending, retries, and rate-limit backoff.
 
@@ -346,6 +351,7 @@ Deno.serve(async (req) => {
       label: templateName,
       idempotency_key: idempotencyKey,
       unsubscribe_token: unsubscribeToken,
+      support_request_id: supportRequestId,
       queued_at: new Date().toISOString(),
     },
   })

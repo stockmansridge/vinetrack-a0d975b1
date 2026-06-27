@@ -52,6 +52,31 @@ function parseJwtClaims(token: string): Record<string, unknown> | null {
   }
 }
 
+async function updateExternalSupportEmailStatus(
+  payload: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const requestId = payload.support_request_id
+  if (typeof requestId !== 'string' || !requestId) return
+
+  const url = Deno.env.get('VINETRACK_SUPABASE_URL')
+  const serviceKey = Deno.env.get('VINETRACK_SERVICE_ROLE_KEY')
+  if (!url || !serviceKey) return
+
+  const admin = createClient(url, serviceKey, { auth: { persistSession: false } })
+  const { error } = await admin
+    .from('support_requests')
+    .update({ ...patch })
+    .eq('id', requestId)
+
+  if (error) {
+    console.error('Failed to update external support request email status', {
+      requestId,
+      error,
+    })
+  }
+}
+
 // Move a message to the dead letter queue and log the reason.
 async function moveToDlq(
   supabase: ReturnType<typeof createClient>,
@@ -277,6 +302,11 @@ Deno.serve(async (req) => {
           recipient_email: payload.to,
           status: 'sent',
         })
+        await updateExternalSupportEmailStatus(payload, {
+          email_status: 'sent',
+          email_sent_at: new Date().toISOString(),
+          email_error: null,
+        })
 
         // Delete from queue
         const { error: delError } = await supabase.rpc('delete_email', {
@@ -316,6 +346,10 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString(),
             })
             .eq('id', 1)
+          await updateExternalSupportEmailStatus(payload, {
+            email_status: 'queued',
+            email_error: errorMsg.slice(0, 1000),
+          })
 
           // Stop processing — remaining messages stay in queue (VT expires, retried next cycle)
           return new Response(
@@ -328,6 +362,10 @@ Deno.serve(async (req) => {
         // message, so move straight to DLQ and stop processing the rest of the batch.
         if (isForbidden(error)) {
           await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
+          await updateExternalSupportEmailStatus(payload, {
+            email_status: 'failed',
+            email_error: errorMsg.slice(0, 1000),
+          })
           return new Response(
             JSON.stringify({ processed: totalProcessed, stopped: 'forbidden' }),
             { headers: { 'Content-Type': 'application/json' } }
@@ -341,6 +379,10 @@ Deno.serve(async (req) => {
           recipient_email: payload.to,
           status: 'failed',
           error_message: errorMsg.slice(0, 1000),
+        })
+        await updateExternalSupportEmailStatus(payload, {
+          email_status: 'failed',
+          email_error: errorMsg.slice(0, 1000),
         })
         if (payload?.message_id && typeof payload.message_id === 'string') {
           failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
