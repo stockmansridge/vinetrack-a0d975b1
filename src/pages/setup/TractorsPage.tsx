@@ -40,6 +40,7 @@ import {
 import { Plus, Pencil, Sparkles, Archive } from "lucide-react";
 import { z } from "zod";
 import { formatDate } from "@/lib/dateFormat";
+import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
 
 interface Tractor {
   id: string;
