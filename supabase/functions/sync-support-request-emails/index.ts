@@ -95,21 +95,22 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse({ error: "Unauthorized" }, 401);
-  }
-  const claims = parseJwtClaims(authHeader.slice(7).trim());
-  if (claims?.role !== "service_role") {
-    return jsonResponse({ error: "Forbidden" }, 403);
-  }
-
   const localUrl = Deno.env.get("SUPABASE_URL");
   const localServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const iosUrl = Deno.env.get("VINETRACK_SUPABASE_URL");
   const iosServiceKey = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY");
   if (!localUrl || !localServiceKey || !iosUrl || !iosServiceKey) {
     return jsonResponse({ error: "Support email sync is not configured" }, 503);
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+  const token = authHeader.slice(7).trim();
+  const claims = parseJwtClaims(token);
+  if (claims?.role !== "service_role" && token !== localServiceKey) {
+    return jsonResponse({ error: "Forbidden" }, 403);
   }
 
   let body: { batch_size?: number } = {};
