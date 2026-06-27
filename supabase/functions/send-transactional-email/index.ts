@@ -48,22 +48,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  const authHeader = req.headers.get('Authorization') ?? ''
-  if (!authHeader.toLowerCase().startsWith('bearer ')) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
-  const claims = parseJwtClaims(authHeader.slice(7).trim())
-  if (claims?.role !== 'service_role') {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
-
-
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -76,6 +60,22 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     )
+  }
+
+  const authHeader = req.headers.get('Authorization') ?? ''
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  const token = authHeader.slice(7).trim()
+  const claims = parseJwtClaims(token)
+  if (claims?.role !== 'service_role' && token !== supabaseServiceKey) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   // Parse request body
@@ -321,6 +321,11 @@ Deno.serve(async (req) => {
       ? template.subject(templateData)
       : template.subject
 
+  const supportRequestId =
+    templateName === 'support_request' && typeof templateData.request_id === 'string'
+      ? templateData.request_id
+      : undefined
+
   // 5. Enqueue the pre-rendered email for async processing by the dispatcher.
   // The dispatcher (process-email-queue) handles sending, retries, and rate-limit backoff.
 
@@ -346,6 +351,7 @@ Deno.serve(async (req) => {
       label: templateName,
       idempotency_key: idempotencyKey,
       unsubscribe_token: unsubscribeToken,
+      support_request_id: supportRequestId,
       queued_at: new Date().toISOString(),
     },
   })
