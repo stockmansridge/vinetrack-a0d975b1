@@ -3,7 +3,7 @@
 //
 // Schema assumptions (confirmed by Rork):
 //   public.equipment_items: id, vineyard_id, category ('other' for now),
-//     name, make, model, serial_number, notes, created_at, updated_at,
+//     name, make, model, serial_number, vin_number, notes, created_at, updated_at,
 //     deleted_at, created_by, updated_by, client_updated_at, sync_version
 //   NOTE: no sort_order column exists in production — do not send it.
 //
@@ -21,6 +21,7 @@ export interface EquipmentItem {
   make?: string | null;
   model?: string | null;
   serial_number?: string | null;
+  vin_number?: string | null;
   notes?: string | null;
   // sort_order intentionally omitted — column does not exist in production.
   created_at?: string | null;
@@ -54,6 +55,7 @@ export interface CreateEquipmentItemInput {
   make?: string | null;
   model?: string | null;
   serial_number?: string | null;
+  vin_number?: string | null;
   notes?: string | null;
   category?: EquipmentCategory;
   user_id: string | null;
@@ -69,6 +71,7 @@ export async function createEquipmentItem(
     make: input.make ?? null,
     model: input.model ?? null,
     serial_number: input.serial_number ?? null,
+    vin_number: input.vin_number ?? null,
     notes: input.notes ?? "",
     created_by: input.user_id,
     updated_by: input.user_id,
@@ -91,6 +94,7 @@ export interface UpdateEquipmentItemInput {
   make?: string | null;
   model?: string | null;
   serial_number?: string | null;
+  vin_number?: string | null;
   notes?: string | null;
   user_id: string | null;
   current_sync_version?: number | null;
@@ -109,6 +113,7 @@ export async function updateEquipmentItem(
   if (input.make !== undefined) patch.make = input.make;
   if (input.model !== undefined) patch.model = input.model;
   if (input.serial_number !== undefined) patch.serial_number = input.serial_number;
+  if (input.vin_number !== undefined) patch.vin_number = input.vin_number;
   if (input.notes !== undefined) patch.notes = input.notes ?? "";
   
 
