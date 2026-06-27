@@ -328,7 +328,14 @@ export default function SprayEquipmentPage() {
                 className="cursor-pointer"
                 onClick={() => navigate(`/setup/spray-equipment/${r.id}`)}
               >
-                <TableCell className="font-medium">{fmtCell(r.name)}</TableCell>
+                <TableCell className="font-medium">
+                  <div>{fmtCell(r.name)}</div>
+                  {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
+                    <div className="text-xs text-muted-foreground font-normal">
+                      {equipmentIdSubtitle(r.serial_number, r.vin_number)}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>{fmtCell(r.tank_capacity_litres)}</TableCell>
                 <TableCell>{fmtCell(r.updated_at)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
@@ -398,6 +405,24 @@ export default function SprayEquipmentPage() {
                   required
                 />
               </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Serial number">
+                  <Input
+                    value={form.serial_number}
+                    onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="VIN number">
+                  <Input
+                    value={form.vin_number}
+                    onChange={(e) => setForm((f) => ({ ...f, vin_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </Field>
+              </div>
             </div>
             <DialogFooter>
               <Button
