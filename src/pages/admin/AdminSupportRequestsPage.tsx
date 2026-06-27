@@ -301,7 +301,7 @@ export default function AdminSupportRequestsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<string>>(
-    () => new Set(["new", "in_progress", "resolved"]),
+    () => new Set(["new", "open", "in_progress", "resolved"]),
   );
   const [emailFilter, setEmailFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
