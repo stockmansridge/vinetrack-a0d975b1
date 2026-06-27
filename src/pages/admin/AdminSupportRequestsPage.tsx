@@ -14,7 +14,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Paperclip, ExternalLink, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Paperclip, ExternalLink, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   AdminGate,
