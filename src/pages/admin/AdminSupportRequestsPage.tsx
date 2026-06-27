@@ -60,12 +60,14 @@ interface SupportRequestRow {
   attachment_count?: number | null;
 }
 
-const STATUS_OPTIONS = ["new", "in_progress", "resolved", "closed"] as const;
+const STATUS_OPTIONS = ["new", "open", "in_progress", "resolved", "closed"] as const;
 
 function statusClass(s: string | null | undefined) {
   switch ((s ?? "").toLowerCase()) {
     case "new":
       return "bg-blue-500/15 text-blue-600 border-blue-500/30";
+    case "open":
+      return "bg-sky-500/15 text-sky-600 border-sky-500/30";
     case "in_progress":
       return "bg-orange-500/15 text-orange-600 border-orange-500/30";
     case "resolved":
@@ -299,7 +301,7 @@ export default function AdminSupportRequestsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<string>>(
-    () => new Set(["new", "in_progress", "resolved"]),
+    () => new Set(["new", "open", "in_progress", "resolved"]),
   );
   const [emailFilter, setEmailFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
