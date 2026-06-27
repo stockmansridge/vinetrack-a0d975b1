@@ -49,6 +49,8 @@ interface Tractor {
   model: string | null;
   model_year: number | null;
   fuel_usage_l_per_hour: number | null;
+  serial_number: string | null;
+  vin_number: string | null;
   updated_at?: string | null;
 }
 
@@ -86,6 +88,8 @@ type FormState = {
   model: string;
   model_year: string;
   fuel_usage_l_per_hour: string;
+  serial_number: string;
+  vin_number: string;
 };
 
 const emptyForm: FormState = {
@@ -94,6 +98,8 @@ const emptyForm: FormState = {
   model: "",
   model_year: "",
   fuel_usage_l_per_hour: String(DEFAULT_FUEL_L_PER_HOUR),
+  serial_number: "",
+  vin_number: "",
 };
 
 const fmtCell = (v: any) => {
@@ -158,6 +164,8 @@ export default function TractorsPage() {
       model_year: t.model_year != null ? String(t.model_year) : "",
       fuel_usage_l_per_hour:
         t.fuel_usage_l_per_hour != null ? String(t.fuel_usage_l_per_hour) : "",
+      serial_number: t.serial_number ?? "",
+      vin_number: t.vin_number ?? "",
     });
     setErrors({});
     setSuggestion(null);
@@ -256,6 +264,8 @@ export default function TractorsPage() {
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
           fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
+          serial_number: trimmedOrNull(form.serial_number),
+          vin_number: trimmedOrNull(form.vin_number),
           updated_by: user.id,
           client_updated_at: nowIso,
         };
@@ -276,6 +286,8 @@ export default function TractorsPage() {
           model: trimmedOrNull(form.model),
           model_year: numOrNull(form.model_year),
           fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
+          serial_number: trimmedOrNull(form.serial_number),
+          vin_number: trimmedOrNull(form.vin_number),
           created_by: user.id,
           updated_by: user.id,
           client_updated_at: nowIso,
