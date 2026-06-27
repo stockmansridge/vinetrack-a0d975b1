@@ -527,6 +527,24 @@ export default function TractorsPage() {
                   />
                 </Field>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Serial number">
+                  <Input
+                    value={form.serial_number}
+                    onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="VIN number">
+                  <Input
+                    value={form.vin_number}
+                    onChange={(e) => setForm((f) => ({ ...f, vin_number: e.target.value }))}
+                    maxLength={120}
+                    placeholder="Optional"
+                  />
+                </Field>
+              </div>
               <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
