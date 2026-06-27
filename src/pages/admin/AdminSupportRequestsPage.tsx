@@ -60,7 +60,7 @@ interface SupportRequestRow {
   attachment_count?: number | null;
 }
 
-const STATUS_OPTIONS = ["new", "in_progress", "resolved", "closed"] as const;
+const STATUS_OPTIONS = ["new", "open", "in_progress", "resolved", "closed"] as const;
 
 function statusClass(s: string | null | undefined) {
   switch ((s ?? "").toLowerCase()) {
