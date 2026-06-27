@@ -32,6 +32,7 @@ import {
   softDeleteEquipmentItem,
   type EquipmentItem,
 } from "@/lib/equipmentItemsQuery";
+import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -109,7 +110,7 @@ export default function EquipmentOtherItemsPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Make / Model</TableHead>
-              <TableHead>Serial number</TableHead>
+              <TableHead>Identification</TableHead>
               <TableHead>Notes</TableHead>
               <TableHead>Updated</TableHead>
             </TableRow>
@@ -147,7 +148,7 @@ export default function EquipmentOtherItemsPage() {
               >
                 <TableCell className="font-medium">{fmt(c.name)}</TableCell>
                 <TableCell>{mm || "—"}</TableCell>
-                <TableCell>{fmt(c.serial_number)}</TableCell>
+                <TableCell>{equipmentIdSubtitle(c.serial_number, c.vin_number) || "—"}</TableCell>
                 <TableCell className="max-w-[280px] truncate" title={notes || undefined}>
                   {notes ? (notes.length > 80 ? notes.slice(0, 80) + "…" : notes) : "—"}
                 </TableCell>
@@ -212,6 +213,7 @@ function ItemEditor({
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
+  const [vinNumber, setVinNumber] = useState("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -220,6 +222,7 @@ function ItemEditor({
       setMake(item?.make ?? "");
       setModel(item?.model ?? "");
       setSerialNumber(item?.serial_number ?? "");
+      setVinNumber(item?.vin_number ?? "");
       setNotes(item?.notes ?? "");
     }
   }, [open, item]);
@@ -233,6 +236,7 @@ function ItemEditor({
         make: make.trim() || null,
         model: model.trim() || null,
         serial_number: serialNumber.trim() || null,
+        vin_number: vinNumber.trim() || null,
         notes: notes.trim() || null,
         category: "other",
         user_id: userId,
@@ -260,6 +264,7 @@ function ItemEditor({
         make: make.trim() ? make.trim() : null,
         model: model.trim() ? model.trim() : null,
         serial_number: serialNumber.trim() ? serialNumber.trim() : null,
+        vin_number: vinNumber.trim() ? vinNumber.trim() : null,
         notes: notes.trim() ? notes.trim() : null,
         user_id: userId,
         current_sync_version: item.sync_version ?? 0,
