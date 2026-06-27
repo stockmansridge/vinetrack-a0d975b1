@@ -191,7 +191,7 @@ export const template = {
   subject: (data: SupportRequestProps) =>
     `[VineTrack ${data.request_type ?? 'support'}] ${data.subject ?? '(no subject)'}`,
   // Always sent to the team inbox regardless of caller input.
-  to: 'jonathan@stockmansridge.com.au',
+  to: 'support@vinetrack.com.au',
   previewData: {
     request_type: 'bug',
     subject: 'Spray job totals look wrong',
