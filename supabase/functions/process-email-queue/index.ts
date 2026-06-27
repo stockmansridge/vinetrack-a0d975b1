@@ -237,6 +237,10 @@ Deno.serve(async (req) => {
             ttl_minutes: ttlMinutes[queue],
           })
           await moveToDlq(supabase, queue, msg, `TTL exceeded (${ttlMinutes[queue]} minutes)`)
+          await updateExternalSupportEmailStatus(payload, {
+            email_status: 'failed',
+            email_error: `TTL exceeded (${ttlMinutes[queue]} minutes)`,
+          })
           continue
         }
       }
@@ -244,6 +248,10 @@ Deno.serve(async (req) => {
       // Move to DLQ if max failed send attempts reached.
       if (failedAttempts >= MAX_RETRIES) {
         await moveToDlq(supabase, queue, msg, `Max retries (${MAX_RETRIES}) exceeded (attempted ${failedAttempts} times)`)
+        await updateExternalSupportEmailStatus(payload, {
+          email_status: 'failed',
+          email_error: `Max retries (${MAX_RETRIES}) exceeded`,
+        })
         continue
       }
 
