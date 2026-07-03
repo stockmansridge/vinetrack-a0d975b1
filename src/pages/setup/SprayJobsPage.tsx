@@ -442,7 +442,18 @@ function JobsTable({
         { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
         { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
         { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
-        { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell> },
+        { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
+          const names = (j.chemical_lines ?? []).map((l) => (l?.name ?? "").trim()).filter(Boolean);
+          return (
+            <TableCell className="min-w-[220px] max-w-[340px] align-top">
+              {names.length === 0 ? <span className="text-muted-foreground">—</span> : (
+                <ul className="flex flex-col gap-0.5 whitespace-normal break-words">
+                  {names.map((n, i) => (<li key={i} className="leading-snug">{n}</li>))}
+                </ul>
+              )}
+            </TableCell>
+          );
+        } },
         { key: "water", label: "Water (L)", accessor: (j) => (j.water_volume == null ? null : Number(j.water_volume)), render: (j) => <TableCell>{fmt(j.water_volume)}</TableCell> },
         { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)), render: (j) => <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell> },
         { key: "cf", label: "CF", accessor: (j) => (j.concentration_factor == null ? null : Number(j.concentration_factor)), render: (j) => <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell> },
