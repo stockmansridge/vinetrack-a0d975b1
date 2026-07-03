@@ -4,6 +4,7 @@ import { Plus, Pencil, Archive, MapPin as MapPinIcon, Loader2, ShieldAlert } fro
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { fetchList } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
