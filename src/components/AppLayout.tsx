@@ -21,13 +21,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { useState } from "react";
 
 export default function AppLayout() {
