@@ -26,10 +26,17 @@ import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
+import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
+import { ProfileDialog } from "@/components/ProfileDialog";
+import { useState } from "react";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
   const { user, signOut } = useAuth();
+  const { profile } = useCurrentProfile();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const displayName = displayNameFor(profile, user?.email);
+
 
   return (
     <SidebarProvider>
