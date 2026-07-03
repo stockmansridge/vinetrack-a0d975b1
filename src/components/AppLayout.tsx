@@ -21,13 +21,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { useState } from "react";
 
 export default function AppLayout() {
@@ -76,14 +76,7 @@ export default function AppLayout() {
               )}
             </div>
             <div className="hidden lg:flex items-center flex-1 justify-center px-6">
-              <div className="relative w-full max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search VineTrack…"
-                  className="pl-9 h-9 rounded-full bg-muted/60 border-transparent focus-visible:bg-card focus-visible:border-input"
-                />
-              </div>
+              <GlobalSearch />
             </div>
             <div className="ml-auto flex items-center gap-2">
               <SupportAlertPill />
