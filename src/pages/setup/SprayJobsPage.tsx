@@ -378,22 +378,58 @@ function JobsTable({
   });
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [opFilter, setOpFilter] = useState<string>("all");
+  const [growthFilter, setGrowthFilter] = useState<string>("all");
+  const [equipmentFilter, setEquipmentFilter] = useState<string>("all");
+  const [operatorFilter, setOperatorFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+
   const allRows = useMemo(() => {
     const base = data ?? [];
     if (templatesOnly && mode === "archived") return base.filter((j) => !!j.is_template);
     return base;
   }, [data, templatesOnly, mode]);
+  const growthOptions = useMemo(() => {
+    const set = new Set<string>();
+    allRows.forEach((j) => { if (j.growth_stage_code) set.add(j.growth_stage_code); });
+    return Array.from(set).sort();
+  }, [allRows]);
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return allRows;
+    const from = dateFrom ? new Date(dateFrom).getTime() : null;
+    const to = dateTo ? new Date(dateTo).getTime() + 86_400_000 - 1 : null;
     return allRows.filter((j) => {
-      const hay = [
-        j.name, j.target, j.operation_type, j.growth_stage_code,
-        j.notes, chemicalLinesSummary(j.chemical_lines),
-      ].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
+      if (q) {
+        const hay = [
+          j.name, j.target, j.operation_type, j.growth_stage_code,
+          j.notes, chemicalLinesSummary(j.chemical_lines),
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (statusFilter !== "all" && String(j.status ?? "").toLowerCase() !== statusFilter) return false;
+      if (opFilter !== "all" && String(j.operation_type ?? "").toLowerCase() !== opFilter.toLowerCase()) return false;
+      if (growthFilter !== "all" && j.growth_stage_code !== growthFilter) return false;
+      if (equipmentFilter !== "all" && j.equipment_id !== equipmentFilter) return false;
+      if (operatorFilter !== "all" && j.operator_user_id !== operatorFilter) return false;
+      if (from != null || to != null) {
+        const d = j.planned_date ? new Date(j.planned_date).getTime() : null;
+        if (d == null) return false;
+        if (from != null && d < from) return false;
+        if (to != null && d > to) return false;
+      }
+      return true;
     });
-  }, [allRows, search]);
+  }, [allRows, search, statusFilter, opFilter, growthFilter, equipmentFilter, operatorFilter, dateFrom, dateTo]);
+
+  const filtersActive =
+    statusFilter !== "all" || opFilter !== "all" || growthFilter !== "all" ||
+    equipmentFilter !== "all" || operatorFilter !== "all" || !!dateFrom || !!dateTo;
+  const clearFilters = () => {
+    setStatusFilter("all"); setOpFilter("all"); setGrowthFilter("all");
+    setEquipmentFilter("all"); setOperatorFilter("all"); setDateFrom(""); setDateTo("");
+  };
 
   type ColDef = { key: string; label: string; align?: "right"; accessor: (j: SprayJob) => any; render: (j: SprayJob) => React.ReactNode };
   const STATUS_ORDER: Record<string, number> = {
