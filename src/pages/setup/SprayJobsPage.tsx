@@ -1430,7 +1430,7 @@ function LinkedRecordsSection({
                 <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
                   Actual
                 </div>
-                <div>Op: {fmt(rec.operation_type)}</div>
+                <div className="flex items-center gap-1">Op: <OperationTypeBadge value={rec.operation_type} /></div>
                 <div>Water: {water != null ? `${water} L` : "—"}</div>
                 <div className="truncate" title={chems.join(", ") || "—"}>
                   Chems: {chems.length ? chems.join(", ") : "—"}
