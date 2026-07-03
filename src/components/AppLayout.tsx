@@ -91,14 +91,19 @@ export default function AppLayout() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1.5 rounded-full">
-                    <span className="hidden sm:inline text-sm">{user?.email}</span>
+                    <span className="hidden sm:inline text-sm">{displayName}</span>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                    Profile
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => signOut()}>Sign out</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
+
             </div>
           </header>
           <PortalInfoBanner />
