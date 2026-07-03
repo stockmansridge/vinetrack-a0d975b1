@@ -85,6 +85,25 @@ const opTypeLabel = (v?: string | null) => {
   return OP_LABEL_BY_VALUE.get(v.toLowerCase()) ?? v;
 };
 
+function OperationTypeBadge({ value }: { value?: string | null }) {
+  if (!value) return <span>—</span>;
+  const label = opTypeLabel(value);
+  const lower = value.toLowerCase();
+  const cls =
+    lower === "foliar spray"
+      ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-700/60"
+      : lower === "banded spray"
+      ? "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60"
+      : lower === "spreader"
+      ? "bg-purple-500/15 text-purple-700 border-purple-500/30 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-700/60"
+      : "bg-secondary text-secondary-foreground";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 type LookupMaps = {
   paddocks: Map<string, string>;
   tractors: Map<string, string>;
@@ -384,7 +403,7 @@ function JobsTable({
     if (mode === "templates") {
       return [
         { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
-        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell>{opTypeLabel(j.operation_type)}</TableCell> },
+        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
         { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
         { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
         { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell> },
@@ -406,7 +425,7 @@ function JobsTable({
       { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
       { key: "planned", label: "Planned date", accessor: (j) => (j.planned_date ? new Date(j.planned_date) : null), render: (j) => <TableCell>{fmtDate(j.planned_date)}</TableCell> },
       { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell> },
-      { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell>{opTypeLabel(j.operation_type)}</TableCell> },
+      { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
       { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
       { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
       { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)), render: (j) => <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell> },
@@ -1401,7 +1420,7 @@ function LinkedRecordsSection({
                 <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
                   Planned
                 </div>
-                <div>Op: {fmt(job.operation_type)}</div>
+                <div className="flex items-center gap-1">Op: <OperationTypeBadge value={job.operation_type} /></div>
                 <div>Water: {job.water_volume != null ? `${job.water_volume} L` : "—"}</div>
                 <div className="truncate" title={chemicalLinesSummary(job.chemical_lines)}>
                   Chems: {chemicalLinesSummary(job.chemical_lines)}
@@ -1411,7 +1430,7 @@ function LinkedRecordsSection({
                 <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
                   Actual
                 </div>
-                <div>Op: {fmt(rec.operation_type)}</div>
+                <div className="flex items-center gap-1">Op: <OperationTypeBadge value={rec.operation_type} /></div>
                 <div>Water: {water != null ? `${water} L` : "—"}</div>
                 <div className="truncate" title={chems.join(", ") || "—"}>
                   Chems: {chems.length ? chems.join(", ") : "—"}
@@ -1509,7 +1528,9 @@ function LinkRecordDialog({
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {rec.date ?? "—"}
-                    {rec.operation_type ? ` · ${rec.operation_type}` : ""}
+                    {rec.operation_type ? (
+                      <span className="ml-1"><OperationTypeBadge value={rec.operation_type} /></span>
+                    ) : null}
                     {rec.tractor ? ` · ${rec.tractor}` : ""}
                   </div>
                 </div>
