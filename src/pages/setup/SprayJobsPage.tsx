@@ -85,6 +85,25 @@ const opTypeLabel = (v?: string | null) => {
   return OP_LABEL_BY_VALUE.get(v.toLowerCase()) ?? v;
 };
 
+function OperationTypeBadge({ value }: { value?: string | null }) {
+  if (!value) return <span>—</span>;
+  const label = opTypeLabel(value);
+  const lower = value.toLowerCase();
+  const cls =
+    lower === "foliar spray"
+      ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-700/60"
+      : lower === "banded spray"
+      ? "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60"
+      : lower === "spreader"
+      ? "bg-purple-500/15 text-purple-700 border-purple-500/30 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-700/60"
+      : "bg-secondary text-secondary-foreground";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 type LookupMaps = {
   paddocks: Map<string, string>;
   tractors: Map<string, string>;
