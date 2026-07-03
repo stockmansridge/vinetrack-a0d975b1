@@ -1481,7 +1481,7 @@ function LinkRecordDialog({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-[35vw] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Link existing spray record</SheetTitle>
         </SheetHeader>
