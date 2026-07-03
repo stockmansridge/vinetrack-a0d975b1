@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { supabase as lovableCloud } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
   Sheet,
   SheetContent,
