@@ -441,11 +441,13 @@ export default function DamageRecordsPage() {
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
         userDisplayName={
+          profile?.full_name?.trim() ||
           (user?.user_metadata as any)?.full_name ||
           (user?.user_metadata as any)?.name ||
           user?.email ||
           null
         }
+
         onClose={() => setEditingOpen(false)}
         onSaved={() => {
           setEditingOpen(false);
