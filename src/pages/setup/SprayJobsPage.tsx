@@ -1528,7 +1528,9 @@ function LinkRecordDialog({
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {rec.date ?? "—"}
-                    {rec.operation_type ? ` · ${rec.operation_type}` : ""}
+                    {rec.operation_type ? (
+                      <span className="ml-1"><OperationTypeBadge value={rec.operation_type} /></span>
+                    ) : null}
                     {rec.tractor ? ` · ${rec.tractor}` : ""}
                   </div>
                 </div>
