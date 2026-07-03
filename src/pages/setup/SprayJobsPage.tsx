@@ -403,7 +403,7 @@ function JobsTable({
     if (mode === "templates") {
       return [
         { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
-        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell>{opTypeLabel(j.operation_type)}</TableCell> },
+        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
         { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
         { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
         { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => <TableCell className="max-w-[260px] truncate">{chemicalLinesSummary(j.chemical_lines)}</TableCell> },
