@@ -116,6 +116,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 export default function DamageRecordsPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
+  const { profile } = useCurrentProfile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { resolve } = useTeamLookup(selectedVineyardId);
