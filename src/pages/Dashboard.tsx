@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
+import VintageOverviewSection from "@/components/dashboard/VintageOverviewSection";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { MetricCard, PageHeader } from "@/components/ui/metric-card";
 import { Badge } from "@/components/ui/badge";
@@ -165,7 +166,10 @@ export default function Dashboard() {
         />
       </div>
 
+      <VintageOverviewSection />
+
       <VineyardOverviewMap />
+
 
       <section className="space-y-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Daily management</h2>
