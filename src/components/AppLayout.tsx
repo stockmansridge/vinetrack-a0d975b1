@@ -76,14 +76,7 @@ export default function AppLayout() {
               )}
             </div>
             <div className="hidden lg:flex items-center flex-1 justify-center px-6">
-              <div className="relative w-full max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search VineTrack…"
-                  className="pl-9 h-9 rounded-full bg-muted/60 border-transparent focus-visible:bg-card focus-visible:border-input"
-                />
-              </div>
+              <GlobalSearch />
             </div>
             <div className="ml-auto flex items-center gap-2">
               <SupportAlertPill />
