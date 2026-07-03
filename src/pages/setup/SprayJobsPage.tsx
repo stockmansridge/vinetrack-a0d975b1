@@ -453,7 +453,7 @@ function JobsTable({
                     const unitText = displayUnitText(l.unit);
                     const rateText = l.rate != null ? `${l.rate}${unitText ? ` ${unitText}` : ""}` : "";
                     const basisLabel = l.rate_basis
-                      ? ({ per_hectare: "Per Ha", per_100L: "Per 100L" } as Record<string, string>)[l.rate_basis] ?? l.rate_basis
+                      ? ({ per_hectare: "Per Ha", per_100L: "Per 100L", per_100_litres: "Per 100L" } as Record<string, string>)[l.rate_basis] ?? l.rate_basis
                       : "";
                     const detail = [rateText, basisLabel].filter(Boolean).join(" · ");
                     return (
