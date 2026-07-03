@@ -1420,7 +1420,7 @@ function LinkedRecordsSection({
                 <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
                   Planned
                 </div>
-                <div>Op: {fmt(job.operation_type)}</div>
+                <div className="flex items-center gap-1">Op: <OperationTypeBadge value={job.operation_type} /></div>
                 <div>Water: {job.water_volume != null ? `${job.water_volume} L` : "—"}</div>
                 <div className="truncate" title={chemicalLinesSummary(job.chemical_lines)}>
                   Chems: {chemicalLinesSummary(job.chemical_lines)}
