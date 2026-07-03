@@ -58,7 +58,7 @@ import {
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { inferRateBasis, composeUnit, displayUnitText, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
+import { inferRateBasis, composeUnit, displayUnitText, normaliseUnit, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 import { formatDate } from "@/lib/dateFormat";
 
 const fmtDate = (v?: string | null) => {
@@ -450,7 +450,7 @@ function JobsTable({
                 <ul className="flex flex-col gap-0.5 whitespace-normal break-words">
                   {lines.map((l, i) => {
                     const name = (l.name ?? "").trim();
-                    const unitText = displayUnitText(l.unit);
+                    const baseUnit = normaliseUnit(l.unit);
                     // Determine basis suffix from rate_basis; fall back to
                     // rate_per_ha / rate_per_100L when basis is missing.
                     const basis =
@@ -467,7 +467,7 @@ function JobsTable({
                       basis === "per_hectare" ? "/ha" : basis === "per_100L" ? "/100 L" : "";
                     const rateText =
                       l.rate != null
-                        ? `${l.rate}${unitText ? ` ${unitText}` : ""}${suffix}`
+                        ? `${l.rate}${baseUnit ? ` ${baseUnit}` : ""}${suffix}`
                         : "";
                     const detail = rateText;
 
