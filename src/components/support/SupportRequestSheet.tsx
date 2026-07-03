@@ -77,11 +77,14 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
 
+  const { profile } = useCurrentProfile();
   const submitterName =
-    (user?.user_metadata?.full_name as string | undefined) ??
-    (user?.user_metadata?.name as string | undefined) ??
+    profile?.full_name?.trim() ||
+    (user?.user_metadata?.full_name as string | undefined) ||
+    (user?.user_metadata?.name as string | undefined) ||
     null;
   const submitterEmail = user?.email ?? null;
+
 
   // Editable contact fields, prefilled from auth.
   const [contactName, setContactName] = useState("");
