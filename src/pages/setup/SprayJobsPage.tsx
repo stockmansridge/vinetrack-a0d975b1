@@ -58,7 +58,7 @@ import {
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { inferRateBasis, composeUnit, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
+import { inferRateBasis, composeUnit, displayUnitText, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 import { formatDate } from "@/lib/dateFormat";
 
 const fmtDate = (v?: string | null) => {
@@ -443,12 +443,24 @@ function JobsTable({
         { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
         { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
         { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
-          const names = (j.chemical_lines ?? []).map((l) => (l?.name ?? "").trim()).filter(Boolean);
+          const lines = (j.chemical_lines ?? []).filter((l) => (l?.name ?? "").trim());
           return (
-            <TableCell className="min-w-[220px] max-w-[340px] align-top">
-              {names.length === 0 ? <span className="text-muted-foreground">—</span> : (
+            <TableCell className="min-w-[260px] max-w-[440px] align-top">
+              {lines.length === 0 ? <span className="text-muted-foreground">—</span> : (
                 <ul className="flex flex-col gap-0.5 whitespace-normal break-words">
-                  {names.map((n, i) => (<li key={i} className="leading-snug">{n}</li>))}
+                  {lines.map((l, i) => {
+                    const name = (l.name ?? "").trim();
+                    const unitText = displayUnitText(l.unit);
+                    const rateText = l.rate != null ? `${l.rate}${unitText ? ` ${unitText}` : ""}` : "";
+                    const basisLabel = l.rate_basis ? (RATE_BASIS_LABEL[l.rate_basis as RateBasis] ?? l.rate_basis) : "";
+                    const detail = [rateText, basisLabel].filter(Boolean).join(" · ");
+                    return (
+                      <li key={i} className="leading-snug">
+                        <span className="font-medium">{name}</span>
+                        {detail ? <span className="text-muted-foreground text-xs ml-1">— {detail}</span> : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </TableCell>
