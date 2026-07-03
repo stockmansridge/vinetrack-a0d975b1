@@ -451,11 +451,26 @@ function JobsTable({
                   {lines.map((l, i) => {
                     const name = (l.name ?? "").trim();
                     const unitText = displayUnitText(l.unit);
-                    const rateText = l.rate != null ? `${l.rate}${unitText ? ` ${unitText}` : ""}` : "";
-                    const basisLabel = l.rate_basis
-                      ? ({ per_hectare: "Per Ha", per_100L: "Per 100L", per_100_litres: "Per 100L" } as Record<string, string>)[l.rate_basis] ?? l.rate_basis
-                      : "";
-                    const detail = [rateText, basisLabel].filter(Boolean).join(" · ");
+                    // Determine basis suffix from rate_basis; fall back to
+                    // rate_per_ha / rate_per_100L when basis is missing.
+                    const basis =
+                      l.rate_basis === "per_hectare"
+                        ? "per_hectare"
+                        : l.rate_basis === "per_100L" || l.rate_basis === "per_100_litres"
+                          ? "per_100L"
+                          : (l as any).rate_per_ha != null
+                            ? "per_hectare"
+                            : (l as any).rate_per_100L != null
+                              ? "per_100L"
+                              : null;
+                    const suffix =
+                      basis === "per_hectare" ? "/ha" : basis === "per_100L" ? "/100 L" : "";
+                    const rateText =
+                      l.rate != null
+                        ? `${l.rate}${unitText ? ` ${unitText}` : ""}${suffix}`
+                        : "";
+                    const detail = rateText;
+
                     return (
                       <li key={i} className="leading-snug">
                         <span className="font-medium">{name}</span>
