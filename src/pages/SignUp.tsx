@@ -59,8 +59,25 @@ export default function SignUp() {
       return;
     }
 
+    // Seed the canonical profile row (Display Name = public.profiles.full_name).
+    // Safe if a DB trigger already inserted a row: upsert on the user id.
+    if (data.user) {
+      await (supabase as any)
+        .from("profiles")
+        .upsert(
+          {
+            id: data.user.id,
+            email: data.user.email ?? email.trim(),
+            full_name: name.trim() || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        );
+    }
+
     toast({ title: "Account created", description: "Let's set up your first vineyard." });
     navigate("/onboarding", { replace: true });
+
   };
 
   return (

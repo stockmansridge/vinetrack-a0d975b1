@@ -26,10 +26,17 @@ import { ChevronDown, Search } from "lucide-react";
 import { BrandName } from "@/components/BrandName";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SupportAlertPill } from "@/components/support/SupportAlertPill";
+import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
+import { ProfileDialog } from "@/components/ProfileDialog";
+import { useState } from "react";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
   const { user, signOut } = useAuth();
+  const { profile } = useCurrentProfile();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const displayName = displayNameFor(profile, user?.email);
+
 
   return (
     <SidebarProvider>
@@ -84,14 +91,19 @@ export default function AppLayout() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1.5 rounded-full">
-                    <span className="hidden sm:inline text-sm">{user?.email}</span>
+                    <span className="hidden sm:inline text-sm">{displayName}</span>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                    Profile
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => signOut()}>Sign out</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
+
             </div>
           </header>
           <PortalInfoBanner />

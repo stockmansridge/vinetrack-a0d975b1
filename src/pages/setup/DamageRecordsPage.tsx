@@ -4,6 +4,7 @@ import { Plus, Pencil, Archive, MapPin as MapPinIcon, Loader2, ShieldAlert } fro
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { fetchList } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -115,6 +116,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 export default function DamageRecordsPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
   const { user } = useAuth();
+  const { profile } = useCurrentProfile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -439,11 +441,13 @@ export default function DamageRecordsPage() {
         vineyardId={selectedVineyardId}
         userId={user?.id ?? null}
         userDisplayName={
+          profile?.full_name?.trim() ||
           (user?.user_metadata as any)?.full_name ||
           (user?.user_metadata as any)?.name ||
           user?.email ||
           null
         }
+
         onClose={() => setEditingOpen(false)}
         onSaved={() => {
           setEditingOpen(false);
