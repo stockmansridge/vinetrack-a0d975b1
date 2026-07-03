@@ -527,8 +527,87 @@ function JobsTable({
           </div>
         )}
       </div>
-      <div className="flex justify-end mb-2">
-        <ColumnSettingsMenu onReset={sjReset} />
+      <div className="flex flex-wrap items-end gap-2">
+        {mode !== "templates" && (
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground">Operation</Label>
+          <Select value={opFilter} onValueChange={setOpFilter}>
+            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All operations</SelectItem>
+              {OPERATION_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {growthOptions.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Growth stage</Label>
+            <Select value={growthFilter} onValueChange={setGrowthFilter}>
+              <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All stages</SelectItem>
+                {growthOptions.map((g) => (
+                  <SelectItem key={g} value={g}>{g}{GROWTH_STAGE_LABEL.get(g) ? ` – ${GROWTH_STAGE_LABEL.get(g)}` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {mode === "planned" && (
+          <>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Equipment</Label>
+              <Select value={equipmentFilter} onValueChange={setEquipmentFilter}>
+                <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All equipment</SelectItem>
+                  {Array.from(maps.equipment.entries()).map(([id, name]) => (
+                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Operator</Label>
+              <Select value={operatorFilter} onValueChange={setOperatorFilter}>
+                <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All operators</SelectItem>
+                  {Array.from(maps.members.entries()).map(([id, name]) => (
+                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Planned from</Label>
+              <Input type="date" className="h-8 w-40" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Planned to</Label>
+              <Input type="date" className="h-8 w-40" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </div>
+          </>
+        )}
+        {filtersActive && (
+          <Button size="sm" variant="ghost" onClick={clearFilters} className="h-8">
+            <X className="h-3.5 w-3.5 mr-1" /> Clear filters
+          </Button>
+        )}
+        <div className="ml-auto">
+          <ColumnSettingsMenu onReset={sjReset} />
+        </div>
       </div>
       <Card>
       <Table>
