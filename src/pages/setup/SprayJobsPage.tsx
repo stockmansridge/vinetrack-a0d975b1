@@ -766,7 +766,7 @@ function SprayJobSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-[40vw] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
             {editing ? "Edit" : "New"} {form.is_template ? "template" : "planned job"}
