@@ -17,7 +17,7 @@ export interface MetricCardProps {
 }
 
 // Controlled, intentional palette. No "disabled-looking" greys.
-const TONES: Record<MetricTone, string> = {
+export const TONE_CLASSES: Record<MetricTone, string> = {
   primary: "bg-primary/10 text-primary",
   accent: "bg-accent/15 text-accent",
   teal: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
@@ -29,7 +29,12 @@ const TONES: Record<MetricTone, string> = {
   // (Tractors, Spray Equipment, etc.) stand apart from vineyard/block metrics.
   equipment:
     "bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200/70 dark:bg-[rgba(245,158,11,0.14)] dark:text-amber-300 dark:ring-amber-400/20",
+  // Team / people metrics: teal so people cards stand apart from
+  // vineyard (green) and equipment (amber).
+  team:
+    "bg-teal-100 text-teal-700 ring-1 ring-inset ring-teal-200/70 dark:bg-[rgba(20,184,166,0.14)] dark:text-teal-300 dark:ring-teal-400/20",
 };
+const TONES = TONE_CLASSES;
 
 export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary" }: MetricCardProps) {
   const body = (
