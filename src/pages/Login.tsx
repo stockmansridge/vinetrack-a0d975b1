@@ -161,6 +161,7 @@ export default function Login() {
           </div>
 
           <GoogleSignInButton redirectPath="/select-vineyard" />
+          <AppleSignInButton redirectPath="/select-vineyard" />
         </form>
 
         <div className="flex flex-col items-center gap-2">
