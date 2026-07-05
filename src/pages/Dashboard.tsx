@@ -12,19 +12,29 @@ import { useMemo } from "react";
 import VineyardOverviewMap from "@/components/dashboard/VineyardOverviewMap";
 import VintageOverviewSection from "@/components/dashboard/VintageOverviewSection";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
-import { MetricCard, PageHeader } from "@/components/ui/metric-card";
+import { MetricCard, PageHeader, TONE_CLASSES, type MetricTone } from "@/components/ui/metric-card";
 import { Badge } from "@/components/ui/badge";
 
 const fmt = (n: number, digits = 0) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
 
-const QuickLink = ({ to, label, Icon }: { to: string; label: string; Icon: any }) => (
+const QuickLink = ({
+  to,
+  label,
+  Icon,
+  tone = "primary",
+}: {
+  to: string;
+  label: string;
+  Icon: any;
+  tone?: MetricTone;
+}) => (
   <Link
     to={to}
     className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm hover:bg-muted/40 hover:border-primary/30 transition"
   >
     <span className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${TONE_CLASSES[tone]}`}>
         <Icon className="h-4 w-4" />
       </span>
       <span className="font-medium text-foreground">{label}</span>
