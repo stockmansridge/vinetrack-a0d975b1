@@ -228,8 +228,8 @@ export default function SignUp() {
                 <div className="h-px flex-1 bg-black/10" />
               </div>
 
-              <GoogleSignInButton label="Continue with Google" redirectPath="/select-vineyard" />
-              <AppleSignInButton label="Continue with Apple" redirectPath="/select-vineyard" />
+              <GoogleSignInButton label="Continue with Google" redirectPath="/auth/callback?next=/select-vineyard" />
+              <AppleSignInButton label="Continue with Apple" redirectPath="/auth/callback?next=/select-vineyard" />
             </form>
           )}
 

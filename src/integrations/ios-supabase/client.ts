@@ -17,6 +17,11 @@ export const iosSupabase = createClient(IOS_SUPABASE_URL, IOS_SUPABASE_ANON_KEY,
     autoRefreshToken: true,
     storage: localStorage,
     storageKey: "ios-supabase-auth",
+    // OAuth returns from Google/Apple use PKCE (?code=...). Handle the
+    // exchange explicitly in /auth/callback so guards don't race the
+    // client's URL detection and bounce the user to /login.
+    flowType: "pkce",
+    detectSessionInUrl: false,
   },
 });
 

@@ -9,6 +9,7 @@ import { RequireAuth, RequireVineyard } from "@/components/guards";
 import { RoleRoute } from "@/components/PermissionGate";
 import AppLayout from "@/components/AppLayout";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
 import ResetPassword from "./pages/ResetPassword";
 import SignUp from "./pages/SignUp";
 import Onboarding from "./pages/Onboarding";
@@ -94,6 +95,7 @@ const App = () => (
           <VineyardProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/no-access" element={<NoAccess />} />
