@@ -146,14 +146,14 @@ export default function Dashboard() {
         <MetricCard
           label="Tractors"
           icon={Tractor}
-          tone="teal"
+          tone="primary"
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
           to="/setup/tractors"
         />
         <MetricCard
           label="Spray equipment"
           icon={SprayCan}
-          tone="teal"
+          tone="primary"
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
           to="/setup/spray-equipment"
         />
