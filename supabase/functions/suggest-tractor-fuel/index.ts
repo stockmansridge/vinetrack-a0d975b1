@@ -21,14 +21,20 @@ Deno.serve(async (req) => {
   }
   try {
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-    const sb = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    // Users authenticate against the VineTrack (iOS) Supabase project, not
+    // this Lovable Cloud project. Validate the caller's token against that
+    // project so `getClaims` can find a matching signing key.
+    const authProjectUrl =
+      Deno.env.get("VINETRACK_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL")!;
+    const authProjectAnon =
+      Deno.env.get("VINETRACK_ANON_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!;
+    const sb = createClient(authProjectUrl, authProjectAnon, {
+      global: { headers: { Authorization: authHeader } },
+    });
     const token = authHeader.slice(7).trim();
     const { data: claimsData, error: claimsErr } = await sb.auth.getClaims(token);
     if (claimsErr || !claimsData?.claims?.sub) {
+      console.error("suggest-tractor-fuel auth failed", claimsErr);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
