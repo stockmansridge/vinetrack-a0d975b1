@@ -9,6 +9,7 @@ import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
 import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { AppleSignInButton } from "@/components/auth/AppleSignInButton";
 
 export default function SignUp() {
   const { session, loading } = useAuth();
@@ -228,6 +229,7 @@ export default function SignUp() {
               </div>
 
               <GoogleSignInButton label="Continue with Google" redirectPath="/select-vineyard" />
+              <AppleSignInButton label="Continue with Apple" redirectPath="/select-vineyard" />
             </form>
           )}
 
