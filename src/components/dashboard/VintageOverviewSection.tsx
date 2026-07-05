@@ -64,7 +64,6 @@ export default function VintageOverviewSection() {
                 ? "—"
                 : fmt(sprayCountQ.data ?? 0)
           }
-          hint={`Vintage ${vintage}`}
           to="/reports/spray"
         />
       </div>
