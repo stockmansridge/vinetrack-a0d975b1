@@ -184,9 +184,18 @@ export default function TractorsPage() {
     setSuggesting(true);
     setSuggestion(null);
     try {
+      // The cloud edge function lives in a different Supabase project than the
+      // one users authenticate against (ios-supabase). Pass the ios-supabase
+      // access token explicitly so the function can verify the caller.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error("Not signed in");
       const { data, error } = await cloudSupabase.functions.invoke(
         "suggest-tractor-fuel",
-        { body: { brand, model, year: year ? Number(year) : undefined } },
+        {
+          body: { brand, model, year: year ? Number(year) : undefined },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
       );
       if (error) throw error;
       const fuel = Number((data as any)?.fuel_l_per_hour);
