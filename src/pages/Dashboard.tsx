@@ -170,7 +170,7 @@ export default function Dashboard() {
         <MetricCard
           label="Team members"
           icon={Users}
-          tone="purple"
+          tone="team"
           value={teamQ.isLoading ? "…" : teamQ.error ? "—" : fmt(teamQ.data ?? 0)}
           to="/team"
         />
@@ -196,10 +196,10 @@ export default function Dashboard() {
       <section className="space-y-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Setup</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} />
-          <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} />
-          <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={Droplet} />
-          <QuickLink to="/team" label="Team" Icon={Users} />
+          <QuickLink to="/setup/paddocks" label={rf.blocksLabel} Icon={Map} tone="primary" />
+          <QuickLink to="/setup/tractors" label="Tractors" Icon={Tractor} tone="equipment" />
+          <QuickLink to="/setup/spray-equipment" label="Spray equipment" Icon={Droplet} tone="equipment" />
+          <QuickLink to="/team" label="Team" Icon={Users} tone="team" />
         </div>
       </section>
     </div>
