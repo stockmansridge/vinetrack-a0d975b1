@@ -1,53 +1,65 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/ios-supabase/client";
 
 /**
- * OAuth return handler. Providers (Google/Apple) redirect back to this
- * route with either `?code=...` (PKCE) or `#access_token=...` (implicit).
- * We explicitly exchange the code for a session before letting the auth
- * guards decide where to send the user — this avoids a race where the
- * RequireAuth guard sees "no session yet" and bounces to /login before
- * supabase-js has finished hydrating the OAuth response.
+ * OAuth return handler for Google/Apple PKCE flows.
+ *
+ * Supabase JS v2 `exchangeCodeForSession` takes the raw `code` string,
+ * NOT the full callback URL. Passing the href produced
+ * "Unable to exchange external code: <prefix>" for Apple.
+ *
+ * We also guard against React StrictMode double-invoke and any accidental
+ * re-run: auth codes are single-use, so a second exchange with the same
+ * code always fails. `ranRef` ensures the exchange runs exactly once
+ * per page load.
  */
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const ranRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const next = safeNext(params.get("next")) ?? "/select-vineyard";
-    const errDesc = params.get("error_description") ?? params.get("error");
+    if (ranRef.current) return;
+    ranRef.current = true;
 
-    if (errDesc) {
-      setError(errDesc);
-      return;
-    }
+    let cancelled = false;
 
     const run = async () => {
-      try {
-        const href = window.location.href;
-        const hasCode = params.get("code");
-        const hash = window.location.hash;
-        const hashHasToken = hash.includes("access_token=");
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      const nextParam = url.searchParams.get("next");
+      const next = safeNext(nextParam) ?? "/select-vineyard";
+      const oauthError = url.searchParams.get("error");
+      const oauthErrorDescription =
+        url.searchParams.get("error_description") ?? url.searchParams.get("error");
 
-        if (hasCode) {
-          const { error } = await supabase.auth.exchangeCodeForSession(href);
-          if (error) throw error;
+      if (oauthError) {
+        setError(oauthErrorDescription ?? "Sign-in was cancelled or failed.");
+        return;
+      }
+
+      // Implicit flow (hash tokens) — supabase-js handles this itself once
+      // we call getSession(). Nothing to exchange.
+      const hashHasToken = window.location.hash.includes("access_token=");
+
+      try {
+        if (code) {
+          // Pass ONLY the code string — v2 signature is (authCode: string).
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) throw exchangeError;
         } else if (!hashHasToken) {
-          // Nothing to exchange — maybe supabase-js already consumed it.
-          // Fall through to session check.
+          setError("Sign-in link is missing its authorisation code. Please try again.");
+          return;
         }
 
-        // Wait briefly for onAuthStateChange to persist the session.
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
+
         if (data.session) {
           navigate(next, { replace: true });
         } else {
-          // No session established — send to login rather than loop.
-          navigate("/login", { replace: true });
+          setError("Sign-in didn't create a session. Please try again.");
         }
       } catch (e) {
         if (cancelled) return;
@@ -59,7 +71,7 @@ export default function AuthCallback() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, params]);
+  }, [navigate]);
 
   if (error) {
     return (
@@ -83,7 +95,6 @@ export default function AuthCallback() {
 
 function safeNext(value: string | null): string | null {
   if (!value) return null;
-  // Only accept same-origin relative paths.
   if (!value.startsWith("/") || value.startsWith("//")) return null;
   return value;
 }
