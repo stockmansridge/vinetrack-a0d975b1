@@ -133,13 +133,13 @@ export default function Dashboard() {
         <MetricCard
           label="Total rows"
           icon={Ruler}
-          tone="accent"
+          tone="primary"
           value={loading ? "…" : fmt(summary.totalRows)}
         />
         <MetricCard
           label="Vines"
           icon={Grape}
-          tone="white"
+          tone="primary"
           value={loading ? "…" : summary.totalVines > 0 ? fmt(summary.totalVines) : "—"}
           hint={summary.vineFromAll ? "Derived from row length / vine spacing" : "Partial — some blocks missing data"}
         />
