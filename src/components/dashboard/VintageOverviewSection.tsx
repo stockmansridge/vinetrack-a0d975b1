@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { SprayCan, CalendarDays } from "lucide-react";
+import { Droplet, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
@@ -55,7 +55,7 @@ export default function VintageOverviewSection() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Sprays complete"
-          icon={SprayCan}
+          icon={Droplet}
           tone="teal"
           value={
             sprayCountQ.isLoading
