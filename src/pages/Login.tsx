@@ -160,8 +160,8 @@ export default function Login() {
             <div className="h-px flex-1 bg-black/10" />
           </div>
 
-          <GoogleSignInButton redirectPath="/select-vineyard" />
-          <AppleSignInButton redirectPath="/select-vineyard" />
+          <GoogleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
+          <AppleSignInButton redirectPath="/auth/callback?next=/select-vineyard" />
         </form>
 
         <div className="flex flex-col items-center gap-2">
