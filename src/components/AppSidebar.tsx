@@ -81,7 +81,7 @@ const work: NavItem[] = [
 // "Equipment" — physical assets and fuel
 const equipment: NavItem[] = [
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
-  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Gauge },
+  { title: "Spray Equipment", url: "/setup/spray-equipment", icon: Droplet },
   { title: "Vineyard Machines", url: "/setup/vineyard-machines", icon: Tractor },
   { title: "Other Equipment & Assets", url: "/setup/equipment-other", icon: Wrench },
   { title: "Fuel", url: "/fuel", icon: Fuel },
