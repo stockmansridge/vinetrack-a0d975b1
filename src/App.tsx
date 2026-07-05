@@ -9,6 +9,7 @@ import { RequireAuth, RequireVineyard } from "@/components/guards";
 import { RoleRoute } from "@/components/PermissionGate";
 import AppLayout from "@/components/AppLayout";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
 import ResetPassword from "./pages/ResetPassword";
 import SignUp from "./pages/SignUp";
 import Onboarding from "./pages/Onboarding";
