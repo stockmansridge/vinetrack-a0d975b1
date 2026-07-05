@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchCount, fetchList } from "@/lib/queries";
 import {
-  Map, Tractor, SprayCan, Users, Ruler, Grape, LayoutGrid,
+  Map, Tractor, SprayCan, Droplet, Users, Ruler, Grape, LayoutGrid,
   ArrowRight, Activity, Sprout, Layers, MapPin, FolderOpen, Route,
 } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -146,14 +146,14 @@ export default function Dashboard() {
         <MetricCard
           label="Tractors"
           icon={Tractor}
-          tone="primary"
+          tone="equipment"
           value={tractorsQ.isLoading ? "…" : tractorsQ.error ? "—" : fmt(tractorsQ.data ?? 0)}
           to="/setup/tractors"
         />
         <MetricCard
           label="Spray equipment"
-          icon={SprayCan}
-          tone="primary"
+          icon={Droplet}
+          tone="equipment"
           value={sprayQ.isLoading ? "…" : sprayQ.error ? "—" : fmt(sprayQ.data ?? 0)}
           to="/setup/spray-equipment"
         />
