@@ -8,6 +8,7 @@ import appIcon from "@/assets/vinetrack-app-icon.png";
 import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
 import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function SignUp() {
   const { session, loading } = useAuth();
