@@ -95,6 +95,7 @@ const App = () => (
           <VineyardProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/no-access" element={<NoAccess />} />
