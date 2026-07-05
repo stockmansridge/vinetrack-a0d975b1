@@ -8,6 +8,7 @@ import appIcon from "@/assets/vinetrack-app-icon.png";
 import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
 import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function SignUp() {
   const { session, loading } = useAuth();
@@ -219,6 +220,14 @@ export default function SignUp() {
               >
                 {submitting ? "Creating account…" : "Create account"}
               </button>
+
+              <div className="flex items-center gap-3 pt-1">
+                <div className="h-px flex-1 bg-black/10" />
+                <span className="text-[11px] font-medium uppercase tracking-wide text-[#4D5C52]">or</span>
+                <div className="h-px flex-1 bg-black/10" />
+              </div>
+
+              <GoogleSignInButton label="Continue with Google" redirectPath="/select-vineyard" />
             </form>
           )}
 
