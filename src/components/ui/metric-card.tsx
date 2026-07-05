@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral" | "white";
+export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral" | "white" | "equipment";
 
 export interface MetricCardProps {
   label: string;
@@ -25,6 +25,10 @@ const TONES: Record<MetricTone, string> = {
   purple: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
   neutral: "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300",
   white: "bg-white text-primary ring-1 ring-inset ring-border shadow-sm dark:bg-white dark:text-primary",
+  // Equipment metrics: distinct amber/orange treatment so equipment cards
+  // (Tractors, Spray Equipment, etc.) stand apart from vineyard/block metrics.
+  equipment:
+    "bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200/70 dark:bg-[rgba(245,158,11,0.14)] dark:text-amber-300 dark:ring-amber-400/20",
 };
 
 export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary" }: MetricCardProps) {
