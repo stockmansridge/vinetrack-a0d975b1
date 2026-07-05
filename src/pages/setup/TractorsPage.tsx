@@ -187,7 +187,7 @@ export default function TractorsPage() {
       // The cloud edge function lives in a different Supabase project than the
       // one users authenticate against (ios-supabase). Pass the ios-supabase
       // access token explicitly so the function can verify the caller.
-      const { data: sessionData } = await iosSupabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error("Not signed in");
       const { data, error } = await cloudSupabase.functions.invoke(
