@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral" | "white" | "equipment";
+export type MetricTone = "primary" | "accent" | "teal" | "amber" | "purple" | "neutral" | "white" | "equipment" | "team";
 
 export interface MetricCardProps {
   label: string;
