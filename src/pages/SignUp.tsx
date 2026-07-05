@@ -229,6 +229,7 @@ export default function SignUp() {
               </div>
 
               <GoogleSignInButton label="Continue with Google" redirectPath="/select-vineyard" />
+              <AppleSignInButton label="Continue with Apple" redirectPath="/select-vineyard" />
             </form>
           )}
 
