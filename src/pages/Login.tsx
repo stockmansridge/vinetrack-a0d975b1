@@ -9,6 +9,7 @@ import { BrandName } from "@/components/BrandName";
 import { PageHead } from "@/components/PageHead";
 import { PasswordToggleButton } from "@/components/ui/PasswordToggleButton";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { AppleSignInButton } from "@/components/auth/AppleSignInButton";
 
 export default function Login() {
   const { session, loading } = useAuth();
