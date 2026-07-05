@@ -55,7 +55,7 @@ export default function VintageOverviewSection() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Sprays complete"
-          icon={SprayCan}
+          icon={Droplet}
           tone="teal"
           value={
             sprayCountQ.isLoading
