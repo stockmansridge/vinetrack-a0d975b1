@@ -1402,7 +1402,7 @@ export default function WorkTaskReportsPage() {
     wtPaddocksQ.isLoading || tripsQ.isLoading || (canSeeCosts && allocQ.isLoading);
 
   return (
-    <div className="p-6 space-y-4 max-w-[1600px]">
+    <div className="p-6 space-y-4 w-full">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Work Task Reports</h1>
         <p className="text-sm text-muted-foreground">
