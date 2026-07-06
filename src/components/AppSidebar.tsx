@@ -89,6 +89,7 @@ const equipment: NavItem[] = [
 
 // "Reports" — exports & compliance
 const reports: NavItem[] = [
+  { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
   { title: "Trip Reports", url: "/reports/trips", icon: Route },
   { title: "Work Task Reports", url: "/reports/work-tasks", icon: ClipboardList },
   { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
@@ -97,9 +98,8 @@ const reports: NavItem[] = [
   { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
 ];
 
-// Owner/manager-only reports (financial)
+// Owner/manager-only reports (non-financial)
 const reportsAdmin: NavItem[] = [
-  { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
   { title: "Data Coverage", url: "/reports/data-coverage", icon: Database },
 ];
 
