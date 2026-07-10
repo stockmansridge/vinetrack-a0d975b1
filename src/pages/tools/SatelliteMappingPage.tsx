@@ -703,7 +703,17 @@ export default function SatelliteMappingPage() {
                   <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
                 </SelectTrigger>
                 <SelectContent>
+                  {isAllPaddocks && dateOptions.length > 0 && (
+                    <SelectItem value="latest">Latest available per paddock</SelectItem>
+                  )}
                   {dateOptions.map((d) => {
+                    if (isAllPaddocks) {
+                      return (
+                        <SelectItem key={d.date} value={d.date}>
+                          {d.date} · {d.paddockCount} of {totalPaddocks} paddocks
+                        </SelectItem>
+                      );
+                    }
                     const s = d.scenes[0];
                     const cloud = s?.scene_cloud_cover_pct;
                     const cov = s?.paddock_valid_coverage_pct;
@@ -719,6 +729,7 @@ export default function SatelliteMappingPage() {
                 </SelectContent>
               </Select>
             </div>
+
 
             {/* Map Layer */}
             <div className="space-y-1 min-w-0" style={{ gridColumn: "span 1", minWidth: 220 }}>
