@@ -468,7 +468,9 @@ export default function SatelliteMappingPage() {
         });
         if (seq !== hoverSeqRef.current) return; // stale
         if (error) {
-          setHover((h) => h ? { ...h, status: "error", message: String((error as any)?.message ?? "sample failed") } : h);
+          const msg = String((error as any)?.message ?? "sample failed");
+          const isRate = /429|rate.?limit/i.test(msg);
+          setHover((h) => h ? { ...h, status: isRate ? "no_data" : "error", value: null, message: isRate ? "Provider busy — hover again" : msg } : h);
           return;
         }
         const value = (data as any)?.value;
@@ -479,7 +481,9 @@ export default function SatelliteMappingPage() {
         }
       } catch (e: any) {
         if (seq !== hoverSeqRef.current) return;
-        setHover((h) => h ? { ...h, status: "error", message: String(e?.message ?? e) } : h);
+        const msg = String(e?.message ?? e);
+        const isRate = /429|rate.?limit/i.test(msg);
+        setHover((h) => h ? { ...h, status: isRate ? "no_data" : "error", value: null, message: isRate ? "Provider busy — hover again" : msg } : h);
       }
     }, 350);
   };

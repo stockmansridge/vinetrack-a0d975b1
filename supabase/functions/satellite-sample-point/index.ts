@@ -45,14 +45,27 @@ Deno.serve(async (req) => {
   const dayStart = new Date(acq); dayStart.setUTCHours(0, 0, 0, 0);
   const dayEnd = new Date(acq); dayEnd.setUTCHours(23, 59, 59, 999);
 
+  // Retry on 429 with backoff — hover sampling often collides with batch processing.
+  const attempt = async () => statisticsQuery({
+    geometry, bbox,
+    dateStart: dayStart.toISOString(),
+    dateEnd: dayEnd.toISOString(),
+    evalscript: statsEvalscript(index_type as Exclude<IndexType, "TRUE_COLOUR">),
+    resolutionM: 10,
+  });
+  const delays = [400, 1200, 2500];
+  let stats: any;
   try {
-    const stats = await statisticsQuery({
-      geometry, bbox,
-      dateStart: dayStart.toISOString(),
-      dateEnd: dayEnd.toISOString(),
-      evalscript: statsEvalscript(index_type as Exclude<IndexType, "TRUE_COLOUR">),
-      resolutionM: 10,
-    });
+    for (let i = 0; ; i++) {
+      try { stats = await attempt(); break; }
+      catch (err) {
+        if (err instanceof ProviderError && err.status === 429 && i < delays.length) {
+          await new Promise((r) => setTimeout(r, delays[i]));
+          continue;
+        }
+        throw err;
+      }
+    }
     const interval = stats?.data?.[0];
     const s = interval?.outputs?.index?.bands?.B0?.stats;
     const sampleCount = Number(s?.sampleCount ?? 0);
@@ -72,7 +85,12 @@ Deno.serve(async (req) => {
   } catch (e) {
     if (e instanceof CdseConfigError) return jsonError(503, e.code, e.message);
     if (e instanceof CdseAuthError) return jsonError(502, e.code, e.message);
-    if (e instanceof ProviderError) return jsonError(e.status === 429 ? 429 : 502, e.code, e.message);
+    if (e instanceof ProviderError) {
+      if (e.status === 429) {
+        return jsonError(429, "rate_limited", "Provider is busy — hover again in a moment.");
+      }
+      return jsonError(502, e.code, e.message);
+    }
     return jsonError(500, "internal_error", (e as Error)?.message ?? "Sample failed");
   }
 });
