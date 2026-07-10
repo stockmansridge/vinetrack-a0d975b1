@@ -10,10 +10,19 @@ export interface SatelliteMapPaddock {
   color?: string;
 }
 
+export interface SatelliteRasterOverlay {
+  paddockId: string;
+  url: string;
+  bounds: { north: number; south: number; east: number; west: number };
+  opacity?: number;
+}
+
 export interface SatelliteMapProps {
   paddocks: SatelliteMapPaddock[];
   selectedPaddockId?: string | null;
-  /** signed URL of the raster PNG to overlay */
+  /** Multiple raster overlays (one per paddock). Preferred. */
+  overlays?: SatelliteRasterOverlay[];
+  /** Legacy single overlay — used only when `overlays` is not provided. */
   overlayUrl?: string | null;
   overlayBounds?: { north: number; south: number; east: number; west: number } | null;
   /** 0..1 */
@@ -35,6 +44,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const {
     paddocks,
     selectedPaddockId,
+    overlays,
     overlayUrl,
     overlayBounds,
     overlayOpacity = 0.7,
@@ -44,9 +54,19 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     className,
   } = props;
 
+  // Normalise to a single overlays[] list. Legacy overlayUrl/overlayBounds
+  // become a one-item list so the rendering loop is uniform.
+  const effectiveOverlays: SatelliteRasterOverlay[] = useMemo(() => {
+    if (overlays && overlays.length) return overlays;
+    if (overlayUrl && overlayBounds) {
+      return [{ paddockId: "__single__", url: overlayUrl, bounds: overlayBounds, opacity: overlayOpacity }];
+    }
+    return [];
+  }, [overlays, overlayUrl, overlayBounds, overlayOpacity]);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgLayerRef = useRef<HTMLDivElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const imgRefs = useRef<Map<string, HTMLImageElement>>(new Map());
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
@@ -175,47 +195,68 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     }
   }, [ready, sig, paddocks, selectedPaddockId, onPaddockClick]);
 
-  // Raster overlay reprojection loop
+  // Raster overlay reprojection loop — handles N overlays.
   useEffect(() => {
     const map = mapRef.current;
     const layer = imgLayerRef.current;
-    const img = imgRef.current;
     const container = containerRef.current;
-    if (!ready || !map || !layer || !img || !container) return;
-    if (!overlayUrl || !overlayBounds) {
+    if (!ready || !map || !layer || !container) return;
+
+    // Remove <img> elements for overlays no longer present.
+    const activeIds = new Set(effectiveOverlays.map((o) => o.paddockId));
+    for (const [id, el] of Array.from(imgRefs.current.entries())) {
+      if (!activeIds.has(id)) {
+        try { el.remove(); } catch { /* noop */ }
+        imgRefs.current.delete(id);
+      }
+    }
+
+    if (effectiveOverlays.length === 0) {
       layer.style.display = "none";
       return;
     }
     layer.style.display = "block";
-    img.src = overlayUrl;
-    img.style.opacity = String(overlayOpacity);
 
-    let raf = 0;
+    // Ensure an <img> exists for each overlay and set its src / opacity.
+    for (const o of effectiveOverlays) {
+      let img = imgRefs.current.get(o.paddockId);
+      if (!img) {
+        img = document.createElement("img");
+        img.alt = "";
+        img.className = "pointer-events-none absolute top-0 left-0";
+        img.style.transform = "translate(-9999px,-9999px)";
+        img.style.transformOrigin = "top left";
+        img.style.imageRendering = "pixelated";
+        layer.appendChild(img);
+        imgRefs.current.set(o.paddockId, img);
+      }
+      if (img.src !== o.url) img.src = o.url;
+      img.style.opacity = String(o.opacity ?? overlayOpacity);
+    }
+
     const update = () => {
-      raf = 0;
       try {
         const mapkit = (window as any).mapkit;
-        const nw = new mapkit.Coordinate(overlayBounds.north, overlayBounds.west);
-        const se = new mapkit.Coordinate(overlayBounds.south, overlayBounds.east);
-        const p1 = map.convertCoordinateToPointOnPage(nw);
-        const p2 = map.convertCoordinateToPointOnPage(se);
         const rect = container.getBoundingClientRect();
-        const x = p1.x - rect.left - window.scrollX;
-        const y = p1.y - rect.top - window.scrollY;
-        const w = p2.x - p1.x;
-        const h = p2.y - p1.y;
-        img.style.transform = `translate(${x}px, ${y}px)`;
-        img.style.width = `${Math.max(0, w)}px`;
-        img.style.height = `${Math.max(0, h)}px`;
+        for (const o of effectiveOverlays) {
+          const img = imgRefs.current.get(o.paddockId);
+          if (!img) continue;
+          const nw = new mapkit.Coordinate(o.bounds.north, o.bounds.west);
+          const se = new mapkit.Coordinate(o.bounds.south, o.bounds.east);
+          const p1 = map.convertCoordinateToPointOnPage(nw);
+          const p2 = map.convertCoordinateToPointOnPage(se);
+          const x = p1.x - rect.left - window.scrollX;
+          const y = p1.y - rect.top - window.scrollY;
+          const w = p2.x - p1.x;
+          const h = p2.y - p1.y;
+          img.style.transform = `translate(${x}px, ${y}px)`;
+          img.style.width = `${Math.max(0, w)}px`;
+          img.style.height = `${Math.max(0, h)}px`;
+        }
       } catch { /* noop */ }
     };
-    const schedule = () => { if (!raf) raf = requestAnimationFrame(update); };
+
     update();
-    const events = ["region-change-start", "region-change-end", "scroll-start", "scroll-end", "zoom-start", "zoom-end"];
-    for (const ev of events) {
-      try { map.addEventListener(ev, schedule); } catch { /* noop */ }
-    }
-    // Continuous RAF loop while overlay visible so pan/zoom track smoothly.
     let running = true;
     const tick = () => {
       if (!running) return;
@@ -223,14 +264,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-    return () => {
-      running = false;
-      if (raf) cancelAnimationFrame(raf);
-      for (const ev of events) {
-        try { map.removeEventListener(ev, schedule); } catch { /* noop */ }
-      }
-    };
-  }, [ready, overlayUrl, overlayBounds, overlayOpacity]);
+    return () => { running = false; };
+  }, [ready, effectiveOverlays, overlayOpacity]);
 
   return (
     <div className={`relative isolate ${className ?? ""}`} style={{ zIndex: 0 }}>
@@ -241,14 +276,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
         style={{ zIndex: 5 }}
-      >
-        <img
-          ref={imgRef}
-          alt=""
-          className="pointer-events-none absolute top-0 left-0"
-          style={{ transform: "translate(-9999px,-9999px)", transformOrigin: "top left", imageRendering: "pixelated" }}
-        />
-      </div>
+      />
+
       {error && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 text-center text-sm text-destructive">
           {error}

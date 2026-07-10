@@ -236,9 +236,17 @@ export default function SatelliteMappingPage() {
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
-  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // "acquired_at|paddock_id"
+  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // date | "latest"
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
+
+  // Batch progress for All-Paddocks processing.
+  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "failed" | "skipped";
+  const [batchProgress, setBatchProgress] = useState<{
+    total: number;
+    done: number;
+    statuses: Record<string, PadStatus>;
+  } | null>(null);
 
   // Paddocks list
   const { data: paddocks = [], isLoading: paddocksLoading } = useQuery({
@@ -279,7 +287,8 @@ export default function SatelliteMappingPage() {
 
   // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
 
-  // Available acquisition dates for the current paddock filter
+  // Available acquisition dates for the current paddock filter.
+  // In All Paddocks mode, count how many paddocks have a completed scene per date.
   const dateOptions = useMemo(() => {
     const scenes = scenesQuery.data?.scenes ?? [];
     const map = new Map<string, DBScene[]>();
@@ -291,24 +300,55 @@ export default function SatelliteMappingPage() {
     }
     return Array.from(map.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, s]) => ({ date, scenes: s }));
+      .map(([date, s]) => ({
+        date,
+        scenes: s,
+        paddockCount: new Set(s.map((x) => x.paddock_id)).size,
+      }));
   }, [scenesQuery.data]);
 
-  // Auto-select newest completed scene when none selected, or when a newer scene appears.
+  const isAllPaddocks = paddockId === "all";
+  const totalPaddocks = geoms.length;
+
+  // Auto-select: prefer "latest" per paddock in All mode; newest date otherwise.
   useEffect(() => {
     if (dateOptions.length === 0) return;
-    const newest = dateOptions[0].date;
-    if (!selectedSceneKey || newest > selectedSceneKey) {
-      setSelectedSceneKey(newest);
+    if (isAllPaddocks) {
+      if (!selectedSceneKey) setSelectedSceneKey("latest");
+    } else {
+      const newest = dateOptions[0].date;
+      if (!selectedSceneKey || (selectedSceneKey !== "latest" && newest > selectedSceneKey)) {
+        setSelectedSceneKey(newest);
+      }
     }
-  }, [dateOptions, selectedSceneKey]);
+  }, [dateOptions, selectedSceneKey, isAllPaddocks]);
 
-  // Assets for the currently selected date + layer
+  // Assets for the currently selected date + layer.
+  // "latest" mode: newest completed asset per paddock (dates may differ).
   const activeAssets = useMemo(() => {
     if (!selectedSceneKey || !scenesQuery.data) return [];
-    const scenesForDate = scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey && s.processing_status === "complete");
+    const { scenes, assets } = scenesQuery.data;
+    const completed = scenes.filter((s) => s.processing_status === "complete");
+
+    if (selectedSceneKey === "latest") {
+      // Pick each paddock's newest completed scene, then its asset for this layer.
+      const newestByPaddock = new Map<string, DBScene>();
+      for (const s of completed) {
+        const cur = newestByPaddock.get(s.paddock_id);
+        if (!cur || s.acquired_at > cur.acquired_at) newestByPaddock.set(s.paddock_id, s);
+      }
+      const out: Array<{ asset: DBAsset; scene: DBScene }> = [];
+      for (const scene of newestByPaddock.values()) {
+        const a = assets.find((x) => x.satellite_scene_id === scene.id && x.index_type === layer);
+        if (a) out.push({ asset: a, scene });
+      }
+      return out;
+    }
+
+    const scenesForDate = completed.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
     const bySceneId = new Set(scenesForDate.map((s) => s.id));
-    return scenesQuery.data.assets.filter((a) => bySceneId.has(a.satellite_scene_id) && a.index_type === layer)
+    return assets
+      .filter((a) => bySceneId.has(a.satellite_scene_id) && a.index_type === layer)
       .map((a) => ({ asset: a, scene: scenesForDate.find((s) => s.id === a.satellite_scene_id)! }));
   }, [scenesQuery.data, selectedSceneKey, layer]);
 
@@ -339,33 +379,52 @@ export default function SatelliteMappingPage() {
   const summaryByPaddock = useMemo(() => {
     const map = new Map<string, DBSummary>();
     if (!scenesQuery.data || !selectedSceneKey) return map;
-    const scenesForDate = scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
-    const bySceneId = new Map(scenesForDate.map((s) => [s.id, s]));
+    const relevantScenes = selectedSceneKey === "latest"
+      ? activeAssets.map((x) => x.scene)
+      : scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
+    const bySceneId = new Map(relevantScenes.map((s) => [s.id, s]));
     for (const sum of scenesQuery.data.summaries) {
       if (sum.index_type !== layer) continue;
       const scene = bySceneId.get(sum.satellite_scene_id);
       if (scene) map.set(scene.paddock_id, sum);
     }
     return map;
-  }, [scenesQuery.data, selectedSceneKey, layer]);
+  }, [scenesQuery.data, selectedSceneKey, layer, activeAssets]);
+
 
   // ---------- Actions ----------
   const checkForNewImage = useMutation({
     mutationFn: async () => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
       setSearchError(null);
-      // Determine which paddocks to process.
-      const targetGeoms = paddockId === "all"
-        ? geoms.slice(0, 1)
-        : geoms.filter((g) => g.id === paddockId);
-      const targetPaddocks = targetGeoms.map((g) => g.id);
-      if (targetPaddocks.length === 0) throw new Error("No paddocks with geometry.");
 
-      type ResultStatus = "complete" | "insufficient_coverage" | "no_scenes" | "failed";
+      // Every valid-geometry paddock in the vineyard when "all"; otherwise the one selected.
+      const targetGeoms = paddockId === "all"
+        ? geoms
+        : geoms.filter((g) => g.id === paddockId);
+      const allVineyardPaddocks = paddockId === "all" ? paddocks.length : 1;
+      const skippedNoGeometry = paddockId === "all"
+        ? Math.max(0, allVineyardPaddocks - targetGeoms.length)
+        : 0;
+
+      if (targetGeoms.length === 0) throw new Error("No paddocks with valid boundaries.");
+
+      type ResultStatus = "complete" | "insufficient_coverage" | "no_scenes" | "failed" | "skipped";
       const results: Array<{ paddock_id: string; status: ResultStatus; message?: string }> = [];
-      for (const pid of targetPaddocks) {
+
+      // Seed batch progress.
+      const initialStatuses: Record<string, PadStatus> = {};
+      for (const g of targetGeoms) initialStatuses[g.id] = "queued";
+      setBatchProgress({ total: targetGeoms.length, done: 0, statuses: initialStatuses });
+
+      const setPad = (pid: string, s: PadStatus) => setBatchProgress((prev) => prev
+        ? { ...prev, statuses: { ...prev.statuses, [pid]: s } }
+        : prev);
+      const bumpDone = () => setBatchProgress((prev) => prev ? { ...prev, done: prev.done + 1 } : prev);
+
+      async function processOne(pid: string): Promise<void> {
         const targetPaddock = geoms.find((g) => g.id === pid);
-        // 1) Search
+        setPad(pid, "searching");
         const search = await invokeSatelliteFn("satellite-search-scenes", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
@@ -373,7 +432,8 @@ export default function SatelliteMappingPage() {
         });
         if (search.error) {
           const parsed = parseSatelliteFunctionError(search.error);
-          setSearchError({
+          // Only surface the first error banner (don't clobber earlier ones).
+          setSearchError((prev) => prev ?? {
             code: parsed.code,
             providerStatus: parsed.providerStatus,
             paddockId: pid,
@@ -381,53 +441,89 @@ export default function SatelliteMappingPage() {
             message: parsed.message,
           });
           results.push({ paddock_id: pid, status: "failed", message: parsed.message });
-          continue;
+          setPad(pid, "failed");
+          bumpDone();
+          return;
         }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
-        if (candidates.length === 0) { results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" }); continue; }
-        // 2) Pick the LEAST-CLOUDY recent candidate (not just the newest); newest
-        //    is often heavily clouded and fails the 80% valid-coverage check.
+        if (candidates.length === 0) {
+          results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" });
+          setPad(pid, "failed");
+          bumpDone();
+          return;
+        }
+        // Prefer clearer scenes (≤20% scene cloud), then newest.
         const sorted = [...candidates].sort((a, b) => {
           const ca = Number(a?.scene_cloud_cover_pct ?? 100);
           const cb = Number(b?.scene_cloud_cover_pct ?? 100);
+          const ap = ca <= 20 ? 0 : 1;
+          const bp = cb <= 20 ? 0 : 1;
+          if (ap !== bp) return ap - bp;
           if (ca !== cb) return ca - cb;
           return String(b?.acquired_at ?? "").localeCompare(String(a?.acquired_at ?? ""));
         });
-        const c = sorted[0];
-        const process = await invokeSatelliteFn("satellite-process-scene", {
-          vineyard_id: activeVineyardId,
-          paddock_id: pid,
-          provider_scene_id: c.provider_scene_id,
-          acquired_at: c.acquired_at,
-          scene_cloud_cover_pct: c.scene_cloud_cover_pct,
-        });
-        if (process.error) {
-          results.push({ paddock_id: pid, status: "failed", message: process.error.message });
-          continue;
-        }
-        const procStatus = String((process.data as any)?.status ?? "");
-        if (procStatus === "complete") {
-          results.push({ paddock_id: pid, status: "complete" });
-        } else if (procStatus === "insufficient_coverage") {
-          const pct = (process.data as any)?.valid_coverage_pct;
-          results.push({
+
+        setPad(pid, "processing");
+        // Walk candidates until one completes with sufficient coverage (max 4 tries).
+        let finalStatus: ResultStatus = "failed";
+        let finalMsg = "Processing did not complete.";
+        const maxTries = Math.min(4, sorted.length);
+        for (let i = 0; i < maxTries; i++) {
+          const c = sorted[i];
+          const process = await invokeSatelliteFn("satellite-process-scene", {
+            vineyard_id: activeVineyardId,
             paddock_id: pid,
-            status: "insufficient_coverage",
-            message: `Selected scene had ${pct != null ? Number(pct).toFixed(0) : "0"}% valid pixels (cloud/shadow).`,
+            provider_scene_id: c.provider_scene_id,
+            acquired_at: c.acquired_at,
+            scene_cloud_cover_pct: c.scene_cloud_cover_pct,
           });
-        } else {
-          results.push({ paddock_id: pid, status: "failed", message: procStatus || "Processing did not complete." });
+          if (process.error) {
+            finalMsg = process.error.message ?? finalMsg;
+            continue;
+          }
+          const procStatus = String((process.data as any)?.status ?? "");
+          if (procStatus === "complete") { finalStatus = "complete"; break; }
+          if (procStatus === "insufficient_coverage") {
+            const pct = (process.data as any)?.valid_coverage_pct;
+            finalStatus = "insufficient_coverage";
+            finalMsg = `Selected scene had ${pct != null ? Number(pct).toFixed(0) : "0"}% valid pixels.`;
+            continue; // try next candidate
+          }
+          finalMsg = procStatus || finalMsg;
         }
+
+        results.push({ paddock_id: pid, status: finalStatus, message: finalMsg });
+        setPad(pid, finalStatus === "complete" ? "complete"
+          : finalStatus === "insufficient_coverage" ? "insufficient_coverage"
+          : "failed");
+        bumpDone();
       }
-      return results;
+
+      // Concurrency-limited worker pool (3 in flight).
+      const queue = targetGeoms.map((g) => g.id);
+      const CONC = 3;
+      const workers = Array.from({ length: Math.min(CONC, queue.length) }, async () => {
+        while (queue.length) {
+          const pid = queue.shift();
+          if (!pid) return;
+          try { await processOne(pid); }
+          catch (e: any) {
+            results.push({ paddock_id: pid, status: "failed", message: String(e?.message ?? e) });
+            setPad(pid, "failed");
+            bumpDone();
+          }
+        }
+      });
+      await Promise.all(workers);
+
+      return { results, skippedNoGeometry };
     },
-    onSuccess: async (results) => {
+    onSuccess: async ({ results, skippedNoGeometry }) => {
       const complete = results.filter((r) => r.status === "complete").length;
       const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
-      // Refresh + wait for the list query to actually return the new scene.
-      setSelectedSceneKey(null);
+      // Refresh + wait for the list query to reflect any new scenes.
       let loaded = false;
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
@@ -437,26 +533,22 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
+      // After an All-Paddocks batch, default to "Latest per paddock" view.
+      if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
+
+      const parts: string[] = [];
+      parts.push(`${complete} paddock${complete === 1 ? "" : "s"} processed`);
+      if (cloud > 0) parts.push(`${cloud} had insufficient clear coverage`);
+      if (failed > 0) parts.push(`${failed} failed`);
+      if (skippedNoGeometry > 0) parts.push(`${skippedNoGeometry} had no valid boundary`);
+      const description = parts.join(", ") + ".";
+
       if (complete > 0 && loaded) {
-        toast({ title: "Satellite imagery processed and loaded", description: `${complete} paddock${complete === 1 ? "" : "s"} ready.` });
+        toast({ title: "Satellite processing complete", description });
       } else if (complete > 0 && !loaded) {
-        toast({
-          title: "Processed, but result not yet visible",
-          description: "Satellite imagery was processed, but VineTrack could not load the saved result. Try refreshing.",
-          variant: "destructive",
-        });
-      } else if (cloud > 0) {
-        toast({
-          title: "No usable imagery for this paddock yet",
-          description: "The most recent Sentinel-2 scenes were too cloudy for reliable analysis. Try again after the next clear pass.",
-          variant: "destructive",
-        });
+        toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
       } else {
-        toast({
-          title: "Satellite processing failed",
-          description: `${failed} paddock${failed === 1 ? "" : "s"} could not be processed.`,
-          variant: "destructive",
-        });
+        toast({ title: "No new imagery available", description, variant: "destructive" });
       }
     },
     onError: (e: any) => {
@@ -474,6 +566,8 @@ export default function SatelliteMappingPage() {
       });
     },
   });
+
+
 
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
@@ -609,7 +703,17 @@ export default function SatelliteMappingPage() {
                   <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
                 </SelectTrigger>
                 <SelectContent>
+                  {isAllPaddocks && dateOptions.length > 0 && (
+                    <SelectItem value="latest">Latest available per paddock</SelectItem>
+                  )}
                   {dateOptions.map((d) => {
+                    if (isAllPaddocks) {
+                      return (
+                        <SelectItem key={d.date} value={d.date}>
+                          {d.date} · {d.paddockCount} of {totalPaddocks} paddocks
+                        </SelectItem>
+                      );
+                    }
                     const s = d.scenes[0];
                     const cloud = s?.scene_cloud_cover_pct;
                     const cov = s?.paddock_valid_coverage_pct;
@@ -625,6 +729,7 @@ export default function SatelliteMappingPage() {
                 </SelectContent>
               </Select>
             </div>
+
 
             {/* Map Layer */}
             <div className="space-y-1 min-w-0" style={{ gridColumn: "span 1", minWidth: 220 }}>
@@ -674,10 +779,28 @@ export default function SatelliteMappingPage() {
                 onClick={() => checkForNewImage.mutate()}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                {busy ? "Checking for suitable imagery…" : "Check for New Image"}
+                {busy
+                  ? (isAllPaddocks ? "Checking all paddocks…" : "Checking for suitable imagery…")
+                  : "Check for New Image"}
               </Button>
             </div>
           </div>
+
+          {/* Batch progress (All Paddocks) */}
+          {busy && batchProgress && (
+            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs">
+              <div className="font-medium text-foreground">
+                Checking imagery for {Math.min(batchProgress.done + 1, batchProgress.total)} of {batchProgress.total} paddocks…
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
+                <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
+                <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
+                <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
+                <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
+              </div>
+            </div>
+          )}
 
           {/* Layer description panel */}
           <div className="mt-3 rounded-md border bg-muted/30 p-3">
@@ -686,7 +809,13 @@ export default function SatelliteMappingPage() {
             <div className="text-[11px] text-muted-foreground mt-2 italic">
               Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
             </div>
+            {selectedSceneKey === "latest" && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+                Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
+              </div>
+            )}
           </div>
+
 
           {/* System-admin diagnostics */}
           <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-2 text-[11px] text-muted-foreground grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
@@ -725,10 +854,14 @@ export default function SatelliteMappingPage() {
                   color: paddockColor(g.id),
                 }))}
                 selectedPaddockId={paddockId === "all" ? null : paddockId}
-                overlayUrl={
-                  activeAssets[0] ? (signedUrls[activeAssets[0].asset.id] ?? null) : null
-                }
-                overlayBounds={activeAssets[0]?.asset.bounds ?? null}
+                overlays={activeAssets
+                  .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
+                  .map(({ asset, scene }) => ({
+                    paddockId: scene.paddock_id,
+                    url: signedUrls[asset.id],
+                    bounds: asset.bounds!,
+                    opacity: opacity / 100,
+                  }))}
                 overlayOpacity={opacity / 100}
                 onPaddockClick={(id) => setPaddockId(id)}
               />
