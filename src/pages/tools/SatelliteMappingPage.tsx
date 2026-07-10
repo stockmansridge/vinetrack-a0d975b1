@@ -409,7 +409,83 @@ export default function SatelliteMappingPage() {
   }, [scenesQuery.data, selectedSceneKey, layer, activeAssets]);
 
 
+  // ---------- Hover sampling ----------
+  // Which paddock (if any) sits under the pointer, and which scene we would sample.
+  const paddockAt = (lat: number, lng: number): typeof geoms[number] | null => {
+    for (const g of visibleGeoms) {
+      for (const poly of g.polys) {
+        // Outer ring point-in-polygon (ignores holes — good enough for hover).
+        const ring = poly[0];
+        if (!ring || ring.length < 3) continue;
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const xi = ring[i].lng, yi = ring[i].lat;
+          const xj = ring[j].lng, yj = ring[j].lat;
+          const intersect = ((yi > lat) !== (yj > lat)) &&
+            (lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi);
+          if (intersect) inside = !inside;
+        }
+        if (inside) return g;
+      }
+    }
+    return null;
+  };
+
+  // Debounced pointer-move handler — updates paddock context immediately, then
+  // requests a real Sentinel-2 sample from CDSE for that point.
+  const hoverTimerRef = useMemo(() => ({ current: null as any }), []);
+  const hoverSeqRef = useMemo(() => ({ current: 0 }), []);
+  const handlePointerMove = (pt: { lat: number; lng: number; clientX: number; clientY: number } | null) => {
+    if (!pt) {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      setHover(null);
+      return;
+    }
+    const pad = paddockAt(pt.lat, pt.lng);
+    // Locate the active scene for this paddock (matches current date + layer).
+    const match = activeAssets.find((x) => x.scene.paddock_id === pad?.id);
+    const acq = match?.scene.acquired_at ?? null;
+
+    setHover((prev) => ({
+      ...(prev ?? { value: null, message: null, status: "idle" as const }),
+      lat: pt.lat, lng: pt.lng, clientX: pt.clientX, clientY: pt.clientY,
+      paddockId: pad?.id ?? null,
+      paddockName: pad?.name ?? null,
+      acquiredAt: acq,
+      status: pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle",
+      value: null,
+      message: null,
+    }));
+
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    if (!pad || !acq || layer === "TRUE_COLOUR") return;
+
+    const seq = ++hoverSeqRef.current;
+    hoverTimerRef.current = setTimeout(async () => {
+      try {
+        const { data, error } = await invokeSatelliteFn("satellite-sample-point", {
+          lat: pt.lat, lng: pt.lng, acquired_at: acq, index_type: layer,
+        });
+        if (seq !== hoverSeqRef.current) return; // stale
+        if (error) {
+          setHover((h) => h ? { ...h, status: "error", message: String((error as any)?.message ?? "sample failed") } : h);
+          return;
+        }
+        const value = (data as any)?.value;
+        if (typeof value === "number" && Number.isFinite(value)) {
+          setHover((h) => h ? { ...h, status: "ready", value, message: null } : h);
+        } else {
+          setHover((h) => h ? { ...h, status: "no_data", value: null, message: "No valid pixels at this point" } : h);
+        }
+      } catch (e: any) {
+        if (seq !== hoverSeqRef.current) return;
+        setHover((h) => h ? { ...h, status: "error", message: String(e?.message ?? e) } : h);
+      }
+    }, 350);
+  };
+
   // ---------- Actions ----------
+
   const checkForNewImage = useMutation({
     mutationFn: async () => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
