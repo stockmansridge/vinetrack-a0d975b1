@@ -96,32 +96,41 @@ Deno.serve(async (req) => {
     return jsonError(500, "internal_error", "Coverage check failed.");
   }
 
-  if (validCoveragePct === null || validCoveragePct < QC.minValidPaddockCoveragePct) {
-    // Insert a scene row marked insufficient_coverage so the UI can show it.
+  // The SCL-based mask alone is unreliable for small paddocks (returns 0% valid
+  // pixels even on clear scenes). Only reject when the catalogue-level scene
+  // cloud cover indicates the scene is unusable, or coverage is low AND the
+  // scene itself is materially cloudy.
+  const sceneCloudPct = typeof scene_cloud_cover_pct === "number" ? scene_cloud_cover_pct : null;
+  const coverageBelow = validCoveragePct !== null && validCoveragePct < QC.minValidPaddockCoveragePct;
+  const sceneTooCloudy = sceneCloudPct !== null && sceneCloudPct > QC.maxCatalogueCloudCoverPct;
+  const shouldReject = sceneTooCloudy || (coverageBelow && sceneCloudPct !== null && sceneCloudPct > 40);
+
+  if (shouldReject) {
     quality = validCoveragePct === null ? "no_data" : "cloud_affected";
     await supa.from("satellite_scenes").upsert({
       vineyard_id, paddock_id, provider: PROVIDER, collection: SENTINEL2_COLLECTION,
       provider_scene_id, acquired_at,
-      scene_cloud_cover_pct: scene_cloud_cover_pct ?? null,
+      scene_cloud_cover_pct: sceneCloudPct,
       paddock_valid_coverage_pct: validCoveragePct,
       paddock_cloud_cover_pct: validCoveragePct !== null ? 100 - validCoveragePct : null,
       spatial_resolution_m: 10,
       quality_status: quality,
       processing_status: "insufficient_coverage",
-      source_metadata: { reason: "below_min_valid_coverage", min_pct: QC.minValidPaddockCoveragePct },
+      source_metadata: { reason: "below_min_valid_coverage", min_pct: QC.minValidPaddockCoveragePct, scene_cloud_pct: sceneCloudPct },
     }, { onConflict: "provider,provider_scene_id,paddock_id" });
     if (jobId) await supa.from("satellite_processing_jobs").update({
       status: "no_suitable_scene", completed_at: new Date().toISOString(),
       error_code: "insufficient_coverage",
-      error_message: `Valid paddock coverage ${validCoveragePct?.toFixed(1) ?? "0"}% below minimum ${QC.minValidPaddockCoveragePct}%`,
+      error_message: `Scene cloud ${sceneCloudPct ?? "?"}%, paddock valid ${validCoveragePct?.toFixed(1) ?? "0"}%`,
     }).eq("id", jobId);
     return jsonOk({
       status: "insufficient_coverage",
       valid_coverage_pct: validCoveragePct,
+      scene_cloud_cover_pct: sceneCloudPct,
       min_required_pct: QC.minValidPaddockCoveragePct,
     });
   }
-  if (validCoveragePct < 95) quality = "partial";
+  if (validCoveragePct === null || validCoveragePct < 95) quality = "partial";
 
   // ---- 2. Upsert the scene row (processing) ----
   const { data: sceneRow, error: sceneErr } = await supa.from("satellite_scenes").upsert({
