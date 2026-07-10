@@ -286,8 +286,8 @@ export default function SatelliteMappingPage() {
       for (const { asset } of activeAssets) {
         if (signedUrls[asset.id]) continue;
         try {
-          const { data, error } = await supabase.functions.invoke("satellite-get-asset-url", {
-            body: { asset_id: asset.id },
+          const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
+            asset_id: asset.id,
           });
           if (error) throw error;
           if (!cancelled && data?.signed_url) {
