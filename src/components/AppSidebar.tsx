@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Beaker,
   Layers,
+  Satellite,
   UserCog,
   Sprout,
   Database,
@@ -123,6 +124,11 @@ const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
 ];
 
+// System-admin-only tools (visibility gated in render).
+const toolsSystemAdmin: NavItem[] = [
+  { title: "Satellite Mapping", url: "/tools/satellite-mapping", icon: Satellite },
+];
+
 
 
 
@@ -169,6 +175,11 @@ export function AppSidebar() {
             {item.url === "/admin/support-requests" && unresolvedSupport > 0 && (
               <span className="ml-auto inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white dark:bg-amber-400 dark:text-amber-950">
                 {unresolvedSupport}
+              </span>
+            )}
+            {item.url === "/tools/satellite-mapping" && (
+              <span className="ml-auto rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                System Admin
               </span>
             )}
             {item.soon && (
