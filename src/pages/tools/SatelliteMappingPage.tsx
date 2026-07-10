@@ -214,8 +214,9 @@ export default function SatelliteMappingPage() {
     queryKey: ["satellite-scenes", activeVineyardId, paddockId],
     enabled: !!activeVineyardId && isSystemAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("satellite-list-scenes", {
-        body: { vineyard_id: activeVineyardId, paddock_id: paddockId },
+      const { data, error } = await invokeSatelliteFn("satellite-list-scenes", {
+        vineyard_id: activeVineyardId,
+        paddock_id: paddockId,
       });
       if (error) throw error;
       return data as { scenes: DBScene[]; assets: DBAsset[]; summaries: DBSummary[] };
