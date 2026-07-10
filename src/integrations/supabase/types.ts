@@ -221,6 +221,238 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_index_summaries: {
+        Row: {
+          created_at: string
+          id: string
+          index_type: string
+          maximum_value: number | null
+          mean_value: number | null
+          median_value: number | null
+          minimum_value: number | null
+          no_data_pixel_count: number | null
+          percentile_10: number | null
+          percentile_25: number | null
+          percentile_75: number | null
+          percentile_90: number | null
+          processing_version: string
+          satellite_scene_id: string
+          standard_deviation: number | null
+          valid_pixel_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          index_type: string
+          maximum_value?: number | null
+          mean_value?: number | null
+          median_value?: number | null
+          minimum_value?: number | null
+          no_data_pixel_count?: number | null
+          percentile_10?: number | null
+          percentile_25?: number | null
+          percentile_75?: number | null
+          percentile_90?: number | null
+          processing_version: string
+          satellite_scene_id: string
+          standard_deviation?: number | null
+          valid_pixel_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          index_type?: string
+          maximum_value?: number | null
+          mean_value?: number | null
+          median_value?: number | null
+          minimum_value?: number | null
+          no_data_pixel_count?: number | null
+          percentile_10?: number | null
+          percentile_25?: number | null
+          percentile_75?: number | null
+          percentile_90?: number | null
+          processing_version?: string
+          satellite_scene_id?: string
+          standard_deviation?: number | null
+          valid_pixel_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_index_summaries_satellite_scene_id_fkey"
+            columns: ["satellite_scene_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      satellite_processing_jobs: {
+        Row: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          paddock_id: string
+          provider: string
+          provider_scene_id: string | null
+          requested_by: string
+          requested_index_types: string[] | null
+          started_at: string | null
+          status: string
+          vineyard_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          job_type: string
+          paddock_id: string
+          provider: string
+          provider_scene_id?: string | null
+          requested_by: string
+          requested_index_types?: string[] | null
+          started_at?: string | null
+          status: string
+          vineyard_id: string
+        }
+        Update: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          paddock_id?: string
+          provider?: string
+          provider_scene_id?: string | null
+          requested_by?: string
+          requested_index_types?: string[] | null
+          started_at?: string | null
+          status?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
+      satellite_raster_assets: {
+        Row: {
+          bounds: Json | null
+          colour_scale: Json | null
+          created_at: string
+          display_resolution_m: number | null
+          id: string
+          index_type: string
+          maximum_value: number | null
+          mime_type: string
+          minimum_value: number | null
+          native_resolution_m: number | null
+          processing_version: string
+          satellite_scene_id: string
+          storage_path: string
+        }
+        Insert: {
+          bounds?: Json | null
+          colour_scale?: Json | null
+          created_at?: string
+          display_resolution_m?: number | null
+          id?: string
+          index_type: string
+          maximum_value?: number | null
+          mime_type: string
+          minimum_value?: number | null
+          native_resolution_m?: number | null
+          processing_version: string
+          satellite_scene_id: string
+          storage_path: string
+        }
+        Update: {
+          bounds?: Json | null
+          colour_scale?: Json | null
+          created_at?: string
+          display_resolution_m?: number | null
+          id?: string
+          index_type?: string
+          maximum_value?: number | null
+          mime_type?: string
+          minimum_value?: number | null
+          native_resolution_m?: number | null
+          processing_version?: string
+          satellite_scene_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_raster_assets_satellite_scene_id_fkey"
+            columns: ["satellite_scene_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      satellite_scenes: {
+        Row: {
+          acquired_at: string
+          collection: string
+          created_at: string
+          id: string
+          paddock_cloud_cover_pct: number | null
+          paddock_id: string
+          paddock_valid_coverage_pct: number | null
+          processing_status: string
+          provider: string
+          provider_scene_id: string
+          quality_status: string
+          scene_cloud_cover_pct: number | null
+          source_metadata: Json | null
+          spatial_resolution_m: number | null
+          updated_at: string
+          vineyard_id: string
+        }
+        Insert: {
+          acquired_at: string
+          collection: string
+          created_at?: string
+          id?: string
+          paddock_cloud_cover_pct?: number | null
+          paddock_id: string
+          paddock_valid_coverage_pct?: number | null
+          processing_status: string
+          provider: string
+          provider_scene_id: string
+          quality_status: string
+          scene_cloud_cover_pct?: number | null
+          source_metadata?: Json | null
+          spatial_resolution_m?: number | null
+          updated_at?: string
+          vineyard_id: string
+        }
+        Update: {
+          acquired_at?: string
+          collection?: string
+          created_at?: string
+          id?: string
+          paddock_cloud_cover_pct?: number | null
+          paddock_id?: string
+          paddock_valid_coverage_pct?: number | null
+          processing_status?: string
+          provider?: string
+          provider_scene_id?: string
+          quality_status?: string
+          scene_cloud_cover_pct?: number | null
+          source_metadata?: Json | null
+          spatial_resolution_m?: number | null
+          updated_at?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
       support_requests: {
         Row: {
           attachment_paths: string[]
