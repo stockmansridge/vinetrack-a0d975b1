@@ -30,8 +30,8 @@ export interface SatelliteMapProps {
   onPaddockClick?: (id: string) => void;
   onMapReady?: () => void;
   onUnavailable?: (msg: string) => void;
-  /** Fires with the map coordinate under the pointer (or null on leave). */
-  onPointerMove?: (coord: { lat: number; lng: number; clientX: number; clientY: number } | null) => void;
+  /** Fires with the map coordinate under the pointer (or null on leave). `x`/`y` are relative to the map container. */
+  onPointerMove?: (coord: { lat: number; lng: number; x: number; y: number } | null) => void;
   className?: string;
 }
 
