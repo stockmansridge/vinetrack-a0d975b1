@@ -485,6 +485,26 @@ export async function catalogSearch(params: {
   return await res.json();
 }
 
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
+  const delays = [500, 1200, 2500, 5000, 9000];
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status !== 429 && !(res.status >= 500 && res.status <= 504)) return res;
+    if (attempt >= delays.length) return res;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 15000)
+      : delays[attempt];
+    try { await res.body?.cancel(); } catch { /* noop */ }
+    console.warn(`[cdse] ${label} ${res.status}: retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+    await new Promise((r) => setTimeout(r, waitMs + Math.floor(Math.random() * 250)));
+  }
+}
+
 export async function processImage(params: {
   geometry: any; // GeoJSON
   bbox: [number, number, number, number];
@@ -519,7 +539,7 @@ export async function processImage(params: {
     },
     evalscript: params.evalscript,
   };
-  const res = await fetch(CDSE_PROCESS_URL, {
+  const res = await fetchWithRetry(CDSE_PROCESS_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -527,7 +547,7 @@ export async function processImage(params: {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
-  });
+  }, "process");
   if (!res.ok) {
     const t = await res.text();
     console.error(`[cdse] process [${res.status}]:`, t.slice(0, 500));
@@ -581,7 +601,7 @@ export async function statisticsQuery(params: {
       },
     },
   };
-  const res = await fetch(CDSE_STATISTICS_URL, {
+  const res = await fetchWithRetry(CDSE_STATISTICS_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -589,14 +609,16 @@ export async function statisticsQuery(params: {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
-  });
+  }, "statistics");
   if (!res.ok) {
     const t = await res.text();
     console.error(`[cdse] statistics [${res.status}]:`, t.slice(0, 500));
+    if (res.status === 429) throw new ProviderError(429, "rate_limited", "Provider rate limit reached.");
     throw new ProviderError(res.status, "statistics_failed", "Sentinel-2 statistics query failed.");
   }
   return await res.json();
 }
+
 
 // -------- CORS --------
 export const corsHeaders = {
