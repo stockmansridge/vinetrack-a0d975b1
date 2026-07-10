@@ -60,6 +60,20 @@ type LayerOption = {
   legendHigh: string;
 };
 
+// Satellite edge functions live in the Lovable Cloud project but authorize the
+// caller against the VineTrack iOS Supabase project. Send the iOS access token
+// as the Bearer header so `verifySystemAdmin` there succeeds.
+async function invokeSatelliteFn(name: string, body: unknown) {
+  const { data: { session } } = await iosSupabase.auth.getSession();
+  if (!session?.access_token) {
+    return { data: null as any, error: new Error("Not signed in to VineTrack") as any };
+  }
+  return supabase.functions.invoke(name, {
+    body,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+}
+
 const LAYERS: LayerOption[] = [
   {
     id: "TRUE_COLOUR", label: "Satellite Image", short: "True colour", nativeResM: 10, resamplingNote: false,
