@@ -436,7 +436,7 @@ export default function AdminUserActivityPage() {
     });
   }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter]);
 
-  const { sorted, toggleSort, getSortDirection } = useSortableTable(filtered, {
+  const { sorted, toggleSort, getSortDirection } = useSortableTable<UserActivityRow, ActivitySortKey>(filtered, {
     accessors: {
       user: (r) => (r.display_name ?? r.email ?? "").toLowerCase(),
       email: (r) => (r.email ?? "").toLowerCase(),
