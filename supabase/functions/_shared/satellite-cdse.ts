@@ -422,7 +422,7 @@ export async function catalogSearch(params: {
       op: "<=",
       args: [{ property: "eo:cloud_cover" }, params.maxCloudCoverPct],
     },
-    "sortby": [{ field: "properties.datetime", direction: "desc" }],
+    
   };
   const res = await fetch(CDSE_CATALOG_URL, {
     method: "POST",
