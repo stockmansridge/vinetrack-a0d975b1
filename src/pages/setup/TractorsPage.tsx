@@ -143,7 +143,7 @@ export default function TractorsPage() {
     if (!filter) return list;
     const f = filter.toLowerCase();
     return list.filter((r) =>
-      [r.name, r.brand, r.model, r.model_year, r.fuel_usage_l_per_hour]
+      [r.name, r.brand, r.model, r.model_year, r.serial_number, r.vin_number, r.fuel_usage_l_per_hour]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
   }, [data, filter]);
