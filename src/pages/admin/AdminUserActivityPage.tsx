@@ -338,7 +338,6 @@ export default function AdminUserActivityPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [loginFilter, setLoginFilter] = useState<LastLoginFilter>("all");
-  const [sort, setSort] = useState<SortKey>("last_login_desc");
 
   const vineyards = useMemo(
     () =>
@@ -410,7 +409,7 @@ export default function AdminUserActivityPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = data.filter((r) => {
+    return data.filter((r) => {
       if (vineyardFilter !== "all" && !(r.vineyard_names ?? []).includes(vineyardFilter))
         return false;
       if (roleFilter !== "all" && !(r.roles ?? []).includes(roleFilter)) return false;
@@ -435,31 +434,24 @@ export default function AdminUserActivityPage() {
         .map((x) => (x ?? "").toLowerCase())
         .some((x) => x.includes(q));
     });
-    list = [...list].sort((a, b) => {
-      const aLast = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
-      const bLast = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
-      const aCreated = a.account_created_at
-        ? new Date(a.account_created_at).getTime()
-        : 0;
-      const bCreated = b.account_created_at
-        ? new Date(b.account_created_at).getTime()
-        : 0;
-      switch (sort) {
-        case "last_login_desc":
-          return bLast - aLast;
-        case "last_login_asc":
-          return aLast - bLast;
-        case "created_desc":
-          return bCreated - aCreated;
-        case "name_asc": {
-          const an = (a.display_name ?? a.email ?? "").toLowerCase();
-          const bn = (b.display_name ?? b.email ?? "").toLowerCase();
-          return an.localeCompare(bn);
-        }
-      }
-    });
-    return list;
-  }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter, sort]);
+  }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter]);
+
+  const { sorted, toggleSort, getSortDirection } = useSortableTable(filtered, {
+    accessors: {
+      user: (r) => (r.display_name ?? r.email ?? "").toLowerCase(),
+      email: (r) => (r.email ?? "").toLowerCase(),
+      vineyards: (r) => (r.vineyard_names ?? []).length,
+      roles: (r) => (r.roles ?? []).length,
+      account_created: (r) => (r.account_created_at ? new Date(r.account_created_at).getTime() : 0),
+      last_login: (r) => (r.last_sign_in_at ? new Date(r.last_sign_in_at).getTime() : 0),
+      app: (r) => r.app_version ?? "",
+      platform: (r) => r.app_platform ?? "",
+      device: (r) => r.device_model ?? "",
+      os: (r) => r.os_version ?? "",
+      status: (r) => r.status ?? "",
+    },
+    initial: { key: "last_login", direction: "desc" },
+  });
 
   return (
     <AdminGate>
