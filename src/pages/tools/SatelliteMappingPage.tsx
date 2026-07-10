@@ -672,15 +672,55 @@ export default function SatelliteMappingPage() {
 
   const busy = checkForNewImage.isPending;
 
-  // Classification helper
+  // Per-index plain-English descriptions, always relative to this paddock's
+  // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
+  const CLASSIFY_WORDS: Record<SatelliteIndexType, [string, string, string, string, string]> = {
+    NDVI: [
+      "Very sparse vegetation relative to this paddock",
+      "Lower vine or ground-cover vigour relative to this paddock",
+      "Typical vegetation vigour for this paddock",
+      "Higher vegetation vigour relative to this paddock",
+      "Very high vegetation vigour relative to this paddock",
+    ],
+    NDRE: [
+      "Very low chlorophyll signal relative to this paddock",
+      "Lower chlorophyll signal relative to this paddock",
+      "Typical chlorophyll signal for this paddock",
+      "Higher chlorophyll signal relative to this paddock",
+      "Very high chlorophyll signal relative to this paddock",
+    ],
+    MSAVI: [
+      "Very low soil-adjusted vegetation signal relative to this paddock",
+      "Lower soil-adjusted vegetation signal relative to this paddock",
+      "Typical soil-adjusted vegetation signal for this paddock",
+      "Higher soil-adjusted vegetation signal relative to this paddock",
+      "Very high soil-adjusted vegetation signal relative to this paddock",
+    ],
+    RECI: [
+      "Very low relative chlorophyll activity for this paddock",
+      "Lower relative chlorophyll activity for this paddock",
+      "Typical relative chlorophyll activity for this paddock",
+      "Higher relative chlorophyll activity for this paddock",
+      "Very high relative chlorophyll activity for this paddock",
+    ],
+    NDMI: [
+      "Very low relative canopy moisture signal for this paddock",
+      "Lower relative canopy moisture signal for this paddock",
+      "Typical relative canopy moisture signal for this paddock",
+      "Higher relative canopy moisture signal for this paddock",
+      "Very high relative canopy moisture signal for this paddock",
+    ],
+    TRUE_COLOUR: ["—", "—", "—", "—", "—"],
+  };
   function classify(value: number | null, s: DBSummary | undefined): string {
     if (value == null || !s) return "—";
-    if (s.percentile_10 == null) return "Typical for this paddock";
-    if (value <= (s.percentile_10 ?? 0)) return "Very low relative value";
-    if (value <= (s.percentile_25 ?? 0)) return "Low relative value";
-    if (value <= (s.percentile_75 ?? 0)) return "Typical for this paddock";
-    if (value <= (s.percentile_90 ?? 0)) return "High relative value";
-    return "Very high relative value";
+    const words = CLASSIFY_WORDS[layer] ?? CLASSIFY_WORDS.NDVI;
+    if (s.percentile_10 == null) return words[2];
+    if (value <= (s.percentile_10 ?? 0)) return words[0];
+    if (value <= (s.percentile_25 ?? 0)) return words[1];
+    if (value <= (s.percentile_75 ?? 0)) return words[2];
+    if (value <= (s.percentile_90 ?? 0)) return words[3];
+    return words[4];
   }
 
   return (
@@ -1001,10 +1041,16 @@ export default function SatelliteMappingPage() {
                   ) : hover.status === "ready" && hover.value != null ? (
                     <>
                       <div className="text-base font-semibold text-foreground tabular-nums">
-                        {hover.value.toFixed(3)}
+                        {activeLayer.short}: {hover.value.toFixed(2)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
                         {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Resolution: {activeLayer.nativeResM} m
+                      </div>
+                      <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                        Satellite reading — field inspection may be required.
                       </div>
                     </>
                   ) : hover.status === "no_data" ? (
