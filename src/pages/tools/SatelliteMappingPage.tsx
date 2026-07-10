@@ -68,10 +68,20 @@ async function invokeSatelliteFn(name: string, body: unknown) {
   if (!session?.access_token) {
     return { data: null as any, error: new Error("Not signed in to VineTrack") as any };
   }
-  return supabase.functions.invoke(name, {
+  const result = await supabase.functions.invoke(name, {
     body,
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
+  const response = result.error?.context;
+  if (response instanceof Response) {
+    try {
+      const text = await response.clone().text();
+      (result.error as any).details = JSON.parse(text);
+    } catch {
+      // Keep the original invoke error if the response body is not JSON.
+    }
+  }
+  return result;
 }
 
 const LAYERS: LayerOption[] = [
