@@ -270,6 +270,44 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     return () => { running = false; };
   }, [ready, effectiveOverlays, overlayOpacity]);
 
+  // Pointer tracking → forward map coordinate under pointer to parent.
+  useEffect(() => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!ready || !map || !container || !onPointerMove) return;
+    const mapkit = (window as any).mapkit;
+
+    const handleMove = (ev: PointerEvent) => {
+      try {
+        const rect = container.getBoundingClientRect();
+        const x = ev.clientX - rect.left;
+        const y = ev.clientY - rect.top;
+        if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+          onPointerMove(null);
+          return;
+        }
+        // MapKit exposes convertPointOnPageToCoordinate — pointer coords are
+        // relative to the page (viewport + scroll).
+        const pagePt = new (window as any).DOMPoint(ev.clientX + window.scrollX, ev.clientY + window.scrollY);
+        const coord = map.convertPointOnPageToCoordinate(pagePt);
+        if (coord && Number.isFinite(coord.latitude) && Number.isFinite(coord.longitude)) {
+          onPointerMove({ lat: coord.latitude, lng: coord.longitude, clientX: ev.clientX, clientY: ev.clientY });
+        }
+      } catch { /* noop */ }
+    };
+    const handleLeave = () => onPointerMove(null);
+
+    container.addEventListener("pointermove", handleMove);
+    container.addEventListener("pointerleave", handleLeave);
+    return () => {
+      container.removeEventListener("pointermove", handleMove);
+      container.removeEventListener("pointerleave", handleLeave);
+    };
+    // mapkit reference kept to force effect after script load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, onPointerMove]);
+
+
   return (
     <div className={`relative isolate ${className ?? ""}`} style={{ zIndex: 0 }}>
       <div ref={containerRef} className="h-full w-full" style={{ zIndex: 0 }} />
