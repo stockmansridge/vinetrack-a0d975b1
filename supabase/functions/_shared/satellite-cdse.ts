@@ -417,12 +417,9 @@ export async function catalogSearch(params: {
     bbox: params.bbox,
     datetime: `${params.dateStart}/${params.dateEnd}`,
     limit: params.limit,
-    "filter-lang": "cql2-json",
-    filter: {
-      op: "<=",
-      args: [{ property: "eo:cloud_cover" }, params.maxCloudCoverPct],
+    query: {
+      "eo:cloud_cover": { lte: params.maxCloudCoverPct },
     },
-    
   };
   const res = await fetch(CDSE_CATALOG_URL, {
     method: "POST",
