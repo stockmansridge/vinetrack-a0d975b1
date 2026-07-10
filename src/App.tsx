@@ -59,6 +59,7 @@ import DocumentsPage from "./pages/reports/DocumentsPage";
 import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
+import SatelliteMappingPage from "./pages/tools/SatelliteMappingPage";
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
 import FuelPage from "./pages/FuelPage";
@@ -168,6 +169,7 @@ const App = () => (
                     <Route path="/reports/documents" element={<DocumentsPage />} />
                     <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
+                    <Route path="/tools/satellite-mapping" element={<SatelliteMappingPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
                     <Route
                       path="/tools/yield-estimation"
