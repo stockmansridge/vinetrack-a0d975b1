@@ -732,7 +732,7 @@ export default function SatelliteMappingPage() {
 
 
             {/* Map Layer */}
-            <div className="space-y-1 min-w-0" style={{ gridColumn: "span 1", minWidth: 220 }}>
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 Map Layer
                 <TooltipProvider>
@@ -756,22 +756,29 @@ export default function SatelliteMappingPage() {
               </Select>
             </div>
 
-            {/* Opacity */}
-            <div className="space-y-1 min-w-0" style={{ minWidth: 220 }}>
-              <label className="text-xs font-medium text-muted-foreground">
+            {/* Opacity — must fit inside its own grid cell */}
+            <div className="min-w-0 space-y-2">
+              <label className="text-xs font-medium text-muted-foreground block">
                 Overlay Transparency — {opacity}%
               </label>
-              <Slider value={[opacity]} onValueChange={(v) => setOpacity(v[0])} min={0} max={100} step={1} />
-              <div className="flex flex-wrap gap-1 pt-1">
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>Satellite 20%</Button>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>Balanced 65%</Button>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>Overlay 95%</Button>
+              <Slider
+                className="w-full min-w-0"
+                value={[opacity]}
+                onValueChange={(v) => setOpacity(v[0])}
+                min={0}
+                max={100}
+                step={1}
+              />
+              <div className="flex min-w-0 flex-wrap gap-1">
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>20%</Button>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>65%</Button>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>95%</Button>
               </div>
             </div>
 
-            {/* Check for new image */}
+            {/* Process latest imagery — single action, generates every layer for every paddock */}
             <div className="space-y-1 min-w-0 flex flex-col">
-              <label className="text-xs font-medium text-muted-foreground">Latest Capture</label>
+              <label className="text-xs font-medium text-muted-foreground">Process Imagery</label>
               <Button
                 variant="outline"
                 className="w-full min-h-[44px] whitespace-nowrap"
@@ -780,11 +787,15 @@ export default function SatelliteMappingPage() {
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                 {busy
-                  ? (isAllPaddocks ? "Checking all paddocks…" : "Checking for suitable imagery…")
-                  : "Check for New Image"}
+                  ? (isAllPaddocks ? "Processing all paddocks…" : "Processing…")
+                  : "Process Latest Imagery"}
               </Button>
+              <div className="text-[10px] text-muted-foreground leading-snug">
+                Generates every map layer for every paddock in one click.
+              </div>
             </div>
           </div>
+
 
           {/* Batch progress (All Paddocks) */}
           {busy && batchProgress && (
