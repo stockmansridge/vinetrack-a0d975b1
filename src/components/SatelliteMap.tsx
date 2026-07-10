@@ -291,7 +291,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         const pagePt = new (window as any).DOMPoint(ev.clientX + window.scrollX, ev.clientY + window.scrollY);
         const coord = map.convertPointOnPageToCoordinate(pagePt);
         if (coord && Number.isFinite(coord.latitude) && Number.isFinite(coord.longitude)) {
-          onPointerMove({ lat: coord.latitude, lng: coord.longitude, clientX: ev.clientX, clientY: ev.clientY });
+          onPointerMove({ lat: coord.latitude, lng: coord.longitude, x, y });
         }
       } catch { /* noop */ }
     };
