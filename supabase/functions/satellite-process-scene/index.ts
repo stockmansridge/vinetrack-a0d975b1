@@ -156,6 +156,12 @@ Deno.serve(async (req) => {
   }
   const sceneId = sceneRow.id as string;
 
+  const { data: existingAssets } = await supa
+    .from("satellite_raster_assets")
+    .select("id,index_type,asset_type,storage_path,raster_width,raster_height,processing_version,mime_type")
+    .eq("satellite_scene_id", sceneId)
+    .eq("processing_version", PROCESSING_VERSION);
+
   // ---- 3. For each requested index: stats + display PNG + analytical GeoTIFF ----
   const generated: string[] = [];
   const failures: Array<{ index: IndexType; message: string }> = [];
@@ -211,23 +217,31 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Process API — coloured PNG clipped to paddock geometry.
-      const png = await processImage({
-        geometry, bbox, dateStart, dateEnd,
-        evalscript: evalscriptFor(idx),
-        width, height,
-      });
-
       const path = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.png`;
-      const up = await supa.storage.from("satellite-assets").upload(path, png, {
-        contentType: "image/png", upsert: true,
-      });
-      if (up.error) throw new Error(`Storage upload failed: ${up.error.message}`);
+      const existingDisplay = (existingAssets ?? []).find((a: any) =>
+        a.index_type === idx &&
+        (a.asset_type === DISPLAY_ASSET_TYPE || (!a.asset_type && a.mime_type === "image/png"))
+      );
+      const displayPath = existingDisplay?.storage_path ?? path;
+
+      if (!existingDisplay) {
+        // Process API — coloured PNG clipped to paddock geometry.
+        const png = await processImage({
+          geometry, bbox, dateStart, dateEnd,
+          evalscript: evalscriptFor(idx),
+          width, height,
+        });
+
+        const up = await supa.storage.from("satellite-assets").upload(displayPath, png, {
+          contentType: "image/png", upsert: true,
+        });
+        if (up.error) throw new Error(`Storage upload failed: ${up.error.message}`);
+      }
 
       await supa.from("satellite_raster_assets").upsert({
         satellite_scene_id: sceneId, index_type: idx,
         asset_type: DISPLAY_ASSET_TYPE,
-        storage_path: path, mime_type: "image/png",
+        storage_path: displayPath, mime_type: "image/png",
         bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
         raster_width: width,
         raster_height: height,
@@ -252,21 +266,28 @@ Deno.serve(async (req) => {
       }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
 
       if (idx !== "TRUE_COLOUR") {
-        const analytical = await processAnalyticalRaster({
-          geometry, bbox, dateStart, dateEnd,
-          evalscript: analyticalEvalscript(idx),
-          width, height,
-        });
         const analyticalPath = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.analysis.tif`;
-        const analyticalUp = await supa.storage.from("satellite-assets").upload(analyticalPath, analytical, {
-          contentType: "image/tiff", upsert: true,
-        });
-        if (analyticalUp.error) throw new Error(`Analytical storage upload failed: ${analyticalUp.error.message}`);
+        const existingAnalytical = (existingAssets ?? []).find((a: any) =>
+          a.index_type === idx && a.asset_type === ANALYTICAL_ASSET_TYPE
+        );
+        const analyticalStoragePath = existingAnalytical?.storage_path ?? analyticalPath;
+
+        if (!existingAnalytical) {
+          const analytical = await processAnalyticalRaster({
+            geometry, bbox, dateStart, dateEnd,
+            evalscript: analyticalEvalscript(idx),
+            width, height,
+          });
+          const analyticalUp = await supa.storage.from("satellite-assets").upload(analyticalStoragePath, analytical, {
+            contentType: "image/tiff", upsert: true,
+          });
+          if (analyticalUp.error) throw new Error(`Analytical storage upload failed: ${analyticalUp.error.message}`);
+        }
 
         await supa.from("satellite_raster_assets").upsert({
           satellite_scene_id: sceneId, index_type: idx,
           asset_type: ANALYTICAL_ASSET_TYPE,
-          storage_path: analyticalPath, mime_type: "image/tiff",
+          storage_path: analyticalStoragePath, mime_type: "image/tiff",
           bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
           raster_width: width,
           raster_height: height,
@@ -287,7 +308,7 @@ Deno.serve(async (req) => {
             mosaicking_order: "leastCC",
             scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
             matched_display_asset_type: DISPLAY_ASSET_TYPE,
-            matched_display_storage_path: path,
+            matched_display_storage_path: displayPath,
           },
           processing_version: PROCESSING_VERSION,
         }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
