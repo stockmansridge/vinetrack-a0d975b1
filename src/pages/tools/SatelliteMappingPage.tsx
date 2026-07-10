@@ -19,6 +19,7 @@ import { fetchList } from "@/lib/queries";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
 import { supabase } from "@/integrations/supabase/client";
+import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +59,20 @@ type LayerOption = {
   legendLow: string;
   legendHigh: string;
 };
+
+// Satellite edge functions live in the Lovable Cloud project but authorize the
+// caller against the VineTrack iOS Supabase project. Send the iOS access token
+// as the Bearer header so `verifySystemAdmin` there succeeds.
+async function invokeSatelliteFn(name: string, body: unknown) {
+  const { data: { session } } = await iosSupabase.auth.getSession();
+  if (!session?.access_token) {
+    return { data: null as any, error: new Error("Not signed in to VineTrack") as any };
+  }
+  return supabase.functions.invoke(name, {
+    body,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+}
 
 const LAYERS: LayerOption[] = [
   {
@@ -213,8 +228,9 @@ export default function SatelliteMappingPage() {
     queryKey: ["satellite-scenes", activeVineyardId, paddockId],
     enabled: !!activeVineyardId && isSystemAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("satellite-list-scenes", {
-        body: { vineyard_id: activeVineyardId, paddock_id: paddockId },
+      const { data, error } = await invokeSatelliteFn("satellite-list-scenes", {
+        vineyard_id: activeVineyardId,
+        paddock_id: paddockId,
       });
       if (error) throw error;
       return data as { scenes: DBScene[]; assets: DBAsset[]; summaries: DBSummary[] };
@@ -284,8 +300,8 @@ export default function SatelliteMappingPage() {
       for (const { asset } of activeAssets) {
         if (signedUrls[asset.id]) continue;
         try {
-          const { data, error } = await supabase.functions.invoke("satellite-get-asset-url", {
-            body: { asset_id: asset.id },
+          const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
+            asset_id: asset.id,
           });
           if (error) throw error;
           if (!cancelled && data?.signed_url) {
@@ -327,29 +343,25 @@ export default function SatelliteMappingPage() {
       const results: Array<{ paddock_id: string; ok: boolean; message?: string }> = [];
       for (const pid of targetPaddocks) {
         // 1) Search
-        const search = await supabase.functions.invoke("satellite-search-scenes", {
-          body: {
-            vineyard_id: activeVineyardId,
-            paddock_id: pid,
-            date_start: new Date(Date.now() - 30 * 86400_000).toISOString(),
-            date_end: new Date().toISOString(),
-            max_cloud_cover: 60,
-            limit: 5,
-          },
+        const search = await invokeSatelliteFn("satellite-search-scenes", {
+          vineyard_id: activeVineyardId,
+          paddock_id: pid,
+          date_start: new Date(Date.now() - 30 * 86400_000).toISOString(),
+          date_end: new Date().toISOString(),
+          max_cloud_cover: 60,
+          limit: 5,
         });
         if (search.error) { results.push({ paddock_id: pid, ok: false, message: search.error.message }); continue; }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
         if (candidates.length === 0) { results.push({ paddock_id: pid, ok: false, message: "No scenes found" }); continue; }
         // 2) Process newest candidate
         const c = candidates[0];
-        const process = await supabase.functions.invoke("satellite-process-scene", {
-          body: {
-            vineyard_id: activeVineyardId,
-            paddock_id: pid,
-            provider_scene_id: c.provider_scene_id,
-            acquired_at: c.acquired_at,
-            scene_cloud_cover_pct: c.scene_cloud_cover_pct,
-          },
+        const process = await invokeSatelliteFn("satellite-process-scene", {
+          vineyard_id: activeVineyardId,
+          paddock_id: pid,
+          provider_scene_id: c.provider_scene_id,
+          acquired_at: c.acquired_at,
+          scene_cloud_cover_pct: c.scene_cloud_cover_pct,
         });
         if (process.error) results.push({ paddock_id: pid, ok: false, message: process.error.message });
         else results.push({ paddock_id: pid, ok: true, message: (process.data as any)?.status });
