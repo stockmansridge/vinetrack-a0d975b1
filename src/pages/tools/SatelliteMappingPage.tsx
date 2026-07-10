@@ -294,10 +294,12 @@ export default function SatelliteMappingPage() {
       .map(([date, s]) => ({ date, scenes: s }));
   }, [scenesQuery.data]);
 
-  // Default to newest scene when list first loads
+  // Auto-select newest completed scene when none selected, or when a newer scene appears.
   useEffect(() => {
-    if (!selectedSceneKey && dateOptions.length > 0) {
-      setSelectedSceneKey(dateOptions[0].date);
+    if (dateOptions.length === 0) return;
+    const newest = dateOptions[0].date;
+    if (!selectedSceneKey || newest > selectedSceneKey) {
+      setSelectedSceneKey(newest);
     }
   }, [dateOptions, selectedSceneKey]);
 
