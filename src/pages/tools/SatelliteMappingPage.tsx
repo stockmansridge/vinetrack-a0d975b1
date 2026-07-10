@@ -236,9 +236,17 @@ export default function SatelliteMappingPage() {
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
-  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // "acquired_at|paddock_id"
+  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // date | "latest"
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
+
+  // Batch progress for All-Paddocks processing.
+  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "failed" | "skipped";
+  const [batchProgress, setBatchProgress] = useState<{
+    total: number;
+    done: number;
+    statuses: Record<string, PadStatus>;
+  } | null>(null);
 
   // Paddocks list
   const { data: paddocks = [], isLoading: paddocksLoading } = useQuery({
