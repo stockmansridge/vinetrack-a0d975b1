@@ -192,17 +192,6 @@ function parseSatelliteFunctionError(error: any): { code: string | null; provide
 }
 
 // ---------- Map helpers ----------
-function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    try {
-      const lb = L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.2);
-      map.fitBounds(lb, { padding: [24, 24] });
-    } catch { /* noop */ }
-  }, [bounds, map]);
-  return null;
-}
 
 // Parse polygon_points → array of polygons, each an array of rings (outer + holes).
 function parseGeometry(raw: any): LatLng[][][] {
