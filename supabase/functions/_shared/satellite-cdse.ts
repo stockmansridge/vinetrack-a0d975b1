@@ -104,7 +104,13 @@ export function catalogErrorCode(status: number): string {
 // -------- Token cache (per-isolate; edge functions are short-lived) --------
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-export async function getCdseAccessToken(): Promise<string> {
+export async function getCdseAccessTokenWithMetadata(): Promise<{
+  token: string;
+  status: number;
+  tokenType: string | null;
+  expiresInPresent: boolean;
+  fromCache: boolean;
+}> {
   const clientId = Deno.env.get("CDSE_CLIENT_ID");
   const clientSecret = Deno.env.get("CDSE_CLIENT_SECRET");
   if (!clientId || !clientSecret) {
@@ -113,7 +119,9 @@ export async function getCdseAccessToken(): Promise<string> {
     );
   }
   const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt - 30_000 > now) return cachedToken.token;
+  if (cachedToken && cachedToken.expiresAt - 30_000 > now) {
+    return { token: cachedToken.token, status: 200, tokenType: "Bearer", expiresInPresent: true, fromCache: true };
+  }
 
   const body = new URLSearchParams({
     grant_type: "client_credentials",
@@ -134,9 +142,16 @@ export async function getCdseAccessToken(): Promise<string> {
   }
   const json = await res.json();
   const token = json.access_token as string;
+  const tokenType = typeof json.token_type === "string" ? json.token_type : null;
+  const expiresInPresent = json.expires_in != null;
   const expiresIn = Number(json.expires_in ?? 300);
   cachedToken = { token, expiresAt: now + expiresIn * 1000 };
-  return token;
+  return { token, status: res.status, tokenType, expiresInPresent, fromCache: false };
+}
+
+export async function getCdseAccessToken(): Promise<string> {
+  const result = await getCdseAccessTokenWithMetadata();
+  return result.token;
 }
 
 // -------- Admin verification (via VineTrack iOS project) --------
