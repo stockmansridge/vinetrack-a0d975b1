@@ -329,29 +329,25 @@ export default function SatelliteMappingPage() {
       const results: Array<{ paddock_id: string; ok: boolean; message?: string }> = [];
       for (const pid of targetPaddocks) {
         // 1) Search
-        const search = await supabase.functions.invoke("satellite-search-scenes", {
-          body: {
-            vineyard_id: activeVineyardId,
-            paddock_id: pid,
-            date_start: new Date(Date.now() - 30 * 86400_000).toISOString(),
-            date_end: new Date().toISOString(),
-            max_cloud_cover: 60,
-            limit: 5,
-          },
+        const search = await invokeSatelliteFn("satellite-search-scenes", {
+          vineyard_id: activeVineyardId,
+          paddock_id: pid,
+          date_start: new Date(Date.now() - 30 * 86400_000).toISOString(),
+          date_end: new Date().toISOString(),
+          max_cloud_cover: 60,
+          limit: 5,
         });
         if (search.error) { results.push({ paddock_id: pid, ok: false, message: search.error.message }); continue; }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
         if (candidates.length === 0) { results.push({ paddock_id: pid, ok: false, message: "No scenes found" }); continue; }
         // 2) Process newest candidate
         const c = candidates[0];
-        const process = await supabase.functions.invoke("satellite-process-scene", {
-          body: {
-            vineyard_id: activeVineyardId,
-            paddock_id: pid,
-            provider_scene_id: c.provider_scene_id,
-            acquired_at: c.acquired_at,
-            scene_cloud_cover_pct: c.scene_cloud_cover_pct,
-          },
+        const process = await invokeSatelliteFn("satellite-process-scene", {
+          vineyard_id: activeVineyardId,
+          paddock_id: pid,
+          provider_scene_id: c.provider_scene_id,
+          acquired_at: c.acquired_at,
+          scene_cloud_cover_pct: c.scene_cloud_cover_pct,
         });
         if (process.error) results.push({ paddock_id: pid, ok: false, message: process.error.message });
         else results.push({ paddock_id: pid, ok: true, message: (process.data as any)?.status });
