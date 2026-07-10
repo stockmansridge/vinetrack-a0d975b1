@@ -779,10 +779,28 @@ export default function SatelliteMappingPage() {
                 onClick={() => checkForNewImage.mutate()}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                {busy ? "Checking for suitable imagery…" : "Check for New Image"}
+                {busy
+                  ? (isAllPaddocks ? "Checking all paddocks…" : "Checking for suitable imagery…")
+                  : "Check for New Image"}
               </Button>
             </div>
           </div>
+
+          {/* Batch progress (All Paddocks) */}
+          {busy && batchProgress && (
+            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs">
+              <div className="font-medium text-foreground">
+                Checking imagery for {Math.min(batchProgress.done + 1, batchProgress.total)} of {batchProgress.total} paddocks…
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
+                <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
+                <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
+                <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
+                <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
+              </div>
+            </div>
+          )}
 
           {/* Layer description panel */}
           <div className="mt-3 rounded-md border bg-muted/30 p-3">
@@ -791,7 +809,13 @@ export default function SatelliteMappingPage() {
             <div className="text-[11px] text-muted-foreground mt-2 italic">
               Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
             </div>
+            {selectedSceneKey === "latest" && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+                Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
+              </div>
+            )}
           </div>
+
 
           {/* System-admin diagnostics */}
           <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-2 text-[11px] text-muted-foreground grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
