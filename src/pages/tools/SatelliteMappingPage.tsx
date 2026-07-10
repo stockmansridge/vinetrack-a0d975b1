@@ -287,7 +287,8 @@ export default function SatelliteMappingPage() {
 
   // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
 
-  // Available acquisition dates for the current paddock filter
+  // Available acquisition dates for the current paddock filter.
+  // In All Paddocks mode, count how many paddocks have a completed scene per date.
   const dateOptions = useMemo(() => {
     const scenes = scenesQuery.data?.scenes ?? [];
     const map = new Map<string, DBScene[]>();
@@ -299,24 +300,55 @@ export default function SatelliteMappingPage() {
     }
     return Array.from(map.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, s]) => ({ date, scenes: s }));
+      .map(([date, s]) => ({
+        date,
+        scenes: s,
+        paddockCount: new Set(s.map((x) => x.paddock_id)).size,
+      }));
   }, [scenesQuery.data]);
 
-  // Auto-select newest completed scene when none selected, or when a newer scene appears.
+  const isAllPaddocks = paddockId === "all";
+  const totalPaddocks = geoms.length;
+
+  // Auto-select: prefer "latest" per paddock in All mode; newest date otherwise.
   useEffect(() => {
     if (dateOptions.length === 0) return;
-    const newest = dateOptions[0].date;
-    if (!selectedSceneKey || newest > selectedSceneKey) {
-      setSelectedSceneKey(newest);
+    if (isAllPaddocks) {
+      if (!selectedSceneKey) setSelectedSceneKey("latest");
+    } else {
+      const newest = dateOptions[0].date;
+      if (!selectedSceneKey || (selectedSceneKey !== "latest" && newest > selectedSceneKey)) {
+        setSelectedSceneKey(newest);
+      }
     }
-  }, [dateOptions, selectedSceneKey]);
+  }, [dateOptions, selectedSceneKey, isAllPaddocks]);
 
-  // Assets for the currently selected date + layer
+  // Assets for the currently selected date + layer.
+  // "latest" mode: newest completed asset per paddock (dates may differ).
   const activeAssets = useMemo(() => {
     if (!selectedSceneKey || !scenesQuery.data) return [];
-    const scenesForDate = scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey && s.processing_status === "complete");
+    const { scenes, assets } = scenesQuery.data;
+    const completed = scenes.filter((s) => s.processing_status === "complete");
+
+    if (selectedSceneKey === "latest") {
+      // Pick each paddock's newest completed scene, then its asset for this layer.
+      const newestByPaddock = new Map<string, DBScene>();
+      for (const s of completed) {
+        const cur = newestByPaddock.get(s.paddock_id);
+        if (!cur || s.acquired_at > cur.acquired_at) newestByPaddock.set(s.paddock_id, s);
+      }
+      const out: Array<{ asset: DBAsset; scene: DBScene }> = [];
+      for (const scene of newestByPaddock.values()) {
+        const a = assets.find((x) => x.satellite_scene_id === scene.id && x.index_type === layer);
+        if (a) out.push({ asset: a, scene });
+      }
+      return out;
+    }
+
+    const scenesForDate = completed.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
     const bySceneId = new Set(scenesForDate.map((s) => s.id));
-    return scenesQuery.data.assets.filter((a) => bySceneId.has(a.satellite_scene_id) && a.index_type === layer)
+    return assets
+      .filter((a) => bySceneId.has(a.satellite_scene_id) && a.index_type === layer)
       .map((a) => ({ asset: a, scene: scenesForDate.find((s) => s.id === a.satellite_scene_id)! }));
   }, [scenesQuery.data, selectedSceneKey, layer]);
 
@@ -347,15 +379,18 @@ export default function SatelliteMappingPage() {
   const summaryByPaddock = useMemo(() => {
     const map = new Map<string, DBSummary>();
     if (!scenesQuery.data || !selectedSceneKey) return map;
-    const scenesForDate = scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
-    const bySceneId = new Map(scenesForDate.map((s) => [s.id, s]));
+    const relevantScenes = selectedSceneKey === "latest"
+      ? activeAssets.map((x) => x.scene)
+      : scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
+    const bySceneId = new Map(relevantScenes.map((s) => [s.id, s]));
     for (const sum of scenesQuery.data.summaries) {
       if (sum.index_type !== layer) continue;
       const scene = bySceneId.get(sum.satellite_scene_id);
       if (scene) map.set(scene.paddock_id, sum);
     }
     return map;
-  }, [scenesQuery.data, selectedSceneKey, layer]);
+  }, [scenesQuery.data, selectedSceneKey, layer, activeAssets]);
+
 
   // ---------- Actions ----------
   const checkForNewImage = useMutation({
