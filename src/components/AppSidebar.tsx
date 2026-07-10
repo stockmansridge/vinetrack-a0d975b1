@@ -247,7 +247,7 @@ export function AppSidebar() {
         {renderGroup("Dashboard", visible(dashboard))}
         {renderGroup("Work", visible(work))}
         {renderGroup("Equipment", visible(equipment), false)}
-        {renderGroup("Tools", visible(tools), false)}
+        {renderGroup("Tools", visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin] : tools), false)}
         {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports), false)}
         {renderGroup("Setup", visible(setup), false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
