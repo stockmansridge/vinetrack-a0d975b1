@@ -166,7 +166,6 @@ Deno.serve(async (req) => {
   const generated: string[] = [];
   const failures: Array<{ index: IndexType; message: string }> = [];
 
-  const { w, h } = bboxSizeMeters(bbox);
   const acqDateStr = acq.toISOString().slice(0, 10);
   const paddockName = String(paddock.name ?? paddock.id);
 
