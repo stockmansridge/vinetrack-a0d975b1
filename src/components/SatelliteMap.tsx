@@ -44,6 +44,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const {
     paddocks,
     selectedPaddockId,
+    overlays,
     overlayUrl,
     overlayBounds,
     overlayOpacity = 0.7,
@@ -53,9 +54,19 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     className,
   } = props;
 
+  // Normalise to a single overlays[] list. Legacy overlayUrl/overlayBounds
+  // become a one-item list so the rendering loop is uniform.
+  const effectiveOverlays: SatelliteRasterOverlay[] = useMemo(() => {
+    if (overlays && overlays.length) return overlays;
+    if (overlayUrl && overlayBounds) {
+      return [{ paddockId: "__single__", url: overlayUrl, bounds: overlayBounds, opacity: overlayOpacity }];
+    }
+    return [];
+  }, [overlays, overlayUrl, overlayBounds, overlayOpacity]);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgLayerRef = useRef<HTMLDivElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const imgRefs = useRef<Map<string, HTMLImageElement>>(new Map());
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
