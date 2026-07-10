@@ -240,6 +240,23 @@ export default function SatelliteMappingPage() {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
 
+  // Hover readout — real value sampled from CDSE at pointer coordinate.
+  const [hover, setHover] = useState<
+    | null
+    | {
+        lat: number;
+        lng: number;
+        clientX: number;
+        clientY: number;
+        paddockId: string | null;
+        paddockName: string | null;
+        acquiredAt: string | null;
+        status: "idle" | "loading" | "ready" | "no_data" | "error";
+        value: number | null;
+        message: string | null;
+      }
+  >(null);
+
   // Batch progress for All-Paddocks processing.
   type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "failed" | "skipped";
   const [batchProgress, setBatchProgress] = useState<{
