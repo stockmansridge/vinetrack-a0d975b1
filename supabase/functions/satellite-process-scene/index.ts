@@ -8,15 +8,18 @@
 //          + valid-pixel coverage (using SCL cloud/shadow mask).
 //        - reject the scene if paddock coverage < QC.minValidPaddockCoveragePct.
 //        - call Sentinel Hub Process API to render a coloured PNG clipped to paddock.
-//        - upload PNG to private storage bucket.
+//        - for numeric layers, call the same Process API geometry/grid to create
+//          a single-band Float32 GeoTIFF analytical raster for hover sampling.
+//        - upload both matched assets to private storage.
 //        - upsert satellite_raster_assets + satellite_index_summaries rows.
 //   4. Upsert one satellite_scenes row per paddock with quality/processing status.
 //   5. Mark the job complete or failed.
 import {
   corsHeaders, jsonError, jsonOk, verifySystemAdmin, getServiceClient,
   parseGeometryRings, toGeoJson, computeBbox, computeImageSize, bboxSizeMeters,
-  evalscriptFor, statsEvalscript, processImage, statisticsQuery,
+  evalscriptFor, statsEvalscript, analyticalEvalscript, processImage, processAnalyticalRaster, statisticsQuery,
   INDEX_TYPES, INDEX_NATIVE_RES_M, QC, PROCESSING_VERSION, PROVIDER, SENTINEL2_COLLECTION,
+  DISPLAY_ASSET_TYPE, ANALYTICAL_ASSET_TYPE, ANALYTICAL_NO_DATA_SENTINEL, ANALYTICAL_ROW_ORIENTATION,
   CdseConfigError, CdseAuthError, ProviderError,
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
@@ -153,7 +156,7 @@ Deno.serve(async (req) => {
   }
   const sceneId = sceneRow.id as string;
 
-  // ---- 3. For each requested index: stats + PNG + upload + upsert ----
+  // ---- 3. For each requested index: stats + display PNG + analytical GeoTIFF ----
   const generated: string[] = [];
   const failures: Array<{ index: IndexType; message: string }> = [];
 
@@ -223,18 +226,72 @@ Deno.serve(async (req) => {
 
       await supa.from("satellite_raster_assets").upsert({
         satellite_scene_id: sceneId, index_type: idx,
+        asset_type: DISPLAY_ASSET_TYPE,
         storage_path: path, mime_type: "image/png",
         bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+        raster_width: width,
+        raster_height: height,
         native_resolution_m: nativeRes, display_resolution_m: displayResolutionM,
+        data_type: "UINT8_RGBA",
+        scale_factor: null,
+        no_data_sentinel: null,
+        row_orientation: ANALYTICAL_ROW_ORIENTATION,
+        acquisition_date: acqDateStr,
         minimum_value: minValue, maximum_value: maxValue,
         colour_scale: {
           formula: idx,
           bands: bandsFor(idx),
+          time_interval: { from: dateStart, to: dateEnd },
+          crs: "EPSG:4326",
+          mosaicking_order: "leastCC",
+          scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
           resampling: nativeRes > QC.processImageTargetResolutionM ? "bilinear" : "none",
           percentiles,
         },
         processing_version: PROCESSING_VERSION,
-      }, { onConflict: "satellite_scene_id,index_type,processing_version" });
+      }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
+
+      if (idx !== "TRUE_COLOUR") {
+        const analytical = await processAnalyticalRaster({
+          geometry, bbox, dateStart, dateEnd,
+          evalscript: analyticalEvalscript(idx),
+          width, height,
+        });
+        const analyticalPath = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.analysis.tif`;
+        const analyticalUp = await supa.storage.from("satellite-assets").upload(analyticalPath, analytical, {
+          contentType: "image/tiff", upsert: true,
+        });
+        if (analyticalUp.error) throw new Error(`Analytical storage upload failed: ${analyticalUp.error.message}`);
+
+        await supa.from("satellite_raster_assets").upsert({
+          satellite_scene_id: sceneId, index_type: idx,
+          asset_type: ANALYTICAL_ASSET_TYPE,
+          storage_path: analyticalPath, mime_type: "image/tiff",
+          bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+          raster_width: width,
+          raster_height: height,
+          native_resolution_m: nativeRes,
+          display_resolution_m: displayResolutionM,
+          data_type: "Float32",
+          scale_factor: 1,
+          no_data_sentinel: ANALYTICAL_NO_DATA_SENTINEL,
+          row_orientation: ANALYTICAL_ROW_ORIENTATION,
+          acquisition_date: acqDateStr,
+          minimum_value: minValue,
+          maximum_value: maxValue,
+          colour_scale: {
+            formula: idx,
+            bands: bandsFor(idx),
+            time_interval: { from: dateStart, to: dateEnd },
+            crs: "EPSG:4326",
+            mosaicking_order: "leastCC",
+            scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
+            matched_display_asset_type: DISPLAY_ASSET_TYPE,
+            matched_display_storage_path: path,
+          },
+          processing_version: PROCESSING_VERSION,
+        }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
+      }
 
       generated.push(idx);
     } catch (e) {
