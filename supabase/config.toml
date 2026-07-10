@@ -44,3 +44,15 @@ verify_jwt = false
 
 [functions.revoke-vinetrack-user-licence]
 verify_jwt = false
+
+[functions.satellite-search-scenes]
+verify_jwt = false
+
+[functions.satellite-process-scene]
+verify_jwt = false
+
+[functions.satellite-list-scenes]
+verify_jwt = false
+
+[functions.satellite-get-asset-url]
+verify_jwt = false
