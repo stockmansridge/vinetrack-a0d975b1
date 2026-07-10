@@ -11,10 +11,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { RefreshCw, Download } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
-import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { useSortableTable } from "@/lib/useSortableTable";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import {
   AdminGate,
@@ -43,12 +50,26 @@ interface UserActivityRow {
 }
 
 interface ActivityColumn {
-  key: string;
+  key: ActivitySortKey;
   label: string;
   render: (row: UserActivityRow) => React.ReactNode;
   className?: string;
   locked?: "start" | "end";
+  sortable?: boolean;
 }
+
+type ActivitySortKey =
+  | "user"
+  | "email"
+  | "vineyards"
+  | "roles"
+  | "account_created"
+  | "last_login"
+  | "app"
+  | "platform"
+  | "device"
+  | "os"
+  | "status";
 
 type LastLoginFilter =
   | "all"
@@ -59,11 +80,6 @@ type LastLoginFilter =
   | "inactive30"
   | "inactive90";
 
-type SortKey =
-  | "last_login_desc"
-  | "last_login_asc"
-  | "created_desc"
-  | "name_asc";
 
 const STATUS_LABELS: Record<string, string> = {
   never: "Never logged in",
@@ -201,6 +217,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "user",
     label: "User",
+    sortable: true,
     render: (r) => (
       <div>
         <div className="font-medium truncate max-w-[200px]">
@@ -215,6 +232,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "email",
     label: "Email",
+    sortable: true,
     render: (r) => (
       <span className="truncate block max-w-[220px]">{r.email ?? "—"}</span>
     ),
@@ -222,6 +240,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "vineyards",
     label: "Vineyards",
+    sortable: true,
     render: (r) => {
       const label = (r.vineyard_names ?? []).join(", ") || "—";
       return (
@@ -234,18 +253,21 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "roles",
     label: "Roles",
+    sortable: true,
     render: (r) => <span>{(r.roles ?? []).join(", ") || "—"}</span>,
   },
   {
     key: "account_created",
     label: "Account created",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => formatDate(r.account_created_at),
   },
   {
     key: "last_login",
     label: "Last login",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) =>
       r.last_sign_in_at ? (
         <div>
@@ -262,30 +284,35 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     key: "app",
     label: "App",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => appVersionDisplay(r),
   },
   {
     key: "platform",
     label: "Platform",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => r.app_platform || "Unknown",
   },
   {
     key: "device",
     label: "Device",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => r.device_model || "Unknown",
   },
   {
     key: "os",
     label: "OS",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => r.os_version || "Unknown",
   },
   {
     key: "status",
     label: "Status",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => (
       <span
         className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(r.status)}`}
@@ -308,7 +335,6 @@ export default function AdminUserActivityPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [loginFilter, setLoginFilter] = useState<LastLoginFilter>("all");
-  const [sort, setSort] = useState<SortKey>("last_login_desc");
 
   const vineyards = useMemo(
     () =>
@@ -380,7 +406,7 @@ export default function AdminUserActivityPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = data.filter((r) => {
+    return data.filter((r) => {
       if (vineyardFilter !== "all" && !(r.vineyard_names ?? []).includes(vineyardFilter))
         return false;
       if (roleFilter !== "all" && !(r.roles ?? []).includes(roleFilter)) return false;
@@ -405,31 +431,24 @@ export default function AdminUserActivityPage() {
         .map((x) => (x ?? "").toLowerCase())
         .some((x) => x.includes(q));
     });
-    list = [...list].sort((a, b) => {
-      const aLast = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
-      const bLast = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
-      const aCreated = a.account_created_at
-        ? new Date(a.account_created_at).getTime()
-        : 0;
-      const bCreated = b.account_created_at
-        ? new Date(b.account_created_at).getTime()
-        : 0;
-      switch (sort) {
-        case "last_login_desc":
-          return bLast - aLast;
-        case "last_login_asc":
-          return aLast - bLast;
-        case "created_desc":
-          return bCreated - aCreated;
-        case "name_asc": {
-          const an = (a.display_name ?? a.email ?? "").toLowerCase();
-          const bn = (b.display_name ?? b.email ?? "").toLowerCase();
-          return an.localeCompare(bn);
-        }
-      }
-    });
-    return list;
-  }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter, sort]);
+  }, [data, search, vineyardFilter, roleFilter, statusFilter, loginFilter]);
+
+  const { sorted, toggleSort, getSortDirection } = useSortableTable<UserActivityRow, ActivitySortKey>(filtered, {
+    accessors: {
+      user: (r) => (r.display_name ?? r.email ?? "").toLowerCase(),
+      email: (r) => (r.email ?? "").toLowerCase(),
+      vineyards: (r) => (r.vineyard_names ?? []).length,
+      roles: (r) => (r.roles ?? []).length,
+      account_created: (r) => (r.account_created_at ? new Date(r.account_created_at).getTime() : 0),
+      last_login: (r) => (r.last_sign_in_at ? new Date(r.last_sign_in_at).getTime() : 0),
+      app: (r) => r.app_version ?? "",
+      platform: (r) => r.app_platform ?? "",
+      device: (r) => r.device_model ?? "",
+      os: (r) => r.os_version ?? "",
+      status: (r) => r.status ?? "",
+    },
+    initial: { key: "last_login", direction: "desc" },
+  });
 
   return (
     <AdminGate>
@@ -543,17 +562,6 @@ export default function AdminUserActivityPage() {
           )}
           <div className="ml-auto flex items-center gap-2">
             <ColumnSettingsMenu onReset={reset} />
-            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-              <SelectTrigger className="h-9 w-56">
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="last_login_desc">Last login · newest</SelectItem>
-                <SelectItem value="last_login_asc">Last login · oldest</SelectItem>
-                <SelectItem value="created_desc">Account created · newest</SelectItem>
-                <SelectItem value="name_asc">Name / email · A–Z</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
       </Card>
@@ -567,48 +575,41 @@ export default function AdminUserActivityPage() {
           <AdminEmpty>No users match the current filters.</AdminEmpty>
         )}
         {!isLoading && filtered.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  {finalColumns.map((c) => (
-                    <th
-                      key={c.key}
-                      className={cn(
-                        "text-left font-medium px-3 py-2",
-                        c.className,
-                      )}
-                    >
-                      {c.locked ? (
-                        c.label
-                      ) : (
-                        <DraggableHeaderCell
-                          columnId={c.key}
-                          onDropColumn={moveColumn}
-                        >
-                          {c.label}
-                        </DraggableHeaderCell>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((r) => (
-                  <tr key={r.user_id} className="hover:bg-muted/30">
-                    {finalColumns.map((c) => (
-                      <td
-                        key={c.key}
-                        className={cn("px-3 py-2 align-top", c.className)}
-                      >
-                        {c.render(r)}
-                      </td>
-                    ))}
-                  </tr>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {finalColumns.map((c) => (
+                  <ReorderableHead
+                    key={c.key}
+                    columnId={c.key}
+                    onDropColumn={moveColumn}
+                    className={c.className}
+                    sort={
+                      c.sortable
+                        ? {
+                            active: getSortDirection(c.key),
+                            onSort: () => toggleSort(c.key),
+                          }
+                        : undefined
+                    }
+                  >
+                    {c.label}
+                  </ReorderableHead>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((r) => (
+                <TableRow key={r.user_id}>
+                  {finalColumns.map((c) => (
+                    <TableCell key={c.key} className={c.className}>
+                      {c.render(r)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </Card>
     </AdminGate>
