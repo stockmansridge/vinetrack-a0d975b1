@@ -321,14 +321,16 @@ Deno.serve(async (req) => {
     }
   }
 
-  const finalStatus = generated.length > 0 ? "complete" : "failed";
+  const requiredForCompletion = requested.filter((idx) => idx === "TRUE_COLOUR" || idx !== "TRUE_COLOUR");
+  const missingRequired = requiredForCompletion.filter((idx) => !generated.includes(idx));
+  const finalStatus = missingRequired.length === 0 ? "complete" : "failed";
   await supa.from("satellite_scenes").update({
     processing_status: finalStatus,
   }).eq("id", sceneId);
 
   if (jobId) await supa.from("satellite_processing_jobs").update({
     status: finalStatus, completed_at: new Date().toISOString(),
-    error_code: failures.length && !generated.length ? "processing_failed" : null,
+    error_code: finalStatus === "failed" ? "processing_failed" : null,
     error_message: failures.length ? failures.map((f) => `${f.index}: ${f.message}`).join("; ").slice(0, 500) : null,
   }).eq("id", jobId);
 
