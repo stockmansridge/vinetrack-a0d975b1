@@ -11,10 +11,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { RefreshCw, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
 import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import {
   AdminGate,
@@ -43,12 +53,26 @@ interface UserActivityRow {
 }
 
 interface ActivityColumn {
-  key: string;
+  key: ActivitySortKey;
   label: string;
   render: (row: UserActivityRow) => React.ReactNode;
   className?: string;
   locked?: "start" | "end";
+  sortable?: boolean;
 }
+
+type ActivitySortKey =
+  | "user"
+  | "email"
+  | "vineyards"
+  | "roles"
+  | "account_created"
+  | "last_login"
+  | "app"
+  | "platform"
+  | "device"
+  | "os"
+  | "status";
 
 type LastLoginFilter =
   | "all"
@@ -59,11 +83,6 @@ type LastLoginFilter =
   | "inactive30"
   | "inactive90";
 
-type SortKey =
-  | "last_login_desc"
-  | "last_login_asc"
-  | "created_desc"
-  | "name_asc";
 
 const STATUS_LABELS: Record<string, string> = {
   never: "Never logged in",
