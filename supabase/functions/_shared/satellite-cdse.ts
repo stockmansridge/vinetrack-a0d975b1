@@ -21,7 +21,7 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v2-analytical";
+export const PROCESSING_VERSION = "sentinel2-v1";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
 export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
 export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
