@@ -977,7 +977,7 @@ export default function SatelliteMappingPage() {
               <div
                 className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
                 style={{
-                  left: Math.min(hover.clientX + 12, (containerWidthGuess() - 220)),
+                  left: Math.max(8, hover.clientX + 12),
                   top: Math.max(8, hover.clientY - 60),
                 }}
               >
