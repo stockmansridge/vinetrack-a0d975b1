@@ -143,7 +143,7 @@ export default function TractorsPage() {
     if (!filter) return list;
     const f = filter.toLowerCase();
     return list.filter((r) =>
-      [r.name, r.brand, r.model, r.model_year, r.fuel_usage_l_per_hour]
+      [r.name, r.brand, r.model, r.model_year, r.serial_number, r.vin_number, r.fuel_usage_l_per_hour]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
   }, [data, filter]);
@@ -388,6 +388,7 @@ export default function TractorsPage() {
               <TableHead>Brand</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>Year</TableHead>
+              <TableHead>Serial number</TableHead>
               <TableHead>Fuel (L/h)</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead className="w-[60px]"></TableHead>
@@ -396,21 +397,21 @@ export default function TractorsPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-destructive">
+                <TableCell colSpan={8} className="text-center text-destructive">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No tractors yet.{" "}
                   {canEdit && (
                     <button
@@ -441,6 +442,7 @@ export default function TractorsPage() {
                 <TableCell>{fmtCell(r.brand)}</TableCell>
                 <TableCell>{fmtCell(r.model)}</TableCell>
                 <TableCell>{fmtCell(r.model_year)}</TableCell>
+                <TableCell>{fmtCell(r.serial_number)}</TableCell>
                 <TableCell>{fmtCell(r.fuel_usage_l_per_hour)}</TableCell>
                 <TableCell>{fmtCell(r.updated_at)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
