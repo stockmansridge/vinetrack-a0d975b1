@@ -19,6 +19,7 @@ import { fetchList } from "@/lib/queries";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
 import { supabase } from "@/integrations/supabase/client";
+import { iosSupabase } from "@/integrations/ios-supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
