@@ -246,8 +246,8 @@ export default function SatelliteMappingPage() {
     | {
         lat: number;
         lng: number;
-        clientX: number;
-        clientY: number;
+        x: number;
+        y: number;
         paddockId: string | null;
         paddockName: string | null;
         acquiredAt: string | null;
@@ -435,7 +435,7 @@ export default function SatelliteMappingPage() {
   // requests a real Sentinel-2 sample from CDSE for that point.
   const hoverTimerRef = useMemo(() => ({ current: null as any }), []);
   const hoverSeqRef = useMemo(() => ({ current: 0 }), []);
-  const handlePointerMove = (pt: { lat: number; lng: number; clientX: number; clientY: number } | null) => {
+  const handlePointerMove = (pt: { lat: number; lng: number; x: number; y: number } | null) => {
     if (!pt) {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       setHover(null);
@@ -448,7 +448,7 @@ export default function SatelliteMappingPage() {
 
     setHover((prev) => ({
       ...(prev ?? { value: null, message: null, status: "idle" as const }),
-      lat: pt.lat, lng: pt.lng, clientX: pt.clientX, clientY: pt.clientY,
+      lat: pt.lat, lng: pt.lng, x: pt.x, y: pt.y,
       paddockId: pad?.id ?? null,
       paddockName: pad?.name ?? null,
       acquiredAt: acq,
@@ -977,8 +977,8 @@ export default function SatelliteMappingPage() {
               <div
                 className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
                 style={{
-                  left: Math.max(8, hover.clientX + 12),
-                  top: Math.max(8, hover.clientY - 60),
+                  left: Math.max(8, hover.x + 12),
+                  top: Math.max(8, hover.y - 60),
                 }}
               >
                 <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
