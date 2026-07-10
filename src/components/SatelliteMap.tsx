@@ -53,6 +53,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     onPaddockClick,
     onMapReady,
     onUnavailable,
+    onPointerMove,
     className,
   } = props;
 
