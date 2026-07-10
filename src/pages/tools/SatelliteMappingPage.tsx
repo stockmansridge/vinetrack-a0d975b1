@@ -189,6 +189,10 @@ type DecodedAnalyticalRaster = {
   processingVersion: string;
 };
 
+const assetKind = (a: DBAsset) => a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
+const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: SatelliteIndexType, processingVersion: string | null | undefined) =>
+  `${paddockId}:${sceneId}:${indexType}:${processingVersion ?? "unknown"}`;
+
 function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
   const fallback = String(error?.message ?? error ?? "Unknown error");
   const raw = error?.context ?? error?.details ?? fallback;
@@ -312,10 +316,6 @@ export default function SatelliteMappingPage() {
   });
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
-
-  const assetKind = (a: DBAsset) => a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
-  const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: SatelliteIndexType, processingVersion: string | null | undefined) =>
-    `${paddockId}:${sceneId}:${indexType}:${processingVersion ?? "unknown"}`;
 
   // Parsed paddock geometry
   const geoms = useMemo(() => {
