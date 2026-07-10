@@ -388,6 +388,7 @@ export default function TractorsPage() {
               <TableHead>Brand</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>Year</TableHead>
+              <TableHead>Serial number</TableHead>
               <TableHead>Fuel (L/h)</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead className="w-[60px]"></TableHead>
