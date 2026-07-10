@@ -578,46 +578,42 @@ export default function AdminUserActivityPage() {
           <AdminEmpty>No users match the current filters.</AdminEmpty>
         )}
         {!isLoading && filtered.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {finalColumns.map((c) => (
-                      <ReorderableHead
-                        key={c.key}
-                        columnId={c.key}
-                        onDropColumn={moveColumn}
-                        className={c.className}
-                        sort={
-                          c.sortable
-                            ? {
-                                active: getSortDirection(c.key),
-                                onSort: () => toggleSort(c.key),
-                              }
-                            : undefined
-                        }
-                      >
-                        {c.label}
-                      </ReorderableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sorted.map((r) => (
-                    <TableRow key={r.user_id}>
-                      {finalColumns.map((c) => (
-                        <TableCell key={c.key} className={c.className}>
-                          {c.render(r)}
-                        </TableCell>
-                      ))}
-                    </TableRow>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {finalColumns.map((c) => (
+                  <ReorderableHead
+                    key={c.key}
+                    columnId={c.key}
+                    onDropColumn={moveColumn}
+                    className={c.className}
+                    sort={
+                      c.sortable
+                        ? {
+                            active: getSortDirection(c.key),
+                            onSort: () => toggleSort(c.key),
+                          }
+                        : undefined
+                    }
+                  >
+                    {c.label}
+                  </ReorderableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((r) => (
+                <TableRow key={r.user_id}>
+                  {finalColumns.map((c) => (
+                    <TableCell key={c.key} className={c.className}>
+                      {c.render(r)}
+                    </TableCell>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
     </AdminGate>
   );
