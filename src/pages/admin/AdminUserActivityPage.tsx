@@ -580,47 +580,44 @@ export default function AdminUserActivityPage() {
         {!isLoading && filtered.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  {finalColumns.map((c) => (
-                    <th
-                      key={c.key}
-                      className={cn(
-                        "text-left font-medium px-3 py-2",
-                        c.className,
-                      )}
-                    >
-                      {c.locked ? (
-                        c.label
-                      ) : (
-                        <DraggableHeaderCell
-                          columnId={c.key}
-                          onDropColumn={moveColumn}
-                        >
-                          {c.label}
-                        </DraggableHeaderCell>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((r) => (
-                  <tr key={r.user_id} className="hover:bg-muted/30">
+              <Table>
+                <TableHeader>
+                  <TableRow>
                     {finalColumns.map((c) => (
-                      <td
+                      <ReorderableHead
                         key={c.key}
-                        className={cn("px-3 py-2 align-top", c.className)}
+                        columnId={c.key}
+                        onDropColumn={moveColumn}
+                        className={c.className}
+                        sort={
+                          c.sortable
+                            ? {
+                                active: getSortDirection(c.key),
+                                onSort: () => toggleSort(c.key),
+                              }
+                            : undefined
+                        }
                       >
-                        {c.render(r)}
-                      </td>
+                        {c.label}
+                      </ReorderableHead>
                     ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sorted.map((r) => (
+                    <TableRow key={r.user_id}>
+                      {finalColumns.map((c) => (
+                        <TableCell key={c.key} className={c.className}>
+                          {c.render(r)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </Card>
     </AdminGate>
   );
