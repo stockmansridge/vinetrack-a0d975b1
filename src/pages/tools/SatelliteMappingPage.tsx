@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  MapContainer,
-  TileLayer,
-  Polygon,
-  ImageOverlay,
-  useMap,
-  Tooltip as LeafletTooltip,
-} from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2 } from "lucide-react";
+import SatelliteMap from "@/components/SatelliteMap";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
@@ -201,17 +192,6 @@ function parseSatelliteFunctionError(error: any): { code: string | null; provide
 }
 
 // ---------- Map helpers ----------
-function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    try {
-      const lb = L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.2);
-      map.fitBounds(lb, { padding: [24, 24] });
-    } catch { /* noop */ }
-  }, [bounds, map]);
-  return null;
-}
 
 // Parse polygon_points → array of polygons, each an array of rings (outer + holes).
 function parseGeometry(raw: any): LatLng[][][] {
@@ -297,14 +277,7 @@ export default function SatelliteMappingPage() {
     return geoms.filter((g) => g.id === paddockId);
   }, [geoms, paddockId]);
 
-  const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
-    const pts: [number, number][] = [];
-    for (const g of visibleGeoms)
-      for (const poly of g.polys)
-        for (const ring of poly)
-          for (const p of ring) pts.push([p.lat, p.lng]);
-    return pts.length ? (pts as L.LatLngBoundsExpression) : null;
-  }, [visibleGeoms]);
+  // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
 
   // Available acquisition dates for the current paddock filter
   const dateOptions = useMemo(() => {
@@ -321,10 +294,12 @@ export default function SatelliteMappingPage() {
       .map(([date, s]) => ({ date, scenes: s }));
   }, [scenesQuery.data]);
 
-  // Default to newest scene when list first loads
+  // Auto-select newest completed scene when none selected, or when a newer scene appears.
   useEffect(() => {
-    if (!selectedSceneKey && dateOptions.length > 0) {
-      setSelectedSceneKey(dateOptions[0].date);
+    if (dateOptions.length === 0) return;
+    const newest = dateOptions[0].date;
+    if (!selectedSceneKey || newest > selectedSceneKey) {
+      setSelectedSceneKey(newest);
     }
   }, [dateOptions, selectedSceneKey]);
 
@@ -584,14 +559,20 @@ export default function SatelliteMappingPage() {
       )}
 
       {/* Toolbar */}
-      <Card>
+      <Card className="relative z-30">
         <CardContent className="p-3 md:p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+          <div
+            className="grid gap-3 items-end"
+            style={{
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(180px, 1fr))",
+            }}
+          >
             {/* Vineyard */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Vineyard</label>
               <Select value={activeVineyardId ?? ""} onValueChange={(v) => { setVineyardId(v); setPaddockId("all"); setSelectedSceneKey(null); }}>
-                <SelectTrigger><SelectValue placeholder="Select vineyard" /></SelectTrigger>
+                <SelectTrigger className="min-h-[44px]"><SelectValue placeholder="Select vineyard" /></SelectTrigger>
                 <SelectContent>
                   {memberships.map((m) => (
                     <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
@@ -603,10 +584,10 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Paddock */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Paddock</label>
               <Select value={paddockId} onValueChange={(v) => { setPaddockId(v); setSelectedSceneKey(null); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Paddocks</SelectItem>
                   {geoms.map((g) => (
@@ -617,24 +598,36 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Image date */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Image Date</label>
-              <Select value={selectedSceneKey ?? ""} onValueChange={setSelectedSceneKey}>
-                <SelectTrigger>
-                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No images yet"} />
+              <Select
+                value={selectedSceneKey ?? ""}
+                onValueChange={setSelectedSceneKey}
+                disabled={dateOptions.length === 0}
+              >
+                <SelectTrigger className="min-h-[44px]">
+                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {dateOptions.map((d) => (
-                    <SelectItem key={d.date} value={d.date}>
-                      {d.date} · {d.scenes.length} paddock{d.scenes.length === 1 ? "" : "s"}
-                    </SelectItem>
-                  ))}
+                  {dateOptions.map((d) => {
+                    const s = d.scenes[0];
+                    const cloud = s?.scene_cloud_cover_pct;
+                    const cov = s?.paddock_valid_coverage_pct;
+                    return (
+                      <SelectItem key={d.date} value={d.date}>
+                        {d.date}
+                        {cloud != null ? ` · ${Number(cloud).toFixed(0)}% cloud` : ""}
+                        {cov != null ? ` · ${Number(cov).toFixed(0)}% valid` : ""}
+                        {s?.quality_status ? ` · ${s.quality_status}` : ""}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
 
             {/* Map Layer */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0" style={{ gridColumn: "span 1", minWidth: 220 }}>
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 Map Layer
                 <TooltipProvider>
@@ -649,7 +642,7 @@ export default function SatelliteMappingPage() {
                 </TooltipProvider>
               </label>
               <Select value={layer} onValueChange={(v) => setLayer(v as SatelliteIndexType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {LAYERS.map((l) => (
                     <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
@@ -659,12 +652,12 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Opacity */}
-            <div className="space-y-1 lg:col-span-1">
+            <div className="space-y-1 min-w-0" style={{ minWidth: 220 }}>
               <label className="text-xs font-medium text-muted-foreground">
                 Overlay Transparency — {opacity}%
               </label>
               <Slider value={[opacity]} onValueChange={(v) => setOpacity(v[0])} min={0} max={100} step={1} />
-              <div className="flex gap-1 pt-1">
+              <div className="flex flex-wrap gap-1 pt-1">
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>Satellite 20%</Button>
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>Balanced 65%</Button>
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>Overlay 95%</Button>
@@ -672,15 +665,16 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Check for new image */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0 flex flex-col">
               <label className="text-xs font-medium text-muted-foreground">Latest Capture</label>
               <Button
-                variant="outline" size="sm" className="w-full"
+                variant="outline"
+                className="w-full min-h-[44px] whitespace-nowrap"
                 disabled={busy || geoms.length === 0}
                 onClick={() => checkForNewImage.mutate()}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                {busy ? "Processing…" : "Check for New Image"}
+                {busy ? "Checking for suitable imagery…" : "Check for New Image"}
               </Button>
             </div>
           </div>
@@ -693,8 +687,19 @@ export default function SatelliteMappingPage() {
               Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
             </div>
           </div>
+
+          {/* System-admin diagnostics */}
+          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-2 text-[11px] text-muted-foreground grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+            <div>Scenes returned: <span className="text-foreground">{scenesQuery.data?.scenes.length ?? 0}</span></div>
+            <div>Completed scenes: <span className="text-foreground">{(scenesQuery.data?.scenes ?? []).filter((s) => s.processing_status === "complete").length}</span></div>
+            <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
+            <div>Selected layer: <span className="text-foreground">{layer}</span></div>
+            <div>Matching asset: <span className="text-foreground">{activeAssets[0]?.asset.id ? "yes" : "no"}</span></div>
+            <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
+          </div>
         </CardContent>
       </Card>
+
 
       {/* Map */}
       <Card className="overflow-hidden">
@@ -711,82 +716,22 @@ export default function SatelliteMappingPage() {
                 </div>
               </div>
             ) : (
-              <MapContainer
-                key={activeVineyardId ?? "none"}
-                center={[0, 0]} zoom={2}
-                style={{ height: "100%", width: "100%" }}
-                scrollWheelZoom
-              >
-                <TileLayer
-                  attribution='Imagery © Esri · Analysis © Copernicus Sentinel-2'
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                  maxZoom={19}
-                />
-
-                {/* Real Sentinel-2 overlays (clipped to paddock by the evalscript). */}
-                {activeAssets.map(({ asset }) => {
-                  const url = signedUrls[asset.id];
-                  if (!url || !asset.bounds) return null;
-                  const b: L.LatLngBoundsExpression = [
-                    [asset.bounds.south, asset.bounds.west],
-                    [asset.bounds.north, asset.bounds.east],
-                  ];
-                  return (
-                    <ImageOverlay
-                      key={asset.id}
-                      url={url}
-                      bounds={b}
-                      opacity={opacity / 100}
-                    />
-                  );
-                })}
-
-                {/* Paddock outlines sit above rasters. */}
-                {visibleGeoms.map((g) =>
-                  g.polys.map((poly, pi) => (
-                    <Polygon
-                      key={`${g.id}-${pi}`}
-                      positions={poly.map((ring) => ring.map((p) => [p.lat, p.lng])) as any}
-                      pathOptions={{
-                        color: "#ffffff", weight: 2.5, opacity: 1,
-                        fillColor: paddockColor(g.id), fillOpacity: 0.05,
-                      }}
-                    >
-                      <LeafletTooltip sticky direction="top" opacity={0.95}>
-                        {(() => {
-                          const s = summaryByPaddock.get(g.id);
-                          const scene = scenesQuery.data?.scenes.find((sc) => sc.paddock_id === g.id && sc.acquired_at.slice(0, 10) === selectedSceneKey);
-                          const value = s?.mean_value ?? null;
-                          return (
-                            <div className="text-xs">
-                              <div className="font-semibold">{g.name}</div>
-                              <div className="text-muted-foreground">{activeLayer.short}</div>
-                              {value != null ? (
-                                <>
-                                  <div>Mean: {value.toFixed(2)}</div>
-                                  <div>{classify(value, s)}</div>
-                                </>
-                              ) : (
-                                <div>No processed value for this scene</div>
-                              )}
-                              {scene?.acquired_at && (
-                                <div className="text-muted-foreground mt-1">
-                                  {scene.acquired_at.slice(0, 10)} · native {activeLayer.nativeResM} m
-                                </div>
-                              )}
-                              {scene?.quality_status && (
-                                <div className="text-muted-foreground">Quality: {scene.quality_status}</div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </LeafletTooltip>
-                    </Polygon>
-                  )),
-                )}
-
-                {bounds && <FitBounds bounds={bounds} />}
-              </MapContainer>
+              <SatelliteMap
+                className="h-full w-full"
+                paddocks={visibleGeoms.map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                  polys: g.polys,
+                  color: paddockColor(g.id),
+                }))}
+                selectedPaddockId={paddockId === "all" ? null : paddockId}
+                overlayUrl={
+                  activeAssets[0] ? (signedUrls[activeAssets[0].asset.id] ?? null) : null
+                }
+                overlayBounds={activeAssets[0]?.asset.bounds ?? null}
+                overlayOpacity={opacity / 100}
+                onPaddockClick={(id) => setPaddockId(id)}
+              />
             )}
 
             {/* Legend */}
