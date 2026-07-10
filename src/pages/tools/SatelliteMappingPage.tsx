@@ -968,8 +968,53 @@ export default function SatelliteMappingPage() {
                   }))}
                 overlayOpacity={opacity / 100}
                 onPaddockClick={(id) => setPaddockId(id)}
+                onPointerMove={handlePointerMove}
               />
             )}
+
+            {/* Hover readout — real Sentinel-2 sample at pointer */}
+            {hover && hover.paddockId && (
+              <div
+                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
+                style={{
+                  left: Math.min(hover.clientX + 12, (containerWidthGuess() - 220)),
+                  top: Math.max(8, hover.clientY - 60),
+                }}
+              >
+                <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {activeLayer.short}{hover.acquiredAt ? ` · ${hover.acquiredAt.slice(0, 10)}` : ""}
+                </div>
+                <div className="mt-1">
+                  {layer === "TRUE_COLOUR" ? (
+                    <span className="text-muted-foreground">No scalar value for true-colour</span>
+                  ) : !hover.acquiredAt ? (
+                    <span className="text-muted-foreground">No processed image for this paddock</span>
+                  ) : hover.status === "loading" ? (
+                    <span className="text-muted-foreground inline-flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Sampling…
+                    </span>
+                  ) : hover.status === "ready" && hover.value != null ? (
+                    <>
+                      <div className="text-base font-semibold text-foreground tabular-nums">
+                        {hover.value.toFixed(3)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
+                      </div>
+                    </>
+                  ) : hover.status === "no_data" ? (
+                    <span className="text-muted-foreground">{hover.message ?? "No valid pixels"}</span>
+                  ) : hover.status === "error" ? (
+                    <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+                  {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
+                </div>
+              </div>
+            )}
+
 
             {/* Legend */}
             <div className="absolute bottom-3 right-3 z-[500] w-64 max-w-[90%]">
