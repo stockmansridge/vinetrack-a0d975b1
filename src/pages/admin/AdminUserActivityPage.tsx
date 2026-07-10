@@ -565,17 +565,6 @@ export default function AdminUserActivityPage() {
           )}
           <div className="ml-auto flex items-center gap-2">
             <ColumnSettingsMenu onReset={reset} />
-            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-              <SelectTrigger className="h-9 w-56">
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="last_login_desc">Last login · newest</SelectItem>
-                <SelectItem value="last_login_asc">Last login · oldest</SelectItem>
-                <SelectItem value="created_desc">Account created · newest</SelectItem>
-                <SelectItem value="name_asc">Name / email · A–Z</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
       </Card>
