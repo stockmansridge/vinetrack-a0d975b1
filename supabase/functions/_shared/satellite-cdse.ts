@@ -17,7 +17,7 @@ export const CDSE_TOKEN_URL =
   "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token";
 export const CDSE_BASE = "https://sh.dataspace.copernicus.eu/api/v1";
 export const CDSE_PROCESS_URL = `${CDSE_BASE}/process`;
-export const CDSE_CATALOG_URL = `${CDSE_BASE}/catalog/1.0.0/search`;
+export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/search";
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
@@ -59,15 +59,46 @@ export class CdseConfigError extends Error {
 }
 export class CdseAuthError extends Error {
   code = "cdse_auth_failed";
+  status?: number;
+  contentType?: string | null;
+  bodyPreview?: string;
+  constructor(msg: string, status?: number, contentType?: string | null, bodyPreview?: string) {
+    super(msg);
+    this.status = status;
+    this.contentType = contentType;
+    this.bodyPreview = bodyPreview;
+  }
 }
 export class ProviderError extends Error {
   code: string;
   status: number;
-  constructor(status: number, code: string, msg: string) {
+  contentType?: string | null;
+  bodyPreview?: string;
+  constructor(status: number, code: string, msg: string, contentType?: string | null, bodyPreview?: string) {
     super(msg);
     this.code = code;
     this.status = status;
+    this.contentType = contentType;
+    this.bodyPreview = bodyPreview;
   }
+}
+
+export function sanitiseProviderPreview(input: string, max = 1000): string {
+  return input
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/"access_token"\s*:\s*"[^"]+"/gi, '"access_token":"[redacted]"')
+    .replace(/"refresh_token"\s*:\s*"[^"]+"/gi, '"refresh_token":"[redacted]"')
+    .replace(/"client_secret"\s*:\s*"[^"]+"/gi, '"client_secret":"[redacted]"')
+    .slice(0, max);
+}
+
+export function catalogErrorCode(status: number): string {
+  if (status === 400) return "catalog_bad_request";
+  if (status === 401) return "catalog_unauthorised";
+  if (status === 403) return "catalog_forbidden";
+  if (status === 429) return "catalog_rate_limited";
+  if (status >= 500 && status <= 599) return "catalog_provider_error";
+  return "catalog_provider_error";
 }
 
 // -------- Token cache (per-isolate; edge functions are short-lived) --------
@@ -95,9 +126,11 @@ export async function getCdseAccessToken(): Promise<string> {
     body,
   });
   if (!res.ok) {
+    const contentType = res.headers.get("content-type");
     const text = await res.text();
-    console.error(`[cdse] token request failed [${res.status}]:`, text.slice(0, 500));
-    throw new CdseAuthError("Failed to authenticate with Copernicus Data Space.");
+    const bodyPreview = sanitiseProviderPreview(text, 500);
+    console.error(`[cdse] token request failed [${res.status}]:`, bodyPreview);
+    throw new CdseAuthError("Copernicus authentication failed.", res.status, contentType, bodyPreview);
   }
   const json = await res.json();
   const token = json.access_token as string;
@@ -417,22 +450,22 @@ export async function catalogSearch(params: {
     bbox: params.bbox,
     datetime: `${params.dateStart}/${params.dateEnd}`,
     limit: params.limit,
-    query: {
-      "eo:cloud_cover": { lte: params.maxCloudCoverPct },
-    },
   };
   const res = await fetch(CDSE_CATALOG_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/geo+json, application/json",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    const contentType = res.headers.get("content-type");
     const t = await res.text();
-    console.error(`[cdse] catalog [${res.status}]:`, t.slice(0, 500));
-    throw new ProviderError(res.status, "catalog_failed", "Catalog search failed.");
+    const bodyPreview = sanitiseProviderPreview(t, 1000);
+    console.error(`[cdse] catalog [${res.status}]:`, bodyPreview.slice(0, 500));
+    throw new ProviderError(res.status, catalogErrorCode(res.status), "Catalog search failed.", contentType, bodyPreview);
   }
   return await res.json();
 }
@@ -557,8 +590,8 @@ export const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-export function jsonError(status: number, code: string, message: string) {
-  return new Response(JSON.stringify({ error: message, code }), {
+export function jsonError(status: number, code: string, message: string, details: Record<string, unknown> = {}) {
+  return new Response(JSON.stringify({ error: message, code, ...details }), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
