@@ -12,6 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RefreshCw, Download } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
+import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import {
   AdminGate,
   AdminPageHeader,
@@ -36,6 +40,14 @@ interface UserActivityRow {
   device_model: string | null;
   os_version: string | null;
   status: string | null;
+}
+
+interface ActivityColumn {
+  key: string;
+  label: string;
+  render: (row: UserActivityRow) => React.ReactNode;
+  className?: string;
+  locked?: "start" | "end";
 }
 
 type LastLoginFilter =
@@ -185,6 +197,105 @@ function SummaryCard({
   );
 }
 
+const ACTIVITY_COLUMNS: ActivityColumn[] = [
+  {
+    key: "user",
+    label: "User",
+    render: (r) => (
+      <div>
+        <div className="font-medium truncate max-w-[200px]">
+          {r.display_name || r.email || "—"}
+        </div>
+        <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
+          {r.user_id}
+        </div>
+      </div>
+    ),
+  },
+  {
+    key: "email",
+    label: "Email",
+    render: (r) => (
+      <span className="truncate block max-w-[220px]">{r.email ?? "—"}</span>
+    ),
+  },
+  {
+    key: "vineyards",
+    label: "Vineyards",
+    render: (r) => {
+      const label = (r.vineyard_names ?? []).join(", ") || "—";
+      return (
+        <span className="block max-w-[220px] truncate" title={label}>
+          {label}
+        </span>
+      );
+    },
+  },
+  {
+    key: "roles",
+    label: "Roles",
+    render: (r) => <span>{(r.roles ?? []).join(", ") || "—"}</span>,
+  },
+  {
+    key: "account_created",
+    label: "Account created",
+    className: "whitespace-nowrap",
+    render: (r) => formatDate(r.account_created_at),
+  },
+  {
+    key: "last_login",
+    label: "Last login",
+    className: "whitespace-nowrap",
+    render: (r) =>
+      r.last_sign_in_at ? (
+        <div>
+          <div>{formatDate(r.last_sign_in_at)}</div>
+          <div className="text-xs text-muted-foreground">
+            {formatRelative(r.last_sign_in_at)}
+          </div>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">Never logged in</span>
+      ),
+  },
+  {
+    key: "app",
+    label: "App",
+    className: "whitespace-nowrap",
+    render: (r) => appVersionDisplay(r),
+  },
+  {
+    key: "platform",
+    label: "Platform",
+    className: "whitespace-nowrap",
+    render: (r) => r.app_platform || "Unknown",
+  },
+  {
+    key: "device",
+    label: "Device",
+    className: "whitespace-nowrap",
+    render: (r) => r.device_model || "Unknown",
+  },
+  {
+    key: "os",
+    label: "OS",
+    className: "whitespace-nowrap",
+    render: (r) => r.os_version || "Unknown",
+  },
+  {
+    key: "status",
+    label: "Status",
+    className: "whitespace-nowrap",
+    render: (r) => (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(r.status)}`}
+      >
+        {STATUS_LABELS[r.status ?? ""] ?? r.status ?? "—"}
+      </span>
+    ),
+  },
+];
+
 export default function AdminUserActivityPage() {
   const { data = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin", "user-activity"],
@@ -244,6 +355,28 @@ export default function AdminUserActivityPage() {
     }
     return { total, today, last7, last30, never, inactive90 };
   }, [data]);
+
+  const lockedStart = ACTIVITY_COLUMNS.filter((c) => c.locked === "start");
+  const lockedEnd = ACTIVITY_COLUMNS.filter((c) => c.locked === "end");
+  const movable = ACTIVITY_COLUMNS.filter((c) => !c.locked);
+  const defaultOrder = useMemo(() => movable.map((c) => c.key), [movable]);
+  const { order, moveColumn, reset } = useColumnOrder(
+    "admin_user_activity_table",
+    defaultOrder,
+  );
+  const columnsById = useMemo(() => {
+    const m = new Map<string, ActivityColumn>();
+    for (const c of ACTIVITY_COLUMNS) m.set(c.key, c);
+    return m;
+  }, []);
+  const orderedMovable = useMemo(
+    () => order.map((id) => columnsById.get(id)).filter(Boolean) as ActivityColumn[],
+    [order, columnsById],
+  );
+  const finalColumns = useMemo(
+    () => [...lockedStart, ...orderedMovable, ...lockedEnd],
+    [lockedStart, orderedMovable, lockedEnd],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -408,7 +541,8 @@ export default function AdminUserActivityPage() {
               </SelectContent>
             </Select>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <ColumnSettingsMenu onReset={reset} />
             <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
               <SelectTrigger className="h-9 w-56">
                 <SelectValue placeholder="Sort" />
@@ -437,81 +571,41 @@ export default function AdminUserActivityPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="text-left font-medium px-3 py-2">User</th>
-                  <th className="text-left font-medium px-3 py-2">Email</th>
-                  <th className="text-left font-medium px-3 py-2">Vineyards</th>
-                  <th className="text-left font-medium px-3 py-2">Roles</th>
-                  <th className="text-left font-medium px-3 py-2">Account created</th>
-                  <th className="text-left font-medium px-3 py-2">Last login</th>
-                  <th className="text-left font-medium px-3 py-2">App</th>
-                  <th className="text-left font-medium px-3 py-2">Platform</th>
-                  <th className="text-left font-medium px-3 py-2">Device</th>
-                  <th className="text-left font-medium px-3 py-2">OS</th>
-                  <th className="text-left font-medium px-3 py-2">Status</th>
+                  {finalColumns.map((c) => (
+                    <th
+                      key={c.key}
+                      className={cn(
+                        "text-left font-medium px-3 py-2",
+                        c.className,
+                      )}
+                    >
+                      {c.locked ? (
+                        c.label
+                      ) : (
+                        <DraggableHeaderCell
+                          columnId={c.key}
+                          onDropColumn={moveColumn}
+                        >
+                          {c.label}
+                        </DraggableHeaderCell>
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered.map((r) => {
-                  const vineyardLabel = (r.vineyard_names ?? []).join(", ") || "—";
-                  const rolesLabel = (r.roles ?? []).join(", ") || "—";
-                  return (
-                    <tr key={r.user_id} className="hover:bg-muted/30">
-                      <td className="px-3 py-2 align-top">
-                        <div className="font-medium truncate max-w-[200px]">
-                          {r.display_name || r.email || "—"}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
-                          {r.user_id}
-                        </div>
+                {filtered.map((r) => (
+                  <tr key={r.user_id} className="hover:bg-muted/30">
+                    {finalColumns.map((c) => (
+                      <td
+                        key={c.key}
+                        className={cn("px-3 py-2 align-top", c.className)}
+                      >
+                        {c.render(r)}
                       </td>
-                      <td className="px-3 py-2 align-top">
-                        <span className="truncate block max-w-[220px]">
-                          {r.email ?? "—"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <span className="block max-w-[220px] truncate" title={vineyardLabel}>
-                          {vineyardLabel}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 align-top">{rolesLabel}</td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {formatDate(r.account_created_at)}
-                      </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {r.last_sign_in_at ? (
-                          <div>
-                            <div>{formatDate(r.last_sign_in_at)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatRelative(r.last_sign_in_at)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">Never logged in</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {appVersionDisplay(r)}
-                      </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {r.app_platform || "Unknown"}
-                      </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {r.device_model || "Unknown"}
-                      </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {r.os_version || "Unknown"}
-                      </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(r.status)}`}
-                        >
-                          {STATUS_LABELS[r.status ?? ""] ?? r.status ?? "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
