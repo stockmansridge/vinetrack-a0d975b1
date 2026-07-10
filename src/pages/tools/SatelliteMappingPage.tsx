@@ -854,10 +854,14 @@ export default function SatelliteMappingPage() {
                   color: paddockColor(g.id),
                 }))}
                 selectedPaddockId={paddockId === "all" ? null : paddockId}
-                overlayUrl={
-                  activeAssets[0] ? (signedUrls[activeAssets[0].asset.id] ?? null) : null
-                }
-                overlayBounds={activeAssets[0]?.asset.bounds ?? null}
+                overlays={activeAssets
+                  .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
+                  .map(({ asset, scene }) => ({
+                    paddockId: scene.paddock_id,
+                    url: signedUrls[asset.id],
+                    bounds: asset.bounds!,
+                    opacity: opacity / 100,
+                  }))}
                 overlayOpacity={opacity / 100}
                 onPaddockClick={(id) => setPaddockId(id)}
               />
