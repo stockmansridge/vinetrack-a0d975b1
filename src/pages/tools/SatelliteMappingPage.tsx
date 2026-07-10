@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2 } from "lucide-react";
+import { fromArrayBuffer } from "geotiff";
 import SatelliteMap from "@/components/SatelliteMap";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -142,10 +143,19 @@ interface DBAsset {
   id: string;
   satellite_scene_id: string;
   index_type: SatelliteIndexType;
+  asset_type?: "DISPLAY_RASTER" | "ANALYTICAL_RASTER" | string | null;
   storage_path: string;
   bounds: { north: number; south: number; east: number; west: number } | null;
+  raster_width?: number | null;
+  raster_height?: number | null;
   native_resolution_m: number | null;
   display_resolution_m: number | null;
+  data_type?: string | null;
+  scale_factor?: number | null;
+  no_data_sentinel?: number | null;
+  row_orientation?: string | null;
+  processing_version?: string | null;
+  acquisition_date?: string | null;
 }
 interface DBSummary {
   satellite_scene_id: string;
@@ -165,6 +175,23 @@ type SatelliteSearchError = {
   paddockName: string | null;
   message: string;
 };
+
+type DecodedAnalyticalRaster = {
+  key: string;
+  assetId: string;
+  data: ArrayLike<number>;
+  width: number;
+  height: number;
+  bounds: { north: number; south: number; east: number; west: number };
+  noData: number | null;
+  scale: number;
+  rowOrientation: string;
+  processingVersion: string;
+};
+
+const assetKind = (a: DBAsset) => a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
+const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: SatelliteIndexType, processingVersion: string | null | undefined) =>
+  `${paddockId}:${sceneId}:${indexType}:${processingVersion ?? "unknown"}`;
 
 function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
   const fallback = String(error?.message ?? error ?? "Unknown error");
@@ -239,8 +266,10 @@ export default function SatelliteMappingPage() {
   const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // date | "latest"
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
+  const [rasterCacheVersion, setRasterCacheVersion] = useState(0);
+  const analyticalCacheRef = useRef(new Map<string, DecodedAnalyticalRaster | Promise<DecodedAnalyticalRaster> | { error: string }>());
 
-  // Hover readout — real value sampled from CDSE at pointer coordinate.
+  // Hover readout — real value sampled locally from the matched analytical raster.
   const [hover, setHover] = useState<
     | null
     | {
@@ -342,10 +371,21 @@ export default function SatelliteMappingPage() {
 
   // Assets for the currently selected date + layer.
   // "latest" mode: newest completed asset per paddock (dates may differ).
-  const activeAssets = useMemo(() => {
+  const activeAssetPairs = useMemo(() => {
     if (!selectedSceneKey || !scenesQuery.data) return [];
     const { scenes, assets } = scenesQuery.data;
     const completed = scenes.filter((s) => s.processing_status === "complete");
+
+    const displayFor = (sceneId: string) => assets.find((x) =>
+      x.satellite_scene_id === sceneId &&
+      x.index_type === layer &&
+      assetKind(x) === "DISPLAY_RASTER"
+    );
+    const analyticalFor = (sceneId: string) => assets.find((x) =>
+      x.satellite_scene_id === sceneId &&
+      x.index_type === layer &&
+      assetKind(x) === "ANALYTICAL_RASTER"
+    );
 
     if (selectedSceneKey === "latest") {
       // Pick each paddock's newest completed scene, then its asset for this layer.
@@ -354,26 +394,38 @@ export default function SatelliteMappingPage() {
         const cur = newestByPaddock.get(s.paddock_id);
         if (!cur || s.acquired_at > cur.acquired_at) newestByPaddock.set(s.paddock_id, s);
       }
-      const out: Array<{ asset: DBAsset; scene: DBScene }> = [];
+      const out: Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }> = [];
       for (const scene of newestByPaddock.values()) {
-        const a = assets.find((x) => x.satellite_scene_id === scene.id && x.index_type === layer);
-        if (a) out.push({ asset: a, scene });
+        const displayAsset = displayFor(scene.id);
+        if (displayAsset) out.push({ displayAsset, analyticalAsset: analyticalFor(scene.id), scene });
       }
       return out;
     }
 
     const scenesForDate = completed.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
-    const bySceneId = new Set(scenesForDate.map((s) => s.id));
-    return assets
-      .filter((a) => bySceneId.has(a.satellite_scene_id) && a.index_type === layer)
-      .map((a) => ({ asset: a, scene: scenesForDate.find((s) => s.id === a.satellite_scene_id)! }));
+    return scenesForDate.flatMap((scene) => {
+      const displayAsset = displayFor(scene.id);
+      return displayAsset ? [{ displayAsset, analyticalAsset: analyticalFor(scene.id), scene }] : [];
+    });
   }, [scenesQuery.data, selectedSceneKey, layer]);
+
+  const activeAssets = useMemo(
+    () => activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
+    [activeAssetPairs],
+  );
+
+  const activeAnalyticalAssets = useMemo(
+    () => activeAssetPairs
+      .filter((x) => x.analyticalAsset)
+      .map(({ analyticalAsset, scene }) => ({ asset: analyticalAsset!, scene })),
+    [activeAssetPairs],
+  );
 
   // Fetch signed URLs for visible assets
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      for (const { asset } of activeAssets) {
+      for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
         if (signedUrls[asset.id]) continue;
         try {
           const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
@@ -390,7 +442,67 @@ export default function SatelliteMappingPage() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets]);
+  }, [activeAssets, activeAnalyticalAssets]);
+
+  // Clear decoded analytical rasters when the user changes the data context.
+  useEffect(() => {
+    analyticalCacheRef.current.clear();
+    setRasterCacheVersion((v) => v + 1);
+  }, [activeVineyardId, selectedSceneKey, layer]);
+
+  // Decode selected analytical rasters once. Pointer movement only reads this cache.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function decodeAsset(asset: DBAsset, scene: DBScene, url: string) {
+      if (!asset.bounds) throw new Error("Analytical raster bounds missing");
+      const key = analyticalCacheKey(scene.paddock_id, scene.id, asset.index_type, asset.processing_version);
+      const existing = analyticalCacheRef.current.get(key);
+      if (existing) return;
+
+      const promise = (async (): Promise<DecodedAnalyticalRaster> => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Analytical raster fetch failed (${res.status})`);
+        const tiff = await fromArrayBuffer(await res.arrayBuffer());
+        const image = await tiff.getImage();
+        const rasters: any = await image.readRasters({ interleave: true });
+        return {
+          key,
+          assetId: asset.id,
+          data: rasters as ArrayLike<number>,
+          width: asset.raster_width ?? image.getWidth(),
+          height: asset.raster_height ?? image.getHeight(),
+          bounds: asset.bounds!,
+          noData: asset.no_data_sentinel ?? -9999,
+          scale: asset.scale_factor ?? 1,
+          rowOrientation: asset.row_orientation ?? "north_to_south",
+          processingVersion: asset.processing_version ?? "unknown",
+        };
+      })();
+
+      analyticalCacheRef.current.set(key, promise);
+      setRasterCacheVersion((v) => v + 1);
+      try {
+        const decoded = await promise;
+        if (cancelled) return;
+        analyticalCacheRef.current.set(key, decoded);
+      } catch (e: any) {
+        if (cancelled) return;
+        analyticalCacheRef.current.set(key, { error: String(e?.message ?? e) });
+      } finally {
+        if (!cancelled) setRasterCacheVersion((v) => v + 1);
+      }
+    }
+
+    for (const { asset, scene } of activeAnalyticalAssets) {
+      const url = signedUrls[asset.id];
+      if (url) void decodeAsset(asset, scene, url);
+    }
+
+    return () => { cancelled = true; };
+    // rasterCacheVersion is deliberately not a dependency; it is only a UI refresh tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAnalyticalAssets, signedUrls]);
 
   // Summaries lookup by paddock (for hover + selected-scene classification)
   const summaryByPaddock = useMemo(() => {
@@ -431,61 +543,72 @@ export default function SatelliteMappingPage() {
     return null;
   };
 
-  // Debounced pointer-move handler — updates paddock context immediately, then
-  // requests a real Sentinel-2 sample from CDSE for that point.
-  const hoverTimerRef = useMemo(() => ({ current: null as any }), []);
-  const hoverSeqRef = useMemo(() => ({ current: 0 }), []);
+  const readAnalyticalValue = (raster: DecodedAnalyticalRaster, lat: number, lng: number): { value: number | null; message: string | null } => {
+    const { west, east, south, north } = raster.bounds;
+    const xRatio = (lng - west) / (east - west);
+    const yRatio = (north - lat) / (north - south);
+    const pixelX = Math.floor(xRatio * raster.width);
+    const pixelY = Math.floor(yRatio * raster.height);
+    if (pixelX < 0 || pixelY < 0 || pixelX >= raster.width || pixelY >= raster.height) {
+      return { value: null, message: "Outside analytical raster" };
+    }
+    const raw = Number(raster.data[pixelY * raster.width + pixelX]);
+    if (!Number.isFinite(raw)) return { value: null, message: "No valid analytical pixel" };
+    if (raster.noData !== null && Math.abs(raw - raster.noData) < 1e-6) {
+      return { value: null, message: "Masked pixel — cloud, shadow or no data" };
+    }
+    return { value: raw * raster.scale, message: null };
+  };
+
+  // Pointer-move handler — no network request; reads the cached analytical raster.
   const handlePointerMove = (pt: { lat: number; lng: number; x: number; y: number } | null) => {
     if (!pt) {
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       setHover(null);
       return;
     }
     const pad = paddockAt(pt.lat, pt.lng);
     // Locate the active scene for this paddock (matches current date + layer).
-    const match = activeAssets.find((x) => x.scene.paddock_id === pad?.id);
+    const match = activeAssetPairs.find((x) => x.scene.paddock_id === pad?.id);
     const acq = match?.scene.acquired_at ?? null;
+    let status: "idle" | "loading" | "ready" | "no_data" | "error" = pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle";
+    let value: number | null = null;
+    let message: string | null = null;
 
-    setHover((prev) => ({
-      ...(prev ?? { value: null, message: null, status: "idle" as const }),
+    if (pad && acq && layer !== "TRUE_COLOUR") {
+      const analytical = match?.analyticalAsset;
+      if (!analytical) {
+        status = "no_data";
+        message = "Analytical raster missing — process imagery to update this scene";
+      } else {
+        const key = analyticalCacheKey(pad.id, match.scene.id, layer, analytical.processing_version);
+        const cached = analyticalCacheRef.current.get(key);
+        if (!cached) {
+          status = "loading";
+          message = "Loading analytical raster…";
+        } else if (cached instanceof Promise) {
+          status = "loading";
+          message = "Loading analytical raster…";
+        } else if ("error" in cached) {
+          status = "error";
+          message = cached.error;
+        } else {
+          const sampled = readAnalyticalValue(cached, pt.lat, pt.lng);
+          value = sampled.value;
+          message = sampled.message;
+          status = value == null ? "no_data" : "ready";
+        }
+      }
+    }
+
+    setHover({
       lat: pt.lat, lng: pt.lng, x: pt.x, y: pt.y,
       paddockId: pad?.id ?? null,
       paddockName: pad?.name ?? null,
       acquiredAt: acq,
-      status: pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle",
-      value: null,
-      message: null,
-    }));
-
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    if (!pad || !acq || layer === "TRUE_COLOUR") return;
-
-    const seq = ++hoverSeqRef.current;
-    hoverTimerRef.current = setTimeout(async () => {
-      try {
-        const { data, error } = await invokeSatelliteFn("satellite-sample-point", {
-          lat: pt.lat, lng: pt.lng, acquired_at: acq, index_type: layer,
-        });
-        if (seq !== hoverSeqRef.current) return; // stale
-        if (error) {
-          const msg = String((error as any)?.message ?? "sample failed");
-          const isRate = /429|rate.?limit/i.test(msg);
-          setHover((h) => h ? { ...h, status: isRate ? "no_data" : "error", value: null, message: isRate ? "Provider busy — hover again" : msg } : h);
-          return;
-        }
-        const value = (data as any)?.value;
-        if (typeof value === "number" && Number.isFinite(value)) {
-          setHover((h) => h ? { ...h, status: "ready", value, message: null } : h);
-        } else {
-          setHover((h) => h ? { ...h, status: "no_data", value: null, message: "No valid pixels at this point" } : h);
-        }
-      } catch (e: any) {
-        if (seq !== hoverSeqRef.current) return;
-        const msg = String(e?.message ?? e);
-        const isRate = /429|rate.?limit/i.test(msg);
-        setHover((h) => h ? { ...h, status: isRate ? "no_data" : "error", value: null, message: isRate ? "Provider busy — hover again" : msg } : h);
-      }
-    }, 350);
+      status,
+      value,
+      message,
+    });
   };
 
   // ---------- Actions ----------
@@ -971,7 +1094,8 @@ export default function SatelliteMappingPage() {
             <div>Completed scenes: <span className="text-foreground">{(scenesQuery.data?.scenes ?? []).filter((s) => s.processing_status === "complete").length}</span></div>
             <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
             <div>Selected layer: <span className="text-foreground">{layer}</span></div>
-            <div>Matching asset: <span className="text-foreground">{activeAssets[0]?.asset.id ? "yes" : "no"}</span></div>
+            <div>Display asset: <span className="text-foreground">{activeAssets[0]?.asset.id ? "yes" : "no"}</span></div>
+            <div>Analytical asset: <span className="text-foreground">{activeAnalyticalAssets[0]?.asset.id ? "yes" : "no"}</span></div>
             <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
           </div>
         </CardContent>
@@ -1016,7 +1140,7 @@ export default function SatelliteMappingPage() {
               />
             )}
 
-            {/* Hover readout — real Sentinel-2 sample at pointer */}
+            {/* Hover readout — local analytical raster sample at pointer */}
             {hover && hover.paddockId && (
               <div
                 className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
@@ -1036,7 +1160,7 @@ export default function SatelliteMappingPage() {
                     <span className="text-muted-foreground">No processed image for this paddock</span>
                   ) : hover.status === "loading" ? (
                     <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Sampling…
+                      <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading analytical raster…"}
                     </span>
                   ) : hover.status === "ready" && hover.value != null ? (
                     <>
@@ -1050,7 +1174,7 @@ export default function SatelliteMappingPage() {
                         Resolution: {activeLayer.nativeResM} m
                       </div>
                       <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                        Satellite reading — field inspection may be required.
+                        Analytical raster value from the matched display grid.
                       </div>
                     </>
                   ) : hover.status === "no_data" ? (

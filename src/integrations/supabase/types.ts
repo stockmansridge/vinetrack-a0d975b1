@@ -342,9 +342,12 @@ export type Database = {
       }
       satellite_raster_assets: {
         Row: {
+          acquisition_date: string | null
+          asset_type: string
           bounds: Json | null
           colour_scale: Json | null
           created_at: string
+          data_type: string | null
           display_resolution_m: number | null
           id: string
           index_type: string
@@ -352,14 +355,22 @@ export type Database = {
           mime_type: string
           minimum_value: number | null
           native_resolution_m: number | null
+          no_data_sentinel: number | null
           processing_version: string
+          raster_height: number | null
+          raster_width: number | null
+          row_orientation: string | null
           satellite_scene_id: string
+          scale_factor: number | null
           storage_path: string
         }
         Insert: {
+          acquisition_date?: string | null
+          asset_type?: string
           bounds?: Json | null
           colour_scale?: Json | null
           created_at?: string
+          data_type?: string | null
           display_resolution_m?: number | null
           id?: string
           index_type: string
@@ -367,14 +378,22 @@ export type Database = {
           mime_type: string
           minimum_value?: number | null
           native_resolution_m?: number | null
+          no_data_sentinel?: number | null
           processing_version: string
+          raster_height?: number | null
+          raster_width?: number | null
+          row_orientation?: string | null
           satellite_scene_id: string
+          scale_factor?: number | null
           storage_path: string
         }
         Update: {
+          acquisition_date?: string | null
+          asset_type?: string
           bounds?: Json | null
           colour_scale?: Json | null
           created_at?: string
+          data_type?: string | null
           display_resolution_m?: number | null
           id?: string
           index_type?: string
@@ -382,8 +401,13 @@ export type Database = {
           mime_type?: string
           minimum_value?: number | null
           native_resolution_m?: number | null
+          no_data_sentinel?: number | null
           processing_version?: string
+          raster_height?: number | null
+          raster_width?: number | null
+          row_orientation?: string | null
           satellite_scene_id?: string
+          scale_factor?: number | null
           storage_path?: string
         }
         Relationships: [

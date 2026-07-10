@@ -8,15 +8,18 @@
 //          + valid-pixel coverage (using SCL cloud/shadow mask).
 //        - reject the scene if paddock coverage < QC.minValidPaddockCoveragePct.
 //        - call Sentinel Hub Process API to render a coloured PNG clipped to paddock.
-//        - upload PNG to private storage bucket.
+//        - for numeric layers, call the same Process API geometry/grid to create
+//          a single-band Float32 GeoTIFF analytical raster for hover sampling.
+//        - upload both matched assets to private storage.
 //        - upsert satellite_raster_assets + satellite_index_summaries rows.
 //   4. Upsert one satellite_scenes row per paddock with quality/processing status.
 //   5. Mark the job complete or failed.
 import {
   corsHeaders, jsonError, jsonOk, verifySystemAdmin, getServiceClient,
   parseGeometryRings, toGeoJson, computeBbox, computeImageSize, bboxSizeMeters,
-  evalscriptFor, statsEvalscript, processImage, statisticsQuery,
+  evalscriptFor, statsEvalscript, analyticalEvalscript, processImage, processAnalyticalRaster, statisticsQuery,
   INDEX_TYPES, INDEX_NATIVE_RES_M, QC, PROCESSING_VERSION, PROVIDER, SENTINEL2_COLLECTION,
+  DISPLAY_ASSET_TYPE, ANALYTICAL_ASSET_TYPE, ANALYTICAL_NO_DATA_SENTINEL, ANALYTICAL_ROW_ORIENTATION,
   CdseConfigError, CdseAuthError, ProviderError,
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
@@ -153,11 +156,16 @@ Deno.serve(async (req) => {
   }
   const sceneId = sceneRow.id as string;
 
-  // ---- 3. For each requested index: stats + PNG + upload + upsert ----
+  const { data: existingAssets } = await supa
+    .from("satellite_raster_assets")
+    .select("id,index_type,asset_type,storage_path,raster_width,raster_height,processing_version,mime_type")
+    .eq("satellite_scene_id", sceneId)
+    .eq("processing_version", PROCESSING_VERSION);
+
+  // ---- 3. For each requested index: stats + display PNG + analytical GeoTIFF ----
   const generated: string[] = [];
   const failures: Array<{ index: IndexType; message: string }> = [];
 
-  const { w, h } = bboxSizeMeters(bbox);
   const acqDateStr = acq.toISOString().slice(0, 10);
   const paddockName = String(paddock.name ?? paddock.id);
 
@@ -208,33 +216,102 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Process API — coloured PNG clipped to paddock geometry.
-      const png = await processImage({
-        geometry, bbox, dateStart, dateEnd,
-        evalscript: evalscriptFor(idx),
-        width, height,
-      });
-
       const path = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.png`;
-      const up = await supa.storage.from("satellite-assets").upload(path, png, {
-        contentType: "image/png", upsert: true,
-      });
-      if (up.error) throw new Error(`Storage upload failed: ${up.error.message}`);
+      const existingDisplay = (existingAssets ?? []).find((a: any) =>
+        a.index_type === idx &&
+        (a.asset_type === DISPLAY_ASSET_TYPE || (!a.asset_type && a.mime_type === "image/png"))
+      );
+      const displayPath = existingDisplay?.storage_path ?? path;
+
+      if (!existingDisplay) {
+        // Process API — coloured PNG clipped to paddock geometry.
+        const png = await processImage({
+          geometry, bbox, dateStart, dateEnd,
+          evalscript: evalscriptFor(idx),
+          width, height,
+        });
+
+        const up = await supa.storage.from("satellite-assets").upload(displayPath, png, {
+          contentType: "image/png", upsert: true,
+        });
+        if (up.error) throw new Error(`Storage upload failed: ${up.error.message}`);
+      }
 
       await supa.from("satellite_raster_assets").upsert({
         satellite_scene_id: sceneId, index_type: idx,
-        storage_path: path, mime_type: "image/png",
+        asset_type: DISPLAY_ASSET_TYPE,
+        storage_path: displayPath, mime_type: "image/png",
         bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+        raster_width: width,
+        raster_height: height,
         native_resolution_m: nativeRes, display_resolution_m: displayResolutionM,
+        data_type: "UINT8_RGBA",
+        scale_factor: null,
+        no_data_sentinel: null,
+        row_orientation: ANALYTICAL_ROW_ORIENTATION,
+        acquisition_date: acqDateStr,
         minimum_value: minValue, maximum_value: maxValue,
         colour_scale: {
           formula: idx,
           bands: bandsFor(idx),
+          time_interval: { from: dateStart, to: dateEnd },
+          crs: "EPSG:4326",
+          mosaicking_order: "leastCC",
+          scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
           resampling: nativeRes > QC.processImageTargetResolutionM ? "bilinear" : "none",
           percentiles,
         },
         processing_version: PROCESSING_VERSION,
-      }, { onConflict: "satellite_scene_id,index_type,processing_version" });
+      }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
+
+      if (idx !== "TRUE_COLOUR") {
+        const analyticalPath = `${vineyard_id}/${paddock_id}/${acqDateStr}/${provider_scene_id}/${idx}.analysis.tif`;
+        const existingAnalytical = (existingAssets ?? []).find((a: any) =>
+          a.index_type === idx && a.asset_type === ANALYTICAL_ASSET_TYPE
+        );
+        const analyticalStoragePath = existingAnalytical?.storage_path ?? analyticalPath;
+
+        if (!existingAnalytical) {
+          const analytical = await processAnalyticalRaster({
+            geometry, bbox, dateStart, dateEnd,
+            evalscript: analyticalEvalscript(idx),
+            width, height,
+          });
+          const analyticalUp = await supa.storage.from("satellite-assets").upload(analyticalStoragePath, analytical, {
+            contentType: "image/tiff", upsert: true,
+          });
+          if (analyticalUp.error) throw new Error(`Analytical storage upload failed: ${analyticalUp.error.message}`);
+        }
+
+        await supa.from("satellite_raster_assets").upsert({
+          satellite_scene_id: sceneId, index_type: idx,
+          asset_type: ANALYTICAL_ASSET_TYPE,
+          storage_path: analyticalStoragePath, mime_type: "image/tiff",
+          bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+          raster_width: width,
+          raster_height: height,
+          native_resolution_m: nativeRes,
+          display_resolution_m: displayResolutionM,
+          data_type: "Float32",
+          scale_factor: 1,
+          no_data_sentinel: ANALYTICAL_NO_DATA_SENTINEL,
+          row_orientation: ANALYTICAL_ROW_ORIENTATION,
+          acquisition_date: acqDateStr,
+          minimum_value: minValue,
+          maximum_value: maxValue,
+          colour_scale: {
+            formula: idx,
+            bands: bandsFor(idx),
+            time_interval: { from: dateStart, to: dateEnd },
+            crs: "EPSG:4326",
+            mosaicking_order: "leastCC",
+            scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
+            matched_display_asset_type: DISPLAY_ASSET_TYPE,
+            matched_display_storage_path: displayPath,
+          },
+          processing_version: PROCESSING_VERSION,
+        }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
+      }
 
       generated.push(idx);
     } catch (e) {
@@ -244,14 +321,16 @@ Deno.serve(async (req) => {
     }
   }
 
-  const finalStatus = generated.length > 0 ? "complete" : "failed";
+  const requiredForCompletion = requested.filter((idx) => idx === "TRUE_COLOUR" || idx !== "TRUE_COLOUR");
+  const missingRequired = requiredForCompletion.filter((idx) => !generated.includes(idx));
+  const finalStatus = missingRequired.length === 0 ? "complete" : "failed";
   await supa.from("satellite_scenes").update({
     processing_status: finalStatus,
   }).eq("id", sceneId);
 
   if (jobId) await supa.from("satellite_processing_jobs").update({
     status: finalStatus, completed_at: new Date().toISOString(),
-    error_code: failures.length && !generated.length ? "processing_failed" : null,
+    error_code: finalStatus === "failed" ? "processing_failed" : null,
     error_message: failures.length ? failures.map((f) => `${f.index}: ${f.message}`).join("; ").slice(0, 500) : null,
   }).eq("id", jobId);
 
