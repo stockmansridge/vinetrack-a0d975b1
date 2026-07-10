@@ -157,6 +157,39 @@ interface DBSummary {
   percentile_90: number | null;
 }
 
+type SatelliteSearchError = {
+  code: string | null;
+  providerStatus: number | null;
+  paddockId: string | null;
+  paddockName: string | null;
+  message: string;
+};
+
+function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
+  const fallback = String(error?.message ?? error ?? "Unknown error");
+  const raw = error?.context ?? error?.details ?? fallback;
+  if (typeof raw === "object" && raw) {
+    return {
+      code: raw.code ?? null,
+      providerStatus: raw.provider_status ?? null,
+      message: raw.error ?? raw.message ?? fallback,
+    };
+  }
+  const text = String(raw);
+  const match = text.match(/\{.*\}$/s);
+  if (!match) return { code: null, providerStatus: null, message: fallback };
+  try {
+    const parsed = JSON.parse(match[0]);
+    return {
+      code: parsed.code ?? null,
+      providerStatus: parsed.provider_status ?? null,
+      message: parsed.error ?? parsed.message ?? fallback,
+    };
+  } catch {
+    return { code: null, providerStatus: null, message: fallback };
+  }
+}
+
 // ---------- Map helpers ----------
 function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   const map = useMap();
@@ -215,6 +248,7 @@ export default function SatelliteMappingPage() {
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
   const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // "acquired_at|paddock_id"
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
+  const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
 
   // Paddocks list
   const { data: paddocks = [], isLoading: paddocksLoading } = useQuery({
@@ -334,24 +368,35 @@ export default function SatelliteMappingPage() {
   const checkForNewImage = useMutation({
     mutationFn: async () => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
+      setSearchError(null);
       // Determine which paddocks to process.
-      const targetPaddocks = paddockId === "all"
-        ? geoms.map((g) => g.id)
-        : [paddockId];
+      const targetGeoms = paddockId === "all"
+        ? geoms.slice(0, 1)
+        : geoms.filter((g) => g.id === paddockId);
+      const targetPaddocks = targetGeoms.map((g) => g.id);
       if (targetPaddocks.length === 0) throw new Error("No paddocks with geometry.");
 
       const results: Array<{ paddock_id: string; ok: boolean; message?: string }> = [];
       for (const pid of targetPaddocks) {
+        const targetPaddock = geoms.find((g) => g.id === pid);
         // 1) Search
         const search = await invokeSatelliteFn("satellite-search-scenes", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
-          date_start: new Date(Date.now() - 30 * 86400_000).toISOString(),
-          date_end: new Date().toISOString(),
-          max_cloud_cover: 60,
-          limit: 5,
+          limit: 20,
         });
-        if (search.error) { results.push({ paddock_id: pid, ok: false, message: search.error.message }); continue; }
+        if (search.error) {
+          const parsed = parseSatelliteFunctionError(search.error);
+          setSearchError({
+            code: parsed.code,
+            providerStatus: parsed.providerStatus,
+            paddockId: pid,
+            paddockName: targetPaddock?.name ?? null,
+            message: parsed.message,
+          });
+          results.push({ paddock_id: pid, ok: false, message: parsed.message });
+          continue;
+        }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
         if (candidates.length === 0) { results.push({ paddock_id: pid, ok: false, message: "No scenes found" }); continue; }
         // 2) Process newest candidate
@@ -379,6 +424,13 @@ export default function SatelliteMappingPage() {
       setSelectedSceneKey(null);
     },
     onError: (e: any) => {
+      setSearchError({
+        code: null,
+        providerStatus: null,
+        paddockId: paddockId === "all" ? geoms[0]?.id ?? null : paddockId,
+        paddockName: paddockId === "all" ? geoms[0]?.name ?? null : geoms.find((g) => g.id === paddockId)?.name ?? null,
+        message: String(e?.message ?? e ?? "Unknown error"),
+      });
       toast({
         title: "Satellite processing failed",
         description: String(e?.message ?? e ?? "Unknown error"),
@@ -435,6 +487,40 @@ export default function SatelliteMappingPage() {
           </span>
         </CardContent>
       </Card>
+
+      {searchError && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Satellite search failed</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              VineTrack could not search Copernicus imagery. The existing vineyard map remains available.
+            </p>
+            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+              <div>
+                <div className="font-medium text-foreground">Error code</div>
+                <div>{searchError.code ?? "—"}</div>
+              </div>
+              <div>
+                <div className="font-medium text-foreground">Provider status</div>
+                <div>{searchError.providerStatus ?? "—"}</div>
+              </div>
+              <div>
+                <div className="font-medium text-foreground">Paddock</div>
+                <div>{searchError.paddockName ?? searchError.paddockId ?? "—"}</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => checkForNewImage.mutate()}>
+                {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                Retry
+              </Button>
+              <span className="text-xs text-muted-foreground">{searchError.message}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Toolbar */}
       <Card>
