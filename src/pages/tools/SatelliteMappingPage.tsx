@@ -240,6 +240,23 @@ export default function SatelliteMappingPage() {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
 
+  // Hover readout — real value sampled from CDSE at pointer coordinate.
+  const [hover, setHover] = useState<
+    | null
+    | {
+        lat: number;
+        lng: number;
+        x: number;
+        y: number;
+        paddockId: string | null;
+        paddockName: string | null;
+        acquiredAt: string | null;
+        status: "idle" | "loading" | "ready" | "no_data" | "error";
+        value: number | null;
+        message: string | null;
+      }
+  >(null);
+
   // Batch progress for All-Paddocks processing.
   type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "failed" | "skipped";
   const [batchProgress, setBatchProgress] = useState<{
@@ -392,7 +409,83 @@ export default function SatelliteMappingPage() {
   }, [scenesQuery.data, selectedSceneKey, layer, activeAssets]);
 
 
+  // ---------- Hover sampling ----------
+  // Which paddock (if any) sits under the pointer, and which scene we would sample.
+  const paddockAt = (lat: number, lng: number): typeof geoms[number] | null => {
+    for (const g of visibleGeoms) {
+      for (const poly of g.polys) {
+        // Outer ring point-in-polygon (ignores holes — good enough for hover).
+        const ring = poly[0];
+        if (!ring || ring.length < 3) continue;
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const xi = ring[i].lng, yi = ring[i].lat;
+          const xj = ring[j].lng, yj = ring[j].lat;
+          const intersect = ((yi > lat) !== (yj > lat)) &&
+            (lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi);
+          if (intersect) inside = !inside;
+        }
+        if (inside) return g;
+      }
+    }
+    return null;
+  };
+
+  // Debounced pointer-move handler — updates paddock context immediately, then
+  // requests a real Sentinel-2 sample from CDSE for that point.
+  const hoverTimerRef = useMemo(() => ({ current: null as any }), []);
+  const hoverSeqRef = useMemo(() => ({ current: 0 }), []);
+  const handlePointerMove = (pt: { lat: number; lng: number; x: number; y: number } | null) => {
+    if (!pt) {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      setHover(null);
+      return;
+    }
+    const pad = paddockAt(pt.lat, pt.lng);
+    // Locate the active scene for this paddock (matches current date + layer).
+    const match = activeAssets.find((x) => x.scene.paddock_id === pad?.id);
+    const acq = match?.scene.acquired_at ?? null;
+
+    setHover((prev) => ({
+      ...(prev ?? { value: null, message: null, status: "idle" as const }),
+      lat: pt.lat, lng: pt.lng, x: pt.x, y: pt.y,
+      paddockId: pad?.id ?? null,
+      paddockName: pad?.name ?? null,
+      acquiredAt: acq,
+      status: pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle",
+      value: null,
+      message: null,
+    }));
+
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    if (!pad || !acq || layer === "TRUE_COLOUR") return;
+
+    const seq = ++hoverSeqRef.current;
+    hoverTimerRef.current = setTimeout(async () => {
+      try {
+        const { data, error } = await invokeSatelliteFn("satellite-sample-point", {
+          lat: pt.lat, lng: pt.lng, acquired_at: acq, index_type: layer,
+        });
+        if (seq !== hoverSeqRef.current) return; // stale
+        if (error) {
+          setHover((h) => h ? { ...h, status: "error", message: String((error as any)?.message ?? "sample failed") } : h);
+          return;
+        }
+        const value = (data as any)?.value;
+        if (typeof value === "number" && Number.isFinite(value)) {
+          setHover((h) => h ? { ...h, status: "ready", value, message: null } : h);
+        } else {
+          setHover((h) => h ? { ...h, status: "no_data", value: null, message: "No valid pixels at this point" } : h);
+        }
+      } catch (e: any) {
+        if (seq !== hoverSeqRef.current) return;
+        setHover((h) => h ? { ...h, status: "error", message: String(e?.message ?? e) } : h);
+      }
+    }, 350);
+  };
+
   // ---------- Actions ----------
+
   const checkForNewImage = useMutation({
     mutationFn: async () => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
@@ -732,7 +825,7 @@ export default function SatelliteMappingPage() {
 
 
             {/* Map Layer */}
-            <div className="space-y-1 min-w-0" style={{ gridColumn: "span 1", minWidth: 220 }}>
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 Map Layer
                 <TooltipProvider>
@@ -756,22 +849,29 @@ export default function SatelliteMappingPage() {
               </Select>
             </div>
 
-            {/* Opacity */}
-            <div className="space-y-1 min-w-0" style={{ minWidth: 220 }}>
-              <label className="text-xs font-medium text-muted-foreground">
+            {/* Opacity — must fit inside its own grid cell */}
+            <div className="min-w-0 space-y-2">
+              <label className="text-xs font-medium text-muted-foreground block">
                 Overlay Transparency — {opacity}%
               </label>
-              <Slider value={[opacity]} onValueChange={(v) => setOpacity(v[0])} min={0} max={100} step={1} />
-              <div className="flex flex-wrap gap-1 pt-1">
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>Satellite 20%</Button>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>Balanced 65%</Button>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>Overlay 95%</Button>
+              <Slider
+                className="w-full min-w-0"
+                value={[opacity]}
+                onValueChange={(v) => setOpacity(v[0])}
+                min={0}
+                max={100}
+                step={1}
+              />
+              <div className="flex min-w-0 flex-wrap gap-1">
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>20%</Button>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>65%</Button>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>95%</Button>
               </div>
             </div>
 
-            {/* Check for new image */}
+            {/* Process latest imagery — single action, generates every layer for every paddock */}
             <div className="space-y-1 min-w-0 flex flex-col">
-              <label className="text-xs font-medium text-muted-foreground">Latest Capture</label>
+              <label className="text-xs font-medium text-muted-foreground">Process Imagery</label>
               <Button
                 variant="outline"
                 className="w-full min-h-[44px] whitespace-nowrap"
@@ -780,11 +880,15 @@ export default function SatelliteMappingPage() {
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                 {busy
-                  ? (isAllPaddocks ? "Checking all paddocks…" : "Checking for suitable imagery…")
-                  : "Check for New Image"}
+                  ? (isAllPaddocks ? "Processing all paddocks…" : "Processing…")
+                  : "Process Latest Imagery"}
               </Button>
+              <div className="text-[10px] text-muted-foreground leading-snug">
+                Generates every map layer for every paddock in one click.
+              </div>
             </div>
           </div>
+
 
           {/* Batch progress (All Paddocks) */}
           {busy && batchProgress && (
@@ -864,8 +968,53 @@ export default function SatelliteMappingPage() {
                   }))}
                 overlayOpacity={opacity / 100}
                 onPaddockClick={(id) => setPaddockId(id)}
+                onPointerMove={handlePointerMove}
               />
             )}
+
+            {/* Hover readout — real Sentinel-2 sample at pointer */}
+            {hover && hover.paddockId && (
+              <div
+                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
+                style={{
+                  left: Math.max(8, hover.x + 12),
+                  top: Math.max(8, hover.y - 60),
+                }}
+              >
+                <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {activeLayer.short}{hover.acquiredAt ? ` · ${hover.acquiredAt.slice(0, 10)}` : ""}
+                </div>
+                <div className="mt-1">
+                  {layer === "TRUE_COLOUR" ? (
+                    <span className="text-muted-foreground">No scalar value for true-colour</span>
+                  ) : !hover.acquiredAt ? (
+                    <span className="text-muted-foreground">No processed image for this paddock</span>
+                  ) : hover.status === "loading" ? (
+                    <span className="text-muted-foreground inline-flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Sampling…
+                    </span>
+                  ) : hover.status === "ready" && hover.value != null ? (
+                    <>
+                      <div className="text-base font-semibold text-foreground tabular-nums">
+                        {hover.value.toFixed(3)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
+                      </div>
+                    </>
+                  ) : hover.status === "no_data" ? (
+                    <span className="text-muted-foreground">{hover.message ?? "No valid pixels"}</span>
+                  ) : hover.status === "error" ? (
+                    <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+                  {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
+                </div>
+              </div>
+            )}
+
 
             {/* Legend */}
             <div className="absolute bottom-3 right-3 z-[500] w-64 max-w-[90%]">
