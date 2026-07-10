@@ -220,6 +220,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "user",
     label: "User",
+    sortable: true,
     render: (r) => (
       <div>
         <div className="font-medium truncate max-w-[200px]">
@@ -234,6 +235,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "email",
     label: "Email",
+    sortable: true,
     render: (r) => (
       <span className="truncate block max-w-[220px]">{r.email ?? "—"}</span>
     ),
@@ -241,6 +243,7 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "vineyards",
     label: "Vineyards",
+    sortable: true,
     render: (r) => {
       const label = (r.vineyard_names ?? []).join(", ") || "—";
       return (
@@ -253,18 +256,21 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
   {
     key: "roles",
     label: "Roles",
+    sortable: true,
     render: (r) => <span>{(r.roles ?? []).join(", ") || "—"}</span>,
   },
   {
     key: "account_created",
     label: "Account created",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => formatDate(r.account_created_at),
   },
   {
     key: "last_login",
     label: "Last login",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) =>
       r.last_sign_in_at ? (
         <div>
@@ -281,30 +287,35 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
     key: "app",
     label: "App",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => appVersionDisplay(r),
   },
   {
     key: "platform",
     label: "Platform",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => r.app_platform || "Unknown",
   },
   {
     key: "device",
     label: "Device",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => r.device_model || "Unknown",
   },
   {
     key: "os",
     label: "OS",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => r.os_version || "Unknown",
   },
   {
     key: "status",
     label: "Status",
     className: "whitespace-nowrap",
+    sortable: true,
     render: (r) => (
       <span
         className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${statusClass(r.status)}`}
