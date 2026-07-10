@@ -10,10 +10,19 @@ export interface SatelliteMapPaddock {
   color?: string;
 }
 
+export interface SatelliteRasterOverlay {
+  paddockId: string;
+  url: string;
+  bounds: { north: number; south: number; east: number; west: number };
+  opacity?: number;
+}
+
 export interface SatelliteMapProps {
   paddocks: SatelliteMapPaddock[];
   selectedPaddockId?: string | null;
-  /** signed URL of the raster PNG to overlay */
+  /** Multiple raster overlays (one per paddock). Preferred. */
+  overlays?: SatelliteRasterOverlay[];
+  /** Legacy single overlay — used only when `overlays` is not provided. */
   overlayUrl?: string | null;
   overlayBounds?: { north: number; south: number; east: number; west: number } | null;
   /** 0..1 */
