@@ -195,17 +195,6 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     }
   }, [ready, sig, paddocks, selectedPaddockId, onPaddockClick]);
 
-  // Raster overlay reprojection loop
-  useEffect(() => {
-    const map = mapRef.current;
-    const layer = imgLayerRef.current;
-    const img = imgRef.current;
-    const container = containerRef.current;
-    if (!ready || !map || !layer || !img || !container) return;
-    if (!overlayUrl || !overlayBounds) {
-      layer.style.display = "none";
-      return;
-    }
   // Raster overlay reprojection loop — handles N overlays.
   useEffect(() => {
     const map = mapRef.current;
