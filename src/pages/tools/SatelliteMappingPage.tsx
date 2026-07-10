@@ -277,14 +277,7 @@ export default function SatelliteMappingPage() {
     return geoms.filter((g) => g.id === paddockId);
   }, [geoms, paddockId]);
 
-  const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
-    const pts: [number, number][] = [];
-    for (const g of visibleGeoms)
-      for (const poly of g.polys)
-        for (const ring of poly)
-          for (const p of ring) pts.push([p.lat, p.lng]);
-    return pts.length ? (pts as L.LatLngBoundsExpression) : null;
-  }, [visibleGeoms]);
+  // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
 
   // Available acquisition dates for the current paddock filter
   const dateOptions = useMemo(() => {
