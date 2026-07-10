@@ -21,8 +21,12 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v1";
+export const PROCESSING_VERSION = "sentinel2-v2-analytical";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
+export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
+export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
+export const ANALYTICAL_NO_DATA_SENTINEL = -9999;
+export const ANALYTICAL_ROW_ORIENTATION = "north_to_south";
 
 // -------- Quality controls (server-side config) --------
 export const QC = {
@@ -442,6 +446,38 @@ function setup() {
     ]
   };
 }
+
+/** Evalscript for browser point sampling. This emits the raw numeric index on
+ * the exact same Process API grid as the display PNG. Invalid/cloud/shadow
+ * pixels are written as a stable no-data sentinel rather than NaN so browser
+ * reads are deterministic across GeoTIFF decoders. */
+export function analyticalEvalscript(index: Exclude<IndexType, "TRUE_COLOUR">): string {
+  const expr: Record<string, { formula: string; bands: string[] }> = {
+    NDVI: { formula: "(s.B08 - s.B04) / (s.B08 + s.B04)", bands: ["B04", "B08"] },
+    NDRE: { formula: "(s.B08 - s.B05) / (s.B08 + s.B05)", bands: ["B05", "B08"] },
+    MSAVI: {
+      formula:
+        "(2*s.B08 + 1 - Math.sqrt((2*s.B08 + 1)*(2*s.B08 + 1) - 8*(s.B08 - s.B04))) / 2",
+      bands: ["B04", "B08"],
+    },
+    RECI: { formula: "(s.B08 / s.B05) - 1", bands: ["B05", "B08"] },
+    NDMI: { formula: "(s.B08 - s.B11) / (s.B08 + s.B11)", bands: ["B08", "B11"] },
+  };
+  const e = expr[index];
+  return `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: [${e.bands.map((b) => `"${b}"`).join(",")}, "SCL", "dataMask"] }],
+    output: { bands: 1, sampleType: "FLOAT32" }
+  };
+}
+function evaluatePixel(s) {
+  const validScene = !(s.SCL === 0 || s.SCL === 1 || s.SCL === 3 || s.SCL === 8 || s.SCL === 9 || s.SCL === 10 || s.SCL === 11);
+  if (s.dataMask !== 1 || !validScene) return [${ANALYTICAL_NO_DATA_SENTINEL}];
+  const v = ${e.formula};
+  return [isFinite(v) ? v : ${ANALYTICAL_NO_DATA_SENTINEL}];
+}`;
+}
 function evaluatePixel(s) {
   const validScene = !(s.SCL === 0 || s.SCL === 1 || s.SCL === 3 || s.SCL === 8 || s.SCL === 9 || s.SCL === 10 || s.SCL === 11);
   const mask = (s.dataMask === 1 && validScene) ? 1 : 0;
@@ -556,6 +592,58 @@ export async function processImage(params: {
   }
   const buf = new Uint8Array(await res.arrayBuffer());
   return buf;
+}
+
+export async function processAnalyticalRaster(params: {
+  geometry: any; // GeoJSON
+  bbox: [number, number, number, number];
+  dateStart: string;
+  dateEnd: string;
+  evalscript: string;
+  width: number;
+  height: number;
+}): Promise<Uint8Array> {
+  const token = await getCdseAccessToken();
+  const body = {
+    input: {
+      bounds: {
+        bbox: params.bbox,
+        properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+        geometry: params.geometry,
+      },
+      data: [
+        {
+          type: SENTINEL2_COLLECTION,
+          dataFilter: {
+            timeRange: { from: params.dateStart, to: params.dateEnd },
+            mosaickingOrder: "leastCC",
+          },
+        },
+      ],
+    },
+    output: {
+      width: params.width,
+      height: params.height,
+      responses: [{ identifier: "default", format: { type: "image/tiff" } }],
+    },
+    evalscript: params.evalscript,
+  };
+  const res = await fetchWithRetry(CDSE_PROCESS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "image/tiff",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  }, "process-analytical");
+  if (!res.ok) {
+    const t = await res.text();
+    console.error(`[cdse] process analytical [${res.status}]:`, sanitiseProviderPreview(t, 500));
+    if (res.status === 429) throw new ProviderError(429, "rate_limited", "Provider rate limit reached.");
+    throw new ProviderError(res.status, "analytical_process_failed", "Sentinel-2 analytical raster processing failed.");
+  }
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 export async function statisticsQuery(params: {
