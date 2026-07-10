@@ -397,18 +397,34 @@ export default function SatelliteMappingPage() {
     mutationFn: async () => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
       setSearchError(null);
-      // Determine which paddocks to process.
-      const targetGeoms = paddockId === "all"
-        ? geoms.slice(0, 1)
-        : geoms.filter((g) => g.id === paddockId);
-      const targetPaddocks = targetGeoms.map((g) => g.id);
-      if (targetPaddocks.length === 0) throw new Error("No paddocks with geometry.");
 
-      type ResultStatus = "complete" | "insufficient_coverage" | "no_scenes" | "failed";
+      // Every valid-geometry paddock in the vineyard when "all"; otherwise the one selected.
+      const targetGeoms = paddockId === "all"
+        ? geoms
+        : geoms.filter((g) => g.id === paddockId);
+      const allVineyardPaddocks = paddockId === "all" ? paddocks.length : 1;
+      const skippedNoGeometry = paddockId === "all"
+        ? Math.max(0, allVineyardPaddocks - targetGeoms.length)
+        : 0;
+
+      if (targetGeoms.length === 0) throw new Error("No paddocks with valid boundaries.");
+
+      type ResultStatus = "complete" | "insufficient_coverage" | "no_scenes" | "failed" | "skipped";
       const results: Array<{ paddock_id: string; status: ResultStatus; message?: string }> = [];
-      for (const pid of targetPaddocks) {
+
+      // Seed batch progress.
+      const initialStatuses: Record<string, PadStatus> = {};
+      for (const g of targetGeoms) initialStatuses[g.id] = "queued";
+      setBatchProgress({ total: targetGeoms.length, done: 0, statuses: initialStatuses });
+
+      const setPad = (pid: string, s: PadStatus) => setBatchProgress((prev) => prev
+        ? { ...prev, statuses: { ...prev.statuses, [pid]: s } }
+        : prev);
+      const bumpDone = () => setBatchProgress((prev) => prev ? { ...prev, done: prev.done + 1 } : prev);
+
+      async function processOne(pid: string): Promise<void> {
         const targetPaddock = geoms.find((g) => g.id === pid);
-        // 1) Search
+        setPad(pid, "searching");
         const search = await invokeSatelliteFn("satellite-search-scenes", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
@@ -416,7 +432,8 @@ export default function SatelliteMappingPage() {
         });
         if (search.error) {
           const parsed = parseSatelliteFunctionError(search.error);
-          setSearchError({
+          // Only surface the first error banner (don't clobber earlier ones).
+          setSearchError((prev) => prev ?? {
             code: parsed.code,
             providerStatus: parsed.providerStatus,
             paddockId: pid,
@@ -424,53 +441,89 @@ export default function SatelliteMappingPage() {
             message: parsed.message,
           });
           results.push({ paddock_id: pid, status: "failed", message: parsed.message });
-          continue;
+          setPad(pid, "failed");
+          bumpDone();
+          return;
         }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
-        if (candidates.length === 0) { results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" }); continue; }
-        // 2) Pick the LEAST-CLOUDY recent candidate (not just the newest); newest
-        //    is often heavily clouded and fails the 80% valid-coverage check.
+        if (candidates.length === 0) {
+          results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" });
+          setPad(pid, "failed");
+          bumpDone();
+          return;
+        }
+        // Prefer clearer scenes (≤20% scene cloud), then newest.
         const sorted = [...candidates].sort((a, b) => {
           const ca = Number(a?.scene_cloud_cover_pct ?? 100);
           const cb = Number(b?.scene_cloud_cover_pct ?? 100);
+          const ap = ca <= 20 ? 0 : 1;
+          const bp = cb <= 20 ? 0 : 1;
+          if (ap !== bp) return ap - bp;
           if (ca !== cb) return ca - cb;
           return String(b?.acquired_at ?? "").localeCompare(String(a?.acquired_at ?? ""));
         });
-        const c = sorted[0];
-        const process = await invokeSatelliteFn("satellite-process-scene", {
-          vineyard_id: activeVineyardId,
-          paddock_id: pid,
-          provider_scene_id: c.provider_scene_id,
-          acquired_at: c.acquired_at,
-          scene_cloud_cover_pct: c.scene_cloud_cover_pct,
-        });
-        if (process.error) {
-          results.push({ paddock_id: pid, status: "failed", message: process.error.message });
-          continue;
-        }
-        const procStatus = String((process.data as any)?.status ?? "");
-        if (procStatus === "complete") {
-          results.push({ paddock_id: pid, status: "complete" });
-        } else if (procStatus === "insufficient_coverage") {
-          const pct = (process.data as any)?.valid_coverage_pct;
-          results.push({
+
+        setPad(pid, "processing");
+        // Walk candidates until one completes with sufficient coverage (max 4 tries).
+        let finalStatus: ResultStatus = "failed";
+        let finalMsg = "Processing did not complete.";
+        const maxTries = Math.min(4, sorted.length);
+        for (let i = 0; i < maxTries; i++) {
+          const c = sorted[i];
+          const process = await invokeSatelliteFn("satellite-process-scene", {
+            vineyard_id: activeVineyardId,
             paddock_id: pid,
-            status: "insufficient_coverage",
-            message: `Selected scene had ${pct != null ? Number(pct).toFixed(0) : "0"}% valid pixels (cloud/shadow).`,
+            provider_scene_id: c.provider_scene_id,
+            acquired_at: c.acquired_at,
+            scene_cloud_cover_pct: c.scene_cloud_cover_pct,
           });
-        } else {
-          results.push({ paddock_id: pid, status: "failed", message: procStatus || "Processing did not complete." });
+          if (process.error) {
+            finalMsg = process.error.message ?? finalMsg;
+            continue;
+          }
+          const procStatus = String((process.data as any)?.status ?? "");
+          if (procStatus === "complete") { finalStatus = "complete"; break; }
+          if (procStatus === "insufficient_coverage") {
+            const pct = (process.data as any)?.valid_coverage_pct;
+            finalStatus = "insufficient_coverage";
+            finalMsg = `Selected scene had ${pct != null ? Number(pct).toFixed(0) : "0"}% valid pixels.`;
+            continue; // try next candidate
+          }
+          finalMsg = procStatus || finalMsg;
         }
+
+        results.push({ paddock_id: pid, status: finalStatus, message: finalMsg });
+        setPad(pid, finalStatus === "complete" ? "complete"
+          : finalStatus === "insufficient_coverage" ? "insufficient_coverage"
+          : "failed");
+        bumpDone();
       }
-      return results;
+
+      // Concurrency-limited worker pool (3 in flight).
+      const queue = targetGeoms.map((g) => g.id);
+      const CONC = 3;
+      const workers = Array.from({ length: Math.min(CONC, queue.length) }, async () => {
+        while (queue.length) {
+          const pid = queue.shift();
+          if (!pid) return;
+          try { await processOne(pid); }
+          catch (e: any) {
+            results.push({ paddock_id: pid, status: "failed", message: String(e?.message ?? e) });
+            setPad(pid, "failed");
+            bumpDone();
+          }
+        }
+      });
+      await Promise.all(workers);
+
+      return { results, skippedNoGeometry };
     },
-    onSuccess: async (results) => {
+    onSuccess: async ({ results, skippedNoGeometry }) => {
       const complete = results.filter((r) => r.status === "complete").length;
       const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
-      // Refresh + wait for the list query to actually return the new scene.
-      setSelectedSceneKey(null);
+      // Refresh + wait for the list query to reflect any new scenes.
       let loaded = false;
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
@@ -480,26 +533,22 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
+      // After an All-Paddocks batch, default to "Latest per paddock" view.
+      if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
+
+      const parts: string[] = [];
+      parts.push(`${complete} paddock${complete === 1 ? "" : "s"} processed`);
+      if (cloud > 0) parts.push(`${cloud} had insufficient clear coverage`);
+      if (failed > 0) parts.push(`${failed} failed`);
+      if (skippedNoGeometry > 0) parts.push(`${skippedNoGeometry} had no valid boundary`);
+      const description = parts.join(", ") + ".";
+
       if (complete > 0 && loaded) {
-        toast({ title: "Satellite imagery processed and loaded", description: `${complete} paddock${complete === 1 ? "" : "s"} ready.` });
+        toast({ title: "Satellite processing complete", description });
       } else if (complete > 0 && !loaded) {
-        toast({
-          title: "Processed, but result not yet visible",
-          description: "Satellite imagery was processed, but VineTrack could not load the saved result. Try refreshing.",
-          variant: "destructive",
-        });
-      } else if (cloud > 0) {
-        toast({
-          title: "No usable imagery for this paddock yet",
-          description: "The most recent Sentinel-2 scenes were too cloudy for reliable analysis. Try again after the next clear pass.",
-          variant: "destructive",
-        });
+        toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
       } else {
-        toast({
-          title: "Satellite processing failed",
-          description: `${failed} paddock${failed === 1 ? "" : "s"} could not be processed.`,
-          variant: "destructive",
-        });
+        toast({ title: "No new imagery available", description, variant: "destructive" });
       }
     },
     onError: (e: any) => {
@@ -517,6 +566,8 @@ export default function SatelliteMappingPage() {
       });
     },
   });
+
+
 
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
