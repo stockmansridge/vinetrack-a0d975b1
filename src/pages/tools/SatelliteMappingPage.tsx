@@ -386,7 +386,8 @@ export default function SatelliteMappingPage() {
       const targetPaddocks = targetGeoms.map((g) => g.id);
       if (targetPaddocks.length === 0) throw new Error("No paddocks with geometry.");
 
-      const results: Array<{ paddock_id: string; ok: boolean; message?: string }> = [];
+      type ResultStatus = "complete" | "insufficient_coverage" | "no_scenes" | "failed";
+      const results: Array<{ paddock_id: string; status: ResultStatus; message?: string }> = [];
       for (const pid of targetPaddocks) {
         const targetPaddock = geoms.find((g) => g.id === pid);
         // 1) Search
@@ -404,13 +405,20 @@ export default function SatelliteMappingPage() {
             paddockName: targetPaddock?.name ?? null,
             message: parsed.message,
           });
-          results.push({ paddock_id: pid, ok: false, message: parsed.message });
+          results.push({ paddock_id: pid, status: "failed", message: parsed.message });
           continue;
         }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
-        if (candidates.length === 0) { results.push({ paddock_id: pid, ok: false, message: "No scenes found" }); continue; }
-        // 2) Process newest candidate
-        const c = candidates[0];
+        if (candidates.length === 0) { results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" }); continue; }
+        // 2) Pick the LEAST-CLOUDY recent candidate (not just the newest); newest
+        //    is often heavily clouded and fails the 80% valid-coverage check.
+        const sorted = [...candidates].sort((a, b) => {
+          const ca = Number(a?.scene_cloud_cover_pct ?? 100);
+          const cb = Number(b?.scene_cloud_cover_pct ?? 100);
+          if (ca !== cb) return ca - cb;
+          return String(b?.acquired_at ?? "").localeCompare(String(a?.acquired_at ?? ""));
+        });
+        const c = sorted[0];
         const process = await invokeSatelliteFn("satellite-process-scene", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
@@ -418,20 +426,63 @@ export default function SatelliteMappingPage() {
           acquired_at: c.acquired_at,
           scene_cloud_cover_pct: c.scene_cloud_cover_pct,
         });
-        if (process.error) results.push({ paddock_id: pid, ok: false, message: process.error.message });
-        else results.push({ paddock_id: pid, ok: true, message: (process.data as any)?.status });
+        if (process.error) {
+          results.push({ paddock_id: pid, status: "failed", message: process.error.message });
+          continue;
+        }
+        const procStatus = String((process.data as any)?.status ?? "");
+        if (procStatus === "complete") {
+          results.push({ paddock_id: pid, status: "complete" });
+        } else if (procStatus === "insufficient_coverage") {
+          const pct = (process.data as any)?.valid_coverage_pct;
+          results.push({
+            paddock_id: pid,
+            status: "insufficient_coverage",
+            message: `Selected scene had ${pct != null ? Number(pct).toFixed(0) : "0"}% valid pixels (cloud/shadow).`,
+          });
+        } else {
+          results.push({ paddock_id: pid, status: "failed", message: procStatus || "Processing did not complete." });
+        }
       }
       return results;
     },
-    onSuccess: (results) => {
-      const ok = results.filter((r) => r.ok).length;
-      const failed = results.length - ok;
-      toast({
-        title: "Satellite processing finished",
-        description: `${ok} succeeded, ${failed} failed. Reloading scene list…`,
-      });
-      qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+    onSuccess: async (results) => {
+      const complete = results.filter((r) => r.status === "complete").length;
+      const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
+      const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
+
+      // Refresh + wait for the list query to actually return the new scene.
       setSelectedSceneKey(null);
+      let loaded = false;
+      for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
+        await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+        const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[] } | undefined;
+        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) { loaded = true; break; }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+
+      if (complete > 0 && loaded) {
+        toast({ title: "Satellite imagery processed and loaded", description: `${complete} paddock${complete === 1 ? "" : "s"} ready.` });
+      } else if (complete > 0 && !loaded) {
+        toast({
+          title: "Processed, but result not yet visible",
+          description: "Satellite imagery was processed, but VineTrack could not load the saved result. Try refreshing.",
+          variant: "destructive",
+        });
+      } else if (cloud > 0) {
+        toast({
+          title: "No usable imagery for this paddock yet",
+          description: "The most recent Sentinel-2 scenes were too cloudy for reliable analysis. Try again after the next clear pass.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Satellite processing failed",
+          description: `${failed} paddock${failed === 1 ? "" : "s"} could not be processed.`,
+          variant: "destructive",
+        });
+      }
     },
     onError: (e: any) => {
       setSearchError({
