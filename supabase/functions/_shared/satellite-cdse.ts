@@ -446,6 +446,13 @@ function setup() {
     ]
   };
 }
+function evaluatePixel(s) {
+  const validScene = !(s.SCL === 0 || s.SCL === 1 || s.SCL === 3 || s.SCL === 8 || s.SCL === 9 || s.SCL === 10 || s.SCL === 11);
+  const mask = (s.dataMask === 1 && validScene) ? 1 : 0;
+  const v = ${e.formula};
+  return { index: [isFinite(v) ? v : NaN], dataMask: [mask] };
+}`;
+}
 
 /** Evalscript for browser point sampling. This emits the raw numeric index on
  * the exact same Process API grid as the display PNG. Invalid/cloud/shadow
@@ -476,13 +483,6 @@ function evaluatePixel(s) {
   if (s.dataMask !== 1 || !validScene) return [${ANALYTICAL_NO_DATA_SENTINEL}];
   const v = ${e.formula};
   return [isFinite(v) ? v : ${ANALYTICAL_NO_DATA_SENTINEL}];
-}`;
-}
-function evaluatePixel(s) {
-  const validScene = !(s.SCL === 0 || s.SCL === 1 || s.SCL === 3 || s.SCL === 8 || s.SCL === 9 || s.SCL === 10 || s.SCL === 11);
-  const mask = (s.dataMask === 1 && validScene) ? 1 : 0;
-  const v = ${e.formula};
-  return { index: [isFinite(v) ? v : NaN], dataMask: [mask] };
 }`;
 }
 
