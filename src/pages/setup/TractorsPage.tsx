@@ -442,6 +442,7 @@ export default function TractorsPage() {
                 <TableCell>{fmtCell(r.brand)}</TableCell>
                 <TableCell>{fmtCell(r.model)}</TableCell>
                 <TableCell>{fmtCell(r.model_year)}</TableCell>
+                <TableCell>{fmtCell(r.serial_number)}</TableCell>
                 <TableCell>{fmtCell(r.fuel_usage_l_per_hour)}</TableCell>
                 <TableCell>{fmtCell(r.updated_at)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
