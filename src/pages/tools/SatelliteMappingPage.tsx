@@ -1041,10 +1041,16 @@ export default function SatelliteMappingPage() {
                   ) : hover.status === "ready" && hover.value != null ? (
                     <>
                       <div className="text-base font-semibold text-foreground tabular-nums">
-                        {hover.value.toFixed(3)}
+                        {activeLayer.short}: {hover.value.toFixed(2)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
                         {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Resolution: {activeLayer.nativeResM} m
+                      </div>
+                      <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                        Satellite reading — field inspection may be required.
                       </div>
                     </>
                   ) : hover.status === "no_data" ? (
