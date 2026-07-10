@@ -557,14 +557,20 @@ export default function SatelliteMappingPage() {
       )}
 
       {/* Toolbar */}
-      <Card>
+      <Card className="relative z-30">
         <CardContent className="p-3 md:p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+          <div
+            className="grid gap-3 items-end"
+            style={{
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(180px, 1fr))",
+            }}
+          >
             {/* Vineyard */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Vineyard</label>
               <Select value={activeVineyardId ?? ""} onValueChange={(v) => { setVineyardId(v); setPaddockId("all"); setSelectedSceneKey(null); }}>
-                <SelectTrigger><SelectValue placeholder="Select vineyard" /></SelectTrigger>
+                <SelectTrigger className="min-h-[44px]"><SelectValue placeholder="Select vineyard" /></SelectTrigger>
                 <SelectContent>
                   {memberships.map((m) => (
                     <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
@@ -576,10 +582,10 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Paddock */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Paddock</label>
               <Select value={paddockId} onValueChange={(v) => { setPaddockId(v); setSelectedSceneKey(null); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Paddocks</SelectItem>
                   {geoms.map((g) => (
@@ -590,24 +596,36 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Image date */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Image Date</label>
-              <Select value={selectedSceneKey ?? ""} onValueChange={setSelectedSceneKey}>
-                <SelectTrigger>
-                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No images yet"} />
+              <Select
+                value={selectedSceneKey ?? ""}
+                onValueChange={setSelectedSceneKey}
+                disabled={dateOptions.length === 0}
+              >
+                <SelectTrigger className="min-h-[44px]">
+                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {dateOptions.map((d) => (
-                    <SelectItem key={d.date} value={d.date}>
-                      {d.date} · {d.scenes.length} paddock{d.scenes.length === 1 ? "" : "s"}
-                    </SelectItem>
-                  ))}
+                  {dateOptions.map((d) => {
+                    const s = d.scenes[0];
+                    const cloud = s?.scene_cloud_cover_pct;
+                    const cov = s?.paddock_valid_coverage_pct;
+                    return (
+                      <SelectItem key={d.date} value={d.date}>
+                        {d.date}
+                        {cloud != null ? ` · ${Number(cloud).toFixed(0)}% cloud` : ""}
+                        {cov != null ? ` · ${Number(cov).toFixed(0)}% valid` : ""}
+                        {s?.quality_status ? ` · ${s.quality_status}` : ""}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
 
             {/* Map Layer */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0" style={{ gridColumn: "span 1", minWidth: 220 }}>
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 Map Layer
                 <TooltipProvider>
@@ -622,7 +640,7 @@ export default function SatelliteMappingPage() {
                 </TooltipProvider>
               </label>
               <Select value={layer} onValueChange={(v) => setLayer(v as SatelliteIndexType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {LAYERS.map((l) => (
                     <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
@@ -632,12 +650,12 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Opacity */}
-            <div className="space-y-1 lg:col-span-1">
+            <div className="space-y-1 min-w-0" style={{ minWidth: 220 }}>
               <label className="text-xs font-medium text-muted-foreground">
                 Overlay Transparency — {opacity}%
               </label>
               <Slider value={[opacity]} onValueChange={(v) => setOpacity(v[0])} min={0} max={100} step={1} />
-              <div className="flex gap-1 pt-1">
+              <div className="flex flex-wrap gap-1 pt-1">
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>Satellite 20%</Button>
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>Balanced 65%</Button>
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>Overlay 95%</Button>
@@ -645,15 +663,16 @@ export default function SatelliteMappingPage() {
             </div>
 
             {/* Check for new image */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0 flex flex-col">
               <label className="text-xs font-medium text-muted-foreground">Latest Capture</label>
               <Button
-                variant="outline" size="sm" className="w-full"
+                variant="outline"
+                className="w-full min-h-[44px] whitespace-nowrap"
                 disabled={busy || geoms.length === 0}
                 onClick={() => checkForNewImage.mutate()}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                {busy ? "Processing…" : "Check for New Image"}
+                {busy ? "Checking for suitable imagery…" : "Check for New Image"}
               </Button>
             </div>
           </div>
@@ -666,8 +685,19 @@ export default function SatelliteMappingPage() {
               Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
             </div>
           </div>
+
+          {/* System-admin diagnostics */}
+          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-2 text-[11px] text-muted-foreground grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+            <div>Scenes returned: <span className="text-foreground">{scenesQuery.data?.scenes.length ?? 0}</span></div>
+            <div>Completed scenes: <span className="text-foreground">{(scenesQuery.data?.scenes ?? []).filter((s) => s.processing_status === "complete").length}</span></div>
+            <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
+            <div>Selected layer: <span className="text-foreground">{layer}</span></div>
+            <div>Matching asset: <span className="text-foreground">{activeAssets[0]?.asset.id ? "yes" : "no"}</span></div>
+            <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
+          </div>
         </CardContent>
       </Card>
+
 
       {/* Map */}
       <Card className="overflow-hidden">
