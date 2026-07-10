@@ -684,82 +684,22 @@ export default function SatelliteMappingPage() {
                 </div>
               </div>
             ) : (
-              <MapContainer
-                key={activeVineyardId ?? "none"}
-                center={[0, 0]} zoom={2}
-                style={{ height: "100%", width: "100%" }}
-                scrollWheelZoom
-              >
-                <TileLayer
-                  attribution='Imagery © Esri · Analysis © Copernicus Sentinel-2'
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                  maxZoom={19}
-                />
-
-                {/* Real Sentinel-2 overlays (clipped to paddock by the evalscript). */}
-                {activeAssets.map(({ asset }) => {
-                  const url = signedUrls[asset.id];
-                  if (!url || !asset.bounds) return null;
-                  const b: L.LatLngBoundsExpression = [
-                    [asset.bounds.south, asset.bounds.west],
-                    [asset.bounds.north, asset.bounds.east],
-                  ];
-                  return (
-                    <ImageOverlay
-                      key={asset.id}
-                      url={url}
-                      bounds={b}
-                      opacity={opacity / 100}
-                    />
-                  );
-                })}
-
-                {/* Paddock outlines sit above rasters. */}
-                {visibleGeoms.map((g) =>
-                  g.polys.map((poly, pi) => (
-                    <Polygon
-                      key={`${g.id}-${pi}`}
-                      positions={poly.map((ring) => ring.map((p) => [p.lat, p.lng])) as any}
-                      pathOptions={{
-                        color: "#ffffff", weight: 2.5, opacity: 1,
-                        fillColor: paddockColor(g.id), fillOpacity: 0.05,
-                      }}
-                    >
-                      <LeafletTooltip sticky direction="top" opacity={0.95}>
-                        {(() => {
-                          const s = summaryByPaddock.get(g.id);
-                          const scene = scenesQuery.data?.scenes.find((sc) => sc.paddock_id === g.id && sc.acquired_at.slice(0, 10) === selectedSceneKey);
-                          const value = s?.mean_value ?? null;
-                          return (
-                            <div className="text-xs">
-                              <div className="font-semibold">{g.name}</div>
-                              <div className="text-muted-foreground">{activeLayer.short}</div>
-                              {value != null ? (
-                                <>
-                                  <div>Mean: {value.toFixed(2)}</div>
-                                  <div>{classify(value, s)}</div>
-                                </>
-                              ) : (
-                                <div>No processed value for this scene</div>
-                              )}
-                              {scene?.acquired_at && (
-                                <div className="text-muted-foreground mt-1">
-                                  {scene.acquired_at.slice(0, 10)} · native {activeLayer.nativeResM} m
-                                </div>
-                              )}
-                              {scene?.quality_status && (
-                                <div className="text-muted-foreground">Quality: {scene.quality_status}</div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </LeafletTooltip>
-                    </Polygon>
-                  )),
-                )}
-
-                {bounds && <FitBounds bounds={bounds} />}
-              </MapContainer>
+              <SatelliteMap
+                className="h-full w-full"
+                paddocks={visibleGeoms.map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                  polys: g.polys,
+                  color: paddockColor(g.id),
+                }))}
+                selectedPaddockId={paddockId === "all" ? null : paddockId}
+                overlayUrl={
+                  activeAssets[0] ? (signedUrls[activeAssets[0].asset.id] ?? null) : null
+                }
+                overlayBounds={activeAssets[0]?.asset.bounds ?? null}
+                overlayOpacity={opacity / 100}
+                onPaddockClick={(id) => setPaddockId(id)}
+              />
             )}
 
             {/* Legend */}
