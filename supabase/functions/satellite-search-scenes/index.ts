@@ -5,8 +5,8 @@
 // return newest-first candidates. Does NOT create scene DB records.
 import {
   corsHeaders, jsonError, jsonOk, verifySystemAdmin,
-  getServiceClient, parseGeometryRings, computeBbox,
-  QC, SENTINEL2_COLLECTION, PROVIDER, CdseConfigError, CdseAuthError, ProviderError,
+  parseGeometryRings, computeBbox,
+  SENTINEL2_COLLECTION, PROVIDER, CdseConfigError, CdseAuthError, ProviderError,
   CDSE_CATALOG_URL, getCdseAccessTokenWithMetadata, sanitiseProviderPreview, catalogErrorCode,
 } from "../_shared/satellite-cdse.ts";
 
@@ -42,10 +42,8 @@ Deno.serve(async (req) => {
 
   let body: any;
   try { body = await req.json(); } catch { return jsonError(400, "bad_request", "Invalid JSON"); }
-  const { vineyard_id, paddock_id, date_start, date_end, max_cloud_cover, limit } = body ?? {};
+  const { vineyard_id, paddock_id, date_start, date_end, limit } = body ?? {};
   if (!vineyard_id || !paddock_id) return jsonError(400, "bad_request", "vineyard_id and paddock_id are required");
-
-  const supa = getServiceClient();
 
   // Load paddock from VineTrack (iOS) project since that's the source of truth.
   const vtUrl = Deno.env.get("VINETRACK_SUPABASE_URL")!;
@@ -171,7 +169,6 @@ Deno.serve(async (req) => {
       return jsonOk({ paddock_id, vineyard_id, bbox, scenes: [], candidates: [], status: "no_scenes_found" });
     }
 
-    const features = (search.features ?? []) as any[];
     const candidates = features.map((f) => ({
       provider: PROVIDER,
       collection: SENTINEL2_COLLECTION,
