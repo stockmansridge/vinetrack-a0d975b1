@@ -73,6 +73,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgLayerRef = useRef<HTMLDivElement | null>(null);
   const imgRefs = useRef<Map<string, HTMLImageElement>>(new Map());
+  const cellRectRef = useRef<HTMLDivElement | null>(null);
+  const cellRectValueRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
