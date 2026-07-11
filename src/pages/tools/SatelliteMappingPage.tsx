@@ -1300,8 +1300,10 @@ export default function SatelliteMappingPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Timeline */}
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Image History — Last 12 Months</CardTitle>
