@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -256,6 +257,40 @@ function parseGeometry(raw: any): LatLng[][][] {
     return polys;
   }
   return [];
+}
+
+const STALE_DAYS = 3;
+
+function computeStalePaddockIds(
+  paddockIds: string[],
+  scenes: DBScene[],
+  assets: DBAsset[],
+  layer: SatelliteIndexType,
+): string[] {
+  const cutoff = Date.now() - STALE_DAYS * 86400_000;
+  // Newest completed scene per paddock.
+  const newestByPad = new Map<string, DBScene>();
+  for (const s of scenes) {
+    if (s.processing_status !== "complete") continue;
+    const cur = newestByPad.get(s.paddock_id);
+    if (!cur || s.acquired_at > cur.acquired_at) newestByPad.set(s.paddock_id, s);
+  }
+  const analyticalBySceneLayer = new Set<string>();
+  for (const a of assets) {
+    const kind = a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
+    if (kind === "ANALYTICAL_RASTER" && a.index_type === layer) {
+      analyticalBySceneLayer.add(a.satellite_scene_id);
+    }
+  }
+  const stale: string[] = [];
+  for (const pid of paddockIds) {
+    const s = newestByPad.get(pid);
+    if (!s) { stale.push(pid); continue; }
+    const acqMs = new Date(s.acquired_at).getTime();
+    if (Number.isFinite(acqMs) && acqMs < cutoff) { stale.push(pid); continue; }
+    if (layer !== "TRUE_COLOUR" && !analyticalBySceneLayer.has(s.id)) { stale.push(pid); continue; }
+  }
+  return stale;
 }
 
 // ---------- Page ----------
@@ -641,17 +676,25 @@ export default function SatelliteMappingPage() {
 
   // ---------- Actions ----------
 
+  type RefreshVars = { paddockIds?: string[]; isRetry?: boolean } | undefined;
+  const retryInFlightRef = useRef(false);
+  const autoRanForVineyardRef = useRef<string | null>(null);
+
   const checkForNewImage = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars: RefreshVars) => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
       setSearchError(null);
 
-      // Every valid-geometry paddock in the vineyard when "all"; otherwise the one selected.
-      const targetGeoms = paddockId === "all"
-        ? geoms
-        : geoms.filter((g) => g.id === paddockId);
-      const allVineyardPaddocks = paddockId === "all" ? paddocks.length : 1;
-      const skippedNoGeometry = paddockId === "all"
+      // If explicit paddockIds provided, use exactly those (stale set / retry set).
+      // Otherwise: every valid-geometry paddock in the vineyard when "all"; the one selected otherwise.
+      const explicitIds = vars?.paddockIds;
+      const targetGeoms = explicitIds
+        ? geoms.filter((g) => explicitIds.includes(g.id))
+        : paddockId === "all"
+          ? geoms
+          : geoms.filter((g) => g.id === paddockId);
+      const allVineyardPaddocks = paddockId === "all" && !explicitIds ? paddocks.length : targetGeoms.length;
+      const skippedNoGeometry = paddockId === "all" && !explicitIds
         ? Math.max(0, allVineyardPaddocks - targetGeoms.length)
         : 0;
 
@@ -764,20 +807,27 @@ export default function SatelliteMappingPage() {
       });
       await Promise.all(workers);
 
-      return { results, skippedNoGeometry };
+      return { results, skippedNoGeometry, isRetry: !!vars?.isRetry };
     },
-    onSuccess: async ({ results, skippedNoGeometry }) => {
+    onSuccess: async ({ results, skippedNoGeometry, isRetry }) => {
       const complete = results.filter((r) => r.status === "complete").length;
       const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
       // Refresh + wait for the list query to reflect any new scenes.
       let loaded = false;
+      let latestScenes: DBScene[] = [];
+      let latestAssets: DBAsset[] = [];
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
         const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[] } | undefined;
-        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) { loaded = true; break; }
+        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[] } | undefined;
+        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
+          loaded = true;
+          latestScenes = anyData?.scenes ?? [];
+          latestAssets = anyData?.assets ?? [];
+          break;
+        }
         await new Promise((r) => setTimeout(r, 1500));
       }
 
@@ -788,16 +838,34 @@ export default function SatelliteMappingPage() {
           paddock_id: paddockId,
         });
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
-        await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        const refreshed2 = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        const anyData2 = refreshed2?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[] } | undefined;
+        if (anyData2) {
+          latestScenes = anyData2.scenes ?? latestScenes;
+          latestAssets = anyData2.assets ?? latestAssets;
+        }
         analyticalCacheRef.current.clear();
         setRasterCacheVersion((v) => v + 1);
       } catch (e) {
         console.warn("analytical backfill after processing failed", e);
       }
 
-
       // After an All-Paddocks batch, default to "Latest per paddock" view.
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
+
+      // Auto-retry once for any paddocks that remained stale after this pass.
+      if (!isRetry) {
+        const candidateIds = paddockId === "all"
+          ? geoms.map((g) => g.id)
+          : geoms.filter((g) => g.id === paddockId).map((g) => g.id);
+        const residual = computeStalePaddockIds(candidateIds, latestScenes, latestAssets, layer);
+        if (residual.length > 0) {
+          retryInFlightRef.current = true;
+          checkForNewImage.mutate({ paddockIds: residual, isRetry: true });
+          return; // suppress interim toast; retry pass will report.
+        }
+      }
+      retryInFlightRef.current = false;
 
       const parts: string[] = [];
       parts.push(`${complete} paddock${complete === 1 ? "" : "s"} processed`);
@@ -807,7 +875,7 @@ export default function SatelliteMappingPage() {
       const description = parts.join(", ") + ".";
 
       if (complete > 0 && loaded) {
-        toast({ title: "Satellite processing complete", description });
+        toast({ title: "Satellite imagery up to date", description });
       } else if (complete > 0 && !loaded) {
         toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
       } else {
@@ -815,6 +883,7 @@ export default function SatelliteMappingPage() {
       }
     },
     onError: (e: any) => {
+      retryInFlightRef.current = false;
       setSearchError({
         code: null,
         providerStatus: null,
@@ -823,45 +892,32 @@ export default function SatelliteMappingPage() {
         message: String(e?.message ?? e ?? "Unknown error"),
       });
       toast({
-        title: "Satellite processing failed",
+        title: "Satellite refresh failed",
         description: String(e?.message ?? e ?? "Unknown error"),
         variant: "destructive",
       });
     },
   });
 
-  // Backfill analytical (cell) rasters for existing completed scenes that have
-  // display PNGs but no analytical GeoTIFFs. Reuses the existing display asset.
-  const backfillAnalytical = useMutation({
-    mutationFn: async () => {
-      if (!activeVineyardId) throw new Error("No vineyard selected");
-      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
-        vineyard_id: activeVineyardId,
-        paddock_id: paddockId,
-      });
-      if (error) throw error;
-      return data as { scanned: number; backfilled: number; skipped: number; failures: any[]; halted?: string };
-    },
-    onSuccess: async (res) => {
-      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
-      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-      // Force a re-decode by clearing analytical cache.
-      analyticalCacheRef.current.clear();
-      setRasterCacheVersion((v) => v + 1);
-      const halted = res?.halted ? ` (paused: ${res.halted})` : "";
-      toast({
-        title: "Cell readings generated",
-        description: `${res?.backfilled ?? 0} cell rasters added across ${res?.scanned ?? 0} scenes${halted}.`,
-      });
-    },
-    onError: (e: any) => {
-      toast({
-        title: "Cell reading backfill failed",
-        description: String(e?.message ?? e ?? "Unknown error"),
-        variant: "destructive",
-      });
-    },
-  });
+  // Auto-run on page load: if any paddock has no imagery in the last 3 days,
+  // silently trigger a refresh for just those paddocks. Once per vineyard/session.
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    if (scenesQuery.isLoading || !scenesQuery.data) return;
+    if (paddocksLoading || geoms.length === 0) return;
+    if (autoRanForVineyardRef.current === activeVineyardId) return;
+    if (checkForNewImage.isPending) return;
+    autoRanForVineyardRef.current = activeVineyardId;
+    const stale = computeStalePaddockIds(
+      geoms.map((g) => g.id),
+      scenesQuery.data.scenes,
+      scenesQuery.data.assets,
+      layer,
+    );
+    if (stale.length > 0) checkForNewImage.mutate({ paddockIds: stale });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeVineyardId, scenesQuery.data, scenesQuery.isLoading, paddocksLoading, geoms.length]);
+
 
 
   // ---------- Guards ----------
@@ -869,7 +925,12 @@ export default function SatelliteMappingPage() {
   if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
 
   const busy = checkForNewImage.isPending;
-  const backfilling = backfillAnalytical.isPending;
+  const isRetryPass = busy && retryInFlightRef.current;
+  const refreshLabel = busy
+    ? (isRetryPass
+        ? "Retrying skipped…"
+        : (batchProgress ? `Refreshing ${Math.min(batchProgress.done + 1, batchProgress.total)} / ${batchProgress.total}…` : "Refreshing…"))
+    : "Refresh Imagery";
 
   // Per-index plain-English descriptions, always relative to this paddock's
   // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
@@ -937,22 +998,12 @@ export default function SatelliteMappingPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
             disabled={busy || geoms.length === 0}
-            onClick={() => checkForNewImage.mutate()}
+            onClick={() => checkForNewImage.mutate(undefined)}
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            {busy ? (isAllPaddocks ? "Processing…" : "Processing…") : "Process Latest Imagery"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy || backfilling || geoms.length === 0}
-            onClick={() => backfillAnalytical.mutate()}
-          >
-            {backfilling ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            {backfilling ? "Generating…" : "Generate Cell Readings"}
+            {refreshLabel}
           </Button>
         </div>
       </div>
@@ -982,7 +1033,7 @@ export default function SatelliteMappingPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => checkForNewImage.mutate()}>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => checkForNewImage.mutate(undefined)}>
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                 Retry
               </Button>
@@ -1122,21 +1173,34 @@ export default function SatelliteMappingPage() {
 
 
 
-          {/* Batch progress (All Paddocks) */}
-          {busy && batchProgress && (
-            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs">
+          {/* Batch progress */}
+          {busy && (
+            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs space-y-2">
               <div className="font-medium text-foreground">
-                Checking imagery for {Math.min(batchProgress.done + 1, batchProgress.total)} of {batchProgress.total} paddocks…
+                {isRetryPass
+                  ? "Retrying skipped paddocks…"
+                  : batchProgress
+                    ? `Checking imagery for ${Math.min(batchProgress.done + 1, batchProgress.total)} of ${batchProgress.total} paddocks…`
+                    : "Preparing…"}
               </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
-                <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
-                <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
-                <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
-                <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
-                <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
-              </div>
+              {batchProgress && (
+                <>
+                  <Progress
+                    value={batchProgress.total > 0 ? (batchProgress.done / batchProgress.total) * 100 : 0}
+                    className="h-1.5"
+                  />
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                    <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
+                    <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
+                    <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
+                    <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
+                    <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
+                  </div>
+                </>
+              )}
             </div>
           )}
+
 
           {/* Layer description panel */}
           <div className="mt-3 rounded-md border bg-muted/30 p-3">
@@ -1236,7 +1300,7 @@ export default function SatelliteMappingPage() {
                     <>
                       <div className="text-muted-foreground">{hover.message}</div>
                       <div className="text-[10px] text-muted-foreground mt-1 italic">
-                        Use “Generate Cell Readings” above.
+                        Use “Refresh Imagery” above.
                       </div>
                     </>
                   ) : hover.status === "ready" && hover.value != null ? (
@@ -1338,7 +1402,7 @@ export default function SatelliteMappingPage() {
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
             {(scenesQuery.data?.scenes.length ?? 0) === 0
-              ? "No satellite scenes have been processed for this vineyard yet. Click Check for New Image."
+              ? "No satellite scenes have been processed for this vineyard yet. Click Refresh Imagery."
               : "Hover a paddock on the map for its per-paddock summary; select a date above to switch scenes."}
           </div>
         </CardContent>
