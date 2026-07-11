@@ -280,9 +280,11 @@ export default function SatelliteMappingPage() {
         paddockId: string | null;
         paddockName: string | null;
         acquiredAt: string | null;
-        status: "idle" | "loading" | "ready" | "no_data" | "error";
+        status: "idle" | "loading" | "ready" | "no_data" | "error" | "missing_analytical";
         value: number | null;
         message: string | null;
+        cellResM: number | null;
+        cellRect: { north: number; south: number; east: number; west: number } | null;
       }
   >(null);
 
@@ -543,21 +545,32 @@ export default function SatelliteMappingPage() {
     return null;
   };
 
-  const readAnalyticalValue = (raster: DecodedAnalyticalRaster, lat: number, lng: number): { value: number | null; message: string | null } => {
+  const readAnalyticalCell = (raster: DecodedAnalyticalRaster, lat: number, lng: number): {
+    value: number | null;
+    message: string | null;
+    cellRect: { north: number; south: number; east: number; west: number } | null;
+  } => {
     const { west, east, south, north } = raster.bounds;
     const xRatio = (lng - west) / (east - west);
     const yRatio = (north - lat) / (north - south);
     const pixelX = Math.floor(xRatio * raster.width);
     const pixelY = Math.floor(yRatio * raster.height);
     if (pixelX < 0 || pixelY < 0 || pixelX >= raster.width || pixelY >= raster.height) {
-      return { value: null, message: "Outside analytical raster" };
+      return { value: null, message: "Outside paddock", cellRect: null };
     }
+    const cellWest = west + (pixelX / raster.width) * (east - west);
+    const cellEast = west + ((pixelX + 1) / raster.width) * (east - west);
+    const cellNorth = north - (pixelY / raster.height) * (north - south);
+    const cellSouth = north - ((pixelY + 1) / raster.height) * (north - south);
+    const cellRect = { north: cellNorth, south: cellSouth, east: cellEast, west: cellWest };
     const raw = Number(raster.data[pixelY * raster.width + pixelX]);
-    if (!Number.isFinite(raw)) return { value: null, message: "No valid analytical pixel" };
-    if (raster.noData !== null && Math.abs(raw - raster.noData) < 1e-6) {
-      return { value: null, message: "Masked pixel — cloud, shadow or no data" };
+    if (!Number.isFinite(raw)) {
+      return { value: null, message: "No satellite data for this cell", cellRect };
     }
-    return { value: raw * raster.scale, message: null };
+    if (raster.noData !== null && Math.abs(raw - raster.noData) < 1e-6) {
+      return { value: null, message: "Cloud, shadow or no satellite data in this cell", cellRect };
+    }
+    return { value: raw * raster.scale, message: null, cellRect };
   };
 
   // Pointer-move handler — no network request; reads the cached analytical raster.
@@ -570,31 +583,36 @@ export default function SatelliteMappingPage() {
     // Locate the active scene for this paddock (matches current date + layer).
     const match = activeAssetPairs.find((x) => x.scene.paddock_id === pad?.id);
     const acq = match?.scene.acquired_at ?? null;
-    let status: "idle" | "loading" | "ready" | "no_data" | "error" = pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle";
+    let status: "idle" | "loading" | "ready" | "no_data" | "error" | "missing_analytical" =
+      pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle";
     let value: number | null = null;
     let message: string | null = null;
+    let cellRect: { north: number; south: number; east: number; west: number } | null = null;
+    let cellResM: number | null = null;
 
     if (pad && acq && layer !== "TRUE_COLOUR") {
       const analytical = match?.analyticalAsset;
       if (!analytical) {
-        status = "no_data";
-        message = "Analytical raster missing — process imagery to update this scene";
+        status = "missing_analytical";
+        message = "Cell readings have not been generated for this image yet.";
       } else {
         const key = analyticalCacheKey(pad.id, match.scene.id, layer, analytical.processing_version);
         const cached = analyticalCacheRef.current.get(key);
         if (!cached) {
           status = "loading";
-          message = "Loading analytical raster…";
+          message = "Loading cell data…";
         } else if (cached instanceof Promise) {
           status = "loading";
-          message = "Loading analytical raster…";
+          message = "Loading cell data…";
         } else if ("error" in cached) {
           status = "error";
           message = cached.error;
         } else {
-          const sampled = readAnalyticalValue(cached, pt.lat, pt.lng);
+          const sampled = readAnalyticalCell(cached, pt.lat, pt.lng);
           value = sampled.value;
           message = sampled.message;
+          cellRect = sampled.cellRect;
+          cellResM = analytical.native_resolution_m ?? activeLayer.nativeResM;
           status = value == null ? "no_data" : "ready";
         }
       }
@@ -608,6 +626,8 @@ export default function SatelliteMappingPage() {
       status,
       value,
       message,
+      cellResM,
+      cellRect,
     });
   };
 
@@ -753,6 +773,21 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
+      // Backfill analytical rasters for any completed scenes still missing them.
+      try {
+        await invokeSatelliteFn("satellite-backfill-analytical", {
+          vineyard_id: activeVineyardId,
+          paddock_id: paddockId,
+        });
+        await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+        await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        analyticalCacheRef.current.clear();
+        setRasterCacheVersion((v) => v + 1);
+      } catch (e) {
+        console.warn("analytical backfill after processing failed", e);
+      }
+
+
       // After an All-Paddocks batch, default to "Latest per paddock" view.
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
 
@@ -787,6 +822,38 @@ export default function SatelliteMappingPage() {
     },
   });
 
+  // Backfill analytical (cell) rasters for existing completed scenes that have
+  // display PNGs but no analytical GeoTIFFs. Reuses the existing display asset.
+  const backfillAnalytical = useMutation({
+    mutationFn: async () => {
+      if (!activeVineyardId) throw new Error("No vineyard selected");
+      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
+        vineyard_id: activeVineyardId,
+        paddock_id: paddockId,
+      });
+      if (error) throw error;
+      return data as { scanned: number; backfilled: number; skipped: number; failures: any[]; halted?: string };
+    },
+    onSuccess: async (res) => {
+      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+      // Force a re-decode by clearing analytical cache.
+      analyticalCacheRef.current.clear();
+      setRasterCacheVersion((v) => v + 1);
+      const halted = res?.halted ? ` (paused: ${res.halted})` : "";
+      toast({
+        title: "Cell readings generated",
+        description: `${res?.backfilled ?? 0} cell rasters added across ${res?.scanned ?? 0} scenes${halted}.`,
+      });
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Cell reading backfill failed",
+        description: String(e?.message ?? e ?? "Unknown error"),
+        variant: "destructive",
+      });
+    },
+  });
 
 
   // ---------- Guards ----------
@@ -794,6 +861,7 @@ export default function SatelliteMappingPage() {
   if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
 
   const busy = checkForNewImage.isPending;
+  const backfilling = backfillAnalytical.isPending;
 
   // Per-index plain-English descriptions, always relative to this paddock's
   // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
@@ -1054,7 +1122,25 @@ export default function SatelliteMappingPage() {
                 Generates every map layer for every paddock in one click.
               </div>
             </div>
+
+            {/* Generate Cell Readings — backfills analytical rasters for existing scenes */}
+            <div className="space-y-1 min-w-0 flex flex-col">
+              <label className="text-xs font-medium text-muted-foreground">Cell Readings</label>
+              <Button
+                variant="outline"
+                className="w-full min-h-[44px] whitespace-nowrap"
+                disabled={busy || backfilling || geoms.length === 0}
+                onClick={() => backfillAnalytical.mutate()}
+              >
+                {backfilling ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                {backfilling ? "Generating cell data…" : "Generate Cell Readings"}
+              </Button>
+              <div className="text-[10px] text-muted-foreground leading-snug">
+                Adds native-resolution numeric cell data to existing scenes without redownloading imagery.
+              </div>
+            </div>
           </div>
+
 
 
           {/* Batch progress (All Paddocks) */}
@@ -1135,18 +1221,19 @@ export default function SatelliteMappingPage() {
                     opacity: opacity / 100,
                   }))}
                 overlayOpacity={opacity / 100}
+                cellRect={hover?.cellRect ?? null}
                 onPaddockClick={(id) => setPaddockId(id)}
                 onPointerMove={handlePointerMove}
               />
             )}
 
-            {/* Hover readout — local analytical raster sample at pointer */}
+            {/* Hover readout — local analytical cell sample at pointer */}
             {hover && hover.paddockId && (
               <div
-                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
+                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[200px] max-w-[260px]"
                 style={{
                   left: Math.max(8, hover.x + 12),
-                  top: Math.max(8, hover.y - 60),
+                  top: Math.max(8, hover.y - 72),
                 }}
               >
                 <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
@@ -1155,30 +1242,40 @@ export default function SatelliteMappingPage() {
                 </div>
                 <div className="mt-1">
                   {layer === "TRUE_COLOUR" ? (
-                    <span className="text-muted-foreground">No scalar value for true-colour</span>
+                    <>
+                      <div className="text-sm font-medium text-foreground">True-colour satellite image</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m</div>
+                    </>
                   ) : !hover.acquiredAt ? (
                     <span className="text-muted-foreground">No processed image for this paddock</span>
                   ) : hover.status === "loading" ? (
                     <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading analytical raster…"}
+                      <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading cell data…"}
                     </span>
+                  ) : hover.status === "missing_analytical" ? (
+                    <>
+                      <div className="text-muted-foreground">{hover.message}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1 italic">
+                        Use “Generate Cell Readings” above.
+                      </div>
+                    </>
                   ) : hover.status === "ready" && hover.value != null ? (
                     <>
                       <div className="text-base font-semibold text-foreground tabular-nums">
-                        {activeLayer.short}: {hover.value.toFixed(2)}
+                        {activeLayer.short} cell value: {hover.value.toFixed(2)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
                         {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        Resolution: {activeLayer.nativeResM} m
+                        Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
                       </div>
                       <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                        Analytical raster value from the matched display grid.
+                        Each value represents the satellite cell containing this location.
                       </div>
                     </>
                   ) : hover.status === "no_data" ? (
-                    <span className="text-muted-foreground">{hover.message ?? "No valid pixels"}</span>
+                    <span className="text-muted-foreground">{hover.message ?? "No satellite data for this cell"}</span>
                   ) : hover.status === "error" ? (
                     <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
                   ) : null}
@@ -1188,6 +1285,7 @@ export default function SatelliteMappingPage() {
                 </div>
               </div>
             )}
+
 
 
             {/* Legend */}

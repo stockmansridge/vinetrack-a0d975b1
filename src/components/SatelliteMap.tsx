@@ -27,6 +27,8 @@ export interface SatelliteMapProps {
   overlayBounds?: { north: number; south: number; east: number; west: number } | null;
   /** 0..1 */
   overlayOpacity?: number;
+  /** Optional rectangle drawn above raster overlays to highlight the hovered analytical cell. */
+  cellRect?: { north: number; south: number; east: number; west: number } | null;
   onPaddockClick?: (id: string) => void;
   onMapReady?: () => void;
   onUnavailable?: (msg: string) => void;
@@ -50,6 +52,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     overlayUrl,
     overlayBounds,
     overlayOpacity = 0.7,
+    cellRect,
     onPaddockClick,
     onMapReady,
     onUnavailable,
@@ -70,6 +73,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgLayerRef = useRef<HTMLDivElement | null>(null);
   const imgRefs = useRef<Map<string, HTMLImageElement>>(new Map());
+  const cellRectRef = useRef<HTMLDivElement | null>(null);
+  const cellRectValueRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
@@ -256,6 +261,26 @@ export default function SatelliteMap(props: SatelliteMapProps) {
           img.style.width = `${Math.max(0, w)}px`;
           img.style.height = `${Math.max(0, h)}px`;
         }
+        const cr = cellRectValueRef.current;
+        const cellEl = cellRectRef.current;
+        if (cellEl) {
+          if (cr) {
+            const nw = new mapkit.Coordinate(cr.north, cr.west);
+            const se = new mapkit.Coordinate(cr.south, cr.east);
+            const p1 = map.convertCoordinateToPointOnPage(nw);
+            const p2 = map.convertCoordinateToPointOnPage(se);
+            const x = p1.x - rect.left - window.scrollX;
+            const y = p1.y - rect.top - window.scrollY;
+            const w = Math.max(0, p2.x - p1.x);
+            const h = Math.max(0, p2.y - p1.y);
+            cellEl.style.display = "block";
+            cellEl.style.transform = `translate(${x}px, ${y}px)`;
+            cellEl.style.width = `${w}px`;
+            cellEl.style.height = `${h}px`;
+          } else {
+            cellEl.style.display = "none";
+          }
+        }
       } catch { /* noop */ }
     };
 
@@ -269,6 +294,12 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     requestAnimationFrame(tick);
     return () => { running = false; };
   }, [ready, effectiveOverlays, overlayOpacity]);
+
+  // Sync the highlighted-cell rectangle into the animation loop.
+  useEffect(() => {
+    cellRectValueRef.current = cellRect ?? null;
+  }, [cellRect]);
+
 
   // Pointer tracking → forward map coordinate under pointer to parent.
   useEffect(() => {
@@ -317,6 +348,20 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
         style={{ zIndex: 5 }}
+      />
+      {/* Highlighted native satellite cell — sits above rasters but below the tooltip. */}
+      <div
+        ref={cellRectRef}
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-0"
+        style={{
+          zIndex: 6,
+          display: "none",
+          border: "1.5px solid rgba(255,255,255,0.95)",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.55) inset",
+          background: "rgba(255,255,255,0.05)",
+          transformOrigin: "top left",
+        }}
       />
 
       {error && (
