@@ -915,36 +915,40 @@ export default function SatelliteMappingPage() {
   }
 
   return (
-    <div className="w-full p-4 md:p-6 space-y-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-amber-500/15 p-2 text-amber-600 dark:text-amber-400">
-            <SatelliteIcon className="h-5 w-5" />
+    <div className="w-full p-2 md:p-3 space-y-3 flex flex-col">
+      {/* Compact header */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="rounded-md bg-amber-500/15 p-1.5 text-amber-600 dark:text-amber-400">
+            <SatelliteIcon className="h-4 w-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold">Satellite Mapping</h1>
-              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                System Admin Only
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-              Live Sentinel-2 imagery via the Copernicus Data Space Ecosystem. Processed on-demand and clipped to each paddock.
-            </p>
-          </div>
+          <h1 className="text-lg font-semibold truncate">Satellite Mapping</h1>
+          <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]">
+            System Admin · Beta
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || geoms.length === 0}
+            onClick={() => checkForNewImage.mutate()}
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+            {busy ? (isAllPaddocks ? "Processing…" : "Processing…") : "Process Latest Imagery"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || backfilling || geoms.length === 0}
+            onClick={() => backfillAnalytical.mutate()}
+          >
+            {backfilling ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+            {backfilling ? "Generating…" : "Generate Cell Readings"}
+          </Button>
         </div>
       </div>
 
-      {/* Dev notice */}
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardContent className="flex items-start gap-2 py-3 text-sm">
-          <Info className="h-4 w-4 mt-0.5 text-amber-600 dark:text-amber-400 shrink-0" />
-          <span>
-            Satellite Mapping is under active development and is currently available only to VineTrack system administrators.
-          </span>
-        </CardContent>
-      </Card>
 
       {searchError && (
         <Card className="border-destructive/40 bg-destructive/5">
