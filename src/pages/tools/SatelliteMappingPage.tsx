@@ -1281,6 +1281,10 @@ export default function SatelliteMappingPage() {
                       <div className="h-2.5 w-full rounded-sm" style={{
                         background: `linear-gradient(to right, ${activeLayer.legend.join(", ")})`,
                       }} />
+                      <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                        <span>{activeLayer.legendMinValue}</span>
+                        <span>{activeLayer.legendMaxValue}</span>
+                      </div>
                       <div className="flex justify-between text-[10px] text-muted-foreground">
                         <span>{activeLayer.legendLow}</span>
                         <span>Typical</span>
