@@ -349,6 +349,20 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         className="pointer-events-none absolute inset-0 overflow-hidden"
         style={{ zIndex: 5 }}
       />
+      {/* Highlighted native satellite cell — sits above rasters but below the tooltip. */}
+      <div
+        ref={cellRectRef}
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-0"
+        style={{
+          zIndex: 6,
+          display: "none",
+          border: "1.5px solid rgba(255,255,255,0.95)",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.55) inset",
+          background: "rgba(255,255,255,0.05)",
+          transformOrigin: "top left",
+        }}
+      />
 
       {error && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 text-center text-sm text-destructive">
