@@ -1,78 +1,62 @@
-# Reorderable Table Columns
+# Satellite Mapping — keep user zoom, and let the map own the screen
 
-Add a reusable system for users to drag/reorder table columns across the portal, with per-user, per-table persistence.
+Two problems to fix on `/tools/satellite-mapping`:
 
-## Scope
+1. Zooming into a paddock snaps the map back out to the fit-all view.
+2. Header, dev notice, toolbar, layer description and diagnostics push the map below the fold, so it feels small.
 
-Phase 1 (this change): build the reusable system + apply to **Chemicals** table as the reference implementation.
-Phase 2 (follow-up): roll out to remaining tables (pins, trips, spray reports, rainfall, dashboard, work tasks, team, blocks, documents).
+## 1. Stop the map from zooming back out
 
-I'll stop after Phase 1 and confirm the pattern looks right before rolling out everywhere — that avoids touching ~10 large pages in one go and shipping regressions in sort/filter/export/pagination.
+**Root cause.** In `src/components/SatelliteMap.tsx`, the polygon-rendering effect also assigns `map.region = new mapkit.CoordinateRegion(...)` to fit paddocks. Its deps include `paddocks` and `onPaddockClick`. The parent (`SatelliteMappingPage`) rebuilds `paddocks` inline every render and re-renders on every pointer hover (tooltip / `cellRect` state). Every hover ⇒ effect fires ⇒ `map.region` reset ⇒ user's zoom is lost.
 
-## Storage
+**Fix (in `src/components/SatelliteMap.tsx`).** Decouple polygon rebuild from region fitting, and only fit when the fit actually needs to change.
 
-New Supabase table `user_table_preferences`:
+- Add a `lastFitSigRef` (ref).
+- Keep `sig` (already memoized from paddock ids + count + `selectedPaddockId`) as the fit key.
+- In the effect:
+  - Rebuild polygon overlays when `sig` changes.
+  - Only run the `map.region = …` fit when `lastFitSigRef.current !== sig`, then store `sig`.
+  - When `selectedPaddockId` becomes `null`/`"all"`, treat that as an explicit user request to fit-all and refit; otherwise leave the user's current zoom untouched.
+- Remove `paddocks` and `onPaddockClick` from the effect deps. Use `paddocksRef` / `onPaddockClickRef` (updated each render) so click handlers stay current without retriggering the effect.
 
-- `user_id` (auth.users)
-- `vineyard_id` (nullable — null = applies across vineyards)
-- `table_id` (text, e.g. `chemicals_table`)
-- `column_order` (jsonb array of stable column IDs)
-- `hidden_columns` (jsonb, reserved for future show/hide)
-- unique `(user_id, vineyard_id, table_id)`
+Net result: pan/zoom stays put across hover-driven re-renders. Initial load still fits all paddocks. Selecting a specific paddock still zooms to it. Switching back to "All paddocks" refits.
 
-RLS: users can only select/insert/update/delete their own rows.
+## 2. Layout: map above the fold
 
-## Reusable API
+Rework `src/pages/tools/SatelliteMappingPage.tsx` so the map dominates the viewport, roughly like a mapping app rather than a stacked report.
 
-```
-src/lib/userTablePreferencesQuery.ts
-  - useColumnOrder(tableId, defaultColumnIds, { vineyardScoped? })
-    returns { order, setOrder, reset, isLoading }
-  - Local cache via React Query, debounced upsert to Supabase.
-  - Falls back to localStorage when signed out / offline.
+Layout plan (desktop ≥ `lg`):
 
-src/components/table/ReorderableTableHeader.tsx
-  - Wraps <TableHeader>/<TableRow>.
-  - HTML5 drag-and-drop on <TableHead> by stable column id.
-  - Respects locked columns: `lockedStart` (e.g. select/expand) and
-    `lockedEnd` (e.g. actions) — these can't be dragged and can't be
-    dropped into the middle.
-  - Small grip icon (GripVertical) appears on hover next to label.
-  - Click on the existing sort button still sorts (drag starts only
-    from the grip or the empty area, not the sort button — pointer-down
-    on a `[data-no-drag]` element cancels the drag).
-
-src/components/table/ColumnSettingsMenu.tsx
-  - DropdownMenu trigger button "Columns" placed near search/filters.
-  - "Reset column order" item.
-  - Stub for future show/hide.
+```text
+┌───────────────────────────────────────────────────────────────┐
+│ Compact header row: title · admin badge · Process · Generate  │
+├───────────────────────────────┬───────────────────────────────┤
+│                               │  Controls panel (scrollable)  │
+│                               │  - Vineyard / Paddock         │
+│           MAP                 │  - Date / Layer / Opacity     │
+│      (fills remaining         │  - Layer description          │
+│       viewport height)        │  - Batch progress             │
+│                               │  - Admin diagnostics          │
+│                               │                               │
+└───────────────────────────────┴───────────────────────────────┘
 ```
 
-Column definition shape:
+Concrete changes:
 
-```ts
-interface ColumnDef { id: string; label: string; locked?: "start" | "end" }
-```
+- Wrap the page in a flex column that fills the viewport: `min-h-[calc(100vh-4rem)]` (header is 64px per `AppLayout`) and reduce outer padding (`p-2 md:p-3`).
+- Collapse the current header block into one compact row: keep title + "System Admin Only" badge on the left; move the primary action buttons (Process Latest Imagery, Generate Cell Readings, Retry) into the same row on the right. Drop the descriptive paragraph and the amber "under active development" notice from the top — surface the dev-only note as a small inline pill next to the badge instead.
+- Split the body into a two-column flex row that grows to fill remaining height:
+  - Left: the Map card, `flex-1`, with `h-full`. Replace the fixed `h-[560px]` on the map container with `h-full min-h-[420px]` so it fills the column.
+  - Right: a `w-[340px] shrink-0` sidebar containing the existing toolbar controls, layer description, batch progress and admin diagnostics, stacked vertically inside a single scrollable `Card` (`overflow-y-auto`).
+- Mobile (`< lg`): stack vertically — map first at `h-[70vh]`, controls below. No functional change; just no side-by-side.
+- Keep every existing control, query, mutation, tooltip and hover behaviour exactly as-is. This is presentation only.
 
-## Apply to Chemicals page (reference)
+## Files changed
 
-`src/pages/setup/SavedChemicalsPage.tsx`:
+- `src/components/SatelliteMap.tsx` — zoom-preservation fix.
+- `src/pages/tools/SatelliteMappingPage.tsx` — layout restructure only; no data / logic changes.
 
-- Define `CHEMICALS_COLUMNS: ColumnDef[]` with stable IDs:
-  `product`, `manufacturer`, `group`, `use`, `active_ingredient`,
-  `rate`, `whp`, `rei`, `label`, `updated`, `actions` (locked end).
-- Call `useColumnOrder("chemicals_table", defaultIds)`.
-- Render header cells and body cells in the resolved order; `actions` stays pinned right.
-- All existing sort/filter/search/edit logic untouched.
+## Verification
 
-## Acceptance
-
-- Drag columns left/right on chemicals page; refresh — order persists.
-- Actions stays far right; locked columns can't be moved.
-- Sort arrows + filter dropdowns still work.
-- Reset menu restores defaults.
-- Per-user (RLS) and per-table (table_id) isolation.
-
-## Out of scope for this change
-
-Other tables — once the chemicals implementation is signed off, the same `useColumnOrder` + `ReorderableTableHeader` are dropped into each remaining page (mostly a column-definition + render-loop refactor per page).
+- Typecheck.
+- Manual: open Satellite Mapping, zoom in with scroll/pinch, hover across paddocks — zoom must stay put. Selecting a paddock refits to it; switching back to "All paddocks" refits to all. On desktop, the map fills the area between the app header and the bottom of the viewport, with controls in a right-hand sidebar.
