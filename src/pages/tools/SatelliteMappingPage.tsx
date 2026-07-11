@@ -1110,42 +1110,6 @@ export default function SatelliteMappingPage() {
                 <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>95%</Button>
               </div>
             </div>
-
-            {/* Process latest imagery — single action, generates every layer for every paddock */}
-            <div className="space-y-1 min-w-0 flex flex-col">
-              <label className="text-xs font-medium text-muted-foreground">Process Imagery</label>
-              <Button
-                variant="outline"
-                className="w-full min-h-[44px] whitespace-nowrap"
-                disabled={busy || geoms.length === 0}
-                onClick={() => checkForNewImage.mutate()}
-              >
-                {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                {busy
-                  ? (isAllPaddocks ? "Processing all paddocks…" : "Processing…")
-                  : "Process Latest Imagery"}
-              </Button>
-              <div className="text-[10px] text-muted-foreground leading-snug">
-                Generates every map layer for every paddock in one click.
-              </div>
-            </div>
-
-            {/* Generate Cell Readings — backfills analytical rasters for existing scenes */}
-            <div className="space-y-1 min-w-0 flex flex-col">
-              <label className="text-xs font-medium text-muted-foreground">Cell Readings</label>
-              <Button
-                variant="outline"
-                className="w-full min-h-[44px] whitespace-nowrap"
-                disabled={busy || backfilling || geoms.length === 0}
-                onClick={() => backfillAnalytical.mutate()}
-              >
-                {backfilling ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                {backfilling ? "Generating cell data…" : "Generate Cell Readings"}
-              </Button>
-              <div className="text-[10px] text-muted-foreground leading-snug">
-                Adds native-resolution numeric cell data to existing scenes without redownloading imagery.
-              </div>
-            </div>
           </div>
 
 
