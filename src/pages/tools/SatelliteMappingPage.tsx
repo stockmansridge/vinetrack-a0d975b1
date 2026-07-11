@@ -807,6 +807,38 @@ export default function SatelliteMappingPage() {
     },
   });
 
+  // Backfill analytical (cell) rasters for existing completed scenes that have
+  // display PNGs but no analytical GeoTIFFs. Reuses the existing display asset.
+  const backfillAnalytical = useMutation({
+    mutationFn: async () => {
+      if (!activeVineyardId) throw new Error("No vineyard selected");
+      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
+        vineyard_id: activeVineyardId,
+        paddock_id: paddockId,
+      });
+      if (error) throw error;
+      return data as { scanned: number; backfilled: number; skipped: number; failures: any[]; halted?: string };
+    },
+    onSuccess: async (res) => {
+      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+      // Force a re-decode by clearing analytical cache.
+      analyticalCacheRef.current.clear();
+      setRasterCacheVersion((v) => v + 1);
+      const halted = res?.halted ? ` (paused: ${res.halted})` : "";
+      toast({
+        title: "Cell readings generated",
+        description: `${res?.backfilled ?? 0} cell rasters added across ${res?.scanned ?? 0} scenes${halted}.`,
+      });
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Cell reading backfill failed",
+        description: String(e?.message ?? e ?? "Unknown error"),
+        variant: "destructive",
+      });
+    },
+  });
 
 
   // ---------- Guards ----------
@@ -814,6 +846,7 @@ export default function SatelliteMappingPage() {
   if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
 
   const busy = checkForNewImage.isPending;
+  const backfilling = backfillAnalytical.isPending;
 
   // Per-index plain-English descriptions, always relative to this paddock's
   // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
