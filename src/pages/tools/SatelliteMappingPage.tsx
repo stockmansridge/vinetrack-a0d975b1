@@ -280,9 +280,11 @@ export default function SatelliteMappingPage() {
         paddockId: string | null;
         paddockName: string | null;
         acquiredAt: string | null;
-        status: "idle" | "loading" | "ready" | "no_data" | "error";
+        status: "idle" | "loading" | "ready" | "no_data" | "error" | "missing_analytical";
         value: number | null;
         message: string | null;
+        cellResM: number | null;
+        cellRect: { north: number; south: number; east: number; west: number } | null;
       }
   >(null);
 
