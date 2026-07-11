@@ -76,6 +76,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const cellRectRef = useRef<HTMLDivElement | null>(null);
   const cellRectValueRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null);
   const mapRef = useRef<any>(null);
+  const lastFitSigRef = useRef<string | null>(null);
+  const paddocksRef = useRef(paddocks);
+  const onPaddockClickRef = useRef(onPaddockClick);
+  paddocksRef.current = paddocks;
+  onPaddockClickRef.current = onPaddockClick;
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +139,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     const selectedPts: LatLng[] = [];
     const newOverlays: any[] = [];
 
-    for (const p of paddocks) {
+    for (const p of paddocksRef.current) {
       const isSel = p.id === selectedPaddockId;
       const color = p.color || "#34C759";
       for (const poly of p.polys) {
@@ -164,7 +169,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
             data: { id: p.id },
           },
         );
-        overlay.addEventListener("select", () => onPaddockClick?.(p.id));
+        overlay.addEventListener("select", () => onPaddockClickRef.current?.(p.id));
         newOverlays.push(overlay);
 
         for (const ring of poly) {
@@ -181,27 +186,33 @@ export default function SatelliteMap(props: SatelliteMapProps) {
       overlaysRef.current = newOverlays;
     }
 
-    const fitPts = selectedPts.length ? selectedPts : all;
-    if (fitPts.length) {
-      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-      for (const pt of fitPts) {
-        if (pt.lat < minLat) minLat = pt.lat;
-        if (pt.lat > maxLat) maxLat = pt.lat;
-        if (pt.lng < minLng) minLng = pt.lng;
-        if (pt.lng > maxLng) maxLng = pt.lng;
+    // Only refit region when the paddock set or selection actually changed
+    // (tracked by `sig`). This preserves the user's manual zoom/pan across
+    // hover-driven re-renders.
+    if (lastFitSigRef.current !== sig) {
+      lastFitSigRef.current = sig;
+      const fitPts = selectedPts.length ? selectedPts : all;
+      if (fitPts.length) {
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        for (const pt of fitPts) {
+          if (pt.lat < minLat) minLat = pt.lat;
+          if (pt.lat > maxLat) maxLat = pt.lat;
+          if (pt.lng < minLng) minLng = pt.lng;
+          if (pt.lng > maxLng) maxLng = pt.lng;
+        }
+        const centerLat = (minLat + maxLat) / 2;
+        const centerLng = (minLng + maxLng) / 2;
+        const latDelta = Math.max((maxLat - minLat) * 1.6, 0.002);
+        const lngDelta = Math.max((maxLng - minLng) * 1.6, 0.002);
+        try {
+          map.region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(centerLat, centerLng),
+            new mapkit.CoordinateSpan(latDelta, lngDelta),
+          );
+        } catch { /* noop */ }
       }
-      const centerLat = (minLat + maxLat) / 2;
-      const centerLng = (minLng + maxLng) / 2;
-      const latDelta = Math.max((maxLat - minLat) * 1.6, 0.002);
-      const lngDelta = Math.max((maxLng - minLng) * 1.6, 0.002);
-      try {
-        map.region = new mapkit.CoordinateRegion(
-          new mapkit.Coordinate(centerLat, centerLng),
-          new mapkit.CoordinateSpan(latDelta, lngDelta),
-        );
-      } catch { /* noop */ }
     }
-  }, [ready, sig, paddocks, selectedPaddockId, onPaddockClick]);
+  }, [ready, sig, selectedPaddockId]);
 
   // Raster overlay reprojection loop — handles N overlays.
   useEffect(() => {
