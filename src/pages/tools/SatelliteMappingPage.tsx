@@ -1206,18 +1206,19 @@ export default function SatelliteMappingPage() {
                     opacity: opacity / 100,
                   }))}
                 overlayOpacity={opacity / 100}
+                cellRect={hover?.cellRect ?? null}
                 onPaddockClick={(id) => setPaddockId(id)}
                 onPointerMove={handlePointerMove}
               />
             )}
 
-            {/* Hover readout — local analytical raster sample at pointer */}
+            {/* Hover readout — local analytical cell sample at pointer */}
             {hover && hover.paddockId && (
               <div
-                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[180px]"
+                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[200px] max-w-[260px]"
                 style={{
                   left: Math.max(8, hover.x + 12),
-                  top: Math.max(8, hover.y - 60),
+                  top: Math.max(8, hover.y - 72),
                 }}
               >
                 <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
@@ -1226,30 +1227,40 @@ export default function SatelliteMappingPage() {
                 </div>
                 <div className="mt-1">
                   {layer === "TRUE_COLOUR" ? (
-                    <span className="text-muted-foreground">No scalar value for true-colour</span>
+                    <>
+                      <div className="text-sm font-medium text-foreground">True-colour satellite image</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m</div>
+                    </>
                   ) : !hover.acquiredAt ? (
                     <span className="text-muted-foreground">No processed image for this paddock</span>
                   ) : hover.status === "loading" ? (
                     <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading analytical raster…"}
+                      <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading cell data…"}
                     </span>
+                  ) : hover.status === "missing_analytical" ? (
+                    <>
+                      <div className="text-muted-foreground">{hover.message}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1 italic">
+                        Use “Generate Cell Readings” above.
+                      </div>
+                    </>
                   ) : hover.status === "ready" && hover.value != null ? (
                     <>
                       <div className="text-base font-semibold text-foreground tabular-nums">
-                        {activeLayer.short}: {hover.value.toFixed(2)}
+                        {activeLayer.short} cell value: {hover.value.toFixed(2)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
                         {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        Resolution: {activeLayer.nativeResM} m
+                        Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
                       </div>
                       <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                        Analytical raster value from the matched display grid.
+                        Each value represents the satellite cell containing this location.
                       </div>
                     </>
                   ) : hover.status === "no_data" ? (
-                    <span className="text-muted-foreground">{hover.message ?? "No valid pixels"}</span>
+                    <span className="text-muted-foreground">{hover.message ?? "No satellite data for this cell"}</span>
                   ) : hover.status === "error" ? (
                     <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
                   ) : null}
@@ -1259,6 +1270,7 @@ export default function SatelliteMappingPage() {
                 </div>
               </div>
             )}
+
 
 
             {/* Legend */}
