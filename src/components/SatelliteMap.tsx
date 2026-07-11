@@ -261,6 +261,26 @@ export default function SatelliteMap(props: SatelliteMapProps) {
           img.style.width = `${Math.max(0, w)}px`;
           img.style.height = `${Math.max(0, h)}px`;
         }
+        const cr = cellRectValueRef.current;
+        const cellEl = cellRectRef.current;
+        if (cellEl) {
+          if (cr) {
+            const nw = new mapkit.Coordinate(cr.north, cr.west);
+            const se = new mapkit.Coordinate(cr.south, cr.east);
+            const p1 = map.convertCoordinateToPointOnPage(nw);
+            const p2 = map.convertCoordinateToPointOnPage(se);
+            const x = p1.x - rect.left - window.scrollX;
+            const y = p1.y - rect.top - window.scrollY;
+            const w = Math.max(0, p2.x - p1.x);
+            const h = Math.max(0, p2.y - p1.y);
+            cellEl.style.display = "block";
+            cellEl.style.transform = `translate(${x}px, ${y}px)`;
+            cellEl.style.width = `${w}px`;
+            cellEl.style.height = `${h}px`;
+          } else {
+            cellEl.style.display = "none";
+          }
+        }
       } catch { /* noop */ }
     };
 
