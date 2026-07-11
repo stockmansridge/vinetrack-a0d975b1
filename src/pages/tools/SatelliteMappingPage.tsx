@@ -1300,7 +1300,7 @@ export default function SatelliteMappingPage() {
                     <>
                       <div className="text-muted-foreground">{hover.message}</div>
                       <div className="text-[10px] text-muted-foreground mt-1 italic">
-                        Use “Generate Cell Readings” above.
+                        Use “Refresh Imagery” above.
                       </div>
                     </>
                   ) : hover.status === "ready" && hover.value != null ? (
