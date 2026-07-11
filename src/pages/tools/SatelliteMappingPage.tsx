@@ -925,7 +925,12 @@ export default function SatelliteMappingPage() {
   if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
 
   const busy = checkForNewImage.isPending;
-  const backfilling = backfillAnalytical.isPending;
+  const isRetryPass = busy && retryInFlightRef.current;
+  const refreshLabel = busy
+    ? (isRetryPass
+        ? "Retrying skipped…"
+        : (batchProgress ? `Refreshing ${Math.min(batchProgress.done + 1, batchProgress.total)} / ${batchProgress.total}…` : "Refreshing…"))
+    : "Refresh Imagery";
 
   // Per-index plain-English descriptions, always relative to this paddock's
   // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
