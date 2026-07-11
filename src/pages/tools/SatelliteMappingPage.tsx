@@ -984,9 +984,12 @@ export default function SatelliteMappingPage() {
         </Card>
       )}
 
+      {/* Map + controls — side-by-side on desktop, stacked on mobile */}
+      <div className="flex flex-col lg:flex-row gap-3 lg:h-[calc(100vh-9rem)] lg:min-h-[520px]">
       {/* Toolbar */}
-      <Card className="relative z-30">
+      <Card className="relative z-30 order-2 lg:order-2 w-full lg:w-[360px] lg:shrink-0 lg:overflow-y-auto">
         <CardContent className="p-3 md:p-4">
+
           <div
             className="grid gap-3 items-end"
             style={{
