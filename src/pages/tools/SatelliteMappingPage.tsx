@@ -50,6 +50,8 @@ type LayerOption = {
   legend: string[];
   legendLow: string;
   legendHigh: string;
+  legendMinValue: string;
+  legendMaxValue: string;
 };
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
@@ -82,36 +84,42 @@ const LAYERS: LayerOption[] = [
     description: "A natural-colour view of the vineyard from the selected Sentinel-2 capture. Uses native 10 m visible bands.",
     legend: ["#3b2f1e", "#7a6a48", "#c7b98a", "#e9e2c7", "#ffffff"],
     legendLow: "Darker", legendHigh: "Brighter",
+    legendMinValue: "0", legendMaxValue: "255",
   },
   {
     id: "NDVI", label: "NDVI — General Vine Vigour", short: "NDVI", nativeResM: 10, resamplingNote: false,
     description: "Overall canopy vigour. Uses native 10 m red (B04) and near-infrared (B08) data.",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
     id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
     description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
     id: "MSAVI", label: "MSAVI — Vigour with Soil Adjustment", short: "MSAVI", nativeResM: 10, resamplingNote: false,
     description: "Reduces soil influence for sparse canopies. Uses native 10 m red (B04) and NIR (B08).",
     legend: ["#7a4a2b", "#b98a55", "#e0cc99", "#a3c977", "#2f6b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
     id: "RECI", label: "RECI — Chlorophyll Activity", short: "RECI", nativeResM: 20, resamplingNote: true,
     description: "Relative differences in leaf chlorophyll. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "0", legendMaxValue: "10",
   },
   {
     id: "NDMI", label: "NDMI — Canopy Moisture", short: "NDMI", nativeResM: 20, resamplingNote: true,
     description: "Relative canopy-moisture variation. Uses 10 m NIR (B08) and 20 m native SWIR (B11); result is on a 10 m display grid.",
     legend: ["#7a3b1e", "#c98a4f", "#e6dcb0", "#7fb7d1", "#1e4f7a"],
     legendLow: "Drier", legendHigh: "Wetter",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
 ];
 
@@ -1273,6 +1281,10 @@ export default function SatelliteMappingPage() {
                       <div className="h-2.5 w-full rounded-sm" style={{
                         background: `linear-gradient(to right, ${activeLayer.legend.join(", ")})`,
                       }} />
+                      <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                        <span>{activeLayer.legendMinValue}</span>
+                        <span>{activeLayer.legendMaxValue}</span>
+                      </div>
                       <div className="flex justify-between text-[10px] text-muted-foreground">
                         <span>{activeLayer.legendLow}</span>
                         <span>Typical</span>
