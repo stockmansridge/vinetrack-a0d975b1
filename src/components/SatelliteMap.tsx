@@ -27,6 +27,8 @@ export interface SatelliteMapProps {
   overlayBounds?: { north: number; south: number; east: number; west: number } | null;
   /** 0..1 */
   overlayOpacity?: number;
+  /** Optional rectangle drawn above raster overlays to highlight the hovered analytical cell. */
+  cellRect?: { north: number; south: number; east: number; west: number } | null;
   onPaddockClick?: (id: string) => void;
   onMapReady?: () => void;
   onUnavailable?: (msg: string) => void;
