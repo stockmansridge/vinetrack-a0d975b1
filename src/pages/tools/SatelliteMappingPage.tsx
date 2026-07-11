@@ -773,6 +773,21 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
+      // Backfill analytical rasters for any completed scenes still missing them.
+      try {
+        await invokeSatelliteFn("satellite-backfill-analytical", {
+          vineyard_id: activeVineyardId,
+          paddock_id: paddockId,
+        });
+        await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+        await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        analyticalCacheRef.current.clear();
+        setRasterCacheVersion((v) => v + 1);
+      } catch (e) {
+        console.warn("analytical backfill after processing failed", e);
+      }
+
+
       // After an All-Paddocks batch, default to "Latest per paddock" view.
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
 
