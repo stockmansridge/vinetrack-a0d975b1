@@ -1173,21 +1173,34 @@ export default function SatelliteMappingPage() {
 
 
 
-          {/* Batch progress (All Paddocks) */}
-          {busy && batchProgress && (
-            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs">
+          {/* Batch progress */}
+          {busy && (
+            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs space-y-2">
               <div className="font-medium text-foreground">
-                Checking imagery for {Math.min(batchProgress.done + 1, batchProgress.total)} of {batchProgress.total} paddocks…
+                {isRetryPass
+                  ? "Retrying skipped paddocks…"
+                  : batchProgress
+                    ? `Checking imagery for ${Math.min(batchProgress.done + 1, batchProgress.total)} of ${batchProgress.total} paddocks…`
+                    : "Preparing…"}
               </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
-                <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
-                <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
-                <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
-                <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
-                <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
-              </div>
+              {batchProgress && (
+                <>
+                  <Progress
+                    value={batchProgress.total > 0 ? (batchProgress.done / batchProgress.total) * 100 : 0}
+                    className="h-1.5"
+                  />
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                    <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
+                    <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
+                    <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
+                    <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
+                    <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
+                  </div>
+                </>
+              )}
             </div>
           )}
+
 
           {/* Layer description panel */}
           <div className="mt-3 rounded-md border bg-muted/30 p-3">
