@@ -676,17 +676,25 @@ export default function SatelliteMappingPage() {
 
   // ---------- Actions ----------
 
+  type RefreshVars = { paddockIds?: string[]; isRetry?: boolean } | undefined;
+  const retryInFlightRef = useRef(false);
+  const autoRanForVineyardRef = useRef<string | null>(null);
+
   const checkForNewImage = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars: RefreshVars) => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
       setSearchError(null);
 
-      // Every valid-geometry paddock in the vineyard when "all"; otherwise the one selected.
-      const targetGeoms = paddockId === "all"
-        ? geoms
-        : geoms.filter((g) => g.id === paddockId);
-      const allVineyardPaddocks = paddockId === "all" ? paddocks.length : 1;
-      const skippedNoGeometry = paddockId === "all"
+      // If explicit paddockIds provided, use exactly those (stale set / retry set).
+      // Otherwise: every valid-geometry paddock in the vineyard when "all"; the one selected otherwise.
+      const explicitIds = vars?.paddockIds;
+      const targetGeoms = explicitIds
+        ? geoms.filter((g) => explicitIds.includes(g.id))
+        : paddockId === "all"
+          ? geoms
+          : geoms.filter((g) => g.id === paddockId);
+      const allVineyardPaddocks = paddockId === "all" && !explicitIds ? paddocks.length : targetGeoms.length;
+      const skippedNoGeometry = paddockId === "all" && !explicitIds
         ? Math.max(0, allVineyardPaddocks - targetGeoms.length)
         : 0;
 
