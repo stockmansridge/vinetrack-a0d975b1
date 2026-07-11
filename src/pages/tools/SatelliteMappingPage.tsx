@@ -807,20 +807,27 @@ export default function SatelliteMappingPage() {
       });
       await Promise.all(workers);
 
-      return { results, skippedNoGeometry };
+      return { results, skippedNoGeometry, isRetry: !!vars?.isRetry };
     },
-    onSuccess: async ({ results, skippedNoGeometry }) => {
+    onSuccess: async ({ results, skippedNoGeometry, isRetry }) => {
       const complete = results.filter((r) => r.status === "complete").length;
       const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
       // Refresh + wait for the list query to reflect any new scenes.
       let loaded = false;
+      let latestScenes: DBScene[] = [];
+      let latestAssets: DBAsset[] = [];
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
         const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[] } | undefined;
-        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) { loaded = true; break; }
+        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[] } | undefined;
+        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
+          loaded = true;
+          latestScenes = anyData?.scenes ?? [];
+          latestAssets = anyData?.assets ?? [];
+          break;
+        }
         await new Promise((r) => setTimeout(r, 1500));
       }
 
@@ -831,16 +838,34 @@ export default function SatelliteMappingPage() {
           paddock_id: paddockId,
         });
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
-        await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        const refreshed2 = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+        const anyData2 = refreshed2?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[] } | undefined;
+        if (anyData2) {
+          latestScenes = anyData2.scenes ?? latestScenes;
+          latestAssets = anyData2.assets ?? latestAssets;
+        }
         analyticalCacheRef.current.clear();
         setRasterCacheVersion((v) => v + 1);
       } catch (e) {
         console.warn("analytical backfill after processing failed", e);
       }
 
-
       // After an All-Paddocks batch, default to "Latest per paddock" view.
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
+
+      // Auto-retry once for any paddocks that remained stale after this pass.
+      if (!isRetry) {
+        const candidateIds = paddockId === "all"
+          ? geoms.map((g) => g.id)
+          : geoms.filter((g) => g.id === paddockId).map((g) => g.id);
+        const residual = computeStalePaddockIds(candidateIds, latestScenes, latestAssets, layer);
+        if (residual.length > 0) {
+          retryInFlightRef.current = true;
+          checkForNewImage.mutate({ paddockIds: residual, isRetry: true });
+          return; // suppress interim toast; retry pass will report.
+        }
+      }
+      retryInFlightRef.current = false;
 
       const parts: string[] = [];
       parts.push(`${complete} paddock${complete === 1 ? "" : "s"} processed`);
@@ -850,7 +875,7 @@ export default function SatelliteMappingPage() {
       const description = parts.join(", ") + ".";
 
       if (complete > 0 && loaded) {
-        toast({ title: "Satellite processing complete", description });
+        toast({ title: "Satellite imagery up to date", description });
       } else if (complete > 0 && !loaded) {
         toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
       } else {
@@ -858,6 +883,7 @@ export default function SatelliteMappingPage() {
       }
     },
     onError: (e: any) => {
+      retryInFlightRef.current = false;
       setSearchError({
         code: null,
         providerStatus: null,
@@ -866,45 +892,32 @@ export default function SatelliteMappingPage() {
         message: String(e?.message ?? e ?? "Unknown error"),
       });
       toast({
-        title: "Satellite processing failed",
+        title: "Satellite refresh failed",
         description: String(e?.message ?? e ?? "Unknown error"),
         variant: "destructive",
       });
     },
   });
 
-  // Backfill analytical (cell) rasters for existing completed scenes that have
-  // display PNGs but no analytical GeoTIFFs. Reuses the existing display asset.
-  const backfillAnalytical = useMutation({
-    mutationFn: async () => {
-      if (!activeVineyardId) throw new Error("No vineyard selected");
-      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
-        vineyard_id: activeVineyardId,
-        paddock_id: paddockId,
-      });
-      if (error) throw error;
-      return data as { scanned: number; backfilled: number; skipped: number; failures: any[]; halted?: string };
-    },
-    onSuccess: async (res) => {
-      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
-      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-      // Force a re-decode by clearing analytical cache.
-      analyticalCacheRef.current.clear();
-      setRasterCacheVersion((v) => v + 1);
-      const halted = res?.halted ? ` (paused: ${res.halted})` : "";
-      toast({
-        title: "Cell readings generated",
-        description: `${res?.backfilled ?? 0} cell rasters added across ${res?.scanned ?? 0} scenes${halted}.`,
-      });
-    },
-    onError: (e: any) => {
-      toast({
-        title: "Cell reading backfill failed",
-        description: String(e?.message ?? e ?? "Unknown error"),
-        variant: "destructive",
-      });
-    },
-  });
+  // Auto-run on page load: if any paddock has no imagery in the last 3 days,
+  // silently trigger a refresh for just those paddocks. Once per vineyard/session.
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    if (scenesQuery.isLoading || !scenesQuery.data) return;
+    if (paddocksLoading || geoms.length === 0) return;
+    if (autoRanForVineyardRef.current === activeVineyardId) return;
+    if (checkForNewImage.isPending) return;
+    autoRanForVineyardRef.current = activeVineyardId;
+    const stale = computeStalePaddockIds(
+      geoms.map((g) => g.id),
+      scenesQuery.data.scenes,
+      scenesQuery.data.assets,
+      layer,
+    );
+    if (stale.length > 0) checkForNewImage.mutate({ paddockIds: stale });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeVineyardId, scenesQuery.data, scenesQuery.isLoading, paddocksLoading, geoms.length]);
+
 
 
   // ---------- Guards ----------
