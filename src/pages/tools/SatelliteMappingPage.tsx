@@ -50,6 +50,8 @@ type LayerOption = {
   legend: string[];
   legendLow: string;
   legendHigh: string;
+  legendMinValue: string;
+  legendMaxValue: string;
 };
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
