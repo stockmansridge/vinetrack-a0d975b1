@@ -1402,7 +1402,7 @@ export default function SatelliteMappingPage() {
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
             {(scenesQuery.data?.scenes.length ?? 0) === 0
-              ? "No satellite scenes have been processed for this vineyard yet. Click Check for New Image."
+              ? "No satellite scenes have been processed for this vineyard yet. Click Refresh Imagery."
               : "Hover a paddock on the map for its per-paddock summary; select a date above to switch scenes."}
           </div>
         </CardContent>
