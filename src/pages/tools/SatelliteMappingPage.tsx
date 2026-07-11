@@ -545,21 +545,32 @@ export default function SatelliteMappingPage() {
     return null;
   };
 
-  const readAnalyticalValue = (raster: DecodedAnalyticalRaster, lat: number, lng: number): { value: number | null; message: string | null } => {
+  const readAnalyticalCell = (raster: DecodedAnalyticalRaster, lat: number, lng: number): {
+    value: number | null;
+    message: string | null;
+    cellRect: { north: number; south: number; east: number; west: number } | null;
+  } => {
     const { west, east, south, north } = raster.bounds;
     const xRatio = (lng - west) / (east - west);
     const yRatio = (north - lat) / (north - south);
     const pixelX = Math.floor(xRatio * raster.width);
     const pixelY = Math.floor(yRatio * raster.height);
     if (pixelX < 0 || pixelY < 0 || pixelX >= raster.width || pixelY >= raster.height) {
-      return { value: null, message: "Outside analytical raster" };
+      return { value: null, message: "Outside paddock", cellRect: null };
     }
+    const cellWest = west + (pixelX / raster.width) * (east - west);
+    const cellEast = west + ((pixelX + 1) / raster.width) * (east - west);
+    const cellNorth = north - (pixelY / raster.height) * (north - south);
+    const cellSouth = north - ((pixelY + 1) / raster.height) * (north - south);
+    const cellRect = { north: cellNorth, south: cellSouth, east: cellEast, west: cellWest };
     const raw = Number(raster.data[pixelY * raster.width + pixelX]);
-    if (!Number.isFinite(raw)) return { value: null, message: "No valid analytical pixel" };
-    if (raster.noData !== null && Math.abs(raw - raster.noData) < 1e-6) {
-      return { value: null, message: "Masked pixel — cloud, shadow or no data" };
+    if (!Number.isFinite(raw)) {
+      return { value: null, message: "No satellite data for this cell", cellRect };
     }
-    return { value: raw * raster.scale, message: null };
+    if (raster.noData !== null && Math.abs(raw - raster.noData) < 1e-6) {
+      return { value: null, message: "Cloud, shadow or no satellite data in this cell", cellRect };
+    }
+    return { value: raw * raster.scale, message: null, cellRect };
   };
 
   // Pointer-move handler — no network request; reads the cached analytical raster.
@@ -572,31 +583,36 @@ export default function SatelliteMappingPage() {
     // Locate the active scene for this paddock (matches current date + layer).
     const match = activeAssetPairs.find((x) => x.scene.paddock_id === pad?.id);
     const acq = match?.scene.acquired_at ?? null;
-    let status: "idle" | "loading" | "ready" | "no_data" | "error" = pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle";
+    let status: "idle" | "loading" | "ready" | "no_data" | "error" | "missing_analytical" =
+      pad && acq && layer !== "TRUE_COLOUR" ? "loading" : "idle";
     let value: number | null = null;
     let message: string | null = null;
+    let cellRect: { north: number; south: number; east: number; west: number } | null = null;
+    let cellResM: number | null = null;
 
     if (pad && acq && layer !== "TRUE_COLOUR") {
       const analytical = match?.analyticalAsset;
       if (!analytical) {
-        status = "no_data";
-        message = "Analytical raster missing — process imagery to update this scene";
+        status = "missing_analytical";
+        message = "Cell readings have not been generated for this image yet.";
       } else {
         const key = analyticalCacheKey(pad.id, match.scene.id, layer, analytical.processing_version);
         const cached = analyticalCacheRef.current.get(key);
         if (!cached) {
           status = "loading";
-          message = "Loading analytical raster…";
+          message = "Loading cell data…";
         } else if (cached instanceof Promise) {
           status = "loading";
-          message = "Loading analytical raster…";
+          message = "Loading cell data…";
         } else if ("error" in cached) {
           status = "error";
           message = cached.error;
         } else {
-          const sampled = readAnalyticalValue(cached, pt.lat, pt.lng);
+          const sampled = readAnalyticalCell(cached, pt.lat, pt.lng);
           value = sampled.value;
           message = sampled.message;
+          cellRect = sampled.cellRect;
+          cellResM = analytical.native_resolution_m ?? activeLayer.nativeResM;
           status = value == null ? "no_data" : "ready";
         }
       }
@@ -610,6 +626,8 @@ export default function SatelliteMappingPage() {
       status,
       value,
       message,
+      cellResM,
+      cellRect,
     });
   };
 
