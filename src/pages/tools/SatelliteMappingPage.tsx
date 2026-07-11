@@ -998,22 +998,12 @@ export default function SatelliteMappingPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
             disabled={busy || geoms.length === 0}
-            onClick={() => checkForNewImage.mutate()}
+            onClick={() => checkForNewImage.mutate(undefined)}
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            {busy ? (isAllPaddocks ? "Processing…" : "Processing…") : "Process Latest Imagery"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy || backfilling || geoms.length === 0}
-            onClick={() => backfillAnalytical.mutate()}
-          >
-            {backfilling ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            {backfilling ? "Generating…" : "Generate Cell Readings"}
+            {refreshLabel}
           </Button>
         </div>
       </div>
