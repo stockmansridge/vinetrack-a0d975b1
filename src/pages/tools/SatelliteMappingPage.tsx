@@ -1033,7 +1033,7 @@ export default function SatelliteMappingPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => checkForNewImage.mutate()}>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => checkForNewImage.mutate(undefined)}>
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                 Retry
               </Button>
