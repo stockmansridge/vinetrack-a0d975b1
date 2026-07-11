@@ -52,6 +52,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     overlayUrl,
     overlayBounds,
     overlayOpacity = 0.7,
+    cellRect,
     onPaddockClick,
     onMapReady,
     onUnavailable,
