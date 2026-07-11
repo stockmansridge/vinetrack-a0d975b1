@@ -1160,9 +1160,10 @@ export default function SatelliteMappingPage() {
 
 
       {/* Map */}
-      <Card className="overflow-hidden">
-        <CardContent className="p-0 relative">
-          <div className="h-[560px] w-full relative">
+      <Card className="overflow-hidden order-1 lg:order-1 flex-1 min-w-0 lg:h-full">
+        <CardContent className="p-0 relative h-full">
+          <div className="h-[65vh] lg:h-full w-full relative">
+
             {paddocksLoading ? (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                 Loading paddocks…
