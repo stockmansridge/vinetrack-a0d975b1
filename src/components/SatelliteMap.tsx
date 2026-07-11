@@ -295,6 +295,12 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     return () => { running = false; };
   }, [ready, effectiveOverlays, overlayOpacity]);
 
+  // Sync the highlighted-cell rectangle into the animation loop.
+  useEffect(() => {
+    cellRectValueRef.current = cellRect ?? null;
+  }, [cellRect]);
+
+
   // Pointer tracking → forward map coordinate under pointer to parent.
   useEffect(() => {
     const map = mapRef.current;
