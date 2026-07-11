@@ -76,6 +76,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const cellRectRef = useRef<HTMLDivElement | null>(null);
   const cellRectValueRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null);
   const mapRef = useRef<any>(null);
+  const lastFitSigRef = useRef<string | null>(null);
+  const paddocksRef = useRef(paddocks);
+  const onPaddockClickRef = useRef(onPaddockClick);
+  paddocksRef.current = paddocks;
+  onPaddockClickRef.current = onPaddockClick;
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
