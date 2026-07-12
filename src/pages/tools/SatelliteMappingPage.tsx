@@ -1429,12 +1429,15 @@ export default function SatelliteMappingPage() {
       autoRanForVineyardRef.current = activeVineyardId;
       return;
     }
-    const stale = computeStalePaddockIds(
-      geoms.map((g) => g.id),
-      scenesQuery.data.scenes,
-      scenesQuery.data.assets,
-      layer,
-    );
+    const autoReport = inspectCompleteness({
+      paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
+      scenes: scenesQuery.data.scenes,
+      assets: scenesQuery.data.assets,
+      summaries: scenesQuery.data.summaries,
+    });
+    const stale = autoReport.perPaddock
+      .filter((p) => p.state !== "complete")
+      .map((p) => p.paddockId);
     autoRanForVineyardRef.current = activeVineyardId;
     if (stale.length > 0) {
       autoRunTimestamps.set(activeVineyardId, Date.now());
