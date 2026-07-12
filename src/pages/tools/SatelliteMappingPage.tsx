@@ -1277,9 +1277,20 @@ export default function SatelliteMappingPage() {
               </label>
               <Select value={layer} onValueChange={(v) => setLayer(v as SatelliteIndexType)}>
                 <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {LAYERS.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                <SelectContent className="max-h-[420px]">
+                  {LAYER_GROUPS.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {group.label}
+                      </SelectLabel>
+                      {group.ids.map((id) => {
+                        const l = LAYERS.find((x) => x.id === id);
+                        if (!l) return null;
+                        return (
+                          <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                        );
+                      })}
+                    </SelectGroup>
                   ))}
                 </SelectContent>
               </Select>
