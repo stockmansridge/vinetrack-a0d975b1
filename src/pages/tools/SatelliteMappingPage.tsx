@@ -896,7 +896,7 @@ export default function SatelliteMappingPage() {
       const description = parts.join(", ") + ".";
 
       if (complete > 0 && loaded) {
-        toast({ title: "Satellite imagery up to date", description });
+        toast({ title: "Crop Health Maps up to date", description });
       } else if (complete > 0 && !loaded) {
         toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
       } else {
@@ -913,7 +913,7 @@ export default function SatelliteMappingPage() {
         message: String(e?.message ?? e ?? "Unknown error"),
       });
       toast({
-        title: "Satellite refresh failed",
+        title: "Crop Health Maps refresh failed",
         description: String(e?.message ?? e ?? "Unknown error"),
         variant: "destructive",
       });
@@ -1021,7 +1021,7 @@ export default function SatelliteMappingPage() {
           <div className="rounded-md bg-amber-500/15 p-1.5 text-amber-600 dark:text-amber-400">
             <SatelliteIcon className="h-4 w-4" />
           </div>
-          <h1 className="text-lg font-semibold truncate">Satellite Mapping</h1>
+          <h1 className="text-lg font-semibold truncate">Crop Health Maps</h1>
           <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]">
             System Admin · Beta
           </Badge>
@@ -1042,7 +1042,7 @@ export default function SatelliteMappingPage() {
       {searchError && (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Satellite search failed</CardTitle>
+            <CardTitle className="text-sm font-semibold">Crop Health Maps search failed</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p className="text-muted-foreground">
