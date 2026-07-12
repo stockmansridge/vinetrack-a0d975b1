@@ -1178,178 +1178,187 @@ function WillyWeatherCard({
   }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">WillyWeather</h2>
-        {configured ? (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Configured
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-        )}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
-      </p>
-
-      {autoAssigning && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Matching nearest WillyWeather location from vineyard GPS centre…
-        </div>
-      )}
-      {!autoAssigning && autoAssigned && configured && (
-        <div className="rounded-md border border-emerald-600/30 bg-emerald-600/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-          WillyWeather location automatically matched from this vineyard's GPS centre.
-        </div>
-      )}
-      {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
-        </div>
-      )}
-      {lastError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
-          <span className="font-medium">WillyWeather error:</span> {lastError}
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      ) : (
-        <div className="grid gap-2 sm:grid-cols-2 text-sm">
-          <Row label="Location" value={status?.station_name ?? "—"} />
-          <Row label="Location ID" value={status?.station_id ?? "—"} />
-          <Row
-            label="Coordinates"
-            value={
-              status?.station_latitude != null && status?.station_longitude != null
-                ? `${status.station_latitude.toFixed(3)}, ${status.station_longitude.toFixed(3)}`
-                : "—"
-            }
-          />
-          <Row label="Active" value={<YN v={status?.is_active ?? null} />} />
-          <Row label="Last test" value={fmtDate(status?.last_tested_at)} />
-          <Row label="Last test status" value={status?.last_test_status ?? "—"} />
-        </div>
-      )}
-
-      {canEdit ? (
-        <div className="space-y-3 border-t pt-4">
-          <div className="space-y-1">
-            <Label htmlFor="ww-query">Search location</Label>
-            <div className="flex gap-2">
-              <Input
-                id="ww-query"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. Orange NSW"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSearch();
-                  }
-                }}
-              />
-              <Button onClick={handleSearch} disabled={searching || !query.trim()} className="gap-2">
-                {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Search
-              </Button>
-              {configured && (
-                <Button
-                  variant="outline"
-                  onClick={handleNearest}
-                  disabled={searching}
-                  title="Find locations nearest the current coordinates"
-                >
-                  Find nearest
-                </Button>
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-4">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">WillyWeather</h2>
+            <div className="flex items-center gap-2">
+              {configured ? (
+                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                  Configured
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
               )}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </div>
-          </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
+          </p>
 
-          {results && results.length > 0 && (
-            <div className="rounded-md border divide-y max-h-72 overflow-auto">
-              {results.map((loc) => (
-                <button
-                  key={loc.id}
-                  type="button"
-                  onClick={() => handleSelect(loc)}
-                  disabled={busy === "set"}
-                  className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{loc.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {[loc.region, loc.state, loc.postcode].filter(Boolean).join(" · ") || `${loc.latitude}, ${loc.longitude}`}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {loc.distanceKm != null ? `${loc.distanceKm.toFixed(1)} km` : "Select"}
-                  </div>
-                </button>
-              ))}
+          {autoAssigning && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Matching nearest WillyWeather location from vineyard GPS centre…
+            </div>
+          )}
+          {!autoAssigning && autoAssigned && configured && (
+            <div className="rounded-md border border-emerald-600/30 bg-emerald-600/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+              WillyWeather location automatically matched from this vineyard's GPS centre.
+            </div>
+          )}
+          {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
+            </div>
+          )}
+          {lastError && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
+              <span className="font-medium">WillyWeather error:</span> {lastError}
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              variant="outline"
-              onClick={handleTest}
-              disabled={busy === "test" || !configured}
-              className="gap-2"
-              title={!configured ? "Set a location first" : "Test WillyWeather connection"}
-            >
-              {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-              Test connection
-            </Button>
-            <div className="ml-auto">
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-                disabled={!configured || busy === "delete"}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove location
-              </Button>
+          {isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 text-sm">
+              <Row label="Location" value={status?.station_name ?? "—"} />
+              <Row label="Location ID" value={status?.station_id ?? "—"} />
+              <Row
+                label="Coordinates"
+                value={
+                  status?.station_latitude != null && status?.station_longitude != null
+                    ? `${status.station_latitude.toFixed(3)}, ${status.station_longitude.toFixed(3)}`
+                    : "—"
+                }
+              />
+              <Row label="Active" value={<YN v={status?.is_active ?? null} />} />
+              <Row label="Last test" value={fmtDate(status?.last_tested_at)} />
+              <Row label="Last test status" value={status?.last_test_status ?? "—"} />
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change the WillyWeather location.
-        </div>
-      )}
+          )}
 
-      <WillyWeatherAttribution />
+          {canEdit ? (
+            <div className="space-y-3 border-t pt-4">
+              <div className="space-y-1">
+                <Label htmlFor="ww-query">Search location</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="ww-query"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="e.g. Orange NSW"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleSearch();
+                      }
+                    }}
+                  />
+                  <Button onClick={handleSearch} disabled={searching || !query.trim()} className="gap-2">
+                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Search
+                  </Button>
+                  {configured && (
+                    <Button
+                      variant="outline"
+                      onClick={handleNearest}
+                      disabled={searching}
+                      title="Find locations nearest the current coordinates"
+                    >
+                      Find nearest
+                    </Button>
+                  )}
+                </div>
+              </div>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove WillyWeather location?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The vineyard will fall back to Open-Meteo for forecasts (or whatever the Forecast Provider preference resolves to).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleDelete();
-              }}
-              disabled={busy === "delete"}
-            >
-              {busy === "delete" ? "Removing…" : "Remove"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+              {results && results.length > 0 && (
+                <div className="rounded-md border divide-y max-h-72 overflow-auto">
+                  {results.map((loc) => (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => handleSelect(loc)}
+                      disabled={busy === "set"}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{loc.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {[loc.region, loc.state, loc.postcode].filter(Boolean).join(" · ") || `${loc.latitude}, ${loc.longitude}`}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {loc.distanceKm != null ? `${loc.distanceKm.toFixed(1)} km` : "Select"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  onClick={handleTest}
+                  disabled={busy === "test" || !configured}
+                  className="gap-2"
+                  title={!configured ? "Set a location first" : "Test WillyWeather connection"}
+                >
+                  {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                  Test connection
+                </Button>
+                <div className="ml-auto">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={!configured || busy === "delete"}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove location
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change the WillyWeather location.
+            </div>
+          )}
+
+          <WillyWeatherAttribution />
+        </CollapsibleContent>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove WillyWeather location?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The vineyard will fall back to Open-Meteo for forecasts (or whatever the Forecast Provider preference resolves to).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete();
+                }}
+                disabled={busy === "delete"}
+              >
+                {busy === "delete" ? "Removing…" : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    </Collapsible>
   );
+
 }
 
 // ---------------------------------------------------------------------------
