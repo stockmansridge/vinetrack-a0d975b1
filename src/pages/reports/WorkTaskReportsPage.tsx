@@ -48,6 +48,8 @@ import {
 } from "@/lib/tripCostAllocationsQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { useVintage } from "@/lib/useVintage";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -218,6 +220,8 @@ export default function WorkTaskReportsPage() {
   const [hasLinked, setHasLinked] = useState<string>(ANY); // any | yes | no
   const [hasManualMachine, setHasManualMachine] = useState<string>(ANY);
   const [warningOnly, setWarningOnly] = useState(false);
+  const [season, setSeason] = useState<string>("current");
+  const { vintage: currentVintageYear, seasonStartMonth, seasonStartDay } = useVintage();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
@@ -468,10 +472,25 @@ export default function WorkTaskReportsPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
+  const rowVintage = (r: TaskRow): number => {
+    if (!r.date) return currentVintageYear;
+    return vintageForDate(new Date(r.date), seasonStartMonth, seasonStartDay);
+  };
+
+  const seasonOptions = useMemo(() => {
+    const s = new Set<number>();
+    rows.forEach((r) => s.add(rowVintage(r)));
+    const list = Array.from(s).sort((a, b) => b - a);
+    if (!list.includes(currentVintageYear)) list.unshift(currentVintageYear);
+    return list;
+  }, [rows, seasonStartMonth, seasonStartDay, currentVintageYear]);
+
   const filtered = useMemo(() => {
     const fromTs = from ? new Date(from).getTime() : null;
     const toTs = to ? new Date(to).getTime() + 86_399_999 : null;
     const q = search.trim().toLowerCase();
+    const seasonYear =
+      season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
     return rows.filter((r) => {
       if (fromTs != null || toTs != null) {
         const ts = r.date ? new Date(r.date).getTime() : NaN;
@@ -479,6 +498,7 @@ export default function WorkTaskReportsPage() {
         if (fromTs != null && ts < fromTs) return false;
         if (toTs != null && ts > toTs) return false;
       }
+      if (seasonYear != null && rowVintage(r) !== seasonYear) return false;
       if (taskType !== ANY && r.task.task_type !== taskType) return false;
       if (paddockId !== ANY && !r.paddockIds.includes(paddockId)) return false;
       if (hasLinked === "yes" && !r.hasLinkedTrips) return false;
@@ -501,7 +521,21 @@ export default function WorkTaskReportsPage() {
       const bd = b.date ? new Date(b.date).getTime() : 0;
       return bd - ad;
     });
-  }, [rows, search, from, to, taskType, paddockId, hasLinked, hasManualMachine, warningOnly]);
+  }, [rows, search, from, to, taskType, paddockId, hasLinked, hasManualMachine, warningOnly, season, seasonStartMonth, seasonStartDay, currentVintageYear]);
+
+  const seasonYearActive =
+    season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
+  const seasonTotalCost = useMemo(() => {
+    if (seasonYearActive == null) return rows.reduce((s, r) => s + r.totalCost, 0);
+    return rows
+      .filter((r) => rowVintage(r) === seasonYearActive)
+      .reduce((s, r) => s + r.totalCost, 0);
+  }, [rows, seasonYearActive, seasonStartMonth, seasonStartDay]);
+  const seasonTaskCount = useMemo(() => {
+    if (seasonYearActive == null) return rows.length;
+    return rows.filter((r) => rowVintage(r) === seasonYearActive).length;
+  }, [rows, seasonYearActive, seasonStartMonth, seasonStartDay]);
+
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -1483,6 +1517,23 @@ export default function WorkTaskReportsPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Season</label>
+            <Select value={season} onValueChange={setSeason}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All seasons</SelectItem>
+                <SelectItem value="current">Current ({currentVintageYear})</SelectItem>
+                {seasonOptions
+                  .filter((y) => y !== currentVintageYear)
+                  .map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      Vintage {y}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1 flex flex-col justify-end">
             <label className="text-xs text-muted-foreground">&nbsp;</label>
             <label className="flex items-center gap-2 h-9 text-sm">
@@ -1491,10 +1542,26 @@ export default function WorkTaskReportsPage() {
             </label>
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground">
+            {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
+          </span>
+          {canSeeCosts && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-[12px] font-medium">
+              <span className="text-muted-foreground">
+                {season === "all"
+                  ? "All seasons total"
+                  : season === "current"
+                    ? `Season ${currentVintageYear} total`
+                    : `Vintage ${seasonYearActive} total`}
+                {" "}({seasonTaskCount} task{seasonTaskCount === 1 ? "" : "s"}):
+              </span>
+              <span className="font-semibold text-foreground">{money(seasonTotalCost)}</span>
+            </span>
+          )}
         </div>
       </Card>
+
 
       <Tabs defaultValue="task-summary" className="space-y-3">
         <TabsList>
