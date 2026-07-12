@@ -323,12 +323,9 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     {suspicious && canSeeCosts && (
-                      <AlertTriangle
-                        className="h-3.5 w-3.5 text-amber-600 shrink-0"
-                        aria-label="This record may contain a unit price in the Total Purchase Cost field. Review and correct it."
-                      >
-                        <title>This record may contain a unit price in the Total Purchase Cost field. Review and correct it.</title>
-                      </AlertTriangle>
+                      <span title="This record may contain a unit price in the Total Purchase Cost field. Review and correct it.">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                      </span>
                     )}
                     <span>{fmtDate(r.date)}</span>
                   </div>
