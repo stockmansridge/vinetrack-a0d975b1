@@ -293,6 +293,11 @@ function computeStalePaddockIds(
   return stale;
 }
 
+// Module-level so it survives page unmount/remount within the tab session.
+// Records the last time we auto-triggered a refresh for a given vineyard.
+const autoRunTimestamps = new Map<string, number>();
+const AUTO_RUN_COOLDOWN_MS = 10 * 60_000;
+
 // ---------- Page ----------
 export default function SatelliteMappingPage() {
   const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin();
@@ -344,6 +349,9 @@ export default function SatelliteMappingPage() {
     queryKey: ["satellite-paddocks", activeVineyardId],
     enabled: !!activeVineyardId && isSystemAdmin,
     queryFn: () => fetchList<Paddock>("paddocks", activeVineyardId!),
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   // Processed scenes for this vineyard/paddock
@@ -358,6 +366,9 @@ export default function SatelliteMappingPage() {
       if (error) throw error;
       return data as { scenes: DBScene[]; assets: DBAsset[]; summaries: DBSummary[] };
     },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
@@ -466,19 +477,29 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
-  // Fetch signed URLs for visible assets
+  // Fetch signed URLs for visible assets. Signed URLs live ~10 min server-side;
+  // route through React Query so they survive route changes within their TTL
+  // and don't get re-signed on every page mount.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
         if (signedUrls[asset.id]) continue;
         try {
-          const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
-            asset_id: asset.id,
+          const signed_url = await qc.fetchQuery({
+            queryKey: ["satellite-signed-url", asset.id],
+            queryFn: async () => {
+              const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
+                asset_id: asset.id,
+              });
+              if (error) throw error;
+              return (data as any)?.signed_url as string;
+            },
+            staleTime: 8 * 60_000,
+            gcTime: 10 * 60_000,
           });
-          if (error) throw error;
-          if (!cancelled && data?.signed_url) {
-            setSignedUrls((prev) => ({ ...prev, [asset.id]: data.signed_url }));
+          if (!cancelled && signed_url) {
+            setSignedUrls((prev) => ({ ...prev, [asset.id]: signed_url }));
           }
         } catch (e) {
           console.error("sign url failed", e);
@@ -900,21 +921,30 @@ export default function SatelliteMappingPage() {
   });
 
   // Auto-run on page load: if any paddock has no imagery in the last 3 days,
-  // silently trigger a refresh for just those paddocks. Once per vineyard/session.
+  // silently trigger a refresh for just those paddocks. Cooled down per vineyard
+  // across mounts so bouncing in and out of the page doesn't refire it.
   useEffect(() => {
     if (!activeVineyardId) return;
     if (scenesQuery.isLoading || !scenesQuery.data) return;
     if (paddocksLoading || geoms.length === 0) return;
     if (autoRanForVineyardRef.current === activeVineyardId) return;
     if (checkForNewImage.isPending) return;
-    autoRanForVineyardRef.current = activeVineyardId;
+    const last = autoRunTimestamps.get(activeVineyardId) ?? 0;
+    if (Date.now() - last < AUTO_RUN_COOLDOWN_MS) {
+      autoRanForVineyardRef.current = activeVineyardId;
+      return;
+    }
     const stale = computeStalePaddockIds(
       geoms.map((g) => g.id),
       scenesQuery.data.scenes,
       scenesQuery.data.assets,
       layer,
     );
-    if (stale.length > 0) checkForNewImage.mutate({ paddockIds: stale });
+    autoRanForVineyardRef.current = activeVineyardId;
+    if (stale.length > 0) {
+      autoRunTimestamps.set(activeVineyardId, Date.now());
+      checkForNewImage.mutate({ paddockIds: stale });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeVineyardId, scenesQuery.data, scenesQuery.isLoading, paddocksLoading, geoms.length]);
 
