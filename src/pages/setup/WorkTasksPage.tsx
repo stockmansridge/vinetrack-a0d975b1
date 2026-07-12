@@ -1460,7 +1460,20 @@ function LabourLineRow({
       <Field label="Notes">
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
+      <div className="rounded border bg-muted/40 px-3 py-2">
+        <div className="text-xs text-muted-foreground mb-1">Cost estimate</div>
+        <div className="text-sm flex flex-wrap items-center gap-1">
+          <span>{derivedHourlyRate != null ? money(derivedHourlyRate) : "—"}/h</span>
+          <span className="text-muted-foreground">×</span>
+          <span>{workerCount || "—"} workers</span>
+          <span className="text-muted-foreground">×</span>
+          <span>{hoursPerWorker || "—"}h</span>
+          <span className="text-muted-foreground">=</span>
+          <span className="font-semibold">{estimatedCost != null ? money(estimatedCost) : "—"}</span>
+        </div>
+      </div>
       <div className="flex justify-end gap-2">
+
         {(line || onCancel) && (
           <Button variant="ghost" size="sm" onClick={() => (line ? setEditing(false) : onCancel?.())}>Cancel</Button>
         )}
