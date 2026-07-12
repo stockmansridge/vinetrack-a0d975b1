@@ -363,7 +363,7 @@ export default function TractorFuelLogsPage({ embedded = false }: { embedded?: b
               <TableHead className="text-right">{rf.fuelUnitLabel}/hr</TableHead>
               <TableHead>Rate status</TableHead>
               <TableHead>Operator</TableHead>
-              {canSeeCosts && <TableHead className="text-right">Cost/{rf.fuelUnitLabel}</TableHead>}
+              {canSeeCosts && <TableHead className="text-right">Price / {rf.fuelUnitLabel}</TableHead>}
               {canSeeCosts && <TableHead className="text-right">Total</TableHead>}
               <TableHead>Full?</TableHead>
               <TableHead>Notes</TableHead>
