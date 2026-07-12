@@ -344,6 +344,9 @@ export default function SatelliteMappingPage() {
     queryKey: ["satellite-paddocks", activeVineyardId],
     enabled: !!activeVineyardId && isSystemAdmin,
     queryFn: () => fetchList<Paddock>("paddocks", activeVineyardId!),
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   // Processed scenes for this vineyard/paddock
@@ -358,6 +361,9 @@ export default function SatelliteMappingPage() {
       if (error) throw error;
       return data as { scenes: DBScene[]; assets: DBAsset[]; summaries: DBSummary[] };
     },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
