@@ -43,6 +43,13 @@ import {
 import type { SatelliteIndexType } from "@/types/satellite";
 
 // ---------- Layer definitions ----------
+type InterpretationDirection =
+  | "higher_usually_more_vegetation"
+  | "higher_usually_more_chlorophyll_signal"
+  | "higher_usually_more_moisture_signal"
+  | "higher_usually_more_senescence"
+  | "context_only";
+
 type LayerOption = {
   id: SatelliteIndexType;
   label: string;
@@ -51,113 +58,187 @@ type LayerOption = {
   nativeResM: number;
   resamplingNote: boolean;
   legend: string[];
+  // Plain-English endpoint labels
   legendLow: string;
   legendHigh: string;
-  legendMinValue: string;
-  legendMaxValue: string;
+  // Documented display range (numerical). These are display bounds only —
+  // values outside remain in analytical rasters and tooltips.
+  displayMin: number;
+  displayMax: number;
+  // One-line supporting note under the legend colour bar.
+  legendNote: string;
+  // Direction of meaning used to phrase copy consistently.
+  interpretationDirection: InterpretationDirection;
+  // Content for the legend's info popover.
+  infoWhat: string;
+  infoLow: string;
+  infoHigh: string;
+  infoImportant: string;
+  // Extra caution shown in legend + tooltip (e.g. PSRI seasonality note).
+  extraCaution?: string;
+  // Whether to rely mainly on paddock-relative wording instead of fixed bands.
+  useRelativeBands?: boolean;
 };
 
-// Satellite edge functions live in the Lovable Cloud project but authorize the
-// caller against the VineTrack iOS Supabase project. Send the iOS access token
-// as the Bearer header so `verifySystemAdmin` there succeeds.
-async function invokeSatelliteFn(name: string, body: unknown) {
-  const { data: { session } } = await iosSupabase.auth.getSession();
-  if (!session?.access_token) {
-    return { data: null as any, error: new Error("Not signed in to VineTrack") as any };
-  }
-  const result = await supabase.functions.invoke(name, {
-    body,
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  const response = result.error?.context;
-  if (response instanceof Response) {
-    try {
-      const text = await response.clone().text();
-      (result.error as any).details = JSON.parse(text);
-    } catch {
-      // Keep the original invoke error if the response body is not JSON.
-    }
-  }
-  return result;
-}
+const fmt = (n: number) => (Number.isInteger(n) ? n.toFixed(0) : n.toFixed(1));
 
 const LAYERS: LayerOption[] = [
   {
     id: "TRUE_COLOUR", label: "Satellite Image", short: "True colour", nativeResM: 10, resamplingNote: false,
     description: "A natural-colour view of the vineyard from the selected Sentinel-2 capture. Uses native 10 m visible bands.",
     legend: ["#3b2f1e", "#7a6a48", "#c7b98a", "#e9e2c7", "#ffffff"],
-    legendLow: "Darker", legendHigh: "Brighter",
-    legendMinValue: "0", legendMaxValue: "255",
+    legendLow: "Darker surface", legendHigh: "Brighter surface",
+    displayMin: 0, displayMax: 255,
+    legendNote: "Natural-colour Sentinel-2 image. No numerical index value.",
+    interpretationDirection: "context_only",
+    infoWhat: "A natural-colour composite from Sentinel-2 red, green and blue bands.",
+    infoLow: "Darker areas (shadow, water, dense canopy in shade).",
+    infoHigh: "Brighter areas (exposed soil, bare ground, clouds).",
+    infoImportant: "No agronomic index is being measured — this is a visual reference only.",
   },
   {
     id: "NDVI", label: "NDVI — General Vine Vigour", short: "NDVI", nativeResM: 10, resamplingNote: false,
     description: "Overall canopy vigour. Uses native 10 m red (B04) and near-infrared (B08) data.",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Water, bare soil or very little green vegetation",
+    legendHigh: "Very strong green vegetation signal",
+    displayMin: -0.2, displayMax: 0.9,
+    legendNote: "Higher values usually indicate more green vegetation in the satellite cell.",
+    interpretationDirection: "higher_usually_more_vegetation",
+    infoWhat: "NDVI compares near-infrared and red reflectance to highlight green vegetation.",
+    infoLow: "Usually indicate water, shadow, exposed soil or very little green vegetation.",
+    infoHigh: "Usually indicate a strong or dense green vegetation signal.",
+    infoImportant: "A high value is not automatically better. Compare nearby cells, earlier imagery and field observations.",
   },
   {
     id: "EVI", label: "EVI — Dense Canopy Vigour", short: "EVI", nativeResM: 10, resamplingNote: false,
     description: "Shows canopy vigour while reducing some soil and atmospheric influence. It can remain useful where dense vegetation causes NDVI values to level out. Bands: 10 m blue (B02), red (B04), NIR (B08).",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Very little active canopy",
+    legendHigh: "Strong dense-canopy signal",
+    displayMin: -0.2, displayMax: 1.0,
+    legendNote: "Higher values usually indicate stronger or denser active vegetation.",
+    interpretationDirection: "higher_usually_more_vegetation",
+    infoWhat: "EVI improves on NDVI in dense canopies by reducing soil and atmospheric influence.",
+    infoLow: "Usually indicate little active vegetation or a non-vegetated surface.",
+    infoHigh: "Usually indicate a strong dense-canopy signal.",
+    infoImportant: "A high value is not automatically better. Compare with nearby cells and field observations.",
   },
   {
     id: "GNDVI", label: "GNDVI — Chlorophyll & Nitrogen Signal", short: "GNDVI", nativeResM: 10, resamplingNote: false,
     description: "Highlights relative differences in green-canopy chlorophyll. It may help identify areas requiring inspection for canopy or nutritional variation. Bands: 10 m green (B03), NIR (B08).",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Very weak green-canopy chlorophyll signal",
+    legendHigh: "Strong green-canopy chlorophyll signal",
+    displayMin: -0.2, displayMax: 0.9,
+    legendNote: "Higher values usually indicate a stronger green-canopy chlorophyll response, but do not directly prove nitrogen status.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    infoWhat: "GNDVI uses green and near-infrared reflectance and is sensitive to canopy chlorophyll.",
+    infoLow: "Usually indicate little or no green-canopy chlorophyll response.",
+    infoHigh: "Usually indicate a strong green-canopy chlorophyll response.",
+    infoImportant: "A higher signal does not by itself prove nitrogen sufficiency — confirm with tissue tests and field checks.",
   },
   {
     id: "MSAVI", label: "MSAVI — Vigour with Soil Adjustment", short: "MSAVI", nativeResM: 10, resamplingNote: false,
     description: "Reduces soil influence for sparse canopies. Uses native 10 m red (B04) and NIR (B08).",
     legend: ["#7a4a2b", "#b98a55", "#e0cc99", "#a3c977", "#2f6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Bare soil or very sparse vegetation",
+    legendHigh: "Strong vegetation signal",
+    displayMin: -0.2, displayMax: 0.9,
+    legendNote: "Higher values usually indicate more vegetation after reducing some exposed-soil influence.",
+    interpretationDirection: "higher_usually_more_vegetation",
+    infoWhat: "MSAVI adjusts NDVI-like vigour to reduce the effect of exposed soil in sparse canopies.",
+    infoLow: "Usually indicate bare soil or very sparse vegetation.",
+    infoHigh: "Usually indicate a strong vegetation signal.",
+    infoImportant: "A high value is not automatically better. Use with field observations.",
   },
   {
     id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
     description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Very weak red-edge chlorophyll signal",
+    legendHigh: "Strong red-edge chlorophyll signal",
+    displayMin: -0.2, displayMax: 0.8,
+    legendNote: "Higher values usually indicate a stronger chlorophyll response in established canopy.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    infoWhat: "NDRE uses red-edge and near-infrared reflectance to highlight canopy chlorophyll variation.",
+    infoLow: "Usually indicate little or no red-edge canopy response.",
+    infoHigh: "Usually indicate a strong red-edge chlorophyll response.",
+    infoImportant: "Most useful once canopies are established. A high value is not automatically better.",
   },
   {
     id: "RECI", label: "RECI — Chlorophyll Activity", short: "RECI", nativeResM: 20, resamplingNote: true,
     description: "Relative differences in leaf chlorophyll. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "0", legendMaxValue: "10",
+    legendLow: "Low chlorophyll response",
+    legendHigh: "Very strong chlorophyll response",
+    displayMin: 0, displayMax: 5,
+    legendNote: "Higher values indicate a stronger red-edge chlorophyll signal. This index is not limited to 1.0.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    useRelativeBands: true,
+    infoWhat: "RECI is a red-edge chlorophyll ratio index — it has no fixed upper bound of 1.0.",
+    infoLow: "Low relative chlorophyll response for this scene.",
+    infoHigh: "Very strong relative chlorophyll response for this scene.",
+    infoImportant: "This index has no universal maximum of 1.0. Interpret cells relative to the paddock distribution and prior images.",
   },
   {
     id: "GCI", label: "GCI — Green Chlorophyll Index", short: "GCI", nativeResM: 10, resamplingNote: false,
     description: "Highlights relative canopy chlorophyll activity using green and near-infrared reflectance. Bands: 10 m green (B03), NIR (B08).",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "0", legendMaxValue: "8",
+    legendLow: "Low green chlorophyll response",
+    legendHigh: "Very strong green chlorophyll response",
+    displayMin: 0, displayMax: 8,
+    legendNote: "Higher values indicate a stronger chlorophyll signal. This index is not limited to 1.0.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    useRelativeBands: true,
+    infoWhat: "GCI is a green-band chlorophyll ratio — like RECI it has no fixed upper bound.",
+    infoLow: "Low relative green-chlorophyll response for this scene.",
+    infoHigh: "Very strong relative green-chlorophyll response for this scene.",
+    infoImportant: "This index has no universal maximum of 1.0. Interpret cells relative to the paddock distribution.",
   },
   {
     id: "RENDVI", label: "RENDVI — Red-Edge Vine Vigour", short: "RENDVI", nativeResM: 20, resamplingNote: true,
     description: "Measures canopy variation using narrow near-infrared and red-edge data. It may be useful for established canopies and later growth stages. Bands: 20 m red-edge (B05), 20 m narrow NIR (B8A); result shown on 10 m display grid.",
     legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Little or no red-edge canopy signal",
+    legendHigh: "Strong red-edge canopy signal",
+    displayMin: -0.2, displayMax: 0.8,
+    legendNote: "Higher values usually indicate stronger established-canopy or chlorophyll response.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    infoWhat: "RENDVI measures the contrast between red-edge and narrow near-infrared reflectance.",
+    infoLow: "Usually indicate little canopy, exposed soil or a weaker red-edge response.",
+    infoHigh: "Usually indicate a stronger established-canopy and chlorophyll response.",
+    infoImportant: "A high value is not automatically better. Compare nearby cells, earlier imagery and field observations.",
   },
   {
     id: "NDMI", label: "NDMI — Canopy Moisture", short: "NDMI", nativeResM: 20, resamplingNote: true,
     description: "Relative canopy-moisture variation. Uses 10 m NIR (B08) and 20 m native SWIR (B11); result is on a 10 m display grid.",
     legend: ["#7a3b1e", "#c98a4f", "#e6dcb0", "#7fb7d1", "#1e4f7a"],
-    legendLow: "Drier", legendHigh: "Wetter",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Low vegetation-moisture signal",
+    legendHigh: "Strong vegetation-moisture signal",
+    displayMin: -0.5, displayMax: 0.7,
+    legendNote: "Higher values generally indicate a stronger canopy-moisture response, but do not by themselves confirm irrigation status or water stress.",
+    interpretationDirection: "higher_usually_more_moisture_signal",
+    infoWhat: "NDMI compares near-infrared and short-wave infrared reflectance and is sensitive to canopy moisture.",
+    infoLow: "Usually indicate a low vegetation-moisture signal (may also occur on non-vegetated surfaces).",
+    infoHigh: "Usually indicate a strong vegetation-moisture signal.",
+    infoImportant: "Do not interpret cells as dry, irrigated or water-stressed without field confirmation.",
   },
   {
     id: "PSRI", label: "PSRI — Leaf Ageing & Senescence", short: "PSRI", nativeResM: 20, resamplingNote: true,
     description: "Highlights relative pigment changes associated with leaf ageing and senescence. It is most useful when comparing similar growth stages and dates. Bands: 10 m blue (B02), red (B04), 20 m red-edge (B06); result shown on 10 m display grid.",
     legend: ["#1e6b2e", "#7ec26b", "#e6d36a", "#c98a3f", "#8b3a2b"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-0.2", legendMaxValue: "0.4",
+    legendLow: "Low senescence or pigment-change signal",
+    legendHigh: "Stronger senescence or pigment-change signal",
+    displayMin: -0.2, displayMax: 0.5,
+    legendNote: "Higher values may indicate greater leaf ageing or pigment change. For this layer, higher is not necessarily better.",
+    interpretationDirection: "higher_usually_more_senescence",
+    useRelativeBands: true,
+    infoWhat: "PSRI highlights pigment changes associated with leaf ageing and senescence.",
+    infoLow: "Usually indicate little pigment change or ageing signal.",
+    infoHigh: "Usually indicate a stronger pigment-change or senescence signal — not necessarily healthier vines.",
+    infoImportant: "A higher value generally means a stronger ageing or pigment-change signal, not necessarily healthier vines.",
+    extraCaution: "Compare similar growth stages because natural seasonal ageing changes this index.",
   },
 ];
 
@@ -173,7 +254,74 @@ const PSRI_CAUTION =
   "Seasonal leaf ageing naturally changes this index. Compare similar growth stages before treating a difference as unusual.";
 
 const LAYER_DISCLAIMER =
-  "Satellite indices indicate relative variation and do not by themselves diagnose disease, water stress, nutrient deficiency or vine health.";
+  "Satellite indices indicate relative variation and do not by themselves diagnose disease, water stress, nutrient deficiency or vine health. Each 10 m or 20 m cell may include vines, inter-row vegetation, exposed soil and shadow together.";
+
+// ---------- Plain-English general interpretation bands ----------
+// Returned band text is deliberately descriptive, not evaluative. Layers with
+// `useRelativeBands` (RECI, GCI, PSRI) return null here — their tooltips lean
+// on the paddock-relative wording instead.
+function generalBand(index: SatelliteIndexType, v: number): string | null {
+  switch (index) {
+    case "NDVI":
+      if (v < 0) return "Usually water, shadow or a non-vegetated surface";
+      if (v < 0.15) return "Mostly bare soil or very little green vegetation";
+      if (v < 0.30) return "Sparse green vegetation";
+      if (v < 0.50) return "Moderate vegetation signal";
+      if (v < 0.70) return "Strong green vegetation signal";
+      return "Very strong or dense green vegetation signal";
+    case "MSAVI":
+      if (v < 0) return "Little vegetation or non-vegetated surface";
+      if (v < 0.15) return "Very sparse vegetation";
+      if (v < 0.30) return "Sparse vegetation";
+      if (v < 0.50) return "Moderate soil-adjusted vegetation signal";
+      if (v < 0.70) return "Strong soil-adjusted vegetation signal";
+      return "Very strong vegetation signal";
+    case "GNDVI":
+      if (v < 0) return "Little or no green-canopy signal";
+      if (v < 0.20) return "Weak green-canopy chlorophyll signal";
+      if (v < 0.40) return "Moderate green-canopy chlorophyll signal";
+      if (v < 0.60) return "Strong green-canopy chlorophyll signal";
+      return "Very strong green-canopy chlorophyll signal";
+    case "EVI":
+      if (v < 0) return "Little active vegetation or non-vegetated surface";
+      if (v < 0.20) return "Weak canopy signal";
+      if (v < 0.40) return "Moderate canopy vigour";
+      if (v < 0.60) return "Strong canopy vigour";
+      return "Very strong dense-canopy signal";
+    case "NDRE":
+    case "RENDVI":
+      if (v < 0) return "Little or no red-edge canopy response";
+      if (v < 0.15) return "Weak red-edge canopy signal";
+      if (v < 0.30) return "Moderate red-edge canopy signal";
+      if (v < 0.50) return "Strong red-edge canopy signal";
+      return "Very strong red-edge canopy signal";
+    case "NDMI":
+      if (v < -0.2) return "Very low vegetation-moisture signal or non-vegetated surface";
+      if (v < 0.0) return "Low vegetation-moisture signal";
+      if (v < 0.2) return "Moderate vegetation-moisture signal";
+      if (v < 0.4) return "Strong vegetation-moisture signal";
+      return "Very strong vegetation-moisture signal";
+    default:
+      return null;
+  }
+}
+
+// Paddock-relative band + approximate percentile using stored quartile anchors.
+type RelativeInterp = { band: string; approxPct: number | null };
+function relativeInterpretation(
+  value: number,
+  s: { percentile_10: number | null; percentile_25: number | null; percentile_75: number | null; percentile_90: number | null } | undefined,
+): RelativeInterp | null {
+  if (!s || s.percentile_10 == null || s.percentile_25 == null || s.percentile_75 == null || s.percentile_90 == null) return null;
+  const { percentile_10: p10, percentile_25: p25, percentile_75: p75, percentile_90: p90 } = s;
+  const lerp = (v: number, x0: number, x1: number, y0: number, y1: number) =>
+    x1 === x0 ? y0 : y0 + ((v - x0) / (x1 - x0)) * (y1 - y0);
+  if (value <= p10) return { band: "Among the lowest 10% of this paddock", approxPct: null };
+  if (value <= p25) return { band: "Lower than most of this paddock", approxPct: Math.round(lerp(value, p10, p25, 10, 25)) };
+  if (value <= p75) return { band: "Typical for this paddock", approxPct: Math.round(lerp(value, p25, p75, 25, 75)) };
+  if (value <= p90) return { band: "Higher than most of this paddock", approxPct: Math.round(lerp(value, p75, p90, 75, 90)) };
+  return { band: "Among the highest 10% of this paddock", approxPct: null };
+}
 
 // ---------- Paddock type ----------
 interface Paddock {
