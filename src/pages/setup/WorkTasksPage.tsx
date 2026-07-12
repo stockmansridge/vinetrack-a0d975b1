@@ -861,6 +861,8 @@ function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
+  const [localLabourLines, setLocalLabourLines] = useState<WorkTaskLabourLine[]>([]);
+  const [localMachineLines, setLocalMachineLines] = useState<WorkTaskMachineLine[]>([]);
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const money = mkMoney(rf);
@@ -885,7 +887,11 @@ function WorkTaskDrawer({
   const [isFinalized, setIsFinalized] = useState<boolean>(!!task?.is_finalized);
   const [savedTaskId, setSavedTaskId] = useState<string | null>(task?.id ?? null);
 
-  useEffect(() => { setSavedTaskId(task?.id ?? null); }, [task?.id]);
+  useEffect(() => {
+    setSavedTaskId(task?.id ?? null);
+    setLocalLabourLines([]);
+    setLocalMachineLines([]);
+  }, [task?.id]);
 
   const togglePaddock = (id: string) => {
     setPaddockIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -1004,7 +1010,19 @@ function WorkTaskDrawer({
   });
 
   const drawerCanSeeCosts = useCanSeeCosts();
-  const visibleLines = labourLines.filter((l) => !l.deleted_at);
+  const displayedLabourLines = useMemo(() => {
+    const byId = new Map<string, WorkTaskLabourLine>();
+    labourLines.forEach((line) => byId.set(line.id, line));
+    localLabourLines.forEach((line) => byId.set(line.id, line));
+    return Array.from(byId.values());
+  }, [labourLines, localLabourLines]);
+  const displayedMachineLines = useMemo(() => {
+    const byId = new Map<string, WorkTaskMachineLine>();
+    machineLines.forEach((line) => byId.set(line.id, line));
+    localMachineLines.forEach((line) => byId.set(line.id, line));
+    return Array.from(byId.values());
+  }, [machineLines, localMachineLines]);
+  const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
   const missingRate = visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
@@ -1117,7 +1135,7 @@ function WorkTaskDrawer({
                 Task created. Add labour and machine resources below before closing.
               </div>
             )}
-            {savedTaskId && visibleLines.length === 0 && machineLines.length === 0 && (
+            {savedTaskId && visibleLines.length === 0 && displayedMachineLines.length === 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 No labour or machine resources have been added to this task.
               </div>
@@ -1129,7 +1147,16 @@ function WorkTaskDrawer({
               categories={categories}
               canSoftDelete={canSoftDelete}
               userId={userId}
-              onChanged={onSaved}
+              onChanged={(savedLine) => {
+                if (savedLine) {
+                  setLocalLabourLines((prev) => {
+                    const byId = new Map(prev.map((line) => [line.id, line]));
+                    byId.set(savedLine.id, savedLine);
+                    return Array.from(byId.values());
+                  });
+                }
+                onSaved();
+              }}
             />
           </div>
 
@@ -1194,11 +1221,21 @@ function WorkTaskDrawer({
               <MachineWorkSection
                 workTaskId={savedTaskId}
                 vineyardId={vineyardId}
-                lines={machineLines}
+                lines={displayedMachineLines}
                 lookups={machineLookups}
                 canEdit={canSoftDelete}
                 canDelete={canSoftDelete}
                 userId={userId}
+                onChanged={(savedLine) => {
+                  if (savedLine) {
+                    setLocalMachineLines((prev) => {
+                      const byId = new Map(prev.map((line) => [line.id, line]));
+                      byId.set(savedLine.id, savedLine);
+                      return Array.from(byId.values());
+                    });
+                  }
+                  onSaved();
+                }}
               />
             ) : (
               <Section title="Manual Machine Work">
@@ -1210,7 +1247,7 @@ function WorkTaskDrawer({
             {!isNew && task && (
               <WorkTaskSummarySection
                 labourLines={visibleLines}
-                machineLines={machineLines}
+                machineLines={displayedMachineLines}
                 linkedTrips={linkedTrips}
                 allocByTripId={allocByTripId}
                 canSeeCosts={canSeeCosts}
