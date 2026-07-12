@@ -1070,6 +1070,41 @@ export default function SatelliteMappingPage() {
       "Higher relative canopy moisture signal for this paddock",
       "Very high relative canopy moisture signal for this paddock",
     ],
+    GNDVI: [
+      "Very low green-canopy chlorophyll signal relative to this paddock",
+      "Lower green-canopy chlorophyll signal relative to this paddock",
+      "Typical green-canopy chlorophyll signal for this paddock",
+      "Higher green-canopy chlorophyll signal relative to this paddock",
+      "Very high green-canopy chlorophyll signal relative to this paddock",
+    ],
+    EVI: [
+      "Very low dense-canopy vigour relative to this paddock",
+      "Lower dense-canopy vigour relative to this paddock",
+      "Typical dense-canopy vigour for this paddock",
+      "Higher dense-canopy vigour relative to this paddock",
+      "Very high dense-canopy vigour relative to this paddock",
+    ],
+    GCI: [
+      "Very low green chlorophyll activity relative to this paddock",
+      "Lower green chlorophyll activity relative to this paddock",
+      "Typical green chlorophyll activity for this paddock",
+      "Higher green chlorophyll activity relative to this paddock",
+      "Very high green chlorophyll activity relative to this paddock",
+    ],
+    RENDVI: [
+      "Very low red-edge vigour relative to this paddock",
+      "Lower red-edge vigour relative to this paddock",
+      "Typical red-edge vigour for this paddock",
+      "Higher red-edge vigour relative to this paddock",
+      "Very high red-edge vigour relative to this paddock",
+    ],
+    PSRI: [
+      "Very low senescence signal relative to this paddock",
+      "Lower senescence signal relative to this paddock",
+      "Typical senescence signal for this paddock",
+      "Higher senescence signal relative to this paddock",
+      "Very high senescence signal relative to this paddock",
+    ],
     TRUE_COLOUR: ["—", "—", "—", "—", "—"],
   };
   function classify(value: number | null, s: DBSummary | undefined): string {
