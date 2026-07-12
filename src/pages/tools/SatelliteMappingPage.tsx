@@ -95,9 +95,16 @@ const LAYERS: LayerOption[] = [
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
-    id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
-    description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
-    legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
+    id: "EVI", label: "EVI — Dense Canopy Vigour", short: "EVI", nativeResM: 10, resamplingNote: false,
+    description: "Shows canopy vigour while reducing some soil and atmospheric influence. It can remain useful where dense vegetation causes NDVI values to level out. Bands: 10 m blue (B02), red (B04), NIR (B08).",
+    legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
+  },
+  {
+    id: "GNDVI", label: "GNDVI — Chlorophyll & Nitrogen Signal", short: "GNDVI", nativeResM: 10, resamplingNote: false,
+    description: "Highlights relative differences in green-canopy chlorophyll. It may help identify areas requiring inspection for canopy or nutritional variation. Bands: 10 m green (B03), NIR (B08).",
+    legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
@@ -109,11 +116,32 @@ const LAYERS: LayerOption[] = [
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
+    id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
+    description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
+    legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
+  },
+  {
     id: "RECI", label: "RECI — Chlorophyll Activity", short: "RECI", nativeResM: 20, resamplingNote: true,
     description: "Relative differences in leaf chlorophyll. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
     legendMinValue: "0", legendMaxValue: "10",
+  },
+  {
+    id: "GCI", label: "GCI — Green Chlorophyll Index", short: "GCI", nativeResM: 10, resamplingNote: false,
+    description: "Highlights relative canopy chlorophyll activity using green and near-infrared reflectance. Bands: 10 m green (B03), NIR (B08).",
+    legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "0", legendMaxValue: "8",
+  },
+  {
+    id: "RENDVI", label: "RENDVI — Red-Edge Vine Vigour", short: "RENDVI", nativeResM: 20, resamplingNote: true,
+    description: "Measures canopy variation using narrow near-infrared and red-edge data. It may be useful for established canopies and later growth stages. Bands: 20 m red-edge (B05), 20 m narrow NIR (B8A); result shown on 10 m display grid.",
+    legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
     id: "NDMI", label: "NDMI — Canopy Moisture", short: "NDMI", nativeResM: 20, resamplingNote: true,
@@ -122,7 +150,25 @@ const LAYERS: LayerOption[] = [
     legendLow: "Drier", legendHigh: "Wetter",
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
+  {
+    id: "PSRI", label: "PSRI — Leaf Ageing & Senescence", short: "PSRI", nativeResM: 20, resamplingNote: true,
+    description: "Highlights relative pigment changes associated with leaf ageing and senescence. It is most useful when comparing similar growth stages and dates. Bands: 10 m blue (B02), red (B04), 20 m red-edge (B06); result shown on 10 m display grid.",
+    legend: ["#1e6b2e", "#7ec26b", "#e6d36a", "#c98a3f", "#8b3a2b"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-0.2", legendMaxValue: "0.4",
+  },
 ];
+
+// Grouped presentation for the Map Layer selector.
+const LAYER_GROUPS: Array<{ label: string; ids: SatelliteIndexType[] }> = [
+  { label: "Satellite Image", ids: ["TRUE_COLOUR"] },
+  { label: "Canopy & Vigour", ids: ["NDVI", "EVI", "GNDVI", "MSAVI"] },
+  { label: "Chlorophyll & Red Edge", ids: ["NDRE", "RECI", "GCI", "RENDVI"] },
+  { label: "Moisture & Seasonal Change", ids: ["NDMI", "PSRI"] },
+];
+
+const PSRI_CAUTION =
+  "Seasonal leaf ageing naturally changes this index. Compare similar growth stages before treating a difference as unusual.";
 
 const LAYER_DISCLAIMER =
   "Satellite indices indicate relative variation and do not by themselves diagnose disease, water stress, nutrient deficiency or vine health.";
