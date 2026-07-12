@@ -1559,211 +1559,220 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Weather Underground</h2>
-        {configured ? (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Configured
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-        )}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Uses platform Weather Underground connection. Owners and managers can
-        set the vineyard's PWS station ID. Rainfall is backfilled into
-        vineyard history server-side.
-      </p>
-
-      {merged.error && (
-        <div className="text-xs text-destructive">RPC error: {merged.error}</div>
-      )}
-
-      {wuLoading && !wuConfig && (
-        <div className="text-xs text-muted-foreground">Loading station config…</div>
-      )}
-
-      {configured && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          <div className="font-medium">Selected: {merged.station_name ?? "—"}</div>
-          <div className="text-xs text-muted-foreground">
-            Station ID: {merged.station_id ?? "—"}
-            {merged.station_latitude != null && merged.station_longitude != null
-              ? ` · ${merged.station_latitude.toFixed(3)}, ${merged.station_longitude.toFixed(3)}`
-              : ""}
-          </div>
-        </div>
-      )}
-
-      {canEdit ? (
-        <div className="space-y-3 border-t pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => findMut.mutate()}
-              disabled={findMut.isPending || !vineyardCenter}
-              title={!vineyardCenter ? "Vineyard coordinates not available" : "Find nearby WU stations"}
-              className="gap-2"
-            >
-              {findMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Find nearby WU stations
-            </Button>
-            {!vineyardCenter && (
-              <span className="text-xs text-muted-foreground">
-                Set vineyard GPS centre to search nearby stations.
-              </span>
-            )}
-          </div>
-
-          {findError && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
-              {findError}
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-4">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Weather Underground</h2>
+            <div className="flex items-center gap-2">
+              {configured ? (
+                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                  Configured
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
+              )}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </div>
-          )}
-
-          {nearby && nearby.length > 0 && (
-            <div className="rounded-md border divide-y max-h-72 overflow-auto">
-              {nearby.map((s) => (
-                <button
-                  key={s.station_id}
-                  type="button"
-                  onClick={() => pickNearby(s)}
-                  className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="text-sm font-medium">
-                      {s.station_name ?? s.neighborhood ?? s.station_id}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      ID: {s.station_id}
-                      {s.neighborhood && s.station_name && s.neighborhood !== s.station_name
-                        ? ` · ${s.neighborhood}`
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {s.distance_km != null ? `${Number(s.distance_km).toFixed(1)} km` : "Pick"}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="wu-station-id">Station ID</Label>
-              <Input
-                id="wu-station-id"
-                value={stationId}
-                onChange={(e) => setStationId(e.target.value)}
-                placeholder="e.g. KCASANTA123"
-                autoComplete="off"
-                spellCheck={false}
-                className="bg-card"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="wu-station-name">Station name</Label>
-              <Input
-                id="wu-station-name"
-                value={stationName}
-                onChange={(e) => setStationName(e.target.value)}
-                placeholder="e.g. North block PWS"
-                autoComplete="off"
-                className="bg-card"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending || !stationId.trim()}
-              className="gap-2"
-            >
-              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save station
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => backfillMut.mutate()}
-              disabled={backfillMut.isPending || !configured}
-              className="gap-2"
-              title={!configured ? "Save a station first" : "Backfill last 14 days of WU rainfall"}
-            >
-              {backfillMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudRain className="h-4 w-4" />}
-              Backfill Weather Underground rainfall
-            </Button>
-
-            <div className="ml-auto">
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-                disabled={!configured || deleteMut.isPending}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove Weather Underground station
-              </Button>
-            </div>
-          </div>
-
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Imports the last 14 days of Weather Underground rainfall into
-            vineyard history. Safe to re-run — Manual and Davis rainfall are
-            preserved. Today is skipped because the daily summary is
-            incomplete.
+            Uses platform Weather Underground connection. Owners and managers can
+            set the vineyard's PWS station ID. Rainfall is backfilled into
+            vineyard history server-side.
           </p>
 
-          {backfillResult && (
-            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
-              {backfillResult}
+          {merged.error && (
+            <div className="text-xs text-destructive">RPC error: {merged.error}</div>
+          )}
+
+          {wuLoading && !wuConfig && (
+            <div className="text-xs text-muted-foreground">Loading station config…</div>
+          )}
+
+          {configured && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <div className="font-medium">Selected: {merged.station_name ?? "—"}</div>
+              <div className="text-xs text-muted-foreground">
+                Station ID: {merged.station_id ?? "—"}
+                {merged.station_latitude != null && merged.station_longitude != null
+                  ? ` · ${merged.station_latitude.toFixed(3)}, ${merged.station_longitude.toFixed(3)}`
+                  : ""}
+              </div>
             </div>
           )}
-        </div>
-      ) : (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change the Weather
-          Underground station or run a rainfall backfill.
-        </div>
-      )}
 
-      <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        Manual entries override Davis. Davis overrides Weather Underground.
-        Weather Underground overrides Open-Meteo. Backfill only writes
-        Weather Underground rows — Manual and Davis rows are never
-        overwritten.
-      </div>
+          {canEdit ? (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => findMut.mutate()}
+                  disabled={findMut.isPending || !vineyardCenter}
+                  title={!vineyardCenter ? "Vineyard coordinates not available" : "Find nearby WU stations"}
+                  className="gap-2"
+                >
+                  {findMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Find nearby WU stations
+                </Button>
+                {!vineyardCenter && (
+                  <span className="text-xs text-muted-foreground">
+                    Set vineyard GPS centre to search nearby stations.
+                  </span>
+                )}
+              </div>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Weather Underground station?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the shared vineyard-wide Weather Underground
-              station. Existing rainfall history is preserved. The vineyard
-              will fall back to Open-Meteo for WU rainfall until a new
-              station is saved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                deleteMut.mutate();
-              }}
-              disabled={deleteMut.isPending}
-            >
-              {deleteMut.isPending ? "Removing…" : "Remove"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+              {findError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
+                  {findError}
+                </div>
+              )}
+
+              {nearby && nearby.length > 0 && (
+                <div className="rounded-md border divide-y max-h-72 overflow-auto">
+                  {nearby.map((s) => (
+                    <button
+                      key={s.station_id}
+                      type="button"
+                      onClick={() => pickNearby(s)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">
+                          {s.station_name ?? s.neighborhood ?? s.station_id}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          ID: {s.station_id}
+                          {s.neighborhood && s.station_name && s.neighborhood !== s.station_name
+                            ? ` · ${s.neighborhood}`
+                            : ""}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {s.distance_km != null ? `${Number(s.distance_km).toFixed(1)} km` : "Pick"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="wu-station-id">Station ID</Label>
+                  <Input
+                    id="wu-station-id"
+                    value={stationId}
+                    onChange={(e) => setStationId(e.target.value)}
+                    placeholder="e.g. KCASANTA123"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="bg-card"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="wu-station-name">Station name</Label>
+                  <Input
+                    id="wu-station-name"
+                    value={stationName}
+                    onChange={(e) => setStationName(e.target.value)}
+                    placeholder="e.g. North block PWS"
+                    autoComplete="off"
+                    className="bg-card"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  onClick={() => saveMut.mutate()}
+                  disabled={saveMut.isPending || !stationId.trim()}
+                  className="gap-2"
+                >
+                  {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save station
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => backfillMut.mutate()}
+                  disabled={backfillMut.isPending || !configured}
+                  className="gap-2"
+                  title={!configured ? "Save a station first" : "Backfill last 14 days of WU rainfall"}
+                >
+                  {backfillMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudRain className="h-4 w-4" />}
+                  Backfill Weather Underground rainfall
+                </Button>
+
+                <div className="ml-auto">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={!configured || deleteMut.isPending}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove Weather Underground station
+                  </Button>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Imports the last 14 days of Weather Underground rainfall into
+                vineyard history. Safe to re-run — Manual and Davis rainfall are
+                preserved. Today is skipped because the daily summary is
+                incomplete.
+              </p>
+
+              {backfillResult && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                  {backfillResult}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change the Weather
+              Underground station or run a rainfall backfill.
+            </div>
+          )}
+
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Manual entries override Davis. Davis overrides Weather Underground.
+            Weather Underground overrides Open-Meteo. Backfill only writes
+            Weather Underground rows — Manual and Davis rows are never
+            overwritten.
+          </div>
+        </CollapsibleContent>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove Weather Underground station?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the shared vineyard-wide Weather Underground
+                station. Existing rainfall history is preserved. The vineyard
+                will fall back to Open-Meteo for WU rainfall until a new
+                station is saved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  deleteMut.mutate();
+                }}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? "Removing…" : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    </Collapsible>
   );
+
 }
 
