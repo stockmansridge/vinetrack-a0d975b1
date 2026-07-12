@@ -444,8 +444,8 @@ function FuelSheet({
             <Section title="Record">
               <Field label="Date" value={fmtDate(record.date)} />
               <Field label="Volume" value={fmtLitres(record.volume_litres)} />
-              {canSeeCosts && <Field label="Total cost" value={fmtCost(record.total_cost)} />}
-              {canSeeCosts && <Field label={`Cost / ${rf.fuelUnitLabel}`} value={fmtCpl(record.total_cost, record.volume_litres)} />}
+              {canSeeCosts && <Field label={`Price / ${rf.fuelUnitLabel}`} value={fmtCpl(record.total_cost, record.volume_litres)} />}
+              {canSeeCosts && <Field label="Total Purchase Cost" value={record.total_cost == null ? "Not specified" : fmtCost(record.total_cost)} />}
             </Section>
             <Section title="Meta">
               <Field label="Entered by" value={fmt(resolveUser(record.created_by))} />
