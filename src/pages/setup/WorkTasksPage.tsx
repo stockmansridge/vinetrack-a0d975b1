@@ -1342,21 +1342,17 @@ function LabourLineRow({
   const money = mkMoney(rf);
   const [editing, setEditing] = useState(isNew);
   const [workDate, setWorkDate] = useState(line?.work_date ?? "");
-  const [workerType, setWorkerType] = useState(line?.worker_type ?? "");
   const [categoryId, setCategoryId] = useState(line?.worker_type_id ?? NONE);
   const [workerCount, setWorkerCount] = useState(line?.worker_count == null ? "" : String(line.worker_count));
   const [hoursPerWorker, setHoursPerWorker] = useState(line?.hours_per_worker == null ? "" : String(line.hours_per_worker));
-  const [hourlyRate, setHourlyRate] = useState(line?.hourly_rate == null ? "" : String(line.hourly_rate));
   const [notes, setNotes] = useState(line?.notes ?? "");
 
-  // Auto-populate hourly rate from selected category if rate empty.
-  useEffect(() => {
-    if (categoryId !== NONE && hourlyRate === "") {
-      const cat = categories.find((c) => c.id === categoryId);
-      if (cat?.cost_per_hour != null) setHourlyRate(String(cat.cost_per_hour));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId]);
+  const selectedCategory = categoryId === NONE ? null : categories.find((c) => c.id === categoryId) ?? null;
+  const derivedHourlyRate =
+    selectedCategory?.cost_per_hour != null
+      ? Number(selectedCategory.cost_per_hour)
+      : line?.hourly_rate ?? null;
+  const derivedWorkerType = selectedCategory?.name ?? line?.worker_type ?? null;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -1367,10 +1363,10 @@ function LabourLineRow({
         vineyard_id: vineyardId,
         work_date: workDate || null,
         worker_type_id: categoryId === NONE ? null : categoryId,
-        worker_type: workerType.trim() || null,
+        worker_type: derivedWorkerType,
         worker_count: workerCount === "" ? null : Number(workerCount),
         hours_per_worker: hoursPerWorker === "" ? null : Number(hoursPerWorker),
-        hourly_rate: hourlyRate === "" ? null : Number(hourlyRate),
+        hourly_rate: derivedHourlyRate,
         notes,
         user_id: userId,
         current_sync_version: line?.sync_version ?? 0,
@@ -1432,19 +1428,18 @@ function LabourLineRow({
           <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
         </Field>
         <Field label="Worker type">
-          <Input value={workerType} onChange={(e) => setWorkerType(e.target.value)} placeholder="Pruner, tractor op…" />
-        </Field>
-        <Field label="Worker type">
           <Select value={categoryId} onValueChange={setCategoryId}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE}>None</SelectItem>
-              {categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name ?? c.id.slice(0, 8)}</SelectItem>))}
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {(c.name ?? c.id.slice(0, 8)) +
+                    (c.cost_per_hour != null ? ` — ${money(Number(c.cost_per_hour))}/h` : "")}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        </Field>
-        <Field label="Hourly rate">
-          <Input type="number" step="0.01" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} />
         </Field>
         <Field label="Worker count">
           <Input type="number" step="1" value={workerCount} onChange={(e) => setWorkerCount(e.target.value)} />
