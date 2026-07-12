@@ -288,47 +288,74 @@ const LAYER_DISCLAIMER =
 function generalBand(index: SatelliteIndexType, v: number): string | null {
   switch (index) {
     case "NDVI":
-      if (v < 0) return "Usually water, shadow or a non-vegetated surface";
-      if (v < 0.15) return "Mostly bare soil or very little green vegetation";
-      if (v < 0.30) return "Sparse green vegetation";
+      if (v < 0.15) return "Very sparse green vegetation signal";
+      if (v < 0.30) return "Sparse green vegetation signal";
       if (v < 0.50) return "Moderate vegetation signal";
       if (v < 0.70) return "Strong green vegetation signal";
-      return "Very strong or dense green vegetation signal";
+      return "Very strong green vegetation signal";
+    case "EVI":
+      if (v < 0.20) return "Very weak dense-canopy signal";
+      if (v < 0.40) return "Weak dense-canopy signal";
+      if (v < 0.60) return "Moderate dense-canopy vigour";
+      if (v < 0.80) return "Strong dense-canopy vigour";
+      return "Very strong dense-canopy signal";
+    case "GNDVI":
+      if (v < 0.20) return "Very weak green-canopy chlorophyll signal";
+      if (v < 0.40) return "Weak green-canopy chlorophyll signal";
+      if (v < 0.60) return "Moderate green-canopy chlorophyll signal";
+      if (v < 0.80) return "Strong green-canopy chlorophyll signal";
+      return "Very strong green-canopy chlorophyll signal";
     case "MSAVI":
-      if (v < 0) return "Little vegetation or non-vegetated surface";
-      if (v < 0.15) return "Very sparse vegetation";
-      if (v < 0.30) return "Sparse vegetation";
+      if (v < 0.15) return "Very sparse vegetation after soil adjustment";
+      if (v < 0.30) return "Sparse vegetation after soil adjustment";
       if (v < 0.50) return "Moderate soil-adjusted vegetation signal";
       if (v < 0.70) return "Strong soil-adjusted vegetation signal";
-      return "Very strong vegetation signal";
-    case "GNDVI":
-      if (v < 0) return "Little or no green-canopy signal";
-      if (v < 0.20) return "Weak green-canopy chlorophyll signal";
-      if (v < 0.40) return "Moderate green-canopy chlorophyll signal";
-      if (v < 0.60) return "Strong green-canopy chlorophyll signal";
-      return "Very strong green-canopy chlorophyll signal";
-    case "EVI":
-      if (v < 0) return "Little active vegetation or non-vegetated surface";
-      if (v < 0.20) return "Weak canopy signal";
-      if (v < 0.40) return "Moderate canopy vigour";
-      if (v < 0.60) return "Strong canopy vigour";
-      return "Very strong dense-canopy signal";
+      return "Very strong soil-adjusted vegetation signal";
     case "NDRE":
+      if (v < 0.10) return "Very weak red-edge chlorophyll signal";
+      if (v < 0.20) return "Weak red-edge chlorophyll signal";
+      if (v < 0.35) return "Moderate red-edge chlorophyll signal";
+      if (v < 0.50) return "Strong red-edge chlorophyll signal";
+      return "Very strong red-edge chlorophyll signal";
     case "RENDVI":
-      if (v < 0) return "Little or no red-edge canopy response";
-      if (v < 0.15) return "Weak red-edge canopy signal";
-      if (v < 0.30) return "Moderate red-edge canopy signal";
+      if (v < 0.10) return "Very weak red-edge canopy signal";
+      if (v < 0.20) return "Weak red-edge canopy signal";
+      if (v < 0.35) return "Moderate red-edge canopy signal";
       if (v < 0.50) return "Strong red-edge canopy signal";
       return "Very strong red-edge canopy signal";
     case "NDMI":
-      if (v < -0.2) return "Very low vegetation-moisture signal or non-vegetated surface";
-      if (v < 0.0) return "Low vegetation-moisture signal";
-      if (v < 0.2) return "Moderate vegetation-moisture signal";
-      if (v < 0.4) return "Strong vegetation-moisture signal";
-      return "Very strong vegetation-moisture signal";
+      if (v < 0.00) return "Very low canopy-moisture signal";
+      if (v < 0.15) return "Low canopy-moisture signal";
+      if (v < 0.30) return "Moderate canopy-moisture signal";
+      if (v < 0.45) return "Strong canopy-moisture signal";
+      return "Very strong canopy-moisture signal";
+    case "PSRI":
+      if (v < 0.00) return "Very low senescence or pigment-change signal";
+      if (v < 0.10) return "Low senescence or pigment-change signal";
+      if (v < 0.20) return "Moderate senescence or pigment-change signal";
+      if (v < 0.30) return "Strong senescence or pigment-change signal";
+      return "Very strong senescence or pigment-change signal";
     default:
       return null;
   }
+}
+
+// Paddock-relative 5-band wording for indices without a universal scale (RECI, GCI).
+function relativeMeaning(
+  index: SatelliteIndexType,
+  value: number,
+  s: { percentile_10: number | null; percentile_25: number | null; percentile_75: number | null; percentile_90: number | null } | undefined,
+): string | null {
+  if (index !== "RECI" && index !== "GCI") return null;
+  const noun = index === "RECI" ? "chlorophyll activity" : "green chlorophyll activity";
+  if (!s || s.percentile_10 == null || s.percentile_25 == null || s.percentile_75 == null || s.percentile_90 == null) {
+    return `Typical ${noun} for this paddock`;
+  }
+  if (value <= s.percentile_10) return `Very low ${noun} for this paddock`;
+  if (value <= s.percentile_25) return `Low ${noun} for this paddock`;
+  if (value <= s.percentile_75) return `Typical ${noun} for this paddock`;
+  if (value <= s.percentile_90) return `High ${noun} for this paddock`;
+  return `Very high ${noun} for this paddock`;
 }
 
 // Paddock-relative band + approximate percentile using stored quartile anchors.
@@ -1677,46 +1704,17 @@ export default function SatelliteMappingPage() {
                     </>
                   ) : hover.status === "ready" && hover.value != null ? (() => {
                       const value = hover.value;
-                      const general = activeLayer.useRelativeBands ? null : generalBand(layer, value);
-                      const rel = relativeInterpretation(value, hoverSummary);
-                      // Choose the strongest bold line: prefer the general
-                      // band; fall back to the paddock-relative band for
-                      // ratio/senescence indices without universal bands.
-                      const boldLine = general ?? rel?.band ?? "Value recorded for this cell";
-                      const relSubtext = rel
-                        ? (rel.approxPct != null
-                            ? `Higher than approximately ${rel.approxPct}% of valid cells in this paddock.`
-                            : `${rel.band}.`)
-                        : "Paddock distribution not yet available for this scene.";
+                      const meaning =
+                        generalBand(layer, value) ??
+                        relativeMeaning(layer, value, hoverSummary) ??
+                        "Value recorded for this cell";
                       return (
                         <>
                           <div className="text-sm font-medium text-foreground tabular-nums">
                             Cell value: {value.toFixed(2)}
                           </div>
-                          <div className="text-[11px] font-semibold text-foreground mt-1">
-                            {boldLine}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {activeLayer.legendNote}
-                          </div>
-                          <div className="text-[10px] text-foreground/80 mt-1">
-                            {relSubtext}
-                          </div>
-                          {activeLayer.useRelativeBands && (
-                            <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                              This index has no universal maximum of 1.0.
-                            </div>
-                          )}
-                          {activeLayer.extraCaution && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                              {activeLayer.extraCaution}
-                            </div>
-                          )}
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
-                          </div>
-                          <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                            Each cell may include vines, inter-row, exposed soil and shadow.
+                          <div className="text-[11px] font-semibold text-foreground mt-0.5">
+                            {meaning}
                           </div>
                         </>
                       );
@@ -1728,6 +1726,9 @@ export default function SatelliteMappingPage() {
                 </div>
                 <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
                   {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground italic">
+                  Each cell may include vines, inter-row vegetation, exposed soil and shadow.
                 </div>
               </div>
               );
