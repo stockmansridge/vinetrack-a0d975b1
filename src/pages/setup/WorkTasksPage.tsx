@@ -1106,7 +1106,16 @@ function WorkTaskDrawer({
                   overdue alerts. Existing values are preserved on save. */}
             </Section>
 
-
+            {isNew && savedTaskId && (
+              <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-primary">
+                Task created. Add labour and machine resources below before closing.
+              </div>
+            )}
+            {savedTaskId && visibleLines.length === 0 && machineLines.length === 0 && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                No labour or machine resources have been added to this task.
+              </div>
+            )}
             <LabourLinesSection
               taskId={savedTaskId}
               vineyardId={vineyardId}
