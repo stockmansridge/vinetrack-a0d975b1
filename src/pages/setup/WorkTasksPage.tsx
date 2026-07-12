@@ -1816,6 +1816,7 @@ function MachineWorkSection({
   canEdit,
   canDelete,
   userId,
+  onChanged,
 }: {
   workTaskId: string;
   vineyardId: string | null;
@@ -1824,6 +1825,7 @@ function MachineWorkSection({
   canEdit: boolean;
   canDelete: boolean;
   userId: string | null;
+  onChanged?: (savedLine?: WorkTaskMachineLine) => void;
 }) {
   const qc = useQueryClient();
   const rf = useRegionFormatters();
@@ -1878,18 +1880,19 @@ function MachineWorkSection({
       };
       if (editingId && editingId !== "__new__") {
         const existing = lines.find((l) => l.id === editingId);
-        await updateWorkTaskMachineLine({
+        return updateWorkTaskMachineLine({
           ...input,
           id: editingId,
           current_sync_version: existing?.sync_version ?? 0,
         });
       } else {
-        await createWorkTaskMachineLine(input);
+        return createWorkTaskMachineLine(input);
       }
     },
-    onSuccess: () => {
+    onSuccess: (savedLine) => {
       toast({ title: editingId === "__new__" ? "Machine work added" : "Machine work updated" });
       cancel();
+      onChanged?.(savedLine);
       invalidate();
     },
     onError: (e) =>
