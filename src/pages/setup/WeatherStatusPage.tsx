@@ -35,7 +35,9 @@ import {
   Loader2,
   Copy,
   HelpCircle,
+  ChevronDown,
 } from "lucide-react";
+
 import {
   deleteWeatherIntegration,
   fetchLiveWeather,
