@@ -12,7 +12,7 @@ export interface PendingInvite {
   expires_at: string | null;
   created_at: string | null;
   vineyard_name: string | null;
-  operator_category_name: string | null;
+  worker_type_name: string | null;
 }
 
 const DEFAULT_PENDING_INVITE_TIMEOUT_MS = 6_000;
@@ -68,7 +68,7 @@ export async function fetchPendingInvitesForEmail(
     expires_at: row.expires_at,
     created_at: row.created_at ?? null,
     vineyard_name: null,
-    operator_category_name: null,
+    worker_type_name: null,
   }));
 }
 

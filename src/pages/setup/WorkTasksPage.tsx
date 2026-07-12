@@ -1343,7 +1343,7 @@ function LabourLineRow({
   const [editing, setEditing] = useState(isNew);
   const [workDate, setWorkDate] = useState(line?.work_date ?? "");
   const [workerType, setWorkerType] = useState(line?.worker_type ?? "");
-  const [categoryId, setCategoryId] = useState(line?.operator_category_id ?? NONE);
+  const [categoryId, setCategoryId] = useState(line?.worker_type_id ?? NONE);
   const [workerCount, setWorkerCount] = useState(line?.worker_count == null ? "" : String(line.worker_count));
   const [hoursPerWorker, setHoursPerWorker] = useState(line?.hours_per_worker == null ? "" : String(line.hours_per_worker));
   const [hourlyRate, setHourlyRate] = useState(line?.hourly_rate == null ? "" : String(line.hourly_rate));
@@ -1366,7 +1366,7 @@ function LabourLineRow({
         work_task_id: taskId,
         vineyard_id: vineyardId,
         work_date: workDate || null,
-        operator_category_id: categoryId === NONE ? null : categoryId,
+        worker_type_id: categoryId === NONE ? null : categoryId,
         worker_type: workerType.trim() || null,
         worker_count: workerCount === "" ? null : Number(workerCount),
         hours_per_worker: hoursPerWorker === "" ? null : Number(hoursPerWorker),
@@ -1395,7 +1395,7 @@ function LabourLineRow({
   });
 
   if (!editing && line) {
-    const cat = line.operator_category_id ? categories.find((c) => c.id === line.operator_category_id) : null;
+    const cat = line.worker_type_id ? categories.find((c) => c.id === line.worker_type_id) : null;
     return (
       <div className="rounded border p-2 text-sm flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -1434,7 +1434,7 @@ function LabourLineRow({
         <Field label="Worker type">
           <Input value={workerType} onChange={(e) => setWorkerType(e.target.value)} placeholder="Pruner, tractor op…" />
         </Field>
-        <Field label="Operator category">
+        <Field label="Worker type">
           <Select value={categoryId} onValueChange={setCategoryId}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>

@@ -18,9 +18,9 @@ export async function updateMemberOperatorCategoryRpc(
   membershipId: string,
   operatorCategoryId: string | null,
 ): Promise<void> {
-  const { error } = await supabase.rpc("update_member_operator_category", {
+  const { error } = await supabase.rpc("update_member_worker_type", {
     p_membership_id: membershipId,
-    p_operator_category_id: operatorCategoryId,
+    p_worker_type_id: operatorCategoryId,
   });
   if (error) throw error;
 }

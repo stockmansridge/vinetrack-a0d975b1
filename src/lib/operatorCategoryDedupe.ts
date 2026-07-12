@@ -1,4 +1,4 @@
-// Client-side deduplication helpers for operator categories.
+// Client-side deduplication helpers for worker types.
 //
 // Step 1 of the Team / User setup work: the iOS-shared `operator_categories`
 // table has no unique constraint on (vineyard_id, name, cost_per_hour), so

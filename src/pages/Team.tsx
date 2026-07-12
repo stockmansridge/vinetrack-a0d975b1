@@ -140,7 +140,7 @@ export default function Team() {
 
   const categoryByMembership = useMemo(() => {
     const m = new Map<string, string | null>();
-    (memberRows ?? []).forEach((r) => m.set(r.id, r.operator_category_id ?? null));
+    (memberRows ?? []).forEach((r) => m.set(r.id, r.worker_type_id ?? null));
     return m;
   }, [memberRows]);
 
@@ -156,7 +156,7 @@ export default function Team() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vineyard-members-rows", selectedVineyardId] });
-      toast({ title: "Operator category updated" });
+      toast({ title: "Worker type updated" });
     },
     onError: (e) => {
       toast({ title: "Couldn't update category", description: describeMemberWriteError(e), variant: "destructive" });
@@ -233,7 +233,7 @@ export default function Team() {
         <div>
           <h1 className="text-2xl font-semibold">Team</h1>
           <p className="text-sm text-muted-foreground">
-            Invite users, manage roles, and assign operator categories.
+            Invite users, manage roles, and assign worker types.
           </p>
         </div>
         {canEdit && (
@@ -251,7 +251,7 @@ export default function Team() {
 
       {rawCategories.length > categories.length && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200">
-          Duplicate operator categories detected — hiding {rawCategories.length - categories.length} from the dropdown so each appears once.
+          Duplicate worker types detected — hiding {rawCategories.length - categories.length} from the dropdown so each appears once.
         </div>
       )}
 
@@ -273,7 +273,7 @@ export default function Team() {
             <TableHeader>
               <TableRow>
                 {(memberCols.order as MemberColId[]).map((id) => {
-                  const label = id === "member" ? "Member" : id === "role" ? "Role" : id === "operator_category" ? "Operator category" : "Joined";
+                  const label = id === "member" ? "Member" : id === "role" ? "Role" : id === "operator_category" ? "Worker type" : "Joined";
                   return (
                     <TableHead key={id}>
                       <DraggableHeaderCell columnId={id} onDropColumn={memberCols.moveColumn}>{label}</DraggableHeaderCell>
@@ -412,7 +412,7 @@ export default function Team() {
               <TableHeader>
                 <TableRow>
                   {(inviteCols.order as InviteColId[]).map((id) => {
-                    const label = id === "email" ? "Email" : id === "role" ? "Role" : id === "operator_category" ? "Operator category" : id === "expires" ? "Expires" : "Status";
+                    const label = id === "email" ? "Email" : id === "role" ? "Role" : id === "operator_category" ? "Worker type" : id === "expires" ? "Expires" : "Status";
                     return (
                       <TableHead key={id}>
                         <DraggableHeaderCell columnId={id} onDropColumn={inviteCols.moveColumn}>{label}</DraggableHeaderCell>
@@ -435,7 +435,7 @@ export default function Team() {
                     inv={inv}
                     columnOrder={inviteCols.order as InviteColId[]}
                     categoryName={(() => {
-                      const id = inv.default_operator_category_id;
+                      const id = inv.default_worker_type_id;
                       if (!id) return null;
                       const kept = categoryIdToKeptId.get(id) ?? id;
                       return categories.find((c) => c.id === kept)?.name ?? null;
@@ -557,7 +557,7 @@ function InviteDialog({
         vineyard_id: vineyardId,
         email,
         role,
-        operator_category_id: categoryId === NONE ? null : categoryId,
+        worker_type_id: categoryId === NONE ? null : categoryId,
         expires_in_days: days,
       });
     },
@@ -610,7 +610,7 @@ function InviteDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Default operator category (optional)</Label>
+            <Label>Default worker type (optional)</Label>
             <Select value={categoryId} onValueChange={setCategoryId}>
               <SelectTrigger><SelectValue placeholder="No category" /></SelectTrigger>
               <SelectContent>

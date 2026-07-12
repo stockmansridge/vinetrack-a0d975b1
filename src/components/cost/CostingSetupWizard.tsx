@@ -45,11 +45,11 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     tractors, tractorsLph, trips, tripsTractor,
     fuel, chems, inputs, inputsCost, paddocks, yieldR,
   ] = await Promise.all([
-    eq("operator_categories"),
-    eq("operator_categories").not("cost_per_hour", "is", null),
+    eq("worker_types"),
+    eq("worker_types").not("cost_per_hour", "is", null),
     supabase.from("vineyard_members").select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId),
     supabase.from("vineyard_members").select("*", { count: "exact", head: true })
-      .eq("vineyard_id", vineyardId).not("operator_category_id", "is", null),
+      .eq("vineyard_id", vineyardId).not("worker_type_id", "is", null),
     eq("tractors"),
     eq("tractors").not("fuel_usage_l_per_hour", "is", null),
     eq("trips"),
@@ -126,14 +126,14 @@ function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
       state: c.operatorCategories === 0 || c.membersTotal === 0 ? "empty" :
         rateOk && memberOk ? "ok" : "warn",
       detail: c.operatorCategories === 0
-        ? "No operator categories yet. Add categories with an hourly rate."
+        ? "No worker types yet. Add categories with an hourly rate."
         : !rateOk
           ? `${c.operatorCategories - c.operatorCategoriesWithRate} of ${c.operatorCategories} categories are missing an hourly rate.`
           : !memberOk
-            ? `${c.membersTotal - c.membersWithCategory} of ${c.membersTotal} team members are not yet assigned to an operator category.`
+            ? `${c.membersTotal - c.membersWithCategory} of ${c.membersTotal} team members are not yet assigned to an worker type.`
             : "All categories have a rate and all team members are assigned.",
       href: "/setup/operator-categories",
-      linkLabel: "Operator categories",
+      linkLabel: "Worker types",
     },
     {
       key: "fuel",

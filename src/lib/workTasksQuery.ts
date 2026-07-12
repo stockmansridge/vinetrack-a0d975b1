@@ -37,7 +37,7 @@ export interface WorkTaskLabourLine {
   work_task_id: string;
   vineyard_id: string;
   work_date?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
   worker_type?: string | null;
   worker_count?: number | null;
   hours_per_worker?: number | null;
@@ -233,7 +233,7 @@ export interface UpsertLabourLineInput {
   work_task_id: string;
   vineyard_id: string;
   work_date?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
   worker_type?: string | null;
   worker_count?: number | null;
   hours_per_worker?: number | null;
@@ -252,7 +252,7 @@ export async function createLabourLine(input: UpsertLabourLineInput): Promise<Wo
     work_task_id: input.work_task_id,
     vineyard_id: input.vineyard_id,
     work_date: input.work_date ?? null,
-    operator_category_id: input.operator_category_id ?? null,
+    worker_type_id: input.worker_type_id ?? null,
     worker_type: input.worker_type ?? null,
     worker_count: input.worker_count ?? null,
     hours_per_worker: input.hours_per_worker ?? null,
@@ -279,7 +279,7 @@ export async function updateLabourLine(input: UpsertLabourLineInput): Promise<Wo
   // total_hours and total_cost are generated columns; do not include them.
   const payload: any = {
     work_date: input.work_date ?? null,
-    operator_category_id: input.operator_category_id ?? null,
+    worker_type_id: input.worker_type_id ?? null,
     worker_type: input.worker_type ?? null,
     worker_count: input.worker_count ?? null,
     hours_per_worker: input.hours_per_worker ?? null,
