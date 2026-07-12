@@ -898,54 +898,64 @@ function ForecastProviderCard({
   const value: ForecastProvider = data ?? "auto";
 
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Forecast Provider</h2>
-          <p className="text-xs text-muted-foreground">
-            Which service provides 7-day forecasts. Auto uses WillyWeather when configured, otherwise Open-Meteo.
-          </p>
-        </div>
-        {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      </div>
-      {isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      ) : (
-        <RadioGroup
-          value={value}
-          onValueChange={(v) => onChange(v as ForecastProvider)}
-          className="grid gap-2 sm:grid-cols-3"
-        >
-          {(
-            [
-              { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
-              { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
-              { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
-            ] as { v: ForecastProvider; label: string; hint: string }[]
-          ).map((opt) => (
-            <label
-              key={opt.v}
-              htmlFor={`fp-${opt.v}`}
-              className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
-                canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
-              } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-3">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2 text-left">
+            <div>
+              <h2 className="text-base font-semibold">Forecast Provider</h2>
+              <p className="text-xs text-muted-foreground">
+                Which service provides 7-day forecasts. Auto uses WillyWeather when configured, otherwise Open-Meteo.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3">
+          {isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <RadioGroup
+              value={value}
+              onValueChange={(v) => onChange(v as ForecastProvider)}
+              className="grid gap-2 sm:grid-cols-3"
             >
-              <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
-              <div>
-                <div className="font-medium">{opt.label}</div>
-                <div className="text-xs text-muted-foreground">{opt.hint}</div>
-              </div>
-            </label>
-          ))}
-        </RadioGroup>
-      )}
-      {!canEdit && (
-        <div className="text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change the forecast provider.
-        </div>
-      )}
-    </Card>
+              {(
+                [
+                  { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
+                  { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
+                  { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
+                ] as { v: ForecastProvider; label: string; hint: string }[]
+              ).map((opt) => (
+                <label
+                  key={opt.v}
+                  htmlFor={`fp-${opt.v}`}
+                  className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
+                    canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
+                  } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
+                >
+                  <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
+                  <div>
+                    <div className="font-medium">{opt.label}</div>
+                    <div className="text-xs text-muted-foreground">{opt.hint}</div>
+                  </div>
+                </label>
+              ))}
+            </RadioGroup>
+          )}
+          {!canEdit && (
+            <div className="text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change the forecast provider.
+            </div>
+          )}
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
+
 }
 
 // ---------------------------------------------------------------------------
