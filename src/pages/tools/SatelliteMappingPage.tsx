@@ -988,49 +988,90 @@ export default function SatelliteMappingPage() {
 
   type RefreshVars = { paddockIds?: string[]; isRetry?: boolean } | undefined;
   const retryInFlightRef = useRef(false);
+  const refreshInFlightRef = useRef(false);
   const autoRanForVineyardRef = useRef<string | null>(null);
 
   const checkForNewImage = useMutation({
     mutationFn: async (vars: RefreshVars) => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
+      if (refreshInFlightRef.current) throw new Error("Refresh already running");
+      refreshInFlightRef.current = true;
       setSearchError(null);
 
-      // If explicit paddockIds provided, use exactly those (stale set / retry set).
-      // Otherwise: every valid-geometry paddock in the vineyard when "all"; the one selected otherwise.
-      const explicitIds = vars?.paddockIds;
-      const targetGeoms = explicitIds
-        ? geoms.filter((g) => explicitIds.includes(g.id))
-        : paddockId === "all"
-          ? geoms
-          : geoms.filter((g) => g.id === paddockId);
-      const allVineyardPaddocks = paddockId === "all" && !explicitIds ? paddocks.length : targetGeoms.length;
-      const skippedNoGeometry = paddockId === "all" && !explicitIds
-        ? Math.max(0, allVineyardPaddocks - targetGeoms.length)
-        : 0;
+      // Build completeness against currently-loaded scenes/assets/summaries.
+      const scenesForReport = scenesQuery.data?.scenes ?? [];
+      const assetsForReport = scenesQuery.data?.assets ?? [];
+      const summariesForReport = scenesQuery.data?.summaries ?? [];
+      const report = inspectCompleteness({
+        paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
+        scenes: scenesForReport,
+        assets: assetsForReport,
+        summaries: summariesForReport,
+      });
 
-      if (targetGeoms.length === 0) throw new Error("No paddocks with valid boundaries.");
+      // Scope the report to whatever the user selected.
+      const explicitIds = vars?.paddockIds;
+      let inScopeAll = report.perPaddock;
+      if (explicitIds) {
+        inScopeAll = report.perPaddock.filter((p) => explicitIds.includes(p.paddockId));
+      } else if (paddockId !== "all") {
+        inScopeAll = report.perPaddock.filter((p) => p.paddockId === paddockId);
+      }
+
+      const inScopeNeedingWork = inScopeAll.filter((p) => p.state !== "complete");
+      const skippedComplete = inScopeAll.length - inScopeNeedingWork.length;
+      const skippedNoGeometry = paddockId === "all" && !explicitIds
+        ? Math.max(0, paddocks.length - geoms.length)
+        : 0;
+      const providerCallsAvoided = inScopeNeedingWork.filter(
+        (p) => p.state !== "missing_latest_scene",
+      ).length;
 
       type ResultStatus = "complete" | "partial" | "insufficient_coverage" | "rate_limited" | "no_scenes" | "failed" | "skipped";
-      const results: Array<{ paddock_id: string; status: ResultStatus; message?: string }> = [];
+      const results: Array<{ paddock_id: string; status: ResultStatus; message?: string; repairedIndices?: SatelliteIndexType[] }> = [];
       let stopQueue = false;
 
-      // Seed batch progress.
+      // Nothing to do → return early with an "up to date" result set.
+      if (inScopeNeedingWork.length === 0) {
+        setBatchProgress(null);
+        return {
+          results,
+          skippedNoGeometry,
+          skippedComplete,
+          providerCallsAvoided: 0,
+          repairedItems: 0,
+          isRetry: !!vars?.isRetry,
+          noWorkNeeded: true,
+          report,
+        };
+      }
+
+      // Preflight toast so the user sees exactly what will run.
+      const preflightParts = [
+        `${report.totals.completePaddocks} complete`,
+        `${inScopeNeedingWork.length} needing work`,
+      ];
+      if (report.totals.missingDisplay > 0) preflightParts.push(`${report.totals.missingDisplay} display`);
+      if (report.totals.missingAnalytical > 0) preflightParts.push(`${report.totals.missingAnalytical} analytical`);
+      if (report.totals.missingSummaries > 0) preflightParts.push(`${report.totals.missingSummaries} summaries`);
+      toast({
+        title: "Imagery refresh check",
+        description: preflightParts.join(" · ") + ". Only missing items will be processed.",
+      });
+
+      // Seed batch progress. Complete paddocks are shown as skipped so users
+      // can see exactly what was NOT reprocessed.
       const initialStatuses: Record<string, PadStatus> = {};
-      for (const g of targetGeoms) initialStatuses[g.id] = "queued";
-      setBatchProgress({ total: targetGeoms.length, done: 0, statuses: initialStatuses });
+      for (const p of inScopeAll) initialStatuses[p.paddockId] = p.state === "complete" ? "skipped" : "queued";
+      setBatchProgress({ total: inScopeNeedingWork.length, done: 0, statuses: initialStatuses });
 
       const setPad = (pid: string, s: PadStatus) => setBatchProgress((prev) => prev
         ? { ...prev, statuses: { ...prev.statuses, [pid]: s } }
         : prev);
       const bumpDone = () => setBatchProgress((prev) => prev ? { ...prev, done: prev.done + 1 } : prev);
 
-      async function processOne(pid: string): Promise<void> {
-        if (stopQueue) {
-          results.push({ paddock_id: pid, status: "skipped", message: "Skipped after the satellite provider paused requests." });
-          setPad(pid, "skipped");
-          bumpDone();
-          return;
-        }
+      async function processMissingScene(p: PaddockCompleteness): Promise<void> {
+        const pid = p.paddockId;
         const targetPaddock = geoms.find((g) => g.id === pid);
         setPad(pid, "searching");
         const search = await invokeSatelliteFn("satellite-search-scenes", {
@@ -1043,50 +1084,28 @@ export default function SatelliteMappingPage() {
           if (parsed.code === "rate_limited" || parsed.code === "catalog_rate_limited") {
             stopQueue = true;
             results.push({ paddock_id: pid, status: "rate_limited", message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
-            setSearchError((prev) => prev ?? {
-              code: parsed.code,
-              providerStatus: parsed.providerStatus,
-              paddockId: pid,
-              paddockName: targetPaddock?.name ?? null,
-              message: "Satellite provider is temporarily limiting requests. Try again in a few minutes.",
-            });
-            setPad(pid, "rate_limited");
-            bumpDone();
-            return;
+            setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
+            setPad(pid, "rate_limited"); bumpDone(); return;
           }
-          // Only surface the first error banner (don't clobber earlier ones).
-          setSearchError((prev) => prev ?? {
-            code: parsed.code,
-            providerStatus: parsed.providerStatus,
-            paddockId: pid,
-            paddockName: targetPaddock?.name ?? null,
-            message: parsed.message,
-          });
+          setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: parsed.message });
           results.push({ paddock_id: pid, status: "failed", message: parsed.message });
-          setPad(pid, "failed");
-          bumpDone();
-          return;
+          setPad(pid, "failed"); bumpDone(); return;
         }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
         if (candidates.length === 0) {
           results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" });
-          setPad(pid, "failed");
-          bumpDone();
-          return;
+          setPad(pid, "failed"); bumpDone(); return;
         }
-        // Prefer clearer scenes (≤20% scene cloud), then newest.
         const sorted = [...candidates].sort((a, b) => {
           const ca = Number(a?.scene_cloud_cover_pct ?? 100);
           const cb = Number(b?.scene_cloud_cover_pct ?? 100);
-          const ap = ca <= 20 ? 0 : 1;
-          const bp = cb <= 20 ? 0 : 1;
+          const ap = ca <= 20 ? 0 : 1; const bp = cb <= 20 ? 0 : 1;
           if (ap !== bp) return ap - bp;
           if (ca !== cb) return ca - cb;
           return String(b?.acquired_at ?? "").localeCompare(String(a?.acquired_at ?? ""));
         });
 
         setPad(pid, "processing");
-        // Walk candidates until one completes with sufficient coverage (max 4 tries).
         let finalStatus: ResultStatus = "failed";
         let finalMsg = "Processing did not complete.";
         const maxTries = Math.min(4, sorted.length);
@@ -1098,51 +1117,35 @@ export default function SatelliteMappingPage() {
             provider_scene_id: c.provider_scene_id,
             acquired_at: c.acquired_at,
             scene_cloud_cover_pct: c.scene_cloud_cover_pct,
-            requested_index_types: [layer],
+            // A brand-new scene must carry the full required layer set so it is
+            // "complete" per the completeness contract.
+            requested_index_types: REQUIRED_INDICES,
           });
           if (process.error) {
             const parsed = parseSatelliteFunctionError(process.error);
             finalMsg = parsed.message ?? process.error.message ?? finalMsg;
             if (parsed.code === "rate_limited") {
-              finalStatus = "rate_limited";
-              finalMsg = "Satellite provider is temporarily limiting requests. Try again in a few minutes.";
-              stopQueue = true;
-              setSearchError((prev) => prev ?? {
-                code: parsed.code,
-                providerStatus: parsed.providerStatus,
-                paddockId: pid,
-                paddockName: targetPaddock?.name ?? null,
-                message: finalMsg,
-              });
+              finalStatus = "rate_limited"; stopQueue = true;
+              setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: finalMsg });
               break;
             }
             continue;
           }
           const procStatus = String((process.data as any)?.status ?? "");
           if (procStatus === "complete") { finalStatus = "complete"; break; }
-          if (procStatus === "partial" && Array.isArray((process.data as any)?.generated) && (process.data as any).generated.includes(layer)) {
-            finalStatus = "partial";
-            finalMsg = `${layer} generated; some other layers were skipped.`;
-            break;
-          }
+          if (procStatus === "partial") { finalStatus = "partial"; finalMsg = "Some layers were skipped."; break; }
           if (procStatus === "rate_limited") {
             finalStatus = "rate_limited";
             finalMsg = (process.data as any)?.message ?? "Satellite provider is temporarily limiting requests. Try again in a few minutes.";
             stopQueue = true;
-            setSearchError((prev) => prev ?? {
-              code: "rate_limited",
-              providerStatus: null,
-              paddockId: pid,
-              paddockName: targetPaddock?.name ?? null,
-              message: finalMsg,
-            });
+            setSearchError((prev) => prev ?? { code: "rate_limited", providerStatus: null, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: finalMsg });
             break;
           }
           if (procStatus === "insufficient_coverage") {
             const pct = (process.data as any)?.valid_coverage_pct;
             finalStatus = "insufficient_coverage";
             finalMsg = `Selected scene had ${pct != null ? Number(pct).toFixed(0) : "0"}% valid pixels.`;
-            continue; // try next candidate
+            continue;
           }
           finalMsg = procStatus || finalMsg;
         }
@@ -1155,27 +1158,104 @@ export default function SatelliteMappingPage() {
         bumpDone();
       }
 
-      // Provider-limited worker pool. Keep scene processing serial to avoid
-      // bursty provider 429s; each scene now generates only the selected layer.
-      const queue = targetGeoms.map((g) => g.id);
+      async function repairScene(p: PaddockCompleteness): Promise<void> {
+        const pid = p.paddockId;
+        const targetPaddock = geoms.find((g) => g.id === pid);
+        if (!p.latestProviderSceneId || !p.latestAcquiredAt) {
+          // Should be unreachable — repair states always carry a latest scene.
+          results.push({ paddock_id: pid, status: "failed", message: "No latest scene to repair." });
+          setPad(pid, "failed"); bumpDone(); return;
+        }
+        setPad(pid, "processing");
+        const process = await invokeSatelliteFn("satellite-process-scene", {
+          vineyard_id: activeVineyardId,
+          paddock_id: pid,
+          provider_scene_id: p.latestProviderSceneId,
+          acquired_at: p.latestAcquiredAt,
+          scene_cloud_cover_pct: p.latestSceneCloudCoverPct,
+          requested_index_types: p.indicesRequiringWork,
+        });
+        if (process.error) {
+          const parsed = parseSatelliteFunctionError(process.error);
+          const msg = parsed.message ?? process.error.message ?? "Repair failed";
+          if (parsed.code === "rate_limited") {
+            stopQueue = true;
+            setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: msg });
+            results.push({ paddock_id: pid, status: "rate_limited", message: msg });
+            setPad(pid, "rate_limited"); bumpDone(); return;
+          }
+          results.push({ paddock_id: pid, status: "failed", message: msg });
+          setPad(pid, "failed"); bumpDone(); return;
+        }
+        const procStatus = String((process.data as any)?.status ?? "");
+        const finalStatus: ResultStatus =
+          procStatus === "complete" ? "complete"
+          : procStatus === "partial" ? "partial"
+          : procStatus === "rate_limited" ? "rate_limited"
+          : "failed";
+        if (finalStatus === "rate_limited") {
+          stopQueue = true;
+          setSearchError((prev) => prev ?? { code: "rate_limited", providerStatus: null, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: (process.data as any)?.message ?? "Provider paused" });
+        }
+        results.push({
+          paddock_id: pid,
+          status: finalStatus,
+          repairedIndices: finalStatus === "complete" || finalStatus === "partial" ? p.indicesRequiringWork : [],
+        });
+        setPad(pid, finalStatus === "complete" || finalStatus === "partial" ? "complete"
+          : finalStatus === "rate_limited" ? "rate_limited" : "failed");
+        bumpDone();
+      }
+
+      async function processOne(p: PaddockCompleteness): Promise<void> {
+        if (stopQueue) {
+          results.push({ paddock_id: p.paddockId, status: "skipped", message: "Skipped after the satellite provider paused requests." });
+          setPad(p.paddockId, "skipped"); bumpDone(); return;
+        }
+        if (p.state === "missing_latest_scene") await processMissingScene(p);
+        else await repairScene(p);
+      }
+
+      const queue = [...inScopeNeedingWork];
       const CONC = 1;
       const workers = Array.from({ length: Math.min(CONC, queue.length) }, async () => {
         while (queue.length) {
-          const pid = queue.shift();
-          if (!pid) return;
-          try { await processOne(pid); }
+          const p = queue.shift();
+          if (!p) return;
+          try { await processOne(p); }
           catch (e: any) {
-            results.push({ paddock_id: pid, status: "failed", message: String(e?.message ?? e) });
-            setPad(pid, "failed");
-            bumpDone();
+            results.push({ paddock_id: p.paddockId, status: "failed", message: String(e?.message ?? e) });
+            setPad(p.paddockId, "failed"); bumpDone();
           }
         }
       });
       await Promise.all(workers);
 
-      return { results, skippedNoGeometry, isRetry: !!vars?.isRetry };
+      const repairedItems = results.reduce((n, r) => n + (r.repairedIndices?.length ?? 0), 0);
+
+      return {
+        results, skippedNoGeometry, skippedComplete, providerCallsAvoided,
+        repairedItems, isRetry: !!vars?.isRetry, noWorkNeeded: false, report,
+      };
     },
-    onSuccess: async ({ results, skippedNoGeometry, isRetry }) => {
+    onSettled: () => { refreshInFlightRef.current = false; },
+    onSuccess: async ({ results, skippedNoGeometry, skippedComplete, providerCallsAvoided, repairedItems, isRetry, noWorkNeeded }) => {
+      if (noWorkNeeded) {
+        setLastRefreshSummary({
+          at: new Date().toISOString(),
+          processedPaddocks: 0,
+          repairedItems: 0,
+          skippedPaddocks: skippedComplete,
+          providerCallsAvoided: 0,
+        });
+        retryInFlightRef.current = false;
+        toast({
+          title: "No updates required",
+          description: "All current imagery and analytical layers are complete.",
+        });
+        return;
+      }
+
       const complete = results.filter((r) => r.status === "complete" || r.status === "partial").length;
       const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
       const rateLimited = results.filter((r) => r.status === "rate_limited").length;
@@ -1184,40 +1264,58 @@ export default function SatelliteMappingPage() {
 
       // Refresh + wait for the list query to reflect any new scenes.
       let loaded = false;
-      let latestScenes: DBScene[] = [];
-      let latestAssets: DBAsset[] = [];
+      let latestScenes: DBScene[] = scenesQuery.data?.scenes ?? [];
+      let latestAssets: DBAsset[] = scenesQuery.data?.assets ?? [];
+      let latestSummaries: DBSummary[] = scenesQuery.data?.summaries ?? [];
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
         const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[] } | undefined;
+        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[]; summaries?: DBSummary[] } | undefined;
         if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
           loaded = true;
           latestScenes = anyData?.scenes ?? [];
           latestAssets = anyData?.assets ?? [];
+          latestSummaries = anyData?.summaries ?? [];
           break;
         }
         await new Promise((r) => setTimeout(r, 1500));
       }
 
-      // After an All-Paddocks batch, default to "Latest per paddock" view.
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
 
-      // Auto-retry once for any paddocks that remained stale after this pass.
+      // Auto-retry once for any paddocks that are still incomplete after this pass.
       if (!isRetry && rateLimited === 0) {
-        const candidateIds = paddockId === "all"
-          ? geoms.map((g) => g.id)
-          : geoms.filter((g) => g.id === paddockId).map((g) => g.id);
-        const residual = computeStalePaddockIds(candidateIds, latestScenes, latestAssets, layer);
+        const nextReport = inspectCompleteness({
+          paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
+          scenes: latestScenes,
+          assets: latestAssets,
+          summaries: latestSummaries,
+        });
+        const residual = nextReport.perPaddock
+          .filter((p) => p.state !== "complete")
+          .filter((p) => (paddockId === "all" ? true : p.paddockId === paddockId))
+          .map((p) => p.paddockId);
         if (residual.length > 0) {
           retryInFlightRef.current = true;
           checkForNewImage.mutate({ paddockIds: residual, isRetry: true });
-          return; // suppress interim toast; retry pass will report.
+          return;
         }
       }
       retryInFlightRef.current = false;
 
+      setLastRefreshSummary({
+        at: new Date().toISOString(),
+        processedPaddocks: complete,
+        repairedItems,
+        skippedPaddocks: skippedComplete,
+        providerCallsAvoided,
+      });
+
       const parts: string[] = [];
       parts.push(`${complete} paddock${complete === 1 ? "" : "s"} processed`);
+      if (skippedComplete > 0) parts.push(`${skippedComplete} complete paddock${skippedComplete === 1 ? "" : "s"} skipped`);
+      if (providerCallsAvoided > 0) parts.push(`${providerCallsAvoided} provider call${providerCallsAvoided === 1 ? "" : "s"} avoided`);
+      if (repairedItems > 0) parts.push(`${repairedItems} missing item${repairedItems === 1 ? "" : "s"} repaired`);
       if (cloud > 0) parts.push(`${cloud} had insufficient clear coverage`);
       if (rateLimited > 0) parts.push("provider paused requests");
       if (skipped > 0) parts.push(`${skipped} skipped`);
@@ -1226,9 +1324,9 @@ export default function SatelliteMappingPage() {
       const description = parts.join(", ") + ".";
 
       if (rateLimited > 0) {
-        toast({ title: "Crop Health Maps paused", description: `${description} Wait a few minutes, then refresh again.`, variant: "destructive" });
+        toast({ title: "Satellite imagery paused", description: `${description} Wait a few minutes, then refresh again.`, variant: "destructive" });
       } else if (complete > 0 && loaded) {
-        toast({ title: "Crop Health Maps up to date", description });
+        toast({ title: "Satellite imagery updated", description });
       } else if (complete > 0 && !loaded) {
         toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
       } else {
@@ -1251,6 +1349,7 @@ export default function SatelliteMappingPage() {
       });
     },
   });
+
 
   // System-admin backfill: generate any missing display/analytical/summary
   // assets for the new 11-layer package on scenes that were processed under
