@@ -515,32 +515,70 @@ function FuelEditor({
   const [date, setDate] = useState<string>(todayIso());
   const [litres, setLitres] = useState<string>("");
   const [cost, setCost] = useState<string>("");
+  const [ppl, setPpl] = useState<string>("");
+  // Which cost field the user last edited — drives recomputation on volume change.
+  const [lastEdited, setLastEdited] = useState<"unitPrice" | "totalCost">("totalCost");
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setDate(editing.date ?? todayIso());
-      setLitres(editing.volume_litres == null ? "" : String(editing.volume_litres));
-      setCost(editing.total_cost == null ? "" : String(editing.total_cost));
+      const v = editing.volume_litres;
+      const c = editing.total_cost;
+      setLitres(v == null ? "" : String(v));
+      setCost(c == null ? "" : String(c));
+      setPpl(c != null && v != null && v > 0 ? String(+(c / v).toFixed(4)) : "");
+      setLastEdited("totalCost");
     } else {
       setDate(todayIso());
       setLitres("");
       setCost("");
+      setPpl("");
+      setLastEdited("totalCost");
     }
   }, [open, editing]);
 
   const litresNum = numOrNaN(litres);
   const costNum = numOrNaN(cost);
-  const previewCpl = useMemo(() => {
-    if (!Number.isFinite(litresNum) || !Number.isFinite(costNum) || litresNum <= 0) return "—";
-    return fmtCpl(costNum, litresNum);
-  }, [litresNum, costNum]);
+  const pplNum = numOrNaN(ppl);
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+  const onVolumeChange = (v: string) => {
+    setLitres(v);
+    const vn = numOrNaN(v);
+    if (!Number.isFinite(vn) || vn <= 0) return;
+    if (lastEdited === "unitPrice" && Number.isFinite(pplNum) && pplNum > 0) {
+      setCost(String(round2(vn * pplNum)));
+    } else if (lastEdited === "totalCost" && Number.isFinite(costNum) && costNum > 0) {
+      setPpl(String(round4(costNum / vn)));
+    }
+  };
+
+  const onPplChange = (v: string) => {
+    setPpl(v);
+    setLastEdited("unitPrice");
+    const pn = numOrNaN(v);
+    if (Number.isFinite(pn) && pn > 0 && Number.isFinite(litresNum) && litresNum > 0) {
+      setCost(String(round2(litresNum * pn)));
+    }
+  };
+
+  const onCostChange = (v: string) => {
+    setCost(v);
+    setLastEdited("totalCost");
+    const cn = numOrNaN(v);
+    if (Number.isFinite(cn) && cn >= 0 && Number.isFinite(litresNum) && litresNum > 0) {
+      setPpl(String(round4(cn / litresNum)));
+    }
+  };
 
   const validate = (): string | null => {
     if (!date) return "Date is required";
-    if (!Number.isFinite(litresNum) || litresNum <= 0) return "Volume (litres) must be greater than 0";
+    if (!Number.isFinite(litresNum) || litresNum <= 0) return "Volume must be greater than 0";
     if (canSeeCosts) {
-      if (!Number.isFinite(costNum) || costNum < 0) return "Total cost must be 0 or greater";
+      if (!Number.isFinite(costNum) || costNum < 0) return "Total Purchase Cost must be 0 or greater";
     }
     return null;
   };
