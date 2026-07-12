@@ -922,25 +922,6 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
-      // Backfill analytical rasters for any completed scenes still missing them.
-      try {
-        await invokeSatelliteFn("satellite-backfill-analytical", {
-          vineyard_id: activeVineyardId,
-          paddock_id: paddockId,
-        });
-        await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
-        const refreshed2 = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-        const anyData2 = refreshed2?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[] } | undefined;
-        if (anyData2) {
-          latestScenes = anyData2.scenes ?? latestScenes;
-          latestAssets = anyData2.assets ?? latestAssets;
-        }
-        analyticalCacheRef.current.clear();
-        setRasterCacheVersion((v) => v + 1);
-      } catch (e) {
-        console.warn("analytical backfill after processing failed", e);
-      }
-
       // After an All-Paddocks batch, default to "Latest per paddock" view.
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
 
@@ -996,15 +977,39 @@ export default function SatelliteMappingPage() {
   const backfillLayers = useMutation({
     mutationFn: async () => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
-      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
-        vineyard_id: activeVineyardId,
-        paddock_id: paddockId,
-      });
-      if (error) throw error;
-      return data as {
-        scanned: number; backfilled: number; skipped: number;
-        failures: Array<{ scene_id: string; index: string; message: string }>;
+      type BackfillResponse = {
+        scanned: number;
+        backfilled: number;
+        skipped: number;
+        has_more?: boolean;
+        remaining_work_items?: number;
+        halted?: string;
+        failures?: Array<{ scene_id: string; index: string; work_key?: string; message: string }>;
       };
+      const aggregate = { scanned: 0, backfilled: 0, skipped: 0, halted: null as string | null, failures: [] as NonNullable<BackfillResponse["failures"]> };
+      const excludedWorkKeys = new Set<string>();
+
+      for (let pass = 0; pass < 120; pass++) {
+        const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
+          vineyard_id: activeVineyardId,
+          paddock_id: paddockId,
+          max_work_items: 1,
+          exclude_work_keys: Array.from(excludedWorkKeys),
+        });
+        if (error) throw error;
+        const result = data as BackfillResponse;
+        aggregate.scanned = Math.max(aggregate.scanned, result.scanned ?? 0);
+        aggregate.backfilled += result.backfilled ?? 0;
+        aggregate.skipped += result.skipped ?? 0;
+        for (const failure of result.failures ?? []) {
+          aggregate.failures.push(failure);
+          if (failure.work_key) excludedWorkKeys.add(failure.work_key);
+        }
+        if (result.halted) aggregate.halted = result.halted;
+        if (!result.has_more || result.halted === "rate_limited") break;
+      }
+
+      return aggregate;
     },
     onSuccess: async (data) => {
       await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
@@ -1012,9 +1017,12 @@ export default function SatelliteMappingPage() {
       analyticalCacheRef.current.clear();
       setRasterCacheVersion((v) => v + 1);
       const failed = data?.failures?.length ?? 0;
+      const paused = data?.halted === "rate_limited";
       toast({
-        title: "Crop Health Maps · backfill complete",
-        description: `Scanned ${data.scanned} scenes, generated ${data.backfilled} assets${failed ? `, ${failed} failures` : ""}.`,
+        title: paused ? "Crop Health Maps · backfill paused" : "Crop Health Maps · backfill complete",
+        description: paused
+          ? `Provider rate limit reached after generating ${data.backfilled} assets. Run it again in a few minutes.`
+          : `Scanned ${data.scanned} scenes, generated ${data.backfilled} assets${failed ? `, ${failed} failures` : ""}.`,
         variant: failed && !data.backfilled ? "destructive" : "default",
       });
     },
