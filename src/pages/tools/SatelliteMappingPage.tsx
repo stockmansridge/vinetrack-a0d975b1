@@ -472,19 +472,29 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
-  // Fetch signed URLs for visible assets
+  // Fetch signed URLs for visible assets. Signed URLs live ~10 min server-side;
+  // route through React Query so they survive route changes within their TTL
+  // and don't get re-signed on every page mount.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
         if (signedUrls[asset.id]) continue;
         try {
-          const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
-            asset_id: asset.id,
+          const signed_url = await qc.fetchQuery({
+            queryKey: ["satellite-signed-url", asset.id],
+            queryFn: async () => {
+              const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
+                asset_id: asset.id,
+              });
+              if (error) throw error;
+              return (data as any)?.signed_url as string;
+            },
+            staleTime: 8 * 60_000,
+            gcTime: 10 * 60_000,
           });
-          if (error) throw error;
-          if (!cancelled && data?.signed_url) {
-            setSignedUrls((prev) => ({ ...prev, [asset.id]: data.signed_url }));
+          if (!cancelled && signed_url) {
+            setSignedUrls((prev) => ({ ...prev, [asset.id]: signed_url }));
           }
         } catch (e) {
           console.error("sign url failed", e);
