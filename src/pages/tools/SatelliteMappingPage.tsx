@@ -1743,15 +1743,54 @@ export default function SatelliteMappingPage() {
           </div>
 
 
-          {/* System-admin diagnostics */}
-          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-2 text-[11px] text-muted-foreground grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-            <div>Scenes returned: <span className="text-foreground">{scenesQuery.data?.scenes.length ?? 0}</span></div>
-            <div>Completed scenes: <span className="text-foreground">{(scenesQuery.data?.scenes ?? []).filter((s) => s.processing_status === "complete").length}</span></div>
-            <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
-            <div>Selected layer: <span className="text-foreground">{layer}</span></div>
-            <div>Display asset: <span className="text-foreground">{activeAssets[0]?.asset.id ? "yes" : "no"}</span></div>
-            <div>Analytical asset: <span className="text-foreground">{activeAnalyticalAssets[0]?.asset.id ? "yes" : "no"}</span></div>
-            <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
+          {/* System-admin diagnostics — imagery completeness */}
+          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
+            <div className="text-xs font-semibold text-foreground">Imagery completeness</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+              <div>Active paddocks: <span className="text-foreground">{liveReport.totals.totalPaddocks}</span></div>
+              <div>With latest imagery: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
+              <div>Missing latest: <span className="text-foreground">{liveReport.totals.missingPaddocks}</span></div>
+              <div>Complete packages: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
+              <div>Partial packages: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
+              <div>Old processing version: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
+              <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
+              <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
+              <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+              {lastRefreshSummary && (
+                <>
+                  <div>Last refresh — processed: <span className="text-foreground">{lastRefreshSummary.processedPaddocks}</span></div>
+                  <div>Last refresh — skipped: <span className="text-foreground">{lastRefreshSummary.skippedPaddocks}</span></div>
+                  <div>Provider calls avoided: <span className="text-foreground">{lastRefreshSummary.providerCallsAvoided}</span></div>
+                </>
+              )}
+            </div>
+            <div className="pt-1 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
+              <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
+              <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
+              <div>Selected layer: <span className="text-foreground">{layer}</span></div>
+              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
+            </div>
+            <Collapsible open={missingDetailOpen} onOpenChange={setMissingDetailOpen}>
+              <CollapsibleTrigger className="inline-flex items-center gap-1 text-[11px] text-foreground/80 hover:text-foreground">
+                <ChevronDown className={`h-3 w-3 transition-transform ${missingDetailOpen ? "" : "-rotate-90"}`} />
+                Show missing item detail
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-2 max-h-56 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
+                  {liveReport.perPaddock.length === 0 && (
+                    <div className="text-[10px]">No paddocks with valid boundaries.</div>
+                  )}
+                  {liveReport.perPaddock.map((p) => (
+                    <div key={p.paddockId} className="text-[11px] leading-tight">
+                      <span className="font-medium text-foreground">{p.paddockName}</span>
+                      <span className={`ml-1 ${p.state === "complete" ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>
+                        — {describePaddockMissingItems(p).join("; ")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </CardContent>
       </Card>
