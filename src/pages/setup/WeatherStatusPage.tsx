@@ -196,17 +196,18 @@ export default function WeatherStatusPage() {
             canEdit={canEdit}
           />
 
-          <WillyWeatherCard
-            vineyardId={selectedVineyardId!}
-            canEdit={canEdit}
-          />
-
           <LiveWeatherCard
             vineyardId={selectedVineyardId!}
             anyConfigured={!!(davis?.configured || wu?.configured)}
           />
 
+          <WillyWeatherCard
+            vineyardId={selectedVineyardId!}
+            canEdit={canEdit}
+          />
+
           <DavisCard
+
             status={davis}
             canEdit={canEdit}
             callerRole={callerRole}
