@@ -222,6 +222,7 @@ export default function WorkTasksPage() {
   const [labourFilter, setLabourFilter] = useState<string>(ANY); // any|has|missing
   const [selected, setSelected] = useState<WorkTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
@@ -601,7 +602,7 @@ export default function WorkTasksPage() {
           <Button variant="outline" size="sm" onClick={exportCsv}>
             <Download className="h-4 w-4 mr-2" /> CSV
           </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" onClick={() => { setCreatedTask(null); setCreateOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" /> New Work Task
           </Button>
         </div>
@@ -786,17 +787,20 @@ export default function WorkTasksPage() {
 
       <WorkTaskDrawer
         key={createOpen ? "create-open" : "create-closed"}
-        task={null}
+        task={createdTask}
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(o) => {
+          setCreateOpen(o);
+          if (!o) setCreatedTask(null);
+        }}
         paddocks={paddocks}
-        existingPaddocks={[]}
+        existingPaddocks={createdTask ? paddocksByTask.get(createdTask.id) ?? [] : []}
         categories={categories}
         syncedTaskTypes={syncedTaskTypes}
-        labourLines={[]}
-        linkedTrips={[]}
+        labourLines={createdTask ? linesByTask.get(createdTask.id) ?? [] : []}
+        linkedTrips={createdTask ? tripsByTask.get(createdTask.id) ?? [] : []}
         allTrips={trips}
-        machineLines={[]}
+        machineLines={createdTask ? machineLinesByTask.get(createdTask.id) ?? [] : []}
         machineLookups={machineLookups}
         allocByTripId={allocByTripId}
         canSeeCosts={canSeeCosts}
@@ -804,10 +808,12 @@ export default function WorkTasksPage() {
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
-        onSaved={() => {
+        onSaved={(saved) => {
+          if (saved) setCreatedTask(saved);
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
+          qc.invalidateQueries({ queryKey: ["work_task_machine_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_types"] });
         }}
       />
@@ -848,13 +854,15 @@ interface DrawerProps {
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
-  onSaved: () => void;
+  onSaved: (saved?: WorkTask) => void;
 }
 
 function WorkTaskDrawer({
   task, open, onOpenChange, paddocks, existingPaddocks, categories, syncedTaskTypes, labourLines, linkedTrips, allTrips, paddockNameById, machineLines, machineLookups, allocByTripId, canSeeCosts, canSoftDelete, userId, vineyardId, onSaved,
 }: DrawerProps) {
   const isNew = !task;
+  const [localLabourLines, setLocalLabourLines] = useState<WorkTaskLabourLine[]>([]);
+  const [localMachineLines, setLocalMachineLines] = useState<WorkTaskMachineLine[]>([]);
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const money = mkMoney(rf);
@@ -879,7 +887,11 @@ function WorkTaskDrawer({
   const [isFinalized, setIsFinalized] = useState<boolean>(!!task?.is_finalized);
   const [savedTaskId, setSavedTaskId] = useState<string | null>(task?.id ?? null);
 
-  useEffect(() => { setSavedTaskId(task?.id ?? null); }, [task?.id]);
+  useEffect(() => {
+    setSavedTaskId(task?.id ?? null);
+    setLocalLabourLines([]);
+    setLocalMachineLines([]);
+  }, [task?.id]);
 
   const togglePaddock = (id: string) => {
     setPaddockIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -948,7 +960,7 @@ function WorkTaskDrawer({
     onSuccess: (saved) => {
       setSavedTaskId(saved.id);
       toast({ title: isNew ? "Task log created" : "Task log updated" });
-      onSaved();
+      onSaved(saved);
       if (!isNew) onOpenChange(false);
     },
     onError: (e: any) => {
@@ -998,7 +1010,19 @@ function WorkTaskDrawer({
   });
 
   const drawerCanSeeCosts = useCanSeeCosts();
-  const visibleLines = labourLines.filter((l) => !l.deleted_at);
+  const displayedLabourLines = useMemo(() => {
+    const byId = new Map<string, WorkTaskLabourLine>();
+    labourLines.forEach((line) => byId.set(line.id, line));
+    localLabourLines.forEach((line) => byId.set(line.id, line));
+    return Array.from(byId.values());
+  }, [labourLines, localLabourLines]);
+  const displayedMachineLines = useMemo(() => {
+    const byId = new Map<string, WorkTaskMachineLine>();
+    machineLines.forEach((line) => byId.set(line.id, line));
+    localMachineLines.forEach((line) => byId.set(line.id, line));
+    return Array.from(byId.values());
+  }, [machineLines, localMachineLines]);
+  const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
   const missingRate = visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
@@ -1111,7 +1135,7 @@ function WorkTaskDrawer({
                 Task created. Add labour and machine resources below before closing.
               </div>
             )}
-            {savedTaskId && visibleLines.length === 0 && machineLines.length === 0 && (
+            {savedTaskId && visibleLines.length === 0 && displayedMachineLines.length === 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 No labour or machine resources have been added to this task.
               </div>
@@ -1123,7 +1147,16 @@ function WorkTaskDrawer({
               categories={categories}
               canSoftDelete={canSoftDelete}
               userId={userId}
-              onChanged={onSaved}
+              onChanged={(savedLine) => {
+                if (savedLine) {
+                  setLocalLabourLines((prev) => {
+                    const byId = new Map(prev.map((line) => [line.id, line]));
+                    byId.set(savedLine.id, savedLine);
+                    return Array.from(byId.values());
+                  });
+                }
+                onSaved();
+              }}
             />
           </div>
 
@@ -1188,11 +1221,21 @@ function WorkTaskDrawer({
               <MachineWorkSection
                 workTaskId={savedTaskId}
                 vineyardId={vineyardId}
-                lines={machineLines}
+                lines={displayedMachineLines}
                 lookups={machineLookups}
                 canEdit={canSoftDelete}
                 canDelete={canSoftDelete}
                 userId={userId}
+                onChanged={(savedLine) => {
+                  if (savedLine) {
+                    setLocalMachineLines((prev) => {
+                      const byId = new Map(prev.map((line) => [line.id, line]));
+                      byId.set(savedLine.id, savedLine);
+                      return Array.from(byId.values());
+                    });
+                  }
+                  onSaved();
+                }}
               />
             ) : (
               <Section title="Manual Machine Work">
@@ -1204,7 +1247,7 @@ function WorkTaskDrawer({
             {!isNew && task && (
               <WorkTaskSummarySection
                 labourLines={visibleLines}
-                machineLines={machineLines}
+                machineLines={displayedMachineLines}
                 linkedTrips={linkedTrips}
                 allocByTripId={allocByTripId}
                 canSeeCosts={canSeeCosts}
@@ -1280,7 +1323,7 @@ function LabourLinesSection({
   categories: OperatorCategory[];
   canSoftDelete: boolean;
   userId: string | null;
-  onChanged: () => void;
+  onChanged: (savedLine?: WorkTaskLabourLine) => void;
 }) {
   const [adding, setAdding] = useState(false);
 
@@ -1318,7 +1361,7 @@ function LabourLinesSection({
             userId={userId}
             vineyardId={vineyardId}
             taskId={taskId}
-            onChanged={() => { setAdding(false); onChanged(); }}
+            onChanged={(savedLine) => { setAdding(false); onChanged(savedLine); }}
             onCancel={() => setAdding(false)}
           />
         )}
@@ -1341,7 +1384,7 @@ function LabourLineRow({
   userId: string | null;
   vineyardId: string | null;
   taskId: string;
-  onChanged: () => void;
+  onChanged: (savedLine?: WorkTaskLabourLine) => void;
   onCancel?: () => void;
 }) {
   const isNew = !line;
@@ -1390,10 +1433,10 @@ function LabourLineRow({
       };
       return isNew ? createLabourLine(input) : updateLabourLine(input);
     },
-    onSuccess: () => {
+    onSuccess: (savedLine) => {
       toast({ title: isNew ? "Labour line added" : "Labour line updated" });
       setEditing(false);
-      onChanged();
+      onChanged(savedLine);
     },
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
@@ -1773,6 +1816,7 @@ function MachineWorkSection({
   canEdit,
   canDelete,
   userId,
+  onChanged,
 }: {
   workTaskId: string;
   vineyardId: string | null;
@@ -1781,6 +1825,7 @@ function MachineWorkSection({
   canEdit: boolean;
   canDelete: boolean;
   userId: string | null;
+  onChanged?: (savedLine?: WorkTaskMachineLine) => void;
 }) {
   const qc = useQueryClient();
   const rf = useRegionFormatters();
@@ -1835,18 +1880,19 @@ function MachineWorkSection({
       };
       if (editingId && editingId !== "__new__") {
         const existing = lines.find((l) => l.id === editingId);
-        await updateWorkTaskMachineLine({
+        return updateWorkTaskMachineLine({
           ...input,
           id: editingId,
           current_sync_version: existing?.sync_version ?? 0,
         });
       } else {
-        await createWorkTaskMachineLine(input);
+        return createWorkTaskMachineLine(input);
       }
     },
-    onSuccess: () => {
+    onSuccess: (savedLine) => {
       toast({ title: editingId === "__new__" ? "Machine work added" : "Machine work updated" });
       cancel();
+      onChanged?.(savedLine);
       invalidate();
     },
     onError: (e) =>
