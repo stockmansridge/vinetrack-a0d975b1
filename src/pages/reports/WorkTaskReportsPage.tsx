@@ -48,6 +48,8 @@ import {
 } from "@/lib/tripCostAllocationsQuery";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { useVintage } from "@/lib/useVintage";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -218,6 +220,8 @@ export default function WorkTaskReportsPage() {
   const [hasLinked, setHasLinked] = useState<string>(ANY); // any | yes | no
   const [hasManualMachine, setHasManualMachine] = useState<string>(ANY);
   const [warningOnly, setWarningOnly] = useState(false);
+  const [season, setSeason] = useState<string>("current");
+  const { vintage: currentVintageYear, seasonStartMonth, seasonStartDay } = useVintage();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
