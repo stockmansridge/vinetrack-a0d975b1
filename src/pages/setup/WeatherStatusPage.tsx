@@ -491,222 +491,231 @@ function DavisCard({
   const typedHasNew = apiKey.trim() !== "" || apiSecret.trim() !== "";
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Davis WeatherLink</h2>
-        {configured ? (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Configured
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-        )}
-      </div>
-
-      {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
-
-      {configured && <StatusBlock status={status} />}
-
-      {lastTestCode === "function_not_found" && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-          Test connection is unavailable: the <code>davis-proxy</code> server function is not deployed on the production backend yet.
-          Saved credentials are still stored securely and used by the iOS app —
-          this only blocks the in-portal connection test. Use the Copy diagnostics button below when reporting this to support.
-        </div>
-      )}
-
-      {!canEdit && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change weather integration settings.
-          {callerRole && <> Your role: <span className="font-medium">{callerRole}</span>.</>}
-        </div>
-      )}
-
-      {canEdit && (
-        <div className="space-y-3 border-t pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Label htmlFor="weather-enabled" className="text-sm font-medium">Enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                Turn the Davis integration on or off for this vineyard.
-              </p>
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-4">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Davis WeatherLink</h2>
+            <div className="flex items-center gap-2">
+              {configured ? (
+                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                  Configured
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
+              )}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </div>
-            <Switch id="weather-enabled" checked={enabled} onCheckedChange={setEnabled} />
-          </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
+          {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="station-id">Station ID</Label>
-              <Input
-                id="station-id"
-                value={stationId}
-                onChange={(e) => setStationId(e.target.value)}
-                placeholder="e.g. 123456"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="station-name">Station name</Label>
-              <Input
-                id="station-name"
-                value={stationName}
-                onChange={(e) => setStationName(e.target.value)}
-                placeholder="e.g. North block"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="api-key">API key</Label>
-              <Input
-                id="api-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={hasKey ? "Stored — leave blank to keep existing" : "Enter API key"}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="api-secret">API secret</Label>
-              <Input
-                id="api-secret"
-                type="password"
-                value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
-                placeholder={hasSecret ? "Stored — leave blank to keep existing" : "Enter API secret"}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-          </div>
+          {configured && <StatusBlock status={status} />}
 
-          <p className="text-xs text-muted-foreground">
-            Leaving API key or secret blank preserves the values already stored
-            server-side. Stored credentials are never displayed.
-          </p>
-
-          {(configured || hasKey || hasSecret) && (
-            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              The API key and API secret inputs clear after save by design. Use the stored-status rows above to confirm whether credentials are saved for this vineyard.
+          {lastTestCode === "function_not_found" && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              Test connection is unavailable: the <code>davis-proxy</code> server function is not deployed on the production backend yet.
+              Saved credentials are still stored securely and used by the iOS app —
+              this only blocks the in-portal connection test. Use the Copy diagnostics button below when reporting this to support.
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending}
-              className="gap-2"
-            >
-              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save settings
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => testSavedMut.mutate()}
-              disabled={testSavedMut.isPending || !configured}
-              className="gap-2"
-              title={!configured ? "Save settings first" : "Test stored credentials"}
-            >
-              {testSavedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-              Test saved credentials
-            </Button>
-
-            {typedHasNew && (
-              <Button
-                variant="outline"
-                onClick={() => testTypedMut.mutate()}
-                disabled={testTypedMut.isPending}
-                className="gap-2"
-              >
-                {testTypedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-                Test typed credentials
-              </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2"
-              onClick={async () => {
-                const wind = sensorState(status?.has_wind, status?.detected_sensors, "wind");
-                const th = sensorState(status?.has_temperature_humidity, status?.detected_sensors, "temp_humidity");
-                const rain = sensorState(status?.has_rain, status?.detected_sensors, "rain");
-                const diag = {
-                  vineyardId,
-                  provider: DAVIS,
-                  configured,
-                  has_api_key: status?.has_api_key ?? null,
-                  has_api_secret: status?.has_api_secret ?? null,
-                  is_active: status?.is_active ?? null,
-                  station_id: status?.station_id ?? null,
-                  station_name: status?.station_name ?? null,
-                  last_tested_at: status?.last_tested_at ?? null,
-                  last_test_status: status?.last_test_status ?? null,
-                  detectedSensors: status?.detected_sensors ?? [],
-                  hasWindSensor: wind,
-                  hasTemperatureHumiditySensor: th,
-                  hasRainSensor: rain,
-                  has_leaf_wetness: status?.has_leaf_wetness ?? null,
-                  caller_role: status?.caller_role ?? null,
-                  rpc_error: status?.error ?? null,
-                  last_portal_test_code: lastTestCode,
-                  generated_at: new Date().toISOString(),
-                };
-                try {
-                  await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
-                  toast.success("Davis diagnostics copied to clipboard");
-                } catch {
-                  toast.error("Could not copy diagnostics");
-                }
-              }}
-            >
-              <Copy className="h-4 w-4" />
-              Copy diagnostics
-            </Button>
-
-            <div className="ml-auto">
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-                disabled={!configured || deleteMut.isPending}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Clear settings
-              </Button>
+          {!canEdit && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change weather integration settings.
+              {callerRole && <> Your role: <span className="font-medium">{callerRole}</span>.</>}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear Davis WeatherLink settings for this vineyard?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the stored Davis WeatherLink configuration and
-              credentials for this vineyard. The VineTrack app will fall back to
-              forecast/archive sources until new settings are saved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                deleteMut.mutate();
-              }}
-              disabled={deleteMut.isPending}
-            >
-              {deleteMut.isPending ? "Clearing…" : "Clear settings"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+          {canEdit && (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="weather-enabled" className="text-sm font-medium">Enabled</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Turn the Davis integration on or off for this vineyard.
+                  </p>
+                </div>
+                <Switch id="weather-enabled" checked={enabled} onCheckedChange={setEnabled} />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="station-id">Station ID</Label>
+                  <Input
+                    id="station-id"
+                    value={stationId}
+                    onChange={(e) => setStationId(e.target.value)}
+                    placeholder="e.g. 123456"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="station-name">Station name</Label>
+                  <Input
+                    id="station-name"
+                    value={stationName}
+                    onChange={(e) => setStationName(e.target.value)}
+                    placeholder="e.g. North block"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="api-key">API key</Label>
+                  <Input
+                    id="api-key"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={hasKey ? "Stored — leave blank to keep existing" : "Enter API key"}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="api-secret">API secret</Label>
+                  <Input
+                    id="api-secret"
+                    type="password"
+                    value={apiSecret}
+                    onChange={(e) => setApiSecret(e.target.value)}
+                    placeholder={hasSecret ? "Stored — leave blank to keep existing" : "Enter API secret"}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Leaving API key or secret blank preserves the values already stored
+                server-side. Stored credentials are never displayed.
+              </p>
+
+              {(configured || hasKey || hasSecret) && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  The API key and API secret inputs clear after save by design. Use the stored-status rows above to confirm whether credentials are saved for this vineyard.
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  onClick={() => saveMut.mutate()}
+                  disabled={saveMut.isPending}
+                  className="gap-2"
+                >
+                  {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save settings
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => testSavedMut.mutate()}
+                  disabled={testSavedMut.isPending || !configured}
+                  className="gap-2"
+                  title={!configured ? "Save settings first" : "Test stored credentials"}
+                >
+                  {testSavedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                  Test saved credentials
+                </Button>
+
+                {typedHasNew && (
+                  <Button
+                    variant="outline"
+                    onClick={() => testTypedMut.mutate()}
+                    disabled={testTypedMut.isPending}
+                    className="gap-2"
+                  >
+                    {testTypedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                    Test typed credentials
+                  </Button>
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={async () => {
+                    const wind = sensorState(status?.has_wind, status?.detected_sensors, "wind");
+                    const th = sensorState(status?.has_temperature_humidity, status?.detected_sensors, "temp_humidity");
+                    const rain = sensorState(status?.has_rain, status?.detected_sensors, "rain");
+                    const diag = {
+                      vineyardId,
+                      provider: DAVIS,
+                      configured,
+                      has_api_key: status?.has_api_key ?? null,
+                      has_api_secret: status?.has_api_secret ?? null,
+                      is_active: status?.is_active ?? null,
+                      station_id: status?.station_id ?? null,
+                      station_name: status?.station_name ?? null,
+                      last_tested_at: status?.last_tested_at ?? null,
+                      last_test_status: status?.last_test_status ?? null,
+                      detectedSensors: status?.detected_sensors ?? [],
+                      hasWindSensor: wind,
+                      hasTemperatureHumiditySensor: th,
+                      hasRainSensor: rain,
+                      has_leaf_wetness: status?.has_leaf_wetness ?? null,
+                      caller_role: status?.caller_role ?? null,
+                      rpc_error: status?.error ?? null,
+                      last_portal_test_code: lastTestCode,
+                      generated_at: new Date().toISOString(),
+                    };
+                    try {
+                      await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
+                      toast.success("Davis diagnostics copied to clipboard");
+                    } catch {
+                      toast.error("Could not copy diagnostics");
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy diagnostics
+                </Button>
+
+                <div className="ml-auto">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={!configured || deleteMut.isPending}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear settings
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CollapsibleContent>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear Davis WeatherLink settings for this vineyard?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the stored Davis WeatherLink configuration and
+                credentials for this vineyard. The VineTrack app will fall back to
+                forecast/archive sources until new settings are saved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  deleteMut.mutate();
+                }}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? "Clearing…" : "Clear settings"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    </Collapsible>
   );
+
 }
 
 function fmtNum(v: number | null | undefined, digits = 1, suffix = "") {
