@@ -150,11 +150,13 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
   const summary = useMemo(() => {
     const totalLitres = rows.reduce((a, r) => a + (r.volume_litres ?? 0), 0);
     const totalCost = rows.reduce((a, r) => a + (r.total_cost ?? 0), 0);
+    const flagged = rows.filter(isSuspiciousPurchase).length;
     return {
       count: rows.length,
       totalLitres,
       totalCost,
       avgCpl: totalLitres > 0 ? totalCost / totalLitres : null,
+      flagged,
     };
   }, [rows]);
 
