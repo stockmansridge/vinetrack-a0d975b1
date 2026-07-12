@@ -854,7 +854,7 @@ interface DrawerProps {
   canSoftDelete: boolean;
   userId: string | null;
   vineyardId: string | null;
-  onSaved: () => void;
+  onSaved: (saved?: WorkTask) => void;
 }
 
 function WorkTaskDrawer({
