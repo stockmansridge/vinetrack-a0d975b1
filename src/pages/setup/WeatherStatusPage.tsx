@@ -11,6 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -20,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
 import {
   Cloud,
   CloudRain,
@@ -35,7 +41,9 @@ import {
   Loader2,
   Copy,
   HelpCircle,
+  ChevronDown,
 } from "lucide-react";
+
 import {
   deleteWeatherIntegration,
   fetchLiveWeather,
@@ -483,222 +491,231 @@ function DavisCard({
   const typedHasNew = apiKey.trim() !== "" || apiSecret.trim() !== "";
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Davis WeatherLink</h2>
-        {configured ? (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Configured
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-        )}
-      </div>
-
-      {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
-
-      {configured && <StatusBlock status={status} />}
-
-      {lastTestCode === "function_not_found" && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-          Test connection is unavailable: the <code>davis-proxy</code> server function is not deployed on the production backend yet.
-          Saved credentials are still stored securely and used by the iOS app —
-          this only blocks the in-portal connection test. Use the Copy diagnostics button below when reporting this to support.
-        </div>
-      )}
-
-      {!canEdit && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change weather integration settings.
-          {callerRole && <> Your role: <span className="font-medium">{callerRole}</span>.</>}
-        </div>
-      )}
-
-      {canEdit && (
-        <div className="space-y-3 border-t pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Label htmlFor="weather-enabled" className="text-sm font-medium">Enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                Turn the Davis integration on or off for this vineyard.
-              </p>
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-4">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Davis WeatherLink</h2>
+            <div className="flex items-center gap-2">
+              {configured ? (
+                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                  Configured
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
+              )}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </div>
-            <Switch id="weather-enabled" checked={enabled} onCheckedChange={setEnabled} />
-          </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
+          {status?.error && <div className="text-xs text-destructive">RPC error: {status.error}</div>}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="station-id">Station ID</Label>
-              <Input
-                id="station-id"
-                value={stationId}
-                onChange={(e) => setStationId(e.target.value)}
-                placeholder="e.g. 123456"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="station-name">Station name</Label>
-              <Input
-                id="station-name"
-                value={stationName}
-                onChange={(e) => setStationName(e.target.value)}
-                placeholder="e.g. North block"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="api-key">API key</Label>
-              <Input
-                id="api-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={hasKey ? "Stored — leave blank to keep existing" : "Enter API key"}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="api-secret">API secret</Label>
-              <Input
-                id="api-secret"
-                type="password"
-                value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
-                placeholder={hasSecret ? "Stored — leave blank to keep existing" : "Enter API secret"}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-          </div>
+          {configured && <StatusBlock status={status} />}
 
-          <p className="text-xs text-muted-foreground">
-            Leaving API key or secret blank preserves the values already stored
-            server-side. Stored credentials are never displayed.
-          </p>
-
-          {(configured || hasKey || hasSecret) && (
-            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              The API key and API secret inputs clear after save by design. Use the stored-status rows above to confirm whether credentials are saved for this vineyard.
+          {lastTestCode === "function_not_found" && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              Test connection is unavailable: the <code>davis-proxy</code> server function is not deployed on the production backend yet.
+              Saved credentials are still stored securely and used by the iOS app —
+              this only blocks the in-portal connection test. Use the Copy diagnostics button below when reporting this to support.
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending}
-              className="gap-2"
-            >
-              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save settings
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => testSavedMut.mutate()}
-              disabled={testSavedMut.isPending || !configured}
-              className="gap-2"
-              title={!configured ? "Save settings first" : "Test stored credentials"}
-            >
-              {testSavedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-              Test saved credentials
-            </Button>
-
-            {typedHasNew && (
-              <Button
-                variant="outline"
-                onClick={() => testTypedMut.mutate()}
-                disabled={testTypedMut.isPending}
-                className="gap-2"
-              >
-                {testTypedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-                Test typed credentials
-              </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2"
-              onClick={async () => {
-                const wind = sensorState(status?.has_wind, status?.detected_sensors, "wind");
-                const th = sensorState(status?.has_temperature_humidity, status?.detected_sensors, "temp_humidity");
-                const rain = sensorState(status?.has_rain, status?.detected_sensors, "rain");
-                const diag = {
-                  vineyardId,
-                  provider: DAVIS,
-                  configured,
-                  has_api_key: status?.has_api_key ?? null,
-                  has_api_secret: status?.has_api_secret ?? null,
-                  is_active: status?.is_active ?? null,
-                  station_id: status?.station_id ?? null,
-                  station_name: status?.station_name ?? null,
-                  last_tested_at: status?.last_tested_at ?? null,
-                  last_test_status: status?.last_test_status ?? null,
-                  detectedSensors: status?.detected_sensors ?? [],
-                  hasWindSensor: wind,
-                  hasTemperatureHumiditySensor: th,
-                  hasRainSensor: rain,
-                  has_leaf_wetness: status?.has_leaf_wetness ?? null,
-                  caller_role: status?.caller_role ?? null,
-                  rpc_error: status?.error ?? null,
-                  last_portal_test_code: lastTestCode,
-                  generated_at: new Date().toISOString(),
-                };
-                try {
-                  await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
-                  toast.success("Davis diagnostics copied to clipboard");
-                } catch {
-                  toast.error("Could not copy diagnostics");
-                }
-              }}
-            >
-              <Copy className="h-4 w-4" />
-              Copy diagnostics
-            </Button>
-
-            <div className="ml-auto">
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-                disabled={!configured || deleteMut.isPending}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Clear settings
-              </Button>
+          {!canEdit && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change weather integration settings.
+              {callerRole && <> Your role: <span className="font-medium">{callerRole}</span>.</>}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear Davis WeatherLink settings for this vineyard?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the stored Davis WeatherLink configuration and
-              credentials for this vineyard. The VineTrack app will fall back to
-              forecast/archive sources until new settings are saved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                deleteMut.mutate();
-              }}
-              disabled={deleteMut.isPending}
-            >
-              {deleteMut.isPending ? "Clearing…" : "Clear settings"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+          {canEdit && (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="weather-enabled" className="text-sm font-medium">Enabled</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Turn the Davis integration on or off for this vineyard.
+                  </p>
+                </div>
+                <Switch id="weather-enabled" checked={enabled} onCheckedChange={setEnabled} />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="station-id">Station ID</Label>
+                  <Input
+                    id="station-id"
+                    value={stationId}
+                    onChange={(e) => setStationId(e.target.value)}
+                    placeholder="e.g. 123456"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="station-name">Station name</Label>
+                  <Input
+                    id="station-name"
+                    value={stationName}
+                    onChange={(e) => setStationName(e.target.value)}
+                    placeholder="e.g. North block"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="api-key">API key</Label>
+                  <Input
+                    id="api-key"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={hasKey ? "Stored — leave blank to keep existing" : "Enter API key"}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="api-secret">API secret</Label>
+                  <Input
+                    id="api-secret"
+                    type="password"
+                    value={apiSecret}
+                    onChange={(e) => setApiSecret(e.target.value)}
+                    placeholder={hasSecret ? "Stored — leave blank to keep existing" : "Enter API secret"}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Leaving API key or secret blank preserves the values already stored
+                server-side. Stored credentials are never displayed.
+              </p>
+
+              {(configured || hasKey || hasSecret) && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  The API key and API secret inputs clear after save by design. Use the stored-status rows above to confirm whether credentials are saved for this vineyard.
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  onClick={() => saveMut.mutate()}
+                  disabled={saveMut.isPending}
+                  className="gap-2"
+                >
+                  {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save settings
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => testSavedMut.mutate()}
+                  disabled={testSavedMut.isPending || !configured}
+                  className="gap-2"
+                  title={!configured ? "Save settings first" : "Test stored credentials"}
+                >
+                  {testSavedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                  Test saved credentials
+                </Button>
+
+                {typedHasNew && (
+                  <Button
+                    variant="outline"
+                    onClick={() => testTypedMut.mutate()}
+                    disabled={testTypedMut.isPending}
+                    className="gap-2"
+                  >
+                    {testTypedMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                    Test typed credentials
+                  </Button>
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={async () => {
+                    const wind = sensorState(status?.has_wind, status?.detected_sensors, "wind");
+                    const th = sensorState(status?.has_temperature_humidity, status?.detected_sensors, "temp_humidity");
+                    const rain = sensorState(status?.has_rain, status?.detected_sensors, "rain");
+                    const diag = {
+                      vineyardId,
+                      provider: DAVIS,
+                      configured,
+                      has_api_key: status?.has_api_key ?? null,
+                      has_api_secret: status?.has_api_secret ?? null,
+                      is_active: status?.is_active ?? null,
+                      station_id: status?.station_id ?? null,
+                      station_name: status?.station_name ?? null,
+                      last_tested_at: status?.last_tested_at ?? null,
+                      last_test_status: status?.last_test_status ?? null,
+                      detectedSensors: status?.detected_sensors ?? [],
+                      hasWindSensor: wind,
+                      hasTemperatureHumiditySensor: th,
+                      hasRainSensor: rain,
+                      has_leaf_wetness: status?.has_leaf_wetness ?? null,
+                      caller_role: status?.caller_role ?? null,
+                      rpc_error: status?.error ?? null,
+                      last_portal_test_code: lastTestCode,
+                      generated_at: new Date().toISOString(),
+                    };
+                    try {
+                      await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
+                      toast.success("Davis diagnostics copied to clipboard");
+                    } catch {
+                      toast.error("Could not copy diagnostics");
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy diagnostics
+                </Button>
+
+                <div className="ml-auto">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={!configured || deleteMut.isPending}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear settings
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CollapsibleContent>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear Davis WeatherLink settings for this vineyard?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the stored Davis WeatherLink configuration and
+                credentials for this vineyard. The VineTrack app will fall back to
+                forecast/archive sources until new settings are saved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  deleteMut.mutate();
+                }}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? "Clearing…" : "Clear settings"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    </Collapsible>
   );
+
 }
 
 function fmtNum(v: number | null | undefined, digits = 1, suffix = "") {
@@ -890,54 +907,64 @@ function ForecastProviderCard({
   const value: ForecastProvider = data ?? "auto";
 
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Forecast Provider</h2>
-          <p className="text-xs text-muted-foreground">
-            Which service provides 7-day forecasts. Auto uses WillyWeather when configured, otherwise Open-Meteo.
-          </p>
-        </div>
-        {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      </div>
-      {isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      ) : (
-        <RadioGroup
-          value={value}
-          onValueChange={(v) => onChange(v as ForecastProvider)}
-          className="grid gap-2 sm:grid-cols-3"
-        >
-          {(
-            [
-              { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
-              { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
-              { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
-            ] as { v: ForecastProvider; label: string; hint: string }[]
-          ).map((opt) => (
-            <label
-              key={opt.v}
-              htmlFor={`fp-${opt.v}`}
-              className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
-                canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
-              } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-3">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2 text-left">
+            <div>
+              <h2 className="text-base font-semibold">Forecast Provider</h2>
+              <p className="text-xs text-muted-foreground">
+                Which service provides 7-day forecasts. Auto uses WillyWeather when configured, otherwise Open-Meteo.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3">
+          {isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <RadioGroup
+              value={value}
+              onValueChange={(v) => onChange(v as ForecastProvider)}
+              className="grid gap-2 sm:grid-cols-3"
             >
-              <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
-              <div>
-                <div className="font-medium">{opt.label}</div>
-                <div className="text-xs text-muted-foreground">{opt.hint}</div>
-              </div>
-            </label>
-          ))}
-        </RadioGroup>
-      )}
-      {!canEdit && (
-        <div className="text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change the forecast provider.
-        </div>
-      )}
-    </Card>
+              {(
+                [
+                  { v: "auto", label: "Auto", hint: "WillyWeather if set, else Open-Meteo" },
+                  { v: "open_meteo", label: "Open-Meteo", hint: "Free global forecast service" },
+                  { v: "willyweather", label: "WillyWeather", hint: "Australian forecast (location required)" },
+                ] as { v: ForecastProvider; label: string; hint: string }[]
+              ).map((opt) => (
+                <label
+                  key={opt.v}
+                  htmlFor={`fp-${opt.v}`}
+                  className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
+                    canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
+                  } ${value === opt.v ? "border-primary bg-primary/5" : ""}`}
+                >
+                  <RadioGroupItem id={`fp-${opt.v}`} value={opt.v} disabled={!canEdit} className="mt-0.5" />
+                  <div>
+                    <div className="font-medium">{opt.label}</div>
+                    <div className="text-xs text-muted-foreground">{opt.hint}</div>
+                  </div>
+                </label>
+              ))}
+            </RadioGroup>
+          )}
+          {!canEdit && (
+            <div className="text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change the forecast provider.
+            </div>
+          )}
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
+
 }
 
 // ---------------------------------------------------------------------------
@@ -1160,178 +1187,187 @@ function WillyWeatherCard({
   }, [canEdit, configured, providerEligible, vineyardCenter, autoAssigning, vineyardId]);
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">WillyWeather</h2>
-        {configured ? (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Configured
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-        )}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
-      </p>
-
-      {autoAssigning && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Matching nearest WillyWeather location from vineyard GPS centre…
-        </div>
-      )}
-      {!autoAssigning && autoAssigned && configured && (
-        <div className="rounded-md border border-emerald-600/30 bg-emerald-600/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-          WillyWeather location automatically matched from this vineyard's GPS centre.
-        </div>
-      )}
-      {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
-        </div>
-      )}
-      {lastError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
-          <span className="font-medium">WillyWeather error:</span> {lastError}
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      ) : (
-        <div className="grid gap-2 sm:grid-cols-2 text-sm">
-          <Row label="Location" value={status?.station_name ?? "—"} />
-          <Row label="Location ID" value={status?.station_id ?? "—"} />
-          <Row
-            label="Coordinates"
-            value={
-              status?.station_latitude != null && status?.station_longitude != null
-                ? `${status.station_latitude.toFixed(3)}, ${status.station_longitude.toFixed(3)}`
-                : "—"
-            }
-          />
-          <Row label="Active" value={<YN v={status?.is_active ?? null} />} />
-          <Row label="Last test" value={fmtDate(status?.last_tested_at)} />
-          <Row label="Last test status" value={status?.last_test_status ?? "—"} />
-        </div>
-      )}
-
-      {canEdit ? (
-        <div className="space-y-3 border-t pt-4">
-          <div className="space-y-1">
-            <Label htmlFor="ww-query">Search location</Label>
-            <div className="flex gap-2">
-              <Input
-                id="ww-query"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. Orange NSW"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSearch();
-                  }
-                }}
-              />
-              <Button onClick={handleSearch} disabled={searching || !query.trim()} className="gap-2">
-                {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Search
-              </Button>
-              {configured && (
-                <Button
-                  variant="outline"
-                  onClick={handleNearest}
-                  disabled={searching}
-                  title="Find locations nearest the current coordinates"
-                >
-                  Find nearest
-                </Button>
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-4">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">WillyWeather</h2>
+            <div className="flex items-center gap-2">
+              {configured ? (
+                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                  Configured
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
               )}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </div>
-          </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            WillyWeather provides Australian-region forecasts. The API key is managed centrally — no key is needed here. Set a location and test the connection.
+          </p>
 
-          {results && results.length > 0 && (
-            <div className="rounded-md border divide-y max-h-72 overflow-auto">
-              {results.map((loc) => (
-                <button
-                  key={loc.id}
-                  type="button"
-                  onClick={() => handleSelect(loc)}
-                  disabled={busy === "set"}
-                  className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{loc.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {[loc.region, loc.state, loc.postcode].filter(Boolean).join(" · ") || `${loc.latitude}, ${loc.longitude}`}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {loc.distanceKm != null ? `${loc.distanceKm.toFixed(1)} km` : "Select"}
-                  </div>
-                </button>
-              ))}
+          {autoAssigning && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Matching nearest WillyWeather location from vineyard GPS centre…
+            </div>
+          )}
+          {!autoAssigning && autoAssigned && configured && (
+            <div className="rounded-md border border-emerald-600/30 bg-emerald-600/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+              WillyWeather location automatically matched from this vineyard's GPS centre.
+            </div>
+          )}
+          {!configured && !autoAssigning && providerEligible && canEdit && !hasCenter && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Add vineyard GPS centre coordinates to automatically match the nearest WillyWeather forecast location.
+            </div>
+          )}
+          {lastError && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
+              <span className="font-medium">WillyWeather error:</span> {lastError}
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              variant="outline"
-              onClick={handleTest}
-              disabled={busy === "test" || !configured}
-              className="gap-2"
-              title={!configured ? "Set a location first" : "Test WillyWeather connection"}
-            >
-              {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-              Test connection
-            </Button>
-            <div className="ml-auto">
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-                disabled={!configured || busy === "delete"}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove location
-              </Button>
+          {isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 text-sm">
+              <Row label="Location" value={status?.station_name ?? "—"} />
+              <Row label="Location ID" value={status?.station_id ?? "—"} />
+              <Row
+                label="Coordinates"
+                value={
+                  status?.station_latitude != null && status?.station_longitude != null
+                    ? `${status.station_latitude.toFixed(3)}, ${status.station_longitude.toFixed(3)}`
+                    : "—"
+                }
+              />
+              <Row label="Active" value={<YN v={status?.is_active ?? null} />} />
+              <Row label="Last test" value={fmtDate(status?.last_tested_at)} />
+              <Row label="Last test status" value={status?.last_test_status ?? "—"} />
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change the WillyWeather location.
-        </div>
-      )}
+          )}
 
-      <WillyWeatherAttribution />
+          {canEdit ? (
+            <div className="space-y-3 border-t pt-4">
+              <div className="space-y-1">
+                <Label htmlFor="ww-query">Search location</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="ww-query"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="e.g. Orange NSW"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleSearch();
+                      }
+                    }}
+                  />
+                  <Button onClick={handleSearch} disabled={searching || !query.trim()} className="gap-2">
+                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Search
+                  </Button>
+                  {configured && (
+                    <Button
+                      variant="outline"
+                      onClick={handleNearest}
+                      disabled={searching}
+                      title="Find locations nearest the current coordinates"
+                    >
+                      Find nearest
+                    </Button>
+                  )}
+                </div>
+              </div>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove WillyWeather location?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The vineyard will fall back to Open-Meteo for forecasts (or whatever the Forecast Provider preference resolves to).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleDelete();
-              }}
-              disabled={busy === "delete"}
-            >
-              {busy === "delete" ? "Removing…" : "Remove"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+              {results && results.length > 0 && (
+                <div className="rounded-md border divide-y max-h-72 overflow-auto">
+                  {results.map((loc) => (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => handleSelect(loc)}
+                      disabled={busy === "set"}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{loc.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {[loc.region, loc.state, loc.postcode].filter(Boolean).join(" · ") || `${loc.latitude}, ${loc.longitude}`}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {loc.distanceKm != null ? `${loc.distanceKm.toFixed(1)} km` : "Select"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  onClick={handleTest}
+                  disabled={busy === "test" || !configured}
+                  className="gap-2"
+                  title={!configured ? "Set a location first" : "Test WillyWeather connection"}
+                >
+                  {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                  Test connection
+                </Button>
+                <div className="ml-auto">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={!configured || busy === "delete"}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove location
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change the WillyWeather location.
+            </div>
+          )}
+
+          <WillyWeatherAttribution />
+        </CollapsibleContent>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove WillyWeather location?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The vineyard will fall back to Open-Meteo for forecasts (or whatever the Forecast Provider preference resolves to).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete();
+                }}
+                disabled={busy === "delete"}
+              >
+                {busy === "delete" ? "Removing…" : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    </Collapsible>
   );
+
 }
 
 // ---------------------------------------------------------------------------
@@ -1523,211 +1559,220 @@ function WundergroundCard({
   const configured = merged.configured;
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Weather Underground</h2>
-        {configured ? (
-          <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
-            Configured
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
-        )}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Uses platform Weather Underground connection. Owners and managers can
-        set the vineyard's PWS station ID. Rainfall is backfilled into
-        vineyard history server-side.
-      </p>
-
-      {merged.error && (
-        <div className="text-xs text-destructive">RPC error: {merged.error}</div>
-      )}
-
-      {wuLoading && !wuConfig && (
-        <div className="text-xs text-muted-foreground">Loading station config…</div>
-      )}
-
-      {configured && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          <div className="font-medium">Selected: {merged.station_name ?? "—"}</div>
-          <div className="text-xs text-muted-foreground">
-            Station ID: {merged.station_id ?? "—"}
-            {merged.station_latitude != null && merged.station_longitude != null
-              ? ` · ${merged.station_latitude.toFixed(3)}, ${merged.station_longitude.toFixed(3)}`
-              : ""}
-          </div>
-        </div>
-      )}
-
-      {canEdit ? (
-        <div className="space-y-3 border-t pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => findMut.mutate()}
-              disabled={findMut.isPending || !vineyardCenter}
-              title={!vineyardCenter ? "Vineyard coordinates not available" : "Find nearby WU stations"}
-              className="gap-2"
-            >
-              {findMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Find nearby WU stations
-            </Button>
-            {!vineyardCenter && (
-              <span className="text-xs text-muted-foreground">
-                Set vineyard GPS centre to search nearby stations.
-              </span>
-            )}
-          </div>
-
-          {findError && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
-              {findError}
+    <Collapsible defaultOpen={false} className="group">
+      <Card className="p-4 space-y-4">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Weather Underground</h2>
+            <div className="flex items-center gap-2">
+              {configured ? (
+                <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30">
+                  Configured
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not configured</Badge>
+              )}
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </div>
-          )}
-
-          {nearby && nearby.length > 0 && (
-            <div className="rounded-md border divide-y max-h-72 overflow-auto">
-              {nearby.map((s) => (
-                <button
-                  key={s.station_id}
-                  type="button"
-                  onClick={() => pickNearby(s)}
-                  className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="text-sm font-medium">
-                      {s.station_name ?? s.neighborhood ?? s.station_id}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      ID: {s.station_id}
-                      {s.neighborhood && s.station_name && s.neighborhood !== s.station_name
-                        ? ` · ${s.neighborhood}`
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {s.distance_km != null ? `${Number(s.distance_km).toFixed(1)} km` : "Pick"}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="wu-station-id">Station ID</Label>
-              <Input
-                id="wu-station-id"
-                value={stationId}
-                onChange={(e) => setStationId(e.target.value)}
-                placeholder="e.g. KCASANTA123"
-                autoComplete="off"
-                spellCheck={false}
-                className="bg-card"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="wu-station-name">Station name</Label>
-              <Input
-                id="wu-station-name"
-                value={stationName}
-                onChange={(e) => setStationName(e.target.value)}
-                placeholder="e.g. North block PWS"
-                autoComplete="off"
-                className="bg-card"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending || !stationId.trim()}
-              className="gap-2"
-            >
-              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save station
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => backfillMut.mutate()}
-              disabled={backfillMut.isPending || !configured}
-              className="gap-2"
-              title={!configured ? "Save a station first" : "Backfill last 14 days of WU rainfall"}
-            >
-              {backfillMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudRain className="h-4 w-4" />}
-              Backfill Weather Underground rainfall
-            </Button>
-
-            <div className="ml-auto">
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-                disabled={!configured || deleteMut.isPending}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove Weather Underground station
-              </Button>
-            </div>
-          </div>
-
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Imports the last 14 days of Weather Underground rainfall into
-            vineyard history. Safe to re-run — Manual and Davis rainfall are
-            preserved. Today is skipped because the daily summary is
-            incomplete.
+            Uses platform Weather Underground connection. Owners and managers can
+            set the vineyard's PWS station ID. Rainfall is backfilled into
+            vineyard history server-side.
           </p>
 
-          {backfillResult && (
-            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
-              {backfillResult}
+          {merged.error && (
+            <div className="text-xs text-destructive">RPC error: {merged.error}</div>
+          )}
+
+          {wuLoading && !wuConfig && (
+            <div className="text-xs text-muted-foreground">Loading station config…</div>
+          )}
+
+          {configured && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <div className="font-medium">Selected: {merged.station_name ?? "—"}</div>
+              <div className="text-xs text-muted-foreground">
+                Station ID: {merged.station_id ?? "—"}
+                {merged.station_latitude != null && merged.station_longitude != null
+                  ? ` · ${merged.station_latitude.toFixed(3)}, ${merged.station_longitude.toFixed(3)}`
+                  : ""}
+              </div>
             </div>
           )}
-        </div>
-      ) : (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Only vineyard Owners and Managers can change the Weather
-          Underground station or run a rainfall backfill.
-        </div>
-      )}
 
-      <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        Manual entries override Davis. Davis overrides Weather Underground.
-        Weather Underground overrides Open-Meteo. Backfill only writes
-        Weather Underground rows — Manual and Davis rows are never
-        overwritten.
-      </div>
+          {canEdit ? (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => findMut.mutate()}
+                  disabled={findMut.isPending || !vineyardCenter}
+                  title={!vineyardCenter ? "Vineyard coordinates not available" : "Find nearby WU stations"}
+                  className="gap-2"
+                >
+                  {findMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Find nearby WU stations
+                </Button>
+                {!vineyardCenter && (
+                  <span className="text-xs text-muted-foreground">
+                    Set vineyard GPS centre to search nearby stations.
+                  </span>
+                )}
+              </div>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Weather Underground station?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the shared vineyard-wide Weather Underground
-              station. Existing rainfall history is preserved. The vineyard
-              will fall back to Open-Meteo for WU rainfall until a new
-              station is saved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                deleteMut.mutate();
-              }}
-              disabled={deleteMut.isPending}
-            >
-              {deleteMut.isPending ? "Removing…" : "Remove"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+              {findError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive break-words">
+                  {findError}
+                </div>
+              )}
+
+              {nearby && nearby.length > 0 && (
+                <div className="rounded-md border divide-y max-h-72 overflow-auto">
+                  {nearby.map((s) => (
+                    <button
+                      key={s.station_id}
+                      type="button"
+                      onClick={() => pickNearby(s)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/40 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">
+                          {s.station_name ?? s.neighborhood ?? s.station_id}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          ID: {s.station_id}
+                          {s.neighborhood && s.station_name && s.neighborhood !== s.station_name
+                            ? ` · ${s.neighborhood}`
+                            : ""}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {s.distance_km != null ? `${Number(s.distance_km).toFixed(1)} km` : "Pick"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="wu-station-id">Station ID</Label>
+                  <Input
+                    id="wu-station-id"
+                    value={stationId}
+                    onChange={(e) => setStationId(e.target.value)}
+                    placeholder="e.g. KCASANTA123"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="bg-card"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="wu-station-name">Station name</Label>
+                  <Input
+                    id="wu-station-name"
+                    value={stationName}
+                    onChange={(e) => setStationName(e.target.value)}
+                    placeholder="e.g. North block PWS"
+                    autoComplete="off"
+                    className="bg-card"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  onClick={() => saveMut.mutate()}
+                  disabled={saveMut.isPending || !stationId.trim()}
+                  className="gap-2"
+                >
+                  {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save station
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => backfillMut.mutate()}
+                  disabled={backfillMut.isPending || !configured}
+                  className="gap-2"
+                  title={!configured ? "Save a station first" : "Backfill last 14 days of WU rainfall"}
+                >
+                  {backfillMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudRain className="h-4 w-4" />}
+                  Backfill Weather Underground rainfall
+                </Button>
+
+                <div className="ml-auto">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={!configured || deleteMut.isPending}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove Weather Underground station
+                  </Button>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Imports the last 14 days of Weather Underground rainfall into
+                vineyard history. Safe to re-run — Manual and Davis rainfall are
+                preserved. Today is skipped because the daily summary is
+                incomplete.
+              </p>
+
+              {backfillResult && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                  {backfillResult}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Only vineyard Owners and Managers can change the Weather
+              Underground station or run a rainfall backfill.
+            </div>
+          )}
+
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Manual entries override Davis. Davis overrides Weather Underground.
+            Weather Underground overrides Open-Meteo. Backfill only writes
+            Weather Underground rows — Manual and Davis rows are never
+            overwritten.
+          </div>
+        </CollapsibleContent>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove Weather Underground station?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the shared vineyard-wide Weather Underground
+                station. Existing rainfall history is preserved. The vineyard
+                will fall back to Open-Meteo for WU rainfall until a new
+                station is saved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  deleteMut.mutate();
+                }}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? "Removing…" : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+    </Collapsible>
   );
+
 }
 
