@@ -1342,21 +1342,17 @@ function LabourLineRow({
   const money = mkMoney(rf);
   const [editing, setEditing] = useState(isNew);
   const [workDate, setWorkDate] = useState(line?.work_date ?? "");
-  const [workerType, setWorkerType] = useState(line?.worker_type ?? "");
   const [categoryId, setCategoryId] = useState(line?.worker_type_id ?? NONE);
   const [workerCount, setWorkerCount] = useState(line?.worker_count == null ? "" : String(line.worker_count));
   const [hoursPerWorker, setHoursPerWorker] = useState(line?.hours_per_worker == null ? "" : String(line.hours_per_worker));
-  const [hourlyRate, setHourlyRate] = useState(line?.hourly_rate == null ? "" : String(line.hourly_rate));
   const [notes, setNotes] = useState(line?.notes ?? "");
 
-  // Auto-populate hourly rate from selected category if rate empty.
-  useEffect(() => {
-    if (categoryId !== NONE && hourlyRate === "") {
-      const cat = categories.find((c) => c.id === categoryId);
-      if (cat?.cost_per_hour != null) setHourlyRate(String(cat.cost_per_hour));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId]);
+  const selectedCategory = categoryId === NONE ? null : categories.find((c) => c.id === categoryId) ?? null;
+  const derivedHourlyRate =
+    selectedCategory?.cost_per_hour != null
+      ? Number(selectedCategory.cost_per_hour)
+      : line?.hourly_rate ?? null;
+  const derivedWorkerType = selectedCategory?.name ?? line?.worker_type ?? null;
 
   const save = useMutation({
     mutationFn: async () => {
