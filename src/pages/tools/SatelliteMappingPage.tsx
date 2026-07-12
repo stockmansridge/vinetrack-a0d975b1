@@ -1333,6 +1333,11 @@ export default function SatelliteMappingPage() {
                 }}
               >
                 <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
+                {hover.estRow != null && (
+                  <div className="text-[10px] text-muted-foreground">
+                    Est. Row: <span className="font-medium text-foreground tabular-nums">{hover.estRow}</span>
+                  </div>
+                )}
                 <div className="text-[10px] text-muted-foreground">
                   {activeLayer.short}{hover.acquiredAt ? ` · ${hover.acquiredAt.slice(0, 10)}` : ""}
                 </div>
