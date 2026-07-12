@@ -786,7 +786,7 @@ export default function WorkTasksPage() {
       />
 
       <WorkTaskDrawer
-        key={createdTask?.id ?? (createOpen ? "create-open" : "create-closed")}
+        key={createOpen ? "create-open" : "create-closed"}
         task={createdTask}
         open={createOpen}
         onOpenChange={(o) => {
