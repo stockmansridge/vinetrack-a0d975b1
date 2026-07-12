@@ -1134,6 +1134,16 @@ export default function SatelliteMappingPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
+            variant="outline"
+            disabled={busy || backfillLayers.isPending || !activeVineyardId}
+            onClick={() => backfillLayers.mutate()}
+            title="Generate any missing display / analytical / summary assets for the new layer set on existing scenes"
+          >
+            {backfillLayers.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SatelliteIcon className="h-3.5 w-3.5 mr-1.5" />}
+            {backfillLayers.isPending ? "Generating…" : "Generate New Layers for Existing Images"}
+          </Button>
+          <Button
+            size="sm"
             disabled={busy || geoms.length === 0}
             onClick={() => checkForNewImage.mutate(undefined)}
           >
