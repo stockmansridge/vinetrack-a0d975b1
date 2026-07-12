@@ -126,7 +126,7 @@ const tools: NavItem[] = [
 
 // System-admin-only tools (visibility gated in render).
 const toolsSystemAdmin: NavItem[] = [
-  { title: "Satellite Mapping", url: "/tools/satellite-mapping", icon: Satellite },
+  { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite },
 ];
 
 
