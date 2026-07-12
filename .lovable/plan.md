@@ -1,64 +1,51 @@
-## Goal
+# Confirmation of current behaviour
 
-Make the Satellite Mapping page self-healing: when a paddock has no imagery within the last 3 days, silently gather it — on page load and when the user asks. Merge the two action buttons into one that both fetches new imagery and generates cell readings, shows a progress bar, and automatically retries any skipped paddocks once.
+Good news first — the page is **not** re-generating imagery it already has:
 
-## Behaviour
+- `computeStalePaddockIds` only flags a paddock when it has no completed scene, its newest scene is >3 days old, or the selected non-true-colour layer is missing its analytical raster.
+- The auto-run effect only calls `satellite-process-scene` for that stale set. Fresh paddocks are skipped entirely.
+- `satellite-process-scene` itself is idempotent per `(scene, index, processing_version)` — it short-circuits Sentinel Hub render + storage upload when the asset row already exists.
 
-### Stale detection (3-day rule)
-For each paddock in the active vineyard, look at the newest completed scene from `scenesQuery`. A paddock is "stale" if:
-- No completed scene exists at all, OR
-- Newest completed scene's `acquired_at` is older than 3 days from now, OR
-- Newest completed scene lacks an analytical raster for the currently selected layer (cell readings missing).
+So no paddock's PNG/GeoTIFF is being re-rendered on every visit.
 
-### Auto-run on page load
-When the vineyard's scene data first loads and any paddock is stale, automatically trigger the unified refresh for just those stale paddocks. Guard so it only fires once per vineyard per session (ref keyed by `vineyardId`).
+# What is slow
 
-### Unified action button
-Replace "Process Latest Imagery" and "Generate Cell Readings" with a single button labelled "Refresh Imagery". When clicked:
-1. Compute the stale-paddock set (or use all paddocks if user is on a single paddock and it's stale/forced).
-2. Run the existing `processOne` worker pool against that set (produces display + summary + analytical inline via `satellite-process-scene`, which already writes analytical rasters for new scenes).
-3. After the pool completes, call `satellite-backfill-analytical` scoped to the vineyard to fill any analytical rasters still missing on older completed scenes.
-4. Recompute stale paddocks. If any remain stale AND haven't already been retried this run, re-run step 2 once for that residual set. Track a `retriedOnce` flag so we never loop more than twice.
+Three things still happen from scratch every time the user opens the page:
 
-If the user is viewing a specific paddock, the button only targets that paddock (still applies the 3-day check and one retry).
+1. **`satellite-list-scenes` refetches on every mount and window refocus.** Neither `useQuery` in `SatelliteMappingPage.tsx` sets `staleTime`/`gcTime`, so React Query defaults (`staleTime: 0`) apply and the scenes + assets + summaries payload is refetched even if the user just navigated away for a moment.
+2. **Signed storage URLs are re-signed every mount.** `signedUrls` lives in `useState`, so the moment the component unmounts (route change) all URLs are dropped and every visible asset hits `satellite-get-asset-url` again on the next visit.
+3. **The auto-run effect still fires `satellite-process-scene` for stale paddocks even if that was already done seconds ago in another tab / previous mount.** The guard is a `useRef` that resets on unmount, so hopping in and out of the page repeatedly re-runs coverage checks and DB upserts (cheap per call, but adds latency when many paddocks are involved).
 
-### Progress UI
-Keep the existing `batchProgress` panel but:
-- Always show it while the mutation is pending (currently it's guarded on `busy && batchProgress`).
-- Add a shadcn `<Progress>` bar showing `done / total` percentage above the status counts.
-- Add a "Retrying skipped paddocks…" line when the auto-retry pass is running.
+Together these produce the "takes too long each time I open it" feeling even though nothing new is being generated.
 
-### Header/toolbar cleanup
-- Remove the two old buttons.
-- Add one "Refresh Imagery" button with spinner + label states: idle "Refresh Imagery", running "Refreshing 3 / 12…", retry "Retrying skipped…".
-- Keep the error banner + Retry action wired to the new unified mutation.
+# Plan (frontend only, no edge-function or DB changes)
 
-## Technical details
+### 1. Cache the scenes/assets query
+In `SatelliteMappingPage.tsx`, on both `useQuery` calls (`satellite-paddocks` and `satellite-scenes`):
 
-- File: `src/pages/tools/SatelliteMappingPage.tsx` only. No edge-function or DB changes; existing `satellite-search-scenes`, `satellite-process-scene`, and `satellite-backfill-analytical` cover the needs.
-- New helpers inside the component:
-  - `const STALE_DAYS = 3;`
-  - `computeStalePaddockIds(paddocks, scenes, assets, layer)` returning `string[]`.
-- Extend `checkForNewImage` mutation:
-  - Accept `{ paddockIds?: string[]; isRetry?: boolean }` in `mutationFn` variables.
-  - When `paddockIds` provided, filter `targetGeoms` to that set; otherwise fall back to today's logic (all vs single).
-  - After the worker pool completes, if `!isRetry`, recompute stale set from the just-refetched scenes; if non-empty, call `mutation.mutate({ paddockIds: residual, isRetry: true })` from `onSuccess` before showing the final toast. Use a ref (`retryInFlightRef`) to suppress the intermediate toast.
-- Auto-load effect:
-  ```ts
-  const autoRanForVineyardRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!activeVineyardId || scenesQuery.isLoading || !scenesQuery.data) return;
-    if (autoRanForVineyardRef.current === activeVineyardId) return;
-    const stale = computeStalePaddockIds(...);
-    autoRanForVineyardRef.current = activeVineyardId;
-    if (stale.length > 0) checkForNewImage.mutate({ paddockIds: stale });
-  }, [activeVineyardId, scenesQuery.data, scenesQuery.isLoading]);
-  ```
-- Progress bar: import `Progress` from `@/components/ui/progress`; value = `(done/total)*100`.
-- Retain existing concurrency-3 worker pool and per-paddock status map.
-- Typecheck with `tsgo` after edits.
+- `staleTime: 5 * 60_000` (5 min) — scenes only change when we process them, and we invalidate the query after a successful refresh mutation anyway.
+- `gcTime: 30 * 60_000` (30 min) — keep the payload warm across brief navigations.
+- `refetchOnWindowFocus: false` — no need to refetch on tab focus for a page whose data source is our own DB.
 
-## Out of scope
-- No changes to edge functions or database schema.
-- No change to hover/cell-reading interaction.
-- No change to layer legend or map zoom behaviour.
+### 2. Cache signed URLs across mounts
+Replace the `useState<Record<string,string>>` signed-URL cache with a **React Query cache keyed by asset id**:
+
+- New helper `useSignedAssetUrl(assetId)` using `useQuery(["satellite-signed-url", assetId], …)` with `staleTime` set to slightly less than the signing TTL (inspect `satellite-get-asset-url` to pick a safe value; default to 50 min if the TTL is 1 h) and `gcTime` an hour.
+- Signed URLs then survive route changes; revisiting the page shows tiles immediately without re-signing every asset.
+
+### 3. Persist the "auto-ran for vineyard" guard across mounts
+Move `autoRanForVineyardRef` out of `useRef` into a module-level `Map<string, number>` (vineyardId → timestamp). Only auto-run when the last auto-run for that vineyard was more than, say, 10 minutes ago. That keeps the self-healing behaviour but stops it from firing again when the user just briefly navigated away.
+
+### 4. Small correctness follow-ups while we're here
+- After the `checkForNewImage` mutation completes, we already `invalidateQueries` on scenes; make sure the auto-run guard is only set **after** we know we've actually kicked off a refresh (so a failed session can still retry on the next visit).
+
+# Out of scope
+- No edge-function changes.
+- No DB / RLS changes.
+- No changes to map rendering, legend, or layer selection.
+- Larger architectural moves (prefetching from Dashboard, service-worker caching of tiles) — happy to plan those separately if the above isn't enough.
+
+# Technical notes
+- Files touched: `src/pages/tools/SatelliteMappingPage.tsx` only.
+- Verify with `tsgo` after edits.
+- Manual check: open the page, navigate away, come back — network panel should show no `satellite-list-scenes` or `satellite-get-asset-url` calls within the stale window.
