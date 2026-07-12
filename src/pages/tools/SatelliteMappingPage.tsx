@@ -1704,46 +1704,17 @@ export default function SatelliteMappingPage() {
                     </>
                   ) : hover.status === "ready" && hover.value != null ? (() => {
                       const value = hover.value;
-                      const general = activeLayer.useRelativeBands ? null : generalBand(layer, value);
-                      const rel = relativeInterpretation(value, hoverSummary);
-                      // Choose the strongest bold line: prefer the general
-                      // band; fall back to the paddock-relative band for
-                      // ratio/senescence indices without universal bands.
-                      const boldLine = general ?? rel?.band ?? "Value recorded for this cell";
-                      const relSubtext = rel
-                        ? (rel.approxPct != null
-                            ? `Higher than approximately ${rel.approxPct}% of valid cells in this paddock.`
-                            : `${rel.band}.`)
-                        : "Paddock distribution not yet available for this scene.";
+                      const meaning =
+                        generalBand(layer, value) ??
+                        relativeMeaning(layer, value, hoverSummary) ??
+                        "Value recorded for this cell";
                       return (
                         <>
                           <div className="text-sm font-medium text-foreground tabular-nums">
                             Cell value: {value.toFixed(2)}
                           </div>
-                          <div className="text-[11px] font-semibold text-foreground mt-1">
-                            {boldLine}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {activeLayer.legendNote}
-                          </div>
-                          <div className="text-[10px] text-foreground/80 mt-1">
-                            {relSubtext}
-                          </div>
-                          {activeLayer.useRelativeBands && (
-                            <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                              This index has no universal maximum of 1.0.
-                            </div>
-                          )}
-                          {activeLayer.extraCaution && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                              {activeLayer.extraCaution}
-                            </div>
-                          )}
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
-                          </div>
-                          <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                            Each cell may include vines, inter-row, exposed soil and shadow.
+                          <div className="text-[11px] font-semibold text-foreground mt-0.5">
+                            {meaning}
                           </div>
                         </>
                       );
@@ -1755,6 +1726,9 @@ export default function SatelliteMappingPage() {
                 </div>
                 <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
                   {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground italic">
+                  Each cell may include vines, inter-row vegetation, exposed soil and shadow.
                 </div>
               </div>
               );
