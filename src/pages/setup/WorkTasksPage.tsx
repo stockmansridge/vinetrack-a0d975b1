@@ -114,6 +114,8 @@ import {
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { useVintage, hemisphereForCountry, currentVintage } from "@/lib/useVintage";
+
 
 interface PaddockLite {
   id: string;
