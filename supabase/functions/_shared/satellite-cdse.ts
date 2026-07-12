@@ -575,7 +575,7 @@ async function fetchWithRetry(
 ): Promise<Response> {
   // Edge functions have a hard idle timeout. Keep provider retries short and
   // surface 429/5xx responses to the caller instead of waiting for minutes.
-  const delays = [750, 1500];
+  const delays = [750, 1500, 3000, 5000];
   for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25_000);
@@ -594,7 +594,7 @@ async function fetchWithRetry(
     if (attempt >= delays.length) return res;
     const retryAfter = Number(res.headers.get("retry-after"));
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-      ? Math.min(retryAfter * 1000, 3000)
+      ? Math.min(retryAfter * 1000, 6000)
       : delays[attempt];
     try { await res.body?.cancel(); } catch { /* noop */ }
     console.warn(`[cdse] ${label} ${res.status}: retrying in ${waitMs}ms (attempt ${attempt + 1})`);

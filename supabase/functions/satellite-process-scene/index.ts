@@ -329,7 +329,7 @@ Deno.serve(async (req) => {
   // 11 layers sequentially exceeded the 150s edge-runtime idle timeout. A small
   // pool keeps us well under CDSE per-account rate limits while cutting wall
   // time roughly 4x.
-  const LAYER_CONCURRENCY = 4;
+  const LAYER_CONCURRENCY = 2;
   const queue = [...requested];
   const layerWorkers = Array.from(
     { length: Math.min(LAYER_CONCURRENCY, queue.length) },
