@@ -568,37 +568,66 @@ export async function catalogSearch(params: {
   return await res.json();
 }
 
+// Isolate-level concurrency gate for provider calls. CDSE rate-limits bursts
+// aggressively; when several scene/layer requests run in the same warm isolate
+// (e.g. client processes multiple paddocks in parallel), unbounded concurrency
+// produces 429 storms that can't recover before the layer is failed. Cap to a
+// small number of in-flight provider calls per isolate.
+const PROVIDER_MAX_INFLIGHT = 2;
+let providerInflight = 0;
+const providerWaiters: Array<() => void> = [];
+
+async function acquireProviderSlot(): Promise<void> {
+  if (providerInflight < PROVIDER_MAX_INFLIGHT) {
+    providerInflight++;
+    return;
+  }
+  await new Promise<void>((resolve) => providerWaiters.push(resolve));
+  providerInflight++;
+}
+
+function releaseProviderSlot(): void {
+  providerInflight = Math.max(0, providerInflight - 1);
+  const next = providerWaiters.shift();
+  if (next) next();
+}
+
 async function fetchWithRetry(
   url: string,
   init: RequestInit,
   label: string,
 ): Promise<Response> {
-  // Edge functions have a hard idle timeout. Keep provider retries short and
-  // surface 429/5xx responses to the caller instead of waiting for minutes.
-  const delays = [750, 1500, 3000, 5000];
-  for (let attempt = 0; ; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25_000);
-    let res: Response;
-    try {
-      res = await fetch(url, { ...init, signal: controller.signal });
-    } catch (e) {
-      if ((e as Error)?.name === "AbortError") {
-        throw new ProviderError(504, `${label}_timeout`, "Copernicus request timed out.");
+  // Retry budget must stay under the ~150s edge timeout. Widen the ceiling on
+  // Retry-After so genuine rate-limit responses recover instead of failing.
+  const delays = [750, 1500, 3000, 6000, 10000, 15000];
+  await acquireProviderSlot();
+  try {
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25_000);
+      let res: Response;
+      try {
+        res = await fetch(url, { ...init, signal: controller.signal });
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") {
+          throw new ProviderError(504, `${label}_timeout`, "Copernicus request timed out.");
+        }
+        throw e;
+      } finally {
+        clearTimeout(timeout);
       }
-      throw e;
-    } finally {
-      clearTimeout(timeout);
+      if (res.status !== 429 && !(res.status >= 500 && res.status <= 504)) return res;
+      if (attempt >= delays.length) return res;
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 20000)
+        : delays[attempt];
+      try { await res.body?.cancel(); } catch { /* noop */ }
+      console.warn(`[cdse] ${label} ${res.status}: retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+      await new Promise((r) => setTimeout(r, waitMs + Math.floor(Math.random() * 400)));
     }
-    if (res.status !== 429 && !(res.status >= 500 && res.status <= 504)) return res;
-    if (attempt >= delays.length) return res;
-    const retryAfter = Number(res.headers.get("retry-after"));
-    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-      ? Math.min(retryAfter * 1000, 6000)
-      : delays[attempt];
-    try { await res.body?.cancel(); } catch { /* noop */ }
-    console.warn(`[cdse] ${label} ${res.status}: retrying in ${waitMs}ms (attempt ${attempt + 1})`);
-    await new Promise((r) => setTimeout(r, waitMs + Math.floor(Math.random() * 250)));
+  } finally {
+    releaseProviderSlot();
   }
 }
 
