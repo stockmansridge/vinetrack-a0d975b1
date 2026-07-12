@@ -994,6 +994,20 @@ export default function SatelliteMappingPage() {
         });
         if (search.error) {
           const parsed = parseSatelliteFunctionError(search.error);
+          if (parsed.code === "rate_limited" || parsed.code === "catalog_rate_limited") {
+            stopQueue = true;
+            results.push({ paddock_id: pid, status: "rate_limited", message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
+            setSearchError((prev) => prev ?? {
+              code: parsed.code,
+              providerStatus: parsed.providerStatus,
+              paddockId: pid,
+              paddockName: targetPaddock?.name ?? null,
+              message: "Satellite provider is temporarily limiting requests. Try again in a few minutes.",
+            });
+            setPad(pid, "rate_limited");
+            bumpDone();
+            return;
+          }
           // Only surface the first error banner (don't clobber earlier ones).
           setSearchError((prev) => prev ?? {
             code: parsed.code,
