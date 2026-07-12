@@ -528,16 +528,24 @@ export async function hardDeleteWorkTask(
 async function assertWorkTaskGone(workTaskId: string): Promise<void> {
   const check = await supabase
     .from("work_tasks")
-    .select("id")
+    .select("id,deleted_at")
     .eq("id", workTaskId)
     .maybeSingle();
-  if (check.error) {
-    // Unexpected read error — bubble it up so the UI shows the real message.
-    throw check.error;
-  }
-  if (check.data) {
+  if (check.error) throw check.error;
+  if (!check.data || check.data.deleted_at) return;
+
+  // Hard delete was blocked by RLS (silent no-op). Fall back to a soft delete
+  // so the task disappears from the portal + iOS lists, which all filter on
+  // deleted_at IS NULL.
+  const soft = await supabase
+    .from("work_tasks")
+    .update({ deleted_at: nowIso(), client_updated_at: nowIso() })
+    .eq("id", workTaskId)
+    .select("id");
+  if (soft.error) throw soft.error;
+  if (!soft.data || soft.data.length === 0) {
     throw new Error(
-      "permission denied: this work task could not be deleted. You may not have the required role on this vineyard.",
+      "You don't have permission to delete this work task on this vineyard.",
     );
   }
 }
