@@ -1736,8 +1736,24 @@ export default function SatelliteMappingPage() {
               </div>
             )}
             {selectedSceneKey === "latest" && (
-              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
-                Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 space-y-1">
+                <div>
+                  Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
+                </div>
+                {paddocksMissingLatestSet.size > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {liveReport.perPaddock
+                      .filter((p) => p.state === "missing_latest_scene")
+                      .map((p) => (
+                        <span
+                          key={p.paddockId}
+                          className="inline-flex items-center rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300"
+                        >
+                          {p.paddockName} · Imagery missing
+                        </span>
+                      ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
