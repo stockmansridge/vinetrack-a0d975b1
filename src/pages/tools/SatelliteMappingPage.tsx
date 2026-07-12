@@ -1571,10 +1571,13 @@ export default function SatelliteMappingPage() {
               />
             )}
 
-            {/* Hover readout — local analytical cell sample at pointer */}
-            {hover && hover.paddockId && (
+            {hover && hover.paddockId && (() => {
+              const dateLong = hover.acquiredAt
+                ? new Date(hover.acquiredAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+                : null;
+              return (
               <div
-                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[200px] max-w-[260px]"
+                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[220px] max-w-[320px]"
                 style={{
                   left: Math.max(8, hover.x + 12),
                   top: Math.max(8, hover.y - 72),
@@ -1587,13 +1590,13 @@ export default function SatelliteMappingPage() {
                   </div>
                 )}
                 <div className="text-[10px] text-muted-foreground">
-                  {activeLayer.short}{hover.acquiredAt ? ` · ${hover.acquiredAt.slice(0, 10)}` : ""}
+                  {activeLayer.short}{dateLong ? ` · ${dateLong}` : ""}
                 </div>
                 <div className="mt-1">
                   {layer === "TRUE_COLOUR" ? (
                     <>
                       <div className="text-sm font-medium text-foreground">True-colour satellite image</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m — no numerical index value.</div>
                     </>
                   ) : !hover.acquiredAt ? (
                     <span className="text-muted-foreground">No processed image for this paddock</span>
@@ -1608,22 +1611,52 @@ export default function SatelliteMappingPage() {
                         Use “Refresh Imagery” above.
                       </div>
                     </>
-                  ) : hover.status === "ready" && hover.value != null ? (
-                    <>
-                      <div className="text-base font-semibold text-foreground tabular-nums">
-                        {activeLayer.short} cell value: {hover.value.toFixed(2)}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
-                      </div>
-                      <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                        Each value represents the satellite cell containing this location.
-                      </div>
-                    </>
-                  ) : hover.status === "no_data" ? (
+                  ) : hover.status === "ready" && hover.value != null ? (() => {
+                      const value = hover.value;
+                      const general = activeLayer.useRelativeBands ? null : generalBand(layer, value);
+                      const rel = relativeInterpretation(value, hoverSummary);
+                      // Choose the strongest bold line: prefer the general
+                      // band; fall back to the paddock-relative band for
+                      // ratio/senescence indices without universal bands.
+                      const boldLine = general ?? rel?.band ?? "Value recorded for this cell";
+                      const relSubtext = rel
+                        ? (rel.approxPct != null
+                            ? `Higher than approximately ${rel.approxPct}% of valid cells in this paddock.`
+                            : `${rel.band}.`)
+                        : "Paddock distribution not yet available for this scene.";
+                      return (
+                        <>
+                          <div className="text-sm font-medium text-foreground tabular-nums">
+                            Cell value: {value.toFixed(2)}
+                          </div>
+                          <div className="text-[11px] font-semibold text-foreground mt-1">
+                            {boldLine}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {activeLayer.legendNote}
+                          </div>
+                          <div className="text-[10px] text-foreground/80 mt-1">
+                            {relSubtext}
+                          </div>
+                          {activeLayer.useRelativeBands && (
+                            <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                              This index has no universal maximum of 1.0.
+                            </div>
+                          )}
+                          {activeLayer.extraCaution && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                              {activeLayer.extraCaution}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
+                          </div>
+                          <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                            Each cell may include vines, inter-row, exposed soil and shadow.
+                          </div>
+                        </>
+                      );
+                    })() : hover.status === "no_data" ? (
                     <span className="text-muted-foreground">{hover.message ?? "No satellite data for this cell"}</span>
                   ) : hover.status === "error" ? (
                     <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
@@ -1633,7 +1666,9 @@ export default function SatelliteMappingPage() {
                   {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
                 </div>
               </div>
-            )}
+              );
+            })()}
+
 
 
 
