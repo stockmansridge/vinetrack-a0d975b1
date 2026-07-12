@@ -1673,11 +1673,49 @@ export default function SatelliteMappingPage() {
 
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 z-[500] w-64 max-w-[90%]">
+            <div className="absolute bottom-3 right-3 z-[500] w-72 max-w-[92%]">
               <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
                 <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
                   <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
-                    <span>Legend — {activeLayer.short}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      Legend — {activeLayer.short}
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                              aria-label={`What ${activeLayer.short} shows`}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[280px] text-xs space-y-2 leading-snug">
+                            <div>
+                              <div className="font-semibold">What it shows</div>
+                              <div className="text-muted-foreground">{activeLayer.infoWhat}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Lower values</div>
+                              <div className="text-muted-foreground">{activeLayer.infoLow}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Higher values</div>
+                              <div className="text-muted-foreground">{activeLayer.infoHigh}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Native resolution</div>
+                              <div className="text-muted-foreground">{activeLayer.nativeResM} m</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Important</div>
+                              <div className="text-muted-foreground">{activeLayer.infoImportant}</div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform ${legendOpen ? "" : "-rotate-90"}`} />
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -1685,15 +1723,49 @@ export default function SatelliteMappingPage() {
                       <div className="h-2.5 w-full rounded-sm" style={{
                         background: `linear-gradient(to right, ${activeLayer.legend.join(", ")})`,
                       }} />
-                      <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                        <span>{activeLayer.legendMinValue}</span>
-                        <span>{activeLayer.legendMaxValue}</span>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground">
-                        <span>{activeLayer.legendLow}</span>
-                        <span>Typical</span>
-                        <span>{activeLayer.legendHigh}</span>
-                      </div>
+                      {layer !== "TRUE_COLOUR" ? (
+                        <>
+                          <div className="flex justify-between gap-2 text-[10px]">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMin)}</div>
+                              <div className="text-muted-foreground leading-tight">{activeLayer.legendLow}</div>
+                            </div>
+                            <div className="flex-1 min-w-0 text-right">
+                              <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMax)}</div>
+                              <div className="text-muted-foreground leading-tight">{activeLayer.legendHigh}</div>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground leading-snug">
+                            {activeLayer.legendNote}
+                          </div>
+                          {activeLayer.extraCaution && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">
+                              {activeLayer.extraCaution}
+                            </div>
+                          )}
+                          {legendSummary && (legendSummary.median_value != null || legendSummary.percentile_10 != null) && (
+                            <div className="text-[10px] text-muted-foreground border-t pt-1 space-y-0.5">
+                              {legendSummary.percentile_10 != null && legendSummary.percentile_90 != null && (
+                                <div>
+                                  Current paddock range:{" "}
+                                  <span className="tabular-nums text-foreground">
+                                    {legendSummary.percentile_10.toFixed(2)}–{legendSummary.percentile_90.toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                              {legendSummary.median_value != null && (
+                                <div>
+                                  Median: <span className="tabular-nums text-foreground">{legendSummary.median_value.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground">
+                          Natural-colour Sentinel-2 image. No numerical index value.
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span className="inline-block h-2.5 w-2.5 rounded-sm border" style={{ background: "repeating-linear-gradient(45deg,#666,#666 2px,#999 2px,#999 4px)" }} />
                         No valid data
@@ -1713,6 +1785,7 @@ export default function SatelliteMappingPage() {
                 </div>
               </Collapsible>
             </div>
+
           </div>
         </CardContent>
       </Card>
