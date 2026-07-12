@@ -602,6 +602,16 @@ export default function SatelliteMappingPage() {
     statuses: Record<string, PadStatus>;
   } | null>(null);
 
+  // Summary of the most recent Refresh Imagery pass. Populated by the mutation
+  // and shown in the admin diagnostics panel.
+  const [lastRefreshSummary, setLastRefreshSummary] = useState<{
+    at: string;
+    processedPaddocks: number;
+    repairedItems: number;
+    skippedPaddocks: number;
+    providerCallsAvoided: number;
+  } | null>(null);
+
   // Paddocks list
   const { data: paddocks = [], isLoading: paddocksLoading } = useQuery({
     queryKey: ["satellite-paddocks", activeVineyardId],
