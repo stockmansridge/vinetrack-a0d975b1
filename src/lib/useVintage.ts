@@ -5,54 +5,67 @@ import {
   fetchVineyardRegionSettings,
   type CountryCode,
 } from "@/lib/vineyardRegionSettingsQuery";
+import {
+  SEASON_DEFAULTS,
+  currentVintageForSeason,
+  fetchVineyardSeasonSettings,
+  seasonRangeForVintage,
+  vintageForDate as vintageForDateShared,
+} from "@/lib/vineyardSeasonSettingsQuery";
 
 export type Hemisphere = "southern" | "northern";
 
 const SOUTHERN: CountryCode[] = ["AU", "NZ", "ZA"];
 
+/**
+ * @deprecated Hemisphere is no longer the source of truth for vintage.
+ * Kept as an informational label only. Vintage is driven by the shared
+ * `vineyards.season_start_month`/`season_start_day` values.
+ */
 export function hemisphereForCountry(code: CountryCode | null | undefined): Hemisphere {
   if (!code) return "southern";
   return SOUTHERN.includes(code) ? "southern" : "northern";
 }
 
 /**
- * Compute the current "vintage" year for a hemisphere.
- *
- * Southern hemisphere: growing season crosses the calendar year and is named
- * for the harvest year. From July onwards we roll to the next vintage
- * (e.g. July 2026 → Vintage 2027).
- *
- * Northern hemisphere: harvest lands in the same calendar year, so vintage
- * equals the current calendar year.
+ * @deprecated Use `vintageForDate(date, month, day)` from
+ * `vineyardSeasonSettingsQuery`. Retained for legacy call sites while they
+ * migrate to the shared season contract.
  */
-export function currentVintage(hem: Hemisphere, now: Date = new Date()): number {
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1; // 1-12
-  if (hem === "southern") {
-    return m >= 7 ? y + 1 : y;
-  }
-  return y;
+export function currentVintage(_hem: Hemisphere, now: Date = new Date()): number {
+  return currentVintageForSeason(
+    SEASON_DEFAULTS.season_start_month,
+    SEASON_DEFAULTS.season_start_day,
+    now,
+  );
 }
 
-/** Inclusive date range (ISO YYYY-MM-DD) covered by a given vintage. */
-export function vintageDateRange(hem: Hemisphere, vintage: number) {
-  if (hem === "southern") {
-    // Jul 1 (V-1) → Jun 30 (V)
-    return {
-      startISO: `${vintage - 1}-07-01`,
-      endISO: `${vintage}-06-30`,
-    };
-  }
-  // Northern: Nov 1 (V-1) → Oct 31 (V) — covers winter prep + growing season.
-  return {
-    startISO: `${vintage - 1}-11-01`,
-    endISO: `${vintage}-10-31`,
-  };
+/** @deprecated Use `seasonRangeForVintage`. */
+export function vintageDateRange(_hem: Hemisphere, vintage: number) {
+  const { startISO, endISO } = seasonRangeForVintage(
+    SEASON_DEFAULTS.season_start_month,
+    SEASON_DEFAULTS.season_start_day,
+    vintage,
+  );
+  return { startISO, endISO };
 }
 
+/**
+ * Resolve the current vintage and season range for the selected vineyard
+ * from the shared Supabase season settings. Falls back to 1 July only while
+ * loading or if the RPC has no usable value.
+ */
 export function useVintage() {
   const { selectedVineyardId } = useVineyard();
-  const { data } = useQuery({
+
+  const seasonQ = useQuery({
+    queryKey: ["vineyard-season-settings", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyardSeasonSettings(selectedVineyardId!),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const regionQ = useQuery({
     queryKey: ["vineyard-region-settings", selectedVineyardId],
     enabled: !!selectedVineyardId,
     queryFn: () => fetchVineyardRegionSettings(selectedVineyardId!),
@@ -60,14 +73,23 @@ export function useVintage() {
   });
 
   return useMemo(() => {
-    const hemisphere = hemisphereForCountry(data?.country_code);
-    const vintage = currentVintage(hemisphere);
-    const range = vintageDateRange(hemisphere, vintage);
+    const month = seasonQ.data?.season_start_month ?? SEASON_DEFAULTS.season_start_month;
+    const day = seasonQ.data?.season_start_day ?? SEASON_DEFAULTS.season_start_day;
+    const vintage = currentVintageForSeason(month, day);
+    const range = seasonRangeForVintage(month, day, vintage);
+    const countryCode = regionQ.data?.country_code ?? null;
+    const hemisphere = hemisphereForCountry(countryCode);
     return {
       hemisphere,
       vintage,
-      countryCode: data?.country_code ?? null,
+      countryCode,
+      seasonStartMonth: month,
+      seasonStartDay: day,
+      isLoading: seasonQ.isLoading,
       ...range,
     };
-  }, [data?.country_code]);
+  }, [seasonQ.data, seasonQ.isLoading, regionQ.data]);
 }
+
+/** Convenience re-export so callers only import from one place. */
+export { vintageForDateShared as vintageForDate };
