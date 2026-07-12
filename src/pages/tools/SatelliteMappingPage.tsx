@@ -41,6 +41,14 @@ import {
 } from "@/components/ui/collapsible";
 
 import type { SatelliteIndexType } from "@/types/satellite";
+import {
+  inspectCompleteness,
+  describePaddockMissingItems,
+  REQUIRED_INDICES,
+  CURRENT_PROCESSING_VERSION,
+  type CompletenessReport,
+  type PaddockCompleteness,
+} from "@/lib/satelliteCompleteness";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
