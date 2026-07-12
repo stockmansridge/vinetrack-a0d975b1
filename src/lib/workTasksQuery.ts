@@ -243,14 +243,6 @@ export interface UpsertLabourLineInput {
   current_sync_version?: number | null;
 }
 
-const computeLineTotals = (i: UpsertLabourLineInput) => {
-  const wc = Number(i.worker_count ?? 0) || 0;
-  const hpw = Number(i.hours_per_worker ?? 0) || 0;
-  const rate = i.hourly_rate == null ? null : Number(i.hourly_rate);
-  const total_hours = wc * hpw;
-  const total_cost = rate == null ? null : total_hours * rate;
-  return { total_hours, total_cost };
-};
 
 export async function createLabourLine(input: UpsertLabourLineInput): Promise<WorkTaskLabourLine> {
   // total_hours and total_cost are generated columns on the iOS Supabase
