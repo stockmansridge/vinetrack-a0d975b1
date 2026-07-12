@@ -1517,6 +1517,23 @@ export default function WorkTaskReportsPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Season</label>
+            <Select value={season} onValueChange={setSeason}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All seasons</SelectItem>
+                <SelectItem value="current">Current ({currentVintageYear})</SelectItem>
+                {seasonOptions
+                  .filter((y) => y !== currentVintageYear)
+                  .map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      Vintage {y}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1 flex flex-col justify-end">
             <label className="text-xs text-muted-foreground">&nbsp;</label>
             <label className="flex items-center gap-2 h-9 text-sm">
@@ -1525,10 +1542,26 @@ export default function WorkTaskReportsPage() {
             </label>
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground">
+            {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
+          </span>
+          {canSeeCosts && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-[12px] font-medium">
+              <span className="text-muted-foreground">
+                {season === "all"
+                  ? "All seasons total"
+                  : season === "current"
+                    ? `Season ${currentVintageYear} total`
+                    : `Vintage ${seasonYearActive} total`}
+                {" "}({seasonTaskCount} task{seasonTaskCount === 1 ? "" : "s"}):
+              </span>
+              <span className="font-semibold text-foreground">{money(seasonTotalCost)}</span>
+            </span>
+          )}
         </div>
       </Card>
+
 
       <Tabs defaultValue="task-summary" className="space-y-3">
         <TabsList>
