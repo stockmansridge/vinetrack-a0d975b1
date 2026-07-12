@@ -577,7 +577,19 @@ async function fetchWithRetry(
   // surface 429/5xx responses to the caller instead of waiting for minutes.
   const delays = [750, 1500];
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, init);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25_000);
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, signal: controller.signal });
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") {
+        throw new ProviderError(504, `${label}_timeout`, "Copernicus request timed out.");
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
     if (res.status !== 429 && !(res.status >= 500 && res.status <= 504)) return res;
     if (attempt >= delays.length) return res;
     const retryAfter = Number(res.headers.get("retry-after"));
