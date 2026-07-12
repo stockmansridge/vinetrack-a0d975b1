@@ -159,6 +159,51 @@ export function rowLengthMeters(row: PaddockRow): number {
   return 0;
 }
 
+/**
+ * Estimate the nearest row number for a lat/lng inside (or near) a paddock.
+ * Uses perpendicular distance from the point to each row's start→end segment
+ * via an equirectangular projection around the query point's latitude.
+ * Returns null if there are no usable rows.
+ */
+export function estimateRowNumberAt(
+  rows: PaddockRow[],
+  point: LatLng,
+): { number: number; distanceM: number } | null {
+  if (!rows || rows.length === 0) return null;
+  const cosLat0 = Math.cos((point.lat * Math.PI) / 180);
+  const project = (p: LatLng) => ({
+    x: ((p.lng * Math.PI) / 180) * EARTH_R * cosLat0,
+    y: ((p.lat * Math.PI) / 180) * EARTH_R,
+  });
+  const P = project(point);
+
+  let best: { number: number; distanceM: number } | null = null;
+  for (const r of rows) {
+    if (!isFiniteNum(r.number)) continue;
+    if (!r.start || !r.end) continue;
+    const A = project(r.start);
+    const B = project(r.end);
+    const dx = B.x - A.x;
+    const dy = B.y - A.y;
+    const len2 = dx * dx + dy * dy;
+    let d: number;
+    if (len2 < 1e-6) {
+      d = Math.hypot(P.x - A.x, P.y - A.y);
+    } else {
+      let t = ((P.x - A.x) * dx + (P.y - A.y) * dy) / len2;
+      if (t < 0) t = 0;
+      else if (t > 1) t = 1;
+      const cx = A.x + t * dx;
+      const cy = A.y + t * dy;
+      d = Math.hypot(P.x - cx, P.y - cy);
+    }
+    if (!best || d < best.distanceM) {
+      best = { number: r.number as number, distanceM: d };
+    }
+  }
+  return best;
+}
+
 export interface DerivedMetrics {
   areaHa: number;
   rowCount: number;

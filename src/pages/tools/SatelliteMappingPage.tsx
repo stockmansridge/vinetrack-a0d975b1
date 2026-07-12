@@ -8,7 +8,7 @@ import SatelliteMap from "@/components/SatelliteMap";
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { fetchList } from "@/lib/queries";
-import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
+import { parsePolygonPoints, LatLng, parseRows, estimateRowNumberAt, type PaddockRow } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
 import { supabase } from "@/integrations/supabase/client";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
@@ -333,6 +333,7 @@ export default function SatelliteMappingPage() {
         message: string | null;
         cellResM: number | null;
         cellRect: { north: number; south: number; east: number; west: number } | null;
+        estRow: number | null;
       }
   >(null);
 
@@ -380,6 +381,16 @@ export default function SatelliteMappingPage() {
       name: p.name ?? "Unnamed paddock",
       polys: parseGeometry(p.polygon_points),
     })).filter((g) => g.polys.length > 0);
+  }, [paddocks]);
+
+  // Parsed rows per paddock (for estimated row number in hover popup).
+  const rowsByPaddock = useMemo(() => {
+    const map = new Map<string, PaddockRow[]>();
+    for (const p of paddocks) {
+      const rs = parseRows((p as any).rows);
+      if (rs.length > 0) map.set(p.id, rs);
+    }
+    return map;
   }, [paddocks]);
 
   const visibleGeoms = useMemo(() => {
@@ -682,6 +693,16 @@ export default function SatelliteMappingPage() {
       }
     }
 
+    // Estimate row number from stored row geometry (guard against far-away matches).
+    let estRow: number | null = null;
+    if (pad) {
+      const rows = rowsByPaddock.get(pad.id);
+      if (rows && rows.length > 0) {
+        const nearest = estimateRowNumberAt(rows, { lat: pt.lat, lng: pt.lng });
+        if (nearest && nearest.distanceM <= 25) estRow = nearest.number;
+      }
+    }
+
     setHover({
       lat: pt.lat, lng: pt.lng, x: pt.x, y: pt.y,
       paddockId: pad?.id ?? null,
@@ -692,6 +713,7 @@ export default function SatelliteMappingPage() {
       message,
       cellResM,
       cellRect,
+      estRow,
     });
   };
 
@@ -1311,6 +1333,11 @@ export default function SatelliteMappingPage() {
                 }}
               >
                 <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
+                {hover.estRow != null && (
+                  <div className="text-[10px] text-muted-foreground">
+                    Est. Row: <span className="font-medium text-foreground tabular-nums">{hover.estRow}</span>
+                  </div>
+                )}
                 <div className="text-[10px] text-muted-foreground">
                   {activeLayer.short}{hover.acquiredAt ? ` · ${hover.acquiredAt.slice(0, 10)}` : ""}
                 </div>
