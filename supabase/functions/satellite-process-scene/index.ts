@@ -325,9 +325,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  const requiredForCompletion = requested.filter((idx) => idx === "TRUE_COLOUR" || idx !== "TRUE_COLOUR");
-  const missingRequired = requiredForCompletion.filter((idx) => !generated.includes(idx));
-  const finalStatus = missingRequired.length === 0 ? "complete" : "failed";
+  const finalStatus = generated.length > 0 ? "complete" : "failed";
   await supa.from("satellite_scenes").update({
     processing_status: finalStatus,
   }).eq("id", sceneId);
