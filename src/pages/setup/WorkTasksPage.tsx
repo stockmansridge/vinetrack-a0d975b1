@@ -226,6 +226,10 @@ export default function WorkTasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
 
+  const { hemisphere, vintage: currentVintageYear } = useVintage();
+  const [season, setSeason] = useState<string>("current");
+
+
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
     enabled: !!selectedVineyardId,
