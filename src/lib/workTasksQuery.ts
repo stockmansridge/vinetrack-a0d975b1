@@ -253,7 +253,9 @@ const computeLineTotals = (i: UpsertLabourLineInput) => {
 };
 
 export async function createLabourLine(input: UpsertLabourLineInput): Promise<WorkTaskLabourLine> {
-  const { total_hours, total_cost } = computeLineTotals(input);
+  // total_hours and total_cost are generated columns on the iOS Supabase
+  // project (computed from worker_count * hours_per_worker [* hourly_rate]),
+  // so they must not appear in the insert payload.
   const payload: any = {
     work_task_id: input.work_task_id,
     vineyard_id: input.vineyard_id,
@@ -263,8 +265,6 @@ export async function createLabourLine(input: UpsertLabourLineInput): Promise<Wo
     worker_count: input.worker_count ?? null,
     hours_per_worker: input.hours_per_worker ?? null,
     hourly_rate: input.hourly_rate ?? null,
-    total_hours,
-    total_cost,
     notes: input.notes ?? "",
     deleted_at: null,
     client_updated_at: nowIso(),
