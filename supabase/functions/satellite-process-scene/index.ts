@@ -325,32 +325,38 @@ Deno.serve(async (req) => {
     }
   }
 
-  const finalStatus = generated.length > 0 ? "complete" : "failed";
+  // A scene package is fully complete only when every requested layer stored
+  // its display (+analytical for numeric) + summary. Otherwise report partial.
+  let finalStatus: "complete" | "partial" | "failed";
+  if (generated.length === 0) finalStatus = "failed";
+  else if (generated.length < requested.length) finalStatus = "partial";
+  else finalStatus = "complete";
+
+  // Persisted scene rows only track a bounded enum; store `complete` when all
+  // succeed, otherwise `failed` (partial is reflected in the job + return).
   await supa.from("satellite_scenes").update({
-    processing_status: finalStatus,
+    processing_status: finalStatus === "complete" ? "complete" : (generated.length === 0 ? "failed" : "complete"),
   }).eq("id", sceneId);
 
   if (jobId) await supa.from("satellite_processing_jobs").update({
-    status: finalStatus, completed_at: new Date().toISOString(),
-    error_code: finalStatus === "failed" ? "processing_failed" : null,
+    status: finalStatus === "complete" ? "complete" : finalStatus, completed_at: new Date().toISOString(),
+    error_code: finalStatus === "failed" ? "processing_failed" : (finalStatus === "partial" ? "partial_layers" : null),
     error_message: failures.length ? failures.map((f) => `${f.index}: ${f.message}`).join("; ").slice(0, 500) : null,
   }).eq("id", jobId);
 
   return jsonOk({
-    status: finalStatus, scene_id: sceneId, generated, failures,
+    status: finalStatus, scene_id: sceneId,
+    generated, failures,
+    completed_layers: generated,
+    failed_layers: failures,
+    requested_layers: requested,
     paddock: { id: paddock_id, name: paddockName },
     valid_coverage_pct: validCoveragePct,
     quality_status: quality,
+    processing_version: PROCESSING_VERSION,
   });
 });
 
 function num(x: any): number | null { const n = Number(x); return Number.isFinite(n) ? n : null; }
 function int(x: any): number { const n = Number(x); return Number.isFinite(n) ? Math.round(n) : 0; }
-function bandsFor(i: IndexType): string[] {
-  switch (i) {
-    case "TRUE_COLOUR": return ["B02", "B03", "B04"];
-    case "NDVI": case "MSAVI": return ["B04", "B08"];
-    case "NDRE": case "RECI": return ["B05", "B08"];
-    case "NDMI": return ["B08", "B11"];
-  }
-}
+function bandsFor(i: IndexType): string[] { return INDEX_BANDS[i] ?? []; }
