@@ -89,12 +89,19 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     if (jobId) await supa.from("satellite_processing_jobs").update({
-      status: "failed", completed_at: new Date().toISOString(),
+      status: e instanceof ProviderError && e.status === 429 ? "rate_limited" : "failed", completed_at: new Date().toISOString(),
       error_code: (e as any)?.code ?? "coverage_check_failed",
       error_message: (e as Error)?.message ?? "Coverage check failed",
     }).eq("id", jobId);
     if (e instanceof CdseConfigError) return jsonError(503, e.code, e.message);
     if (e instanceof CdseAuthError) return jsonError(502, e.code, e.message);
+    if (e instanceof ProviderError && e.status === 429) {
+      return jsonOk({
+        status: "rate_limited",
+        code: e.code,
+        message: "Satellite provider is temporarily limiting requests. Try again in a few minutes.",
+      });
+    }
     if (e instanceof ProviderError) return jsonError(e.status === 429 ? 429 : 502, e.code, e.message);
     return jsonError(500, "internal_error", "Coverage check failed.");
   }
@@ -164,7 +171,8 @@ Deno.serve(async (req) => {
 
   // ---- 3. For each requested index: stats + display PNG + analytical GeoTIFF ----
   const generated: string[] = [];
-  const failures: Array<{ index: IndexType; message: string }> = [];
+  const failures: Array<{ index: IndexType; message: string; code?: string }> = [];
+  let halted: "rate_limited" | null = null;
 
   const acqDateStr = acq.toISOString().slice(0, 10);
   const paddockName = String(paddock.name ?? paddock.id);
@@ -321,20 +329,25 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = (e as Error)?.message ?? "unknown";
       console.error(`[satellite-process-scene] ${idx} failed:`, msg);
-      failures.push({ index: idx, message: msg });
+      if (e instanceof ProviderError && e.status === 429) {
+        halted = "rate_limited";
+        failures.push({ index: idx, message: "Provider rate limit reached.", code: "rate_limited" });
+        queue.length = 0;
+        return;
+      }
+      failures.push({ index: idx, message: msg, code: (e as any)?.code });
     }
   };
 
-  // Bounded concurrency across layers. Each layer makes 2–3 CDSE calls; running
-  // 11 layers sequentially exceeded the 150s edge-runtime idle timeout. A small
-  // pool keeps us well under CDSE per-account rate limits while cutting wall
-  // time roughly 4x.
-  const LAYER_CONCURRENCY = 2;
+  // Keep provider calls serial within one invocation. The provider rate-limits
+  // bursts aggressively, and the client now requests only the active layer, so
+  // serial execution is fast enough while avoiding 429 storms.
+  const LAYER_CONCURRENCY = 1;
   const queue = [...requested];
   const layerWorkers = Array.from(
     { length: Math.min(LAYER_CONCURRENCY, queue.length) },
     async () => {
-      while (queue.length) {
+      while (queue.length && !halted) {
         const idx = queue.shift();
         if (!idx) return;
         await runIndex(idx);
@@ -345,8 +358,9 @@ Deno.serve(async (req) => {
 
   // A scene package is fully complete only when every requested layer stored
   // its display (+analytical for numeric) + summary. Otherwise report partial.
-  let finalStatus: "complete" | "partial" | "failed";
-  if (generated.length === 0) finalStatus = "failed";
+  let finalStatus: "complete" | "partial" | "failed" | "rate_limited";
+  if (halted === "rate_limited" && generated.length === 0) finalStatus = "rate_limited";
+  else if (generated.length === 0) finalStatus = "failed";
   else if (generated.length < requested.length) finalStatus = "partial";
   else finalStatus = "complete";
 
@@ -358,12 +372,15 @@ Deno.serve(async (req) => {
 
   if (jobId) await supa.from("satellite_processing_jobs").update({
     status: finalStatus === "complete" ? "complete" : finalStatus, completed_at: new Date().toISOString(),
-    error_code: finalStatus === "failed" ? "processing_failed" : (finalStatus === "partial" ? "partial_layers" : null),
+    error_code: finalStatus === "rate_limited" ? "rate_limited" : (finalStatus === "failed" ? "processing_failed" : (finalStatus === "partial" ? "partial_layers" : null)),
     error_message: failures.length ? failures.map((f) => `${f.index}: ${f.message}`).join("; ").slice(0, 500) : null,
   }).eq("id", jobId);
 
   return jsonOk({
     status: finalStatus, scene_id: sceneId,
+    halted,
+    code: finalStatus === "rate_limited" ? "rate_limited" : undefined,
+    message: finalStatus === "rate_limited" ? "Satellite provider is temporarily limiting requests. Try again in a few minutes." : undefined,
     generated, failures,
     completed_layers: generated,
     failed_layers: failures,

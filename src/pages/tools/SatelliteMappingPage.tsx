@@ -425,8 +425,9 @@ const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: Satel
 
 function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
   const fallback = String(error?.message ?? error ?? "Unknown error");
-  const raw = error?.context ?? error?.details ?? fallback;
+  const raw = error?.details ?? error?.context ?? fallback;
   if (typeof raw === "object" && raw) {
+    if (raw instanceof Response) return { code: null, providerStatus: raw.status, message: fallback };
     return {
       code: raw.code ?? null,
       providerStatus: raw.provider_status ?? null,
@@ -559,7 +560,7 @@ export default function SatelliteMappingPage() {
   >(null);
 
   // Batch progress for All-Paddocks processing.
-  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "failed" | "skipped";
+  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "rate_limited" | "failed" | "skipped";
   const [batchProgress, setBatchProgress] = useState<{
     total: number;
     done: number;
@@ -964,8 +965,9 @@ export default function SatelliteMappingPage() {
 
       if (targetGeoms.length === 0) throw new Error("No paddocks with valid boundaries.");
 
-      type ResultStatus = "complete" | "insufficient_coverage" | "no_scenes" | "failed" | "skipped";
+      type ResultStatus = "complete" | "partial" | "insufficient_coverage" | "rate_limited" | "no_scenes" | "failed" | "skipped";
       const results: Array<{ paddock_id: string; status: ResultStatus; message?: string }> = [];
+      let stopQueue = false;
 
       // Seed batch progress.
       const initialStatuses: Record<string, PadStatus> = {};
@@ -978,6 +980,12 @@ export default function SatelliteMappingPage() {
       const bumpDone = () => setBatchProgress((prev) => prev ? { ...prev, done: prev.done + 1 } : prev);
 
       async function processOne(pid: string): Promise<void> {
+        if (stopQueue) {
+          results.push({ paddock_id: pid, status: "skipped", message: "Skipped after the satellite provider paused requests." });
+          setPad(pid, "skipped");
+          bumpDone();
+          return;
+        }
         const targetPaddock = geoms.find((g) => g.id === pid);
         setPad(pid, "searching");
         const search = await invokeSatelliteFn("satellite-search-scenes", {
@@ -987,6 +995,20 @@ export default function SatelliteMappingPage() {
         });
         if (search.error) {
           const parsed = parseSatelliteFunctionError(search.error);
+          if (parsed.code === "rate_limited" || parsed.code === "catalog_rate_limited") {
+            stopQueue = true;
+            results.push({ paddock_id: pid, status: "rate_limited", message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
+            setSearchError((prev) => prev ?? {
+              code: parsed.code,
+              providerStatus: parsed.providerStatus,
+              paddockId: pid,
+              paddockName: targetPaddock?.name ?? null,
+              message: "Satellite provider is temporarily limiting requests. Try again in a few minutes.",
+            });
+            setPad(pid, "rate_limited");
+            bumpDone();
+            return;
+          }
           // Only surface the first error banner (don't clobber earlier ones).
           setSearchError((prev) => prev ?? {
             code: parsed.code,
@@ -1031,13 +1053,46 @@ export default function SatelliteMappingPage() {
             provider_scene_id: c.provider_scene_id,
             acquired_at: c.acquired_at,
             scene_cloud_cover_pct: c.scene_cloud_cover_pct,
+            requested_index_types: [layer],
           });
           if (process.error) {
-            finalMsg = process.error.message ?? finalMsg;
+            const parsed = parseSatelliteFunctionError(process.error);
+            finalMsg = parsed.message ?? process.error.message ?? finalMsg;
+            if (parsed.code === "rate_limited") {
+              finalStatus = "rate_limited";
+              finalMsg = "Satellite provider is temporarily limiting requests. Try again in a few minutes.";
+              stopQueue = true;
+              setSearchError((prev) => prev ?? {
+                code: parsed.code,
+                providerStatus: parsed.providerStatus,
+                paddockId: pid,
+                paddockName: targetPaddock?.name ?? null,
+                message: finalMsg,
+              });
+              break;
+            }
             continue;
           }
           const procStatus = String((process.data as any)?.status ?? "");
           if (procStatus === "complete") { finalStatus = "complete"; break; }
+          if (procStatus === "partial" && Array.isArray((process.data as any)?.generated) && (process.data as any).generated.includes(layer)) {
+            finalStatus = "partial";
+            finalMsg = `${layer} generated; some other layers were skipped.`;
+            break;
+          }
+          if (procStatus === "rate_limited") {
+            finalStatus = "rate_limited";
+            finalMsg = (process.data as any)?.message ?? "Satellite provider is temporarily limiting requests. Try again in a few minutes.";
+            stopQueue = true;
+            setSearchError((prev) => prev ?? {
+              code: "rate_limited",
+              providerStatus: null,
+              paddockId: pid,
+              paddockName: targetPaddock?.name ?? null,
+              message: finalMsg,
+            });
+            break;
+          }
           if (procStatus === "insufficient_coverage") {
             const pct = (process.data as any)?.valid_coverage_pct;
             finalStatus = "insufficient_coverage";
@@ -1048,15 +1103,17 @@ export default function SatelliteMappingPage() {
         }
 
         results.push({ paddock_id: pid, status: finalStatus, message: finalMsg });
-        setPad(pid, finalStatus === "complete" ? "complete"
+        setPad(pid, finalStatus === "complete" || finalStatus === "partial" ? "complete"
           : finalStatus === "insufficient_coverage" ? "insufficient_coverage"
+          : finalStatus === "rate_limited" ? "rate_limited"
           : "failed");
         bumpDone();
       }
 
-      // Concurrency-limited worker pool (3 in flight).
+      // Provider-limited worker pool. Keep scene processing serial to avoid
+      // bursty provider 429s; each scene now generates only the selected layer.
       const queue = targetGeoms.map((g) => g.id);
-      const CONC = 3;
+      const CONC = 1;
       const workers = Array.from({ length: Math.min(CONC, queue.length) }, async () => {
         while (queue.length) {
           const pid = queue.shift();
@@ -1074,8 +1131,10 @@ export default function SatelliteMappingPage() {
       return { results, skippedNoGeometry, isRetry: !!vars?.isRetry };
     },
     onSuccess: async ({ results, skippedNoGeometry, isRetry }) => {
-      const complete = results.filter((r) => r.status === "complete").length;
+      const complete = results.filter((r) => r.status === "complete" || r.status === "partial").length;
       const cloud = results.filter((r) => r.status === "insufficient_coverage").length;
+      const rateLimited = results.filter((r) => r.status === "rate_limited").length;
+      const skipped = results.filter((r) => r.status === "skipped").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
       // Refresh + wait for the list query to reflect any new scenes.
@@ -1099,7 +1158,7 @@ export default function SatelliteMappingPage() {
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
 
       // Auto-retry once for any paddocks that remained stale after this pass.
-      if (!isRetry) {
+      if (!isRetry && rateLimited === 0) {
         const candidateIds = paddockId === "all"
           ? geoms.map((g) => g.id)
           : geoms.filter((g) => g.id === paddockId).map((g) => g.id);
@@ -1115,11 +1174,15 @@ export default function SatelliteMappingPage() {
       const parts: string[] = [];
       parts.push(`${complete} paddock${complete === 1 ? "" : "s"} processed`);
       if (cloud > 0) parts.push(`${cloud} had insufficient clear coverage`);
+      if (rateLimited > 0) parts.push("provider paused requests");
+      if (skipped > 0) parts.push(`${skipped} skipped`);
       if (failed > 0) parts.push(`${failed} failed`);
       if (skippedNoGeometry > 0) parts.push(`${skippedNoGeometry} had no valid boundary`);
       const description = parts.join(", ") + ".";
 
-      if (complete > 0 && loaded) {
+      if (rateLimited > 0) {
+        toast({ title: "Crop Health Maps paused", description: `${description} Wait a few minutes, then refresh again.`, variant: "destructive" });
+      } else if (complete > 0 && loaded) {
         toast({ title: "Crop Health Maps up to date", description });
       } else if (complete > 0 && !loaded) {
         toast({ title: "Processed, but result not yet visible", description, variant: "destructive" });
@@ -1488,6 +1551,7 @@ export default function SatelliteMappingPage() {
                     <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
                     <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
                     <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
+                    <span>Provider paused: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "rate_limited").length}</span></span>
                     <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
                     <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
                   </div>
