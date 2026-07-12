@@ -116,10 +116,10 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<FuelPurchase | null>(null);
 
-  const FUEL_COLS = ["date", "volume", ...(canSeeCosts ? ["total", "cpl"] : []), "by", "updated"] as const;
+  const FUEL_COLS = ["date", "volume", ...(canSeeCosts ? ["cpl", "total"] : []), "by", "updated"] as const;
   type FuelCol = "date" | "volume" | "total" | "cpl" | "by" | "updated";
   const { order: fOrder, moveColumn: fMove, reset: fReset } = useColumnOrder(
-    "fuel_purchases_table",
+    "fuel_purchases_table_v2",
     FUEL_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
