@@ -1353,8 +1353,13 @@ export default function SatelliteMappingPage() {
             <div className="text-xs font-semibold text-foreground">{activeLayer.label}</div>
             <div className="text-xs text-muted-foreground mt-1">{activeLayer.description}</div>
             <div className="text-[11px] text-muted-foreground mt-2 italic">
-              Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
+              Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (20 m native data, resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
             </div>
+            {layer === "PSRI" && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+                {PSRI_CAUTION}
+              </div>
+            )}
             {selectedSceneKey === "latest" && (
               <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
                 Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
