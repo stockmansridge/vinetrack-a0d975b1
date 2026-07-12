@@ -222,6 +222,7 @@ export default function WorkTasksPage() {
   const [labourFilter, setLabourFilter] = useState<string>(ANY); // any|has|missing
   const [selected, setSelected] = useState<WorkTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
@@ -601,7 +602,7 @@ export default function WorkTasksPage() {
           <Button variant="outline" size="sm" onClick={exportCsv}>
             <Download className="h-4 w-4 mr-2" /> CSV
           </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" onClick={() => { setCreatedTask(null); setCreateOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" /> New Work Task
           </Button>
         </div>
@@ -785,18 +786,21 @@ export default function WorkTasksPage() {
       />
 
       <WorkTaskDrawer
-        key={createOpen ? "create-open" : "create-closed"}
-        task={null}
+        key={createdTask?.id ?? (createOpen ? "create-open" : "create-closed")}
+        task={createdTask}
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(o) => {
+          setCreateOpen(o);
+          if (!o) setCreatedTask(null);
+        }}
         paddocks={paddocks}
-        existingPaddocks={[]}
+        existingPaddocks={createdTask ? paddocksByTask.get(createdTask.id) ?? [] : []}
         categories={categories}
         syncedTaskTypes={syncedTaskTypes}
-        labourLines={[]}
-        linkedTrips={[]}
+        labourLines={createdTask ? linesByTask.get(createdTask.id) ?? [] : []}
+        linkedTrips={createdTask ? tripsByTask.get(createdTask.id) ?? [] : []}
         allTrips={trips}
-        machineLines={[]}
+        machineLines={createdTask ? machineLinesByTask.get(createdTask.id) ?? [] : []}
         machineLookups={machineLookups}
         allocByTripId={allocByTripId}
         canSeeCosts={canSeeCosts}
@@ -804,10 +808,12 @@ export default function WorkTasksPage() {
         canSoftDelete={canSoftDelete}
         userId={user?.id ?? null}
         vineyardId={selectedVineyardId}
-        onSaved={() => {
+        onSaved={(saved) => {
+          if (saved) setCreatedTask(saved);
           qc.invalidateQueries({ queryKey: ["work_tasks"] });
           qc.invalidateQueries({ queryKey: ["work_task_labour_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_paddocks"] });
+          qc.invalidateQueries({ queryKey: ["work_task_machine_lines"] });
           qc.invalidateQueries({ queryKey: ["work_task_types"] });
         }}
       />
