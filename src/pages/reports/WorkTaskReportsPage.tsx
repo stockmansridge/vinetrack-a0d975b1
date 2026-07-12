@@ -1534,14 +1534,8 @@ export default function WorkTaskReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1 flex flex-col justify-end">
-            <label className="text-xs text-muted-foreground">&nbsp;</label>
-            <label className="flex items-center gap-2 h-9 text-sm">
-              <Checkbox checked={warningOnly} onCheckedChange={(v) => setWarningOnly(!!v)} />
-              Warnings only
-            </label>
-          </div>
         </div>
+
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="text-muted-foreground">
             {loading ? "Loading…" : `${filtered.length} of ${rows.length} task${rows.length === 1 ? "" : "s"}`}
