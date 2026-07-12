@@ -472,10 +472,25 @@ export default function WorkTaskReportsPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
+  const rowVintage = (r: TaskRow): number => {
+    if (!r.date) return currentVintageYear;
+    return vintageForDate(new Date(r.date), seasonStartMonth, seasonStartDay);
+  };
+
+  const seasonOptions = useMemo(() => {
+    const s = new Set<number>();
+    rows.forEach((r) => s.add(rowVintage(r)));
+    const list = Array.from(s).sort((a, b) => b - a);
+    if (!list.includes(currentVintageYear)) list.unshift(currentVintageYear);
+    return list;
+  }, [rows, seasonStartMonth, seasonStartDay, currentVintageYear]);
+
   const filtered = useMemo(() => {
     const fromTs = from ? new Date(from).getTime() : null;
     const toTs = to ? new Date(to).getTime() + 86_399_999 : null;
     const q = search.trim().toLowerCase();
+    const seasonYear =
+      season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
     return rows.filter((r) => {
       if (fromTs != null || toTs != null) {
         const ts = r.date ? new Date(r.date).getTime() : NaN;
@@ -483,6 +498,7 @@ export default function WorkTaskReportsPage() {
         if (fromTs != null && ts < fromTs) return false;
         if (toTs != null && ts > toTs) return false;
       }
+      if (seasonYear != null && rowVintage(r) !== seasonYear) return false;
       if (taskType !== ANY && r.task.task_type !== taskType) return false;
       if (paddockId !== ANY && !r.paddockIds.includes(paddockId)) return false;
       if (hasLinked === "yes" && !r.hasLinkedTrips) return false;
@@ -505,7 +521,21 @@ export default function WorkTaskReportsPage() {
       const bd = b.date ? new Date(b.date).getTime() : 0;
       return bd - ad;
     });
-  }, [rows, search, from, to, taskType, paddockId, hasLinked, hasManualMachine, warningOnly]);
+  }, [rows, search, from, to, taskType, paddockId, hasLinked, hasManualMachine, warningOnly, season, seasonStartMonth, seasonStartDay, currentVintageYear]);
+
+  const seasonYearActive =
+    season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
+  const seasonTotalCost = useMemo(() => {
+    if (seasonYearActive == null) return rows.reduce((s, r) => s + r.totalCost, 0);
+    return rows
+      .filter((r) => rowVintage(r) === seasonYearActive)
+      .reduce((s, r) => s + r.totalCost, 0);
+  }, [rows, seasonYearActive, seasonStartMonth, seasonStartDay]);
+  const seasonTaskCount = useMemo(() => {
+    if (seasonYearActive == null) return rows.length;
+    return rows.filter((r) => rowVintage(r) === seasonYearActive).length;
+  }, [rows, seasonYearActive, seasonStartMonth, seasonStartDay]);
+
 
   const totals = useMemo(() => {
     return filtered.reduce(
