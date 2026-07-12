@@ -178,6 +178,7 @@ Deno.serve(async (req) => {
           resolutionM: Math.max(10, nativeRes),
         });
         const s = stats?.data?.[0]?.outputs?.index?.bands?.B0?.stats;
+        if (!s) throw new Error("Copernicus statistics returned no valid pixels for this layer");
         if (s) {
           minValue = num(s.min);
           maxValue = num(s.max);
