@@ -425,8 +425,9 @@ const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: Satel
 
 function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
   const fallback = String(error?.message ?? error ?? "Unknown error");
-  const raw = error?.context ?? error?.details ?? fallback;
+  const raw = error?.details ?? error?.context ?? fallback;
   if (typeof raw === "object" && raw) {
+    if (raw instanceof Response) return { code: null, providerStatus: raw.status, message: fallback };
     return {
       code: raw.code ?? null,
       providerStatus: raw.provider_status ?? null,
