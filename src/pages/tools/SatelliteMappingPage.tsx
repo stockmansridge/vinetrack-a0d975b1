@@ -990,6 +990,43 @@ export default function SatelliteMappingPage() {
     },
   });
 
+  // System-admin backfill: generate any missing display/analytical/summary
+  // assets for the new 11-layer package on scenes that were processed under
+  // an older processing version. Idempotent server-side.
+  const backfillLayers = useMutation({
+    mutationFn: async () => {
+      if (!activeVineyardId) throw new Error("No vineyard selected");
+      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
+        vineyard_id: activeVineyardId,
+        paddock_id: paddockId,
+      });
+      if (error) throw error;
+      return data as {
+        scanned: number; backfilled: number; skipped: number;
+        failures: Array<{ scene_id: string; index: string; message: string }>;
+      };
+    },
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+      analyticalCacheRef.current.clear();
+      setRasterCacheVersion((v) => v + 1);
+      const failed = data?.failures?.length ?? 0;
+      toast({
+        title: "Crop Health Maps · backfill complete",
+        description: `Scanned ${data.scanned} scenes, generated ${data.backfilled} assets${failed ? `, ${failed} failures` : ""}.`,
+        variant: failed && !data.backfilled ? "destructive" : "default",
+      });
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Crop Health Maps · backfill failed",
+        description: String(e?.message ?? e ?? "Unknown error"),
+        variant: "destructive",
+      });
+    },
+  });
+
   // Auto-run on page load: if any paddock has no imagery in the last 3 days,
   // silently trigger a refresh for just those paddocks. Cooled down per vineyard
   // across mounts so bouncing in and out of the page doesn't refire it.
