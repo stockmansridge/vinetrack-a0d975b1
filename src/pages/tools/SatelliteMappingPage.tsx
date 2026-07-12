@@ -42,21 +42,6 @@ import {
 
 import type { SatelliteIndexType } from "@/types/satellite";
 
-// ---------- Layer definitions ----------
-type LayerOption = {
-  id: SatelliteIndexType;
-  label: string;
-  short: string;
-  description: string;
-  nativeResM: number;
-  resamplingNote: boolean;
-  legend: string[];
-  legendLow: string;
-  legendHigh: string;
-  legendMinValue: string;
-  legendMaxValue: string;
-};
-
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
 // as the Bearer header so `verifySystemAdmin` there succeeds.
@@ -81,83 +66,204 @@ async function invokeSatelliteFn(name: string, body: unknown) {
   return result;
 }
 
+
+// ---------- Layer definitions ----------
+type InterpretationDirection =
+  | "higher_usually_more_vegetation"
+  | "higher_usually_more_chlorophyll_signal"
+  | "higher_usually_more_moisture_signal"
+  | "higher_usually_more_senescence"
+  | "context_only";
+
+type LayerOption = {
+  id: SatelliteIndexType;
+  label: string;
+  short: string;
+  description: string;
+  nativeResM: number;
+  resamplingNote: boolean;
+  legend: string[];
+  // Plain-English endpoint labels
+  legendLow: string;
+  legendHigh: string;
+  // Documented display range (numerical). These are display bounds only —
+  // values outside remain in analytical rasters and tooltips.
+  displayMin: number;
+  displayMax: number;
+  // One-line supporting note under the legend colour bar.
+  legendNote: string;
+  // Direction of meaning used to phrase copy consistently.
+  interpretationDirection: InterpretationDirection;
+  // Content for the legend's info popover.
+  infoWhat: string;
+  infoLow: string;
+  infoHigh: string;
+  infoImportant: string;
+  // Extra caution shown in legend + tooltip (e.g. PSRI seasonality note).
+  extraCaution?: string;
+  // Whether to rely mainly on paddock-relative wording instead of fixed bands.
+  useRelativeBands?: boolean;
+};
+
+const fmt = (n: number) => (Number.isInteger(n) ? n.toFixed(0) : n.toFixed(1));
+
 const LAYERS: LayerOption[] = [
   {
     id: "TRUE_COLOUR", label: "Satellite Image", short: "True colour", nativeResM: 10, resamplingNote: false,
     description: "A natural-colour view of the vineyard from the selected Sentinel-2 capture. Uses native 10 m visible bands.",
     legend: ["#3b2f1e", "#7a6a48", "#c7b98a", "#e9e2c7", "#ffffff"],
-    legendLow: "Darker", legendHigh: "Brighter",
-    legendMinValue: "0", legendMaxValue: "255",
+    legendLow: "Darker surface", legendHigh: "Brighter surface",
+    displayMin: 0, displayMax: 255,
+    legendNote: "Natural-colour Sentinel-2 image. No numerical index value.",
+    interpretationDirection: "context_only",
+    infoWhat: "A natural-colour composite from Sentinel-2 red, green and blue bands.",
+    infoLow: "Darker areas (shadow, water, dense canopy in shade).",
+    infoHigh: "Brighter areas (exposed soil, bare ground, clouds).",
+    infoImportant: "No agronomic index is being measured — this is a visual reference only.",
   },
   {
     id: "NDVI", label: "NDVI — General Vine Vigour", short: "NDVI", nativeResM: 10, resamplingNote: false,
     description: "Overall canopy vigour. Uses native 10 m red (B04) and near-infrared (B08) data.",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Water, bare soil or very little green vegetation",
+    legendHigh: "Very strong green vegetation signal",
+    displayMin: -0.2, displayMax: 0.9,
+    legendNote: "Higher values usually indicate more green vegetation in the satellite cell.",
+    interpretationDirection: "higher_usually_more_vegetation",
+    infoWhat: "NDVI compares near-infrared and red reflectance to highlight green vegetation.",
+    infoLow: "Usually indicate water, shadow, exposed soil or very little green vegetation.",
+    infoHigh: "Usually indicate a strong or dense green vegetation signal.",
+    infoImportant: "A high value is not automatically better. Compare nearby cells, earlier imagery and field observations.",
   },
   {
     id: "EVI", label: "EVI — Dense Canopy Vigour", short: "EVI", nativeResM: 10, resamplingNote: false,
     description: "Shows canopy vigour while reducing some soil and atmospheric influence. It can remain useful where dense vegetation causes NDVI values to level out. Bands: 10 m blue (B02), red (B04), NIR (B08).",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Very little active canopy",
+    legendHigh: "Strong dense-canopy signal",
+    displayMin: -0.2, displayMax: 1.0,
+    legendNote: "Higher values usually indicate stronger or denser active vegetation.",
+    interpretationDirection: "higher_usually_more_vegetation",
+    infoWhat: "EVI improves on NDVI in dense canopies by reducing soil and atmospheric influence.",
+    infoLow: "Usually indicate little active vegetation or a non-vegetated surface.",
+    infoHigh: "Usually indicate a strong dense-canopy signal.",
+    infoImportant: "A high value is not automatically better. Compare with nearby cells and field observations.",
   },
   {
     id: "GNDVI", label: "GNDVI — Chlorophyll & Nitrogen Signal", short: "GNDVI", nativeResM: 10, resamplingNote: false,
     description: "Highlights relative differences in green-canopy chlorophyll. It may help identify areas requiring inspection for canopy or nutritional variation. Bands: 10 m green (B03), NIR (B08).",
     legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Very weak green-canopy chlorophyll signal",
+    legendHigh: "Strong green-canopy chlorophyll signal",
+    displayMin: -0.2, displayMax: 0.9,
+    legendNote: "Higher values usually indicate a stronger green-canopy chlorophyll response, but do not directly prove nitrogen status.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    infoWhat: "GNDVI uses green and near-infrared reflectance and is sensitive to canopy chlorophyll.",
+    infoLow: "Usually indicate little or no green-canopy chlorophyll response.",
+    infoHigh: "Usually indicate a strong green-canopy chlorophyll response.",
+    infoImportant: "A higher signal does not by itself prove nitrogen sufficiency — confirm with tissue tests and field checks.",
   },
   {
     id: "MSAVI", label: "MSAVI — Vigour with Soil Adjustment", short: "MSAVI", nativeResM: 10, resamplingNote: false,
     description: "Reduces soil influence for sparse canopies. Uses native 10 m red (B04) and NIR (B08).",
     legend: ["#7a4a2b", "#b98a55", "#e0cc99", "#a3c977", "#2f6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Bare soil or very sparse vegetation",
+    legendHigh: "Strong vegetation signal",
+    displayMin: -0.2, displayMax: 0.9,
+    legendNote: "Higher values usually indicate more vegetation after reducing some exposed-soil influence.",
+    interpretationDirection: "higher_usually_more_vegetation",
+    infoWhat: "MSAVI adjusts NDVI-like vigour to reduce the effect of exposed soil in sparse canopies.",
+    infoLow: "Usually indicate bare soil or very sparse vegetation.",
+    infoHigh: "Usually indicate a strong vegetation signal.",
+    infoImportant: "A high value is not automatically better. Use with field observations.",
   },
   {
     id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
     description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Very weak red-edge chlorophyll signal",
+    legendHigh: "Strong red-edge chlorophyll signal",
+    displayMin: -0.2, displayMax: 0.8,
+    legendNote: "Higher values usually indicate a stronger chlorophyll response in established canopy.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    infoWhat: "NDRE uses red-edge and near-infrared reflectance to highlight canopy chlorophyll variation.",
+    infoLow: "Usually indicate little or no red-edge canopy response.",
+    infoHigh: "Usually indicate a strong red-edge chlorophyll response.",
+    infoImportant: "Most useful once canopies are established. A high value is not automatically better.",
   },
   {
     id: "RECI", label: "RECI — Chlorophyll Activity", short: "RECI", nativeResM: 20, resamplingNote: true,
     description: "Relative differences in leaf chlorophyll. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "0", legendMaxValue: "10",
+    legendLow: "Low chlorophyll response",
+    legendHigh: "Very strong chlorophyll response",
+    displayMin: 0, displayMax: 5,
+    legendNote: "Higher values indicate a stronger red-edge chlorophyll signal. This index is not limited to 1.0.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    useRelativeBands: true,
+    infoWhat: "RECI is a red-edge chlorophyll ratio index — it has no fixed upper bound of 1.0.",
+    infoLow: "Low relative chlorophyll response for this scene.",
+    infoHigh: "Very strong relative chlorophyll response for this scene.",
+    infoImportant: "This index has no universal maximum of 1.0. Interpret cells relative to the paddock distribution and prior images.",
   },
   {
     id: "GCI", label: "GCI — Green Chlorophyll Index", short: "GCI", nativeResM: 10, resamplingNote: false,
     description: "Highlights relative canopy chlorophyll activity using green and near-infrared reflectance. Bands: 10 m green (B03), NIR (B08).",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "0", legendMaxValue: "8",
+    legendLow: "Low green chlorophyll response",
+    legendHigh: "Very strong green chlorophyll response",
+    displayMin: 0, displayMax: 8,
+    legendNote: "Higher values indicate a stronger chlorophyll signal. This index is not limited to 1.0.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    useRelativeBands: true,
+    infoWhat: "GCI is a green-band chlorophyll ratio — like RECI it has no fixed upper bound.",
+    infoLow: "Low relative green-chlorophyll response for this scene.",
+    infoHigh: "Very strong relative green-chlorophyll response for this scene.",
+    infoImportant: "This index has no universal maximum of 1.0. Interpret cells relative to the paddock distribution.",
   },
   {
     id: "RENDVI", label: "RENDVI — Red-Edge Vine Vigour", short: "RENDVI", nativeResM: 20, resamplingNote: true,
     description: "Measures canopy variation using narrow near-infrared and red-edge data. It may be useful for established canopies and later growth stages. Bands: 20 m red-edge (B05), 20 m narrow NIR (B8A); result shown on 10 m display grid.",
     legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Little or no red-edge canopy signal",
+    legendHigh: "Strong red-edge canopy signal",
+    displayMin: -0.2, displayMax: 0.8,
+    legendNote: "Higher values usually indicate stronger established-canopy or chlorophyll response.",
+    interpretationDirection: "higher_usually_more_chlorophyll_signal",
+    infoWhat: "RENDVI measures the contrast between red-edge and narrow near-infrared reflectance.",
+    infoLow: "Usually indicate little canopy, exposed soil or a weaker red-edge response.",
+    infoHigh: "Usually indicate a stronger established-canopy and chlorophyll response.",
+    infoImportant: "A high value is not automatically better. Compare nearby cells, earlier imagery and field observations.",
   },
   {
     id: "NDMI", label: "NDMI — Canopy Moisture", short: "NDMI", nativeResM: 20, resamplingNote: true,
     description: "Relative canopy-moisture variation. Uses 10 m NIR (B08) and 20 m native SWIR (B11); result is on a 10 m display grid.",
     legend: ["#7a3b1e", "#c98a4f", "#e6dcb0", "#7fb7d1", "#1e4f7a"],
-    legendLow: "Drier", legendHigh: "Wetter",
-    legendMinValue: "-1.0", legendMaxValue: "1.0",
+    legendLow: "Low vegetation-moisture signal",
+    legendHigh: "Strong vegetation-moisture signal",
+    displayMin: -0.5, displayMax: 0.7,
+    legendNote: "Higher values generally indicate a stronger canopy-moisture response, but do not by themselves confirm irrigation status or water stress.",
+    interpretationDirection: "higher_usually_more_moisture_signal",
+    infoWhat: "NDMI compares near-infrared and short-wave infrared reflectance and is sensitive to canopy moisture.",
+    infoLow: "Usually indicate a low vegetation-moisture signal (may also occur on non-vegetated surfaces).",
+    infoHigh: "Usually indicate a strong vegetation-moisture signal.",
+    infoImportant: "Do not interpret cells as dry, irrigated or water-stressed without field confirmation.",
   },
   {
     id: "PSRI", label: "PSRI — Leaf Ageing & Senescence", short: "PSRI", nativeResM: 20, resamplingNote: true,
     description: "Highlights relative pigment changes associated with leaf ageing and senescence. It is most useful when comparing similar growth stages and dates. Bands: 10 m blue (B02), red (B04), 20 m red-edge (B06); result shown on 10 m display grid.",
     legend: ["#1e6b2e", "#7ec26b", "#e6d36a", "#c98a3f", "#8b3a2b"],
-    legendLow: "Lower relative value", legendHigh: "Higher relative value",
-    legendMinValue: "-0.2", legendMaxValue: "0.4",
+    legendLow: "Low senescence or pigment-change signal",
+    legendHigh: "Stronger senescence or pigment-change signal",
+    displayMin: -0.2, displayMax: 0.5,
+    legendNote: "Higher values may indicate greater leaf ageing or pigment change. For this layer, higher is not necessarily better.",
+    interpretationDirection: "higher_usually_more_senescence",
+    useRelativeBands: true,
+    infoWhat: "PSRI highlights pigment changes associated with leaf ageing and senescence.",
+    infoLow: "Usually indicate little pigment change or ageing signal.",
+    infoHigh: "Usually indicate a stronger pigment-change or senescence signal — not necessarily healthier vines.",
+    infoImportant: "A higher value generally means a stronger ageing or pigment-change signal, not necessarily healthier vines.",
+    extraCaution: "Compare similar growth stages because natural seasonal ageing changes this index.",
   },
 ];
 
@@ -173,7 +279,74 @@ const PSRI_CAUTION =
   "Seasonal leaf ageing naturally changes this index. Compare similar growth stages before treating a difference as unusual.";
 
 const LAYER_DISCLAIMER =
-  "Satellite indices indicate relative variation and do not by themselves diagnose disease, water stress, nutrient deficiency or vine health.";
+  "Satellite indices indicate relative variation and do not by themselves diagnose disease, water stress, nutrient deficiency or vine health. Each 10 m or 20 m cell may include vines, inter-row vegetation, exposed soil and shadow together.";
+
+// ---------- Plain-English general interpretation bands ----------
+// Returned band text is deliberately descriptive, not evaluative. Layers with
+// `useRelativeBands` (RECI, GCI, PSRI) return null here — their tooltips lean
+// on the paddock-relative wording instead.
+function generalBand(index: SatelliteIndexType, v: number): string | null {
+  switch (index) {
+    case "NDVI":
+      if (v < 0) return "Usually water, shadow or a non-vegetated surface";
+      if (v < 0.15) return "Mostly bare soil or very little green vegetation";
+      if (v < 0.30) return "Sparse green vegetation";
+      if (v < 0.50) return "Moderate vegetation signal";
+      if (v < 0.70) return "Strong green vegetation signal";
+      return "Very strong or dense green vegetation signal";
+    case "MSAVI":
+      if (v < 0) return "Little vegetation or non-vegetated surface";
+      if (v < 0.15) return "Very sparse vegetation";
+      if (v < 0.30) return "Sparse vegetation";
+      if (v < 0.50) return "Moderate soil-adjusted vegetation signal";
+      if (v < 0.70) return "Strong soil-adjusted vegetation signal";
+      return "Very strong vegetation signal";
+    case "GNDVI":
+      if (v < 0) return "Little or no green-canopy signal";
+      if (v < 0.20) return "Weak green-canopy chlorophyll signal";
+      if (v < 0.40) return "Moderate green-canopy chlorophyll signal";
+      if (v < 0.60) return "Strong green-canopy chlorophyll signal";
+      return "Very strong green-canopy chlorophyll signal";
+    case "EVI":
+      if (v < 0) return "Little active vegetation or non-vegetated surface";
+      if (v < 0.20) return "Weak canopy signal";
+      if (v < 0.40) return "Moderate canopy vigour";
+      if (v < 0.60) return "Strong canopy vigour";
+      return "Very strong dense-canopy signal";
+    case "NDRE":
+    case "RENDVI":
+      if (v < 0) return "Little or no red-edge canopy response";
+      if (v < 0.15) return "Weak red-edge canopy signal";
+      if (v < 0.30) return "Moderate red-edge canopy signal";
+      if (v < 0.50) return "Strong red-edge canopy signal";
+      return "Very strong red-edge canopy signal";
+    case "NDMI":
+      if (v < -0.2) return "Very low vegetation-moisture signal or non-vegetated surface";
+      if (v < 0.0) return "Low vegetation-moisture signal";
+      if (v < 0.2) return "Moderate vegetation-moisture signal";
+      if (v < 0.4) return "Strong vegetation-moisture signal";
+      return "Very strong vegetation-moisture signal";
+    default:
+      return null;
+  }
+}
+
+// Paddock-relative band + approximate percentile using stored quartile anchors.
+type RelativeInterp = { band: string; approxPct: number | null };
+function relativeInterpretation(
+  value: number,
+  s: { percentile_10: number | null; percentile_25: number | null; percentile_75: number | null; percentile_90: number | null } | undefined,
+): RelativeInterp | null {
+  if (!s || s.percentile_10 == null || s.percentile_25 == null || s.percentile_75 == null || s.percentile_90 == null) return null;
+  const { percentile_10: p10, percentile_25: p25, percentile_75: p75, percentile_90: p90 } = s;
+  const lerp = (v: number, x0: number, x1: number, y0: number, y1: number) =>
+    x1 === x0 ? y0 : y0 + ((v - x0) / (x1 - x0)) * (y1 - y0);
+  if (value <= p10) return { band: "Among the lowest 10% of this paddock", approxPct: null };
+  if (value <= p25) return { band: "Lower than most of this paddock", approxPct: Math.round(lerp(value, p10, p25, 10, 25)) };
+  if (value <= p75) return { band: "Typical for this paddock", approxPct: Math.round(lerp(value, p25, p75, 25, 75)) };
+  if (value <= p90) return { band: "Higher than most of this paddock", approxPct: Math.round(lerp(value, p75, p90, 75, 90)) };
+  return { band: "Among the highest 10% of this paddock", approxPct: null };
+}
 
 // ---------- Paddock type ----------
 interface Paddock {
@@ -1077,91 +1250,12 @@ export default function SatelliteMappingPage() {
         : (batchProgress ? `Refreshing ${Math.min(batchProgress.done + 1, batchProgress.total)} / ${batchProgress.total}…` : "Refreshing…"))
     : "Refresh Imagery";
 
-  // Per-index plain-English descriptions, always relative to this paddock's
-  // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
-  const CLASSIFY_WORDS: Record<SatelliteIndexType, [string, string, string, string, string]> = {
-    NDVI: [
-      "Very sparse vegetation relative to this paddock",
-      "Lower vine or ground-cover vigour relative to this paddock",
-      "Typical vegetation vigour for this paddock",
-      "Higher vegetation vigour relative to this paddock",
-      "Very high vegetation vigour relative to this paddock",
-    ],
-    NDRE: [
-      "Very low chlorophyll signal relative to this paddock",
-      "Lower chlorophyll signal relative to this paddock",
-      "Typical chlorophyll signal for this paddock",
-      "Higher chlorophyll signal relative to this paddock",
-      "Very high chlorophyll signal relative to this paddock",
-    ],
-    MSAVI: [
-      "Very low soil-adjusted vegetation signal relative to this paddock",
-      "Lower soil-adjusted vegetation signal relative to this paddock",
-      "Typical soil-adjusted vegetation signal for this paddock",
-      "Higher soil-adjusted vegetation signal relative to this paddock",
-      "Very high soil-adjusted vegetation signal relative to this paddock",
-    ],
-    RECI: [
-      "Very low relative chlorophyll activity for this paddock",
-      "Lower relative chlorophyll activity for this paddock",
-      "Typical relative chlorophyll activity for this paddock",
-      "Higher relative chlorophyll activity for this paddock",
-      "Very high relative chlorophyll activity for this paddock",
-    ],
-    NDMI: [
-      "Very low relative canopy moisture signal for this paddock",
-      "Lower relative canopy moisture signal for this paddock",
-      "Typical relative canopy moisture signal for this paddock",
-      "Higher relative canopy moisture signal for this paddock",
-      "Very high relative canopy moisture signal for this paddock",
-    ],
-    GNDVI: [
-      "Very low green-canopy chlorophyll signal relative to this paddock",
-      "Lower green-canopy chlorophyll signal relative to this paddock",
-      "Typical green-canopy chlorophyll signal for this paddock",
-      "Higher green-canopy chlorophyll signal relative to this paddock",
-      "Very high green-canopy chlorophyll signal relative to this paddock",
-    ],
-    EVI: [
-      "Very low dense-canopy vigour relative to this paddock",
-      "Lower dense-canopy vigour relative to this paddock",
-      "Typical dense-canopy vigour for this paddock",
-      "Higher dense-canopy vigour relative to this paddock",
-      "Very high dense-canopy vigour relative to this paddock",
-    ],
-    GCI: [
-      "Very low green chlorophyll activity relative to this paddock",
-      "Lower green chlorophyll activity relative to this paddock",
-      "Typical green chlorophyll activity for this paddock",
-      "Higher green chlorophyll activity relative to this paddock",
-      "Very high green chlorophyll activity relative to this paddock",
-    ],
-    RENDVI: [
-      "Very low red-edge vigour relative to this paddock",
-      "Lower red-edge vigour relative to this paddock",
-      "Typical red-edge vigour for this paddock",
-      "Higher red-edge vigour relative to this paddock",
-      "Very high red-edge vigour relative to this paddock",
-    ],
-    PSRI: [
-      "Very low senescence signal relative to this paddock",
-      "Lower senescence signal relative to this paddock",
-      "Typical senescence signal for this paddock",
-      "Higher senescence signal relative to this paddock",
-      "Very high senescence signal relative to this paddock",
-    ],
-    TRUE_COLOUR: ["—", "—", "—", "—", "—"],
-  };
-  function classify(value: number | null, s: DBSummary | undefined): string {
-    if (value == null || !s) return "—";
-    const words = CLASSIFY_WORDS[layer] ?? CLASSIFY_WORDS.NDVI;
-    if (s.percentile_10 == null) return words[2];
-    if (value <= (s.percentile_10 ?? 0)) return words[0];
-    if (value <= (s.percentile_25 ?? 0)) return words[1];
-    if (value <= (s.percentile_75 ?? 0)) return words[2];
-    if (value <= (s.percentile_90 ?? 0)) return words[3];
-    return words[4];
-  }
+  // Summary for the currently hovered paddock (used to build the tooltip's
+  // paddock-relative interpretation and to show the current-scene range/median
+  // in the legend).
+  const hoverSummary = hover?.paddockId ? summaryByPaddock.get(hover.paddockId) : undefined;
+  const legendSummary = hoverSummary ?? (summaryByPaddock.size === 1 ? Array.from(summaryByPaddock.values())[0] : undefined);
+
 
   return (
     <div className="w-full p-2 md:p-3 space-y-3 flex flex-col">
@@ -1477,10 +1571,13 @@ export default function SatelliteMappingPage() {
               />
             )}
 
-            {/* Hover readout — local analytical cell sample at pointer */}
-            {hover && hover.paddockId && (
+            {hover && hover.paddockId && (() => {
+              const dateLong = hover.acquiredAt
+                ? new Date(hover.acquiredAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+                : null;
+              return (
               <div
-                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[200px] max-w-[260px]"
+                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[220px] max-w-[320px]"
                 style={{
                   left: Math.max(8, hover.x + 12),
                   top: Math.max(8, hover.y - 72),
@@ -1493,13 +1590,13 @@ export default function SatelliteMappingPage() {
                   </div>
                 )}
                 <div className="text-[10px] text-muted-foreground">
-                  {activeLayer.short}{hover.acquiredAt ? ` · ${hover.acquiredAt.slice(0, 10)}` : ""}
+                  {activeLayer.short}{dateLong ? ` · ${dateLong}` : ""}
                 </div>
                 <div className="mt-1">
                   {layer === "TRUE_COLOUR" ? (
                     <>
                       <div className="text-sm font-medium text-foreground">True-colour satellite image</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m — no numerical index value.</div>
                     </>
                   ) : !hover.acquiredAt ? (
                     <span className="text-muted-foreground">No processed image for this paddock</span>
@@ -1514,22 +1611,52 @@ export default function SatelliteMappingPage() {
                         Use “Refresh Imagery” above.
                       </div>
                     </>
-                  ) : hover.status === "ready" && hover.value != null ? (
-                    <>
-                      <div className="text-base font-semibold text-foreground tabular-nums">
-                        {activeLayer.short} cell value: {hover.value.toFixed(2)}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {classify(hover.value, summaryByPaddock.get(hover.paddockId))}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
-                      </div>
-                      <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                        Each value represents the satellite cell containing this location.
-                      </div>
-                    </>
-                  ) : hover.status === "no_data" ? (
+                  ) : hover.status === "ready" && hover.value != null ? (() => {
+                      const value = hover.value;
+                      const general = activeLayer.useRelativeBands ? null : generalBand(layer, value);
+                      const rel = relativeInterpretation(value, hoverSummary);
+                      // Choose the strongest bold line: prefer the general
+                      // band; fall back to the paddock-relative band for
+                      // ratio/senescence indices without universal bands.
+                      const boldLine = general ?? rel?.band ?? "Value recorded for this cell";
+                      const relSubtext = rel
+                        ? (rel.approxPct != null
+                            ? `Higher than approximately ${rel.approxPct}% of valid cells in this paddock.`
+                            : `${rel.band}.`)
+                        : "Paddock distribution not yet available for this scene.";
+                      return (
+                        <>
+                          <div className="text-sm font-medium text-foreground tabular-nums">
+                            Cell value: {value.toFixed(2)}
+                          </div>
+                          <div className="text-[11px] font-semibold text-foreground mt-1">
+                            {boldLine}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {activeLayer.legendNote}
+                          </div>
+                          <div className="text-[10px] text-foreground/80 mt-1">
+                            {relSubtext}
+                          </div>
+                          {activeLayer.useRelativeBands && (
+                            <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                              This index has no universal maximum of 1.0.
+                            </div>
+                          )}
+                          {activeLayer.extraCaution && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                              {activeLayer.extraCaution}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            Cell resolution: {hover.cellResM ?? activeLayer.nativeResM} m
+                          </div>
+                          <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                            Each cell may include vines, inter-row, exposed soil and shadow.
+                          </div>
+                        </>
+                      );
+                    })() : hover.status === "no_data" ? (
                     <span className="text-muted-foreground">{hover.message ?? "No satellite data for this cell"}</span>
                   ) : hover.status === "error" ? (
                     <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
@@ -1539,16 +1666,56 @@ export default function SatelliteMappingPage() {
                   {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
                 </div>
               </div>
-            )}
+              );
+            })()}
+
 
 
 
             {/* Legend */}
-            <div className="absolute bottom-3 right-3 z-[500] w-64 max-w-[90%]">
+            <div className="absolute bottom-3 right-3 z-[500] w-72 max-w-[92%]">
               <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
                 <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
                   <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
-                    <span>Legend — {activeLayer.short}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      Legend — {activeLayer.short}
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                              aria-label={`What ${activeLayer.short} shows`}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[280px] text-xs space-y-2 leading-snug">
+                            <div>
+                              <div className="font-semibold">What it shows</div>
+                              <div className="text-muted-foreground">{activeLayer.infoWhat}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Lower values</div>
+                              <div className="text-muted-foreground">{activeLayer.infoLow}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Higher values</div>
+                              <div className="text-muted-foreground">{activeLayer.infoHigh}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Native resolution</div>
+                              <div className="text-muted-foreground">{activeLayer.nativeResM} m</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold">Important</div>
+                              <div className="text-muted-foreground">{activeLayer.infoImportant}</div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform ${legendOpen ? "" : "-rotate-90"}`} />
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -1556,15 +1723,49 @@ export default function SatelliteMappingPage() {
                       <div className="h-2.5 w-full rounded-sm" style={{
                         background: `linear-gradient(to right, ${activeLayer.legend.join(", ")})`,
                       }} />
-                      <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                        <span>{activeLayer.legendMinValue}</span>
-                        <span>{activeLayer.legendMaxValue}</span>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground">
-                        <span>{activeLayer.legendLow}</span>
-                        <span>Typical</span>
-                        <span>{activeLayer.legendHigh}</span>
-                      </div>
+                      {layer !== "TRUE_COLOUR" ? (
+                        <>
+                          <div className="flex justify-between gap-2 text-[10px]">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMin)}</div>
+                              <div className="text-muted-foreground leading-tight">{activeLayer.legendLow}</div>
+                            </div>
+                            <div className="flex-1 min-w-0 text-right">
+                              <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMax)}</div>
+                              <div className="text-muted-foreground leading-tight">{activeLayer.legendHigh}</div>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground leading-snug">
+                            {activeLayer.legendNote}
+                          </div>
+                          {activeLayer.extraCaution && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">
+                              {activeLayer.extraCaution}
+                            </div>
+                          )}
+                          {legendSummary && (legendSummary.median_value != null || legendSummary.percentile_10 != null) && (
+                            <div className="text-[10px] text-muted-foreground border-t pt-1 space-y-0.5">
+                              {legendSummary.percentile_10 != null && legendSummary.percentile_90 != null && (
+                                <div>
+                                  Current paddock range:{" "}
+                                  <span className="tabular-nums text-foreground">
+                                    {legendSummary.percentile_10.toFixed(2)}–{legendSummary.percentile_90.toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                              {legendSummary.median_value != null && (
+                                <div>
+                                  Median: <span className="tabular-nums text-foreground">{legendSummary.median_value.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground">
+                          Natural-colour Sentinel-2 image. No numerical index value.
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span className="inline-block h-2.5 w-2.5 rounded-sm border" style={{ background: "repeating-linear-gradient(45deg,#666,#666 2px,#999 2px,#999 4px)" }} />
                         No valid data
@@ -1584,6 +1785,7 @@ export default function SatelliteMappingPage() {
                 </div>
               </Collapsible>
             </div>
+
           </div>
         </CardContent>
       </Card>
