@@ -300,6 +300,9 @@ Deno.serve(async (req) => {
       if (e instanceof ProviderError && e.status === 429) {
         return jsonOk(resultPayload({ scanned, attempted, totalWork: workCandidates.length, backfilled, skipped, failures, perPaddockPerLayer, halted: "rate_limited" }));
       }
+      if (e instanceof ProviderError && e.status >= 500) {
+        return jsonOk(resultPayload({ scanned, attempted, totalWork: workCandidates.length, backfilled, skipped, failures, perPaddockPerLayer, halted: "provider_unavailable" }));
+      }
     }
   }
 
