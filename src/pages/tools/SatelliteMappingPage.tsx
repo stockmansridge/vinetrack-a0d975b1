@@ -293,6 +293,11 @@ function computeStalePaddockIds(
   return stale;
 }
 
+// Module-level so it survives page unmount/remount within the tab session.
+// Records the last time we auto-triggered a refresh for a given vineyard.
+const autoRunTimestamps = new Map<string, number>();
+const AUTO_RUN_COOLDOWN_MS = 10 * 60_000;
+
 // ---------- Page ----------
 export default function SatelliteMappingPage() {
   const { isAdmin: isSystemAdmin, loading: adminLoading } = useIsSystemAdmin();
