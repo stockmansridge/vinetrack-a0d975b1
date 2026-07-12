@@ -1486,10 +1486,10 @@ export default function SatelliteMappingPage() {
             variant="outline"
             disabled={busy || backfillLayers.isPending || !activeVineyardId}
             onClick={() => backfillLayers.mutate()}
-            title="Generate any missing display / analytical / summary assets for the new layer set on existing scenes"
+            title="Generate any missing display / analytical / summary assets on already-stored scenes. Skips complete outputs."
           >
             {backfillLayers.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SatelliteIcon className="h-3.5 w-3.5 mr-1.5" />}
-            {backfillLayers.isPending ? "Generating…" : "Generate New Layers for Existing Images"}
+            {backfillLayers.isPending ? "Repairing…" : "Repair Missing Assets"}
           </Button>
           <Button
             size="sm"
