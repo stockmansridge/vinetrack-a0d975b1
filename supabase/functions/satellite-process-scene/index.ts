@@ -18,7 +18,7 @@ import {
   corsHeaders, jsonError, jsonOk, verifySystemAdmin, getServiceClient,
   parseGeometryRings, toGeoJson, computeBbox, computeImageSize, bboxSizeMeters,
   evalscriptFor, statsEvalscript, analyticalEvalscript, processImage, processAnalyticalRaster, statisticsQuery,
-  INDEX_TYPES, INDEX_NATIVE_RES_M, QC, PROCESSING_VERSION, PROVIDER, SENTINEL2_COLLECTION,
+  INDEX_TYPES, INDEX_NATIVE_RES_M, INDEX_BANDS, QC, PROCESSING_VERSION, PROVIDER, SENTINEL2_COLLECTION,
   DISPLAY_ASSET_TYPE, ANALYTICAL_ASSET_TYPE, ANALYTICAL_NO_DATA_SENTINEL, ANALYTICAL_ROW_ORIENTATION,
   CdseConfigError, CdseAuthError, ProviderError,
   type IndexType,
