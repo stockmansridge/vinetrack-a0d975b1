@@ -109,7 +109,7 @@ function StatusBadge({ result }: { result: LhrResult }) {
   );
 }
 
-export default function TractorFuelLogsPage() {
+export default function TractorFuelLogsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { selectedVineyardId } = useVineyard();
   const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
@@ -269,16 +269,15 @@ export default function TractorFuelLogsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Fuel Logs / Machine</h1>
-          <p className="text-sm text-muted-foreground">
-            Read-only view of vineyard machine fill records synced from iPhone. L/hr is
-            calculated display-only from the previous fill for each machine. Fuel logs do
-            not directly allocate costs to blocks or reports.
+          {!embedded && <h1 className="text-2xl font-semibold">Machine Fuel Logs</h1>}
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Read-only machine refuelling records synced from iOS and Android. Price / L is
+            calculated from consecutive fills for each machine.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 ml-auto">
           <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
@@ -364,7 +363,7 @@ export default function TractorFuelLogsPage() {
               <TableHead className="text-right">{rf.fuelUnitLabel}/hr</TableHead>
               <TableHead>Rate status</TableHead>
               <TableHead>Operator</TableHead>
-              {canSeeCosts && <TableHead className="text-right">Cost/{rf.fuelUnitLabel}</TableHead>}
+              {canSeeCosts && <TableHead className="text-right">Price / {rf.fuelUnitLabel}</TableHead>}
               {canSeeCosts && <TableHead className="text-right">Total</TableHead>}
               <TableHead>Full?</TableHead>
               <TableHead>Notes</TableHead>

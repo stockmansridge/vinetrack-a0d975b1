@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Download, AlertTriangle } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -89,7 +89,18 @@ function csvEscape(v: unknown): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export default function FuelPurchasesPage() {
+// A record is suspicious if a plausible volume has a very low stored total,
+// indicating a unit price was likely entered in the total_cost field.
+function isSuspiciousPurchase(r: FuelPurchase): boolean {
+  const v = r.volume_litres;
+  const c = r.total_cost;
+  if (v == null || c == null) return false;
+  if (v <= 5) return false; // small containers can legitimately be cheap
+  if (c <= 0) return false;
+  return c / v < 0.2; // derived < $0.20 per litre is implausible
+}
+
+export default function FuelPurchasesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
   const canSeeCosts = useCanSeeCosts();
@@ -105,10 +116,10 @@ export default function FuelPurchasesPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<FuelPurchase | null>(null);
 
-  const FUEL_COLS = ["date", "volume", ...(canSeeCosts ? ["total", "cpl"] : []), "by", "updated"] as const;
+  const FUEL_COLS = ["date", "volume", ...(canSeeCosts ? ["cpl", "total"] : []), "by", "updated"] as const;
   type FuelCol = "date" | "volume" | "total" | "cpl" | "by" | "updated";
   const { order: fOrder, moveColumn: fMove, reset: fReset } = useColumnOrder(
-    "fuel_purchases_table",
+    "fuel_purchases_table_v2",
     FUEL_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
@@ -139,11 +150,13 @@ export default function FuelPurchasesPage() {
   const summary = useMemo(() => {
     const totalLitres = rows.reduce((a, r) => a + (r.volume_litres ?? 0), 0);
     const totalCost = rows.reduce((a, r) => a + (r.total_cost ?? 0), 0);
+    const flagged = rows.filter(isSuspiciousPurchase).length;
     return {
       count: rows.length,
       totalLitres,
       totalCost,
       avgCpl: totalLitres > 0 ? totalCost / totalLitres : null,
+      flagged,
     };
   }, [rows]);
 
@@ -182,22 +195,30 @@ export default function FuelPurchasesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Fuel purchases</h1>
-          <p className="text-sm text-muted-foreground">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        {embedded ? (
+          <p className="text-sm text-muted-foreground max-w-2xl">
             {canWrite
-              ? "Add, edit and archive fuel purchase records for the selected vineyard."
-              : "Read-only. Soft-deleted records are excluded."}
+              ? "Add, edit and archive fuel purchase records used to calculate the weighted average price per litre for cost allocation."
+              : "Read-only view of fuel purchase records used to calculate the weighted average price per litre."}
           </p>
-        </div>
-        <div className="flex gap-2">
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">Fuel Purchases</h1>
+            <p className="text-sm text-muted-foreground">
+              {canWrite
+                ? "Add, edit and archive fuel purchase records for the selected vineyard."
+                : "Read-only. Soft-deleted records are excluded."}
+            </p>
+          </div>
+        )}
+        <div className="flex gap-2 ml-auto">
           <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
           {canWrite && (
             <Button onClick={openNew}>
-              <Plus className="h-4 w-4 mr-1" /> New fuel purchase
+              <Plus className="h-4 w-4 mr-1" /> New Fuel Purchase
             </Button>
           )}
         </div>
@@ -208,14 +229,32 @@ export default function FuelPurchasesPage() {
         <SummaryCard label={`Total ${rf.fuelUnitLabel === "gal" ? "gallons" : "litres"}`} value={fmtLitres(summary.totalLitres)} />
         {canSeeCosts && (
           <>
-            <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
+            <SummaryCard label="Total Purchase Cost" value={fmtCost(summary.totalCost)} />
             <SummaryCard
-              label={`Avg cost / ${rf.fuelUnitLabel}`}
+              label={`Average Price / ${rf.fuelUnitLabel}`}
               value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
             />
           </>
         )}
       </div>
+
+      {canSeeCosts && summary.flagged > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="space-y-0.5">
+            <div className="font-medium">
+              {summary.flagged === 1
+                ? "One fuel purchase may contain an incorrect total cost"
+                : `${summary.flagged} fuel purchases may contain an incorrect total cost`}
+              {" "}and are affecting the average price per litre.
+            </div>
+            <div className="text-muted-foreground">
+              Rows flagged below with a warning icon likely have a unit price stored where the full
+              purchase amount is expected. Open the record to review and correct it.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
@@ -241,7 +280,7 @@ export default function FuelPurchasesPage() {
         <ColumnSettingsMenu onReset={fReset} />
       </div>
 
-      <Card>
+      <Card className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -250,9 +289,9 @@ export default function FuelPurchasesPage() {
                 const labels: Record<FuelCol, string> = {
                   date: "Date",
                   volume: `Volume (${rf.fuelUnitLabel})`,
-                  total: "Total cost",
-                  cpl: `Cost / ${rf.fuelUnitLabel}`,
-                  by: "Entered by",
+                  total: "Total Purchase Cost",
+                  cpl: `Price / ${rf.fuelUnitLabel}`,
+                  by: "Entered By",
                   updated: "Updated",
                 };
                 const rightAlign = id === "volume" || id === "total" || id === "cpl";
@@ -279,11 +318,34 @@ export default function FuelPurchasesPage() {
               </TableRow>
             )}
             {rows.map((r) => {
+              const suspicious = isSuspiciousPurchase(r);
+              const dateCell = (
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    {suspicious && canSeeCosts && (
+                      <span title="This record may contain a unit price in the Total Purchase Cost field. Review and correct it.">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                      </span>
+                    )}
+                    <span>{fmtDate(r.date)}</span>
+                  </div>
+                </TableCell>
+              );
               const cellMap: Record<FuelCol, React.ReactNode> = {
-                date: <TableCell>{fmtDate(r.date)}</TableCell>,
+                date: dateCell,
                 volume: <TableCell className="text-right">{fmtLitres(r.volume_litres)}</TableCell>,
-                total: <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>,
-                cpl: <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>,
+                total: (
+                  <TableCell className={`text-right ${suspicious ? "text-amber-700" : ""}`}>
+                    {r.total_cost == null ? "Not specified" : fmtCost(r.total_cost)}
+                  </TableCell>
+                ),
+                cpl: (
+                  <TableCell className={`text-right ${suspicious ? "text-amber-700" : ""}`}>
+                    {r.total_cost == null || !r.volume_litres || r.volume_litres <= 0
+                      ? "Not specified"
+                      : fmtCpl(r.total_cost, r.volume_litres)}
+                  </TableCell>
+                ),
                 by: <TableCell>{fmt(resolve(r.created_by))}</TableCell>,
                 updated: <TableCell>{fmtDate(r.updated_at)}</TableCell>,
               };
@@ -299,6 +361,7 @@ export default function FuelPurchasesPage() {
           </TableBody>
         </Table>
       </Card>
+
 
 
       <FuelSheet
@@ -381,8 +444,8 @@ function FuelSheet({
             <Section title="Record">
               <Field label="Date" value={fmtDate(record.date)} />
               <Field label="Volume" value={fmtLitres(record.volume_litres)} />
-              {canSeeCosts && <Field label="Total cost" value={fmtCost(record.total_cost)} />}
-              {canSeeCosts && <Field label={`Cost / ${rf.fuelUnitLabel}`} value={fmtCpl(record.total_cost, record.volume_litres)} />}
+              {canSeeCosts && <Field label={`Price / ${rf.fuelUnitLabel}`} value={fmtCpl(record.total_cost, record.volume_litres)} />}
+              {canSeeCosts && <Field label="Total Purchase Cost" value={record.total_cost == null ? "Not specified" : fmtCost(record.total_cost)} />}
             </Section>
             <Section title="Meta">
               <Field label="Entered by" value={fmt(resolveUser(record.created_by))} />
@@ -452,32 +515,70 @@ function FuelEditor({
   const [date, setDate] = useState<string>(todayIso());
   const [litres, setLitres] = useState<string>("");
   const [cost, setCost] = useState<string>("");
+  const [ppl, setPpl] = useState<string>("");
+  // Which cost field the user last edited — drives recomputation on volume change.
+  const [lastEdited, setLastEdited] = useState<"unitPrice" | "totalCost">("totalCost");
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setDate(editing.date ?? todayIso());
-      setLitres(editing.volume_litres == null ? "" : String(editing.volume_litres));
-      setCost(editing.total_cost == null ? "" : String(editing.total_cost));
+      const v = editing.volume_litres;
+      const c = editing.total_cost;
+      setLitres(v == null ? "" : String(v));
+      setCost(c == null ? "" : String(c));
+      setPpl(c != null && v != null && v > 0 ? String(+(c / v).toFixed(4)) : "");
+      setLastEdited("totalCost");
     } else {
       setDate(todayIso());
       setLitres("");
       setCost("");
+      setPpl("");
+      setLastEdited("totalCost");
     }
   }, [open, editing]);
 
   const litresNum = numOrNaN(litres);
   const costNum = numOrNaN(cost);
-  const previewCpl = useMemo(() => {
-    if (!Number.isFinite(litresNum) || !Number.isFinite(costNum) || litresNum <= 0) return "—";
-    return fmtCpl(costNum, litresNum);
-  }, [litresNum, costNum]);
+  const pplNum = numOrNaN(ppl);
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+  const onVolumeChange = (v: string) => {
+    setLitres(v);
+    const vn = numOrNaN(v);
+    if (!Number.isFinite(vn) || vn <= 0) return;
+    if (lastEdited === "unitPrice" && Number.isFinite(pplNum) && pplNum > 0) {
+      setCost(String(round2(vn * pplNum)));
+    } else if (lastEdited === "totalCost" && Number.isFinite(costNum) && costNum > 0) {
+      setPpl(String(round4(costNum / vn)));
+    }
+  };
+
+  const onPplChange = (v: string) => {
+    setPpl(v);
+    setLastEdited("unitPrice");
+    const pn = numOrNaN(v);
+    if (Number.isFinite(pn) && pn > 0 && Number.isFinite(litresNum) && litresNum > 0) {
+      setCost(String(round2(litresNum * pn)));
+    }
+  };
+
+  const onCostChange = (v: string) => {
+    setCost(v);
+    setLastEdited("totalCost");
+    const cn = numOrNaN(v);
+    if (Number.isFinite(cn) && cn >= 0 && Number.isFinite(litresNum) && litresNum > 0) {
+      setPpl(String(round4(cn / litresNum)));
+    }
+  };
 
   const validate = (): string | null => {
     if (!date) return "Date is required";
-    if (!Number.isFinite(litresNum) || litresNum <= 0) return "Volume (litres) must be greater than 0";
+    if (!Number.isFinite(litresNum) || litresNum <= 0) return "Volume must be greater than 0";
     if (canSeeCosts) {
-      if (!Number.isFinite(costNum) || costNum < 0) return "Total cost must be 0 or greater";
+      if (!Number.isFinite(costNum) || costNum < 0) return "Total Purchase Cost must be 0 or greater";
     }
     return null;
   };
@@ -538,51 +639,65 @@ function FuelEditor({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{editing ? "Edit fuel purchase" : "New fuel purchase"}</SheetTitle>
+          <SheetTitle>{editing ? "Edit Fuel Purchase" : "New Fuel Purchase"}</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 space-y-4 text-sm">
           <div className="space-y-1.5">
-            <Label>Date *</Label>
+            <Label>Purchase Date *</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className={`grid ${canSeeCosts ? "grid-cols-2" : "grid-cols-1"} gap-3`}>
-            <div className="space-y-1.5">
-              <Label>Volume (litres) *</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={litres}
-                onChange={(e) => setLitres(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            {canSeeCosts && (
-              <div className="space-y-1.5">
-                <Label>Total cost *</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
+          <div className="space-y-1.5">
+            <Label>Volume (L) *</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={litres}
+              onChange={(e) => onVolumeChange(e.target.value)}
+              placeholder="0.00"
+            />
           </div>
 
           {canSeeCosts && (
-            <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
-              <span className="text-muted-foreground">Cost per litre</span>
-              <span className="font-medium">{previewCpl}</span>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Price per Litre ($/L)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.001"
+                    min="0"
+                    value={ppl}
+                    onChange={(e) => onPplChange(e.target.value)}
+                    placeholder="0.000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Total Purchase Cost ($) *</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={cost}
+                    onChange={(e) => onCostChange(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter either <strong>Price per Litre</strong> or <strong>Total Purchase Cost</strong>; the
+                other value is calculated automatically. Total Purchase Cost is stored as the full invoice
+                amount and shared with iOS and Android.
+              </p>
+            </>
           )}
         </div>
+
 
         <SheetFooter className="mt-6 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
