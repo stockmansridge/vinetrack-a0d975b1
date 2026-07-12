@@ -109,7 +109,7 @@ function StatusBadge({ result }: { result: LhrResult }) {
   );
 }
 
-export default function TractorFuelLogsPage() {
+export default function TractorFuelLogsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { selectedVineyardId } = useVineyard();
   const canSeeCosts = useCanSeeCosts();
   const { resolve } = useTeamLookup(selectedVineyardId);
