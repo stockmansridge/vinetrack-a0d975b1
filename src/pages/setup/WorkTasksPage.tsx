@@ -1428,19 +1428,18 @@ function LabourLineRow({
           <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
         </Field>
         <Field label="Worker type">
-          <Input value={workerType} onChange={(e) => setWorkerType(e.target.value)} placeholder="Pruner, tractor op…" />
-        </Field>
-        <Field label="Worker type">
           <Select value={categoryId} onValueChange={setCategoryId}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE}>None</SelectItem>
-              {categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name ?? c.id.slice(0, 8)}</SelectItem>))}
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {(c.name ?? c.id.slice(0, 8)) +
+                    (c.cost_per_hour != null ? ` — ${money(Number(c.cost_per_hour))}/h` : "")}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        </Field>
-        <Field label="Hourly rate">
-          <Input type="number" step="0.01" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} />
         </Field>
         <Field label="Worker count">
           <Input type="number" step="1" value={workerCount} onChange={(e) => setWorkerCount(e.target.value)} />
