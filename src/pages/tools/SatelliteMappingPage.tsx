@@ -1250,91 +1250,12 @@ export default function SatelliteMappingPage() {
         : (batchProgress ? `Refreshing ${Math.min(batchProgress.done + 1, batchProgress.total)} / ${batchProgress.total}…` : "Refreshing…"))
     : "Refresh Imagery";
 
-  // Per-index plain-English descriptions, always relative to this paddock's
-  // own distribution (the pixel includes vine canopy, mid-row, soil, shadow).
-  const CLASSIFY_WORDS: Record<SatelliteIndexType, [string, string, string, string, string]> = {
-    NDVI: [
-      "Very sparse vegetation relative to this paddock",
-      "Lower vine or ground-cover vigour relative to this paddock",
-      "Typical vegetation vigour for this paddock",
-      "Higher vegetation vigour relative to this paddock",
-      "Very high vegetation vigour relative to this paddock",
-    ],
-    NDRE: [
-      "Very low chlorophyll signal relative to this paddock",
-      "Lower chlorophyll signal relative to this paddock",
-      "Typical chlorophyll signal for this paddock",
-      "Higher chlorophyll signal relative to this paddock",
-      "Very high chlorophyll signal relative to this paddock",
-    ],
-    MSAVI: [
-      "Very low soil-adjusted vegetation signal relative to this paddock",
-      "Lower soil-adjusted vegetation signal relative to this paddock",
-      "Typical soil-adjusted vegetation signal for this paddock",
-      "Higher soil-adjusted vegetation signal relative to this paddock",
-      "Very high soil-adjusted vegetation signal relative to this paddock",
-    ],
-    RECI: [
-      "Very low relative chlorophyll activity for this paddock",
-      "Lower relative chlorophyll activity for this paddock",
-      "Typical relative chlorophyll activity for this paddock",
-      "Higher relative chlorophyll activity for this paddock",
-      "Very high relative chlorophyll activity for this paddock",
-    ],
-    NDMI: [
-      "Very low relative canopy moisture signal for this paddock",
-      "Lower relative canopy moisture signal for this paddock",
-      "Typical relative canopy moisture signal for this paddock",
-      "Higher relative canopy moisture signal for this paddock",
-      "Very high relative canopy moisture signal for this paddock",
-    ],
-    GNDVI: [
-      "Very low green-canopy chlorophyll signal relative to this paddock",
-      "Lower green-canopy chlorophyll signal relative to this paddock",
-      "Typical green-canopy chlorophyll signal for this paddock",
-      "Higher green-canopy chlorophyll signal relative to this paddock",
-      "Very high green-canopy chlorophyll signal relative to this paddock",
-    ],
-    EVI: [
-      "Very low dense-canopy vigour relative to this paddock",
-      "Lower dense-canopy vigour relative to this paddock",
-      "Typical dense-canopy vigour for this paddock",
-      "Higher dense-canopy vigour relative to this paddock",
-      "Very high dense-canopy vigour relative to this paddock",
-    ],
-    GCI: [
-      "Very low green chlorophyll activity relative to this paddock",
-      "Lower green chlorophyll activity relative to this paddock",
-      "Typical green chlorophyll activity for this paddock",
-      "Higher green chlorophyll activity relative to this paddock",
-      "Very high green chlorophyll activity relative to this paddock",
-    ],
-    RENDVI: [
-      "Very low red-edge vigour relative to this paddock",
-      "Lower red-edge vigour relative to this paddock",
-      "Typical red-edge vigour for this paddock",
-      "Higher red-edge vigour relative to this paddock",
-      "Very high red-edge vigour relative to this paddock",
-    ],
-    PSRI: [
-      "Very low senescence signal relative to this paddock",
-      "Lower senescence signal relative to this paddock",
-      "Typical senescence signal for this paddock",
-      "Higher senescence signal relative to this paddock",
-      "Very high senescence signal relative to this paddock",
-    ],
-    TRUE_COLOUR: ["—", "—", "—", "—", "—"],
-  };
-  function classify(value: number | null, s: DBSummary | undefined): string {
-    if (value == null || !s) return "—";
-    const words = CLASSIFY_WORDS[layer] ?? CLASSIFY_WORDS.NDVI;
-    if (s.percentile_10 == null) return words[2];
-    if (value <= (s.percentile_10 ?? 0)) return words[0];
-    if (value <= (s.percentile_25 ?? 0)) return words[1];
-    if (value <= (s.percentile_75 ?? 0)) return words[2];
-    if (value <= (s.percentile_90 ?? 0)) return words[3];
-    return words[4];
-  }
+  // Summary for the currently hovered paddock (used to build the tooltip's
+  // paddock-relative interpretation and to show the current-scene range/median
+  // in the legend).
+  const hoverSummary = hover?.paddockId ? summaryByPaddock.get(hover.paddockId) : undefined;
+  const legendSummary = hoverSummary ?? (summaryByPaddock.size === 1 ? Array.from(summaryByPaddock.values())[0] : undefined);
+
 
   return (
     <div className="w-full p-2 md:p-3 space-y-3 flex flex-col">
