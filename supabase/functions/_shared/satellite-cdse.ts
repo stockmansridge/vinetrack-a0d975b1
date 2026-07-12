@@ -493,18 +493,7 @@ function evaluatePixel(s){
  * The Statistical API applies aggregation across time; we always request a single
  * date range covering one scene, so results represent that scene. */
 export function statsEvalscript(index: Exclude<IndexType, "TRUE_COLOUR">): string {
-  const expr: Record<string, { formula: string; bands: string[] }> = {
-    NDVI: { formula: "(s.B08 - s.B04) / (s.B08 + s.B04)", bands: ["B04", "B08"] },
-    NDRE: { formula: "(s.B08 - s.B05) / (s.B08 + s.B05)", bands: ["B05", "B08"] },
-    MSAVI: {
-      formula:
-        "(2*s.B08 + 1 - Math.sqrt((2*s.B08 + 1)*(2*s.B08 + 1) - 8*(s.B08 - s.B04))) / 2",
-      bands: ["B04", "B08"],
-    },
-    RECI: { formula: "(s.B08 / s.B05) - 1", bands: ["B05", "B08"] },
-    NDMI: { formula: "(s.B08 - s.B11) / (s.B08 + s.B11)", bands: ["B08", "B11"] },
-  };
-  const e = expr[index];
+  const e = INDEX_FORMULA[index];
   return `//VERSION=3
 function setup() {
   return {
