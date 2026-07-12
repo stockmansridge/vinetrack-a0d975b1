@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
   const acqDateStr = acq.toISOString().slice(0, 10);
   const paddockName = String(paddock.name ?? paddock.id);
 
-  for (const idx of requested) {
+  const runIndex = async (idx: IndexType) => {
     try {
       const nativeRes = INDEX_NATIVE_RES_M[idx];
       const { width, height, displayResolutionM } = computeImageSize(bbox, QC.processImageTargetResolutionM, QC.processImageMaxSize);
@@ -323,7 +323,25 @@ Deno.serve(async (req) => {
       console.error(`[satellite-process-scene] ${idx} failed:`, msg);
       failures.push({ index: idx, message: msg });
     }
-  }
+  };
+
+  // Bounded concurrency across layers. Each layer makes 2–3 CDSE calls; running
+  // 11 layers sequentially exceeded the 150s edge-runtime idle timeout. A small
+  // pool keeps us well under CDSE per-account rate limits while cutting wall
+  // time roughly 4x.
+  const LAYER_CONCURRENCY = 4;
+  const queue = [...requested];
+  const layerWorkers = Array.from(
+    { length: Math.min(LAYER_CONCURRENCY, queue.length) },
+    async () => {
+      while (queue.length) {
+        const idx = queue.shift();
+        if (!idx) return;
+        await runIndex(idx);
+      }
+    },
+  );
+  await Promise.all(layerWorkers);
 
   // A scene package is fully complete only when every requested layer stored
   // its display (+analytical for numeric) + summary. Otherwise report partial.
