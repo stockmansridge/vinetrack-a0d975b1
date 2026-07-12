@@ -439,28 +439,6 @@ export default function WorkTasksPage() {
     return list;
   }, [tasks, hemisphere, currentVintageYear]);
 
-  const seasonFiltered = useMemo(() => {
-    if (season === "all") return filtered;
-    const year = season === "current" ? currentVintageYear : Number(season);
-    return filtered.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === year);
-  }, [filtered, season, hemisphere, currentVintageYear]);
-
-  const seasonTotals = useMemo(() => {
-    const targetYear = season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
-    const list = targetYear == null ? tasks : tasks.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === targetYear);
-    let totalHours = 0;
-    let totalCost = 0;
-    let taskCount = 0;
-    list.forEach((t) => {
-      taskCount++;
-      const tot = totalsByTask.get(t.id);
-      if (tot) {
-        totalHours += tot.hours;
-        totalCost += tot.cost;
-      }
-    });
-    return { taskCount, totalHours, totalCost };
-  }, [tasks, season, hemisphere, currentVintageYear, totalsByTask]);
 
 
   // Selected paddock IDs per task (join rows preferred, fallback to task.paddock_id).
