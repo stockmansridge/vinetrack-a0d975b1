@@ -21,7 +21,7 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v1";
+export const PROCESSING_VERSION = "sentinel2-v3-eleven-layers";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
 export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
 export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
@@ -37,24 +37,50 @@ export const QC = {
   processImageTargetResolutionM: 10, // display grid
 };
 
+// Eleven supported layers. Order matters for the Map Layer control.
 export const INDEX_TYPES = [
   "TRUE_COLOUR",
   "NDVI",
-  "NDRE",
+  "EVI",
+  "GNDVI",
   "MSAVI",
+  "NDRE",
   "RECI",
+  "GCI",
+  "RENDVI",
   "NDMI",
+  "PSRI",
 ] as const;
 export type IndexType = (typeof INDEX_TYPES)[number];
 
-// Native input resolution per Sentinel-2 index.
+// Native input resolution per Sentinel-2 index (10 m or 20 m).
 export const INDEX_NATIVE_RES_M: Record<IndexType, number> = {
   TRUE_COLOUR: 10,
   NDVI: 10,
+  EVI: 10,      // B02, B04, B08 all 10 m
+  GNDVI: 10,    // B03, B08 both 10 m
   MSAVI: 10,
-  NDRE: 20, // B05 red edge
-  RECI: 20, // B05 red edge
-  NDMI: 20, // B11 SWIR
+  NDRE: 20,     // B05 red edge
+  RECI: 20,     // B05 red edge
+  GCI: 10,      // B03, B08 both 10 m
+  RENDVI: 20,   // B05 red edge / B8A narrow NIR (both 20 m)
+  NDMI: 20,     // B11 SWIR
+  PSRI: 20,     // B06 red edge
+};
+
+// Bands used per index (for asset metadata / help panel).
+export const INDEX_BANDS: Record<IndexType, string[]> = {
+  TRUE_COLOUR: ["B02", "B03", "B04"],
+  NDVI: ["B04", "B08"],
+  EVI: ["B02", "B04", "B08"],
+  GNDVI: ["B03", "B08"],
+  MSAVI: ["B04", "B08"],
+  NDRE: ["B05", "B08"],
+  RECI: ["B05", "B08"],
+  GCI: ["B03", "B08"],
+  RENDVI: ["B05", "B8A"],
+  NDMI: ["B08", "B11"],
+  PSRI: ["B02", "B04", "B06"],
 };
 
 // -------- Errors --------
