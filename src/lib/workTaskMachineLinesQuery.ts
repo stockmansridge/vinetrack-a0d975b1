@@ -32,7 +32,7 @@ export interface WorkTaskMachineLine {
 
   // Operator (optional; either user FK or category bucket).
   operator_user_id?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
 
   // Time / engine hours.
   duration_hours?: number | null;
@@ -103,7 +103,7 @@ export interface WorkTaskMachineLineWriteInput {
   equipment_ref_id?: string | null;
   equipment_name_snapshot: string;
   operator_user_id?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
   duration_hours?: number | null;
   engine_hours_used?: number | null;
   start_time?: string | null;
@@ -127,7 +127,7 @@ const toPayload = (i: WorkTaskMachineLineWriteInput) => ({
   equipment_ref_id: i.equipment_ref_id ?? null,
   equipment_name_snapshot: i.equipment_name_snapshot,
   operator_user_id: i.operator_user_id ?? null,
-  operator_category_id: i.operator_category_id ?? null,
+  worker_type_id: i.worker_type_id ?? null,
   duration_hours: num(i.duration_hours),
   engine_hours_used: num(i.engine_hours_used),
   start_time: i.start_time ?? null,

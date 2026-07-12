@@ -33,7 +33,7 @@ export async function fetchOperatorCategoriesForVineyard(
   vineyardId: string,
 ): Promise<OperatorCategoriesQueryResult> {
   const res = await supabase
-    .from("operator_categories")
+    .from("worker_types")
     .select("*")
     .eq("vineyard_id", vineyardId)
     .is("deleted_at", null);
@@ -78,7 +78,7 @@ export async function createOperatorCategory(
   // (vineyard_id, normalised name, cost_per_hour) and restores
   // soft-deleted rows. Falls back to a direct insert if the RPC is
   // missing (older backends).
-  const rpc = await supabase.rpc("upsert_operator_category", {
+  const rpc = await supabase.rpc("upsert_worker_type", {
     p_vineyard_id: input.vineyard_id,
     p_name: input.name,
     p_cost_per_hour: input.cost_per_hour,
@@ -101,7 +101,7 @@ export async function createOperatorCategory(
     deleted_at: null,
   };
   const { data, error } = await supabase
-    .from("operator_categories")
+    .from("worker_types")
     .insert(payload)
     .select()
     .single();
@@ -131,7 +131,7 @@ export async function updateOperatorCategory(
   if (input.cost_per_hour !== undefined) patch.cost_per_hour = input.cost_per_hour;
 
   const { data, error } = await supabase
-    .from("operator_categories")
+    .from("worker_types")
     .update(patch)
     .eq("id", input.id)
     .select()
@@ -146,13 +146,13 @@ export async function softDeleteOperatorCategory(
   currentSyncVersion?: number | null,
 ): Promise<void> {
   // Prefer RPC if it exists in the iOS project.
-  const rpc = await supabase.rpc("soft_delete_operator_category", { p_id: id });
+  const rpc = await supabase.rpc("soft_delete_worker_type", { p_id: id });
   if (!rpc.error) return;
 
   const now = new Date().toISOString();
   const nextVersion = (currentSyncVersion ?? 0) + 1;
   const { error } = await supabase
-    .from("operator_categories")
+    .from("worker_types")
     .update({
       deleted_at: now,
       updated_by: userId,

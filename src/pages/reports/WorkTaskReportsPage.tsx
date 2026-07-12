@@ -1936,7 +1936,7 @@ function ExpandedRowDetails({
                   {row.labourLines.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell className="text-xs">
-                        {l.worker_type?.trim() || l.operator_category_id || "—"}
+                        {l.worker_type?.trim() || l.worker_type_id || "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-xs">
                         {l.worker_count ?? "—"}

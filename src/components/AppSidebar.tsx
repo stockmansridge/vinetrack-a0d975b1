@@ -114,7 +114,7 @@ const setup: NavItem[] = [
   { title: "Blocks", url: "/setup/paddocks", icon: Map },
   { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-  { title: "Operator Categories", url: "/setup/operator-categories", icon: UserCog },
+  { title: "Worker Types", url: "/setup/operator-categories", icon: UserCog },
   { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
   { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
 ];

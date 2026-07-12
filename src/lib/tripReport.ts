@@ -710,7 +710,7 @@ export function tripToCsvRow(
     base.costing_warnings = cost.warnings.join(" | ");
   }
   // Fuel-only path (when no full cost breakdown is available, e.g. on Trips
-  // page CSV where we don't fetch operator categories/spray records).
+  // page CSV where we don't fetch worker types/spray records).
   if (!cost && fuelOnly) {
     const num = (n: number | null | undefined) => (n == null || !isFinite(n) ? "" : n.toFixed(2));
     base.tractor = tractorName ?? "";

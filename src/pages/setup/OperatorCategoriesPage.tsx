@@ -72,7 +72,7 @@ export default function OperatorCategoriesPage() {
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["operator-categories"] });
-    qc.invalidateQueries({ queryKey: ["operator_categories"] });
+    qc.invalidateQueries({ queryKey: ["worker_types"] });
   };
 
   const rows = useMemo(() => {
@@ -102,9 +102,9 @@ export default function OperatorCategoriesPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Operator Categories</h1>
+          <h1 className="text-2xl font-semibold">Worker Types</h1>
           <p className="text-sm text-muted-foreground">
-            Manage labour/operator categories used across work tasks and reporting. These sync with the iOS app.
+            Manage labour/worker types used across work tasks and reporting. These sync with the iOS app.
           </p>
         </div>
         {canWrite && (
@@ -183,7 +183,7 @@ export default function OperatorCategoriesPage() {
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={canSeeCosts ? 3 : 2} className="text-center text-muted-foreground py-8">
-                  No operator categories yet. {canWrite ? "Add one with “New category”." : ""}
+                  No worker types yet. {canWrite ? "Add one with “New category”." : ""}
                 </TableCell>
               </TableRow>
             )}
@@ -279,7 +279,7 @@ function CategoryEditor({
       });
     },
     onSuccess: () => {
-      toast({ title: "Operator category created" });
+      toast({ title: "Worker type created" });
       onSaved();
     },
     onError: (e: any) => {
@@ -305,7 +305,7 @@ function CategoryEditor({
       });
     },
     onSuccess: () => {
-      toast({ title: "Operator category updated" });
+      toast({ title: "Worker type updated" });
       onSaved();
     },
     onError: (e: any) => {
@@ -327,7 +327,7 @@ function CategoryEditor({
       );
     },
     onSuccess: () => {
-      toast({ title: "Operator category archived" });
+      toast({ title: "Worker type archived" });
       onSaved();
     },
     onError: (e: any) => {
@@ -359,7 +359,7 @@ function CategoryEditor({
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
-            {isNew ? "New operator category" : category?.name ?? "Operator category"}
+            {isNew ? "New worker type" : category?.name ?? "Worker type"}
           </SheetTitle>
         </SheetHeader>
 
@@ -410,7 +410,7 @@ function CategoryEditor({
             <Button
               variant="destructive"
               onClick={() => {
-                if (confirm("Archive this operator category?")) deleteMut.mutate();
+                if (confirm("Archive this worker type?")) deleteMut.mutate();
               }}
               disabled={busy}
             >

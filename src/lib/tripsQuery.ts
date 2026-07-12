@@ -49,7 +49,7 @@ export interface Trip {
   tractor_id?: string | null;
   machine_id?: string | null;
   operator_user_id?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
   trip_function?: string | null;
   trip_title?: string | null;
   // SQL 102: optional link back to the parent work_tasks row. Nullable —

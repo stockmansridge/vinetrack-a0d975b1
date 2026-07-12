@@ -75,7 +75,7 @@ interface LabourLine {
   id: string;
   work_task_id: string;
   worker_type?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
   work_date?: string | null;
 }
 
@@ -87,7 +87,7 @@ interface Trip {
   tractor_id?: string | null;
   machine_id?: string | null;
   operator_user_id?: string | null;
-  operator_category_id?: string | null;
+  worker_type_id?: string | null;
   work_task_id?: string | null;
   start_time?: string | null;
   end_time?: string | null;
@@ -235,7 +235,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<LabourLine>(
       "work_task_labour_lines",
       vineyardId,
-      "id,work_task_id,worker_type,operator_category_id,work_date",
+      "id,work_task_id,worker_type,worker_type_id,work_date",
     ),
     selectAll<{ work_task_id: string; paddock_id: string }>(
       "work_task_paddocks",
@@ -246,7 +246,7 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     selectAll<Trip>(
       "trips",
       vineyardId,
-      "id,paddock_id,paddock_ids,paddock_name,tractor_id,machine_id,operator_user_id,operator_category_id,work_task_id,start_time,end_time,manual_correction_events,trip_function",
+      "id,paddock_id,paddock_ids,paddock_name,tractor_id,machine_id,operator_user_id,worker_type_id,work_task_id,start_time,end_time,manual_correction_events,trip_function",
     ),
     selectAll<SprayRow>(
       "spray_records",
@@ -419,15 +419,15 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     });
 
     const labourMissingCategory = labourLines.filter(
-      (l) => !l.operator_category_id && !l.worker_type,
+      (l) => !l.worker_type_id && !l.worker_type,
     );
     push({
       group: "Work Tasks",
       key: "wt_labour_missing_category",
-      name: "Labour lines missing operator category and worker type",
+      name: "Labour lines missing worker type and worker type",
       severity: "warning",
-      explanation: "Labour line has neither an Operator Category nor a worker type, so labour cost rollups can't classify it.",
-      suggestedAction: "Open the Work Task and set an Operator Category on the labour line.",
+      explanation: "Labour line has neither an Worker Type nor a worker type, so labour cost rollups can't classify it.",
+      suggestedAction: "Open the Work Task and set an Worker Type on the labour line.",
       count: labourMissingCategory.length,
       details: cap(
         labourMissingCategory.map((l) => ({
@@ -478,15 +478,15 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     });
 
     const noOperator = trips.filter(
-      (tr) => !tr.operator_user_id && !tr.operator_category_id,
+      (tr) => !tr.operator_user_id && !tr.worker_type_id,
     );
     push({
       group: "Trips",
       key: "trip_no_operator",
       name: "Trips with no operator/category",
       severity: "warning",
-      explanation: "No operator user or operator category is set, so labour cost can't be attributed.",
-      suggestedAction: "Assign an operator or operator category to the trip.",
+      explanation: "No operator user or worker type is set, so labour cost can't be attributed.",
+      suggestedAction: "Assign an operator or worker type to the trip.",
       count: noOperator.length,
       details: cap(
         noOperator.map((t) => ({

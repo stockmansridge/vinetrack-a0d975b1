@@ -60,7 +60,7 @@ const ITEMS: SearchItem[] = [
   { title: "Blocks", url: "/setup/paddocks", group: "Setup", keywords: ["blocks", "paddocks", "rows"] },
   { title: "Grape Varieties", url: "/setup/grape-varieties", group: "Setup", keywords: ["grapes", "varieties", "clones"] },
   { title: "Chemicals", url: "/setup/chemicals", group: "Setup", keywords: ["chemicals", "saved", "products"] },
-  { title: "Operator Categories", url: "/setup/operator-categories", group: "Setup", keywords: ["operators", "categories", "labels"] },
+  { title: "Worker Types", url: "/setup/operator-categories", group: "Setup", keywords: ["operators", "categories", "labels"] },
   { title: "Saved Inputs", url: "/setup/saved-inputs", group: "Setup", keywords: ["inputs", "presets", "saved"] },
   { title: "Weather Settings", url: "/setup/weather", group: "Setup", keywords: ["weather", "station", "davis", "willyweather", "wunderground"] },
 

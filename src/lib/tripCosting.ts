@@ -2,19 +2,19 @@
 //
 // Inputs (per trip):
 //  - trip: trips row (must include start_time/end_time, optional pause/resume,
-//          tractor_id, operator_user_id, operator_category_id)
+//          tractor_id, operator_user_id, worker_type_id)
 //  - tractor: matching tractors row (fuel_usage_l_per_hour) or null
 //  - operatorCategories: full list for the vineyard (id -> cost_per_hour)
-//  - members: vineyard_members rows (user_id -> operator_category_id)
+//  - members: vineyard_members rows (user_id -> worker_type_id)
 //  - fuelPurchases: vineyard_id-scoped fuel_purchases rows (volume_litres,
 //                   total_cost) used to derive a weighted cost per litre
 //  - sprayRecords: vineyard_id-scoped spray_records rows; we look up by trip_id
 //
 // Logic mirrors the iOS calculator:
 //   labour = active_hours * operator_category.cost_per_hour
-//   operator category priority:
-//     1) trips.operator_category_id
-//     2) vineyard_members.operator_category_id (for trips.operator_user_id)
+//   worker type priority:
+//     1) trips.worker_type_id
+//     2) vineyard_members.worker_type_id (for trips.operator_user_id)
 //   fuel = active_hours * tractor.fuel_usage_l_per_hour * weighted_cost_per_litre
 //   weighted_cost_per_litre = sum(total_cost) / sum(volume_litres)
 //   chemicals = sum over linked spray_records.tanks[*].costPerUnit * amount
@@ -264,7 +264,7 @@ export interface TripCostInputs {
   trip: Trip;
   tractor: TractorLite | null;
   operatorCategories: Pick<OperatorCategory, "id" | "name" | "cost_per_hour">[];
-  members: Pick<VineyardMemberRow, "user_id" | "operator_category_id">[];
+  members: Pick<VineyardMemberRow, "user_id" | "worker_type_id">[];
   fuelPurchases: FuelPurchase[];
   sprayRecords: Pick<SprayRecord, "trip_id" | "tanks">[];
   /** Optional saved-chemical library for cost fallback resolution. */
@@ -397,17 +397,17 @@ export function computeTripCost(inp: TripCostInputs): TripCostBreakdown {
   const hours = ms == null ? null : ms / 3_600_000;
   if (hours == null) warnings.push("Trip has no completed start/finish time — active hours unknown.");
 
-  // Operator category resolution.
-  let categoryId = inp.trip.operator_category_id ?? null;
+  // Worker type resolution.
+  let categoryId = inp.trip.worker_type_id ?? null;
   if (!categoryId && inp.trip.operator_user_id) {
     const m = inp.members.find((x) => x.user_id === inp.trip.operator_user_id);
-    categoryId = m?.operator_category_id ?? null;
+    categoryId = m?.worker_type_id ?? null;
     if (!categoryId) warnings.push("Operator has no default category assigned on the Team page.");
   }
-  if (!categoryId) warnings.push("No operator category linked to this trip.");
+  if (!categoryId) warnings.push("No worker type linked to this trip.");
   const cat = categoryId ? inp.operatorCategories.find((c) => c.id === categoryId) ?? null : null;
   const ratePerHour = cat?.cost_per_hour ?? null;
-  if (cat && ratePerHour == null) warnings.push(`Operator category “${cat.name ?? "Unnamed"}” has no cost/hour set.`);
+  if (cat && ratePerHour == null) warnings.push(`Worker type “${cat.name ?? "Unnamed"}” has no cost/hour set.`);
 
   const labourCost = hours != null && ratePerHour != null ? hours * ratePerHour : null;
 

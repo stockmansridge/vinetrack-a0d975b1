@@ -1,7 +1,7 @@
 // Role-based gating for cost/pricing visibility.
 //
 // Per costing rules: only owners and managers may see pricing or cost data
-// (operator category cost/hour, labour rates, fuel cost, chemical cost,
+// (worker type cost/hour, labour rates, fuel cost, chemical cost,
 // trip cost summaries, cost columns in exports, etc.).
 //
 // Supervisors and operators must never see those fields.
