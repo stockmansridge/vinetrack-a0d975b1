@@ -269,16 +269,15 @@ export default function TractorFuelLogsPage({ embedded = false }: { embedded?: b
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Fuel Logs / Machine</h1>
-          <p className="text-sm text-muted-foreground">
-            Read-only view of vineyard machine fill records synced from iPhone. L/hr is
-            calculated display-only from the previous fill for each machine. Fuel logs do
-            not directly allocate costs to blocks or reports.
+          {!embedded && <h1 className="text-2xl font-semibold">Machine Fuel Logs</h1>}
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Read-only machine refuelling records synced from iOS and Android. Price / L is
+            calculated from consecutive fills for each machine.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 ml-auto">
           <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
