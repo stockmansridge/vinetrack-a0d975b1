@@ -195,22 +195,30 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Fuel purchases</h1>
-          <p className="text-sm text-muted-foreground">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        {embedded ? (
+          <p className="text-sm text-muted-foreground max-w-2xl">
             {canWrite
-              ? "Add, edit and archive fuel purchase records for the selected vineyard."
-              : "Read-only. Soft-deleted records are excluded."}
+              ? "Add, edit and archive fuel purchase records used to calculate the weighted average price per litre for cost allocation."
+              : "Read-only view of fuel purchase records used to calculate the weighted average price per litre."}
           </p>
-        </div>
-        <div className="flex gap-2">
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">Fuel Purchases</h1>
+            <p className="text-sm text-muted-foreground">
+              {canWrite
+                ? "Add, edit and archive fuel purchase records for the selected vineyard."
+                : "Read-only. Soft-deleted records are excluded."}
+            </p>
+          </div>
+        )}
+        <div className="flex gap-2 ml-auto">
           <Button variant="outline" onClick={exportCsv} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-1" /> CSV
           </Button>
           {canWrite && (
             <Button onClick={openNew}>
-              <Plus className="h-4 w-4 mr-1" /> New fuel purchase
+              <Plus className="h-4 w-4 mr-1" /> New Fuel Purchase
             </Button>
           )}
         </div>
@@ -221,14 +229,32 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
         <SummaryCard label={`Total ${rf.fuelUnitLabel === "gal" ? "gallons" : "litres"}`} value={fmtLitres(summary.totalLitres)} />
         {canSeeCosts && (
           <>
-            <SummaryCard label="Total cost" value={fmtCost(summary.totalCost)} />
+            <SummaryCard label="Total Purchase Cost" value={fmtCost(summary.totalCost)} />
             <SummaryCard
-              label={`Avg cost / ${rf.fuelUnitLabel}`}
+              label={`Average Price / ${rf.fuelUnitLabel}`}
               value={summary.avgCpl == null ? "—" : fmtCpl(summary.totalCost, summary.totalLitres)}
             />
           </>
         )}
       </div>
+
+      {canSeeCosts && summary.flagged > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="space-y-0.5">
+            <div className="font-medium">
+              {summary.flagged === 1
+                ? "One fuel purchase may contain an incorrect total cost"
+                : `${summary.flagged} fuel purchases may contain an incorrect total cost`}
+              {" "}and are affecting the average price per litre.
+            </div>
+            <div className="text-muted-foreground">
+              Rows flagged below with a warning icon likely have a unit price stored where the full
+              purchase amount is expected. Open the record to review and correct it.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
@@ -254,7 +280,7 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
         <ColumnSettingsMenu onReset={fReset} />
       </div>
 
-      <Card>
+      <Card className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -263,9 +289,9 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
                 const labels: Record<FuelCol, string> = {
                   date: "Date",
                   volume: `Volume (${rf.fuelUnitLabel})`,
-                  total: "Total cost",
-                  cpl: `Cost / ${rf.fuelUnitLabel}`,
-                  by: "Entered by",
+                  total: "Total Purchase Cost",
+                  cpl: `Price / ${rf.fuelUnitLabel}`,
+                  by: "Entered By",
                   updated: "Updated",
                 };
                 const rightAlign = id === "volume" || id === "total" || id === "cpl";
@@ -292,11 +318,37 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
               </TableRow>
             )}
             {rows.map((r) => {
+              const suspicious = isSuspiciousPurchase(r);
+              const dateCell = (
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    {suspicious && canSeeCosts && (
+                      <AlertTriangle
+                        className="h-3.5 w-3.5 text-amber-600 shrink-0"
+                        aria-label="This record may contain a unit price in the Total Purchase Cost field. Review and correct it."
+                      >
+                        <title>This record may contain a unit price in the Total Purchase Cost field. Review and correct it.</title>
+                      </AlertTriangle>
+                    )}
+                    <span>{fmtDate(r.date)}</span>
+                  </div>
+                </TableCell>
+              );
               const cellMap: Record<FuelCol, React.ReactNode> = {
-                date: <TableCell>{fmtDate(r.date)}</TableCell>,
+                date: dateCell,
                 volume: <TableCell className="text-right">{fmtLitres(r.volume_litres)}</TableCell>,
-                total: <TableCell className="text-right">{fmtCost(r.total_cost)}</TableCell>,
-                cpl: <TableCell className="text-right">{fmtCpl(r.total_cost, r.volume_litres)}</TableCell>,
+                total: (
+                  <TableCell className={`text-right ${suspicious ? "text-amber-700" : ""}`}>
+                    {r.total_cost == null ? "Not specified" : fmtCost(r.total_cost)}
+                  </TableCell>
+                ),
+                cpl: (
+                  <TableCell className={`text-right ${suspicious ? "text-amber-700" : ""}`}>
+                    {r.total_cost == null || !r.volume_litres || r.volume_litres <= 0
+                      ? "Not specified"
+                      : fmtCpl(r.total_cost, r.volume_litres)}
+                  </TableCell>
+                ),
                 by: <TableCell>{fmt(resolve(r.created_by))}</TableCell>,
                 updated: <TableCell>{fmtDate(r.updated_at)}</TableCell>,
               };
@@ -312,6 +364,7 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
           </TableBody>
         </Table>
       </Card>
+
 
 
       <FuelSheet
