@@ -47,9 +47,9 @@ export interface CreateInvitationInput {
 export async function createInvitation(
   input: CreateInvitationInput,
 ): Promise<VineyardInvitation> {
-  // SQL 79 signature: (p_vineyard_id, p_email, p_role,
-  // p_worker_type_id default null, p_expires_at default null).
-  // No p_message / p_expires_in_days yet.
+  // create_invitation signature is unchanged after the Worker Types rename —
+  // it still takes p_operator_category_id even though the underlying column
+  // is now invitations.worker_type_id.
   const days = input.expires_in_days ?? 14;
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + days);
@@ -57,7 +57,7 @@ export async function createInvitation(
     p_vineyard_id: input.vineyard_id,
     p_email: input.email.trim().toLowerCase(),
     p_role: input.role,
-    p_worker_type_id: input.worker_type_id ?? null,
+    p_operator_category_id: input.worker_type_id ?? null,
     p_expires_at: expiresAt.toISOString(),
   });
   if (error) throw error;
