@@ -582,10 +582,11 @@ export default function WorkTasksPage() {
     [paddockNameById, totalsByTask, taskPaddockIds, paddocksByTask, paddockById],
   );
 
-  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(filtered, {
+  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(seasonFiltered, {
     accessors,
     initial: { key: "date", direction: "desc" },
   });
+
 
   const WT_COLS = ["date","paddock","task_type","status","area_ha","hours",...(canSeeCosts ? ["cost"] : []),"notes"] as const;
   type WtCol = "date"|"paddock"|"task_type"|"status"|"area_ha"|"hours"|"cost"|"notes";
