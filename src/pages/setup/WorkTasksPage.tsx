@@ -114,7 +114,8 @@ import {
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
-import { useVintage, hemisphereForCountry, currentVintage } from "@/lib/useVintage";
+import { useVintage } from "@/lib/useVintage";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 
 
 interface PaddockLite {
@@ -194,10 +195,10 @@ const mkDateRangeLabel = (rf: RegionFormatters) => {
 };
 const effectiveStart = (t: WorkTask) => t.start_date ?? t.date ?? null;
 const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? null;
-const taskVintage = (t: WorkTask, hemisphere: "southern" | "northern", fallback: number) => {
+const taskVintage = (t: WorkTask, seasonMonth: number, seasonDay: number, fallback: number) => {
   const d = effectiveStart(t) ?? effectiveEnd(t);
   if (!d) return fallback;
-  return currentVintage(hemisphere, new Date(d));
+  return vintageForDate(new Date(d), seasonMonth, seasonDay);
 };
 
 
@@ -232,7 +233,7 @@ export default function WorkTasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
 
-  const { hemisphere, vintage: currentVintageYear } = useVintage();
+  const { vintage: currentVintageYear, seasonStartMonth, seasonStartDay } = useVintage();
   const [season, setSeason] = useState<string>("current");
 
 
@@ -433,11 +434,11 @@ export default function WorkTasksPage() {
 
   const seasons = useMemo(() => {
     const s = new Set<number>();
-    tasks.forEach((t) => s.add(taskVintage(t, hemisphere, currentVintageYear)));
+    tasks.forEach((t) => s.add(taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear)));
     const list = Array.from(s).sort((a, b) => b - a);
     if (!list.includes(currentVintageYear)) list.unshift(currentVintageYear);
     return list;
-  }, [tasks, hemisphere, currentVintageYear]);
+  }, [tasks, seasonStartMonth, seasonStartDay, currentVintageYear]);
 
 
 
@@ -513,12 +514,12 @@ export default function WorkTasksPage() {
   const seasonFiltered = useMemo(() => {
     if (season === "all") return filtered;
     const year = season === "current" ? currentVintageYear : Number(season);
-    return filtered.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === year);
-  }, [filtered, season, hemisphere, currentVintageYear]);
+    return filtered.filter((t) => taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear) === year);
+  }, [filtered, season, seasonStartMonth, seasonStartDay, currentVintageYear]);
 
   const seasonTotals = useMemo(() => {
     const targetYear = season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
-    const list = targetYear == null ? tasks : tasks.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === targetYear);
+    const list = targetYear == null ? tasks : tasks.filter((t) => taskVintage(t, seasonStartMonth, seasonStartDay, currentVintageYear) === targetYear);
     let totalHours = 0;
     let totalCost = 0;
     let taskCount = 0;
@@ -531,7 +532,7 @@ export default function WorkTasksPage() {
       }
     });
     return { taskCount, totalHours, totalCost };
-  }, [tasks, season, hemisphere, currentVintageYear, totalsByTask]);
+  }, [tasks, season, seasonStartMonth, seasonStartDay, currentVintageYear, totalsByTask]);
 
 
   // Dev-only sync diagnostic: keep visibility on rows that still need
