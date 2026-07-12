@@ -986,7 +986,7 @@ export default function SatelliteMappingPage() {
         halted?: string;
         failures?: Array<{ scene_id: string; index: string; work_key?: string; message: string }>;
       };
-      const aggregate = { scanned: 0, backfilled: 0, skipped: 0, failures: [] as NonNullable<BackfillResponse["failures"]> };
+      const aggregate = { scanned: 0, backfilled: 0, skipped: 0, halted: null as string | null, failures: [] as NonNullable<BackfillResponse["failures"]> };
       const excludedWorkKeys = new Set<string>();
 
       for (let pass = 0; pass < 120; pass++) {
@@ -1005,6 +1005,7 @@ export default function SatelliteMappingPage() {
           aggregate.failures.push(failure);
           if (failure.work_key) excludedWorkKeys.add(failure.work_key);
         }
+        if (result.halted) aggregate.halted = result.halted;
         if (!result.has_more || result.halted === "rate_limited") break;
       }
 
@@ -1016,9 +1017,12 @@ export default function SatelliteMappingPage() {
       analyticalCacheRef.current.clear();
       setRasterCacheVersion((v) => v + 1);
       const failed = data?.failures?.length ?? 0;
+      const paused = data?.halted === "rate_limited";
       toast({
-        title: "Crop Health Maps · backfill complete",
-        description: `Scanned ${data.scanned} scenes, generated ${data.backfilled} assets${failed ? `, ${failed} failures` : ""}.`,
+        title: paused ? "Crop Health Maps · backfill paused" : "Crop Health Maps · backfill complete",
+        description: paused
+          ? `Provider rate limit reached after generating ${data.backfilled} assets. Run it again in a few minutes.`
+          : `Scanned ${data.scanned} scenes, generated ${data.backfilled} assets${failed ? `, ${failed} failures` : ""}.`,
         variant: failed && !data.backfilled ? "destructive" : "default",
       });
     },

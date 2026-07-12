@@ -131,13 +131,25 @@ Deno.serve(async (req) => {
 
     const { scene, index: idx, key } = item;
     const pad = padById.get(scene.paddock_id);
-    if (!pad) { skipped++; continue; }
+    if (!pad) {
+      skipped++;
+      failures.push({ scene_id: scene.id, index: idx, work_key: key, message: "Paddock not found" });
+      continue;
+    }
 
     const polys = parseGeometryRings(pad.polygon_points);
-    if (polys.length === 0) { skipped++; continue; }
+    if (polys.length === 0) {
+      skipped++;
+      failures.push({ scene_id: scene.id, index: idx, work_key: key, message: "Paddock geometry is missing or invalid" });
+      continue;
+    }
     const geometry = toGeoJson(polys);
     const bbox = computeBbox(polys);
-    if (!bbox) { skipped++; continue; }
+    if (!bbox) {
+      skipped++;
+      failures.push({ scene_id: scene.id, index: idx, work_key: key, message: "Paddock bounds are missing or invalid" });
+      continue;
+    }
     perPaddockPerLayer[scene.paddock_id] ??= {};
 
     const acq = new Date(scene.acquired_at);
