@@ -639,51 +639,65 @@ function FuelEditor({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{editing ? "Edit fuel purchase" : "New fuel purchase"}</SheetTitle>
+          <SheetTitle>{editing ? "Edit Fuel Purchase" : "New Fuel Purchase"}</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 space-y-4 text-sm">
           <div className="space-y-1.5">
-            <Label>Date *</Label>
+            <Label>Purchase Date *</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className={`grid ${canSeeCosts ? "grid-cols-2" : "grid-cols-1"} gap-3`}>
-            <div className="space-y-1.5">
-              <Label>Volume (litres) *</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={litres}
-                onChange={(e) => setLitres(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            {canSeeCosts && (
-              <div className="space-y-1.5">
-                <Label>Total cost *</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-            )}
+          <div className="space-y-1.5">
+            <Label>Volume (L) *</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={litres}
+              onChange={(e) => onVolumeChange(e.target.value)}
+              placeholder="0.00"
+            />
           </div>
 
           {canSeeCosts && (
-            <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
-              <span className="text-muted-foreground">Cost per litre</span>
-              <span className="font-medium">{previewCpl}</span>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Price per Litre ($/L)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.001"
+                    min="0"
+                    value={ppl}
+                    onChange={(e) => onPplChange(e.target.value)}
+                    placeholder="0.000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Total Purchase Cost ($) *</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={cost}
+                    onChange={(e) => onCostChange(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter either <strong>Price per Litre</strong> or <strong>Total Purchase Cost</strong>; the
+                other value is calculated automatically. Total Purchase Cost is stored as the full invoice
+                amount and shared with iOS and Android.
+              </p>
+            </>
           )}
         </div>
+
 
         <SheetFooter className="mt-6 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
