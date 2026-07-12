@@ -1175,9 +1175,9 @@ function WorkTaskDrawer({
                 userId={userId}
               />
             )}
-            {!isNew && task && (
+            {savedTaskId ? (
               <MachineWorkSection
-                workTaskId={task.id}
+                workTaskId={savedTaskId}
                 vineyardId={vineyardId}
                 lines={machineLines}
                 lookups={machineLookups}
@@ -1185,8 +1185,7 @@ function WorkTaskDrawer({
                 canDelete={canSoftDelete}
                 userId={userId}
               />
-            )}
-            {isNew && (
+            ) : (
               <Section title="Manual Machine Work">
                 <div className="text-xs text-muted-foreground">
                   Save the task first, then add manual machine work.
