@@ -954,7 +954,7 @@ function WorkTaskDrawer({
     onSuccess: (saved) => {
       setSavedTaskId(saved.id);
       toast({ title: isNew ? "Task log created" : "Task log updated" });
-      onSaved();
+      onSaved(saved);
       if (!isNew) onOpenChange(false);
     },
     onError: (e: any) => {
