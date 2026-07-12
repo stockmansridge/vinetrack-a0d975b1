@@ -461,6 +461,10 @@ export async function hardDeleteWorkTask(
   });
   if (!rpc.error) {
     const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+    // Verify the RPC actually removed the row. Some deployments run the RPC as
+    // SECURITY INVOKER, so a caller without delete privileges gets a silent
+    // no-op (returns success + zero-filled row) instead of an error.
+    await assertWorkTaskGone(workTaskId);
     return {
       via: "rpc",
       removed: {
@@ -508,9 +512,40 @@ export async function hardDeleteWorkTask(
 
   const task = await supabase
     .from("work_tasks")
-    .delete()
+    .delete({ count: "exact" })
     .eq("id", workTaskId);
   if (task.error) throw task.error;
 
+  // If the delete affected 0 rows, RLS most likely denied it silently. Verify
+  // by re-reading and surface an error instead of a misleading success toast.
+  if ((task.count ?? 0) === 0) {
+    await assertWorkTaskGone(workTaskId);
+  }
+
   return { via: "client_cascade", removed: counts };
+}
+
+async function assertWorkTaskGone(workTaskId: string): Promise<void> {
+  const check = await supabase
+    .from("work_tasks")
+    .select("id,deleted_at")
+    .eq("id", workTaskId)
+    .maybeSingle();
+  if (check.error) throw check.error;
+  if (!check.data || check.data.deleted_at) return;
+
+  // Hard delete was blocked by RLS (silent no-op). Fall back to a soft delete
+  // so the task disappears from the portal + iOS lists, which all filter on
+  // deleted_at IS NULL.
+  const soft = await supabase
+    .from("work_tasks")
+    .update({ deleted_at: nowIso(), client_updated_at: nowIso() })
+    .eq("id", workTaskId)
+    .select("id");
+  if (soft.error) throw soft.error;
+  if (!soft.data || soft.data.length === 0) {
+    throw new Error(
+      "You don't have permission to delete this work task on this vineyard.",
+    );
+  }
 }
