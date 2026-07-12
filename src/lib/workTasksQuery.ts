@@ -283,8 +283,8 @@ export async function createLabourLine(input: UpsertLabourLineInput): Promise<Wo
 
 export async function updateLabourLine(input: UpsertLabourLineInput): Promise<WorkTaskLabourLine> {
   if (!input.id) throw new Error("updateLabourLine requires an id");
-  const { total_hours, total_cost } = computeLineTotals(input);
   const nextVersion = (input.current_sync_version ?? 0) + 1;
+  // total_hours and total_cost are generated columns; do not include them.
   const payload: any = {
     work_date: input.work_date ?? null,
     operator_category_id: input.operator_category_id ?? null,
@@ -292,8 +292,6 @@ export async function updateLabourLine(input: UpsertLabourLineInput): Promise<Wo
     worker_count: input.worker_count ?? null,
     hours_per_worker: input.hours_per_worker ?? null,
     hourly_rate: input.hourly_rate ?? null,
-    total_hours,
-    total_cost,
     notes: input.notes ?? "",
     client_updated_at: nowIso(),
     sync_version: nextVersion,
