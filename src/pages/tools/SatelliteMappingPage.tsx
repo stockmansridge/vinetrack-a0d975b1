@@ -1158,7 +1158,7 @@ export default function SatelliteMappingPage() {
       if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
 
       // Auto-retry once for any paddocks that remained stale after this pass.
-      if (!isRetry) {
+      if (!isRetry && rateLimited === 0) {
         const candidateIds = paddockId === "all"
           ? geoms.map((g) => g.id)
           : geoms.filter((g) => g.id === paddockId).map((g) => g.id);
