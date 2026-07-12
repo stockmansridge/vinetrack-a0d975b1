@@ -426,8 +426,8 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       key: "wt_labour_missing_category",
       name: "Labour lines missing worker type and worker type",
       severity: "warning",
-      explanation: "Labour line has neither an Operator Category nor a worker type, so labour cost rollups can't classify it.",
-      suggestedAction: "Open the Work Task and set an Operator Category on the labour line.",
+      explanation: "Labour line has neither an Worker Type nor a worker type, so labour cost rollups can't classify it.",
+      suggestedAction: "Open the Work Task and set an Worker Type on the labour line.",
       count: labourMissingCategory.length,
       details: cap(
         labourMissingCategory.map((l) => ({
