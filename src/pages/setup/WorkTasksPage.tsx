@@ -714,9 +714,34 @@ export default function WorkTasksPage() {
         </Filter>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Filter label="Season">
+            <Select value={season} onValueChange={setSeason}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All seasons</SelectItem>
+                <SelectItem value="current">Current ({currentVintageYear})</SelectItem>
+                {seasons.map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Filter>
+          <div className="text-sm">
+            <span className="text-muted-foreground">Total:</span>{" "}
+            <span className="font-medium">{seasonTotals.taskCount} tasks</span>
+            {seasonTotals.totalHours > 0 && (
+              <span className="text-muted-foreground"> · {seasonTotals.totalHours.toFixed(2)} hrs</span>
+            )}
+            {canSeeCosts && seasonTotals.totalCost > 0 && (
+              <span className="text-muted-foreground"> · {money(seasonTotals.totalCost)}</span>
+            )}
+          </div>
+        </div>
         <ColumnSettingsMenu onReset={wtReset} />
       </div>
+
       <Card>
         <Table>
           <TableHeader>
