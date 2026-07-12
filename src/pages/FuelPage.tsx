@@ -21,9 +21,19 @@ export default function FuelPage() {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="machine">Machine Logs</TabsTrigger>
+        <TabsList className="border-2 border-border bg-muted/80 p-1.5 shadow-sm">
+          <TabsTrigger
+            value="purchases"
+            className="px-5 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow"
+          >
+            Purchases
+          </TabsTrigger>
+          <TabsTrigger
+            value="machine"
+            className="px-5 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow"
+          >
+            Machine Logs
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="purchases" className="mt-0">
           <FuelPurchasesPage embedded />
