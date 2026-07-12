@@ -510,6 +510,30 @@ export default function WorkTasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
 
+  const seasonFiltered = useMemo(() => {
+    if (season === "all") return filtered;
+    const year = season === "current" ? currentVintageYear : Number(season);
+    return filtered.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === year);
+  }, [filtered, season, hemisphere, currentVintageYear]);
+
+  const seasonTotals = useMemo(() => {
+    const targetYear = season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
+    const list = targetYear == null ? tasks : tasks.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === targetYear);
+    let totalHours = 0;
+    let totalCost = 0;
+    let taskCount = 0;
+    list.forEach((t) => {
+      taskCount++;
+      const tot = totalsByTask.get(t.id);
+      if (tot) {
+        totalHours += tot.hours;
+        totalCost += tot.cost;
+      }
+    });
+    return { taskCount, totalHours, totalCost };
+  }, [tasks, season, hemisphere, currentVintageYear, totalsByTask]);
+
+
   // Dev-only sync diagnostic: keep visibility on rows that still need
   // area_ha hydration after Rork's iPhone fix lands.
   useEffect(() => {
