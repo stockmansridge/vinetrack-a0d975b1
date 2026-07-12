@@ -1323,7 +1323,7 @@ function LabourLinesSection({
   categories: OperatorCategory[];
   canSoftDelete: boolean;
   userId: string | null;
-  onChanged: () => void;
+  onChanged: (savedLine?: WorkTaskLabourLine) => void;
 }) {
   const [adding, setAdding] = useState(false);
 
@@ -1361,7 +1361,7 @@ function LabourLinesSection({
             userId={userId}
             vineyardId={vineyardId}
             taskId={taskId}
-            onChanged={() => { setAdding(false); onChanged(); }}
+            onChanged={(savedLine) => { setAdding(false); onChanged(savedLine); }}
             onCancel={() => setAdding(false)}
           />
         )}
@@ -1384,7 +1384,7 @@ function LabourLineRow({
   userId: string | null;
   vineyardId: string | null;
   taskId: string;
-  onChanged: () => void;
+  onChanged: (savedLine?: WorkTaskLabourLine) => void;
   onCancel?: () => void;
 }) {
   const isNew = !line;
@@ -1433,10 +1433,10 @@ function LabourLineRow({
       };
       return isNew ? createLabourLine(input) : updateLabourLine(input);
     },
-    onSuccess: () => {
+    onSuccess: (savedLine) => {
       toast({ title: isNew ? "Labour line added" : "Labour line updated" });
       setEditing(false);
-      onChanged();
+      onChanged(savedLine);
     },
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
