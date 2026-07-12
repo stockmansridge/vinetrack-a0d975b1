@@ -6,10 +6,15 @@ export type SatelliteProvider = "COPERNICUS_SENTINEL_2";
 export type SatelliteIndexType =
   | "TRUE_COLOUR"
   | "NDVI"
-  | "NDRE"
+  | "EVI"
+  | "GNDVI"
   | "MSAVI"
+  | "NDRE"
   | "RECI"
-  | "NDMI";
+  | "GCI"
+  | "RENDVI"
+  | "NDMI"
+  | "PSRI";
 
 export type SatelliteProcessingStatus =
   | "not_requested"

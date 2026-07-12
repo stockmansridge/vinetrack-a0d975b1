@@ -23,6 +23,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
@@ -95,9 +97,16 @@ const LAYERS: LayerOption[] = [
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
-    id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
-    description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
-    legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
+    id: "EVI", label: "EVI — Dense Canopy Vigour", short: "EVI", nativeResM: 10, resamplingNote: false,
+    description: "Shows canopy vigour while reducing some soil and atmospheric influence. It can remain useful where dense vegetation causes NDVI values to level out. Bands: 10 m blue (B02), red (B04), NIR (B08).",
+    legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
+  },
+  {
+    id: "GNDVI", label: "GNDVI — Chlorophyll & Nitrogen Signal", short: "GNDVI", nativeResM: 10, resamplingNote: false,
+    description: "Highlights relative differences in green-canopy chlorophyll. It may help identify areas requiring inspection for canopy or nutritional variation. Bands: 10 m green (B03), NIR (B08).",
+    legend: ["#8b3a2b", "#c98a3f", "#e6d36a", "#7ec26b", "#1e6b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
@@ -109,11 +118,32 @@ const LAYERS: LayerOption[] = [
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
+    id: "NDRE", label: "NDRE — Canopy Chlorophyll", short: "NDRE", nativeResM: 20, resamplingNote: true,
+    description: "Canopy chlorophyll differences, useful in denser canopies. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
+    legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
+  },
+  {
     id: "RECI", label: "RECI — Chlorophyll Activity", short: "RECI", nativeResM: 20, resamplingNote: true,
     description: "Relative differences in leaf chlorophyll. Uses 20 m native red-edge (B05) and 10 m NIR (B08); result is on a 10 m display grid.",
     legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
     legendLow: "Lower relative value", legendHigh: "Higher relative value",
     legendMinValue: "0", legendMaxValue: "10",
+  },
+  {
+    id: "GCI", label: "GCI — Green Chlorophyll Index", short: "GCI", nativeResM: 10, resamplingNote: false,
+    description: "Highlights relative canopy chlorophyll activity using green and near-infrared reflectance. Bands: 10 m green (B03), NIR (B08).",
+    legend: ["#4b2e2e", "#a06b3f", "#e4c26a", "#7fbf6a", "#1e5b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "0", legendMaxValue: "8",
+  },
+  {
+    id: "RENDVI", label: "RENDVI — Red-Edge Vine Vigour", short: "RENDVI", nativeResM: 20, resamplingNote: true,
+    description: "Measures canopy variation using narrow near-infrared and red-edge data. It may be useful for established canopies and later growth stages. Bands: 20 m red-edge (B05), 20 m narrow NIR (B8A); result shown on 10 m display grid.",
+    legend: ["#4a2c6a", "#7f5aa8", "#c4a8d6", "#8fd18f", "#1e6b2e"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
   {
     id: "NDMI", label: "NDMI — Canopy Moisture", short: "NDMI", nativeResM: 20, resamplingNote: true,
@@ -122,7 +152,25 @@ const LAYERS: LayerOption[] = [
     legendLow: "Drier", legendHigh: "Wetter",
     legendMinValue: "-1.0", legendMaxValue: "1.0",
   },
+  {
+    id: "PSRI", label: "PSRI — Leaf Ageing & Senescence", short: "PSRI", nativeResM: 20, resamplingNote: true,
+    description: "Highlights relative pigment changes associated with leaf ageing and senescence. It is most useful when comparing similar growth stages and dates. Bands: 10 m blue (B02), red (B04), 20 m red-edge (B06); result shown on 10 m display grid.",
+    legend: ["#1e6b2e", "#7ec26b", "#e6d36a", "#c98a3f", "#8b3a2b"],
+    legendLow: "Lower relative value", legendHigh: "Higher relative value",
+    legendMinValue: "-0.2", legendMaxValue: "0.4",
+  },
 ];
+
+// Grouped presentation for the Map Layer selector.
+const LAYER_GROUPS: Array<{ label: string; ids: SatelliteIndexType[] }> = [
+  { label: "Satellite Image", ids: ["TRUE_COLOUR"] },
+  { label: "Canopy & Vigour", ids: ["NDVI", "EVI", "GNDVI", "MSAVI"] },
+  { label: "Chlorophyll & Red Edge", ids: ["NDRE", "RECI", "GCI", "RENDVI"] },
+  { label: "Moisture & Seasonal Change", ids: ["NDMI", "PSRI"] },
+];
+
+const PSRI_CAUTION =
+  "Seasonal leaf ageing naturally changes this index. Compare similar growth stages before treating a difference as unusual.";
 
 const LAYER_DISCLAIMER =
   "Satellite indices indicate relative variation and do not by themselves diagnose disease, water stress, nutrient deficiency or vine health.";
@@ -942,6 +990,43 @@ export default function SatelliteMappingPage() {
     },
   });
 
+  // System-admin backfill: generate any missing display/analytical/summary
+  // assets for the new 11-layer package on scenes that were processed under
+  // an older processing version. Idempotent server-side.
+  const backfillLayers = useMutation({
+    mutationFn: async () => {
+      if (!activeVineyardId) throw new Error("No vineyard selected");
+      const { data, error } = await invokeSatelliteFn("satellite-backfill-analytical", {
+        vineyard_id: activeVineyardId,
+        paddock_id: paddockId,
+      });
+      if (error) throw error;
+      return data as {
+        scanned: number; backfilled: number; skipped: number;
+        failures: Array<{ scene_id: string; index: string; message: string }>;
+      };
+    },
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
+      analyticalCacheRef.current.clear();
+      setRasterCacheVersion((v) => v + 1);
+      const failed = data?.failures?.length ?? 0;
+      toast({
+        title: "Crop Health Maps · backfill complete",
+        description: `Scanned ${data.scanned} scenes, generated ${data.backfilled} assets${failed ? `, ${failed} failures` : ""}.`,
+        variant: failed && !data.backfilled ? "destructive" : "default",
+      });
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Crop Health Maps · backfill failed",
+        description: String(e?.message ?? e ?? "Unknown error"),
+        variant: "destructive",
+      });
+    },
+  });
+
   // Auto-run on page load: if any paddock has no imagery in the last 3 days,
   // silently trigger a refresh for just those paddocks. Cooled down per vineyard
   // across mounts so bouncing in and out of the page doesn't refire it.
@@ -1022,6 +1107,41 @@ export default function SatelliteMappingPage() {
       "Higher relative canopy moisture signal for this paddock",
       "Very high relative canopy moisture signal for this paddock",
     ],
+    GNDVI: [
+      "Very low green-canopy chlorophyll signal relative to this paddock",
+      "Lower green-canopy chlorophyll signal relative to this paddock",
+      "Typical green-canopy chlorophyll signal for this paddock",
+      "Higher green-canopy chlorophyll signal relative to this paddock",
+      "Very high green-canopy chlorophyll signal relative to this paddock",
+    ],
+    EVI: [
+      "Very low dense-canopy vigour relative to this paddock",
+      "Lower dense-canopy vigour relative to this paddock",
+      "Typical dense-canopy vigour for this paddock",
+      "Higher dense-canopy vigour relative to this paddock",
+      "Very high dense-canopy vigour relative to this paddock",
+    ],
+    GCI: [
+      "Very low green chlorophyll activity relative to this paddock",
+      "Lower green chlorophyll activity relative to this paddock",
+      "Typical green chlorophyll activity for this paddock",
+      "Higher green chlorophyll activity relative to this paddock",
+      "Very high green chlorophyll activity relative to this paddock",
+    ],
+    RENDVI: [
+      "Very low red-edge vigour relative to this paddock",
+      "Lower red-edge vigour relative to this paddock",
+      "Typical red-edge vigour for this paddock",
+      "Higher red-edge vigour relative to this paddock",
+      "Very high red-edge vigour relative to this paddock",
+    ],
+    PSRI: [
+      "Very low senescence signal relative to this paddock",
+      "Lower senescence signal relative to this paddock",
+      "Typical senescence signal for this paddock",
+      "Higher senescence signal relative to this paddock",
+      "Very high senescence signal relative to this paddock",
+    ],
     TRUE_COLOUR: ["—", "—", "—", "—", "—"],
   };
   function classify(value: number | null, s: DBSummary | undefined): string {
@@ -1049,6 +1169,16 @@ export default function SatelliteMappingPage() {
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || backfillLayers.isPending || !activeVineyardId}
+            onClick={() => backfillLayers.mutate()}
+            title="Generate any missing display / analytical / summary assets for the new layer set on existing scenes"
+          >
+            {backfillLayers.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SatelliteIcon className="h-3.5 w-3.5 mr-1.5" />}
+            {backfillLayers.isPending ? "Generating…" : "Generate New Layers for Existing Images"}
+          </Button>
           <Button
             size="sm"
             disabled={busy || geoms.length === 0}
@@ -1194,9 +1324,20 @@ export default function SatelliteMappingPage() {
               </label>
               <Select value={layer} onValueChange={(v) => setLayer(v as SatelliteIndexType)}>
                 <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {LAYERS.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                <SelectContent className="max-h-[420px]">
+                  {LAYER_GROUPS.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {group.label}
+                      </SelectLabel>
+                      {group.ids.map((id) => {
+                        const l = LAYERS.find((x) => x.id === id);
+                        if (!l) return null;
+                        return (
+                          <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
+                        );
+                      })}
+                    </SelectGroup>
                   ))}
                 </SelectContent>
               </Select>
@@ -1259,8 +1400,13 @@ export default function SatelliteMappingPage() {
             <div className="text-xs font-semibold text-foreground">{activeLayer.label}</div>
             <div className="text-xs text-muted-foreground mt-1">{activeLayer.description}</div>
             <div className="text-[11px] text-muted-foreground mt-2 italic">
-              Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
+              Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (20 m native data, resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
             </div>
+            {layer === "PSRI" && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+                {PSRI_CAUTION}
+              </div>
+            )}
             {selectedSceneKey === "latest" && (
               <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
                 Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.

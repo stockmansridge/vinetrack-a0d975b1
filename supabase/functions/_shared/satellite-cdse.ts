@@ -21,7 +21,7 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v1";
+export const PROCESSING_VERSION = "sentinel2-v3-eleven-layers";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
 export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
 export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
@@ -37,24 +37,50 @@ export const QC = {
   processImageTargetResolutionM: 10, // display grid
 };
 
+// Eleven supported layers. Order matters for the Map Layer control.
 export const INDEX_TYPES = [
   "TRUE_COLOUR",
   "NDVI",
-  "NDRE",
+  "EVI",
+  "GNDVI",
   "MSAVI",
+  "NDRE",
   "RECI",
+  "GCI",
+  "RENDVI",
   "NDMI",
+  "PSRI",
 ] as const;
 export type IndexType = (typeof INDEX_TYPES)[number];
 
-// Native input resolution per Sentinel-2 index.
+// Native input resolution per Sentinel-2 index (10 m or 20 m).
 export const INDEX_NATIVE_RES_M: Record<IndexType, number> = {
   TRUE_COLOUR: 10,
   NDVI: 10,
+  EVI: 10,      // B02, B04, B08 all 10 m
+  GNDVI: 10,    // B03, B08 both 10 m
   MSAVI: 10,
-  NDRE: 20, // B05 red edge
-  RECI: 20, // B05 red edge
-  NDMI: 20, // B11 SWIR
+  NDRE: 20,     // B05 red edge
+  RECI: 20,     // B05 red edge
+  GCI: 10,      // B03, B08 both 10 m
+  RENDVI: 20,   // B05 red edge / B8A narrow NIR (both 20 m)
+  NDMI: 20,     // B11 SWIR
+  PSRI: 20,     // B06 red edge
+};
+
+// Bands used per index (for asset metadata / help panel).
+export const INDEX_BANDS: Record<IndexType, string[]> = {
+  TRUE_COLOUR: ["B02", "B03", "B04"],
+  NDVI: ["B04", "B08"],
+  EVI: ["B02", "B04", "B08"],
+  GNDVI: ["B03", "B08"],
+  MSAVI: ["B04", "B08"],
+  NDRE: ["B05", "B08"],
+  RECI: ["B05", "B08"],
+  GCI: ["B03", "B08"],
+  RENDVI: ["B05", "B8A"],
+  NDMI: ["B08", "B11"],
+  PSRI: ["B02", "B04", "B06"],
 };
 
 // -------- Errors --------
@@ -393,49 +419,81 @@ function evaluatePixel(s) {
 }`;
 }
 
+// New index ramps.
+// GNDVI / EVI / RENDVI: -1..1 vegetation-style (share the vigour palette so
+// visual comparison is intuitive, but numeric legends remain per-index).
+const RAMP_GNDVI = RAMP_VEG;
+const RAMP_EVI = RAMP_VEG;
+const RAMP_RENDVI = RAMP_NDRE; // red-edge palette
+// GCI: 0..8 typical range for canopy chlorophyll ratio (matches RECI palette).
+const RAMP_GCI = rampFn([
+  [0, [0.294, 0.180, 0.180]],
+  [1, [0.627, 0.420, 0.247]],
+  [2.5, [0.894, 0.761, 0.416]],
+  [5, [0.498, 0.749, 0.416]],
+  [8, [0.117, 0.357, 0.180]],
+]);
+// PSRI: -0.2..0.4 typical; higher = more senescence (warm autumnal palette).
+const RAMP_PSRI = rampFn([
+  [-0.2, [0.117, 0.420, 0.180]],
+  [0, [0.494, 0.761, 0.42]],
+  [0.1, [0.902, 0.827, 0.416]],
+  [0.25, [0.788, 0.541, 0.247]],
+  [0.4, [0.545, 0.227, 0.169]],
+]);
+
+// Safe-division expression: returns NaN when |denominator| < 1e-6 so that
+// `!isFinite(v)` in the evalscript treats it as no-data.
+const SAFE_DIV = (num: string, den: string) =>
+  `((Math.abs(${den}) < 1e-6) ? NaN : (${num}) / (${den}))`;
+
+// Central formula table — reused by display / stats / analytical evalscripts.
+type IndexFormula = { formula: string; bands: string[] };
+const INDEX_FORMULA: Record<Exclude<IndexType, "TRUE_COLOUR">, IndexFormula> = {
+  NDVI:   { formula: SAFE_DIV("s.B08 - s.B04", "s.B08 + s.B04"), bands: ["B04", "B08"] },
+  EVI:    { formula: `(2.5 * (s.B08 - s.B04) / ((s.B08 + 6*s.B04 - 7.5*s.B02 + 1) === 0 ? NaN : (s.B08 + 6*s.B04 - 7.5*s.B02 + 1)))`, bands: ["B02","B04","B08"] },
+  GNDVI:  { formula: SAFE_DIV("s.B08 - s.B03", "s.B08 + s.B03"), bands: ["B03", "B08"] },
+  MSAVI:  { formula: "((2*s.B08 + 1 - Math.sqrt((2*s.B08 + 1)*(2*s.B08 + 1) - 8*(s.B08 - s.B04))) / 2)", bands: ["B04","B08"] },
+  NDRE:   { formula: SAFE_DIV("s.B08 - s.B05", "s.B08 + s.B05"), bands: ["B05", "B08"] },
+  RECI:   { formula: `((Math.abs(s.B05) < 1e-6) ? NaN : ((s.B08 / s.B05) - 1))`, bands: ["B05","B08"] },
+  GCI:    { formula: `((Math.abs(s.B03) < 1e-6) ? NaN : ((s.B08 / s.B03) - 1))`, bands: ["B03","B08"] },
+  RENDVI: { formula: SAFE_DIV("s.B8A - s.B05", "s.B8A + s.B05"), bands: ["B05", "B8A"] },
+  NDMI:   { formula: SAFE_DIV("s.B08 - s.B11", "s.B08 + s.B11"), bands: ["B08", "B11"] },
+  PSRI:   { formula: `((Math.abs(s.B06) < 1e-6) ? NaN : ((s.B04 - s.B02) / s.B06))`, bands: ["B02","B04","B06"] },
+};
+
+const INDEX_RAMP: Record<Exclude<IndexType, "TRUE_COLOUR">, string> = {
+  NDVI: RAMP_VEG,
+  EVI: RAMP_EVI,
+  GNDVI: RAMP_GNDVI,
+  MSAVI: RAMP_MSAVI,
+  NDRE: RAMP_NDRE,
+  RECI: RAMP_RECI,
+  GCI: RAMP_GCI,
+  RENDVI: RAMP_RENDVI,
+  NDMI: RAMP_NDMI,
+  PSRI: RAMP_PSRI,
+};
+
 export function evalscriptFor(index: IndexType): string {
-  switch (index) {
-    case "TRUE_COLOUR":
-      return `//VERSION=3
+  if (index === "TRUE_COLOUR") {
+    return `//VERSION=3
 function setup(){return{input:[{bands:["B02","B03","B04","dataMask"]}],output:{bands:4,sampleType:"UINT8"}};}
 function evaluatePixel(s){
   if(s.dataMask===0) return [0,0,0,0];
   const g = 2.5;
   return [Math.min(255, s.B04*255*g), Math.min(255, s.B03*255*g), Math.min(255, s.B02*255*g), 255];
 }`;
-    case "NDVI":
-      return evalscriptRgb("(s.B08 - s.B04) / (s.B08 + s.B04)", RAMP_VEG, ["B04", "B08"]);
-    case "NDRE":
-      return evalscriptRgb("(s.B08 - s.B05) / (s.B08 + s.B05)", RAMP_NDRE, ["B05", "B08"]);
-    case "MSAVI":
-      return evalscriptRgb(
-        "(2*s.B08 + 1 - Math.sqrt((2*s.B08 + 1)*(2*s.B08 + 1) - 8*(s.B08 - s.B04))) / 2",
-        RAMP_MSAVI,
-        ["B04", "B08"],
-      );
-    case "RECI":
-      return evalscriptRgb("(s.B08 / s.B05) - 1", RAMP_RECI, ["B05", "B08"]);
-    case "NDMI":
-      return evalscriptRgb("(s.B08 - s.B11) / (s.B08 + s.B11)", RAMP_NDMI, ["B08", "B11"]);
   }
+  const e = INDEX_FORMULA[index];
+  return evalscriptRgb(e.formula, INDEX_RAMP[index], e.bands);
 }
 
 /** Evalscript for the Statistical API: emits per-index index value + validity mask.
  * The Statistical API applies aggregation across time; we always request a single
  * date range covering one scene, so results represent that scene. */
 export function statsEvalscript(index: Exclude<IndexType, "TRUE_COLOUR">): string {
-  const expr: Record<string, { formula: string; bands: string[] }> = {
-    NDVI: { formula: "(s.B08 - s.B04) / (s.B08 + s.B04)", bands: ["B04", "B08"] },
-    NDRE: { formula: "(s.B08 - s.B05) / (s.B08 + s.B05)", bands: ["B05", "B08"] },
-    MSAVI: {
-      formula:
-        "(2*s.B08 + 1 - Math.sqrt((2*s.B08 + 1)*(2*s.B08 + 1) - 8*(s.B08 - s.B04))) / 2",
-      bands: ["B04", "B08"],
-    },
-    RECI: { formula: "(s.B08 / s.B05) - 1", bands: ["B05", "B08"] },
-    NDMI: { formula: "(s.B08 - s.B11) / (s.B08 + s.B11)", bands: ["B08", "B11"] },
-  };
-  const e = expr[index];
+  const e = INDEX_FORMULA[index];
   return `//VERSION=3
 function setup() {
   return {
@@ -459,18 +517,7 @@ function evaluatePixel(s) {
  * pixels are written as a stable no-data sentinel rather than NaN so browser
  * reads are deterministic across GeoTIFF decoders. */
 export function analyticalEvalscript(index: Exclude<IndexType, "TRUE_COLOUR">): string {
-  const expr: Record<string, { formula: string; bands: string[] }> = {
-    NDVI: { formula: "(s.B08 - s.B04) / (s.B08 + s.B04)", bands: ["B04", "B08"] },
-    NDRE: { formula: "(s.B08 - s.B05) / (s.B08 + s.B05)", bands: ["B05", "B08"] },
-    MSAVI: {
-      formula:
-        "(2*s.B08 + 1 - Math.sqrt((2*s.B08 + 1)*(2*s.B08 + 1) - 8*(s.B08 - s.B04))) / 2",
-      bands: ["B04", "B08"],
-    },
-    RECI: { formula: "(s.B08 / s.B05) - 1", bands: ["B05", "B08"] },
-    NDMI: { formula: "(s.B08 - s.B11) / (s.B08 + s.B11)", bands: ["B08", "B11"] },
-  };
-  const e = expr[index];
+  const e = INDEX_FORMULA[index];
   return `//VERSION=3
 function setup() {
   return {
