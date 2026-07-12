@@ -114,6 +114,8 @@ import {
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { useVintage, hemisphereForCountry, currentVintage } from "@/lib/useVintage";
+
 
 interface PaddockLite {
   id: string;
@@ -192,6 +194,12 @@ const mkDateRangeLabel = (rf: RegionFormatters) => {
 };
 const effectiveStart = (t: WorkTask) => t.start_date ?? t.date ?? null;
 const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? null;
+const taskVintage = (t: WorkTask, hemisphere: "southern" | "northern", fallback: number) => {
+  const d = effectiveStart(t) ?? effectiveEnd(t);
+  if (!d) return fallback;
+  return currentVintage(hemisphere, new Date(d));
+};
+
 
 export default function WorkTasksPage() {
   const { selectedVineyardId, currentRole } = useVineyard();
@@ -223,6 +231,10 @@ export default function WorkTasksPage() {
   const [selected, setSelected] = useState<WorkTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
+
+  const { hemisphere, vintage: currentVintageYear } = useVintage();
+  const [season, setSeason] = useState<string>("current");
+
 
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-lite", selectedVineyardId],
@@ -419,6 +431,16 @@ export default function WorkTasksPage() {
     return Array.from(s).sort();
   }, [labourLines]);
 
+  const seasons = useMemo(() => {
+    const s = new Set<number>();
+    tasks.forEach((t) => s.add(taskVintage(t, hemisphere, currentVintageYear)));
+    const list = Array.from(s).sort((a, b) => b - a);
+    if (!list.includes(currentVintageYear)) list.unshift(currentVintageYear);
+    return list;
+  }, [tasks, hemisphere, currentVintageYear]);
+
+
+
   // Selected paddock IDs per task (join rows preferred, fallback to task.paddock_id).
   const taskPaddockIds = useMemo(() => {
     const m = new Map<string, string[]>();
@@ -488,6 +510,30 @@ export default function WorkTasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, filter, from, to, paddockId, taskType, status, workerType, labourFilter, linesByTask, totalsByTask, taskPaddockIds]);
 
+  const seasonFiltered = useMemo(() => {
+    if (season === "all") return filtered;
+    const year = season === "current" ? currentVintageYear : Number(season);
+    return filtered.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === year);
+  }, [filtered, season, hemisphere, currentVintageYear]);
+
+  const seasonTotals = useMemo(() => {
+    const targetYear = season === "all" ? null : season === "current" ? currentVintageYear : Number(season);
+    const list = targetYear == null ? tasks : tasks.filter((t) => taskVintage(t, hemisphere, currentVintageYear) === targetYear);
+    let totalHours = 0;
+    let totalCost = 0;
+    let taskCount = 0;
+    list.forEach((t) => {
+      taskCount++;
+      const tot = totalsByTask.get(t.id);
+      if (tot) {
+        totalHours += tot.hours;
+        totalCost += tot.cost;
+      }
+    });
+    return { taskCount, totalHours, totalCost };
+  }, [tasks, season, hemisphere, currentVintageYear, totalsByTask]);
+
+
   // Dev-only sync diagnostic: keep visibility on rows that still need
   // area_ha hydration after Rork's iPhone fix lands.
   useEffect(() => {
@@ -536,10 +582,11 @@ export default function WorkTasksPage() {
     [paddockNameById, totalsByTask, taskPaddockIds, paddocksByTask, paddockById],
   );
 
-  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(filtered, {
+  const { sorted: rows, getSortDirection, toggleSort } = useSortableTable<WorkTask, SortKey>(seasonFiltered, {
     accessors,
     initial: { key: "date", direction: "desc" },
   });
+
 
   const WT_COLS = ["date","paddock","task_type","status","area_ha","hours",...(canSeeCosts ? ["cost"] : []),"notes"] as const;
   type WtCol = "date"|"paddock"|"task_type"|"status"|"area_ha"|"hours"|"cost"|"notes";
@@ -667,9 +714,34 @@ export default function WorkTasksPage() {
         </Filter>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Filter label="Season">
+            <Select value={season} onValueChange={setSeason}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All seasons</SelectItem>
+                <SelectItem value="current">Current ({currentVintageYear})</SelectItem>
+                {seasons.map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Filter>
+          <div className="text-sm">
+            <span className="text-muted-foreground">Total:</span>{" "}
+            <span className="font-medium">{seasonTotals.taskCount} tasks</span>
+            {seasonTotals.totalHours > 0 && (
+              <span className="text-muted-foreground"> · {seasonTotals.totalHours.toFixed(2)} hrs</span>
+            )}
+            {canSeeCosts && seasonTotals.totalCost > 0 && (
+              <span className="text-muted-foreground"> · {money(seasonTotals.totalCost)}</span>
+            )}
+          </div>
+        </div>
         <ColumnSettingsMenu onReset={wtReset} />
       </div>
+
       <Card>
         <Table>
           <TableHeader>
