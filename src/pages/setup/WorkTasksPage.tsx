@@ -1354,6 +1354,15 @@ function LabourLineRow({
       : line?.hourly_rate ?? null;
   const derivedWorkerType = selectedCategory?.name ?? line?.worker_type ?? null;
 
+  const estimatedCost = useMemo(() => {
+    const rate = derivedHourlyRate;
+    const workers = workerCount === "" ? NaN : Number(workerCount);
+    const hours = hoursPerWorker === "" ? NaN : Number(hoursPerWorker);
+    if (rate == null || Number.isNaN(workers) || Number.isNaN(hours)) return null;
+    return rate * workers * hours;
+  }, [derivedHourlyRate, workerCount, hoursPerWorker]);
+
+
   const save = useMutation({
     mutationFn: async () => {
       if (!vineyardId) throw new Error("No vineyard");
