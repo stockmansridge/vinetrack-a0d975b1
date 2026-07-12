@@ -114,7 +114,8 @@ import {
 import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
-import { useVintage, hemisphereForCountry, currentVintage } from "@/lib/useVintage";
+import { useVintage } from "@/lib/useVintage";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 
 
 interface PaddockLite {
@@ -194,10 +195,10 @@ const mkDateRangeLabel = (rf: RegionFormatters) => {
 };
 const effectiveStart = (t: WorkTask) => t.start_date ?? t.date ?? null;
 const effectiveEnd = (t: WorkTask) => t.end_date ?? t.start_date ?? t.date ?? null;
-const taskVintage = (t: WorkTask, hemisphere: "southern" | "northern", fallback: number) => {
+const taskVintage = (t: WorkTask, seasonMonth: number, seasonDay: number, fallback: number) => {
   const d = effectiveStart(t) ?? effectiveEnd(t);
   if (!d) return fallback;
-  return currentVintage(hemisphere, new Date(d));
+  return vintageForDate(new Date(d), seasonMonth, seasonDay);
 };
 
 
@@ -232,7 +233,7 @@ export default function WorkTasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createdTask, setCreatedTask] = useState<WorkTask | null>(null);
 
-  const { hemisphere, vintage: currentVintageYear } = useVintage();
+  const { vintage: currentVintageYear, seasonStartMonth, seasonStartDay } = useVintage();
   const [season, setSeason] = useState<string>("current");
 
 
