@@ -89,7 +89,18 @@ function csvEscape(v: unknown): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export default function FuelPurchasesPage() {
+// A record is suspicious if a plausible volume has a very low stored total,
+// indicating a unit price was likely entered in the total_cost field.
+function isSuspiciousPurchase(r: FuelPurchase): boolean {
+  const v = r.volume_litres;
+  const c = r.total_cost;
+  if (v == null || c == null) return false;
+  if (v <= 5) return false; // small containers can legitimately be cheap
+  if (c <= 0) return false;
+  return c / v < 0.2; // derived < $0.20 per litre is implausible
+}
+
+export default function FuelPurchasesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { selectedVineyardId, currentRole } = useVineyard();
   const canWrite = !!currentRole && WRITE_ROLES.has(currentRole);
   const canSeeCosts = useCanSeeCosts();
