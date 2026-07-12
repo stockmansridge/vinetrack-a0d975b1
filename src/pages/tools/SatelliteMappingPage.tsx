@@ -42,6 +42,31 @@ import {
 
 import type { SatelliteIndexType } from "@/types/satellite";
 
+// Satellite edge functions live in the Lovable Cloud project but authorize the
+// caller against the VineTrack iOS Supabase project. Send the iOS access token
+// as the Bearer header so `verifySystemAdmin` there succeeds.
+async function invokeSatelliteFn(name: string, body: unknown) {
+  const { data: { session } } = await iosSupabase.auth.getSession();
+  if (!session?.access_token) {
+    return { data: null as any, error: new Error("Not signed in to VineTrack") as any };
+  }
+  const result = await supabase.functions.invoke(name, {
+    body,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  const response = result.error?.context;
+  if (response instanceof Response) {
+    try {
+      const text = await response.clone().text();
+      (result.error as any).details = JSON.parse(text);
+    } catch {
+      // Keep the original invoke error if the response body is not JSON.
+    }
+  }
+  return result;
+}
+
+
 // ---------- Layer definitions ----------
 type InterpretationDirection =
   | "higher_usually_more_vegetation"
