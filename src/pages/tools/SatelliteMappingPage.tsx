@@ -1448,6 +1448,21 @@ export default function SatelliteMappingPage() {
 
 
 
+  // Live completeness snapshot for the diagnostics panel and the
+  // "Imagery missing" chip in Latest-per-paddock mode. Uses the same inspector
+  // as the refresh mutation so the numbers never disagree.
+  const liveReport: CompletenessReport = useMemo(() => inspectCompleteness({
+    paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
+    scenes: scenesQuery.data?.scenes ?? [],
+    assets: scenesQuery.data?.assets ?? [],
+    summaries: scenesQuery.data?.summaries ?? [],
+  }), [geoms, scenesQuery.data]);
+  const [missingDetailOpen, setMissingDetailOpen] = useState(false);
+  const paddocksMissingLatestSet = useMemo(
+    () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
+    [liveReport],
+  );
+
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
   if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
@@ -1466,20 +1481,7 @@ export default function SatelliteMappingPage() {
   const hoverSummary = hover?.paddockId ? summaryByPaddock.get(hover.paddockId) : undefined;
   const legendSummary = hoverSummary ?? (summaryByPaddock.size === 1 ? Array.from(summaryByPaddock.values())[0] : undefined);
 
-  // Live completeness snapshot for the diagnostics panel and the
-  // "Imagery missing" chip in Latest-per-paddock mode. Uses the same inspector
-  // as the refresh mutation so the numbers never disagree.
-  const liveReport: CompletenessReport = useMemo(() => inspectCompleteness({
-    paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-    scenes: scenesQuery.data?.scenes ?? [],
-    assets: scenesQuery.data?.assets ?? [],
-    summaries: scenesQuery.data?.summaries ?? [],
-  }), [geoms, scenesQuery.data]);
-  const [missingDetailOpen, setMissingDetailOpen] = useState(false);
-  const paddocksMissingLatestSet = useMemo(
-    () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
-    [liveReport],
-  );
+
 
 
   return (
