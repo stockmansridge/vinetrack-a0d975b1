@@ -976,6 +976,30 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
+  // Adjacent-date display asset preload. Look up the immediately-previous and
+  // immediately-next saved date for the CURRENT layer and warm the browser
+  // cache. Cache-first, sequential (concurrency 1), never fetches analytical.
+  const sortedDatesAsc = useMemo(
+    () => dateCoverage.map((g) => g.date).slice().sort((a, b) => a.localeCompare(b)),
+    [dateCoverage],
+  );
+  const preloadDisplayAssets = useMemo(() => {
+    if (!selectedSceneKey || sortedDatesAsc.length < 2) return [] as Array<{ asset: DBAsset; scene: DBScene }>;
+    const idx = sortedDatesAsc.indexOf(selectedSceneKey);
+    if (idx < 0) return [];
+    const targets: string[] = [];
+    if (idx > 0) targets.push(sortedDatesAsc[idx - 1]);
+    if (idx < sortedDatesAsc.length - 1) targets.push(sortedDatesAsc[idx + 1]);
+    const out: Array<{ asset: DBAsset; scene: DBScene }> = [];
+    for (const d of targets) {
+      for (const pair of buildAssetPairsFor(d)) {
+        out.push({ asset: pair.displayAsset, scene: pair.scene });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedDatesAsc, selectedSceneKey, layer, scenesQuery.data, dateCoverage]);
+
   // Cache-first loader: for each visible asset, check IndexedDB for a stored
   // blob keyed by (assetId, processingVersion). If present, mint an object URL
   // and render immediately with zero network. Otherwise fetch a short-lived
