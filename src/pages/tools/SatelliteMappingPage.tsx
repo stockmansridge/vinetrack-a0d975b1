@@ -1007,7 +1007,13 @@ export default function SatelliteMappingPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const all = [...activeAssets, ...activeAnalyticalAssets];
+      // Order: committed display + committed analytical first, then adjacent
+      // preload (display only). Preload never triggers analytical downloads.
+      const all = [
+        ...activeAssets,
+        ...activeAnalyticalAssets,
+        ...preloadDisplayAssets,
+      ];
       for (const { asset } of all) {
         if (signedUrls[asset.id]) continue;
         const kind = assetKind(asset);
