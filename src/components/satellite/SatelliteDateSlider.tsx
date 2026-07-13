@@ -64,6 +64,9 @@ export default function SatelliteDateSlider({
   isPlaying = false,
   onTogglePlay,
   totalPaddocks,
+  singlePaddockScope = false,
+  scopedPaddockMissing = false,
+  layerShortLabel,
 }: Props) {
   const sorted = useMemo(
     () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
