@@ -38,6 +38,14 @@ export interface SatelliteMapProps {
   onUnavailable?: (msg: string) => void;
   /** Fires with the map coordinate under the pointer (or null on leave). `x`/`y` are relative to the map container. */
   onPointerMove?: (coord: { lat: number; lng: number; x: number; y: number } | null) => void;
+  /** Fires when a raster overlay <img> successfully loads (bytes decoded). */
+  onOverlayLoad?: (info: { paddockId: string; key: string }) => void;
+  /** Fires when a raster overlay <img> fails to load. */
+  onOverlayError?: (info: { paddockId: string; key: string }) => void;
+  /** Fires when the overlay is loaded AND has been positioned with non-zero geometry (visible on map). */
+  onOverlayMounted?: (info: { paddockId: string; key: string }) => void;
+  /** Fires when an overlay is removed from the DOM (crossfade complete / superseded). */
+  onOverlayUnmounted?: (info: { paddockId: string; key: string }) => void;
   className?: string;
 }
 
