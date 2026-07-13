@@ -107,3 +107,62 @@ export function fetchRefreshStatus(
 export function fetchAssetUrl(assetId: string): Promise<AssetUrlResponse> {
   return invoke<AssetUrlResponse>("satellite-asset-url", { asset_id: assetId });
 }
+
+// ---- Refresh job lock (claim / heartbeat / finish) ----
+
+export class RefreshInProgressError extends Error {
+  activeJob: RefreshJob | null;
+  constructor(activeJob: RefreshJob | null) {
+    super("Refresh already in progress");
+    this.name = "RefreshInProgressError";
+    this.activeJob = activeJob;
+  }
+}
+
+export async function claimRefreshJob(
+  vineyardId: string,
+  jobType: RefreshJobType,
+  totalPaddocks: number,
+): Promise<RefreshJob> {
+  try {
+    const res = await invoke<{ job: RefreshJob }>("satellite-refresh-job", {
+      action: "claim",
+      vineyard_id: vineyardId,
+      job_type: jobType,
+      total_paddocks: totalPaddocks,
+    });
+    return res.job;
+  } catch (e: any) {
+    const details = e?.details ?? e?.context?.details ?? null;
+    if (details?.error === "refresh_in_progress") {
+      throw new RefreshInProgressError(details.active_job ?? null);
+    }
+    throw e;
+  }
+}
+
+export function heartbeatRefreshJob(
+  jobId: string,
+  fields: { currentPaddockId?: string | null; completedPaddocks?: number; failedPaddocks?: number } = {},
+): Promise<void> {
+  return invoke<void>("satellite-refresh-job", {
+    action: "heartbeat",
+    job_id: jobId,
+    current_paddock_id: fields.currentPaddockId ?? null,
+    completed_paddocks: fields.completedPaddocks,
+    failed_paddocks: fields.failedPaddocks,
+  }).then(() => undefined);
+}
+
+export function finishRefreshJob(
+  jobId: string,
+  status: "complete" | "partial" | "failed" | "cancelled",
+  errorMessage?: string,
+): Promise<void> {
+  return invoke<void>("satellite-refresh-job", {
+    action: "finish",
+    job_id: jobId,
+    status,
+    error: errorMessage,
+  }).then(() => undefined);
+}
