@@ -967,12 +967,21 @@ export default function SatelliteMappingPage() {
       if (!asset.bounds) throw new Error("Analytical raster bounds missing");
       const key = analyticalCacheKey(scene.paddock_id, scene.id, asset.index_type, asset.processing_version);
       const existing = analyticalCacheRef.current.get(key);
-      if (existing) return;
+      if (existing) { cacheStatsRef.current.decodedHits += 1; return; }
+      cacheStatsRef.current.decodedMisses += 1;
 
       const promise = (async (): Promise<DecodedAnalyticalRaster> => {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Analytical raster fetch failed (${res.status})`);
-        const tiff = await fromArrayBuffer(await res.arrayBuffer());
+        // Prefer the cached blob (already downloaded for display) over the network.
+        const blobKey = `${asset.id}:${asset.processing_version ?? "unknown"}`;
+        const cachedBlob = assetBlobsRef.current.get(blobKey);
+        const buf = cachedBlob
+          ? await cachedBlob.arrayBuffer()
+          : await (async () => {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error(`Analytical raster fetch failed (${res.status})`);
+              return res.arrayBuffer();
+            })();
+        const tiff = await fromArrayBuffer(buf);
         const image = await tiff.getImage();
         const rasters: any = await image.readRasters({ interleave: true });
         return {
