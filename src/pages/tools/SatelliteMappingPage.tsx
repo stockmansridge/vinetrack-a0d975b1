@@ -2479,20 +2479,23 @@ export default function SatelliteMappingPage() {
               d.setMonth(d.getMonth() - (11 - i));
               const label = d.toLocaleDateString(undefined, { month: "short" });
               const monthKey = d.toISOString().slice(0, 7);
-              const monthScenes = (scenesQuery.data?.scenes ?? []).filter((s) => s.acquired_at.slice(0, 7) === monthKey && s.processing_status === "complete");
+              const monthDates = (manifestQuery.data?.date_coverage ?? [])
+                .filter((entry) => entry.acquisition_date.slice(0, 7) === monthKey);
+              const n = monthDates.length;
               return (
                 <div key={i} className="rounded border border-dashed bg-muted/20 p-2 text-center text-[10px] text-muted-foreground">
                   <div className="font-medium text-foreground/70">{label}</div>
-                  <div className="mt-1">{monthScenes.length > 0 ? `${monthScenes.length} scene${monthScenes.length === 1 ? "" : "s"}` : "—"}</div>
+                  <div className="mt-1">{n > 0 ? `${n} date${n === 1 ? "" : "s"}` : "—"}</div>
                 </div>
               );
             })}
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            {(scenesQuery.data?.scenes.length ?? 0) === 0
+            {(manifestQuery.data?.total_saved_dates ?? 0) === 0
               ? "No satellite scenes have been processed for this vineyard yet. Click Refresh Imagery."
               : "Hover a paddock on the map for its per-paddock summary; select a date above to switch scenes."}
           </div>
+
         </CardContent>
       </Card>
     </div>
