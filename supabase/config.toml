@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.satellite-asset-url]
 verify_jwt = false
+
+[functions.satellite-refresh-job]
+verify_jwt = false
