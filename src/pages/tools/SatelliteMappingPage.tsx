@@ -1909,59 +1909,195 @@ export default function SatelliteMappingPage() {
           </div>
 
 
-          {/* System-admin diagnostics — imagery completeness */}
-          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
-            <div className="text-xs font-semibold text-foreground">Imagery completeness</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-              <div>Active paddocks: <span className="text-foreground">{liveReport.totals.totalPaddocks}</span></div>
-              <div>With saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.hasSavedDisplayImagery).length}</span></div>
-              <div>No saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => !p.hasSavedDisplayImagery).length}</span></div>
-              <div>Complete packages: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
-              <div>Partial packages: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
-              <div>Refresh needed (stale): <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene" && p.hasSavedDisplayImagery).length}</span></div>
-              <div>Old processing version: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
-              <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
-              <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
-              <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+          {/* Copernicus status */}
+          <div className="mt-3 rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-1">
+            <div className="text-xs font-semibold text-foreground">Copernicus status</div>
+            {(() => {
+              const pf = providerFreshness;
+              const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "—";
+              const statusLabel = (() => {
+                switch (pf?.provider_check_status) {
+                  case "checked_recently": return "Checked recently";
+                  case "check_due": return "Check due";
+                  case "checking": return "Checking Copernicus for newer imagery…";
+                  case "failed": return "Last check failed";
+                  case "never_checked": return "Never checked";
+                  default: return "—";
+                }
+              })();
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                  <div>Last checked: <span className="text-foreground">{fmt(pf?.last_provider_check_at ?? null)}</span></div>
+                  <div>Next recommended: <span className="text-foreground">{fmt(pf?.next_recommended_provider_check_at ?? null)}</span></div>
+                  <div>Status: <span className="text-foreground">{statusLabel}</span></div>
+                  <div>Interval: <span className="text-foreground">{pf?.provider_check_interval_days ?? 5} days</span></div>
+                  {pf?.active_job_id && (
+                    <div className="col-span-2 md:col-span-3">Active job: <span className="text-foreground">{pf.active_job_id.slice(0, 8)}…</span></div>
+                  )}
+                </div>
+              );
+            })()}
+            {providerFreshness?.provider_check_status === "check_due" && (
+              <div className="text-[11px] text-foreground/80 pt-1">A new Copernicus check is recommended. Saved imagery remains available.</div>
+            )}
+            {providerFreshness?.provider_check_status === "failed" && (
+              <div className="text-[11px] text-destructive pt-1">Copernicus imagery search failed. Existing saved imagery remains available.</div>
+            )}
+          </div>
 
+          {/* Date history — grouped by month */}
+          {dateOptions.length > 0 && (
+            <Collapsible defaultOpen={false}>
+              <div className="mt-3 rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
+                <CollapsibleTrigger className="flex w-full items-center justify-between text-xs font-semibold text-foreground">
+                  <span>Saved image dates ({dateOptions.length})</span>
+                  <ChevronDown className="h-3 w-3" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {(() => {
+                    const groups = new Map<string, typeof dateOptions>();
+                    for (const d of dateOptions) {
+                      const key = d.date.slice(0, 7); // YYYY-MM
+                      const arr = groups.get(key) ?? [];
+                      arr.push(d);
+                      groups.set(key, arr);
+                    }
+                    const monthLabel = (ym: string) => {
+                      const [y, m] = ym.split("-");
+                      return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+                    };
+                    return (
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        {Array.from(groups.entries()).map(([ym, arr]) => (
+                          <div key={ym}>
+                            <div className="text-[11px] font-medium text-foreground mb-1">{monthLabel(ym)}</div>
+                            <div className="space-y-0.5">
+                              {arr.map((d) => {
+                                const isSel = d.date === selectedSceneKey;
+                                const pct = Number.isInteger(d.coveragePercent) ? `${d.coveragePercent}` : d.coveragePercent.toFixed(1);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={d.date}
+                                    onClick={() => setSelectedSceneKey(d.date)}
+                                    className={`w-full text-left rounded-sm px-2 py-1 text-[11px] leading-tight ${isSel ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}
+                                  >
+                                    <span className="font-medium text-foreground">{formatDate(d.date)}</span>
+                                    <span className="ml-1">· {pct}% · {d.paddockCount}/{d.activeCount || totalPaddocks} paddocks</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          )}
+
+          {/* System-admin diagnostics — sectioned */}
+          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+            {(() => {
+              const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
+              const pct = selectedEntry
+                ? (Number.isInteger(selectedEntry.coveragePercent) ? `${selectedEntry.coveragePercent}` : selectedEntry.coveragePercent.toFixed(1))
+                : "—";
+              return (
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold text-foreground">Selected date</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                    <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
+                    <div>Active paddocks: <span className="text-foreground">{selectedEntry?.activeCount ?? totalPaddocks}</span></div>
+                    <div>Paddocks displayed: <span className="text-foreground">{selectedEntry?.paddockCount ?? 0}</span></div>
+                    <div>Unavailable: <span className="text-foreground">{selectedEntry ? (selectedEntry.activeCount || totalPaddocks) - selectedEntry.paddockCount : 0}</span></div>
+                    <div>Coverage: <span className="text-foreground">{pct}%</span></div>
+                    <div>Layer: <span className="text-foreground">{layer}</span></div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="space-y-1 pt-2 border-t">
+              <div className="text-xs font-semibold text-foreground">Saved history</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                <div>Saved dates: <span className="text-foreground">{manifestQuery.data?.total_saved_dates ?? dateOptions.length}</span></div>
+                <div>Newest: <span className="text-foreground">{manifestQuery.data?.newest_saved_date ?? "—"}</span></div>
+                <div>Oldest: <span className="text-foreground">{manifestQuery.data?.oldest_saved_date ?? "—"}</span></div>
+              </div>
+            </div>
+
+            <div className="space-y-1 pt-2 border-t">
+              <div className="text-xs font-semibold text-foreground">Package health</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                <div>Complete: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
+                <div>Partial: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
+                <div>Upgrade required: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
+                <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
+                <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
+                <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
+              <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
+              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
               {lastRefreshSummary && (
                 <>
-                  <div>Last refresh — processed: <span className="text-foreground">{lastRefreshSummary.processedPaddocks}</span></div>
-                  <div>Last refresh — skipped: <span className="text-foreground">{lastRefreshSummary.skippedPaddocks}</span></div>
+                  <div>Last refresh: <span className="text-foreground">{lastRefreshSummary.processedPaddocks} processed</span></div>
                   <div>Provider calls avoided: <span className="text-foreground">{lastRefreshSummary.providerCallsAvoided}</span></div>
                 </>
               )}
             </div>
-            <div className="pt-1 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
-              <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
-              <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
-              <div>Selected layer: <span className="text-foreground">{layer}</span></div>
-              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
-            </div>
+
             <Collapsible open={missingDetailOpen} onOpenChange={setMissingDetailOpen}>
               <CollapsibleTrigger className="inline-flex items-center gap-1 text-[11px] text-foreground/80 hover:text-foreground">
                 <ChevronDown className={`h-3 w-3 transition-transform ${missingDetailOpen ? "" : "-rotate-90"}`} />
-                Show missing item detail
+                Show per-paddock detail
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-2 max-h-56 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
-                  {liveReport.perPaddock.length === 0 && (
-                    <div className="text-[10px]">No paddocks with valid boundaries.</div>
-                  )}
-                  {liveReport.perPaddock.map((p) => (
-                    <div key={p.paddockId} className="text-[11px] leading-tight">
-                      <span className="font-medium text-foreground">{p.paddockName}</span>
-                      <span className={`ml-1 ${p.state === "complete" ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>
-                        — {describePaddockMissingItems(p).join("; ")}
-                      </span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
+                    const missingSet = new Map<string, string>();
+                    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
+                    for (const m of group?.missing ?? []) {
+                      const label = m.reason === "scene_not_complete"
+                        ? "Imagery exists but processing is incomplete"
+                        : m.reason === "package_version_mismatch"
+                          ? "Imagery exists but requires a package upgrade"
+                          : "No saved imagery for this date";
+                      missingSet.set(m.paddock_id, label);
+                    }
+                    return geoms.map((g) => {
+                      const pkg = liveReport.perPaddock.find((p) => p.paddockId === g.id);
+                      const missingLabel = missingSet.get(g.id);
+                      const badge = missingLabel
+                        ? missingLabel
+                        : pkg?.state === "old_processing_version"
+                          ? "Imagery available · Upgrade available"
+                          : pkg && pkg.indicesRequiringWork.length > 0
+                            ? "Imagery available · Cell data incomplete"
+                            : "Imagery available";
+                      return (
+                        <div key={g.id} className="text-[11px] leading-tight">
+                          <span className="font-medium text-foreground">{g.name}</span>
+                          <span className={`ml-1 ${missingLabel ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>— {badge}</span>
+                        </div>
+                      );
+                    });
+                    // eslint-disable-next-line no-unreachable
+                    void selectedEntry;
+                  })()}
                 </div>
               </CollapsibleContent>
             </Collapsible>
           </div>
         </CardContent>
       </Card>
+
 
 
       {/* Map */}
