@@ -570,7 +570,7 @@ export default function SatelliteMappingPage() {
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
-  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // date | "latest"
+  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // YYYY-MM-DD acquisition date
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
   const [rasterCacheVersion, setRasterCacheVersion] = useState(0);
