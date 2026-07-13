@@ -70,8 +70,27 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     onMapReady,
     onUnavailable,
     onPointerMove,
+    onOverlayLoad,
+    onOverlayError,
+    onOverlayMounted,
+    onOverlayUnmounted,
     className,
   } = props;
+
+  // Latest lifecycle callback refs so the animation-loop effect doesn't need them in deps.
+  const onOverlayLoadRef = useRef(onOverlayLoad);
+  const onOverlayErrorRef = useRef(onOverlayError);
+  const onOverlayMountedRef = useRef(onOverlayMounted);
+  const onOverlayUnmountedRef = useRef(onOverlayUnmounted);
+  onOverlayLoadRef.current = onOverlayLoad;
+  onOverlayErrorRef.current = onOverlayError;
+  onOverlayMountedRef.current = onOverlayMounted;
+  onOverlayUnmountedRef.current = onOverlayUnmounted;
+
+  // Track which overlay keys have already fired 'mounted' so we don't double-emit
+  // when the animation-loop resizes them each frame.
+  const mountedKeysRef = useRef<Set<string>>(new Set());
+  const paddockIdByKeyRef = useRef<Map<string, string>>(new Map());
 
   // Normalise to a single overlays[] list. Legacy overlayUrl/overlayBounds
   // become a one-item list so the rendering loop is uniform.
