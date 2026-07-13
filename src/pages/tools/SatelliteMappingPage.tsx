@@ -892,25 +892,77 @@ export default function SatelliteMappingPage() {
           const signed_url = await qc.fetchQuery({
             queryKey: ["satellite-signed-url", asset.id],
             queryFn: async () => {
-              const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
-                asset_id: asset.id,
-              });
-              if (error) throw error;
-              return (data as any)?.signed_url as string;
-            },
-            staleTime: 8 * 60_000,
-            gcTime: 10 * 60_000,
+  // Cache-first loader: for each visible asset, check IndexedDB for a stored
+  // blob keyed by (assetId, processingVersion). If present, mint an object URL
+  // and render immediately with zero network. Otherwise fetch a short-lived
+  // signed URL, download the bytes, cache them and mint the object URL.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const all = [...activeAssets, ...activeAnalyticalAssets];
+      for (const { asset } of all) {
+        if (signedUrls[asset.id]) continue;
+        const kind = assetKind(asset);
+        const pv = asset.processing_version ?? null;
+        const isDisplay = kind === "DISPLAY_RASTER";
+        if (isDisplay) cacheStatsRef.current.displayRequested += 1;
+        else cacheStatsRef.current.analyticalRequested += 1;
+
+        // Cache probe (no network).
+        const cachedProbe = await readCachedAsset(asset.id, pv);
+        if (cachedProbe) {
+          if (isDisplay) cacheStatsRef.current.displayHits += 1;
+          else cacheStatsRef.current.analyticalHits += 1;
+          assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, cachedProbe.blob);
+          if (cancelled) return;
+          const url = URL.createObjectURL(cachedProbe.blob);
+          objectUrlsRef.current.set(asset.id, url);
+          setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
+          bumpStats();
+          continue;
+        }
+        if (isDisplay) cacheStatsRef.current.displayMisses += 1;
+        else cacheStatsRef.current.analyticalMisses += 1;
+
+        try {
+          const blob = await getAssetBlob(asset.id, pv, async () => {
+            const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
+              asset_id: asset.id,
+            });
+            if (error) throw error;
+            const d = data as any;
+            return {
+              signed_url: d?.signed_url as string,
+              etag: `${asset.id}:${pv ?? "unknown"}`,
+              content_type: null,
+            };
           });
-          if (!cancelled && signed_url) {
-            setSignedUrls((prev) => ({ ...prev, [asset.id]: signed_url }));
-          }
+          if (cancelled) return;
+          if (!blob) continue;
+          assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
+          const url = URL.createObjectURL(blob);
+          objectUrlsRef.current.set(asset.id, url);
+          setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
+          bumpStats();
         } catch (e) {
-          console.error("sign url failed", e);
+          console.error("asset load failed", e);
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAssets, activeAnalyticalAssets]);
+
+  // Revoke stale object URLs when the visible asset set changes. Keeps memory
+  // bounded across date/layer switches.
+  useEffect(() => {
+    const alive = new Set([...activeAssets, ...activeAnalyticalAssets].map((x) => x.asset.id));
+    for (const [assetId, url] of objectUrlsRef.current.entries()) {
+      if (!alive.has(assetId)) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+        objectUrlsRef.current.delete(assetId);
+      }
+    }
   }, [activeAssets, activeAnalyticalAssets]);
 
   // Clear decoded analytical rasters when the user changes the data context.
