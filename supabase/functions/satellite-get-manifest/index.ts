@@ -286,6 +286,48 @@ Deno.serve(async (req) => {
     !acc || (d.updated_at && d.updated_at > acc) ? d.updated_at : acc, null);
   const updated_at = [manifestUpdated, sceneUpdated].filter(Boolean).sort().pop() ?? null;
 
+  // ---- Provider freshness (Copernicus check state) -----------------------
+  // Best-effort: expire stale locks first so we don't report ghost 'checking'.
+  try { await (supa as any).rpc("expire_stale_refresh_jobs"); } catch { /* ignore */ }
+  const { data: providerJobs } = await supa
+    .from("satellite_refresh_jobs")
+    .select("id, status, started_at, completed_at, heartbeat_at, job_type")
+    .eq("vineyard_id", vineyard_id)
+    .eq("job_type", "provider_refresh")
+    .order("started_at", { ascending: false })
+    .limit(10);
+
+  const jobsArr = (providerJobs ?? []) as Array<{ id: string; status: string; started_at: string | null; completed_at: string | null; heartbeat_at: string | null }>;
+  const activeJob = jobsArr.find((j) => j.status === "queued" || j.status === "running") ?? null;
+  const lastSuccess = jobsArr.find((j) => (j.status === "complete" || j.status === "partial") && !!j.completed_at) ?? null;
+  const mostRecentTerminal = jobsArr.find((j) => j.status !== "queued" && j.status !== "running") ?? null;
+  const failureAfterSuccess = mostRecentTerminal
+    && (mostRecentTerminal.status === "failed" || mostRecentTerminal.status === "expired")
+    && (!lastSuccess || (mostRecentTerminal.completed_at ?? "") > (lastSuccess.completed_at ?? ""));
+
+  const nowMs = Date.now();
+  const lastMs = lastSuccess?.completed_at ? new Date(lastSuccess.completed_at).getTime() : NaN;
+  const ageDays = Number.isFinite(lastMs) ? (nowMs - lastMs) / 86400_000 : Infinity;
+  let providerStatus: ProviderCheckStatus;
+  if (activeJob) providerStatus = "checking";
+  else if (failureAfterSuccess) providerStatus = "failed";
+  else if (!lastSuccess) providerStatus = "never_checked";
+  else if (ageDays < PROVIDER_CHECK_INTERVAL_DAYS) providerStatus = "checked_recently";
+  else providerStatus = "check_due";
+
+  const nextRecommended = lastSuccess?.completed_at
+    ? new Date(new Date(lastSuccess.completed_at).getTime() + PROVIDER_CHECK_INTERVAL_DAYS * 86400_000).toISOString()
+    : null;
+
+  const provider_freshness: ProviderFreshness = {
+    last_provider_check_at: lastSuccess?.completed_at ?? null,
+    last_provider_check_status: lastSuccess?.status ?? (mostRecentTerminal?.status ?? null),
+    next_recommended_provider_check_at: nextRecommended,
+    provider_check_interval_days: PROVIDER_CHECK_INTERVAL_DAYS,
+    provider_check_status: providerStatus,
+    active_job_id: activeJob?.id ?? null,
+  };
+
   return jsonOk({
     manifest_version: "v2",
     vineyard_id,
@@ -296,6 +338,7 @@ Deno.serve(async (req) => {
     newest_saved_date: dates[0] ?? null,
     oldest_saved_date: dates[dates.length - 1] ?? null,
     total_saved_dates: dates.length,
+    provider_freshness,
     stats: {
       scene_rows_scanned: sceneRows.length,
       asset_rows_scanned: assetRows.length,
