@@ -2094,8 +2094,17 @@ export default function SatelliteMappingPage() {
             </Collapsible>
           )}
 
-          {/* System-admin diagnostics — sectioned */}
-          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+          {/* Admin tools · Diagnostics — collapsed by default */}
+          <Collapsible defaultOpen={false}>
+            <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+              <CollapsibleTrigger className="flex w-full items-center justify-between text-xs font-semibold text-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <Wrench className="h-3.5 w-3.5" />
+                  Admin tools · Diagnostics
+                </span>
+                <ChevronDown className="h-3 w-3" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
             {(() => {
               const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
               const pct = selectedEntry
