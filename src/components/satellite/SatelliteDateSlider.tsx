@@ -196,6 +196,3 @@ export default function SatelliteDateSlider({
     </div>
   );
 }
-
-// Keep hook order stable across renders.
-export function _unused() { useEffect(() => {}, []); }
