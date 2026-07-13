@@ -243,10 +243,15 @@ Deno.serve(async (req) => {
         package_version_mismatch: false,
       });
     }
+    const activeCount = activePaddockIds.length;
+    const coveragePercent = activeCount > 0
+      ? Math.round((available.length / activeCount) * 1000) / 10
+      : 0;
     date_coverage.push({
       acquisition_date: date,
-      active_paddock_count: activePaddockIds.length,
+      active_paddock_count: activeCount,
       available_paddock_count: available.length,
+      coverage_percent: coveragePercent,
       available_paddock_ids: available.map((p) => p.paddock_id),
       missing_paddock_ids: missing.map((m) => m.paddock_id),
       missing_paddocks: missing,
