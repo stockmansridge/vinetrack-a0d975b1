@@ -2376,8 +2376,8 @@ export default function SatelliteMappingPage() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
                     <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
                     <div>Active paddocks: <span className="text-foreground">{selectedEntry?.activeCount ?? totalPaddocks}</span></div>
-                    <div>Paddocks displayed: <span className="text-foreground">{selectedEntry?.paddockCount ?? 0}</span></div>
-                    <div>Unavailable: <span className="text-foreground">{selectedEntry ? (selectedEntry.activeCount || totalPaddocks) - selectedEntry.paddockCount : 0}</span></div>
+                    <div>Paddocks displayed: <span className="text-foreground">{mountedPaddockCount}</span><span className="text-muted-foreground"> (manifest expects {selectedEntry?.paddockCount ?? 0})</span></div>
+                    <div>Unavailable: <span className="text-foreground">{Math.max(0, (selectedEntry?.activeCount ?? totalPaddocks) - mountedPaddockCount)}</span></div>
                     <div>Coverage: <span className="text-foreground">{pct}%</span></div>
                     <div>Layer: <span className="text-foreground">{layer}</span></div>
                   </div>
