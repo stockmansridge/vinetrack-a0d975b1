@@ -45,6 +45,20 @@ type MissingPaddock = {
   reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch";
 };
 
+const PROVIDER_CHECK_INTERVAL_DAYS = 5;
+
+type ProviderCheckStatus =
+  | "never_checked" | "checked_recently" | "check_due" | "checking" | "failed";
+
+type ProviderFreshness = {
+  last_provider_check_at: string | null;
+  last_provider_check_status: string | null;
+  next_recommended_provider_check_at: string | null;
+  provider_check_interval_days: number;
+  provider_check_status: ProviderCheckStatus;
+  active_job_id: string | null;
+};
+
 type DateCoverageEntry = {
   acquisition_date: string; // YYYY-MM-DD
   active_paddock_count: number;
