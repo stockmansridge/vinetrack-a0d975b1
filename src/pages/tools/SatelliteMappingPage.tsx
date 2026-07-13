@@ -1271,6 +1271,7 @@ export default function SatelliteMappingPage() {
       let latestSummaries: DBSummary[] = scenesQuery.data?.summaries ?? [];
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+        await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
         const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
         const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[]; summaries?: DBSummary[] } | undefined;
         if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
