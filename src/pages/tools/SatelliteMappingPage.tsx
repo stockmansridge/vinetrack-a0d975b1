@@ -1335,19 +1335,32 @@ export default function SatelliteMappingPage() {
     },
     onError: (e: any) => {
       retryInFlightRef.current = false;
+      const msg = String(e?.message ?? e ?? "Unknown error");
+      // "Refresh already running" is a lock conflict, not a Copernicus
+      // search failure. Show it as a neutral toast — do not raise the red
+      // "Crop Health Maps search failed" panel, and do not clobber any
+      // real search error currently displayed.
+      if (/refresh already running/i.test(msg)) {
+        toast({
+          title: "Imagery refresh in progress",
+          description: "Another refresh is running. Existing imagery is still available.",
+        });
+        return;
+      }
       setSearchError({
         code: null,
         providerStatus: null,
         paddockId: paddockId === "all" ? geoms[0]?.id ?? null : paddockId,
         paddockName: paddockId === "all" ? geoms[0]?.name ?? null : geoms.find((g) => g.id === paddockId)?.name ?? null,
-        message: String(e?.message ?? e ?? "Unknown error"),
+        message: msg,
       });
       toast({
         title: "Crop Health Maps refresh failed",
-        description: String(e?.message ?? e ?? "Unknown error"),
+        description: msg,
         variant: "destructive",
       });
     },
+
   });
 
 
