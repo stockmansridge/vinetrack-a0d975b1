@@ -641,6 +641,17 @@ export default function SatelliteMappingPage() {
     refetchOnWindowFocus: false,
   });
 
+  // Server manifest — source of truth for per-paddock completeness and the
+  // date-coverage index. Declared here (before dateCoverage) so both memos
+  // can consume it.
+  const activePaddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
+  const manifestQuery = useQuery({
+    queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+    queryFn: () => fetchManifest(activeVineyardId!, activePaddockIds),
+    enabled: !!activeVineyardId,
+    staleTime: 30_000,
+  });
+
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
 
   // Parsed paddock geometry
@@ -678,15 +689,43 @@ export default function SatelliteMappingPage() {
   // This is the client-side date-coverage index the page renders from — no
   // mixing dates, no per-millisecond timestamp fragility.
   const dateCoverage = useMemo(() => {
+    // Prefer the server-side date-coverage index. It groups by acquisition day
+    // and picks the single best scene per (date, paddock) — no need to reduce
+    // raw scenes on the client.
+    const serverIndex = manifestQuery.data?.date_coverage;
+    if (serverIndex && serverIndex.length > 0) {
+      return serverIndex.map((entry) => {
+        const sceneByPaddock = new Map<string, DBScene>();
+        for (const p of entry.paddocks) {
+          sceneByPaddock.set(p.paddock_id, {
+            id: p.scene_id,
+            paddock_id: p.paddock_id,
+            vineyard_id: activeVineyardId ?? "",
+            provider_scene_id: p.provider_scene_id ?? "",
+            acquired_at: p.acquired_at,
+            scene_cloud_cover_pct: null,
+            paddock_valid_coverage_pct: p.paddock_valid_coverage_pct,
+            paddock_cloud_cover_pct: p.paddock_cloud_cover_pct,
+            quality_status: "",
+            processing_status: "complete",
+          } as DBScene);
+        }
+        return { date: entry.acquisition_date, sceneByPaddock, paddockCount: entry.available_paddock_count };
+      });
+    }
+    // Fallback: client-side reconstruction from scenesQuery (kept until we
+    // confirm every deployment is on the v2 manifest response).
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present in manifest response.");
+    }
     const scenes = scenesQuery.data?.scenes ?? [];
-    const grouped = new Map<string, Map<string, DBScene>>(); // date -> paddockId -> best scene
+    const grouped = new Map<string, Map<string, DBScene>>();
     const better = (a: DBScene, b: DBScene): DBScene => {
       const cov = (b.paddock_valid_coverage_pct ?? -1) - (a.paddock_valid_coverage_pct ?? -1);
-      if (cov > 0) return b;
-      if (cov < 0) return a;
+      if (cov > 0) return b; if (cov < 0) return a;
       const cl = (a.paddock_cloud_cover_pct ?? 101) - (b.paddock_cloud_cover_pct ?? 101);
-      if (cl > 0) return b;
-      if (cl < 0) return a;
+      if (cl > 0) return b; if (cl < 0) return a;
       return b.acquired_at > a.acquired_at ? b : a;
     };
     for (const s of scenes) {
@@ -699,12 +738,8 @@ export default function SatelliteMappingPage() {
     }
     return Array.from(grouped.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, sceneByPaddock]) => ({
-        date,
-        sceneByPaddock,
-        paddockCount: sceneByPaddock.size,
-      }));
-  }, [scenesQuery.data]);
+      .map(([date, sceneByPaddock]) => ({ date, sceneByPaddock, paddockCount: sceneByPaddock.size }));
+  }, [manifestQuery.data, scenesQuery.data, activeVineyardId]);
 
   const isAllPaddocks = paddockId === "all";
   const totalPaddocks = geoms.length;
@@ -1503,16 +1538,9 @@ export default function SatelliteMappingPage() {
 
 
 
-  // Server manifest — source of truth for per-paddock completeness. Cheap to
-  // fetch (single row per paddock) and updated by DB triggers whenever scenes
-  // or assets change. When present, drives the diagnostics counts and status
-  // badges so paddocks with saved overlays are never mislabelled "missing".
-  const manifestQuery = useQuery({
-    queryKey: ["satellite-manifest", activeVineyardId],
-    queryFn: () => fetchManifest(activeVineyardId!),
-    enabled: !!activeVineyardId,
-    staleTime: 30_000,
-  });
+  // manifestQuery + activePaddockIds are declared near scenesQuery above so
+  // both the date-coverage memo and the completeness report can consume them.
+
 
   // Live completeness snapshot for the diagnostics panel and the
   // "Imagery missing" chip in Latest-per-paddock mode. Prefers the server
