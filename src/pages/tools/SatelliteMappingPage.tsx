@@ -571,7 +571,14 @@ export default function SatelliteMappingPage() {
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
-  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // YYYY-MM-DD acquisition date
+  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // COMMITTED date (YYYY-MM-DD)
+  const [previewDate, setPreviewDate] = useState<string | null>(null); // transient preview (null = same as committed)
+  const [interacting, setInteracting] = useState(false); // slider drag / key in progress
+  const [isPlaying, setIsPlaying] = useState(false); // timeline playback
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  }, []);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> object URL (blob:) or signed URL fallback
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
   const [rasterCacheVersion, setRasterCacheVersion] = useState(0);
