@@ -1258,16 +1258,12 @@ export default function SatelliteMappingPage() {
       refreshInFlightRef.current = true;
       setSearchError(null);
 
-      // Build completeness against currently-loaded scenes/assets/summaries.
-      const scenesForReport = scenesQuery.data?.scenes ?? [];
-      const assetsForReport = scenesQuery.data?.assets ?? [];
-      const summariesForReport = scenesQuery.data?.summaries ?? [];
-      const report = inspectCompleteness({
-        paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-        scenes: scenesForReport,
-        assets: assetsForReport,
-        summaries: summariesForReport,
-      });
+      // Build completeness from the manifest (single source of truth).
+      const report = reportFromManifest(
+        geoms.map((g) => ({ id: g.id, name: g.name })),
+        (manifestQuery.data?.paddocks ?? []) as any,
+      );
+
 
       // Scope the report to whatever the user selected.
       const explicitIds = vars?.paddockIds;
