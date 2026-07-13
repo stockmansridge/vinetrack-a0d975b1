@@ -1659,10 +1659,9 @@ export default function SatelliteMappingPage() {
       return aggregate;
     },
     onSuccess: async (data) => {
-      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
       await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
-      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
       analyticalCacheRef.current.clear();
+
       // Invalidate only the blob-cache entries for currently visible assets so
       // any repaired/replaced bytes are re-downloaded, without wiping the full
       // browser cache. New scenes/versions naturally miss the cache (new IDs).
