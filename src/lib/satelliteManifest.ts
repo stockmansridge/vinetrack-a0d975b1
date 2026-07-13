@@ -49,6 +49,42 @@ export interface ManifestResponse {
   vineyard_id: string;
   updated_at: string | null;
   paddocks: ManifestPaddock[];
+  // v2 additions — server-side date-coverage index.
+  date_coverage?: ManifestDateEntry[];
+  recommended_default_date?: string | null;
+  newest_saved_date?: string | null;
+  oldest_saved_date?: string | null;
+  total_saved_dates?: number;
+  stats?: { scene_rows_scanned: number; asset_rows_scanned: number };
+}
+
+export interface ManifestDatePaddock {
+  paddock_id: string;
+  scene_id: string;
+  provider_scene_id: string | null;
+  acquired_at: string;
+  processing_version: string | null;
+  paddock_valid_coverage_pct: number | null;
+  paddock_cloud_cover_pct: number | null;
+  available_display_layers: SatelliteIndexType[];
+  available_analytical_layers: SatelliteIndexType[];
+  package_version_mismatch: boolean;
+}
+
+export type ManifestDateMissingReason =
+  | "no_scene_for_date"
+  | "scene_not_complete"
+  | "package_version_mismatch";
+
+export interface ManifestDateEntry {
+  acquisition_date: string; // YYYY-MM-DD
+  active_paddock_count: number;
+  available_paddock_count: number;
+  available_paddock_ids: string[];
+  missing_paddock_ids: string[];
+  missing_paddocks: { paddock_id: string; reason: ManifestDateMissingReason }[];
+  paddocks: ManifestDatePaddock[];
+  updated_at: string;
 }
 
 export type RefreshJobStatus =
