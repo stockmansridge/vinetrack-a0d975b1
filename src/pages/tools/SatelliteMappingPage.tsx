@@ -2632,10 +2632,17 @@ export default function SatelliteMappingPage() {
           paddockCount: d.paddockCount,
           activeCount: d.activeCount,
         }))}
-        selectedDate={selectedSceneKey}
-        onChange={setSelectedSceneKey}
+        committedDate={selectedSceneKey}
+        previewDate={previewDate}
+        onPreviewChange={(d) => setPreviewDate(d)}
+        onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
+        onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
+        onInteractionEnd={() => setInteracting(false)}
+        isPlaying={isPlaying}
+        onTogglePlay={togglePlay}
         totalPaddocks={totalPaddocks}
       />
+
 
       {/* Timeline */}
 
