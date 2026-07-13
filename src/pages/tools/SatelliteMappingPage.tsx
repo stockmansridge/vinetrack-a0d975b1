@@ -2218,7 +2218,9 @@ export default function SatelliteMappingPage() {
                 </div>
               </CollapsibleContent>
             </Collapsible>
-          </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
         </CardContent>
       </Card>
 
