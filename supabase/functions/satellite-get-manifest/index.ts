@@ -132,17 +132,28 @@ type ProviderFreshness = {
   active_job_id: string | null;
 };
 
+type LayerCoverage = {
+  available: number;
+  total: number;
+  percent: number;
+  available_paddock_ids: string[];
+  missing_paddock_ids: string[];
+};
+
 type DateCoverageEntry = {
   acquisition_date: string; // YYYY-MM-DD
   active_paddock_count: number;
-  available_paddock_count: number;
-  coverage_percent: number;
+  available_paddock_count: number;   // scene-level (back-compat)
+  scene_coverage_count: number;      // same as above, explicit name
+  coverage_percent: number;          // scene-level (back-compat)
+  layer_coverage: Record<string, LayerCoverage>;
   available_paddock_ids: string[];
   missing_paddock_ids: string[];
   missing_paddocks: MissingPaddock[];
   paddocks: PerPaddock[];
   updated_at: string;
 };
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
