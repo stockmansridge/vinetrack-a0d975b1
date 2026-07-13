@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench } from "lucide-react";
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import { fromArrayBuffer } from "geotiff";
-import SatelliteMap from "@/components/SatelliteMap";
+import SatelliteMap, { type SatelliteRasterOverlay } from "@/components/SatelliteMap";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
