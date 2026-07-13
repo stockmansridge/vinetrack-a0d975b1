@@ -810,8 +810,10 @@ export default function SatelliteMappingPage() {
           activeCount: entry.active_paddock_count,
           coveragePercent: entry.coverage_percent,
           missing: entry.missing_paddocks,
+          layerCoverage: entry.layer_coverage ?? {},
         };
       });
+
     }
     // Fallback: client-side reconstruction from scenesQuery.
     if (import.meta.env.DEV) {
@@ -845,8 +847,10 @@ export default function SatelliteMappingPage() {
         activeCount: geoms.length,
         coveragePercent: Math.round((sceneByPaddock.size / total) * 1000) / 10,
         missing: [] as { paddock_id: string; reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch" }[],
+        layerCoverage: {} as Partial<Record<string, { available: number; total: number; percent: number; available_paddock_ids: string[]; missing_paddock_ids: string[] }>>,
       }));
   }, [manifestQuery.data, scenesQuery.data, activeVineyardId, geoms]);
+
 
   const isAllPaddocks = paddockId === "all";
   const totalPaddocks = geoms.length;
@@ -861,17 +865,23 @@ export default function SatelliteMappingPage() {
   };
 
   const dateOptions = useMemo(() => dateCoverage.map((g) => {
-    const pct = typeof g.coveragePercent === "number" && Number.isFinite(g.coveragePercent) ? g.coveragePercent : 0;
-    const pctLabel = Number.isInteger(pct) ? `${pct}` : pct.toFixed(1);
+    const lc = g.layerCoverage?.[layer];
+    const paddockCount = lc ? lc.available : g.paddockCount;
+    const activeCount = lc ? lc.total : g.activeCount;
+    const coveragePercent = lc ? lc.percent
+      : (typeof g.coveragePercent === "number" && Number.isFinite(g.coveragePercent) ? g.coveragePercent : 0);
+    const pctLabel = Number.isInteger(coveragePercent) ? `${coveragePercent}` : coveragePercent.toFixed(1);
     return {
       date: g.date,
       scenes: Array.from(g.sceneByPaddock.values()),
-      paddockCount: g.paddockCount,
-      activeCount: g.activeCount,
-      coveragePercent: pct,
-      label: `${formatDate(g.date)} · ${pctLabel}% coverage · ${g.paddockCount} of ${g.activeCount || totalPaddocks} paddocks`,
+      paddockCount,
+      activeCount,
+      coveragePercent,
+      layerCoverage: g.layerCoverage,
+      label: `${formatDate(g.date)} · ${pctLabel}% ${activeLayer.short} coverage · ${paddockCount} of ${activeCount || totalPaddocks} paddocks`,
     };
-  }), [dateCoverage, totalPaddocks]);
+  }), [dateCoverage, totalPaddocks, layer, activeLayer.short]);
+
 
   const providerFreshness = manifestQuery.data?.provider_freshness ?? null;
   const recommendedDefaultDate = manifestQuery.data?.recommended_default_date ?? null;
@@ -2677,19 +2687,24 @@ export default function SatelliteMappingPage() {
       {(() => {
         const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
         const singlePaddock = paddockId !== "all";
-        const scopedMissing = singlePaddock
-          ? !!scopedGroup && !scopedGroup.sceneByPaddock.has(paddockId)
+        const layerAvailIds = scopedGroup?.layerCoverage?.[layer]?.available_paddock_ids;
+        const scopedMissing = singlePaddock && scopedGroup
+          ? (layerAvailIds ? !layerAvailIds.includes(paddockId) : !scopedGroup.sceneByPaddock.has(paddockId))
           : false;
         return (
           <SatelliteDateSlider
-            entries={dateOptions.map((d) => ({
-              date: d.date,
-              coveragePercent: d.coveragePercent,
-              paddockCount: singlePaddock
-                ? (dateCoverage.find((g) => g.date === d.date)?.sceneByPaddock.has(paddockId) ? 1 : 0)
-                : d.paddockCount,
-              activeCount: singlePaddock ? 1 : d.activeCount,
-            }))}
+            entries={dateOptions.map((d) => {
+              const group = dateCoverage.find((g) => g.date === d.date);
+              const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
+              return {
+                date: d.date,
+                coveragePercent: d.coveragePercent,
+                paddockCount: singlePaddock
+                  ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
+                  : d.paddockCount,
+                activeCount: singlePaddock ? 1 : d.activeCount,
+              };
+            })}
             committedDate={selectedSceneKey}
             previewDate={previewDate}
             onPreviewChange={(d) => setPreviewDate(d)}
@@ -2705,6 +2720,7 @@ export default function SatelliteMappingPage() {
           />
         );
       })()}
+
 
 
       {/* Saved imagery — compact month summary with filters */}

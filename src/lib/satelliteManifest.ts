@@ -153,17 +153,28 @@ export type ManifestDateMissingReason =
   | "scene_not_complete"
   | "package_version_mismatch";
 
+export interface ManifestLayerCoverage {
+  available: number;
+  total: number;
+  percent: number;
+  available_paddock_ids: string[];
+  missing_paddock_ids: string[];
+}
+
 export interface ManifestDateEntry {
   acquisition_date: string; // YYYY-MM-DD
   active_paddock_count: number;
   available_paddock_count: number;
+  scene_coverage_count?: number;
   coverage_percent: number;
+  layer_coverage?: Partial<Record<SatelliteIndexType, ManifestLayerCoverage>>;
   available_paddock_ids: string[];
   missing_paddock_ids: string[];
   missing_paddocks: { paddock_id: string; reason: ManifestDateMissingReason }[];
   paddocks: ManifestDatePaddock[];
   updated_at: string;
 }
+
 
 export type ProviderCheckStatus =
   | "never_checked" | "checked_recently" | "check_due" | "checking" | "failed";
