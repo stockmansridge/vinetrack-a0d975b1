@@ -2460,7 +2460,22 @@ export default function SatelliteMappingPage() {
       </Card>
       </div>
 
+      {/* Acquisition-date timeline slider — primary date navigation */}
+      <SatelliteDateSlider
+        entries={dateOptions.map((d) => ({
+          date: d.date,
+          coveragePercent: d.coveragePercent,
+          paddockCount: d.paddockCount,
+          activeCount: d.activeCount,
+        }))}
+        selectedDate={selectedSceneKey}
+        onChange={setSelectedSceneKey}
+        totalPaddocks={totalPaddocks}
+      />
+
       {/* Timeline */}
+
+
 
       <Card>
         <CardHeader className="pb-2">
