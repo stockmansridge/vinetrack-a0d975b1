@@ -907,7 +907,8 @@ export default function SatelliteMappingPage() {
     }
   }, [dateCoverage, selectedSceneKey, recommendedDefaultDate, activeVineyardId]);
 
-  // Persist user selection per vineyard so revisits keep the same date/layer.
+  // Persist user selections per vineyard so revisits keep the same date/layer/
+  // paddock/opacity/legend state.
   useEffect(() => {
     if (!activeVineyardId || !selectedSceneKey) return;
     try { localStorage.setItem(`crop-health:date:${activeVineyardId}`, selectedSceneKey); } catch { /* ignore */ }
@@ -918,12 +919,53 @@ export default function SatelliteMappingPage() {
   }, [activeVineyardId, layer]);
   useEffect(() => {
     if (!activeVineyardId) return;
+    try { localStorage.setItem(`crop-health:opacity:${activeVineyardId}`, String(opacity)); } catch { /* ignore */ }
+  }, [activeVineyardId, opacity]);
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    try { localStorage.setItem(`crop-health:legend-open:${activeVineyardId}`, legendOpen ? "1" : "0"); } catch { /* ignore */ }
+  }, [activeVineyardId, legendOpen]);
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    try { localStorage.setItem(`crop-health:paddock:${activeVineyardId}`, paddockId); } catch { /* ignore */ }
+  }, [activeVineyardId, paddockId]);
+
+  // Restore per-vineyard preferences on vineyard change. Paddock restoration
+  // is deferred until the paddocks list has loaded so we can validate it.
+  const restoredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeVineyardId) return;
     try {
-      const saved = localStorage.getItem(`crop-health:layer:${activeVineyardId}`);
-      if (saved) setLayer(saved as SatelliteIndexType);
+      const savedLayer = localStorage.getItem(`crop-health:layer:${activeVineyardId}`);
+      if (savedLayer) setLayer(savedLayer as SatelliteIndexType);
+      const savedOpacity = localStorage.getItem(`crop-health:opacity:${activeVineyardId}`);
+      if (savedOpacity != null) {
+        const n = Number(savedOpacity);
+        if (Number.isFinite(n)) setOpacity(Math.max(0, Math.min(100, Math.round(n))));
+      }
+      const savedLegend = localStorage.getItem(`crop-health:legend-open:${activeVineyardId}`);
+      if (savedLegend != null) setLegendOpen(savedLegend !== "0");
     } catch { /* ignore */ }
+    restoredForRef.current = null; // trigger paddock restore below once list ready
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeVineyardId]);
+
+  // Restore saved paddock once paddocks list is loaded (and validate it exists).
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    if (restoredForRef.current === activeVineyardId) return;
+    if (paddocksLoading) return;
+    try {
+      const saved = localStorage.getItem(`crop-health:paddock:${activeVineyardId}`);
+      if (saved && (saved === "all" || paddocks.some((p) => p.id === saved))) {
+        setPaddockId(saved);
+      } else {
+        setPaddockId("all");
+      }
+    } catch { setPaddockId("all"); }
+    restoredForRef.current = activeVineyardId;
+  }, [activeVineyardId, paddocksLoading, paddocks]);
+
 
   // The date used for DISPLAY overlays; may temporarily differ from the
   // committed date while the user scrubs the timeline.
