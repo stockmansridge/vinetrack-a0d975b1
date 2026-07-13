@@ -80,6 +80,15 @@ export interface PaddockCompleteness {
   latestAcquiredAt: string | null;
   latestSceneCloudCoverPct: number | null;
   onOldProcessingVersion: boolean;
+  // True when this paddock has ANY saved display raster (any scene, any
+  // processing version). Drives the "Imagery available" vs "No saved
+  // imagery" badge in the UI — never label a paddock with saved display
+  // rasters as "Imagery missing".
+  hasSavedDisplayImagery: boolean;
+  // True when a saved display raster exists but the newest completed scene
+  // is older than the freshness window — UI shows "Refresh needed" rather
+  // than "Imagery missing".
+  savedImageryStale: boolean;
   // Indices with NO stored assets at all on the latest scene.
   missingLayers: SatelliteIndexType[];
   missingDisplayLayers: SatelliteIndexType[];
@@ -88,6 +97,7 @@ export interface PaddockCompleteness {
   // Deduplicated union of every index this paddock needs re-processed.
   indicesRequiringWork: SatelliteIndexType[];
 }
+
 
 export interface CompletenessTotals {
   totalPaddocks: number;
