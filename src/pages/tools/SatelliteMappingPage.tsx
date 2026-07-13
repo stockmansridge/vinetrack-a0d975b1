@@ -51,6 +51,7 @@ import {
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
 import { fetchManifest } from "@/lib/satelliteManifest";
+import { getAssetBlob, deleteCachedAsset, readCachedAsset } from "@/lib/satelliteCache";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
@@ -571,10 +572,22 @@ export default function SatelliteMappingPage() {
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
   const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // YYYY-MM-DD acquisition date
-  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> object URL (blob:) or signed URL fallback
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
   const [rasterCacheVersion, setRasterCacheVersion] = useState(0);
   const analyticalCacheRef = useRef(new Map<string, DecodedAnalyticalRaster | Promise<DecodedAnalyticalRaster> | { error: string }>());
+  // Blob cache (in-memory mirror of IndexedDB) so the analytical decoder can
+  // reuse bytes already downloaded for the display raster path.
+  const assetBlobsRef = useRef(new Map<string, Blob>()); // key = `${assetId}:${processingVersion}`
+  const objectUrlsRef = useRef(new Map<string, string>()); // asset_id -> blob: URL
+  // Diagnostics: cache hit/miss counters for the crop-health browser cache.
+  const cacheStatsRef = useRef({
+    displayRequested: 0, displayHits: 0, displayMisses: 0,
+    analyticalRequested: 0, analyticalHits: 0, analyticalMisses: 0,
+    decodedHits: 0, decodedMisses: 0,
+  });
+  const [, forceStatsRerender] = useState(0);
+  const bumpStats = () => forceStatsRerender((v) => v + 1);
 
   // Hover readout — real value sampled locally from the matched analytical raster.
   const [hover, setHover] = useState<
@@ -766,7 +779,7 @@ export default function SatelliteMappingPage() {
   };
 
   const dateOptions = useMemo(() => dateCoverage.map((g) => {
-    const pct = g.coveragePercent;
+    const pct = typeof g.coveragePercent === "number" && Number.isFinite(g.coveragePercent) ? g.coveragePercent : 0;
     const pctLabel = Number.isInteger(pct) ? `${pct}` : pct.toFixed(1);
     return {
       date: g.date,
@@ -867,37 +880,77 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
-  // Fetch signed URLs for visible assets. Signed URLs live ~10 min server-side;
-  // route through React Query so they survive route changes within their TTL
-  // and don't get re-signed on every page mount.
+  // Cache-first loader: for each visible asset, check IndexedDB for a stored
+  // blob keyed by (assetId, processingVersion). If present, mint an object URL
+  // and render immediately with zero network. Otherwise fetch a short-lived
+  // signed URL, download the bytes, cache them and mint the object URL.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
+      const all = [...activeAssets, ...activeAnalyticalAssets];
+      for (const { asset } of all) {
         if (signedUrls[asset.id]) continue;
+        const kind = assetKind(asset);
+        const pv = asset.processing_version ?? null;
+        const isDisplay = kind === "DISPLAY_RASTER";
+        if (isDisplay) cacheStatsRef.current.displayRequested += 1;
+        else cacheStatsRef.current.analyticalRequested += 1;
+
+        // Cache probe (no network).
+        const cachedProbe = await readCachedAsset(asset.id, pv);
+        if (cachedProbe) {
+          if (isDisplay) cacheStatsRef.current.displayHits += 1;
+          else cacheStatsRef.current.analyticalHits += 1;
+          assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, cachedProbe.blob);
+          if (cancelled) return;
+          const url = URL.createObjectURL(cachedProbe.blob);
+          objectUrlsRef.current.set(asset.id, url);
+          setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
+          bumpStats();
+          continue;
+        }
+        if (isDisplay) cacheStatsRef.current.displayMisses += 1;
+        else cacheStatsRef.current.analyticalMisses += 1;
+
         try {
-          const signed_url = await qc.fetchQuery({
-            queryKey: ["satellite-signed-url", asset.id],
-            queryFn: async () => {
-              const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
-                asset_id: asset.id,
-              });
-              if (error) throw error;
-              return (data as any)?.signed_url as string;
-            },
-            staleTime: 8 * 60_000,
-            gcTime: 10 * 60_000,
+          const blob = await getAssetBlob(asset.id, pv, async () => {
+            const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
+              asset_id: asset.id,
+            });
+            if (error) throw error;
+            const d = data as any;
+            return {
+              signed_url: d?.signed_url as string,
+              etag: `${asset.id}:${pv ?? "unknown"}`,
+              content_type: null,
+            };
           });
-          if (!cancelled && signed_url) {
-            setSignedUrls((prev) => ({ ...prev, [asset.id]: signed_url }));
-          }
+          if (cancelled) return;
+          if (!blob) continue;
+          assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
+          const url = URL.createObjectURL(blob);
+          objectUrlsRef.current.set(asset.id, url);
+          setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
+          bumpStats();
         } catch (e) {
-          console.error("sign url failed", e);
+          console.error("asset load failed", e);
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAssets, activeAnalyticalAssets]);
+
+  // Revoke stale object URLs when the visible asset set changes. Keeps memory
+  // bounded across date/layer switches.
+  useEffect(() => {
+    const alive = new Set([...activeAssets, ...activeAnalyticalAssets].map((x) => x.asset.id));
+    for (const [assetId, url] of objectUrlsRef.current.entries()) {
+      if (!alive.has(assetId)) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+        objectUrlsRef.current.delete(assetId);
+      }
+    }
   }, [activeAssets, activeAnalyticalAssets]);
 
   // Clear decoded analytical rasters when the user changes the data context.
@@ -914,12 +967,21 @@ export default function SatelliteMappingPage() {
       if (!asset.bounds) throw new Error("Analytical raster bounds missing");
       const key = analyticalCacheKey(scene.paddock_id, scene.id, asset.index_type, asset.processing_version);
       const existing = analyticalCacheRef.current.get(key);
-      if (existing) return;
+      if (existing) { cacheStatsRef.current.decodedHits += 1; return; }
+      cacheStatsRef.current.decodedMisses += 1;
 
       const promise = (async (): Promise<DecodedAnalyticalRaster> => {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Analytical raster fetch failed (${res.status})`);
-        const tiff = await fromArrayBuffer(await res.arrayBuffer());
+        // Prefer the cached blob (already downloaded for display) over the network.
+        const blobKey = `${asset.id}:${asset.processing_version ?? "unknown"}`;
+        const cachedBlob = assetBlobsRef.current.get(blobKey);
+        const buf = cachedBlob
+          ? await cachedBlob.arrayBuffer()
+          : await (async () => {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error(`Analytical raster fetch failed (${res.status})`);
+              return res.arrayBuffer();
+            })();
+        const tiff = await fromArrayBuffer(buf);
         const image = await tiff.getImage();
         const rasters: any = await image.readRasters({ interleave: true });
         return {
@@ -1545,6 +1607,16 @@ export default function SatelliteMappingPage() {
       await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
       await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
       analyticalCacheRef.current.clear();
+      // Invalidate only the blob-cache entries for currently visible assets so
+      // any repaired/replaced bytes are re-downloaded, without wiping the full
+      // browser cache. New scenes/versions naturally miss the cache (new IDs).
+      for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
+        try { await deleteCachedAsset(asset.id, asset.processing_version ?? null); } catch { /* ignore */ }
+        const url = objectUrlsRef.current.get(asset.id);
+        if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } objectUrlsRef.current.delete(asset.id); }
+        assetBlobsRef.current.delete(`${asset.id}:${asset.processing_version ?? "unknown"}`);
+      }
+      setSignedUrls({});
       setRasterCacheVersion((v) => v + 1);
       const failed = data?.failures?.length ?? 0;
       const paused = data?.halted === "rate_limited";
@@ -2038,6 +2110,20 @@ export default function SatelliteMappingPage() {
                 <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
                 <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
                 <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+              </div>
+            </div>
+
+            <div className="space-y-1 pt-2 border-t">
+              <div className="text-xs font-semibold text-foreground">Browser cache</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1">
+                <div>Display requested: <span className="text-foreground">{cacheStatsRef.current.displayRequested}</span></div>
+                <div>Display hits: <span className="text-foreground">{cacheStatsRef.current.displayHits}</span></div>
+                <div>Display misses: <span className="text-foreground">{cacheStatsRef.current.displayMisses}</span></div>
+                <div>Analytical hits: <span className="text-foreground">{cacheStatsRef.current.analyticalHits}</span></div>
+                <div>Analytical misses: <span className="text-foreground">{cacheStatsRef.current.analyticalMisses}</span></div>
+                <div>Decoded hits: <span className="text-foreground">{cacheStatsRef.current.decodedHits}</span></div>
+                <div>Decoded misses: <span className="text-foreground">{cacheStatsRef.current.decodedMisses}</span></div>
+                <div>Object URLs: <span className="text-foreground">{objectUrlsRef.current.size}</span></div>
               </div>
             </div>
 
