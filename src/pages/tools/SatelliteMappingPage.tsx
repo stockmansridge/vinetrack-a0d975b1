@@ -2467,20 +2467,55 @@ export default function SatelliteMappingPage() {
                           : "No saved imagery for this date";
                       missingSet.set(m.paddock_id, label);
                     }
+                    // Per-paddock lifecycle from live overlay tracking.
+                    const overlayByPaddock = new Map<string, { key: string; status: OverlayLoadStatus | "mounted" }>();
+                    for (const o of targetMapOverlays) {
+                      const mounted = overlayMountedKeys.has(o.key!);
+                      const status: OverlayLoadStatus | "mounted" = mounted
+                        ? "mounted"
+                        : (overlayStatus[o.key!] ?? "loading");
+                      overlayByPaddock.set(o.paddockId, { key: o.key!, status });
+                    }
+                    const dateLabel = selectedSceneKey ? formatDate(selectedSceneKey) : "this date";
                     return geoms.map((g) => {
                       const pkg = liveReport.perPaddock.find((p) => p.paddockId === g.id);
                       const missingLabel = missingSet.get(g.id);
-                      const badge = missingLabel
-                        ? missingLabel
-                        : pkg?.state === "old_processing_version"
-                          ? "Imagery available · Upgrade available"
-                          : pkg && pkg.indicesRequiringWork.length > 0
-                            ? "Imagery available · Cell data incomplete"
-                            : "Imagery available";
+                      const live = overlayByPaddock.get(g.id);
+                      let badge: string;
+                      let tone: "ok" | "warn" | "err" = "ok";
+                      if (missingLabel) {
+                        badge = missingLabel === "No saved imagery for this date"
+                          ? `No ${layer} imagery saved for ${dateLabel}`
+                          : missingLabel;
+                        tone = "warn";
+                      } else if (live?.status === "mounted") {
+                        badge = "Imagery displayed";
+                      } else if (live?.status === "loaded") {
+                        badge = "Image available but still loading";
+                      } else if (live?.status === "error") {
+                        badge = `${layer} asset could not be loaded`;
+                        tone = "err";
+                      } else if (live?.status === "loading") {
+                        badge = "Image available but still loading";
+                      } else if (pkg?.state === "old_processing_version") {
+                        badge = `${layer} processing incomplete`;
+                        tone = "warn";
+                      } else if (pkg && pkg.indicesRequiringWork.length > 0) {
+                        badge = "Cell data incomplete";
+                        tone = "warn";
+                      } else {
+                        badge = `No ${layer} imagery saved for ${dateLabel}`;
+                        tone = "warn";
+                      }
+                      const toneCls = tone === "err"
+                        ? "text-destructive"
+                        : tone === "warn"
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground";
                       return (
                         <div key={g.id} className="text-[11px] leading-tight">
                           <span className="font-medium text-foreground">{g.name}</span>
-                          <span className={`ml-1 ${missingLabel ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>— {badge}</span>
+                          <span className={`ml-1 ${toneCls}`}>— {badge}</span>
                         </div>
                       );
                     });
