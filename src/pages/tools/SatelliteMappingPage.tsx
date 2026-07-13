@@ -1098,6 +1098,71 @@ export default function SatelliteMappingPage() {
     return () => clearTimeout(t);
   }, [targetMapOverlays, prefersReducedMotion]);
 
+  // --- Overlay lifecycle tracking -----------------------------------------
+  // Truth for "Paddocks displayed": count of unique paddockIds whose overlay
+  // <img> has actually loaded and mounted for the currently targeted set.
+  type OverlayLoadStatus = "loading" | "loaded" | "error";
+  const [overlayStatus, setOverlayStatus] = useState<Record<string, OverlayLoadStatus>>({});
+  const [overlayMountedKeys, setOverlayMountedKeys] = useState<Set<string>>(() => new Set());
+
+  const handleOverlayLoad = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayStatus((s) => (s[key] === "loaded" ? s : { ...s, [key]: "loaded" }));
+  }, []);
+  const handleOverlayError = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayStatus((s) => (s[key] === "error" ? s : { ...s, [key]: "error" }));
+  }, []);
+  const handleOverlayMounted = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayMountedKeys((s) => {
+      if (s.has(key)) return s;
+      const next = new Set(s); next.add(key); return next;
+    });
+  }, []);
+  const handleOverlayUnmounted = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayMountedKeys((s) => {
+      if (!s.has(key)) return s;
+      const next = new Set(s); next.delete(key); return next;
+    });
+    setOverlayStatus((s) => {
+      if (!(key in s)) return s;
+      const { [key]: _drop, ...rest } = s; return rest;
+    });
+  }, []);
+
+  // Seed 'loading' state for any target overlay we don't already track.
+  useEffect(() => {
+    setOverlayStatus((s) => {
+      let changed = false;
+      const next: Record<string, OverlayLoadStatus> = { ...s };
+      for (const o of targetMapOverlays) {
+        const k = o.key!;
+        if (!(k in next)) { next[k] = "loading"; changed = true; }
+      }
+      return changed ? next : s;
+    });
+  }, [targetMapOverlays]);
+
+  // Count unique paddocks that have a currently-targeted overlay mounted.
+  const mountedPaddockCount = useMemo(() => {
+    const seen = new Set<string>();
+    for (const o of targetMapOverlays) {
+      if (overlayMountedKeys.has(o.key!)) seen.add(o.paddockId);
+    }
+    return seen.size;
+  }, [targetMapOverlays, overlayMountedKeys]);
+
+  // Clear stale search / refresh errors when the user changes date or layer so
+  // banners from a previous selection don't linger on a fresh view.
+  const errorClearKey = `${selectedSceneKey ?? ""}::${layer}`;
+  const lastErrorClearKeyRef = useRef(errorClearKey);
+  useEffect(() => {
+    if (lastErrorClearKeyRef.current !== errorClearKey) {
+      lastErrorClearKeyRef.current = errorClearKey;
+      setSearchError(null);
+    }
+  }, [errorClearKey]);
+
+
+
 
   // ---- Playback ---------------------------------------------------------
   const PLAYBACK_MS = 1250;
@@ -2323,8 +2388,8 @@ export default function SatelliteMappingPage() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
                     <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
                     <div>Active paddocks: <span className="text-foreground">{selectedEntry?.activeCount ?? totalPaddocks}</span></div>
-                    <div>Paddocks displayed: <span className="text-foreground">{selectedEntry?.paddockCount ?? 0}</span></div>
-                    <div>Unavailable: <span className="text-foreground">{selectedEntry ? (selectedEntry.activeCount || totalPaddocks) - selectedEntry.paddockCount : 0}</span></div>
+                    <div>Paddocks displayed: <span className="text-foreground">{mountedPaddockCount}</span><span className="text-muted-foreground"> (manifest expects {selectedEntry?.paddockCount ?? 0})</span></div>
+                    <div>Unavailable: <span className="text-foreground">{Math.max(0, (selectedEntry?.activeCount ?? totalPaddocks) - mountedPaddockCount)}</span></div>
                     <div>Coverage: <span className="text-foreground">{pct}%</span></div>
                     <div>Layer: <span className="text-foreground">{layer}</span></div>
                   </div>
@@ -2402,20 +2467,55 @@ export default function SatelliteMappingPage() {
                           : "No saved imagery for this date";
                       missingSet.set(m.paddock_id, label);
                     }
+                    // Per-paddock lifecycle from live overlay tracking.
+                    const overlayByPaddock = new Map<string, { key: string; status: OverlayLoadStatus | "mounted" }>();
+                    for (const o of targetMapOverlays) {
+                      const mounted = overlayMountedKeys.has(o.key!);
+                      const status: OverlayLoadStatus | "mounted" = mounted
+                        ? "mounted"
+                        : (overlayStatus[o.key!] ?? "loading");
+                      overlayByPaddock.set(o.paddockId, { key: o.key!, status });
+                    }
+                    const dateLabel = selectedSceneKey ? formatDate(selectedSceneKey) : "this date";
                     return geoms.map((g) => {
                       const pkg = liveReport.perPaddock.find((p) => p.paddockId === g.id);
                       const missingLabel = missingSet.get(g.id);
-                      const badge = missingLabel
-                        ? missingLabel
-                        : pkg?.state === "old_processing_version"
-                          ? "Imagery available · Upgrade available"
-                          : pkg && pkg.indicesRequiringWork.length > 0
-                            ? "Imagery available · Cell data incomplete"
-                            : "Imagery available";
+                      const live = overlayByPaddock.get(g.id);
+                      let badge: string;
+                      let tone: "ok" | "warn" | "err" = "ok";
+                      if (missingLabel) {
+                        badge = missingLabel === "No saved imagery for this date"
+                          ? `No ${layer} imagery saved for ${dateLabel}`
+                          : missingLabel;
+                        tone = "warn";
+                      } else if (live?.status === "mounted") {
+                        badge = "Imagery displayed";
+                      } else if (live?.status === "loaded") {
+                        badge = "Image available but still loading";
+                      } else if (live?.status === "error") {
+                        badge = `${layer} asset could not be loaded`;
+                        tone = "err";
+                      } else if (live?.status === "loading") {
+                        badge = "Image available but still loading";
+                      } else if (pkg?.state === "old_processing_version") {
+                        badge = `${layer} processing incomplete`;
+                        tone = "warn";
+                      } else if (pkg && pkg.indicesRequiringWork.length > 0) {
+                        badge = "Cell data incomplete";
+                        tone = "warn";
+                      } else {
+                        badge = `No ${layer} imagery saved for ${dateLabel}`;
+                        tone = "warn";
+                      }
+                      const toneCls = tone === "err"
+                        ? "text-destructive"
+                        : tone === "warn"
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground";
                       return (
                         <div key={g.id} className="text-[11px] leading-tight">
                           <span className="font-medium text-foreground">{g.name}</span>
-                          <span className={`ml-1 ${missingLabel ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>— {badge}</span>
+                          <span className={`ml-1 ${toneCls}`}>— {badge}</span>
                         </div>
                       );
                     });
@@ -2464,6 +2564,10 @@ export default function SatelliteMappingPage() {
                 cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
                 onPaddockClick={(id) => setPaddockId(id)}
                 onPointerMove={handlePointerMove}
+                onOverlayLoad={handleOverlayLoad}
+                onOverlayError={handleOverlayError}
+                onOverlayMounted={handleOverlayMounted}
+                onOverlayUnmounted={handleOverlayUnmounted}
               />
             )}
 

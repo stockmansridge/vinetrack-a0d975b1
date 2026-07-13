@@ -38,6 +38,14 @@ export interface SatelliteMapProps {
   onUnavailable?: (msg: string) => void;
   /** Fires with the map coordinate under the pointer (or null on leave). `x`/`y` are relative to the map container. */
   onPointerMove?: (coord: { lat: number; lng: number; x: number; y: number } | null) => void;
+  /** Fires when a raster overlay <img> successfully loads (bytes decoded). */
+  onOverlayLoad?: (info: { paddockId: string; key: string }) => void;
+  /** Fires when a raster overlay <img> fails to load. */
+  onOverlayError?: (info: { paddockId: string; key: string }) => void;
+  /** Fires when the overlay is loaded AND has been positioned with non-zero geometry (visible on map). */
+  onOverlayMounted?: (info: { paddockId: string; key: string }) => void;
+  /** Fires when an overlay is removed from the DOM (crossfade complete / superseded). */
+  onOverlayUnmounted?: (info: { paddockId: string; key: string }) => void;
   className?: string;
 }
 
@@ -62,8 +70,27 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     onMapReady,
     onUnavailable,
     onPointerMove,
+    onOverlayLoad,
+    onOverlayError,
+    onOverlayMounted,
+    onOverlayUnmounted,
     className,
   } = props;
+
+  // Latest lifecycle callback refs so the animation-loop effect doesn't need them in deps.
+  const onOverlayLoadRef = useRef(onOverlayLoad);
+  const onOverlayErrorRef = useRef(onOverlayError);
+  const onOverlayMountedRef = useRef(onOverlayMounted);
+  const onOverlayUnmountedRef = useRef(onOverlayUnmounted);
+  onOverlayLoadRef.current = onOverlayLoad;
+  onOverlayErrorRef.current = onOverlayError;
+  onOverlayMountedRef.current = onOverlayMounted;
+  onOverlayUnmountedRef.current = onOverlayUnmounted;
+
+  // Track which overlay keys have already fired 'mounted' so we don't double-emit
+  // when the animation-loop resizes them each frame.
+  const mountedKeysRef = useRef<Set<string>>(new Set());
+  const paddockIdByKeyRef = useRef<Map<string, string>>(new Map());
 
   // Normalise to a single overlays[] list. Legacy overlayUrl/overlayBounds
   // become a one-item list so the rendering loop is uniform.
@@ -237,6 +264,14 @@ export default function SatelliteMap(props: SatelliteMapProps) {
       if (!activeIds.has(id)) {
         try { el.remove(); } catch { /* noop */ }
         imgRefs.current.delete(id);
+        if (mountedKeysRef.current.has(id)) {
+          mountedKeysRef.current.delete(id);
+          const pid = paddockIdByKeyRef.current.get(id) ?? "";
+          paddockIdByKeyRef.current.delete(id);
+          try { onOverlayUnmountedRef.current?.({ paddockId: pid, key: id }); } catch { /* noop */ }
+        } else {
+          paddockIdByKeyRef.current.delete(id);
+        }
       }
     }
 
@@ -253,6 +288,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     // Ensure an <img> exists for each overlay and set its src / opacity.
     for (const o of effectiveOverlays) {
       const key = keyFor(o);
+      paddockIdByKeyRef.current.set(key, o.paddockId);
       const targetOpacity = String(o.opacity ?? overlayOpacity);
       let img = imgRefs.current.get(key);
       const fresh = !img;
@@ -265,6 +301,19 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.style.imageRendering = "pixelated";
         img.style.willChange = "opacity, transform";
         img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
+        // Lifecycle callbacks — invoked once per <img> instance.
+        const boundKey = key;
+        const boundPid = o.paddockId;
+        img.addEventListener("load", () => {
+          try { onOverlayLoadRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          if (!mountedKeysRef.current.has(boundKey)) {
+            mountedKeysRef.current.add(boundKey);
+            try { onOverlayMountedRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          }
+        }, { once: false });
+        img.addEventListener("error", () => {
+          try { onOverlayErrorRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+        }, { once: false });
         layer.appendChild(img);
         imgRefs.current.set(key, img);
       }
