@@ -765,19 +765,32 @@ export default function SatelliteMappingPage() {
     } catch { return iso; }
   };
 
-  const dateOptions = useMemo(() => dateCoverage.map((g) => ({
-    date: g.date,
-    scenes: Array.from(g.sceneByPaddock.values()),
-    paddockCount: g.paddockCount,
-    label: `${formatDate(g.date)} · ${g.paddockCount} of ${totalPaddocks} paddocks`,
-  })), [dateCoverage, totalPaddocks]);
+  const dateOptions = useMemo(() => dateCoverage.map((g) => {
+    const pct = g.coveragePercent;
+    const pctLabel = Number.isInteger(pct) ? `${pct}` : pct.toFixed(1);
+    return {
+      date: g.date,
+      scenes: Array.from(g.sceneByPaddock.values()),
+      paddockCount: g.paddockCount,
+      activeCount: g.activeCount,
+      coveragePercent: pct,
+      label: `${formatDate(g.date)} · ${pctLabel}% coverage · ${g.paddockCount} of ${g.activeCount || totalPaddocks} paddocks`,
+    };
+  }), [dateCoverage, totalPaddocks]);
 
-  // Auto-select: newest date with full coverage; otherwise newest date with
-  // the highest coverage count. Also drop any legacy "latest" selection.
+  const providerFreshness = manifestQuery.data?.provider_freshness ?? null;
+  const recommendedDefaultDate = manifestQuery.data?.recommended_default_date ?? null;
+
+  // Auto-select: prefer server-provided recommended default; restore saved
+  // selection if it still exists; drop legacy "latest" markers.
   useEffect(() => {
     if (dateCoverage.length === 0) return;
     if (selectedSceneKey === "latest") { setSelectedSceneKey(null); return; }
-    // Restore per-vineyard remembered selection if it still exists.
+    // If a selection exists but is no longer in the available dates, drop it.
+    if (selectedSceneKey && !dateCoverage.some((g) => g.date === selectedSceneKey)) {
+      setSelectedSceneKey(null);
+      return;
+    }
     if (!selectedSceneKey && activeVineyardId) {
       try {
         const saved = localStorage.getItem(`crop-health:date:${activeVineyardId}`);
@@ -788,13 +801,16 @@ export default function SatelliteMappingPage() {
       } catch { /* ignore */ }
     }
     if (!selectedSceneKey) {
-      const fullCov = dateCoverage.find((g) => g.paddockCount >= totalPaddocks && totalPaddocks > 0);
-      if (fullCov) { setSelectedSceneKey(fullCov.date); return; }
+      if (recommendedDefaultDate && dateCoverage.some((g) => g.date === recommendedDefaultDate)) {
+        setSelectedSceneKey(recommendedDefaultDate);
+        return;
+      }
+      // Server didn't yield one — pick newest with the highest coverage.
       const best = [...dateCoverage].sort((a, b) =>
-        b.paddockCount - a.paddockCount || b.date.localeCompare(a.date))[0];
+        b.coveragePercent - a.coveragePercent || b.date.localeCompare(a.date))[0];
       if (best) setSelectedSceneKey(best.date);
     }
-  }, [dateCoverage, selectedSceneKey, totalPaddocks, activeVineyardId]);
+  }, [dateCoverage, selectedSceneKey, recommendedDefaultDate, activeVineyardId]);
 
   // Persist user selection per vineyard so revisits keep the same date/layer.
   useEffect(() => {
