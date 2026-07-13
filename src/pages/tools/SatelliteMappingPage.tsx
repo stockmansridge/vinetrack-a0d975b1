@@ -1098,7 +1098,7 @@ export default function SatelliteMappingPage() {
 
   // ---------- Actions ----------
 
-  type RefreshVars = { paddockIds?: string[]; isRetry?: boolean } | undefined;
+  type RefreshVars = { paddockIds?: string[]; isRetry?: boolean; force?: boolean } | undefined;
   const retryInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const autoRanForVineyardRef = useRef<string | null>(null);
@@ -1107,6 +1107,21 @@ export default function SatelliteMappingPage() {
     mutationFn: async (vars: RefreshVars) => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
       if (refreshInFlightRef.current) throw new Error("Refresh already running");
+      // Provider-freshness gate: skip routine refresh if Copernicus was
+      // checked within the interval, unless caller passes force=true.
+      if (!vars?.force && !vars?.isRetry
+          && providerFreshness?.provider_check_status === "checked_recently") {
+        toast({
+          title: "Copernicus was checked recently",
+          description: "No routine refresh is required yet. Use Force provider check to run one now.",
+        });
+        return {
+          results: [], skippedNoGeometry: 0, skippedComplete: 0,
+          providerCallsAvoided: 0, repairedItems: 0,
+          isRetry: false, noWorkNeeded: true,
+          report: { perPaddock: [], totals: { totalPaddocks: 0, completePaddocks: 0, missingPaddocks: 0, incompletePaddocks: 0, oldVersionPaddocks: 0, missingDisplay: 0, missingAnalytical: 0, missingSummaries: 0, totalMissing: 0 } },
+        } as any;
+      }
       refreshInFlightRef.current = true;
       setSearchError(null);
 
