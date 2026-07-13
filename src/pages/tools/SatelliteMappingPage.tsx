@@ -1008,12 +1008,12 @@ export default function SatelliteMappingPage() {
   }, [effectiveDisplayDate, selectedSceneKey, displayAssetPairs, signedUrls]);
 
   // Target overlay set for the map, sourced from the effective display date.
-  // If a preview date has assets still loading, we keep the committed-date
-  // overlays visible instead of blanking the map.
+  // If a preview date has assets still loading, we retain the committed-date
+  // overlays instead of blanking the map, then crossfade when preview is ready.
   const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
-    const source = previewPending ? activeAssets : activeAssets;
-    // Note: because displayAssetPairs = activeAssetPairs when no preview
-    // is active OR pending, `activeAssets` is already correct.
+    const source = previewPending
+      ? activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene }))
+      : activeAssets;
     return source
       .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
       .map(({ asset, scene }) => ({
@@ -1023,7 +1023,7 @@ export default function SatelliteMappingPage() {
         opacity: opacity / 100,
         key: `${scene.paddock_id}:${asset.id}`,
       }));
-  }, [activeAssets, signedUrls, opacity, previewPending]);
+  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending]);
 
   // Crossfade-mounted overlays. When the target changes, keep the previous
   // set briefly with opacity 0 so its CSS transition animates out while the
