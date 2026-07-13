@@ -572,10 +572,22 @@ export default function SatelliteMappingPage() {
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
   const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // YYYY-MM-DD acquisition date
-  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> signed URL
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> object URL (blob:) or signed URL fallback
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
   const [rasterCacheVersion, setRasterCacheVersion] = useState(0);
   const analyticalCacheRef = useRef(new Map<string, DecodedAnalyticalRaster | Promise<DecodedAnalyticalRaster> | { error: string }>());
+  // Blob cache (in-memory mirror of IndexedDB) so the analytical decoder can
+  // reuse bytes already downloaded for the display raster path.
+  const assetBlobsRef = useRef(new Map<string, Blob>()); // key = `${assetId}:${processingVersion}`
+  const objectUrlsRef = useRef(new Map<string, string>()); // asset_id -> blob: URL
+  // Diagnostics: cache hit/miss counters for the crop-health browser cache.
+  const cacheStatsRef = useRef({
+    displayRequested: 0, displayHits: 0, displayMisses: 0,
+    analyticalRequested: 0, analyticalHits: 0, analyticalMisses: 0,
+    decodedHits: 0, decodedMisses: 0,
+  });
+  const [, forceStatsRerender] = useState(0);
+  const bumpStats = () => forceStatsRerender((v) => v + 1);
 
   // Hover readout — real value sampled locally from the matched analytical raster.
   const [hover, setHover] = useState<
