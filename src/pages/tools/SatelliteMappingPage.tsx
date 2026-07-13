@@ -2901,8 +2901,5 @@ function SavedImageryHistory({
 }
 
 
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+
+
