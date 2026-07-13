@@ -155,14 +155,10 @@ export default function SatelliteDateSlider({
     );
   }
 
-  const pctLabel = selected
-    ? (Number.isInteger(selected.coveragePercent)
-        ? `${selected.coveragePercent}`
-        : selected.coveragePercent.toFixed(1))
-    : "—";
   const activeCount = selected?.activeCount || totalPaddocks;
   const singleDate = count === 1;
   const isPreviewing = previewDate != null && previewDate !== committedDate;
+
 
   // Coverage message — spec §4.
   const coverageMessage = (() => {
