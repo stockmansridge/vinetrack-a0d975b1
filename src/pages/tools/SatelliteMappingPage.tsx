@@ -1682,14 +1682,11 @@ export default function SatelliteMappingPage() {
                   <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {isAllPaddocks && dateOptions.length > 0 && (
-                    <SelectItem value="latest">Latest available per paddock</SelectItem>
-                  )}
                   {dateOptions.map((d) => {
                     if (isAllPaddocks) {
                       return (
                         <SelectItem key={d.date} value={d.date}>
-                          {d.date} · {d.paddockCount} of {totalPaddocks} paddocks
+                          {formatDate(d.date)} · {d.paddockCount} of {totalPaddocks} paddocks
                         </SelectItem>
                       );
                     }
@@ -1698,7 +1695,7 @@ export default function SatelliteMappingPage() {
                     const cov = s?.paddock_valid_coverage_pct;
                     return (
                       <SelectItem key={d.date} value={d.date}>
-                        {d.date}
+                        {formatDate(d.date)}
                         {cloud != null ? ` · ${Number(cloud).toFixed(0)}% cloud` : ""}
                         {cov != null ? ` · ${Number(cov).toFixed(0)}% valid` : ""}
                         {s?.quality_status ? ` · ${s.quality_status}` : ""}
