@@ -1607,6 +1607,16 @@ export default function SatelliteMappingPage() {
       await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
       await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
       analyticalCacheRef.current.clear();
+      // Invalidate only the blob-cache entries for currently visible assets so
+      // any repaired/replaced bytes are re-downloaded, without wiping the full
+      // browser cache. New scenes/versions naturally miss the cache (new IDs).
+      for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
+        try { await deleteCachedAsset(asset.id, asset.processing_version ?? null); } catch { /* ignore */ }
+        const url = objectUrlsRef.current.get(asset.id);
+        if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } objectUrlsRef.current.delete(asset.id); }
+        assetBlobsRef.current.delete(`${asset.id}:${asset.processing_version ?? "unknown"}`);
+      }
+      setSignedUrls({});
       setRasterCacheVersion((v) => v + 1);
       const failed = data?.failures?.length ?? 0;
       const paused = data?.halted === "rate_limited";
