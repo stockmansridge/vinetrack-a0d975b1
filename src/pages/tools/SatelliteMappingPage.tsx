@@ -2687,19 +2687,24 @@ export default function SatelliteMappingPage() {
       {(() => {
         const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
         const singlePaddock = paddockId !== "all";
-        const scopedMissing = singlePaddock
-          ? !!scopedGroup && !scopedGroup.sceneByPaddock.has(paddockId)
+        const layerAvailIds = scopedGroup?.layerCoverage?.[layer]?.available_paddock_ids;
+        const scopedMissing = singlePaddock && scopedGroup
+          ? (layerAvailIds ? !layerAvailIds.includes(paddockId) : !scopedGroup.sceneByPaddock.has(paddockId))
           : false;
         return (
           <SatelliteDateSlider
-            entries={dateOptions.map((d) => ({
-              date: d.date,
-              coveragePercent: d.coveragePercent,
-              paddockCount: singlePaddock
-                ? (dateCoverage.find((g) => g.date === d.date)?.sceneByPaddock.has(paddockId) ? 1 : 0)
-                : d.paddockCount,
-              activeCount: singlePaddock ? 1 : d.activeCount,
-            }))}
+            entries={dateOptions.map((d) => {
+              const group = dateCoverage.find((g) => g.date === d.date);
+              const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
+              return {
+                date: d.date,
+                coveragePercent: d.coveragePercent,
+                paddockCount: singlePaddock
+                  ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
+                  : d.paddockCount,
+                activeCount: singlePaddock ? 1 : d.activeCount,
+              };
+            })}
             committedDate={selectedSceneKey}
             previewDate={previewDate}
             onPreviewChange={(d) => setPreviewDate(d)}
@@ -2715,6 +2720,7 @@ export default function SatelliteMappingPage() {
           />
         );
       })()}
+
 
 
       {/* Saved imagery — compact month summary with filters */}
