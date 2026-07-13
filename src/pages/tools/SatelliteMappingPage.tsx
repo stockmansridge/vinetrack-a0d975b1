@@ -1712,23 +1712,14 @@ export default function SatelliteMappingPage() {
   // both the date-coverage memo and the completeness report can consume them.
 
 
-  // Live completeness snapshot for the diagnostics panel and the
-  // "Imagery missing" chip in Latest-per-paddock mode. Prefers the server
-  // manifest so counts always match what's actually stored; falls back to the
-  // legacy client-side recount if the manifest hasn't loaded yet.
+  // Live completeness snapshot for the diagnostics panel and the missing
+  // paddock chip. Always derived from the server manifest.
   const liveReport: CompletenessReport = useMemo(() => {
     const paddockInputs = geoms.map((g) => ({ id: g.id, name: g.name }));
-    const manifestRows = manifestQuery.data?.paddocks;
-    if (manifestRows && manifestRows.length > 0) {
-      return reportFromManifest(paddockInputs, manifestRows);
-    }
-    return inspectCompleteness({
-      paddocks: paddockInputs,
-      scenes: scenesQuery.data?.scenes ?? [],
-      assets: scenesQuery.data?.assets ?? [],
-      summaries: scenesQuery.data?.summaries ?? [],
-    });
-  }, [geoms, manifestQuery.data, scenesQuery.data]);
+    const manifestRows = manifestQuery.data?.paddocks ?? [];
+    return reportFromManifest(paddockInputs, manifestRows as any);
+  }, [geoms, manifestQuery.data]);
+
   const [missingDetailOpen, setMissingDetailOpen] = useState(false);
   const paddocksMissingLatestSet = useMemo(
     () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
