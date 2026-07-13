@@ -1408,6 +1408,7 @@ export default function SatelliteMappingPage() {
     },
     onSuccess: async (data) => {
       await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+      await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
       await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
       analyticalCacheRef.current.clear();
       setRasterCacheVersion((v) => v + 1);
