@@ -324,7 +324,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     };
     requestAnimationFrame(tick);
     return () => { running = false; };
-  }, [ready, effectiveOverlays, overlayOpacity]);
+  }, [ready, effectiveOverlays, overlayOpacity, overlayTransitionMs]);
 
   // Sync the highlighted-cell rectangle into the animation loop.
   useEffect(() => {
