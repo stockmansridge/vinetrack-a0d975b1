@@ -1808,28 +1808,30 @@ export default function SatelliteMappingPage() {
                 {PSRI_CAUTION}
               </div>
             )}
-            {selectedSceneKey === "latest" && (
-              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 space-y-1">
-                <div>
-                  Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
-                </div>
-                {liveReport.perPaddock.some((p) => p.state === "missing_latest_scene" && !p.hasSavedDisplayImagery) && (
-                  <div className="flex flex-wrap gap-1">
-                    {liveReport.perPaddock
-                      .filter((p) => p.state === "missing_latest_scene" && !p.hasSavedDisplayImagery)
-                      .map((p) => (
-                        <span
-                          key={p.paddockId}
-                          className="inline-flex items-center rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300"
-                        >
-                          {p.paddockName} · No saved imagery
-                        </span>
-                      ))}
+            {selectedSceneKey && (() => {
+              const group = dateCoverage.find((g) => g.date === selectedSceneKey);
+              const missing = group
+                ? geoms.filter((g) => !group.sceneByPaddock.has(g.id))
+                : geoms;
+              if (missing.length === 0) return null;
+              return (
+                <div className="text-[11px] text-muted-foreground mt-2 space-y-1">
+                  <div>
+                    No imagery saved for {formatDate(selectedSceneKey)} on these paddocks. Their outlines remain on the map; other dates may be available.
                   </div>
-                )}
-
-              </div>
-            )}
+                  <div className="flex flex-wrap gap-1">
+                    {missing.map((p) => (
+                      <span
+                        key={p.id}
+                        className="inline-flex items-center rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        {p.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
 
