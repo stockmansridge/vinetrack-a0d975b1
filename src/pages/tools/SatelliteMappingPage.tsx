@@ -1763,14 +1763,16 @@ export default function SatelliteMappingPage() {
             <div className="text-xs font-semibold text-foreground">Imagery completeness</div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
               <div>Active paddocks: <span className="text-foreground">{liveReport.totals.totalPaddocks}</span></div>
-              <div>With latest imagery: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
-              <div>Missing latest: <span className="text-foreground">{liveReport.totals.missingPaddocks}</span></div>
+              <div>With saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.hasSavedDisplayImagery).length}</span></div>
+              <div>No saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => !p.hasSavedDisplayImagery).length}</span></div>
               <div>Complete packages: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
               <div>Partial packages: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
+              <div>Refresh needed (stale): <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene" && p.hasSavedDisplayImagery).length}</span></div>
               <div>Old processing version: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
               <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
               <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
               <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+
               {lastRefreshSummary && (
                 <>
                   <div>Last refresh — processed: <span className="text-foreground">{lastRefreshSummary.processedPaddocks}</span></div>
