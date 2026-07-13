@@ -637,26 +637,10 @@ export default function SatelliteMappingPage() {
     refetchOnWindowFocus: false,
   });
 
-  // Processed scenes for this vineyard/paddock
-  const scenesQuery = useQuery({
-    queryKey: ["satellite-scenes", activeVineyardId, paddockId],
-    enabled: !!activeVineyardId && isSystemAdmin,
-    queryFn: async () => {
-      const { data, error } = await invokeSatelliteFn("satellite-list-scenes", {
-        vineyard_id: activeVineyardId,
-        paddock_id: paddockId,
-      });
-      if (error) throw error;
-      return data as { scenes: DBScene[]; assets: DBAsset[]; summaries: DBSummary[] };
-    },
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  // Server manifest — source of truth for per-paddock completeness and the
-  // date-coverage index. Declared here (before dateCoverage) so both memos
-  // can consume it.
+  // Server manifest — source of truth for per-paddock completeness, the
+  // date-coverage index AND per-scene asset metadata (v3). The previous
+  // `satellite-list-scenes` query has been retired; every scene/asset/summary
+  // the page renders now flows from `manifestQuery.data.date_coverage[*].paddocks[*].layers`.
   const activePaddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
   const manifestQuery = useQuery({
     queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
@@ -664,6 +648,96 @@ export default function SatelliteMappingPage() {
     enabled: !!activeVineyardId,
     staleTime: 30_000,
   });
+
+  // ---- Derived scenes / assets / summaries ------------------------------
+  // A thin compat shim so existing code (report generator, hover sampler,
+  // signed-URL loader, etc.) keeps working with the shape it already
+  // understands. Nothing here talks to the network.
+  const derivedFromManifest = useMemo(() => {
+    const scenes: DBScene[] = [];
+    const assets: DBAsset[] = [];
+    const summaries: DBSummary[] = [];
+    const seenScenes = new Set<string>();
+    const seenAssets = new Set<string>();
+    for (const entry of manifestQuery.data?.date_coverage ?? []) {
+      for (const p of entry.paddocks) {
+        if (!seenScenes.has(p.scene_id)) {
+          seenScenes.add(p.scene_id);
+          scenes.push({
+            id: p.scene_id,
+            paddock_id: p.paddock_id,
+            vineyard_id: activeVineyardId ?? "",
+            provider_scene_id: p.provider_scene_id ?? "",
+            acquired_at: p.acquired_at,
+            scene_cloud_cover_pct: p.scene_cloud_cover_pct,
+            paddock_valid_coverage_pct: p.paddock_valid_coverage_pct,
+            paddock_cloud_cover_pct: p.paddock_cloud_cover_pct,
+            quality_status: "",
+            processing_status: "complete",
+          });
+        }
+        for (const layer of p.layers) {
+          if (layer.display && !seenAssets.has(layer.display.asset_id)) {
+            seenAssets.add(layer.display.asset_id);
+            assets.push({
+              id: layer.display.asset_id,
+              satellite_scene_id: p.scene_id,
+              index_type: layer.index_type as SatelliteIndexType,
+              asset_type: "DISPLAY_RASTER",
+              storage_path: layer.display.storage_path ?? "",
+              bounds: layer.display.bounds,
+              raster_width: layer.display.raster_width,
+              raster_height: layer.display.raster_height,
+              native_resolution_m: layer.display.native_resolution_m,
+              display_resolution_m: layer.display.display_resolution_m,
+              data_type: layer.display.data_type,
+              scale_factor: layer.display.scale_factor,
+              no_data_sentinel: layer.display.no_data_sentinel,
+              row_orientation: layer.display.row_orientation,
+              processing_version: layer.display.processing_version,
+            });
+          }
+          if (layer.analytical && !seenAssets.has(layer.analytical.asset_id)) {
+            seenAssets.add(layer.analytical.asset_id);
+            assets.push({
+              id: layer.analytical.asset_id,
+              satellite_scene_id: p.scene_id,
+              index_type: layer.index_type as SatelliteIndexType,
+              asset_type: "ANALYTICAL_RASTER",
+              storage_path: layer.analytical.storage_path ?? "",
+              bounds: layer.analytical.bounds,
+              raster_width: layer.analytical.raster_width,
+              raster_height: layer.analytical.raster_height,
+              native_resolution_m: layer.analytical.native_resolution_m,
+              display_resolution_m: layer.analytical.display_resolution_m,
+              data_type: layer.analytical.data_type,
+              scale_factor: layer.analytical.scale_factor,
+              no_data_sentinel: layer.analytical.no_data_sentinel,
+              row_orientation: layer.analytical.row_orientation,
+              processing_version: layer.analytical.processing_version,
+            });
+          }
+          if (layer.summary) {
+            summaries.push({
+              satellite_scene_id: p.scene_id,
+              index_type: layer.index_type as SatelliteIndexType,
+              mean_value: layer.summary.mean_value,
+              median_value: layer.summary.median_value,
+              percentile_10: layer.summary.percentile_10,
+              percentile_25: layer.summary.percentile_25,
+              percentile_75: layer.summary.percentile_75,
+              percentile_90: layer.summary.percentile_90,
+            });
+          }
+        }
+      }
+    }
+    return { scenes, assets, summaries };
+  }, [manifestQuery.data, activeVineyardId]);
+
+  // Compat shim so legacy consumers keep working while we transition.
+  const scenesQuery = { data: derivedFromManifest };
+
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
 
