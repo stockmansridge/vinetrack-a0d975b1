@@ -810,8 +810,10 @@ export default function SatelliteMappingPage() {
           activeCount: entry.active_paddock_count,
           coveragePercent: entry.coverage_percent,
           missing: entry.missing_paddocks,
+          layerCoverage: entry.layer_coverage ?? {},
         };
       });
+
     }
     // Fallback: client-side reconstruction from scenesQuery.
     if (import.meta.env.DEV) {
