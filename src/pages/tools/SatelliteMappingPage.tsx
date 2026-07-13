@@ -50,7 +50,7 @@ import {
   type CompletenessReport,
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
-import { fetchManifest } from "@/lib/satelliteManifest";
+import { fetchManifest, fetchAssetBytes, type ManifestResponse } from "@/lib/satelliteManifest";
 import { getAssetBlob, deleteCachedAsset, readCachedAsset } from "@/lib/satelliteCache";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
