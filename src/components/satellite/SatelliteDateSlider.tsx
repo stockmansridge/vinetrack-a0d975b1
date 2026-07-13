@@ -30,6 +30,12 @@ interface Props {
   onTogglePlay?: () => void;
   /** Optional total paddock count for the "of N" label when activeCount is 0. */
   totalPaddocks: number;
+  /** True when a single paddock is scoped — coverage messaging switches. */
+  singlePaddockScope?: boolean;
+  /** True when the currently-scoped single paddock has no imagery on the committed date. */
+  scopedPaddockMissing?: boolean;
+  /** Layer label used for "No saved NDVI imagery for this paddock" copy. */
+  layerShortLabel?: string;
 }
 
 function formatLong(iso: string): string {
@@ -58,6 +64,9 @@ export default function SatelliteDateSlider({
   isPlaying = false,
   onTogglePlay,
   totalPaddocks,
+  singlePaddockScope = false,
+  scopedPaddockMissing = false,
+  layerShortLabel,
 }: Props) {
   const sorted = useMemo(
     () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
@@ -135,20 +144,38 @@ export default function SatelliteDateSlider({
 
   if (count === 0) {
     return (
-      <div className="rounded-md border bg-muted/20 px-3 py-4 text-xs text-muted-foreground">
-        No saved crop-health imagery is available yet.
+      <div
+        className="rounded-md border bg-muted/20 px-3 py-4 text-xs text-muted-foreground space-y-1"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="text-sm font-medium text-foreground">No saved crop-health imagery is available yet.</div>
+        <div>Refresh Imagery to look for a suitable Copernicus capture.</div>
       </div>
     );
   }
 
-  const pctLabel = selected
-    ? (Number.isInteger(selected.coveragePercent)
-        ? `${selected.coveragePercent}`
-        : selected.coveragePercent.toFixed(1))
-    : "—";
   const activeCount = selected?.activeCount || totalPaddocks;
   const singleDate = count === 1;
   const isPreviewing = previewDate != null && previewDate !== committedDate;
+
+
+  // Coverage message — spec §4.
+  const coverageMessage = (() => {
+    if (!selected) return "";
+    if (singlePaddockScope) {
+      if (scopedPaddockMissing) {
+        const layerName = layerShortLabel ? `${layerShortLabel} ` : "";
+        return `No saved ${layerName}imagery for this paddock on ${formatLong(selected.date)}`;
+      }
+      return "Imagery available for this paddock";
+    }
+    const total = activeCount;
+    if (selected.paddockCount >= total && total > 0) {
+      return `Imagery available for all ${total} paddock${total === 1 ? "" : "s"}`;
+    }
+    return `Imagery available for ${selected.paddockCount} of ${total} paddock${total === 1 ? "" : "s"}`;
+  })();
 
   return (
     <div
@@ -175,12 +202,14 @@ export default function SatelliteDateSlider({
               <span className="ml-2 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Preview</span>
             )}
           </div>
-          <div className="text-[11px] text-muted-foreground">
-            {selected
-              ? `${pctLabel}% coverage · ${selected.paddockCount} of ${activeCount} paddocks`
-              : ""}
+          <div
+            className="text-[11px] text-muted-foreground"
+            aria-live="polite"
+          >
+            {coverageMessage}
           </div>
         </div>
+
 
         {onTogglePlay && (
           <Button
@@ -247,15 +276,22 @@ export default function SatelliteDateSlider({
                   : full
                     ? "h-1.5 w-1.5 bg-foreground/70 border-foreground/70"
                     : "h-1.5 w-1.5 bg-background border-foreground/60";
+              const activeTotal = entry.activeCount || totalPaddocks;
+              const pctText = Number.isInteger(entry.coveragePercent)
+                ? `${entry.coveragePercent}`
+                : entry.coveragePercent.toFixed(1);
+              const label = `${formatLong(entry.date)}, imagery for ${entry.paddockCount} of ${activeTotal} paddocks, ${pctText} percent coverage`;
               return (
                 <span
                   key={entry.date}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border ${cls}`}
                   style={{ left: `${pct}%`, top: 0 }}
-                  title={`${formatShort(entry.date)} — imagery for ${entry.paddockCount} of ${entry.activeCount || totalPaddocks} paddocks`}
+                  title={label}
+                  aria-label={label}
                 />
               );
             })}
+
           </div>
         )}
       </div>
