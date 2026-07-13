@@ -1221,9 +1221,11 @@ export default function SatelliteMappingPage() {
     return { value: raw * raster.scale, message: null, cellRect };
   };
 
+  const hoverSuspended = (previewDate != null && previewDate !== selectedSceneKey) || isPlaying || interacting;
+
   // Pointer-move handler — no network request; reads the cached analytical raster.
   const handlePointerMove = (pt: { lat: number; lng: number; x: number; y: number } | null) => {
-    if (!pt) {
+    if (!pt || hoverSuspended) {
       setHover(null);
       return;
     }
