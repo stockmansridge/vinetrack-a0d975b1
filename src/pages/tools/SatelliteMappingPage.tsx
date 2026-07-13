@@ -585,6 +585,7 @@ export default function SatelliteMappingPage() {
     displayRequested: 0, displayHits: 0, displayMisses: 0,
     analyticalRequested: 0, analyticalHits: 0, analyticalMisses: 0,
     decodedHits: 0, decodedMisses: 0,
+    assetRequests: 0, http304: 0, bytesDownloaded: 0,
   });
   const [, forceStatsRerender] = useState(0);
   const bumpStats = () => forceStatsRerender((v) => v + 1);
