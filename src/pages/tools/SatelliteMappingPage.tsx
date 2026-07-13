@@ -847,8 +847,10 @@ export default function SatelliteMappingPage() {
         activeCount: geoms.length,
         coveragePercent: Math.round((sceneByPaddock.size / total) * 1000) / 10,
         missing: [] as { paddock_id: string; reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch" }[],
+        layerCoverage: {} as Partial<Record<string, { available: number; total: number; percent: number; available_paddock_ids: string[]; missing_paddock_ids: string[] }>>,
       }));
   }, [manifestQuery.data, scenesQuery.data, activeVineyardId, geoms]);
+
 
   const isAllPaddocks = paddockId === "all";
   const totalPaddocks = geoms.length;
