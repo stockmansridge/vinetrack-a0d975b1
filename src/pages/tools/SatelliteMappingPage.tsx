@@ -1007,6 +1007,46 @@ export default function SatelliteMappingPage() {
     return displayAssetPairs.some(({ displayAsset }) => !signedUrls[displayAsset.id]);
   }, [effectiveDisplayDate, selectedSceneKey, displayAssetPairs, signedUrls]);
 
+  // Target overlay set for the map, sourced from the effective display date.
+  // If a preview date has assets still loading, we keep the committed-date
+  // overlays visible instead of blanking the map.
+  const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
+    const source = previewPending ? activeAssets : activeAssets;
+    // Note: because displayAssetPairs = activeAssetPairs when no preview
+    // is active OR pending, `activeAssets` is already correct.
+    return source
+      .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
+      .map(({ asset, scene }) => ({
+        paddockId: scene.paddock_id,
+        url: signedUrls[asset.id],
+        bounds: asset.bounds!,
+        opacity: opacity / 100,
+        key: `${scene.paddock_id}:${asset.id}`,
+      }));
+  }, [activeAssets, signedUrls, opacity, previewPending]);
+
+  // Crossfade-mounted overlays. When the target changes, keep the previous
+  // set briefly with opacity 0 so its CSS transition animates out while the
+  // incoming set animates in.
+  const [mapOverlays, setMapOverlays] = useState<SatelliteRasterOverlay[]>([]);
+  useEffect(() => {
+    const nextKeys = new Set(targetMapOverlays.map((o) => o.key!));
+    setMapOverlays((prev) => {
+      const prevKeys = new Set(prev.map((o) => o.key!));
+      const same = prevKeys.size === nextKeys.size
+        && [...nextKeys].every((k) => prevKeys.has(k));
+      if (same || prefersReducedMotion) return targetMapOverlays;
+      const outgoing = prev
+        .filter((o) => !nextKeys.has(o.key!))
+        .map((o) => ({ ...o, opacity: 0 }));
+      return [...outgoing, ...targetMapOverlays];
+    });
+    if (prefersReducedMotion) return;
+    const t = setTimeout(() => setMapOverlays(targetMapOverlays), 280);
+    return () => clearTimeout(t);
+  }, [targetMapOverlays, prefersReducedMotion]);
+
+
   // ---- Playback ---------------------------------------------------------
   const PLAYBACK_MS = 1250;
   const togglePlay = useCallback(() => {
