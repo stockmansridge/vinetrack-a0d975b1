@@ -1098,6 +1098,59 @@ export default function SatelliteMappingPage() {
     return () => clearTimeout(t);
   }, [targetMapOverlays, prefersReducedMotion]);
 
+  // --- Overlay lifecycle tracking -----------------------------------------
+  // Truth for "Paddocks displayed": count of unique paddockIds whose overlay
+  // <img> has actually loaded and mounted for the currently targeted set.
+  type OverlayLoadStatus = "loading" | "loaded" | "error";
+  const [overlayStatus, setOverlayStatus] = useState<Record<string, OverlayLoadStatus>>({});
+  const [overlayMountedKeys, setOverlayMountedKeys] = useState<Set<string>>(() => new Set());
+
+  const handleOverlayLoad = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayStatus((s) => (s[key] === "loaded" ? s : { ...s, [key]: "loaded" }));
+  }, []);
+  const handleOverlayError = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayStatus((s) => (s[key] === "error" ? s : { ...s, [key]: "error" }));
+  }, []);
+  const handleOverlayMounted = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayMountedKeys((s) => {
+      if (s.has(key)) return s;
+      const next = new Set(s); next.add(key); return next;
+    });
+  }, []);
+  const handleOverlayUnmounted = useCallback(({ key }: { paddockId: string; key: string }) => {
+    setOverlayMountedKeys((s) => {
+      if (!s.has(key)) return s;
+      const next = new Set(s); next.delete(key); return next;
+    });
+    setOverlayStatus((s) => {
+      if (!(key in s)) return s;
+      const { [key]: _drop, ...rest } = s; return rest;
+    });
+  }, []);
+
+  // Seed 'loading' state for any target overlay we don't already track.
+  useEffect(() => {
+    setOverlayStatus((s) => {
+      let changed = false;
+      const next: Record<string, OverlayLoadStatus> = { ...s };
+      for (const o of targetMapOverlays) {
+        const k = o.key!;
+        if (!(k in next)) { next[k] = "loading"; changed = true; }
+      }
+      return changed ? next : s;
+    });
+  }, [targetMapOverlays]);
+
+  // Count unique paddocks that have a currently-targeted overlay mounted.
+  const mountedPaddockCount = useMemo(() => {
+    const seen = new Set<string>();
+    for (const o of targetMapOverlays) {
+      if (overlayMountedKeys.has(o.key!)) seen.add(o.paddockId);
+    }
+    return seen.size;
+  }, [targetMapOverlays, overlayMountedKeys]);
+
+
 
   // ---- Playback ---------------------------------------------------------
   const PLAYBACK_MS = 1250;
