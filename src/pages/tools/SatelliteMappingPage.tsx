@@ -1418,33 +1418,16 @@ export default function SatelliteMappingPage() {
   // Auto-run on page load: if any paddock has no imagery in the last 3 days,
   // silently trigger a refresh for just those paddocks. Cooled down per vineyard
   // across mounts so bouncing in and out of the page doesn't refire it.
+  // NOTE: automatic Refresh Imagery on page load has been removed.
+  // Refreshing must only happen in response to an explicit user click on
+  // the Refresh Imagery button — opening the page must never fire
+  // satellite-search-scenes or satellite-process-scene. Saved imagery is
+  // rendered from stored metadata; provider calls are user-initiated only.
   useEffect(() => {
     if (!activeVineyardId) return;
-    if (scenesQuery.isLoading || !scenesQuery.data) return;
-    if (paddocksLoading || geoms.length === 0) return;
-    if (autoRanForVineyardRef.current === activeVineyardId) return;
-    if (checkForNewImage.isPending) return;
-    const last = autoRunTimestamps.get(activeVineyardId) ?? 0;
-    if (Date.now() - last < AUTO_RUN_COOLDOWN_MS) {
-      autoRanForVineyardRef.current = activeVineyardId;
-      return;
-    }
-    const autoReport = inspectCompleteness({
-      paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-      scenes: scenesQuery.data.scenes,
-      assets: scenesQuery.data.assets,
-      summaries: scenesQuery.data.summaries,
-    });
-    const stale = autoReport.perPaddock
-      .filter((p) => p.state !== "complete")
-      .map((p) => p.paddockId);
     autoRanForVineyardRef.current = activeVineyardId;
-    if (stale.length > 0) {
-      autoRunTimestamps.set(activeVineyardId, Date.now());
-      checkForNewImage.mutate({ paddockIds: stale });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeVineyardId, scenesQuery.data, scenesQuery.isLoading, paddocksLoading, geoms.length]);
+  }, [activeVineyardId]);
+
 
 
 
