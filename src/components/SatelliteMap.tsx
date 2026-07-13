@@ -277,7 +277,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         const mapkit = (window as any).mapkit;
         const rect = container.getBoundingClientRect();
         for (const o of effectiveOverlays) {
-          const img = imgRefs.current.get(o.paddockId);
+          const key = o.key ?? `${o.paddockId}:${o.url}`;
+          const img = imgRefs.current.get(key);
           if (!img) continue;
           const nw = new mapkit.Coordinate(o.bounds.north, o.bounds.west);
           const se = new mapkit.Coordinate(o.bounds.south, o.bounds.east);
