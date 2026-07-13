@@ -175,6 +175,19 @@ export function inspectCompleteness({
     summariesBySceneIndex.set(sum.satellite_scene_id, set);
   }
 
+  // Paddocks that have ANY saved display raster on any scene (regardless of
+  // processing version / freshness). Used to distinguish "no saved imagery"
+  // from "saved imagery exists but may be stale or on an old version".
+  const sceneIdToPaddockId = new Map<string, string>();
+  for (const s of scenes) sceneIdToPaddockId.set(s.id, s.paddock_id);
+  const paddocksWithAnyDisplay = new Set<string>();
+  for (const a of assets) {
+    const kind = normaliseKind(a);
+    if (kind !== "DISPLAY_RASTER") continue;
+    const pid = sceneIdToPaddockId.get(a.satellite_scene_id);
+    if (pid) paddocksWithAnyDisplay.add(pid);
+  }
+
   const perPaddock: PaddockCompleteness[] = [];
   const totals: CompletenessTotals = {
     totalPaddocks: paddocks.length,
@@ -192,6 +205,7 @@ export function inspectCompleteness({
     const latest = newestByPaddock.get(p.id) ?? null;
     const latestMs = latest ? new Date(latest.acquired_at).getTime() : NaN;
     const withinWindow = Number.isFinite(latestMs) && latestMs >= cutoff;
+    const hasSavedDisplayImagery = paddocksWithAnyDisplay.has(p.id);
 
     if (!latest || !withinWindow) {
       perPaddock.push({
@@ -203,6 +217,8 @@ export function inspectCompleteness({
         latestAcquiredAt: latest?.acquired_at ?? null,
         latestSceneCloudCoverPct: latest?.scene_cloud_cover_pct ?? null,
         onOldProcessingVersion: false,
+        hasSavedDisplayImagery,
+        savedImageryStale: hasSavedDisplayImagery,
         missingLayers: [...REQUIRED_INDICES],
         missingDisplayLayers: [...REQUIRED_INDICES],
         missingAnalyticalLayers: REQUIRED_INDICES.filter(requiresAnalytical),
@@ -213,6 +229,7 @@ export function inspectCompleteness({
       totals.totalMissing += 1;
       continue;
     }
+
 
     const displays = displayBySceneIndex.get(latest.id) ?? new Set();
     const analyticals = analyticalBySceneIndex.get(latest.id) ?? new Set();
