@@ -55,6 +55,7 @@ export interface ManifestResponse {
   newest_saved_date?: string | null;
   oldest_saved_date?: string | null;
   total_saved_dates?: number;
+  provider_freshness?: ProviderFreshness;
   stats?: { scene_rows_scanned: number; asset_rows_scanned: number };
 }
 
