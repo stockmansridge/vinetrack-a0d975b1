@@ -126,8 +126,14 @@ export interface AssetUrlResponse {
   content_type: string | null;
 }
 
-export function fetchManifest(vineyardId: string): Promise<ManifestResponse> {
-  return invoke<ManifestResponse>("satellite-get-manifest", { vineyard_id: vineyardId });
+export function fetchManifest(
+  vineyardId: string,
+  activePaddockIds?: string[],
+): Promise<ManifestResponse> {
+  return invoke<ManifestResponse>("satellite-get-manifest", {
+    vineyard_id: vineyardId,
+    active_paddock_ids: activePaddockIds,
+  });
 }
 
 export function fetchRefreshStatus(
