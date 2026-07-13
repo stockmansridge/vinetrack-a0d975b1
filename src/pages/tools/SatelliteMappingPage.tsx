@@ -43,12 +43,14 @@ import {
 import type { SatelliteIndexType } from "@/types/satellite";
 import {
   inspectCompleteness,
+  reportFromManifest,
   describePaddockMissingItems,
   REQUIRED_INDICES,
   CURRENT_PROCESSING_VERSION,
   type CompletenessReport,
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
+import { fetchManifest } from "@/lib/satelliteManifest";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
