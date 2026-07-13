@@ -2406,19 +2406,28 @@ export default function SatelliteMappingPage() {
                   color: paddockColor(g.id),
                 }))}
                 selectedPaddockId={paddockId === "all" ? null : paddockId}
-                overlays={activeAssets
-                  .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
-                  .map(({ asset, scene }) => ({
-                    paddockId: scene.paddock_id,
-                    url: signedUrls[asset.id],
-                    bounds: asset.bounds!,
-                    opacity: opacity / 100,
-                  }))}
+                overlays={mapOverlays}
                 overlayOpacity={opacity / 100}
-                cellRect={hover?.cellRect ?? null}
+                overlayTransitionMs={prefersReducedMotion ? 0 : 220}
+                cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
                 onPaddockClick={(id) => setPaddockId(id)}
                 onPointerMove={handlePointerMove}
               />
+            )}
+
+            {/* Non-blocking status note during preview / playback / preview-load. */}
+            {(hoverSuspended || previewPending) && (
+              <div
+                className="pointer-events-none absolute left-1/2 top-3 z-[550] -translate-x-1/2 rounded-md border bg-background/95 px-3 py-1.5 text-[11px] font-medium text-foreground shadow-md backdrop-blur"
+                role="status"
+                aria-live="polite"
+              >
+                {previewPending && effectiveDisplayDate
+                  ? `Loading imagery for ${new Date(effectiveDisplayDate + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}…`
+                  : isPlaying
+                    ? "Pause playback to inspect cell values."
+                    : "Release the timeline to inspect cell values."}
+              </div>
             )}
 
             {hover && hover.paddockId && (() => {
