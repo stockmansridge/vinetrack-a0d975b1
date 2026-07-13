@@ -55,6 +55,7 @@ export interface ManifestResponse {
   newest_saved_date?: string | null;
   oldest_saved_date?: string | null;
   total_saved_dates?: number;
+  provider_freshness?: ProviderFreshness;
   stats?: { scene_rows_scanned: number; asset_rows_scanned: number };
 }
 
@@ -80,11 +81,24 @@ export interface ManifestDateEntry {
   acquisition_date: string; // YYYY-MM-DD
   active_paddock_count: number;
   available_paddock_count: number;
+  coverage_percent: number;
   available_paddock_ids: string[];
   missing_paddock_ids: string[];
   missing_paddocks: { paddock_id: string; reason: ManifestDateMissingReason }[];
   paddocks: ManifestDatePaddock[];
   updated_at: string;
+}
+
+export type ProviderCheckStatus =
+  | "never_checked" | "checked_recently" | "check_due" | "checking" | "failed";
+
+export interface ProviderFreshness {
+  last_provider_check_at: string | null;
+  last_provider_check_status: string | null;
+  next_recommended_provider_check_at: string | null;
+  provider_check_interval_days: number;
+  provider_check_status: ProviderCheckStatus;
+  active_job_id: string | null;
 }
 
 export type RefreshJobStatus =

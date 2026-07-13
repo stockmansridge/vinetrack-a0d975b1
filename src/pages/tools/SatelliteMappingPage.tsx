@@ -44,7 +44,7 @@ import type { SatelliteIndexType } from "@/types/satellite";
 import {
   inspectCompleteness,
   reportFromManifest,
-  describePaddockMissingItems,
+  // describePaddockMissingItems no longer used — badges now come from date_coverage.
   REQUIRED_INDICES,
   CURRENT_PROCESSING_VERSION,
   type CompletenessReport,
@@ -689,9 +689,7 @@ export default function SatelliteMappingPage() {
   // This is the client-side date-coverage index the page renders from — no
   // mixing dates, no per-millisecond timestamp fragility.
   const dateCoverage = useMemo(() => {
-    // Prefer the server-side date-coverage index. It groups by acquisition day
-    // and picks the single best scene per (date, paddock) — no need to reduce
-    // raw scenes on the client.
+    // Prefer the server-side date-coverage index.
     const serverIndex = manifestQuery.data?.date_coverage;
     if (serverIndex && serverIndex.length > 0) {
       return serverIndex.map((entry) => {
@@ -710,14 +708,20 @@ export default function SatelliteMappingPage() {
             processing_status: "complete",
           } as DBScene);
         }
-        return { date: entry.acquisition_date, sceneByPaddock, paddockCount: entry.available_paddock_count };
+        return {
+          date: entry.acquisition_date,
+          sceneByPaddock,
+          paddockCount: entry.available_paddock_count,
+          activeCount: entry.active_paddock_count,
+          coveragePercent: entry.coverage_percent,
+          missing: entry.missing_paddocks,
+        };
       });
     }
-    // Fallback: client-side reconstruction from scenesQuery (kept until we
-    // confirm every deployment is on the v2 manifest response).
+    // Fallback: client-side reconstruction from scenesQuery.
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present in manifest response.");
+      console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present.");
     }
     const scenes = scenesQuery.data?.scenes ?? [];
     const grouped = new Map<string, Map<string, DBScene>>();
@@ -736,10 +740,18 @@ export default function SatelliteMappingPage() {
       const cur = per.get(s.paddock_id);
       per.set(s.paddock_id, cur ? better(cur, s) : s);
     }
+    const total = geoms.length || 1;
     return Array.from(grouped.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, sceneByPaddock]) => ({ date, sceneByPaddock, paddockCount: sceneByPaddock.size }));
-  }, [manifestQuery.data, scenesQuery.data, activeVineyardId]);
+      .map(([date, sceneByPaddock]) => ({
+        date,
+        sceneByPaddock,
+        paddockCount: sceneByPaddock.size,
+        activeCount: geoms.length,
+        coveragePercent: Math.round((sceneByPaddock.size / total) * 1000) / 10,
+        missing: [] as { paddock_id: string; reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch" }[],
+      }));
+  }, [manifestQuery.data, scenesQuery.data, activeVineyardId, geoms]);
 
   const isAllPaddocks = paddockId === "all";
   const totalPaddocks = geoms.length;
@@ -753,19 +765,32 @@ export default function SatelliteMappingPage() {
     } catch { return iso; }
   };
 
-  const dateOptions = useMemo(() => dateCoverage.map((g) => ({
-    date: g.date,
-    scenes: Array.from(g.sceneByPaddock.values()),
-    paddockCount: g.paddockCount,
-    label: `${formatDate(g.date)} · ${g.paddockCount} of ${totalPaddocks} paddocks`,
-  })), [dateCoverage, totalPaddocks]);
+  const dateOptions = useMemo(() => dateCoverage.map((g) => {
+    const pct = g.coveragePercent;
+    const pctLabel = Number.isInteger(pct) ? `${pct}` : pct.toFixed(1);
+    return {
+      date: g.date,
+      scenes: Array.from(g.sceneByPaddock.values()),
+      paddockCount: g.paddockCount,
+      activeCount: g.activeCount,
+      coveragePercent: pct,
+      label: `${formatDate(g.date)} · ${pctLabel}% coverage · ${g.paddockCount} of ${g.activeCount || totalPaddocks} paddocks`,
+    };
+  }), [dateCoverage, totalPaddocks]);
 
-  // Auto-select: newest date with full coverage; otherwise newest date with
-  // the highest coverage count. Also drop any legacy "latest" selection.
+  const providerFreshness = manifestQuery.data?.provider_freshness ?? null;
+  const recommendedDefaultDate = manifestQuery.data?.recommended_default_date ?? null;
+
+  // Auto-select: prefer server-provided recommended default; restore saved
+  // selection if it still exists; drop legacy "latest" markers.
   useEffect(() => {
     if (dateCoverage.length === 0) return;
     if (selectedSceneKey === "latest") { setSelectedSceneKey(null); return; }
-    // Restore per-vineyard remembered selection if it still exists.
+    // If a selection exists but is no longer in the available dates, drop it.
+    if (selectedSceneKey && !dateCoverage.some((g) => g.date === selectedSceneKey)) {
+      setSelectedSceneKey(null);
+      return;
+    }
     if (!selectedSceneKey && activeVineyardId) {
       try {
         const saved = localStorage.getItem(`crop-health:date:${activeVineyardId}`);
@@ -776,13 +801,16 @@ export default function SatelliteMappingPage() {
       } catch { /* ignore */ }
     }
     if (!selectedSceneKey) {
-      const fullCov = dateCoverage.find((g) => g.paddockCount >= totalPaddocks && totalPaddocks > 0);
-      if (fullCov) { setSelectedSceneKey(fullCov.date); return; }
+      if (recommendedDefaultDate && dateCoverage.some((g) => g.date === recommendedDefaultDate)) {
+        setSelectedSceneKey(recommendedDefaultDate);
+        return;
+      }
+      // Server didn't yield one — pick newest with the highest coverage.
       const best = [...dateCoverage].sort((a, b) =>
-        b.paddockCount - a.paddockCount || b.date.localeCompare(a.date))[0];
+        b.coveragePercent - a.coveragePercent || b.date.localeCompare(a.date))[0];
       if (best) setSelectedSceneKey(best.date);
     }
-  }, [dateCoverage, selectedSceneKey, totalPaddocks, activeVineyardId]);
+  }, [dateCoverage, selectedSceneKey, recommendedDefaultDate, activeVineyardId]);
 
   // Persist user selection per vineyard so revisits keep the same date/layer.
   useEffect(() => {
@@ -1070,7 +1098,7 @@ export default function SatelliteMappingPage() {
 
   // ---------- Actions ----------
 
-  type RefreshVars = { paddockIds?: string[]; isRetry?: boolean } | undefined;
+  type RefreshVars = { paddockIds?: string[]; isRetry?: boolean; force?: boolean } | undefined;
   const retryInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const autoRanForVineyardRef = useRef<string | null>(null);
@@ -1079,6 +1107,21 @@ export default function SatelliteMappingPage() {
     mutationFn: async (vars: RefreshVars) => {
       if (!activeVineyardId) throw new Error("No vineyard selected");
       if (refreshInFlightRef.current) throw new Error("Refresh already running");
+      // Provider-freshness gate: skip routine refresh if Copernicus was
+      // checked within the interval, unless caller passes force=true.
+      if (!vars?.force && !vars?.isRetry
+          && providerFreshness?.provider_check_status === "checked_recently") {
+        toast({
+          title: "Copernicus was checked recently",
+          description: "No routine refresh is required yet. Use Force provider check to run one now.",
+        });
+        return {
+          results: [], skippedNoGeometry: 0, skippedComplete: 0,
+          providerCallsAvoided: 0, repairedItems: 0,
+          isRetry: false, noWorkNeeded: true,
+          report: { perPaddock: [], totals: { totalPaddocks: 0, completePaddocks: 0, missingPaddocks: 0, incompletePaddocks: 0, oldVersionPaddocks: 0, missingDisplay: 0, missingAnalytical: 0, missingSummaries: 0, totalMissing: 0 } },
+        } as any;
+      }
       refreshInFlightRef.current = true;
       setSearchError(null);
 
@@ -1614,10 +1657,23 @@ export default function SatelliteMappingPage() {
             size="sm"
             disabled={busy || geoms.length === 0}
             onClick={() => checkForNewImage.mutate(undefined)}
+            title="Search Copernicus for newer imagery. Skipped when a check ran within the last 5 days."
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
             {refreshLabel}
           </Button>
+          {providerFreshness?.provider_check_status === "checked_recently" && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || geoms.length === 0}
+              onClick={() => checkForNewImage.mutate({ force: true })}
+              title="Force a Copernicus search even though a recent check exists."
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Force provider check
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1707,26 +1763,16 @@ export default function SatelliteMappingPage() {
                 disabled={dateOptions.length === 0}
               >
                 <SelectTrigger className="min-h-[44px]">
-                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
+                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No saved imagery"} />
                 </SelectTrigger>
                 <SelectContent>
                   {dateOptions.map((d) => {
-                    if (isAllPaddocks) {
-                      return (
-                        <SelectItem key={d.date} value={d.date}>
-                          {formatDate(d.date)} · {d.paddockCount} of {totalPaddocks} paddocks
-                        </SelectItem>
-                      );
-                    }
-                    const s = d.scenes[0];
-                    const cloud = s?.scene_cloud_cover_pct;
-                    const cov = s?.paddock_valid_coverage_pct;
+                    const pctLabel = Number.isInteger(d.coveragePercent)
+                      ? `${d.coveragePercent}`
+                      : d.coveragePercent.toFixed(1);
                     return (
                       <SelectItem key={d.date} value={d.date}>
-                        {formatDate(d.date)}
-                        {cloud != null ? ` · ${Number(cloud).toFixed(0)}% cloud` : ""}
-                        {cov != null ? ` · ${Number(cov).toFixed(0)}% valid` : ""}
-                        {s?.quality_status ? ` · ${s.quality_status}` : ""}
+                        {formatDate(d.date)} · {pctLabel}% coverage · {d.paddockCount}/{d.activeCount || totalPaddocks} paddocks
                       </SelectItem>
                     );
                   })}
@@ -1863,59 +1909,195 @@ export default function SatelliteMappingPage() {
           </div>
 
 
-          {/* System-admin diagnostics — imagery completeness */}
-          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
-            <div className="text-xs font-semibold text-foreground">Imagery completeness</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-              <div>Active paddocks: <span className="text-foreground">{liveReport.totals.totalPaddocks}</span></div>
-              <div>With saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.hasSavedDisplayImagery).length}</span></div>
-              <div>No saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => !p.hasSavedDisplayImagery).length}</span></div>
-              <div>Complete packages: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
-              <div>Partial packages: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
-              <div>Refresh needed (stale): <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene" && p.hasSavedDisplayImagery).length}</span></div>
-              <div>Old processing version: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
-              <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
-              <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
-              <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+          {/* Copernicus status */}
+          <div className="mt-3 rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-1">
+            <div className="text-xs font-semibold text-foreground">Copernicus status</div>
+            {(() => {
+              const pf = providerFreshness;
+              const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "—";
+              const statusLabel = (() => {
+                switch (pf?.provider_check_status) {
+                  case "checked_recently": return "Checked recently";
+                  case "check_due": return "Check due";
+                  case "checking": return "Checking Copernicus for newer imagery…";
+                  case "failed": return "Last check failed";
+                  case "never_checked": return "Never checked";
+                  default: return "—";
+                }
+              })();
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                  <div>Last checked: <span className="text-foreground">{fmt(pf?.last_provider_check_at ?? null)}</span></div>
+                  <div>Next recommended: <span className="text-foreground">{fmt(pf?.next_recommended_provider_check_at ?? null)}</span></div>
+                  <div>Status: <span className="text-foreground">{statusLabel}</span></div>
+                  <div>Interval: <span className="text-foreground">{pf?.provider_check_interval_days ?? 5} days</span></div>
+                  {pf?.active_job_id && (
+                    <div className="col-span-2 md:col-span-3">Active job: <span className="text-foreground">{pf.active_job_id.slice(0, 8)}…</span></div>
+                  )}
+                </div>
+              );
+            })()}
+            {providerFreshness?.provider_check_status === "check_due" && (
+              <div className="text-[11px] text-foreground/80 pt-1">A new Copernicus check is recommended. Saved imagery remains available.</div>
+            )}
+            {providerFreshness?.provider_check_status === "failed" && (
+              <div className="text-[11px] text-destructive pt-1">Copernicus imagery search failed. Existing saved imagery remains available.</div>
+            )}
+          </div>
 
+          {/* Date history — grouped by month */}
+          {dateOptions.length > 0 && (
+            <Collapsible defaultOpen={false}>
+              <div className="mt-3 rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
+                <CollapsibleTrigger className="flex w-full items-center justify-between text-xs font-semibold text-foreground">
+                  <span>Saved image dates ({dateOptions.length})</span>
+                  <ChevronDown className="h-3 w-3" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {(() => {
+                    const groups = new Map<string, typeof dateOptions>();
+                    for (const d of dateOptions) {
+                      const key = d.date.slice(0, 7); // YYYY-MM
+                      const arr = groups.get(key) ?? [];
+                      arr.push(d);
+                      groups.set(key, arr);
+                    }
+                    const monthLabel = (ym: string) => {
+                      const [y, m] = ym.split("-");
+                      return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+                    };
+                    return (
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        {Array.from(groups.entries()).map(([ym, arr]) => (
+                          <div key={ym}>
+                            <div className="text-[11px] font-medium text-foreground mb-1">{monthLabel(ym)}</div>
+                            <div className="space-y-0.5">
+                              {arr.map((d) => {
+                                const isSel = d.date === selectedSceneKey;
+                                const pct = Number.isInteger(d.coveragePercent) ? `${d.coveragePercent}` : d.coveragePercent.toFixed(1);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={d.date}
+                                    onClick={() => setSelectedSceneKey(d.date)}
+                                    className={`w-full text-left rounded-sm px-2 py-1 text-[11px] leading-tight ${isSel ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}
+                                  >
+                                    <span className="font-medium text-foreground">{formatDate(d.date)}</span>
+                                    <span className="ml-1">· {pct}% · {d.paddockCount}/{d.activeCount || totalPaddocks} paddocks</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          )}
+
+          {/* System-admin diagnostics — sectioned */}
+          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+            {(() => {
+              const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
+              const pct = selectedEntry
+                ? (Number.isInteger(selectedEntry.coveragePercent) ? `${selectedEntry.coveragePercent}` : selectedEntry.coveragePercent.toFixed(1))
+                : "—";
+              return (
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold text-foreground">Selected date</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                    <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
+                    <div>Active paddocks: <span className="text-foreground">{selectedEntry?.activeCount ?? totalPaddocks}</span></div>
+                    <div>Paddocks displayed: <span className="text-foreground">{selectedEntry?.paddockCount ?? 0}</span></div>
+                    <div>Unavailable: <span className="text-foreground">{selectedEntry ? (selectedEntry.activeCount || totalPaddocks) - selectedEntry.paddockCount : 0}</span></div>
+                    <div>Coverage: <span className="text-foreground">{pct}%</span></div>
+                    <div>Layer: <span className="text-foreground">{layer}</span></div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="space-y-1 pt-2 border-t">
+              <div className="text-xs font-semibold text-foreground">Saved history</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                <div>Saved dates: <span className="text-foreground">{manifestQuery.data?.total_saved_dates ?? dateOptions.length}</span></div>
+                <div>Newest: <span className="text-foreground">{manifestQuery.data?.newest_saved_date ?? "—"}</span></div>
+                <div>Oldest: <span className="text-foreground">{manifestQuery.data?.oldest_saved_date ?? "—"}</span></div>
+              </div>
+            </div>
+
+            <div className="space-y-1 pt-2 border-t">
+              <div className="text-xs font-semibold text-foreground">Package health</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                <div>Complete: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
+                <div>Partial: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
+                <div>Upgrade required: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
+                <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
+                <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
+                <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
+              <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
+              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
               {lastRefreshSummary && (
                 <>
-                  <div>Last refresh — processed: <span className="text-foreground">{lastRefreshSummary.processedPaddocks}</span></div>
-                  <div>Last refresh — skipped: <span className="text-foreground">{lastRefreshSummary.skippedPaddocks}</span></div>
+                  <div>Last refresh: <span className="text-foreground">{lastRefreshSummary.processedPaddocks} processed</span></div>
                   <div>Provider calls avoided: <span className="text-foreground">{lastRefreshSummary.providerCallsAvoided}</span></div>
                 </>
               )}
             </div>
-            <div className="pt-1 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
-              <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
-              <div>Selected date: <span className="text-foreground">{selectedSceneKey ?? "—"}</span></div>
-              <div>Selected layer: <span className="text-foreground">{layer}</span></div>
-              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
-            </div>
+
             <Collapsible open={missingDetailOpen} onOpenChange={setMissingDetailOpen}>
               <CollapsibleTrigger className="inline-flex items-center gap-1 text-[11px] text-foreground/80 hover:text-foreground">
                 <ChevronDown className={`h-3 w-3 transition-transform ${missingDetailOpen ? "" : "-rotate-90"}`} />
-                Show missing item detail
+                Show per-paddock detail
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-2 max-h-56 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
-                  {liveReport.perPaddock.length === 0 && (
-                    <div className="text-[10px]">No paddocks with valid boundaries.</div>
-                  )}
-                  {liveReport.perPaddock.map((p) => (
-                    <div key={p.paddockId} className="text-[11px] leading-tight">
-                      <span className="font-medium text-foreground">{p.paddockName}</span>
-                      <span className={`ml-1 ${p.state === "complete" ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>
-                        — {describePaddockMissingItems(p).join("; ")}
-                      </span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
+                    const missingSet = new Map<string, string>();
+                    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
+                    for (const m of group?.missing ?? []) {
+                      const label = m.reason === "scene_not_complete"
+                        ? "Imagery exists but processing is incomplete"
+                        : m.reason === "package_version_mismatch"
+                          ? "Imagery exists but requires a package upgrade"
+                          : "No saved imagery for this date";
+                      missingSet.set(m.paddock_id, label);
+                    }
+                    return geoms.map((g) => {
+                      const pkg = liveReport.perPaddock.find((p) => p.paddockId === g.id);
+                      const missingLabel = missingSet.get(g.id);
+                      const badge = missingLabel
+                        ? missingLabel
+                        : pkg?.state === "old_processing_version"
+                          ? "Imagery available · Upgrade available"
+                          : pkg && pkg.indicesRequiringWork.length > 0
+                            ? "Imagery available · Cell data incomplete"
+                            : "Imagery available";
+                      return (
+                        <div key={g.id} className="text-[11px] leading-tight">
+                          <span className="font-medium text-foreground">{g.name}</span>
+                          <span className={`ml-1 ${missingLabel ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>— {badge}</span>
+                        </div>
+                      );
+                    });
+                    // eslint-disable-next-line no-unreachable
+                    void selectedEntry;
+                  })()}
                 </div>
               </CollapsibleContent>
             </Collapsible>
           </div>
         </CardContent>
       </Card>
+
 
 
       {/* Map */}
