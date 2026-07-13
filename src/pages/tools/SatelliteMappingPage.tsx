@@ -880,19 +880,6 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
-  // Fetch signed URLs for visible assets. Signed URLs live ~10 min server-side;
-  // route through React Query so they survive route changes within their TTL
-  // and don't get re-signed on every page mount.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      for (const { asset } of [...activeAssets, ...activeAnalyticalAssets]) {
-        if (signedUrls[asset.id]) continue;
-        try {
-          const signed_url = await qc.fetchQuery({
-            queryKey: ["satellite-signed-url", asset.id],
-            queryFn: async () => {
-  // Cache-first loader: for each visible asset, check IndexedDB for a stored
   // blob keyed by (assetId, processingVersion). If present, mint an object URL
   // and render immediately with zero network. Otherwise fetch a short-lived
   // signed URL, download the bytes, cache them and mint the object URL.
