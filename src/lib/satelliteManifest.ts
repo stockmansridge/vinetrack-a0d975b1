@@ -1,5 +1,5 @@
 // Client wrappers for the crop-health manifest, refresh-status and
-// per-asset signed-URL edge functions. All calls go through the VineTrack
+// per-asset stable asset endpoint. All calls go through the VineTrack
 // iOS session (system-admin gated), matching the pattern used elsewhere in
 // SatelliteMappingPage.
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,39 @@ async function invoke<T = any>(name: string, body: unknown): Promise<T> {
   if (error) throw error;
   return data as T;
 }
+
+// Fetch bytes from the stable authenticated asset endpoint. Supports
+// If-None-Match / 304 so cached blobs are reused without re-download.
+export interface AssetFetchResult {
+  status: 200 | 304;
+  blob: Blob | null;   // present on 200, null on 304
+  etag: string | null;
+  contentType: string | null;
+}
+
+export async function fetchAssetBytes(
+  assetId: string,
+  ifNoneMatch?: string | null,
+): Promise<AssetFetchResult> {
+  const { data: { session } } = await iosSupabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not signed in to VineTrack");
+  const base = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+  const anon = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+  if (!base) throw new Error("Supabase URL not configured");
+  const url = `${base}/functions/v1/satellite-get-asset?asset_id=${encodeURIComponent(assetId)}`;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${session.access_token}`,
+  };
+  if (anon) headers.apikey = anon;
+  if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
+  const res = await fetch(url, { method: "GET", headers });
+  const etag = res.headers.get("ETag");
+  if (res.status === 304) return { status: 304, blob: null, etag, contentType: null };
+  if (!res.ok) throw new Error(`asset fetch failed (${res.status})`);
+  const blob = await res.blob();
+  return { status: 200, blob, etag, contentType: res.headers.get("Content-Type") };
+}
+
 
 export type ManifestPackageStatus =
   | "complete"
