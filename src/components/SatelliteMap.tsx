@@ -264,6 +264,14 @@ export default function SatelliteMap(props: SatelliteMapProps) {
       if (!activeIds.has(id)) {
         try { el.remove(); } catch { /* noop */ }
         imgRefs.current.delete(id);
+        if (mountedKeysRef.current.has(id)) {
+          mountedKeysRef.current.delete(id);
+          const pid = paddockIdByKeyRef.current.get(id) ?? "";
+          paddockIdByKeyRef.current.delete(id);
+          try { onOverlayUnmountedRef.current?.({ paddockId: pid, key: id }); } catch { /* noop */ }
+        } else {
+          paddockIdByKeyRef.current.delete(id);
+        }
       }
     }
 
@@ -280,6 +288,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     // Ensure an <img> exists for each overlay and set its src / opacity.
     for (const o of effectiveOverlays) {
       const key = keyFor(o);
+      paddockIdByKeyRef.current.set(key, o.paddockId);
       const targetOpacity = String(o.opacity ?? overlayOpacity);
       let img = imgRefs.current.get(key);
       const fresh = !img;
@@ -292,6 +301,19 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.style.imageRendering = "pixelated";
         img.style.willChange = "opacity, transform";
         img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
+        // Lifecycle callbacks — invoked once per <img> instance.
+        const boundKey = key;
+        const boundPid = o.paddockId;
+        img.addEventListener("load", () => {
+          try { onOverlayLoadRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          if (!mountedKeysRef.current.has(boundKey)) {
+            mountedKeysRef.current.add(boundKey);
+            try { onOverlayMountedRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          }
+        }, { once: false });
+        img.addEventListener("error", () => {
+          try { onOverlayErrorRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+        }, { once: false });
         layer.appendChild(img);
         imgRefs.current.set(key, img);
       }
