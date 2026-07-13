@@ -470,7 +470,7 @@ Deno.serve(async (req) => {
   };
 
   return jsonOk({
-    manifest_version: "v2",
+    manifest_version: "v3",
     vineyard_id,
     updated_at,
     paddocks: manifestRows ?? [],
