@@ -51,6 +51,7 @@ import {
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
 import { fetchManifest } from "@/lib/satelliteManifest";
+import { getAssetBlob, deleteCachedAsset, readCachedAsset } from "@/lib/satelliteCache";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
