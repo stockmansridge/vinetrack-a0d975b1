@@ -182,19 +182,31 @@ Deno.serve(async (req) => {
 
   const sceneIds = sceneRows.map((s) => s.id);
   let assetRows: AssetRow[] = [];
+  let summaryRows: SummaryRow[] = [];
   if (sceneIds.length > 0) {
     // Chunk in case of very long IN lists.
     const CHUNK = 500;
     for (let i = 0; i < sceneIds.length; i += CHUNK) {
       const slice = sceneIds.slice(i, i + CHUNK);
-      const { data: assets, error: aErr } = await supa
-        .from("satellite_raster_assets")
-        .select("satellite_scene_id, index_type, asset_type, processing_version, storage_path")
-        .in("satellite_scene_id", slice);
+      const [{ data: assets, error: aErr }, { data: sums, error: sErr }] = await Promise.all([
+        supa.from("satellite_raster_assets")
+          .select("id, satellite_scene_id, index_type, asset_type, processing_version, storage_path, mime_type, bounds, raster_width, raster_height, native_resolution_m, display_resolution_m, data_type, scale_factor, no_data_sentinel, row_orientation, minimum_value, maximum_value, colour_scale, acquisition_date")
+          .in("satellite_scene_id", slice),
+        supa.from("satellite_index_summaries")
+          .select("satellite_scene_id, index_type, processing_version, mean_value, median_value, minimum_value, maximum_value, standard_deviation, percentile_10, percentile_25, percentile_75, percentile_90")
+          .in("satellite_scene_id", slice),
+      ]);
       if (aErr) return jsonError(500, "read_failed", aErr.message);
+      if (sErr) return jsonError(500, "read_failed", sErr.message);
       assetRows = assetRows.concat((assets ?? []) as AssetRow[]);
+      summaryRows = summaryRows.concat((sums ?? []) as SummaryRow[]);
     }
   }
+
+  const inferKind = (a: AssetRow): "DISPLAY_RASTER" | "ANALYTICAL_RASTER" =>
+    a.asset_type === "DISPLAY_RASTER" || a.asset_type === "ANALYTICAL_RASTER"
+      ? a.asset_type as "DISPLAY_RASTER" | "ANALYTICAL_RASTER"
+      : (a.storage_path?.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
 
   // Index assets by scene, split by DISPLAY_RASTER / ANALYTICAL_RASTER at the
   // current processing version. Track whether an older-version asset was seen
@@ -204,11 +216,11 @@ Deno.serve(async (req) => {
   const anyDisplayByScene = new Map<string, Set<string>>();
   const olderVersionByScene = new Map<string, Set<string>>();
   const currentVersionByScene = new Map<string, Set<string>>();
+  // Per-scene, per-index full asset rows (current version only). Keyed by
+  // `${sceneId}:${indexType}:${kind}` -> AssetRow.
+  const assetByKey = new Map<string, AssetRow>();
   for (const a of assetRows) {
-    const kind: "DISPLAY_RASTER" | "ANALYTICAL_RASTER" =
-      a.asset_type === "DISPLAY_RASTER" || a.asset_type === "ANALYTICAL_RASTER"
-        ? a.asset_type as "DISPLAY_RASTER" | "ANALYTICAL_RASTER"
-        : (a.storage_path?.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
+    const kind = inferKind(a);
     if (kind === "DISPLAY_RASTER") {
       const s = anyDisplayByScene.get(a.satellite_scene_id) ?? new Set<string>();
       s.add(a.index_type);
@@ -222,12 +234,40 @@ Deno.serve(async (req) => {
       const cv = currentVersionByScene.get(a.satellite_scene_id) ?? new Set<string>();
       cv.add(a.index_type);
       currentVersionByScene.set(a.satellite_scene_id, cv);
+      assetByKey.set(`${a.satellite_scene_id}:${a.index_type}:${kind}`, a);
     } else {
       const s = olderVersionByScene.get(a.satellite_scene_id) ?? new Set<string>();
       s.add(String(a.processing_version ?? "unknown"));
       olderVersionByScene.set(a.satellite_scene_id, s);
     }
   }
+  // Per-scene, per-index summaries at the current version.
+  const summaryByKey = new Map<string, SummaryRow>();
+  for (const s of summaryRows) {
+    if ((s.processing_version ?? "") !== CURRENT_PROCESSING_VERSION) continue;
+    summaryByKey.set(`${s.satellite_scene_id}:${s.index_type}`, s);
+  }
+
+  const toLayerAsset = (a: AssetRow): LayerAsset => ({
+    asset_id: a.id,
+    index_type: a.index_type,
+    asset_type: inferKind(a),
+    processing_version: a.processing_version,
+    storage_path: a.storage_path,
+    mime_type: a.mime_type,
+    bounds: a.bounds,
+    raster_width: a.raster_width,
+    raster_height: a.raster_height,
+    native_resolution_m: a.native_resolution_m,
+    display_resolution_m: a.display_resolution_m,
+    data_type: a.data_type,
+    scale_factor: a.scale_factor,
+    no_data_sentinel: a.no_data_sentinel,
+    row_orientation: a.row_orientation,
+    colour_scale: a.colour_scale,
+    etag: `${a.id}:${a.processing_version ?? "unknown"}`,
+  });
+
 
   // ---- Same-day best-scene selection --------------------------------------
   // Group all scenes by acquisition day. Per (date, paddock) pick one best
