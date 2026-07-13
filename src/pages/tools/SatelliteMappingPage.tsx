@@ -865,17 +865,23 @@ export default function SatelliteMappingPage() {
   };
 
   const dateOptions = useMemo(() => dateCoverage.map((g) => {
-    const pct = typeof g.coveragePercent === "number" && Number.isFinite(g.coveragePercent) ? g.coveragePercent : 0;
-    const pctLabel = Number.isInteger(pct) ? `${pct}` : pct.toFixed(1);
+    const lc = g.layerCoverage?.[layer];
+    const paddockCount = lc ? lc.available : g.paddockCount;
+    const activeCount = lc ? lc.total : g.activeCount;
+    const coveragePercent = lc ? lc.percent
+      : (typeof g.coveragePercent === "number" && Number.isFinite(g.coveragePercent) ? g.coveragePercent : 0);
+    const pctLabel = Number.isInteger(coveragePercent) ? `${coveragePercent}` : coveragePercent.toFixed(1);
     return {
       date: g.date,
       scenes: Array.from(g.sceneByPaddock.values()),
-      paddockCount: g.paddockCount,
-      activeCount: g.activeCount,
-      coveragePercent: pct,
-      label: `${formatDate(g.date)} · ${pctLabel}% coverage · ${g.paddockCount} of ${g.activeCount || totalPaddocks} paddocks`,
+      paddockCount,
+      activeCount,
+      coveragePercent,
+      layerCoverage: g.layerCoverage,
+      label: `${formatDate(g.date)} · ${pctLabel}% ${activeLayer.short} coverage · ${paddockCount} of ${activeCount || totalPaddocks} paddocks`,
     };
-  }), [dateCoverage, totalPaddocks]);
+  }), [dateCoverage, totalPaddocks, layer, activeLayer.short]);
+
 
   const providerFreshness = manifestQuery.data?.provider_freshness ?? null;
   const recommendedDefaultDate = manifestQuery.data?.recommended_default_date ?? null;
