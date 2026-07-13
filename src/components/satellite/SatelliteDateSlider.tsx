@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 
@@ -14,9 +14,20 @@ interface Props {
   /** All saved acquisition dates. Any order — sorted ascending internally. */
   entries: SatelliteDateSliderEntry[];
   /** Currently committed date (YYYY-MM-DD). */
-  selectedDate: string | null;
-  /** Called when the user picks a new date. */
-  onChange: (date: string) => void;
+  committedDate: string | null;
+  /** Currently previewed date (may equal committed). */
+  previewDate?: string | null;
+  /** Fires while the user is scrubbing/keyboarding but before commit. */
+  onPreviewChange?: (date: string) => void;
+  /** Called once the user releases the pointer / finishes a keyboard step. */
+  onCommit: (date: string) => void;
+  /** Fires when a pointer-drag or keyboard interaction starts. */
+  onInteractionStart?: () => void;
+  /** Fires when the interaction ends (pointer release / key up). */
+  onInteractionEnd?: () => void;
+  /** Playback state — when supplied, renders a Play/Pause button. */
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
   /** Optional total paddock count for the "of N" label when activeCount is 0. */
   totalPaddocks: number;
 }
@@ -37,47 +48,90 @@ function formatShort(iso: string): string {
 }
 
 export default function SatelliteDateSlider({
-  entries, selectedDate, onChange, totalPaddocks,
+  entries,
+  committedDate,
+  previewDate,
+  onPreviewChange,
+  onCommit,
+  onInteractionStart,
+  onInteractionEnd,
+  isPlaying = false,
+  onTogglePlay,
+  totalPaddocks,
 }: Props) {
-  // Sort ascending: oldest -> newest (left -> right on the slider).
   const sorted = useMemo(
     () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
     [entries],
   );
 
-  const trackRef = useRef<HTMLDivElement | null>(null);
   const count = sorted.length;
   const maxIndex = Math.max(0, count - 1);
-  const selectedIndex = useMemo(() => {
-    if (!selectedDate) return maxIndex;
-    const i = sorted.findIndex((e) => e.date === selectedDate);
-    return i >= 0 ? i : maxIndex;
-  }, [sorted, selectedDate, maxIndex]);
 
-  const selected = sorted[selectedIndex];
+  const displayDate = previewDate ?? committedDate;
+  const displayIndex = useMemo(() => {
+    if (!displayDate) return maxIndex;
+    const i = sorted.findIndex((e) => e.date === displayDate);
+    return i >= 0 ? i : maxIndex;
+  }, [sorted, displayDate, maxIndex]);
+  const committedIndex = useMemo(() => {
+    if (!committedDate) return maxIndex;
+    const i = sorted.findIndex((e) => e.date === committedDate);
+    return i >= 0 ? i : maxIndex;
+  }, [sorted, committedDate, maxIndex]);
+
+  const selected = sorted[displayIndex];
+  const draggingRef = useRef(false);
+
+  const preview = useCallback((idx: number) => {
+    const clamped = Math.max(0, Math.min(maxIndex, idx));
+    const entry = sorted[clamped];
+    if (entry) onPreviewChange?.(entry.date);
+  }, [sorted, maxIndex, onPreviewChange]);
 
   const commit = useCallback((idx: number) => {
     const clamped = Math.max(0, Math.min(maxIndex, idx));
     const entry = sorted[clamped];
-    if (entry) onChange(entry.date);
-  }, [sorted, maxIndex, onChange]);
+    if (entry) onCommit(entry.date);
+  }, [sorted, maxIndex, onCommit]);
 
-  // Keyboard: Home / End / arrow keys move by one acquisition date.
+  // Keyboard: preview + commit happen together for a single arrow / Home / End.
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (count === 0) return;
+    const from = displayIndex;
+    let next: number | null = null;
     switch (e.key) {
       case "ArrowLeft":
-      case "ArrowDown":
-        e.preventDefault(); commit(selectedIndex - 1); break;
+      case "ArrowDown": next = from - 1; break;
       case "ArrowRight":
-      case "ArrowUp":
-        e.preventDefault(); commit(selectedIndex + 1); break;
-      case "Home":
-        e.preventDefault(); commit(0); break;
-      case "End":
-        e.preventDefault(); commit(maxIndex); break;
+      case "ArrowUp": next = from + 1; break;
+      case "Home": next = 0; break;
+      case "End": next = maxIndex; break;
     }
-  }, [count, commit, selectedIndex, maxIndex]);
+    if (next == null) return;
+    e.preventDefault();
+    onInteractionStart?.();
+    preview(next);
+    commit(next);
+    onInteractionEnd?.();
+  }, [count, displayIndex, maxIndex, preview, commit, onInteractionStart, onInteractionEnd]);
+
+  // Detect pointer-drag lifecycle so pointer-release triggers commit even
+  // though Radix Slider fires onValueChange during move.
+  useEffect(() => {
+    if (count === 0) return;
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      commit(displayIndex);
+      onInteractionEnd?.();
+    };
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [count, displayIndex, commit, onInteractionEnd]);
 
   if (count === 0) {
     return (
@@ -94,6 +148,7 @@ export default function SatelliteDateSlider({
     : "—";
   const activeCount = selected?.activeCount || totalPaddocks;
   const singleDate = count === 1;
+  const isPreviewing = previewDate != null && previewDate !== committedDate;
 
   return (
     <div
@@ -101,14 +156,13 @@ export default function SatelliteDateSlider({
       role="group"
       aria-label="Satellite acquisition date"
     >
-      {/* Top row: prev / date / next */}
       <div className="flex items-center justify-between gap-2">
         <Button
           variant="ghost"
           size="icon"
           className="min-h-11 min-w-11"
-          disabled={singleDate || selectedIndex <= 0}
-          onClick={() => commit(selectedIndex - 1)}
+          disabled={singleDate || displayIndex <= 0}
+          onClick={() => { onInteractionStart?.(); preview(displayIndex - 1); commit(displayIndex - 1); onInteractionEnd?.(); }}
           aria-label="Previous acquisition date"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -117,6 +171,9 @@ export default function SatelliteDateSlider({
         <div className="min-w-0 flex-1 text-center">
           <div className="text-sm font-semibold text-foreground truncate">
             {selected ? formatLong(selected.date) : "—"}
+            {isPreviewing && (
+              <span className="ml-2 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Preview</span>
+            )}
           </div>
           <div className="text-[11px] text-muted-foreground">
             {selected
@@ -125,41 +182,54 @@ export default function SatelliteDateSlider({
           </div>
         </div>
 
+        {onTogglePlay && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="min-h-11 min-w-11"
+            disabled={singleDate}
+            onClick={onTogglePlay}
+            aria-label={isPlaying ? "Pause timeline playback" : "Play timeline"}
+            aria-pressed={isPlaying}
+          >
+            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+          </Button>
+        )}
+
         <Button
           variant="ghost"
           size="icon"
           className="min-h-11 min-w-11"
-          disabled={singleDate || selectedIndex >= maxIndex}
-          onClick={() => commit(selectedIndex + 1)}
+          disabled={singleDate || displayIndex >= maxIndex}
+          onClick={() => { onInteractionStart?.(); preview(displayIndex + 1); commit(displayIndex + 1); onInteractionEnd?.(); }}
           aria-label="Next acquisition date"
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
       </div>
 
-      {/* Slider + markers */}
-      <div
-        className="relative mt-2"
-        ref={trackRef}
-        onKeyDown={onKeyDown}
-      >
+      <div className="relative mt-2" onKeyDown={onKeyDown}>
         <Slider
           className="w-full min-w-0"
-          value={[selectedIndex]}
+          value={[displayIndex]}
           min={0}
           max={maxIndex}
           step={1}
           disabled={singleDate}
+          onPointerDown={() => {
+            draggingRef.current = true;
+            onInteractionStart?.();
+          }}
           onValueChange={(v) => {
             const idx = v[0] ?? 0;
-            if (idx !== selectedIndex) commit(idx);
+            if (idx === displayIndex) return;
+            if (draggingRef.current) preview(idx);
+            else { preview(idx); commit(idx); }
           }}
           aria-label="Satellite acquisition date"
           aria-valuetext={selected ? formatLong(selected.date) : undefined}
         />
 
-        {/* Discrete markers overlaid on the track. Purely decorative — the
-            slider thumb remains the interactive control. */}
         {!singleDate && (
           <div
             className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2"
@@ -167,13 +237,16 @@ export default function SatelliteDateSlider({
           >
             {sorted.map((entry, i) => {
               const pct = (i / maxIndex) * 100;
-              const isSel = i === selectedIndex;
+              const isSel = i === displayIndex;
+              const isCommitted = i === committedIndex;
               const full = entry.paddockCount >= (entry.activeCount || totalPaddocks) && entry.paddockCount > 0;
               const cls = isSel
                 ? "h-2.5 w-2.5 bg-primary border-primary"
-                : full
-                  ? "h-1.5 w-1.5 bg-foreground/70 border-foreground/70"
-                  : "h-1.5 w-1.5 bg-background border-foreground/60";
+                : isCommitted
+                  ? "h-2 w-2 bg-primary/60 border-primary/60"
+                  : full
+                    ? "h-1.5 w-1.5 bg-foreground/70 border-foreground/70"
+                    : "h-1.5 w-1.5 bg-background border-foreground/60";
               return (
                 <span
                   key={entry.date}
@@ -187,7 +260,6 @@ export default function SatelliteDateSlider({
         )}
       </div>
 
-      {/* Range labels */}
       <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
         <span>{formatShort(sorted[0].date)}</span>
         <span>{count} saved date{count === 1 ? "" : "s"}</span>
