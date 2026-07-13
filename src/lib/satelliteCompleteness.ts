@@ -306,7 +306,9 @@ export function inspectCompleteness({
 
 export function describePaddockMissingItems(p: PaddockCompleteness): string[] {
   if (p.state === "complete") return ["Complete"];
-  if (p.state === "missing_latest_scene") return ["Missing latest scene"];
+  if (p.state === "missing_latest_scene") {
+    return [p.hasSavedDisplayImagery ? "Refresh needed to check for newer imagery" : "No saved imagery"];
+  }
   const parts: string[] = [];
   for (const idx of p.missingDisplayLayers) parts.push(`Missing ${idx} display`);
   for (const idx of p.missingAnalyticalLayers) parts.push(`Missing ${idx} analytical`);
@@ -314,3 +316,4 @@ export function describePaddockMissingItems(p: PaddockCompleteness): string[] {
   if (p.onOldProcessingVersion) parts.push("Requires version upgrade");
   return parts.length ? parts : ["Complete"];
 }
+
