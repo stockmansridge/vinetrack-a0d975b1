@@ -253,7 +253,9 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     // Ensure an <img> exists for each overlay and set its src / opacity.
     for (const o of effectiveOverlays) {
       const key = keyFor(o);
+      const targetOpacity = String(o.opacity ?? overlayOpacity);
       let img = imgRefs.current.get(key);
+      const fresh = !img;
       if (!img) {
         img = document.createElement("img");
         img.alt = "";
@@ -262,6 +264,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.style.transformOrigin = "top left";
         img.style.imageRendering = "pixelated";
         img.style.willChange = "opacity, transform";
+        img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
         layer.appendChild(img);
         imgRefs.current.set(key, img);
       }
@@ -269,7 +272,14 @@ export default function SatelliteMap(props: SatelliteMapProps) {
       // must remain instant.
       img.style.transition = fadeMs > 0 ? `opacity ${fadeMs}ms linear` : "none";
       if (img.src !== o.url) img.src = o.url;
-      img.style.opacity = String(o.opacity ?? overlayOpacity);
+      if (fresh && fadeMs > 0) {
+        // Apply target opacity next frame so the CSS transition animates 0→target.
+        const target = targetOpacity;
+        const el = img;
+        requestAnimationFrame(() => { try { el.style.opacity = target; } catch { /* noop */ } });
+      } else {
+        img.style.opacity = targetOpacity;
+      }
     }
 
     const update = () => {
