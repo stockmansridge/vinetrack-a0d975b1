@@ -2553,8 +2553,13 @@ export default function SatelliteMappingPage() {
               <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
                 <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
                   <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
-                    <span className="inline-flex items-center gap-1.5">
-                      Legend — {activeLayer.short}
+                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">
+                        Legend — {activeLayer.short}
+                        {!legendOpen && selectedSceneKey && (
+                          <span className="ml-1 font-normal text-muted-foreground">· {formatDate(selectedSceneKey)}</span>
+                        )}
+                      </span>
                       <TooltipProvider delayDuration={100}>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -2594,6 +2599,7 @@ export default function SatelliteMappingPage() {
                     </span>
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform ${legendOpen ? "" : "-rotate-90"}`} />
                   </CollapsibleTrigger>
+
                   <CollapsibleContent>
                     <div className="px-3 pb-3 space-y-2">
                       <div className="h-2.5 w-full rounded-sm" style={{
