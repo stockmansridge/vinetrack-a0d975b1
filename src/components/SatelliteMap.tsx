@@ -15,6 +15,8 @@ export interface SatelliteRasterOverlay {
   url: string;
   bounds: { north: number; south: number; east: number; west: number };
   opacity?: number;
+  /** Optional stable identity. Defaults to `${paddockId}:${url}`. Different keys can co-exist during crossfade. */
+  key?: string;
 }
 
 export interface SatelliteMapProps {
@@ -27,6 +29,8 @@ export interface SatelliteMapProps {
   overlayBounds?: { north: number; south: number; east: number; west: number } | null;
   /** 0..1 */
   overlayOpacity?: number;
+  /** Crossfade duration in ms applied via CSS transition on overlay opacity. 0 disables animation. */
+  overlayTransitionMs?: number;
   /** Optional rectangle drawn above raster overlays to highlight the hovered analytical cell. */
   cellRect?: { north: number; south: number; east: number; west: number } | null;
   onPaddockClick?: (id: string) => void;
