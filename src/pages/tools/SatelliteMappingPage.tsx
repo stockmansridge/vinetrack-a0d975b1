@@ -925,22 +925,22 @@ export default function SatelliteMappingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeVineyardId]);
 
-  // Assets for the currently selected date + layer. Uses the best scene per
-  // paddock for that date (see dateCoverage). Never mixes dates.
-  const activeAssetPairs = useMemo(() => {
-    if (!selectedSceneKey || !scenesQuery.data) return [];
+  // The date used for DISPLAY overlays; may temporarily differ from the
+  // committed date while the user scrubs the timeline.
+  const effectiveDisplayDate = previewDate ?? selectedSceneKey;
+
+  // Build asset pairs (display + optional analytical) for a given date +
+  // current layer. Uses the best scene per paddock for that date.
+  const buildAssetPairsFor = (dateKey: string | null) => {
+    if (!dateKey || !scenesQuery.data) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
     const { assets } = scenesQuery.data;
     const displayFor = (sceneId: string) => assets.find((x) =>
-      x.satellite_scene_id === sceneId &&
-      x.index_type === layer &&
-      assetKind(x) === "DISPLAY_RASTER"
+      x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "DISPLAY_RASTER"
     );
     const analyticalFor = (sceneId: string) => assets.find((x) =>
-      x.satellite_scene_id === sceneId &&
-      x.index_type === layer &&
-      assetKind(x) === "ANALYTICAL_RASTER"
+      x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "ANALYTICAL_RASTER"
     );
-    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
+    const group = dateCoverage.find((g) => g.date === dateKey);
     if (!group) return [];
     const out: Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }> = [];
     for (const scene of group.sceneByPaddock.values()) {
@@ -948,11 +948,25 @@ export default function SatelliteMappingPage() {
       if (displayAsset) out.push({ displayAsset, analyticalAsset: analyticalFor(scene.id), scene });
     }
     return out;
-  }, [scenesQuery.data, selectedSceneKey, layer, dateCoverage]);
+  };
+
+  // Committed pairs — drive analytical decode, hover sampling, summaries.
+  const activeAssetPairs = useMemo(
+    () => buildAssetPairsFor(selectedSceneKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scenesQuery.data, selectedSceneKey, layer, dateCoverage],
+  );
+
+  // Effective display pairs — drive the map overlay images.
+  const displayAssetPairs = useMemo(
+    () => (effectiveDisplayDate === selectedSceneKey ? activeAssetPairs : buildAssetPairsFor(effectiveDisplayDate)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scenesQuery.data, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
+  );
 
   const activeAssets = useMemo(
-    () => activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
-    [activeAssetPairs],
+    () => displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
+    [displayAssetPairs],
   );
 
   const activeAnalyticalAssets = useMemo(
