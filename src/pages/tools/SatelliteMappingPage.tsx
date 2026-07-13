@@ -2113,6 +2113,20 @@ export default function SatelliteMappingPage() {
               </div>
             </div>
 
+            <div className="space-y-1 pt-2 border-t">
+              <div className="text-xs font-semibold text-foreground">Browser cache</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1">
+                <div>Display requested: <span className="text-foreground">{cacheStatsRef.current.displayRequested}</span></div>
+                <div>Display hits: <span className="text-foreground">{cacheStatsRef.current.displayHits}</span></div>
+                <div>Display misses: <span className="text-foreground">{cacheStatsRef.current.displayMisses}</span></div>
+                <div>Analytical hits: <span className="text-foreground">{cacheStatsRef.current.analyticalHits}</span></div>
+                <div>Analytical misses: <span className="text-foreground">{cacheStatsRef.current.analyticalMisses}</span></div>
+                <div>Decoded hits: <span className="text-foreground">{cacheStatsRef.current.decodedHits}</span></div>
+                <div>Decoded misses: <span className="text-foreground">{cacheStatsRef.current.decodedMisses}</span></div>
+                <div>Object URLs: <span className="text-foreground">{objectUrlsRef.current.size}</span></div>
+              </div>
+            </div>
+
             <div className="pt-2 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
               <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
               <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
