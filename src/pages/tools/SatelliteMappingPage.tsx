@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
-import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2 } from "lucide-react";
+import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench } from "lucide-react";
+import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import { fromArrayBuffer } from "geotiff";
 import SatelliteMap from "@/components/SatelliteMap";
 
@@ -1871,32 +1872,9 @@ export default function SatelliteMappingPage() {
                 </SelectContent>
               </Select>
             </div>
+            {/* Image Date moved to timeline slider below the map. */}
 
-            {/* Image date */}
-            <div className="space-y-1 min-w-0">
-              <label className="text-xs font-medium text-muted-foreground">Image Date</label>
-              <Select
-                value={selectedSceneKey ?? ""}
-                onValueChange={setSelectedSceneKey}
-                disabled={dateOptions.length === 0}
-              >
-                <SelectTrigger className="min-h-[44px]">
-                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No saved imagery"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {dateOptions.map((d) => {
-                    const pctLabel = Number.isInteger(d.coveragePercent)
-                      ? `${d.coveragePercent}`
-                      : d.coveragePercent.toFixed(1);
-                    return (
-                      <SelectItem key={d.date} value={d.date}>
-                        {formatDate(d.date)} · {pctLabel}% coverage · {d.paddockCount}/{d.activeCount || totalPaddocks} paddocks
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
+
 
 
             {/* Map Layer */}
@@ -2116,8 +2094,17 @@ export default function SatelliteMappingPage() {
             </Collapsible>
           )}
 
-          {/* System-admin diagnostics — sectioned */}
-          <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+          {/* Admin tools · Diagnostics — collapsed by default */}
+          <Collapsible defaultOpen={false}>
+            <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+              <CollapsibleTrigger className="flex w-full items-center justify-between text-xs font-semibold text-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <Wrench className="h-3.5 w-3.5" />
+                  Admin tools · Diagnostics
+                </span>
+                <ChevronDown className="h-3 w-3" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
             {(() => {
               const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
               const pct = selectedEntry
@@ -2231,7 +2218,9 @@ export default function SatelliteMappingPage() {
                 </div>
               </CollapsibleContent>
             </Collapsible>
-          </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
         </CardContent>
       </Card>
 
@@ -2471,7 +2460,22 @@ export default function SatelliteMappingPage() {
       </Card>
       </div>
 
+      {/* Acquisition-date timeline slider — primary date navigation */}
+      <SatelliteDateSlider
+        entries={dateOptions.map((d) => ({
+          date: d.date,
+          coveragePercent: d.coveragePercent,
+          paddockCount: d.paddockCount,
+          activeCount: d.activeCount,
+        }))}
+        selectedDate={selectedSceneKey}
+        onChange={setSelectedSceneKey}
+        totalPaddocks={totalPaddocks}
+      />
+
       {/* Timeline */}
+
+
 
       <Card>
         <CardHeader className="pb-2">
