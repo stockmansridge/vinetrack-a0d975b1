@@ -343,17 +343,45 @@ Deno.serve(async (req) => {
         missing.push({ paddock_id: pid, reason: "package_version_mismatch" });
         continue;
       }
+      // Assemble per-layer bundles for the winning scene.
+      const layers: LayerBundle[] = [];
+      const layerNames = Array.from(new Set<string>([...dispSet, ...analSet])).sort();
+      for (const idx of layerNames) {
+        const disp = assetByKey.get(`${sceneId}:${idx}:DISPLAY_RASTER`);
+        const anal = assetByKey.get(`${sceneId}:${idx}:ANALYTICAL_RASTER`);
+        const sum = summaryByKey.get(`${sceneId}:${idx}`) ?? null;
+        layers.push({
+          index_type: idx,
+          display: disp ? toLayerAsset(disp) : null,
+          analytical: anal ? toLayerAsset(anal) : null,
+          summary: sum ? {
+            mean_value: sum.mean_value,
+            median_value: sum.median_value,
+            minimum_value: sum.minimum_value,
+            maximum_value: sum.maximum_value,
+            standard_deviation: sum.standard_deviation,
+            percentile_10: sum.percentile_10,
+            percentile_25: sum.percentile_25,
+            percentile_75: sum.percentile_75,
+            percentile_90: sum.percentile_90,
+          } : null,
+        });
+      }
       available.push({
         paddock_id: pid,
         scene_id: sceneId,
         provider_scene_id: bucket.best.provider_scene_id,
+        provider: "sentinel-2-l2a",
         acquired_at: bucket.best.acquired_at,
+        acquisition_date: date,
         processing_version: hasCurrentDisplay ? CURRENT_PROCESSING_VERSION : null,
         paddock_valid_coverage_pct: bucket.best.paddock_valid_coverage_pct,
         paddock_cloud_cover_pct: bucket.best.paddock_cloud_cover_pct,
+        scene_cloud_cover_pct: bucket.best.scene_cloud_cover_pct,
         available_display_layers: Array.from(dispSet).sort(),
         available_analytical_layers: Array.from(analSet).sort(),
         package_version_mismatch: false,
+        layers,
       });
     }
     const activeCount = activePaddockIds.length;
