@@ -1538,17 +1538,9 @@ export default function SatelliteMappingPage() {
 
 
 
-  // Server manifest — source of truth for per-paddock completeness. Cheap to
-  // fetch (single row per paddock) and updated by DB triggers whenever scenes
-  // or assets change. When present, drives the diagnostics counts and status
-  // badges so paddocks with saved overlays are never mislabelled "missing".
-  const activePaddockIds = useMemo(() => geoms.map((g) => g.id), [geoms]);
-  const manifestQuery = useQuery({
-    queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
-    queryFn: () => fetchManifest(activeVineyardId!, activePaddockIds),
-    enabled: !!activeVineyardId,
-    staleTime: 30_000,
-  });
+  // manifestQuery + activePaddockIds are declared near scenesQuery above so
+  // both the date-coverage memo and the completeness report can consume them.
+
 
   // Live completeness snapshot for the diagnostics panel and the
   // "Imagery missing" chip in Latest-per-paddock mode. Prefers the server
