@@ -1507,9 +1507,10 @@ export default function SatelliteMappingPage() {
   // fetch (single row per paddock) and updated by DB triggers whenever scenes
   // or assets change. When present, drives the diagnostics counts and status
   // badges so paddocks with saved overlays are never mislabelled "missing".
+  const activePaddockIds = useMemo(() => geoms.map((g) => g.id), [geoms]);
   const manifestQuery = useQuery({
-    queryKey: ["satellite-manifest", activeVineyardId],
-    queryFn: () => fetchManifest(activeVineyardId!),
+    queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+    queryFn: () => fetchManifest(activeVineyardId!, activePaddockIds),
     enabled: !!activeVineyardId,
     staleTime: 30_000,
   });
