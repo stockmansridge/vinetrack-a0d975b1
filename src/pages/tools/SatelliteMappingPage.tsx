@@ -779,7 +779,7 @@ export default function SatelliteMappingPage() {
   };
 
   const dateOptions = useMemo(() => dateCoverage.map((g) => {
-    const pct = g.coveragePercent;
+    const pct = typeof g.coveragePercent === "number" && Number.isFinite(g.coveragePercent) ? g.coveragePercent : 0;
     const pctLabel = Number.isInteger(pct) ? `${pct}` : pct.toFixed(1);
     return {
       date: g.date,
