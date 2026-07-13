@@ -2500,8 +2500,9 @@ export default function SatelliteMappingPage() {
                       <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m — no numerical index value.</div>
                     </>
                   ) : !hover.acquiredAt ? (
-                    <span className="text-muted-foreground">No processed image for this paddock</span>
+                    <span className="text-muted-foreground">No saved imagery for this date</span>
                   ) : hover.status === "loading" ? (
+
                     <span className="text-muted-foreground inline-flex items-center gap-1">
                       <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading cell data…"}
                     </span>
