@@ -1061,19 +1061,29 @@ export default function SatelliteMappingPage() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets, activeAnalyticalAssets]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
 
   // Revoke stale object URLs when the visible asset set changes. Keeps memory
-  // bounded across date/layer switches.
+  // bounded across date/layer switches. Adjacent-preload and preview-display
+  // assets remain "alive" so scrubbing doesn't churn the cache.
   useEffect(() => {
-    const alive = new Set([...activeAssets, ...activeAnalyticalAssets].map((x) => x.asset.id));
+    const alive = new Set([
+      ...activeAssets,
+      ...activeAnalyticalAssets,
+      ...preloadDisplayAssets,
+      ...displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
+    ].map((x) => x.asset.id));
     for (const [assetId, url] of objectUrlsRef.current.entries()) {
       if (!alive.has(assetId)) {
         try { URL.revokeObjectURL(url); } catch { /* ignore */ }
         objectUrlsRef.current.delete(assetId);
+        setSignedUrls((prev) => {
+          if (!(assetId in prev)) return prev;
+          const next = { ...prev }; delete next[assetId]; return next;
+        });
       }
     }
-  }, [activeAssets, activeAnalyticalAssets]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
 
   // Clear decoded analytical rasters when the user changes the data context.
   useEffect(() => {
