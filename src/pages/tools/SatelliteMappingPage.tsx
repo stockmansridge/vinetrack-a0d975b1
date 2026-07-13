@@ -1657,10 +1657,23 @@ export default function SatelliteMappingPage() {
             size="sm"
             disabled={busy || geoms.length === 0}
             onClick={() => checkForNewImage.mutate(undefined)}
+            title="Search Copernicus for newer imagery. Skipped when a check ran within the last 5 days."
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
             {refreshLabel}
           </Button>
+          {providerFreshness?.provider_check_status === "checked_recently" && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || geoms.length === 0}
+              onClick={() => checkForNewImage.mutate({ force: true })}
+              title="Force a Copernicus search even though a recent check exists."
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Force provider check
+            </Button>
+          )}
         </div>
       </div>
 
