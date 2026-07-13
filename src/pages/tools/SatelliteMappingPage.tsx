@@ -2174,8 +2174,12 @@ export default function SatelliteMappingPage() {
             </div>
 
             <div className="pt-2 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
+              <div>Manifest version: <span className="text-foreground">{manifestQuery.data?.manifest_version ?? "—"}</span></div>
+              <div>Manifest loaded: <span className="text-foreground">{manifestQuery.data ? "yes" : "no"}</span></div>
               <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
-              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
+              <div>Asset requests: <span className="text-foreground">{cacheStatsRef.current.assetRequests}</span></div>
+              <div>HTTP 304: <span className="text-foreground">{cacheStatsRef.current.http304}</span></div>
+              <div>Bytes downloaded: <span className="text-foreground">{(cacheStatsRef.current.bytesDownloaded / 1024).toFixed(1)} KB</span></div>
               {lastRefreshSummary && (
                 <>
                   <div>Last refresh: <span className="text-foreground">{lastRefreshSummary.processedPaddocks} processed</span></div>
@@ -2183,6 +2187,7 @@ export default function SatelliteMappingPage() {
                 </>
               )}
             </div>
+
 
             <Collapsible open={missingDetailOpen} onOpenChange={setMissingDetailOpen}>
               <CollapsibleTrigger className="inline-flex items-center gap-1 text-[11px] text-foreground/80 hover:text-foreground">
