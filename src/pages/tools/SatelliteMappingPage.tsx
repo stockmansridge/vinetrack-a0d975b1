@@ -644,10 +644,7 @@ export default function SatelliteMappingPage() {
   // Server manifest — source of truth for per-paddock completeness and the
   // date-coverage index. Declared here (before dateCoverage) so both memos
   // can consume it.
-  const activePaddockIds = useMemo(
-    () => (paddocksQuery.data ?? []).map((p) => p.id),
-    [paddocksQuery.data],
-  );
+  const activePaddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
   const manifestQuery = useQuery({
     queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
     queryFn: () => fetchManifest(activeVineyardId!, activePaddockIds),
