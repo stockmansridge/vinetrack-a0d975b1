@@ -1150,6 +1150,18 @@ export default function SatelliteMappingPage() {
     return seen.size;
   }, [targetMapOverlays, overlayMountedKeys]);
 
+  // Clear stale search / refresh errors when the user changes date or layer so
+  // banners from a previous selection don't linger on a fresh view.
+  const errorClearKey = `${selectedSceneKey ?? ""}::${layer}`;
+  const lastErrorClearKeyRef = useRef(errorClearKey);
+  useEffect(() => {
+    if (lastErrorClearKeyRef.current !== errorClearKey) {
+      lastErrorClearKeyRef.current = errorClearKey;
+      setSearchError(null);
+    }
+  }, [errorClearKey]);
+
+
 
 
   // ---- Playback ---------------------------------------------------------
