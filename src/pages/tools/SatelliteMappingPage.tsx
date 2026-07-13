@@ -44,7 +44,7 @@ import type { SatelliteIndexType } from "@/types/satellite";
 import {
   inspectCompleteness,
   reportFromManifest,
-  describePaddockMissingItems,
+  // describePaddockMissingItems no longer used — badges now come from date_coverage.
   REQUIRED_INDICES,
   CURRENT_PROCESSING_VERSION,
   type CompletenessReport,
