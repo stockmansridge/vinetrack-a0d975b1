@@ -276,15 +276,22 @@ export default function SatelliteDateSlider({
                   : full
                     ? "h-1.5 w-1.5 bg-foreground/70 border-foreground/70"
                     : "h-1.5 w-1.5 bg-background border-foreground/60";
+              const activeTotal = entry.activeCount || totalPaddocks;
+              const pctText = Number.isInteger(entry.coveragePercent)
+                ? `${entry.coveragePercent}`
+                : entry.coveragePercent.toFixed(1);
+              const label = `${formatLong(entry.date)}, imagery for ${entry.paddockCount} of ${activeTotal} paddocks, ${pctText} percent coverage`;
               return (
                 <span
                   key={entry.date}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border ${cls}`}
                   style={{ left: `${pct}%`, top: 0 }}
-                  title={`${formatShort(entry.date)} — imagery for ${entry.paddockCount} of ${entry.activeCount || totalPaddocks} paddocks`}
+                  title={label}
+                  aria-label={label}
                 />
               );
             })}
+
           </div>
         )}
       </div>
