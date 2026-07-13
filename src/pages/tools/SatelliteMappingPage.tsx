@@ -689,9 +689,7 @@ export default function SatelliteMappingPage() {
   // This is the client-side date-coverage index the page renders from — no
   // mixing dates, no per-millisecond timestamp fragility.
   const dateCoverage = useMemo(() => {
-    // Prefer the server-side date-coverage index. It groups by acquisition day
-    // and picks the single best scene per (date, paddock) — no need to reduce
-    // raw scenes on the client.
+    // Prefer the server-side date-coverage index.
     const serverIndex = manifestQuery.data?.date_coverage;
     if (serverIndex && serverIndex.length > 0) {
       return serverIndex.map((entry) => {
@@ -710,14 +708,20 @@ export default function SatelliteMappingPage() {
             processing_status: "complete",
           } as DBScene);
         }
-        return { date: entry.acquisition_date, sceneByPaddock, paddockCount: entry.available_paddock_count };
+        return {
+          date: entry.acquisition_date,
+          sceneByPaddock,
+          paddockCount: entry.available_paddock_count,
+          activeCount: entry.active_paddock_count,
+          coveragePercent: entry.coverage_percent,
+          missing: entry.missing_paddocks,
+        };
       });
     }
-    // Fallback: client-side reconstruction from scenesQuery (kept until we
-    // confirm every deployment is on the v2 manifest response).
+    // Fallback: client-side reconstruction from scenesQuery.
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present in manifest response.");
+      console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present.");
     }
     const scenes = scenesQuery.data?.scenes ?? [];
     const grouped = new Map<string, Map<string, DBScene>>();
@@ -736,10 +740,18 @@ export default function SatelliteMappingPage() {
       const cur = per.get(s.paddock_id);
       per.set(s.paddock_id, cur ? better(cur, s) : s);
     }
+    const total = geoms.length || 1;
     return Array.from(grouped.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, sceneByPaddock]) => ({ date, sceneByPaddock, paddockCount: sceneByPaddock.size }));
-  }, [manifestQuery.data, scenesQuery.data, activeVineyardId]);
+      .map(([date, sceneByPaddock]) => ({
+        date,
+        sceneByPaddock,
+        paddockCount: sceneByPaddock.size,
+        activeCount: geoms.length,
+        coveragePercent: Math.round((sceneByPaddock.size / total) * 1000) / 10,
+        missing: [] as { paddock_id: string; reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch" }[],
+      }));
+  }, [manifestQuery.data, scenesQuery.data, activeVineyardId, geoms]);
 
   const isAllPaddocks = paddockId === "all";
   const totalPaddocks = geoms.length;
