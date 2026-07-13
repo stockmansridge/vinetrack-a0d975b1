@@ -131,24 +131,43 @@ export async function deleteCachedAsset(
   await withStore(ASSET_STORE, "readwrite", (s) => s.delete(key));
 }
 
-/** Fetch an asset via cache-first: if we already have the blob for this
- * assetId + processingVersion, return it without a network hit. Otherwise
- * call the provided signed-URL loader, download the bytes, and cache them. */
+/** Fetch an asset via cache-first with HTTP 304 revalidation.
+ *
+ * Order of operations:
+ *   1. IndexedDB probe by (assetId, processingVersion) -> hit returns blob
+ *      with zero network. Callers should probe first via `readCachedAsset` if
+ *      they want the cachedAt/etag timestamp before spinning up the fetch.
+ *   2. Miss: call `fetchBytes(ifNoneMatch)` — the stable authenticated asset
+ *      endpoint returns 200 with bytes (immutable Cache-Control) OR 304 if
+ *      the browser already has a matching HTTP cache entry.
+ */
+export interface FetchBytesResult {
+  status: 200 | 304;
+  blob: Blob | null;
+  etag: string | null;
+  contentType: string | null;
+}
+
 export async function getAssetBlob(
   assetId: string,
   processingVersion: string | null,
-  loadSignedUrl: () => Promise<{ signed_url: string; etag: string; content_type: string | null }>,
+  fetchBytes: (ifNoneMatch: string | null) => Promise<FetchBytesResult>,
 ): Promise<Blob | null> {
   const cached = await readCachedAsset(assetId, processingVersion);
   if (cached) return cached.blob;
   try {
-    const { signed_url, etag, content_type } = await loadSignedUrl();
-    const res = await fetch(signed_url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    await writeCachedAsset(assetId, processingVersion, etag, blob, content_type);
-    return blob;
+    const result = await fetchBytes(null);
+    if (result.status === 304 || !result.blob) return null;
+    await writeCachedAsset(
+      assetId,
+      processingVersion,
+      result.etag ?? `${assetId}:${processingVersion ?? "unknown"}`,
+      result.blob,
+      result.contentType,
+    );
+    return result.blob;
   } catch {
     return null;
   }
 }
+

@@ -44,13 +44,12 @@ import type { SatelliteIndexType } from "@/types/satellite";
 import {
   inspectCompleteness,
   reportFromManifest,
-  // describePaddockMissingItems no longer used — badges now come from date_coverage.
   REQUIRED_INDICES,
   CURRENT_PROCESSING_VERSION,
   type CompletenessReport,
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
-import { fetchManifest } from "@/lib/satelliteManifest";
+import { fetchManifest, fetchAssetBytes, type ManifestResponse } from "@/lib/satelliteManifest";
 import { getAssetBlob, deleteCachedAsset, readCachedAsset } from "@/lib/satelliteCache";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
@@ -585,6 +584,7 @@ export default function SatelliteMappingPage() {
     displayRequested: 0, displayHits: 0, displayMisses: 0,
     analyticalRequested: 0, analyticalHits: 0, analyticalMisses: 0,
     decodedHits: 0, decodedMisses: 0,
+    assetRequests: 0, http304: 0, bytesDownloaded: 0,
   });
   const [, forceStatsRerender] = useState(0);
   const bumpStats = () => forceStatsRerender((v) => v + 1);
@@ -637,26 +637,10 @@ export default function SatelliteMappingPage() {
     refetchOnWindowFocus: false,
   });
 
-  // Processed scenes for this vineyard/paddock
-  const scenesQuery = useQuery({
-    queryKey: ["satellite-scenes", activeVineyardId, paddockId],
-    enabled: !!activeVineyardId && isSystemAdmin,
-    queryFn: async () => {
-      const { data, error } = await invokeSatelliteFn("satellite-list-scenes", {
-        vineyard_id: activeVineyardId,
-        paddock_id: paddockId,
-      });
-      if (error) throw error;
-      return data as { scenes: DBScene[]; assets: DBAsset[]; summaries: DBSummary[] };
-    },
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  // Server manifest — source of truth for per-paddock completeness and the
-  // date-coverage index. Declared here (before dateCoverage) so both memos
-  // can consume it.
+  // Server manifest — source of truth for per-paddock completeness, the
+  // date-coverage index AND per-scene asset metadata (v3). The previous
+  // `satellite-list-scenes` query has been retired; every scene/asset/summary
+  // the page renders now flows from `manifestQuery.data.date_coverage[*].paddocks[*].layers`.
   const activePaddockIds = useMemo(() => paddocks.map((p) => p.id), [paddocks]);
   const manifestQuery = useQuery({
     queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
@@ -664,6 +648,96 @@ export default function SatelliteMappingPage() {
     enabled: !!activeVineyardId,
     staleTime: 30_000,
   });
+
+  // ---- Derived scenes / assets / summaries ------------------------------
+  // A thin compat shim so existing code (report generator, hover sampler,
+  // signed-URL loader, etc.) keeps working with the shape it already
+  // understands. Nothing here talks to the network.
+  const derivedFromManifest = useMemo(() => {
+    const scenes: DBScene[] = [];
+    const assets: DBAsset[] = [];
+    const summaries: DBSummary[] = [];
+    const seenScenes = new Set<string>();
+    const seenAssets = new Set<string>();
+    for (const entry of manifestQuery.data?.date_coverage ?? []) {
+      for (const p of entry.paddocks) {
+        if (!seenScenes.has(p.scene_id)) {
+          seenScenes.add(p.scene_id);
+          scenes.push({
+            id: p.scene_id,
+            paddock_id: p.paddock_id,
+            vineyard_id: activeVineyardId ?? "",
+            provider_scene_id: p.provider_scene_id ?? "",
+            acquired_at: p.acquired_at,
+            scene_cloud_cover_pct: p.scene_cloud_cover_pct,
+            paddock_valid_coverage_pct: p.paddock_valid_coverage_pct,
+            paddock_cloud_cover_pct: p.paddock_cloud_cover_pct,
+            quality_status: "",
+            processing_status: "complete",
+          });
+        }
+        for (const layer of p.layers) {
+          if (layer.display && !seenAssets.has(layer.display.asset_id)) {
+            seenAssets.add(layer.display.asset_id);
+            assets.push({
+              id: layer.display.asset_id,
+              satellite_scene_id: p.scene_id,
+              index_type: layer.index_type as SatelliteIndexType,
+              asset_type: "DISPLAY_RASTER",
+              storage_path: layer.display.storage_path ?? "",
+              bounds: layer.display.bounds,
+              raster_width: layer.display.raster_width,
+              raster_height: layer.display.raster_height,
+              native_resolution_m: layer.display.native_resolution_m,
+              display_resolution_m: layer.display.display_resolution_m,
+              data_type: layer.display.data_type,
+              scale_factor: layer.display.scale_factor,
+              no_data_sentinel: layer.display.no_data_sentinel,
+              row_orientation: layer.display.row_orientation,
+              processing_version: layer.display.processing_version,
+            });
+          }
+          if (layer.analytical && !seenAssets.has(layer.analytical.asset_id)) {
+            seenAssets.add(layer.analytical.asset_id);
+            assets.push({
+              id: layer.analytical.asset_id,
+              satellite_scene_id: p.scene_id,
+              index_type: layer.index_type as SatelliteIndexType,
+              asset_type: "ANALYTICAL_RASTER",
+              storage_path: layer.analytical.storage_path ?? "",
+              bounds: layer.analytical.bounds,
+              raster_width: layer.analytical.raster_width,
+              raster_height: layer.analytical.raster_height,
+              native_resolution_m: layer.analytical.native_resolution_m,
+              display_resolution_m: layer.analytical.display_resolution_m,
+              data_type: layer.analytical.data_type,
+              scale_factor: layer.analytical.scale_factor,
+              no_data_sentinel: layer.analytical.no_data_sentinel,
+              row_orientation: layer.analytical.row_orientation,
+              processing_version: layer.analytical.processing_version,
+            });
+          }
+          if (layer.summary) {
+            summaries.push({
+              satellite_scene_id: p.scene_id,
+              index_type: layer.index_type as SatelliteIndexType,
+              mean_value: layer.summary.mean_value,
+              median_value: layer.summary.median_value,
+              percentile_10: layer.summary.percentile_10,
+              percentile_25: layer.summary.percentile_25,
+              percentile_75: layer.summary.percentile_75,
+              percentile_90: layer.summary.percentile_90,
+            });
+          }
+        }
+      }
+    }
+    return { scenes, assets, summaries };
+  }, [manifestQuery.data, activeVineyardId]);
+
+  // Compat shim so legacy consumers keep working while we transition.
+  const scenesQuery = { data: derivedFromManifest };
+
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
 
@@ -913,18 +987,14 @@ export default function SatelliteMappingPage() {
         else cacheStatsRef.current.analyticalMisses += 1;
 
         try {
-          const blob = await getAssetBlob(asset.id, pv, async () => {
-            const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
-              asset_id: asset.id,
-            });
-            if (error) throw error;
-            const d = data as any;
-            return {
-              signed_url: d?.signed_url as string,
-              etag: `${asset.id}:${pv ?? "unknown"}`,
-              content_type: null,
-            };
+          const blob = await getAssetBlob(asset.id, pv, async (ifNoneMatch) => {
+            const r = await fetchAssetBytes(asset.id, ifNoneMatch);
+            cacheStatsRef.current.assetRequests += 1;
+            if (r.status === 304) cacheStatsRef.current.http304 += 1;
+            else if (r.blob) cacheStatsRef.current.bytesDownloaded += r.blob.size;
+            return { status: r.status, blob: r.blob, etag: r.etag, contentType: r.contentType };
           });
+
           if (cancelled) return;
           if (!blob) continue;
           assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
@@ -1187,16 +1257,12 @@ export default function SatelliteMappingPage() {
       refreshInFlightRef.current = true;
       setSearchError(null);
 
-      // Build completeness against currently-loaded scenes/assets/summaries.
-      const scenesForReport = scenesQuery.data?.scenes ?? [];
-      const assetsForReport = scenesQuery.data?.assets ?? [];
-      const summariesForReport = scenesQuery.data?.summaries ?? [];
-      const report = inspectCompleteness({
-        paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-        scenes: scenesForReport,
-        assets: assetsForReport,
-        summaries: summariesForReport,
-      });
+      // Build completeness from the manifest (single source of truth).
+      const report = reportFromManifest(
+        geoms.map((g) => ({ id: g.id, name: g.name })),
+        (manifestQuery.data?.paddocks ?? []) as any,
+      );
+
 
       // Scope the report to whatever the user selected.
       const explicitIds = vars?.paddockIds;
@@ -1451,44 +1517,33 @@ export default function SatelliteMappingPage() {
       const skipped = results.filter((r) => r.status === "skipped").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
-      // Refresh + wait for the list query to reflect any new scenes.
+      // Refresh + wait for the manifest to reflect any new scenes.
       let loaded = false;
-      let latestScenes: DBScene[] = scenesQuery.data?.scenes ?? [];
-      let latestAssets: DBAsset[] = scenesQuery.data?.assets ?? [];
-      let latestSummaries: DBSummary[] = scenesQuery.data?.summaries ?? [];
+      let latestManifest: ManifestResponse | undefined = manifestQuery.data;
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
-        await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
         await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
-        const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[]; summaries?: DBSummary[] } | undefined;
-        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
-          loaded = true;
-          latestScenes = anyData?.scenes ?? [];
-          latestAssets = anyData?.assets ?? [];
-          latestSummaries = anyData?.summaries ?? [];
-          break;
-        }
+        const refreshed = await qc.refetchQueries({
+          queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+        });
+        const data = refreshed?.[0]?.data as ManifestResponse | undefined;
+        latestManifest = data ?? latestManifest;
+        if ((data?.date_coverage?.length ?? 0) > 0) { loaded = true; break; }
         await new Promise((r) => setTimeout(r, 1500));
       }
 
       // Auto-select the newest date the refresh just produced (if any).
       if (complete > 0) {
-        const newestDate = (latestScenes ?? [])
-          .filter((s) => s.processing_status === "complete")
-          .map((s) => s.acquired_at.slice(0, 10))
-          .sort()
-          .pop();
+        const newestDate = latestManifest?.newest_saved_date
+          ?? (latestManifest?.date_coverage?.[0]?.acquisition_date ?? null);
         if (newestDate) setSelectedSceneKey(newestDate);
       }
 
       // Auto-retry once for any paddocks that are still incomplete after this pass.
       if (!isRetry && rateLimited === 0) {
-        const nextReport = inspectCompleteness({
-          paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-          scenes: latestScenes,
-          assets: latestAssets,
-          summaries: latestSummaries,
-        });
+        const nextReport = reportFromManifest(
+          geoms.map((g) => ({ id: g.id, name: g.name })),
+          (latestManifest?.paddocks ?? []) as any,
+        );
         const residual = nextReport.perPaddock
           .filter((p) => p.state !== "complete")
           .filter((p) => (paddockId === "all" ? true : p.paddockId === paddockId))
@@ -1500,6 +1555,7 @@ export default function SatelliteMappingPage() {
         }
       }
       retryInFlightRef.current = false;
+
 
       setLastRefreshSummary({
         at: new Date().toISOString(),
@@ -1603,10 +1659,9 @@ export default function SatelliteMappingPage() {
       return aggregate;
     },
     onSuccess: async (data) => {
-      await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
       await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
-      await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
       analyticalCacheRef.current.clear();
+
       // Invalidate only the blob-cache entries for currently visible assets so
       // any repaired/replaced bytes are re-downloaded, without wiping the full
       // browser cache. New scenes/versions naturally miss the cache (new IDs).
@@ -1657,23 +1712,14 @@ export default function SatelliteMappingPage() {
   // both the date-coverage memo and the completeness report can consume them.
 
 
-  // Live completeness snapshot for the diagnostics panel and the
-  // "Imagery missing" chip in Latest-per-paddock mode. Prefers the server
-  // manifest so counts always match what's actually stored; falls back to the
-  // legacy client-side recount if the manifest hasn't loaded yet.
+  // Live completeness snapshot for the diagnostics panel and the missing
+  // paddock chip. Always derived from the server manifest.
   const liveReport: CompletenessReport = useMemo(() => {
     const paddockInputs = geoms.map((g) => ({ id: g.id, name: g.name }));
-    const manifestRows = manifestQuery.data?.paddocks;
-    if (manifestRows && manifestRows.length > 0) {
-      return reportFromManifest(paddockInputs, manifestRows);
-    }
-    return inspectCompleteness({
-      paddocks: paddockInputs,
-      scenes: scenesQuery.data?.scenes ?? [],
-      assets: scenesQuery.data?.assets ?? [],
-      summaries: scenesQuery.data?.summaries ?? [],
-    });
-  }, [geoms, manifestQuery.data, scenesQuery.data]);
+    const manifestRows = manifestQuery.data?.paddocks ?? [];
+    return reportFromManifest(paddockInputs, manifestRows as any);
+  }, [geoms, manifestQuery.data]);
+
   const [missingDetailOpen, setMissingDetailOpen] = useState(false);
   const paddocksMissingLatestSet = useMemo(
     () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
@@ -2128,8 +2174,12 @@ export default function SatelliteMappingPage() {
             </div>
 
             <div className="pt-2 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
+              <div>Manifest version: <span className="text-foreground">{manifestQuery.data?.manifest_version ?? "—"}</span></div>
+              <div>Manifest loaded: <span className="text-foreground">{manifestQuery.data ? "yes" : "no"}</span></div>
               <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
-              <div>Signed URL: <span className="text-foreground">{activeAssets[0] && signedUrls[activeAssets[0].asset.id] ? "loaded" : "—"}</span></div>
+              <div>Asset requests: <span className="text-foreground">{cacheStatsRef.current.assetRequests}</span></div>
+              <div>HTTP 304: <span className="text-foreground">{cacheStatsRef.current.http304}</span></div>
+              <div>Bytes downloaded: <span className="text-foreground">{(cacheStatsRef.current.bytesDownloaded / 1024).toFixed(1)} KB</span></div>
               {lastRefreshSummary && (
                 <>
                   <div>Last refresh: <span className="text-foreground">{lastRefreshSummary.processedPaddocks} processed</span></div>
@@ -2137,6 +2187,7 @@ export default function SatelliteMappingPage() {
                 </>
               )}
             </div>
+
 
             <Collapsible open={missingDetailOpen} onOpenChange={setMissingDetailOpen}>
               <CollapsibleTrigger className="inline-flex items-center gap-1 text-[11px] text-foreground/80 hover:text-foreground">
@@ -2433,20 +2484,23 @@ export default function SatelliteMappingPage() {
               d.setMonth(d.getMonth() - (11 - i));
               const label = d.toLocaleDateString(undefined, { month: "short" });
               const monthKey = d.toISOString().slice(0, 7);
-              const monthScenes = (scenesQuery.data?.scenes ?? []).filter((s) => s.acquired_at.slice(0, 7) === monthKey && s.processing_status === "complete");
+              const monthDates = (manifestQuery.data?.date_coverage ?? [])
+                .filter((entry) => entry.acquisition_date.slice(0, 7) === monthKey);
+              const n = monthDates.length;
               return (
                 <div key={i} className="rounded border border-dashed bg-muted/20 p-2 text-center text-[10px] text-muted-foreground">
                   <div className="font-medium text-foreground/70">{label}</div>
-                  <div className="mt-1">{monthScenes.length > 0 ? `${monthScenes.length} scene${monthScenes.length === 1 ? "" : "s"}` : "—"}</div>
+                  <div className="mt-1">{n > 0 ? `${n} date${n === 1 ? "" : "s"}` : "—"}</div>
                 </div>
               );
             })}
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            {(scenesQuery.data?.scenes.length ?? 0) === 0
+            {(manifestQuery.data?.total_saved_dates ?? 0) === 0
               ? "No satellite scenes have been processed for this vineyard yet. Click Refresh Imagery."
               : "Hover a paddock on the map for its per-paddock summary; select a date above to switch scenes."}
           </div>
+
         </CardContent>
       </Card>
     </div>

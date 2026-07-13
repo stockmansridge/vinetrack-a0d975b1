@@ -1,5 +1,5 @@
 // Client wrappers for the crop-health manifest, refresh-status and
-// per-asset signed-URL edge functions. All calls go through the VineTrack
+// per-asset stable asset endpoint. All calls go through the VineTrack
 // iOS session (system-admin gated), matching the pattern used elsewhere in
 // SatelliteMappingPage.
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,39 @@ async function invoke<T = any>(name: string, body: unknown): Promise<T> {
   if (error) throw error;
   return data as T;
 }
+
+// Fetch bytes from the stable authenticated asset endpoint. Supports
+// If-None-Match / 304 so cached blobs are reused without re-download.
+export interface AssetFetchResult {
+  status: 200 | 304;
+  blob: Blob | null;   // present on 200, null on 304
+  etag: string | null;
+  contentType: string | null;
+}
+
+export async function fetchAssetBytes(
+  assetId: string,
+  ifNoneMatch?: string | null,
+): Promise<AssetFetchResult> {
+  const { data: { session } } = await iosSupabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not signed in to VineTrack");
+  const base = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+  const anon = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+  if (!base) throw new Error("Supabase URL not configured");
+  const url = `${base}/functions/v1/satellite-get-asset?asset_id=${encodeURIComponent(assetId)}`;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${session.access_token}`,
+  };
+  if (anon) headers.apikey = anon;
+  if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
+  const res = await fetch(url, { method: "GET", headers });
+  const etag = res.headers.get("ETag");
+  if (res.status === 304) return { status: 304, blob: null, etag, contentType: null };
+  if (!res.ok) throw new Error(`asset fetch failed (${res.status})`);
+  const blob = await res.blob();
+  return { status: 200, blob, etag, contentType: res.headers.get("Content-Type") };
+}
+
 
 export type ManifestPackageStatus =
   | "complete"
@@ -59,17 +92,60 @@ export interface ManifestResponse {
   stats?: { scene_rows_scanned: number; asset_rows_scanned: number };
 }
 
+export interface ManifestLayerAsset {
+  asset_id: string;
+  index_type: SatelliteIndexType;
+  asset_type: "DISPLAY_RASTER" | "ANALYTICAL_RASTER";
+  processing_version: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+  raster_width: number | null;
+  raster_height: number | null;
+  native_resolution_m: number | null;
+  display_resolution_m: number | null;
+  data_type: string | null;
+  scale_factor: number | null;
+  no_data_sentinel: number | null;
+  row_orientation: string | null;
+  colour_scale: unknown;
+  etag: string;
+}
+
+export interface ManifestLayerSummary {
+  mean_value: number | null;
+  median_value: number | null;
+  minimum_value: number | null;
+  maximum_value: number | null;
+  standard_deviation: number | null;
+  percentile_10: number | null;
+  percentile_25: number | null;
+  percentile_75: number | null;
+  percentile_90: number | null;
+}
+
+export interface ManifestLayerBundle {
+  index_type: SatelliteIndexType;
+  display: ManifestLayerAsset | null;
+  analytical: ManifestLayerAsset | null;
+  summary: ManifestLayerSummary | null;
+}
+
 export interface ManifestDatePaddock {
   paddock_id: string;
   scene_id: string;
   provider_scene_id: string | null;
+  provider: string;
   acquired_at: string;
+  acquisition_date: string;
   processing_version: string | null;
   paddock_valid_coverage_pct: number | null;
   paddock_cloud_cover_pct: number | null;
+  scene_cloud_cover_pct: number | null;
   available_display_layers: SatelliteIndexType[];
   available_analytical_layers: SatelliteIndexType[];
   package_version_mismatch: boolean;
+  layers: ManifestLayerBundle[];
 }
 
 export type ManifestDateMissingReason =
