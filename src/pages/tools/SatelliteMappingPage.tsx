@@ -1335,19 +1335,32 @@ export default function SatelliteMappingPage() {
     },
     onError: (e: any) => {
       retryInFlightRef.current = false;
+      const msg = String(e?.message ?? e ?? "Unknown error");
+      // "Refresh already running" is a lock conflict, not a Copernicus
+      // search failure. Show it as a neutral toast — do not raise the red
+      // "Crop Health Maps search failed" panel, and do not clobber any
+      // real search error currently displayed.
+      if (/refresh already running/i.test(msg)) {
+        toast({
+          title: "Imagery refresh in progress",
+          description: "Another refresh is running. Existing imagery is still available.",
+        });
+        return;
+      }
       setSearchError({
         code: null,
         providerStatus: null,
         paddockId: paddockId === "all" ? geoms[0]?.id ?? null : paddockId,
         paddockName: paddockId === "all" ? geoms[0]?.name ?? null : geoms.find((g) => g.id === paddockId)?.name ?? null,
-        message: String(e?.message ?? e ?? "Unknown error"),
+        message: msg,
       });
       toast({
         title: "Crop Health Maps refresh failed",
-        description: String(e?.message ?? e ?? "Unknown error"),
+        description: msg,
         variant: "destructive",
       });
     },
+
   });
 
 
@@ -1418,35 +1431,33 @@ export default function SatelliteMappingPage() {
   // Auto-run on page load: if any paddock has no imagery in the last 3 days,
   // silently trigger a refresh for just those paddocks. Cooled down per vineyard
   // across mounts so bouncing in and out of the page doesn't refire it.
+  // NOTE: automatic Refresh Imagery on page load has been removed.
+  // Refreshing must only happen in response to an explicit user click on
+  // the Refresh Imagery button — opening the page must never fire
+  // satellite-search-scenes or satellite-process-scene. Saved imagery is
+  // rendered from stored metadata; provider calls are user-initiated only.
   useEffect(() => {
     if (!activeVineyardId) return;
-    if (scenesQuery.isLoading || !scenesQuery.data) return;
-    if (paddocksLoading || geoms.length === 0) return;
-    if (autoRanForVineyardRef.current === activeVineyardId) return;
-    if (checkForNewImage.isPending) return;
-    const last = autoRunTimestamps.get(activeVineyardId) ?? 0;
-    if (Date.now() - last < AUTO_RUN_COOLDOWN_MS) {
-      autoRanForVineyardRef.current = activeVineyardId;
-      return;
-    }
-    const autoReport = inspectCompleteness({
-      paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-      scenes: scenesQuery.data.scenes,
-      assets: scenesQuery.data.assets,
-      summaries: scenesQuery.data.summaries,
-    });
-    const stale = autoReport.perPaddock
-      .filter((p) => p.state !== "complete")
-      .map((p) => p.paddockId);
     autoRanForVineyardRef.current = activeVineyardId;
-    if (stale.length > 0) {
-      autoRunTimestamps.set(activeVineyardId, Date.now());
-      checkForNewImage.mutate({ paddockIds: stale });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeVineyardId, scenesQuery.data, scenesQuery.isLoading, paddocksLoading, geoms.length]);
+  }, [activeVineyardId]);
 
 
+
+
+  // Live completeness snapshot for the diagnostics panel and the
+  // "Imagery missing" chip in Latest-per-paddock mode. Uses the same inspector
+  // as the refresh mutation so the numbers never disagree.
+  const liveReport: CompletenessReport = useMemo(() => inspectCompleteness({
+    paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
+    scenes: scenesQuery.data?.scenes ?? [],
+    assets: scenesQuery.data?.assets ?? [],
+    summaries: scenesQuery.data?.summaries ?? [],
+  }), [geoms, scenesQuery.data]);
+  const [missingDetailOpen, setMissingDetailOpen] = useState(false);
+  const paddocksMissingLatestSet = useMemo(
+    () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
+    [liveReport],
+  );
 
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
@@ -1466,20 +1477,7 @@ export default function SatelliteMappingPage() {
   const hoverSummary = hover?.paddockId ? summaryByPaddock.get(hover.paddockId) : undefined;
   const legendSummary = hoverSummary ?? (summaryByPaddock.size === 1 ? Array.from(summaryByPaddock.values())[0] : undefined);
 
-  // Live completeness snapshot for the diagnostics panel and the
-  // "Imagery missing" chip in Latest-per-paddock mode. Uses the same inspector
-  // as the refresh mutation so the numbers never disagree.
-  const liveReport: CompletenessReport = useMemo(() => inspectCompleteness({
-    paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-    scenes: scenesQuery.data?.scenes ?? [],
-    assets: scenesQuery.data?.assets ?? [],
-    summaries: scenesQuery.data?.summaries ?? [],
-  }), [geoms, scenesQuery.data]);
-  const [missingDetailOpen, setMissingDetailOpen] = useState(false);
-  const paddocksMissingLatestSet = useMemo(
-    () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
-    [liveReport],
-  );
+
 
 
   return (
@@ -1740,20 +1738,21 @@ export default function SatelliteMappingPage() {
                 <div>
                   Latest available imagery per paddock — capture dates may differ. Hover a paddock to see its acquisition date.
                 </div>
-                {paddocksMissingLatestSet.size > 0 && (
+                {liveReport.perPaddock.some((p) => p.state === "missing_latest_scene" && !p.hasSavedDisplayImagery) && (
                   <div className="flex flex-wrap gap-1">
                     {liveReport.perPaddock
-                      .filter((p) => p.state === "missing_latest_scene")
+                      .filter((p) => p.state === "missing_latest_scene" && !p.hasSavedDisplayImagery)
                       .map((p) => (
                         <span
                           key={p.paddockId}
                           className="inline-flex items-center rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300"
                         >
-                          {p.paddockName} · Imagery missing
+                          {p.paddockName} · No saved imagery
                         </span>
                       ))}
                   </div>
                 )}
+
               </div>
             )}
           </div>
@@ -1764,14 +1763,16 @@ export default function SatelliteMappingPage() {
             <div className="text-xs font-semibold text-foreground">Imagery completeness</div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
               <div>Active paddocks: <span className="text-foreground">{liveReport.totals.totalPaddocks}</span></div>
-              <div>With latest imagery: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
-              <div>Missing latest: <span className="text-foreground">{liveReport.totals.missingPaddocks}</span></div>
+              <div>With saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.hasSavedDisplayImagery).length}</span></div>
+              <div>No saved imagery: <span className="text-foreground">{liveReport.perPaddock.filter((p) => !p.hasSavedDisplayImagery).length}</span></div>
               <div>Complete packages: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
               <div>Partial packages: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
+              <div>Refresh needed (stale): <span className="text-foreground">{liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene" && p.hasSavedDisplayImagery).length}</span></div>
               <div>Old processing version: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
               <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
               <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
               <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+
               {lastRefreshSummary && (
                 <>
                   <div>Last refresh — processed: <span className="text-foreground">{lastRefreshSummary.processedPaddocks}</span></div>

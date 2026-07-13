@@ -1,121 +1,81 @@
 
-# Incremental Refresh Imagery
+# Crop Health Maps — separate saved imagery from provider refresh, add server manifest, fix locks and caching
 
-Rebuild the Refresh Imagery action so it inspects what is already stored, only processes the missing or incomplete items, and reports exactly what it did. Nothing about the underlying provider calls, storage layout, colour ramps or hover behaviour changes.
+The goal is to make the page feel instant on revisit, stop falsely labelling paddocks with visible overlays as `Imagery missing`, never call Copernicus on load, and replace the boolean-ish refresh lock with a heartbeat-backed job so a stale lock cannot wedge the page.
 
-Confirming a few decisions before I start coding:
+## What the user will see change
 
-1. **Scope of "required layers"** — the spec lists all 11 indices (TRUE_COLOUR + 10 numeric) as required for a scene to be "complete". Today the client only asks the edge function to process the currently selected layer (`requested_index_types: [layer]`). To honour the completeness definition, Refresh Imagery will need to ensure **all 11** layers exist on the target scene, not just the currently displayed one. Confirm this is what you want (as opposed to "only the selected layer must be complete"). I will assume **all 11 layers**, matching your section 1.
-2. **Refresh Imagery vs. Repair Missing Assets vs. Backfill 12-Month History** — I will keep the existing 12-month backfill button (already wired to `satellite-backfill-analytical`) as **Backfill 12-Month History (admin)**, add a new **Repair Missing Assets** admin button that runs the same backfill but scoped to *stored scenes only*, and make **Refresh Imagery** target only the latest expected scene per paddock.
-3. **No new edge function is required.** The existing `satellite-process-scene` is already idempotent per `(provider_scene_id, paddock_id, index_type, asset_type, processing_version)` and skips re-uploading assets that already exist (see `existingAssets` reuse in `supabase/functions/satellite-process-scene/index.ts`). All new logic lives in the portal.
+- Revisiting `/tools/satellite-mapping` renders paddock overlays immediately from cache; no Copernicus call fires.
+- Paddocks with saved overlays show `Imagery available` (or `... · Cell data incomplete` / `... · Upgrade available`), never `Imagery missing`.
+- The diagnostics block is reorganised into three clear groups: Saved imagery / Package health / Provider freshness.
+- Pressing `Refresh Imagery` shows real progress (`3 of 8 paddocks checked`) rather than a red "search failed" panel when a job is already running.
+- If a refresh silently died, the page auto-recovers within ~2 min via heartbeat expiry and lets the user retry.
+- `Repair Missing Assets` and `Refresh Imagery` use separate locks and no longer block each other.
 
-## What changes
+## Backend (Lovable Cloud / iOS project via migrations + edge functions)
 
-### Completeness model (client-side, admin-only for the diagnostics)
+New table `satellite_paddock_manifest` (vineyard_id, paddock_id, latest_display_scene_id, latest_display_acquired_at, latest_complete_scene_id, latest_complete_acquired_at, latest_processing_version, available_layer_types text[], available_analytical_types text[], missing_display_count, missing_analytical_count, missing_summary_count, package_status enum, last_provider_check_at, last_successful_refresh_at, last_asset_repair_at, updated_at). Unique (vineyard_id, paddock_id). RLS by vineyard membership. Grants + RLS as per Lovable rules.
 
-New helper module `src/lib/satelliteCompleteness.ts`:
+New table `satellite_refresh_jobs` (id, vineyard_id, job_type enum: provider_refresh|asset_repair|historical_backfill, requested_by, status enum: queued|running|complete|partial|failed|cancelled|expired, started_at, heartbeat_at, completed_at, expiry_at, current_paddock_id, total_paddocks, completed_paddocks, failed_paddocks, error). Partial unique index enforcing "at most one active (queued|running) job per (vineyard_id, job_type)". `has_active_refresh_job` / `claim_refresh_job` / `heartbeat_refresh_job` / `finish_refresh_job` / `expire_stale_refresh_jobs` SQL functions (SECURITY DEFINER with membership check). Stale = heartbeat_at < now() - interval '3 minutes' OR expiry_at < now() — expiring flips status to `expired` and releases the lock.
 
-- `REQUIRED_INDICES` — the 11 indices from `LAYERS`.
-- `requiredOutputsFor(index)` — `TRUE_COLOUR` needs only a display asset; every numeric index needs display + analytical + summary.
-- `PROCESSING_VERSION` constant mirrored from the edge (`"v2"` — verified in `supabase/functions/_shared/satellite-cdse.ts`).
-- `inspectCompleteness({ paddocks, scenes, assets, summaries, processingVersion })` returning:
-  ```ts
-  {
-    perPaddock: Array<{
-      paddockId; paddockName;
-      latestSceneId: string | null;
-      latestAcquiredAt: string | null;
-      state: "complete" | "missing_latest_scene" | "incomplete_scene" | "old_processing_version";
-      missingLayers: SatelliteIndexType[];               // no assets at all
-      missingDisplayLayers: SatelliteIndexType[];
-      missingAnalyticalLayers: SatelliteIndexType[];
-      missingSummaries: SatelliteIndexType[];
-      onOldProcessingVersion: boolean;
-    }>;
-    totals: {
-      completePaddocks, missingPaddocks, incompleteScenes,
-      missingDisplay, missingAnalytical, missingSummaries,
-      oldVersionScenes, totalMissing,
-    };
-  }
-  ```
+Trigger `refresh_paddock_manifest(paddock_id)` — recomputes one manifest row from `satellite_scenes` + `satellite_raster_assets` + `satellite_index_summaries` for the current processing version. Called from AFTER INSERT/UPDATE/DELETE triggers on those three tables (statement-level, batched via changed paddock ids in transition tables).
 
-"Latest scene" for a paddock = newest `satellite_scenes` row with `processing_status = 'complete'` (or `'processing'`/`'failed'` treated as incomplete). A paddock with **no** completed scene within the last `STALE_DAYS` (existing 3-day window) is `missing_latest_scene`.
+One-time backfill migration: `INSERT INTO satellite_paddock_manifest ... FROM satellite_scenes/assets/summaries` for every paddock that has ≥1 saved scene, so existing overlays are correctly classified immediately (fixes today's "8 missing / 0 complete" screenshot).
 
-### Refresh Imagery mutation rewrite
+Edge functions:
+- New `satellite-get-manifest` — returns `{ manifest_version, updated_at, paddocks: [...] }` for a vineyard. Auth via VineTrack session (same pattern as existing satellite fns).
+- New `satellite-refresh-status` — returns the active job for a vineyard+type or the last completed one, and calls `expire_stale_refresh_jobs` first so callers see recovered state.
+- New `satellite-asset-url` — authenticated stable endpoint for a single asset id; returns a signed URL plus `ETag: {assetId}:{processingVersion}`, `Cache-Control: private, max-age=600`, `Last-Modified` from asset updated_at, and handles `If-None-Match` → 304. Used as the stable logical URL for blob caching.
+- Update `satellite-process-scene` and `satellite-backfill-analytical` to (a) claim/heartbeat/finish a job row instead of a boolean flag, (b) call `refresh_paddock_manifest` at the end of each paddock, (c) return `409 { active_job: {...} }` when the same (vineyard, job_type) already has a live job — never a generic 500. Existing rate-limit + concurrency behaviour is untouched.
 
-Rewrite `checkForNewImage` in `src/pages/tools/SatelliteMappingPage.tsx` so it:
+Assets remain immutable — identity is already (paddock_id, provider_scene_id, index_type, asset_type, processing_version). No mutation of existing bytes.
 
-1. Runs `inspectCompleteness` against the already-fetched scenes/assets/summaries (no extra network).
-2. Shows a preflight toast:
-   - `All current satellite imagery is already up to date.` → return, no processing.
-   - Otherwise the summary from spec §6 (complete, missing paddocks, incomplete scenes, missing display / analytical / summaries).
-3. For each paddock needing work:
-   - `missing_latest_scene` → existing search + process flow, but `requested_index_types` = **all 11** required layers.
-   - `incomplete_scene` (or `old_processing_version` with missing outputs) → **skip the CDSE Catalog search**. Reuse the stored `provider_scene_id`/`acquired_at`/`scene_cloud_cover_pct` from the latest scene row and call `satellite-process-scene` directly with `requested_index_types` = only the union of `missingLayers ∪ missingDisplayLayers ∪ missingAnalyticalLayers ∪ missingSummaries`. The edge function already reuses existing display/analytical assets on upsert, so this is naturally idempotent.
-4. Progress messages match spec §7 wording.
-5. Final toast reflects `X missing paddocks processed / Y complete paddocks skipped` or `No updates required`.
-6. A short in-memory lock (`refreshInFlightRef`) prevents overlapping refreshes; the existing `AUTO_RUN_COOLDOWN_MS` is reused for the "no duplicate work across rapid clicks" requirement.
+## Frontend
 
-Button label is already `Refresh Imagery`.
+New `src/lib/satelliteManifest.ts` — types + `fetchManifest(vineyardId)`, `fetchRefreshStatus(vineyardId, jobType)`, `getAssetUrl(assetId)` wrappers.
 
-### Repair Missing Assets (admin)
+New `src/lib/satelliteCache.ts` — IndexedDB (via a tiny hand-rolled wrapper, no new deps) with two stores:
+- `manifest` keyed `crop-health-manifest:{vineyardId}` — value = server manifest + `updated_at`.
+- `asset-blob` keyed `crop-health-asset:{assetId}:{processingVersion}` — value = `{ blob, contentType, cachedAt, etag }`.
+Plus in-memory LRU for decoded analytical rasters keyed `paddockId:sceneId:indexType:processingVersion` (moved out of the page component).
 
-Rename the existing admin "Backfill layers for stored scenes" button to **Repair Missing Assets** and keep it wired to `satellite-backfill-analytical` (which already targets stored scenes and skips complete outputs — no server change needed).
+Rewrite `src/pages/tools/SatelliteMappingPage.tsx` load sequence:
+1. On mount, read cached manifest → render boundaries + cached overlay URLs immediately (via cached blobs → `URL.createObjectURL`). Small `Checking saved imagery…` chip.
+2. Fire `satellite-get-manifest` + `satellite-refresh-status` in parallel. No `satellite-search-scenes`, no `satellite-process-scene`, no Copernicus.
+3. Reconcile: if server `updated_at` newer, fetch changed asset blobs via `satellite-asset-url` (respecting ETag/304 and cached blob). Leave unchanged paddocks alone.
+4. If signed URL fetch fails but blob is cached, keep displaying the cached blob and retry URL renewal in background.
 
-Add a second admin button **Backfill 12-Month History** that calls `satellite-search-scenes` + `satellite-process-scene` across the full window per paddock. Marked "admin only, expensive".
+Rewrite completeness/diagnostics UI to read from the manifest (not from the raw scenes/assets recount that produced the false 0/8 numbers). Statuses per paddock:
+- `display_available` → `Imagery available`
+- `partial` → `Imagery available · Cell data incomplete`
+- `upgrade_required` → `Imagery available · Upgrade available`
+- `no_imagery` → `No saved imagery`
+- active provider job for that paddock → `Checking for newer imagery`
+- last refresh failed but display asset still there → `Existing imagery retained · Refresh failed`
 
-### Diagnostics panel (system admin only)
+Diagnostics panel groups: Saved imagery / Package health / Provider freshness (`Last provider check`, `Paddocks checked`, `New captures found`, `Refresh currently active`). Kill the ambiguous `Missing latest` metric.
 
-New collapsible under the existing admin block:
+Rewrite `Refresh Imagery` handler:
+- Poll `satellite-refresh-status` first. If active, render an informational progress card (not the red error panel), poll heartbeat every 5s, show `X of Y paddocks checked`.
+- If no active job, call the same incremental refresh flow already built (only missing/incomplete paddocks) but now the edge function claims the job row. On completion, invalidate only affected manifest/asset cache entries.
+- Admin-only submenu: `Refresh normally` / `Force provider recheck`.
+- `Repair Missing Assets` uses `job_type = 'asset_repair'`, independent lock.
 
-```
-Imagery completeness
-  Total active paddocks:          8
-  Paddocks with latest imagery:   7
-  Paddocks missing latest:        1
-  Complete scene packages:        7
-  Partial scene packages:         0
-  Missing display assets:         0
-  Missing analytical assets:      0
-  Missing summaries:              0
-  Scenes on old processing ver.:  0
-  Last refresh — processed:       1
-  Last refresh — skipped:         7
+Overlays are never cleared during refresh — the existing overlay layer keeps its current blob URLs until a new asset is confirmed downloaded, then swaps.
 
-  > Show missing item detail
-      Cab Franc  — Missing latest scene
-      Shiraz     — Complete
-      Pinot Noir — Missing PSRI analytical; Missing GCI summary
-```
+Error handling: a 409 from any refresh call renders as `Imagery refresh in progress` with progress data, never as `Crop Health Maps search failed`. Only genuine Copernicus errors show the red failure state, with wording `Copernicus imagery search failed`.
 
-Backed by the same `inspectCompleteness` output plus a `lastRefreshSummary` state populated by the mutation.
+## Files touched (approx)
 
-### All-Paddocks "Latest available per paddock" mode
-
-Where the map currently renders overlays keyed off `newestByPad`, add a subtle `Imagery missing` chip for paddocks whose completeness state is `missing_latest_scene`. Refresh Imagery already targets those via step 3 above. No overlay reprocessing for complete paddocks.
-
-## Files touched
-
-- **new** `src/lib/satelliteCompleteness.ts` — pure completeness inspector + types.
-- **new** `src/lib/satelliteCompleteness.test.ts` — unit tests for all-complete, missing paddock, missing analytical, missing summary, mixed, old version.
-- **edit** `src/pages/tools/SatelliteMappingPage.tsx`
-  - swap `computeStalePaddockIds` usage to the new inspector,
-  - rewrite `checkForNewImage.mutationFn` per §Refresh above,
-  - new preflight/final toast wording,
-  - new diagnostics panel + missing-item collapsible,
-  - rename admin backfill button; add optional 12-month admin button,
-  - `Imagery missing` chip on the all-paddocks legend/list.
-- **no edge-function changes** — `satellite-process-scene`, `satellite-search-scenes`, `satellite-backfill-analytical` are already idempotent and reuse existing assets.
-
-## Validation
-
-- `tsgo --noEmit` on the portal.
-- New vitest cases: all-complete → no work; one paddock missing → one search+process; one scene missing PSRI analytical → one process call with `requested_index_types: ["PSRI"]` and no search call; old processing version with valid assets → only missing-version layers targeted; repeated click while pending → second click is a no-op.
-- Manual smoke on `/tools/satellite-mapping` for a vineyard with mixed state: verify preflight numbers, verify only the incomplete paddock shows a spinner during refresh, verify the final toast lists processed vs skipped, verify the admin diagnostics panel matches.
+Migrations (2): `satellite_paddock_manifest` + triggers + backfill; `satellite_refresh_jobs` + SQL helpers.
+Edge functions: new `satellite-get-manifest`, `satellite-refresh-status`, `satellite-asset-url`; edited `satellite-process-scene`, `satellite-backfill-analytical`.
+Frontend: new `src/lib/satelliteManifest.ts`, `src/lib/satelliteCache.ts`; edited `src/pages/tools/SatelliteMappingPage.tsx` (load sequence, diagnostics, refresh handler, status badges, error panel); light edits to `src/lib/satelliteCompleteness.ts` to consume manifest rows.
+Tests: extend `src/lib/satelliteCompleteness.test.ts` with manifest-derived scenarios; add a small `satelliteCache.test.ts`.
 
 ## Out of scope
 
-- Any change to hover sampling, colour scales, storage buckets, or existing edge-function behaviour.
-- Any schema change (existing tables already carry `processing_version`, `asset_type`, summaries).
-- Non-admin surfacing of the diagnostics panel — remains admin-only per the current page pattern.
+Colour ramps, hover UX, storage bucket layout, Sentinel Hub processing recipes, non-crop-health pages.
+
+## Approval
+
+This is a substantial change touching DB schema, edge functions and the whole page. Reply `go` to implement, or tell me which sections to trim (e.g. skip the stable-URL asset endpoint and keep only blob caching against signed URLs, or ship the frontend fixes first and defer the manifest table).

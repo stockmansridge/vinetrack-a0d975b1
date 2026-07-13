@@ -80,6 +80,15 @@ export interface PaddockCompleteness {
   latestAcquiredAt: string | null;
   latestSceneCloudCoverPct: number | null;
   onOldProcessingVersion: boolean;
+  // True when this paddock has ANY saved display raster (any scene, any
+  // processing version). Drives the "Imagery available" vs "No saved
+  // imagery" badge in the UI — never label a paddock with saved display
+  // rasters as "Imagery missing".
+  hasSavedDisplayImagery: boolean;
+  // True when a saved display raster exists but the newest completed scene
+  // is older than the freshness window — UI shows "Refresh needed" rather
+  // than "Imagery missing".
+  savedImageryStale: boolean;
   // Indices with NO stored assets at all on the latest scene.
   missingLayers: SatelliteIndexType[];
   missingDisplayLayers: SatelliteIndexType[];
@@ -88,6 +97,7 @@ export interface PaddockCompleteness {
   // Deduplicated union of every index this paddock needs re-processed.
   indicesRequiringWork: SatelliteIndexType[];
 }
+
 
 export interface CompletenessTotals {
   totalPaddocks: number;
@@ -165,6 +175,19 @@ export function inspectCompleteness({
     summariesBySceneIndex.set(sum.satellite_scene_id, set);
   }
 
+  // Paddocks that have ANY saved display raster on any scene (regardless of
+  // processing version / freshness). Used to distinguish "no saved imagery"
+  // from "saved imagery exists but may be stale or on an old version".
+  const sceneIdToPaddockId = new Map<string, string>();
+  for (const s of scenes) sceneIdToPaddockId.set(s.id, s.paddock_id);
+  const paddocksWithAnyDisplay = new Set<string>();
+  for (const a of assets) {
+    const kind = normaliseKind(a);
+    if (kind !== "DISPLAY_RASTER") continue;
+    const pid = sceneIdToPaddockId.get(a.satellite_scene_id);
+    if (pid) paddocksWithAnyDisplay.add(pid);
+  }
+
   const perPaddock: PaddockCompleteness[] = [];
   const totals: CompletenessTotals = {
     totalPaddocks: paddocks.length,
@@ -182,6 +205,7 @@ export function inspectCompleteness({
     const latest = newestByPaddock.get(p.id) ?? null;
     const latestMs = latest ? new Date(latest.acquired_at).getTime() : NaN;
     const withinWindow = Number.isFinite(latestMs) && latestMs >= cutoff;
+    const hasSavedDisplayImagery = paddocksWithAnyDisplay.has(p.id);
 
     if (!latest || !withinWindow) {
       perPaddock.push({
@@ -193,6 +217,8 @@ export function inspectCompleteness({
         latestAcquiredAt: latest?.acquired_at ?? null,
         latestSceneCloudCoverPct: latest?.scene_cloud_cover_pct ?? null,
         onOldProcessingVersion: false,
+        hasSavedDisplayImagery,
+        savedImageryStale: hasSavedDisplayImagery,
         missingLayers: [...REQUIRED_INDICES],
         missingDisplayLayers: [...REQUIRED_INDICES],
         missingAnalyticalLayers: REQUIRED_INDICES.filter(requiresAnalytical),
@@ -203,6 +229,7 @@ export function inspectCompleteness({
       totals.totalMissing += 1;
       continue;
     }
+
 
     const displays = displayBySceneIndex.get(latest.id) ?? new Set();
     const analyticals = analyticalBySceneIndex.get(latest.id) ?? new Set();
@@ -264,6 +291,8 @@ export function inspectCompleteness({
       latestAcquiredAt: latest.acquired_at,
       latestSceneCloudCoverPct: latest.scene_cloud_cover_pct,
       onOldProcessingVersion: olderVersionSeen,
+      hasSavedDisplayImagery: paddocksWithAnyDisplay.has(p.id) || (displays.size > 0),
+      savedImageryStale: false,
       missingLayers,
       missingDisplayLayers,
       missingAnalyticalLayers,
@@ -277,7 +306,9 @@ export function inspectCompleteness({
 
 export function describePaddockMissingItems(p: PaddockCompleteness): string[] {
   if (p.state === "complete") return ["Complete"];
-  if (p.state === "missing_latest_scene") return ["Missing latest scene"];
+  if (p.state === "missing_latest_scene") {
+    return [p.hasSavedDisplayImagery ? "Refresh needed to check for newer imagery" : "No saved imagery"];
+  }
   const parts: string[] = [];
   for (const idx of p.missingDisplayLayers) parts.push(`Missing ${idx} display`);
   for (const idx of p.missingAnalyticalLayers) parts.push(`Missing ${idx} analytical`);
@@ -285,3 +316,4 @@ export function describePaddockMissingItems(p: PaddockCompleteness): string[] {
   if (p.onOldProcessingVersion) parts.push("Requires version upgrade");
   return parts.length ? parts : ["Complete"];
 }
+
