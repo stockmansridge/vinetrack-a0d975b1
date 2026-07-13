@@ -317,3 +317,131 @@ export function describePaddockMissingItems(p: PaddockCompleteness): string[] {
   return parts.length ? parts : ["Complete"];
 }
 
+// ---------------------------------------------------------------------------
+// Manifest-derived report
+// ---------------------------------------------------------------------------
+// The server-side `satellite_paddock_manifest` table is the source of truth
+// for what display / analytical / summary assets exist per paddock for the
+// CURRENT processing version. Prefer it over the client-side recount from raw
+// scenes/assets — the recount was misclassifying paddocks with visible
+// overlays as "Imagery missing" whenever the loaded scenes/assets slice was
+// incomplete.
+
+export type ManifestPackageStatusLite =
+  | "complete"
+  | "partial"
+  | "display_available"
+  | "upgrade_required"
+  | "no_imagery";
+
+export interface ManifestPaddockLite {
+  paddock_id: string;
+  latest_display_scene_id: string | null;
+  latest_display_acquired_at: string | null;
+  available_layer_types: SatelliteIndexType[] | null;
+  available_analytical_types: SatelliteIndexType[] | null;
+  missing_display_count: number | null;
+  missing_analytical_count: number | null;
+  missing_summary_count: number | null;
+  package_status: ManifestPackageStatusLite;
+}
+
+export function reportFromManifest(
+  paddocks: CompletenessPaddockInput[],
+  manifestRows: ManifestPaddockLite[],
+): CompletenessReport {
+  const byId = new Map(manifestRows.map((r) => [r.paddock_id, r]));
+  const perPaddock: PaddockCompleteness[] = [];
+  const totals: CompletenessTotals = {
+    totalPaddocks: paddocks.length,
+    completePaddocks: 0,
+    missingPaddocks: 0,
+    incompletePaddocks: 0,
+    oldVersionPaddocks: 0,
+    missingDisplay: 0,
+    missingAnalytical: 0,
+    missingSummaries: 0,
+    totalMissing: 0,
+  };
+
+  for (const p of paddocks) {
+    const m = byId.get(p.id);
+    if (!m || m.package_status === "no_imagery") {
+      perPaddock.push({
+        paddockId: p.id,
+        paddockName: p.name,
+        state: "missing_latest_scene",
+        latestSceneId: null,
+        latestProviderSceneId: null,
+        latestAcquiredAt: null,
+        latestSceneCloudCoverPct: null,
+        onOldProcessingVersion: false,
+        hasSavedDisplayImagery: false,
+        savedImageryStale: false,
+        missingLayers: [...REQUIRED_INDICES],
+        missingDisplayLayers: [...REQUIRED_INDICES],
+        missingAnalyticalLayers: REQUIRED_INDICES.filter(requiresAnalytical),
+        missingSummaries: REQUIRED_INDICES.filter(requiresSummary),
+        indicesRequiringWork: [...REQUIRED_INDICES],
+      });
+      totals.missingPaddocks += 1;
+      totals.totalMissing += 1;
+      continue;
+    }
+
+    const availDisplay = new Set(m.available_layer_types ?? []);
+    const availAnalytical = new Set(m.available_analytical_types ?? []);
+    const missingDisplayLayers = REQUIRED_INDICES.filter((i) => !availDisplay.has(i));
+    const missingAnalyticalLayers = REQUIRED_INDICES.filter(
+      (i) => requiresAnalytical(i) && !availAnalytical.has(i),
+    );
+    // Manifest tracks summary count but not exact index list; approximate with
+    // the analytical-missing list truncated to the count for display purposes.
+    const missingSummaries = missingAnalyticalLayers.slice(0, m.missing_summary_count ?? 0);
+    const indicesRequiringWork = Array.from(new Set([
+      ...missingDisplayLayers,
+      ...missingAnalyticalLayers,
+      ...missingSummaries,
+    ]));
+
+    let state: PaddockCompletenessState;
+    if (m.package_status === "complete") {
+      state = "complete";
+      totals.completePaddocks += 1;
+    } else if (m.package_status === "upgrade_required") {
+      state = "old_processing_version";
+      totals.oldVersionPaddocks += 1;
+      totals.incompletePaddocks += 1;
+      totals.totalMissing += 1;
+    } else {
+      state = "incomplete_scene";
+      totals.incompletePaddocks += 1;
+      totals.totalMissing += 1;
+    }
+
+    totals.missingDisplay += missingDisplayLayers.length;
+    totals.missingAnalytical += missingAnalyticalLayers.length;
+    totals.missingSummaries += missingSummaries.length;
+
+    perPaddock.push({
+      paddockId: p.id,
+      paddockName: p.name,
+      state,
+      latestSceneId: m.latest_display_scene_id,
+      latestProviderSceneId: null,
+      latestAcquiredAt: m.latest_display_acquired_at,
+      latestSceneCloudCoverPct: null,
+      onOldProcessingVersion: m.package_status === "upgrade_required",
+      hasSavedDisplayImagery: true,
+      savedImageryStale: false,
+      missingLayers: missingDisplayLayers,
+      missingDisplayLayers,
+      missingAnalyticalLayers,
+      missingSummaries,
+      indicesRequiringWork,
+    });
+  }
+
+  return { perPaddock, totals };
+}
+

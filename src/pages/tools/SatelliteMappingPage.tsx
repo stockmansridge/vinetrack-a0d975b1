@@ -43,12 +43,14 @@ import {
 import type { SatelliteIndexType } from "@/types/satellite";
 import {
   inspectCompleteness,
+  reportFromManifest,
   describePaddockMissingItems,
   REQUIRED_INDICES,
   CURRENT_PROCESSING_VERSION,
   type CompletenessReport,
   type PaddockCompleteness,
 } from "@/lib/satelliteCompleteness";
+import { fetchManifest } from "@/lib/satelliteManifest";
 
 // Satellite edge functions live in the Lovable Cloud project but authorize the
 // caller against the VineTrack iOS Supabase project. Send the iOS access token
@@ -1269,6 +1271,7 @@ export default function SatelliteMappingPage() {
       let latestSummaries: DBSummary[] = scenesQuery.data?.summaries ?? [];
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
         await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+        await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
         const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
         const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[]; summaries?: DBSummary[] } | undefined;
         if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
@@ -1406,6 +1409,7 @@ export default function SatelliteMappingPage() {
     },
     onSuccess: async (data) => {
       await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
+      await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
       await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
       analyticalCacheRef.current.clear();
       setRasterCacheVersion((v) => v + 1);
@@ -1444,15 +1448,34 @@ export default function SatelliteMappingPage() {
 
 
 
+  // Server manifest — source of truth for per-paddock completeness. Cheap to
+  // fetch (single row per paddock) and updated by DB triggers whenever scenes
+  // or assets change. When present, drives the diagnostics counts and status
+  // badges so paddocks with saved overlays are never mislabelled "missing".
+  const manifestQuery = useQuery({
+    queryKey: ["satellite-manifest", activeVineyardId],
+    queryFn: () => fetchManifest(activeVineyardId!),
+    enabled: !!activeVineyardId,
+    staleTime: 30_000,
+  });
+
   // Live completeness snapshot for the diagnostics panel and the
-  // "Imagery missing" chip in Latest-per-paddock mode. Uses the same inspector
-  // as the refresh mutation so the numbers never disagree.
-  const liveReport: CompletenessReport = useMemo(() => inspectCompleteness({
-    paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-    scenes: scenesQuery.data?.scenes ?? [],
-    assets: scenesQuery.data?.assets ?? [],
-    summaries: scenesQuery.data?.summaries ?? [],
-  }), [geoms, scenesQuery.data]);
+  // "Imagery missing" chip in Latest-per-paddock mode. Prefers the server
+  // manifest so counts always match what's actually stored; falls back to the
+  // legacy client-side recount if the manifest hasn't loaded yet.
+  const liveReport: CompletenessReport = useMemo(() => {
+    const paddockInputs = geoms.map((g) => ({ id: g.id, name: g.name }));
+    const manifestRows = manifestQuery.data?.paddocks;
+    if (manifestRows && manifestRows.length > 0) {
+      return reportFromManifest(paddockInputs, manifestRows);
+    }
+    return inspectCompleteness({
+      paddocks: paddockInputs,
+      scenes: scenesQuery.data?.scenes ?? [],
+      assets: scenesQuery.data?.assets ?? [],
+      summaries: scenesQuery.data?.summaries ?? [],
+    });
+  }, [geoms, manifestQuery.data, scenesQuery.data]);
   const [missingDetailOpen, setMissingDetailOpen] = useState(false);
   const paddocksMissingLatestSet = useMemo(
     () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
