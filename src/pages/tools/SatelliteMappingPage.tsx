@@ -669,49 +669,109 @@ export default function SatelliteMappingPage() {
 
   // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
 
-  // Available acquisition dates for the current paddock filter.
-  // In All Paddocks mode, count how many paddocks have a completed scene per date.
-  const dateOptions = useMemo(() => {
+  // ---- Date-coverage index ----------------------------------------------
+  // Group all completed scenes by acquisition day (YYYY-MM-DD) and, for each
+  // (date, paddock), keep the SINGLE best scene using:
+  //   1. highest paddock_valid_coverage_pct
+  //   2. lowest paddock_cloud_cover_pct
+  //   3. latest acquired_at
+  // This is the client-side date-coverage index the page renders from — no
+  // mixing dates, no per-millisecond timestamp fragility.
+  const dateCoverage = useMemo(() => {
     const scenes = scenesQuery.data?.scenes ?? [];
-    const map = new Map<string, DBScene[]>();
+    const grouped = new Map<string, Map<string, DBScene>>(); // date -> paddockId -> best scene
+    const better = (a: DBScene, b: DBScene): DBScene => {
+      const cov = (b.paddock_valid_coverage_pct ?? -1) - (a.paddock_valid_coverage_pct ?? -1);
+      if (cov > 0) return b;
+      if (cov < 0) return a;
+      const cl = (a.paddock_cloud_cover_pct ?? 101) - (b.paddock_cloud_cover_pct ?? 101);
+      if (cl > 0) return b;
+      if (cl < 0) return a;
+      return b.acquired_at > a.acquired_at ? b : a;
+    };
     for (const s of scenes) {
       if (s.processing_status !== "complete") continue;
-      const d = s.acquired_at.slice(0, 10);
-      if (!map.has(d)) map.set(d, []);
-      map.get(d)!.push(s);
+      const date = s.acquired_at.slice(0, 10);
+      let per = grouped.get(date);
+      if (!per) { per = new Map(); grouped.set(date, per); }
+      const cur = per.get(s.paddock_id);
+      per.set(s.paddock_id, cur ? better(cur, s) : s);
     }
-    return Array.from(map.entries())
+    return Array.from(grouped.entries())
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, s]) => ({
+      .map(([date, sceneByPaddock]) => ({
         date,
-        scenes: s,
-        paddockCount: new Set(s.map((x) => x.paddock_id)).size,
+        sceneByPaddock,
+        paddockCount: sceneByPaddock.size,
       }));
   }, [scenesQuery.data]);
 
   const isAllPaddocks = paddockId === "all";
   const totalPaddocks = geoms.length;
 
-  // Auto-select: prefer "latest" per paddock in All mode; newest date otherwise.
-  useEffect(() => {
-    if (dateOptions.length === 0) return;
-    if (isAllPaddocks) {
-      if (!selectedSceneKey) setSelectedSceneKey("latest");
-    } else {
-      const newest = dateOptions[0].date;
-      if (!selectedSceneKey || (selectedSceneKey !== "latest" && newest > selectedSceneKey)) {
-        setSelectedSceneKey(newest);
-      }
-    }
-  }, [dateOptions, selectedSceneKey, isAllPaddocks]);
+  // Human-readable label: "7 Jul 2026".
+  const formatDate = (iso: string): string => {
+    try {
+      return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, {
+        day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+      });
+    } catch { return iso; }
+  };
 
-  // Assets for the currently selected date + layer.
-  // "latest" mode: newest completed asset per paddock (dates may differ).
+  const dateOptions = useMemo(() => dateCoverage.map((g) => ({
+    date: g.date,
+    scenes: Array.from(g.sceneByPaddock.values()),
+    paddockCount: g.paddockCount,
+    label: `${formatDate(g.date)} · ${g.paddockCount} of ${totalPaddocks} paddocks`,
+  })), [dateCoverage, totalPaddocks]);
+
+  // Auto-select: newest date with full coverage; otherwise newest date with
+  // the highest coverage count. Also drop any legacy "latest" selection.
+  useEffect(() => {
+    if (dateCoverage.length === 0) return;
+    if (selectedSceneKey === "latest") { setSelectedSceneKey(null); return; }
+    // Restore per-vineyard remembered selection if it still exists.
+    if (!selectedSceneKey && activeVineyardId) {
+      try {
+        const saved = localStorage.getItem(`crop-health:date:${activeVineyardId}`);
+        if (saved && dateCoverage.some((g) => g.date === saved)) {
+          setSelectedSceneKey(saved);
+          return;
+        }
+      } catch { /* ignore */ }
+    }
+    if (!selectedSceneKey) {
+      const fullCov = dateCoverage.find((g) => g.paddockCount >= totalPaddocks && totalPaddocks > 0);
+      if (fullCov) { setSelectedSceneKey(fullCov.date); return; }
+      const best = [...dateCoverage].sort((a, b) =>
+        b.paddockCount - a.paddockCount || b.date.localeCompare(a.date))[0];
+      if (best) setSelectedSceneKey(best.date);
+    }
+  }, [dateCoverage, selectedSceneKey, totalPaddocks, activeVineyardId]);
+
+  // Persist user selection per vineyard so revisits keep the same date/layer.
+  useEffect(() => {
+    if (!activeVineyardId || !selectedSceneKey) return;
+    try { localStorage.setItem(`crop-health:date:${activeVineyardId}`, selectedSceneKey); } catch { /* ignore */ }
+  }, [activeVineyardId, selectedSceneKey]);
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    try { localStorage.setItem(`crop-health:layer:${activeVineyardId}`, layer); } catch { /* ignore */ }
+  }, [activeVineyardId, layer]);
+  useEffect(() => {
+    if (!activeVineyardId) return;
+    try {
+      const saved = localStorage.getItem(`crop-health:layer:${activeVineyardId}`);
+      if (saved) setLayer(saved as SatelliteIndexType);
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeVineyardId]);
+
+  // Assets for the currently selected date + layer. Uses the best scene per
+  // paddock for that date (see dateCoverage). Never mixes dates.
   const activeAssetPairs = useMemo(() => {
     if (!selectedSceneKey || !scenesQuery.data) return [];
-    const { scenes, assets } = scenesQuery.data;
-    const completed = scenes.filter((s) => s.processing_status === "complete");
-
+    const { assets } = scenesQuery.data;
     const displayFor = (sceneId: string) => assets.find((x) =>
       x.satellite_scene_id === sceneId &&
       x.index_type === layer &&
@@ -722,28 +782,15 @@ export default function SatelliteMappingPage() {
       x.index_type === layer &&
       assetKind(x) === "ANALYTICAL_RASTER"
     );
-
-    if (selectedSceneKey === "latest") {
-      // Pick each paddock's newest completed scene, then its asset for this layer.
-      const newestByPaddock = new Map<string, DBScene>();
-      for (const s of completed) {
-        const cur = newestByPaddock.get(s.paddock_id);
-        if (!cur || s.acquired_at > cur.acquired_at) newestByPaddock.set(s.paddock_id, s);
-      }
-      const out: Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }> = [];
-      for (const scene of newestByPaddock.values()) {
-        const displayAsset = displayFor(scene.id);
-        if (displayAsset) out.push({ displayAsset, analyticalAsset: analyticalFor(scene.id), scene });
-      }
-      return out;
-    }
-
-    const scenesForDate = completed.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
-    return scenesForDate.flatMap((scene) => {
+    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
+    if (!group) return [];
+    const out: Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }> = [];
+    for (const scene of group.sceneByPaddock.values()) {
       const displayAsset = displayFor(scene.id);
-      return displayAsset ? [{ displayAsset, analyticalAsset: analyticalFor(scene.id), scene }] : [];
-    });
-  }, [scenesQuery.data, selectedSceneKey, layer]);
+      if (displayAsset) out.push({ displayAsset, analyticalAsset: analyticalFor(scene.id), scene });
+    }
+    return out;
+  }, [scenesQuery.data, selectedSceneKey, layer, dateCoverage]);
 
   const activeAssets = useMemo(
     () => activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
