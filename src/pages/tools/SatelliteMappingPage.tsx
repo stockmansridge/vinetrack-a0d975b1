@@ -901,9 +901,9 @@ export default function SatelliteMappingPage() {
   const summaryByPaddock = useMemo(() => {
     const map = new Map<string, DBSummary>();
     if (!scenesQuery.data || !selectedSceneKey) return map;
-    const relevantScenes = selectedSceneKey === "latest"
-      ? activeAssets.map((x) => x.scene)
-      : scenesQuery.data.scenes.filter((s) => s.acquired_at.slice(0, 10) === selectedSceneKey);
+    const relevantScenes = scenesQuery.data.scenes.filter(
+      (s) => s.acquired_at.slice(0, 10) === selectedSceneKey,
+    );
     const bySceneId = new Map(relevantScenes.map((s) => [s.id, s]));
     for (const sum of scenesQuery.data.summaries) {
       if (sum.index_type !== layer) continue;
