@@ -987,18 +987,14 @@ export default function SatelliteMappingPage() {
         else cacheStatsRef.current.analyticalMisses += 1;
 
         try {
-          const blob = await getAssetBlob(asset.id, pv, async () => {
-            const { data, error } = await invokeSatelliteFn("satellite-get-asset-url", {
-              asset_id: asset.id,
-            });
-            if (error) throw error;
-            const d = data as any;
-            return {
-              signed_url: d?.signed_url as string,
-              etag: `${asset.id}:${pv ?? "unknown"}`,
-              content_type: null,
-            };
+          const blob = await getAssetBlob(asset.id, pv, async (ifNoneMatch) => {
+            const r = await fetchAssetBytes(asset.id, ifNoneMatch);
+            cacheStatsRef.current.assetRequests += 1;
+            if (r.status === 304) cacheStatsRef.current.http304 += 1;
+            else if (r.blob) cacheStatsRef.current.bytesDownloaded += r.blob.size;
+            return { status: r.status, blob: r.blob, etag: r.etag, contentType: r.contentType };
           });
+
           if (cancelled) return;
           if (!blob) continue;
           assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
