@@ -286,6 +286,72 @@ export type Database = {
           },
         ]
       }
+      satellite_paddock_manifest: {
+        Row: {
+          available_analytical_types: string[]
+          available_layer_types: string[]
+          created_at: string
+          id: string
+          last_asset_repair_at: string | null
+          last_provider_check_at: string | null
+          last_successful_refresh_at: string | null
+          latest_complete_acquired_at: string | null
+          latest_complete_scene_id: string | null
+          latest_display_acquired_at: string | null
+          latest_display_scene_id: string | null
+          latest_processing_version: string | null
+          missing_analytical_count: number
+          missing_display_count: number
+          missing_summary_count: number
+          package_status: string
+          paddock_id: string
+          updated_at: string
+          vineyard_id: string
+        }
+        Insert: {
+          available_analytical_types?: string[]
+          available_layer_types?: string[]
+          created_at?: string
+          id?: string
+          last_asset_repair_at?: string | null
+          last_provider_check_at?: string | null
+          last_successful_refresh_at?: string | null
+          latest_complete_acquired_at?: string | null
+          latest_complete_scene_id?: string | null
+          latest_display_acquired_at?: string | null
+          latest_display_scene_id?: string | null
+          latest_processing_version?: string | null
+          missing_analytical_count?: number
+          missing_display_count?: number
+          missing_summary_count?: number
+          package_status?: string
+          paddock_id: string
+          updated_at?: string
+          vineyard_id: string
+        }
+        Update: {
+          available_analytical_types?: string[]
+          available_layer_types?: string[]
+          created_at?: string
+          id?: string
+          last_asset_repair_at?: string | null
+          last_provider_check_at?: string | null
+          last_successful_refresh_at?: string | null
+          latest_complete_acquired_at?: string | null
+          latest_complete_scene_id?: string | null
+          latest_display_acquired_at?: string | null
+          latest_display_scene_id?: string | null
+          latest_processing_version?: string | null
+          missing_analytical_count?: number
+          missing_display_count?: number
+          missing_summary_count?: number
+          package_status?: string
+          paddock_id?: string
+          updated_at?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
       satellite_processing_jobs: {
         Row: {
           attempt_count: number
@@ -419,6 +485,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      satellite_refresh_jobs: {
+        Row: {
+          completed_at: string | null
+          completed_paddocks: number
+          created_at: string
+          current_paddock_id: string | null
+          error: string | null
+          expiry_at: string | null
+          failed_paddocks: number
+          heartbeat_at: string | null
+          id: string
+          job_type: string
+          requested_by: string | null
+          started_at: string | null
+          status: string
+          total_paddocks: number
+          updated_at: string
+          vineyard_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_paddocks?: number
+          created_at?: string
+          current_paddock_id?: string | null
+          error?: string | null
+          expiry_at?: string | null
+          failed_paddocks?: number
+          heartbeat_at?: string | null
+          id?: string
+          job_type: string
+          requested_by?: string | null
+          started_at?: string | null
+          status?: string
+          total_paddocks?: number
+          updated_at?: string
+          vineyard_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_paddocks?: number
+          created_at?: string
+          current_paddock_id?: string | null
+          error?: string | null
+          expiry_at?: string | null
+          failed_paddocks?: number
+          heartbeat_at?: string | null
+          id?: string
+          job_type?: string
+          requested_by?: string | null
+          started_at?: string | null
+          status?: string
+          total_paddocks?: number
+          updated_at?: string
+          vineyard_id?: string
+        }
+        Relationships: []
       }
       satellite_scenes: {
         Row: {
@@ -599,6 +722,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_refresh_job: {
+        Args: {
+          p_job_type: string
+          p_requested_by: string
+          p_total_paddocks: number
+          p_vineyard_id: string
+        }
+        Returns: {
+          completed_at: string | null
+          completed_paddocks: number
+          created_at: string
+          current_paddock_id: string | null
+          error: string | null
+          expiry_at: string | null
+          failed_paddocks: number
+          heartbeat_at: string | null
+          id: string
+          job_type: string
+          requested_by: string | null
+          started_at: string | null
+          status: string
+          total_paddocks: number
+          updated_at: string
+          vineyard_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "satellite_refresh_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -607,6 +762,20 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      expire_stale_refresh_jobs: { Args: never; Returns: number }
+      finish_refresh_job: {
+        Args: { p_error: string; p_job_id: string; p_status: string }
+        Returns: undefined
+      }
+      heartbeat_refresh_job: {
+        Args: {
+          p_completed_paddocks: number
+          p_current_paddock_id: string
+          p_failed_paddocks: number
+          p_job_id: string
+        }
+        Returns: undefined
       }
       move_to_dlq: {
         Args: {
@@ -624,6 +793,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      refresh_paddock_manifest: {
+        Args: { p_paddock_id: string }
+        Returns: undefined
       }
       restore_saved_chemicals: { Args: { p_id: string }; Returns: undefined }
     }
