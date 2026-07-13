@@ -30,6 +30,12 @@ interface Props {
   onTogglePlay?: () => void;
   /** Optional total paddock count for the "of N" label when activeCount is 0. */
   totalPaddocks: number;
+  /** True when a single paddock is scoped — coverage messaging switches. */
+  singlePaddockScope?: boolean;
+  /** True when the currently-scoped single paddock has no imagery on the committed date. */
+  scopedPaddockMissing?: boolean;
+  /** Layer label used for "No saved NDVI imagery for this paddock" copy. */
+  layerShortLabel?: string;
 }
 
 function formatLong(iso: string): string {
