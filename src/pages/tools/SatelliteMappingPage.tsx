@@ -2517,6 +2517,10 @@ export default function SatelliteMappingPage() {
                 cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
                 onPaddockClick={(id) => setPaddockId(id)}
                 onPointerMove={handlePointerMove}
+                onOverlayLoad={handleOverlayLoad}
+                onOverlayError={handleOverlayError}
+                onOverlayMounted={handleOverlayMounted}
+                onOverlayUnmounted={handleOverlayUnmounted}
               />
             )}
 
