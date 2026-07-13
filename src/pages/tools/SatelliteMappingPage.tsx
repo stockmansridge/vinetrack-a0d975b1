@@ -880,6 +880,7 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
+  // Cache-first loader: for each visible asset, check IndexedDB for a stored
   // blob keyed by (assetId, processingVersion). If present, mint an object URL
   // and render immediately with zero network. Otherwise fetch a short-lived
   // signed URL, download the bytes, cache them and mint the object URL.
