@@ -1331,7 +1331,15 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
-      if (paddockId === "all" && complete > 0) setSelectedSceneKey("latest");
+      // Auto-select the newest date the refresh just produced (if any).
+      if (complete > 0) {
+        const newestDate = (latestScenes ?? [])
+          .filter((s) => s.processing_status === "complete")
+          .map((s) => s.acquired_at.slice(0, 10))
+          .sort()
+          .pop();
+        if (newestDate) setSelectedSceneKey(newestDate);
+      }
 
       // Auto-retry once for any paddocks that are still incomplete after this pass.
       if (!isRetry && rateLimited === 0) {
