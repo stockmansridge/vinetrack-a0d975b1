@@ -2674,56 +2674,232 @@ export default function SatelliteMappingPage() {
       </div>
 
       {/* Acquisition-date timeline slider — primary date navigation */}
-      <SatelliteDateSlider
-        entries={dateOptions.map((d) => ({
-          date: d.date,
-          coveragePercent: d.coveragePercent,
-          paddockCount: d.paddockCount,
-          activeCount: d.activeCount,
-        }))}
-        committedDate={selectedSceneKey}
-        previewDate={previewDate}
-        onPreviewChange={(d) => setPreviewDate(d)}
-        onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
-        onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
-        onInteractionEnd={() => setInteracting(false)}
-        isPlaying={isPlaying}
-        onTogglePlay={togglePlay}
-        totalPaddocks={totalPaddocks}
-      />
+      {(() => {
+        const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
+        const singlePaddock = paddockId !== "all";
+        const scopedMissing = singlePaddock
+          ? !!scopedGroup && !scopedGroup.sceneByPaddock.has(paddockId)
+          : false;
+        return (
+          <SatelliteDateSlider
+            entries={dateOptions.map((d) => ({
+              date: d.date,
+              coveragePercent: d.coveragePercent,
+              paddockCount: singlePaddock
+                ? (dateCoverage.find((g) => g.date === d.date)?.sceneByPaddock.has(paddockId) ? 1 : 0)
+                : d.paddockCount,
+              activeCount: singlePaddock ? 1 : d.activeCount,
+            }))}
+            committedDate={selectedSceneKey}
+            previewDate={previewDate}
+            onPreviewChange={(d) => setPreviewDate(d)}
+            onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
+            onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
+            onInteractionEnd={() => setInteracting(false)}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            totalPaddocks={singlePaddock ? 1 : totalPaddocks}
+            singlePaddockScope={singlePaddock}
+            scopedPaddockMissing={scopedMissing}
+            layerShortLabel={activeLayer.short}
+          />
+        );
+      })()}
 
 
-      {/* Timeline */}
+      {/* Saved imagery — compact month summary with filters */}
+      {(manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 && (
+        <SavedImageryHistory
+          entries={dateOptions}
+          committedDate={selectedSceneKey}
+          onSelectDate={(d) => { setIsPlaying(false); setPreviewDate(null); setSelectedSceneKey(d); }}
+          totalPaddocks={totalPaddocks}
+        />
+      )}
+    </div>
+  );
+}
 
+// ---------- Compact saved-imagery history ----------
+type HistoryFilter = "all" | "full" | "partial";
+type HistoryEntry = { date: string; coveragePercent: number; paddockCount: number; activeCount: number };
 
+function SavedImageryHistory({
+  entries,
+  committedDate,
+  onSelectDate,
+  totalPaddocks,
+}: {
+  entries: HistoryEntry[];
+  committedDate: string | null;
+  onSelectDate: (date: string) => void;
+  totalPaddocks: number;
+}) {
+  const [filter, setFilter] = useState<HistoryFilter>("all");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [monthOffset, setMonthOffset] = useState(0);
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Image History — Last 12 Months</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-12 gap-1.5">
-            {Array.from({ length: 12 }).map((_, i) => {
-              const d = new Date();
-              d.setMonth(d.getMonth() - (11 - i));
-              const label = d.toLocaleDateString(undefined, { month: "short" });
-              const monthKey = d.toISOString().slice(0, 7);
-              const monthDates = (manifestQuery.data?.date_coverage ?? [])
-                .filter((entry) => entry.acquisition_date.slice(0, 7) === monthKey);
-              const n = monthDates.length;
-              return (
-                <div key={i} className="rounded border border-dashed bg-muted/20 p-2 text-center text-[10px] text-muted-foreground">
-                  <div className="font-medium text-foreground/70">{label}</div>
-                  <div className="mt-1">{n > 0 ? `${n} date${n === 1 ? "" : "s"}` : "—"}</div>
-                </div>
-              );
-            })}
+  const isFull = (e: HistoryEntry) => {
+    const total = e.activeCount || totalPaddocks || 1;
+    return e.paddockCount >= total && e.paddockCount > 0;
+  };
+  const passesFilter = useCallback((e: HistoryEntry) => {
+    if (filter === "all") return true;
+    return filter === "full" ? isFull(e) : !isFull(e);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, totalPaddocks]);
+
+  // Group by month, newest first.
+  const monthGroups = useMemo(() => {
+    const map = new Map<string, HistoryEntry[]>();
+    for (const e of entries) {
+      const key = e.date.slice(0, 7);
+      const arr = map.get(key) ?? [];
+      arr.push(e);
+      map.set(key, arr);
+    }
+    const list = Array.from(map.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([ym, arr]) => {
+        arr.sort((a, b) => b.date.localeCompare(a.date));
+        const full = arr.filter(isFull).length;
+        const partial = arr.length - full;
+        return { ym, entries: arr, full, partial };
+      });
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, totalPaddocks]);
+
+  const filteredMonths = useMemo(
+    () => monthGroups
+      .map((m) => ({ ...m, entries: m.entries.filter(passesFilter) }))
+      .filter((m) => m.entries.length > 0),
+    [monthGroups, passesFilter],
+  );
+
+  const PAGE = 6;
+  const total = filteredMonths.length;
+  const start = Math.max(0, Math.min(monthOffset, Math.max(0, total - PAGE)));
+  const visible = filteredMonths.slice(start, start + PAGE);
+
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  };
+  const fmtDate = (iso: string) =>
+    new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, {
+      day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+    });
+
+  const toggleMonth = (ym: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(ym)) next.delete(ym); else next.add(ym);
+      return next;
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="text-sm font-semibold">Saved imagery</CardTitle>
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter saved imagery">
+          {(["all", "full", "partial"] as HistoryFilter[]).map((f) => (
+            <Button
+              key={f}
+              size="sm"
+              variant={filter === f ? "secondary" : "ghost"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setFilter(f); setMonthOffset(0); }}
+              aria-pressed={filter === f}
+            >
+              {f === "all" ? "All captures" : f === "full" ? "Full coverage" : "Partial coverage"}
+            </Button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {visible.length === 0 ? (
+          <div className="text-xs text-muted-foreground">No saved captures match the selected filter.</div>
+        ) : (
+          visible.map(({ ym, entries: monthEntries, full, partial }) => {
+            const isOpen = expanded.has(ym);
+            return (
+              <div key={ym} className="rounded-md border bg-muted/10">
+                <button
+                  type="button"
+                  onClick={() => toggleMonth(ym)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
+                  aria-expanded={isOpen}
+                  aria-controls={`month-${ym}`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-foreground truncate">{monthLabel(ym)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {monthEntries.length} capture{monthEntries.length === 1 ? "" : "s"}
+                      {full > 0 && <> · {full} full coverage</>}
+                      {partial > 0 && <> · {partial} partial</>}
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                </button>
+                {isOpen && (
+                  <div id={`month-${ym}`} className="border-t divide-y">
+                    {monthEntries.map((e) => {
+                      const sel = e.date === committedDate;
+                      const total = e.activeCount || totalPaddocks || 1;
+                      const covers = isFull(e)
+                        ? `All ${total} paddock${total === 1 ? "" : "s"}`
+                        : `${e.paddockCount} of ${total} paddock${total === 1 ? "" : "s"}`;
+                      return (
+                        <button
+                          type="button"
+                          key={e.date}
+                          onClick={() => onSelectDate(e.date)}
+                          className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-[11px] ${sel ? "bg-primary/10" : "hover:bg-muted/40"}`}
+                          aria-current={sel ? "date" : undefined}
+                        >
+                          <span className="font-medium text-foreground">{fmtDate(e.date)}</span>
+                          <span className="text-muted-foreground">{covers}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+        {total > PAGE && (
+          <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              disabled={start <= 0}
+              onClick={() => setMonthOffset(Math.max(0, start - PAGE))}
+            >
+              Newer months
+            </Button>
+            <span>
+              Showing {start + 1}–{Math.min(start + PAGE, total)} of {total} months
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              disabled={start + PAGE >= total}
+              onClick={() => setMonthOffset(start + PAGE)}
+            >
+              Older months
+            </Button>
           </div>
-          <div className="mt-3 text-xs text-muted-foreground">
-            {(manifestQuery.data?.total_saved_dates ?? 0) === 0
-              ? "No satellite scenes have been processed for this vineyard yet. Click Refresh Imagery."
-              : "Hover a paddock on the map for its per-paddock summary; select a date above to switch scenes."}
-          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 
         </CardContent>
       </Card>
