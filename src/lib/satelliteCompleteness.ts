@@ -291,6 +291,8 @@ export function inspectCompleteness({
       latestAcquiredAt: latest.acquired_at,
       latestSceneCloudCoverPct: latest.scene_cloud_cover_pct,
       onOldProcessingVersion: olderVersionSeen,
+      hasSavedDisplayImagery: paddocksWithAnyDisplay.has(p.id) || (displays.size > 0),
+      savedImageryStale: false,
       missingLayers,
       missingDisplayLayers,
       missingAnalyticalLayers,
