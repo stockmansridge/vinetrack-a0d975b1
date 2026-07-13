@@ -20,24 +20,97 @@ type SceneRow = {
   provider_scene_id: string | null;
 };
 type AssetRow = {
+  id: string;
   satellite_scene_id: string;
   index_type: string;
   asset_type: string | null;
   processing_version: string | null;
   storage_path: string | null;
+  mime_type: string | null;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+  raster_width: number | null;
+  raster_height: number | null;
+  native_resolution_m: number | null;
+  display_resolution_m: number | null;
+  data_type: string | null;
+  scale_factor: number | null;
+  no_data_sentinel: number | null;
+  row_orientation: string | null;
+  minimum_value: number | null;
+  maximum_value: number | null;
+  colour_scale: unknown;
+  acquisition_date: string | null;
+};
+
+type SummaryRow = {
+  satellite_scene_id: string;
+  index_type: string;
+  processing_version: string | null;
+  mean_value: number | null;
+  median_value: number | null;
+  minimum_value: number | null;
+  maximum_value: number | null;
+  standard_deviation: number | null;
+  percentile_10: number | null;
+  percentile_25: number | null;
+  percentile_75: number | null;
+  percentile_90: number | null;
+};
+
+type LayerAsset = {
+  asset_id: string;
+  index_type: string;
+  asset_type: "DISPLAY_RASTER" | "ANALYTICAL_RASTER";
+  processing_version: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+  raster_width: number | null;
+  raster_height: number | null;
+  native_resolution_m: number | null;
+  display_resolution_m: number | null;
+  data_type: string | null;
+  scale_factor: number | null;
+  no_data_sentinel: number | null;
+  row_orientation: string | null;
+  colour_scale: unknown;
+  etag: string;
+};
+
+type LayerSummary = {
+  mean_value: number | null;
+  median_value: number | null;
+  minimum_value: number | null;
+  maximum_value: number | null;
+  standard_deviation: number | null;
+  percentile_10: number | null;
+  percentile_25: number | null;
+  percentile_75: number | null;
+  percentile_90: number | null;
+};
+
+type LayerBundle = {
+  index_type: string;
+  display: LayerAsset | null;
+  analytical: LayerAsset | null;
+  summary: LayerSummary | null;
 };
 
 type PerPaddock = {
   paddock_id: string;
   scene_id: string;
   provider_scene_id: string | null;
+  provider: string;
   acquired_at: string;
+  acquisition_date: string;
   processing_version: string | null;
   paddock_valid_coverage_pct: number | null;
   paddock_cloud_cover_pct: number | null;
+  scene_cloud_cover_pct: number | null;
   available_display_layers: string[];
   available_analytical_layers: string[];
   package_version_mismatch: boolean;
+  layers: LayerBundle[];
 };
 
 type MissingPaddock = {
