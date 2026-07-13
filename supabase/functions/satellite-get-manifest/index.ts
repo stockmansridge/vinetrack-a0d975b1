@@ -63,6 +63,7 @@ type DateCoverageEntry = {
   acquisition_date: string; // YYYY-MM-DD
   active_paddock_count: number;
   available_paddock_count: number;
+  coverage_percent: number;
   available_paddock_ids: string[];
   missing_paddock_ids: string[];
   missing_paddocks: MissingPaddock[];
