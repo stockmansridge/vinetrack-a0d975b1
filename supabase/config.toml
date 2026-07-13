@@ -56,3 +56,12 @@ verify_jwt = false
 
 [functions.satellite-get-asset-url]
 verify_jwt = false
+
+[functions.satellite-get-manifest]
+verify_jwt = false
+
+[functions.satellite-refresh-status]
+verify_jwt = false
+
+[functions.satellite-asset-url]
+verify_jwt = false
