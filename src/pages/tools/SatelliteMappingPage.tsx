@@ -641,6 +641,20 @@ export default function SatelliteMappingPage() {
     refetchOnWindowFocus: false,
   });
 
+  // Server manifest — source of truth for per-paddock completeness and the
+  // date-coverage index. Declared here (before dateCoverage) so both memos
+  // can consume it.
+  const activePaddockIds = useMemo(
+    () => (paddocksQuery.data ?? []).map((p) => p.id),
+    [paddocksQuery.data],
+  );
+  const manifestQuery = useQuery({
+    queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+    queryFn: () => fetchManifest(activeVineyardId!, activePaddockIds),
+    enabled: !!activeVineyardId,
+    staleTime: 30_000,
+  });
+
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
 
   // Parsed paddock geometry
