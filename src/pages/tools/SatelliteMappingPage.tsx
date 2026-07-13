@@ -1517,44 +1517,33 @@ export default function SatelliteMappingPage() {
       const skipped = results.filter((r) => r.status === "skipped").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
-      // Refresh + wait for the list query to reflect any new scenes.
+      // Refresh + wait for the manifest to reflect any new scenes.
       let loaded = false;
-      let latestScenes: DBScene[] = scenesQuery.data?.scenes ?? [];
-      let latestAssets: DBAsset[] = scenesQuery.data?.assets ?? [];
-      let latestSummaries: DBSummary[] = scenesQuery.data?.summaries ?? [];
+      let latestManifest: ManifestResponse | undefined = manifestQuery.data;
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
-        await qc.invalidateQueries({ queryKey: ["satellite-scenes"] });
         await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
-        const refreshed = await qc.refetchQueries({ queryKey: ["satellite-scenes", activeVineyardId, paddockId] });
-        const anyData = refreshed?.[0]?.data as { scenes?: DBScene[]; assets?: DBAsset[]; summaries?: DBSummary[] } | undefined;
-        if ((anyData?.scenes ?? []).some((s) => s.processing_status === "complete")) {
-          loaded = true;
-          latestScenes = anyData?.scenes ?? [];
-          latestAssets = anyData?.assets ?? [];
-          latestSummaries = anyData?.summaries ?? [];
-          break;
-        }
+        const refreshed = await qc.refetchQueries({
+          queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+        });
+        const data = refreshed?.[0]?.data as ManifestResponse | undefined;
+        latestManifest = data ?? latestManifest;
+        if ((data?.date_coverage?.length ?? 0) > 0) { loaded = true; break; }
         await new Promise((r) => setTimeout(r, 1500));
       }
 
       // Auto-select the newest date the refresh just produced (if any).
       if (complete > 0) {
-        const newestDate = (latestScenes ?? [])
-          .filter((s) => s.processing_status === "complete")
-          .map((s) => s.acquired_at.slice(0, 10))
-          .sort()
-          .pop();
+        const newestDate = latestManifest?.newest_saved_date
+          ?? (latestManifest?.date_coverage?.[0]?.acquisition_date ?? null);
         if (newestDate) setSelectedSceneKey(newestDate);
       }
 
       // Auto-retry once for any paddocks that are still incomplete after this pass.
       if (!isRetry && rateLimited === 0) {
-        const nextReport = inspectCompleteness({
-          paddocks: geoms.map((g) => ({ id: g.id, name: g.name })),
-          scenes: latestScenes,
-          assets: latestAssets,
-          summaries: latestSummaries,
-        });
+        const nextReport = reportFromManifest(
+          geoms.map((g) => ({ id: g.id, name: g.name })),
+          (latestManifest?.paddocks ?? []) as any,
+        );
         const residual = nextReport.perPaddock
           .filter((p) => p.state !== "complete")
           .filter((p) => (paddockId === "all" ? true : p.paddockId === paddockId))
@@ -1566,6 +1555,7 @@ export default function SatelliteMappingPage() {
         }
       }
       retryInFlightRef.current = false;
+
 
       setLastRefreshSummary({
         at: new Date().toISOString(),
