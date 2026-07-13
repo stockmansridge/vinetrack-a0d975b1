@@ -15,6 +15,8 @@ export interface SatelliteRasterOverlay {
   url: string;
   bounds: { north: number; south: number; east: number; west: number };
   opacity?: number;
+  /** Optional stable identity. Defaults to `${paddockId}:${url}`. Different keys can co-exist during crossfade. */
+  key?: string;
 }
 
 export interface SatelliteMapProps {
@@ -27,6 +29,8 @@ export interface SatelliteMapProps {
   overlayBounds?: { north: number; south: number; east: number; west: number } | null;
   /** 0..1 */
   overlayOpacity?: number;
+  /** Crossfade duration in ms applied via CSS transition on overlay opacity. 0 disables animation. */
+  overlayTransitionMs?: number;
   /** Optional rectangle drawn above raster overlays to highlight the hovered analytical cell. */
   cellRect?: { north: number; south: number; east: number; west: number } | null;
   onPaddockClick?: (id: string) => void;
@@ -52,6 +56,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     overlayUrl,
     overlayBounds,
     overlayOpacity = 0.7,
+    overlayTransitionMs = 0,
     cellRect,
     onPaddockClick,
     onMapReady,
@@ -221,8 +226,13 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     const container = containerRef.current;
     if (!ready || !map || !layer || !container) return;
 
+    // Key overlays by (paddockId, url) — or caller-supplied `key` — so during
+    // date crossfade the outgoing and incoming rasters co-exist as separate
+    // <img> elements whose opacity animates independently.
+    const keyFor = (o: SatelliteRasterOverlay) => o.key ?? `${o.paddockId}:${o.url}`;
+
     // Remove <img> elements for overlays no longer present.
-    const activeIds = new Set(effectiveOverlays.map((o) => o.paddockId));
+    const activeIds = new Set(effectiveOverlays.map(keyFor));
     for (const [id, el] of Array.from(imgRefs.current.entries())) {
       if (!activeIds.has(id)) {
         try { el.remove(); } catch { /* noop */ }
@@ -236,9 +246,16 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     }
     layer.style.display = "block";
 
+    const prefersReducedMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const fadeMs = prefersReducedMotion ? 0 : Math.max(0, overlayTransitionMs);
+
     // Ensure an <img> exists for each overlay and set its src / opacity.
     for (const o of effectiveOverlays) {
-      let img = imgRefs.current.get(o.paddockId);
+      const key = keyFor(o);
+      const targetOpacity = String(o.opacity ?? overlayOpacity);
+      let img = imgRefs.current.get(key);
+      const fresh = !img;
       if (!img) {
         img = document.createElement("img");
         img.alt = "";
@@ -246,11 +263,23 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.style.transform = "translate(-9999px,-9999px)";
         img.style.transformOrigin = "top left";
         img.style.imageRendering = "pixelated";
+        img.style.willChange = "opacity, transform";
+        img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
         layer.appendChild(img);
-        imgRefs.current.set(o.paddockId, img);
+        imgRefs.current.set(key, img);
       }
+      // CSS transition applies to opacity only — geometry updates every frame
+      // must remain instant.
+      img.style.transition = fadeMs > 0 ? `opacity ${fadeMs}ms linear` : "none";
       if (img.src !== o.url) img.src = o.url;
-      img.style.opacity = String(o.opacity ?? overlayOpacity);
+      if (fresh && fadeMs > 0) {
+        // Apply target opacity next frame so the CSS transition animates 0→target.
+        const target = targetOpacity;
+        const el = img;
+        requestAnimationFrame(() => { try { el.style.opacity = target; } catch { /* noop */ } });
+      } else {
+        img.style.opacity = targetOpacity;
+      }
     }
 
     const update = () => {
@@ -258,7 +287,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         const mapkit = (window as any).mapkit;
         const rect = container.getBoundingClientRect();
         for (const o of effectiveOverlays) {
-          const img = imgRefs.current.get(o.paddockId);
+          const key = o.key ?? `${o.paddockId}:${o.url}`;
+          const img = imgRefs.current.get(key);
           if (!img) continue;
           const nw = new mapkit.Coordinate(o.bounds.north, o.bounds.west);
           const se = new mapkit.Coordinate(o.bounds.south, o.bounds.east);
@@ -304,7 +334,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     };
     requestAnimationFrame(tick);
     return () => { running = false; };
-  }, [ready, effectiveOverlays, overlayOpacity]);
+  }, [ready, effectiveOverlays, overlayOpacity, overlayTransitionMs]);
 
   // Sync the highlighted-cell rectangle into the animation loop.
   useEffect(() => {

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench } from "lucide-react";
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import { fromArrayBuffer } from "geotiff";
-import SatelliteMap from "@/components/SatelliteMap";
+import SatelliteMap, { type SatelliteRasterOverlay } from "@/components/SatelliteMap";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
@@ -571,7 +571,14 @@ export default function SatelliteMappingPage() {
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
   const [legendOpen, setLegendOpen] = useState<boolean>(true);
-  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // YYYY-MM-DD acquisition date
+  const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // COMMITTED date (YYYY-MM-DD)
+  const [previewDate, setPreviewDate] = useState<string | null>(null); // transient preview (null = same as committed)
+  const [interacting, setInteracting] = useState(false); // slider drag / key in progress
+  const [isPlaying, setIsPlaying] = useState(false); // timeline playback
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  }, []);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({}); // asset_id -> object URL (blob:) or signed URL fallback
   const [searchError, setSearchError] = useState<SatelliteSearchError | null>(null);
   const [rasterCacheVersion, setRasterCacheVersion] = useState(0);
@@ -918,22 +925,22 @@ export default function SatelliteMappingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeVineyardId]);
 
-  // Assets for the currently selected date + layer. Uses the best scene per
-  // paddock for that date (see dateCoverage). Never mixes dates.
-  const activeAssetPairs = useMemo(() => {
-    if (!selectedSceneKey || !scenesQuery.data) return [];
+  // The date used for DISPLAY overlays; may temporarily differ from the
+  // committed date while the user scrubs the timeline.
+  const effectiveDisplayDate = previewDate ?? selectedSceneKey;
+
+  // Build asset pairs (display + optional analytical) for a given date +
+  // current layer. Uses the best scene per paddock for that date.
+  const buildAssetPairsFor = (dateKey: string | null) => {
+    if (!dateKey || !scenesQuery.data) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
     const { assets } = scenesQuery.data;
     const displayFor = (sceneId: string) => assets.find((x) =>
-      x.satellite_scene_id === sceneId &&
-      x.index_type === layer &&
-      assetKind(x) === "DISPLAY_RASTER"
+      x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "DISPLAY_RASTER"
     );
     const analyticalFor = (sceneId: string) => assets.find((x) =>
-      x.satellite_scene_id === sceneId &&
-      x.index_type === layer &&
-      assetKind(x) === "ANALYTICAL_RASTER"
+      x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "ANALYTICAL_RASTER"
     );
-    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
+    const group = dateCoverage.find((g) => g.date === dateKey);
     if (!group) return [];
     const out: Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }> = [];
     for (const scene of group.sceneByPaddock.values()) {
@@ -941,11 +948,25 @@ export default function SatelliteMappingPage() {
       if (displayAsset) out.push({ displayAsset, analyticalAsset: analyticalFor(scene.id), scene });
     }
     return out;
-  }, [scenesQuery.data, selectedSceneKey, layer, dateCoverage]);
+  };
+
+  // Committed pairs — drive analytical decode, hover sampling, summaries.
+  const activeAssetPairs = useMemo(
+    () => buildAssetPairsFor(selectedSceneKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scenesQuery.data, selectedSceneKey, layer, dateCoverage],
+  );
+
+  // Effective display pairs — drive the map overlay images.
+  const displayAssetPairs = useMemo(
+    () => (effectiveDisplayDate === selectedSceneKey ? activeAssetPairs : buildAssetPairsFor(effectiveDisplayDate)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scenesQuery.data, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
+  );
 
   const activeAssets = useMemo(
-    () => activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
-    [activeAssetPairs],
+    () => displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
+    [displayAssetPairs],
   );
 
   const activeAnalyticalAssets = useMemo(
@@ -955,6 +976,122 @@ export default function SatelliteMappingPage() {
     [activeAssetPairs],
   );
 
+  // Adjacent-date display asset preload. Look up the immediately-previous and
+  // immediately-next saved date for the CURRENT layer and warm the browser
+  // cache. Cache-first, sequential (concurrency 1), never fetches analytical.
+  const sortedDatesAsc = useMemo(
+    () => dateCoverage.map((g) => g.date).slice().sort((a, b) => a.localeCompare(b)),
+    [dateCoverage],
+  );
+  const preloadDisplayAssets = useMemo(() => {
+    if (!selectedSceneKey || sortedDatesAsc.length < 2) return [] as Array<{ asset: DBAsset; scene: DBScene }>;
+    const idx = sortedDatesAsc.indexOf(selectedSceneKey);
+    if (idx < 0) return [];
+    const targets: string[] = [];
+    if (idx > 0) targets.push(sortedDatesAsc[idx - 1]);
+    if (idx < sortedDatesAsc.length - 1) targets.push(sortedDatesAsc[idx + 1]);
+    const out: Array<{ asset: DBAsset; scene: DBScene }> = [];
+    for (const d of targets) {
+      for (const pair of buildAssetPairsFor(d)) {
+        out.push({ asset: pair.displayAsset, scene: pair.scene });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedDatesAsc, selectedSceneKey, layer, scenesQuery.data, dateCoverage]);
+
+  // Are any preview-date display assets still loading? Drives the loading
+  // caption shown near the map during a scrub.
+  const previewPending = useMemo(() => {
+    if (effectiveDisplayDate === selectedSceneKey) return false;
+    return displayAssetPairs.some(({ displayAsset }) => !signedUrls[displayAsset.id]);
+  }, [effectiveDisplayDate, selectedSceneKey, displayAssetPairs, signedUrls]);
+
+  // Target overlay set for the map, sourced from the effective display date.
+  // If a preview date has assets still loading, we retain the committed-date
+  // overlays instead of blanking the map, then crossfade when preview is ready.
+  const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
+    const source = previewPending
+      ? activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene }))
+      : activeAssets;
+    return source
+      .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
+      .map(({ asset, scene }) => ({
+        paddockId: scene.paddock_id,
+        url: signedUrls[asset.id],
+        bounds: asset.bounds!,
+        opacity: opacity / 100,
+        key: `${scene.paddock_id}:${asset.id}`,
+      }));
+  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending]);
+
+  // Crossfade-mounted overlays. When the target changes, keep the previous
+  // set briefly with opacity 0 so its CSS transition animates out while the
+  // incoming set animates in.
+  const [mapOverlays, setMapOverlays] = useState<SatelliteRasterOverlay[]>([]);
+  useEffect(() => {
+    const nextKeys = new Set(targetMapOverlays.map((o) => o.key!));
+    setMapOverlays((prev) => {
+      const prevKeys = new Set(prev.map((o) => o.key!));
+      const same = prevKeys.size === nextKeys.size
+        && [...nextKeys].every((k) => prevKeys.has(k));
+      if (same || prefersReducedMotion) return targetMapOverlays;
+      const outgoing = prev
+        .filter((o) => !nextKeys.has(o.key!))
+        .map((o) => ({ ...o, opacity: 0 }));
+      return [...outgoing, ...targetMapOverlays];
+    });
+    if (prefersReducedMotion) return;
+    const t = setTimeout(() => setMapOverlays(targetMapOverlays), 280);
+    return () => clearTimeout(t);
+  }, [targetMapOverlays, prefersReducedMotion]);
+
+
+  // ---- Playback ---------------------------------------------------------
+  const PLAYBACK_MS = 1250;
+  const togglePlay = useCallback(() => {
+    if (sortedDatesAsc.length < 2) return;
+    setIsPlaying((cur) => {
+      if (cur) return false;
+      // If we're at the newest date, restart from the oldest.
+      const last = sortedDatesAsc[sortedDatesAsc.length - 1];
+      if (selectedSceneKey === last) setSelectedSceneKey(sortedDatesAsc[0]);
+      setPreviewDate(null);
+      return true;
+    });
+  }, [sortedDatesAsc, selectedSceneKey]);
+
+  // Playback tick — advance chronologically, pause if next asset is not yet
+  // loaded (so we never blank the map), stop at the newest date.
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (sortedDatesAsc.length < 2) { setIsPlaying(false); return; }
+    const t = setInterval(() => {
+      setSelectedSceneKey((prev) => {
+        const idx = prev ? sortedDatesAsc.indexOf(prev) : -1;
+        if (idx < 0) return sortedDatesAsc[0];
+        if (idx >= sortedDatesAsc.length - 1) {
+          // Reached the newest — stop playback on next tick.
+          setTimeout(() => setIsPlaying(false), 0);
+          return prev;
+        }
+        const nextDate = sortedDatesAsc[idx + 1];
+        // If the next date's display assets aren't preloaded yet, pause this
+        // tick — the loader is downloading. We'll advance on the next tick.
+        const nextPairs = buildAssetPairsFor(nextDate);
+        const ready = nextPairs.every((p) => signedUrls[p.displayAsset.id]);
+        if (!ready) return prev;
+        return nextDate;
+      });
+    }, PLAYBACK_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, sortedDatesAsc, signedUrls, layer, dateCoverage]);
+
+  // Stop playback and clear any preview when context changes.
+  useEffect(() => { setIsPlaying(false); setPreviewDate(null); }, [activeVineyardId, paddockId, layer]);
+
+
   // Cache-first loader: for each visible asset, check IndexedDB for a stored
   // blob keyed by (assetId, processingVersion). If present, mint an object URL
   // and render immediately with zero network. Otherwise fetch a short-lived
@@ -962,7 +1099,13 @@ export default function SatelliteMappingPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const all = [...activeAssets, ...activeAnalyticalAssets];
+      // Order: committed display + committed analytical first, then adjacent
+      // preload (display only). Preload never triggers analytical downloads.
+      const all = [
+        ...activeAssets,
+        ...activeAnalyticalAssets,
+        ...preloadDisplayAssets,
+      ];
       for (const { asset } of all) {
         if (signedUrls[asset.id]) continue;
         const kind = assetKind(asset);
@@ -1010,19 +1153,29 @@ export default function SatelliteMappingPage() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets, activeAnalyticalAssets]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
 
   // Revoke stale object URLs when the visible asset set changes. Keeps memory
-  // bounded across date/layer switches.
+  // bounded across date/layer switches. Adjacent-preload and preview-display
+  // assets remain "alive" so scrubbing doesn't churn the cache.
   useEffect(() => {
-    const alive = new Set([...activeAssets, ...activeAnalyticalAssets].map((x) => x.asset.id));
+    const alive = new Set([
+      ...activeAssets,
+      ...activeAnalyticalAssets,
+      ...preloadDisplayAssets,
+      ...displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
+    ].map((x) => x.asset.id));
     for (const [assetId, url] of objectUrlsRef.current.entries()) {
       if (!alive.has(assetId)) {
         try { URL.revokeObjectURL(url); } catch { /* ignore */ }
         objectUrlsRef.current.delete(assetId);
+        setSignedUrls((prev) => {
+          if (!(assetId in prev)) return prev;
+          const next = { ...prev }; delete next[assetId]; return next;
+        });
       }
     }
-  }, [activeAssets, activeAnalyticalAssets]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
 
   // Clear decoded analytical rasters when the user changes the data context.
   useEffect(() => {
@@ -1160,9 +1313,11 @@ export default function SatelliteMappingPage() {
     return { value: raw * raster.scale, message: null, cellRect };
   };
 
+  const hoverSuspended = (previewDate != null && previewDate !== selectedSceneKey) || isPlaying || interacting;
+
   // Pointer-move handler — no network request; reads the cached analytical raster.
   const handlePointerMove = (pt: { lat: number; lng: number; x: number; y: number } | null) => {
-    if (!pt) {
+    if (!pt || hoverSuspended) {
       setHover(null);
       return;
     }
@@ -2251,19 +2406,28 @@ export default function SatelliteMappingPage() {
                   color: paddockColor(g.id),
                 }))}
                 selectedPaddockId={paddockId === "all" ? null : paddockId}
-                overlays={activeAssets
-                  .filter(({ asset }) => asset.bounds && signedUrls[asset.id])
-                  .map(({ asset, scene }) => ({
-                    paddockId: scene.paddock_id,
-                    url: signedUrls[asset.id],
-                    bounds: asset.bounds!,
-                    opacity: opacity / 100,
-                  }))}
+                overlays={mapOverlays}
                 overlayOpacity={opacity / 100}
-                cellRect={hover?.cellRect ?? null}
+                overlayTransitionMs={prefersReducedMotion ? 0 : 220}
+                cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
                 onPaddockClick={(id) => setPaddockId(id)}
                 onPointerMove={handlePointerMove}
               />
+            )}
+
+            {/* Non-blocking status note during preview / playback / preview-load. */}
+            {(hoverSuspended || previewPending) && (
+              <div
+                className="pointer-events-none absolute left-1/2 top-3 z-[550] -translate-x-1/2 rounded-md border bg-background/95 px-3 py-1.5 text-[11px] font-medium text-foreground shadow-md backdrop-blur"
+                role="status"
+                aria-live="polite"
+              >
+                {previewPending && effectiveDisplayDate
+                  ? `Loading imagery for ${new Date(effectiveDisplayDate + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}…`
+                  : isPlaying
+                    ? "Pause playback to inspect cell values."
+                    : "Release the timeline to inspect cell values."}
+              </div>
             )}
 
             {hover && hover.paddockId && (() => {
@@ -2468,10 +2632,17 @@ export default function SatelliteMappingPage() {
           paddockCount: d.paddockCount,
           activeCount: d.activeCount,
         }))}
-        selectedDate={selectedSceneKey}
-        onChange={setSelectedSceneKey}
+        committedDate={selectedSceneKey}
+        previewDate={previewDate}
+        onPreviewChange={(d) => setPreviewDate(d)}
+        onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
+        onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
+        onInteractionEnd={() => setInteracting(false)}
+        isPlaying={isPlaying}
+        onTogglePlay={togglePlay}
         totalPaddocks={totalPaddocks}
       />
+
 
       {/* Timeline */}
 
