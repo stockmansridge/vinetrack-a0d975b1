@@ -1000,6 +1000,58 @@ export default function SatelliteMappingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedDatesAsc, selectedSceneKey, layer, scenesQuery.data, dateCoverage]);
 
+  // Are any preview-date display assets still loading? Drives the loading
+  // caption shown near the map during a scrub.
+  const previewPending = useMemo(() => {
+    if (effectiveDisplayDate === selectedSceneKey) return false;
+    return displayAssetPairs.some(({ displayAsset }) => !signedUrls[displayAsset.id]);
+  }, [effectiveDisplayDate, selectedSceneKey, displayAssetPairs, signedUrls]);
+
+  // ---- Playback ---------------------------------------------------------
+  const PLAYBACK_MS = 1250;
+  const togglePlay = useCallback(() => {
+    if (sortedDatesAsc.length < 2) return;
+    setIsPlaying((cur) => {
+      if (cur) return false;
+      // If we're at the newest date, restart from the oldest.
+      const last = sortedDatesAsc[sortedDatesAsc.length - 1];
+      if (selectedSceneKey === last) setSelectedSceneKey(sortedDatesAsc[0]);
+      setPreviewDate(null);
+      return true;
+    });
+  }, [sortedDatesAsc, selectedSceneKey]);
+
+  // Playback tick — advance chronologically, pause if next asset is not yet
+  // loaded (so we never blank the map), stop at the newest date.
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (sortedDatesAsc.length < 2) { setIsPlaying(false); return; }
+    const t = setInterval(() => {
+      setSelectedSceneKey((prev) => {
+        const idx = prev ? sortedDatesAsc.indexOf(prev) : -1;
+        if (idx < 0) return sortedDatesAsc[0];
+        if (idx >= sortedDatesAsc.length - 1) {
+          // Reached the newest — stop playback on next tick.
+          setTimeout(() => setIsPlaying(false), 0);
+          return prev;
+        }
+        const nextDate = sortedDatesAsc[idx + 1];
+        // If the next date's display assets aren't preloaded yet, pause this
+        // tick — the loader is downloading. We'll advance on the next tick.
+        const nextPairs = buildAssetPairsFor(nextDate);
+        const ready = nextPairs.every((p) => signedUrls[p.displayAsset.id]);
+        if (!ready) return prev;
+        return nextDate;
+      });
+    }, PLAYBACK_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, sortedDatesAsc, signedUrls, layer, dateCoverage]);
+
+  // Stop playback and clear any preview when context changes.
+  useEffect(() => { setIsPlaying(false); setPreviewDate(null); }, [activeVineyardId, paddockId, layer]);
+
+
   // Cache-first loader: for each visible asset, check IndexedDB for a stored
   // blob keyed by (assetId, processingVersion). If present, mint an object URL
   // and render immediately with zero network. Otherwise fetch a short-lived
