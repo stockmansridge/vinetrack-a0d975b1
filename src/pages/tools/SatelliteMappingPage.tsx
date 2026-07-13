@@ -1750,26 +1750,16 @@ export default function SatelliteMappingPage() {
                 disabled={dateOptions.length === 0}
               >
                 <SelectTrigger className="min-h-[44px]">
-                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No processed images"} />
+                  <SelectValue placeholder={dateOptions.length ? "Select date" : "No saved imagery"} />
                 </SelectTrigger>
                 <SelectContent>
                   {dateOptions.map((d) => {
-                    if (isAllPaddocks) {
-                      return (
-                        <SelectItem key={d.date} value={d.date}>
-                          {formatDate(d.date)} · {d.paddockCount} of {totalPaddocks} paddocks
-                        </SelectItem>
-                      );
-                    }
-                    const s = d.scenes[0];
-                    const cloud = s?.scene_cloud_cover_pct;
-                    const cov = s?.paddock_valid_coverage_pct;
+                    const pctLabel = Number.isInteger(d.coveragePercent)
+                      ? `${d.coveragePercent}`
+                      : d.coveragePercent.toFixed(1);
                     return (
                       <SelectItem key={d.date} value={d.date}>
-                        {formatDate(d.date)}
-                        {cloud != null ? ` · ${Number(cloud).toFixed(0)}% cloud` : ""}
-                        {cov != null ? ` · ${Number(cov).toFixed(0)}% valid` : ""}
-                        {s?.quality_status ? ` · ${s.quality_status}` : ""}
+                        {formatDate(d.date)} · {pctLabel}% coverage · {d.paddockCount}/{d.activeCount || totalPaddocks} paddocks
                       </SelectItem>
                     );
                   })}
