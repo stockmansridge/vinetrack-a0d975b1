@@ -399,11 +399,47 @@ Deno.serve(async (req) => {
     const coveragePercent = activeCount > 0
       ? Math.round((available.length / activeCount) * 1000) / 10
       : 0;
+
+    // Per-layer coverage: a paddock counts as covered for a layer only if it
+    // has a usable DISPLAY_RASTER asset (present + bounds + current version)
+    // in its winning scene for this date.
+    const layer_coverage: Record<string, LayerCoverage> = {};
+    const boundsValid = (b: LayerAsset["bounds"]): boolean =>
+      !!b && Number.isFinite(b.north) && Number.isFinite(b.south)
+        && Number.isFinite(b.east) && Number.isFinite(b.west)
+        && b.west < b.east && b.south < b.north;
+    const allLayerNames = new Set<string>();
+    for (const p of available) for (const l of p.layers) allLayerNames.add(l.index_type);
+    for (const idx of allLayerNames) {
+      const availIds: string[] = [];
+      const missIds: string[] = [];
+      for (const pid of activePaddockIds) {
+        const p = available.find((x) => x.paddock_id === pid);
+        const bundle = p?.layers.find((l) => l.index_type === idx);
+        const disp = bundle?.display;
+        const usable = !!disp
+          && (disp.processing_version ?? "") === CURRENT_PROCESSING_VERSION
+          && boundsValid(disp.bounds);
+        if (usable) availIds.push(pid); else missIds.push(pid);
+      }
+      layer_coverage[idx] = {
+        available: availIds.length,
+        total: activeCount,
+        percent: activeCount > 0
+          ? Math.round((availIds.length / activeCount) * 1000) / 10
+          : 0,
+        available_paddock_ids: availIds,
+        missing_paddock_ids: missIds,
+      };
+    }
+
     date_coverage.push({
       acquisition_date: date,
       active_paddock_count: activeCount,
       available_paddock_count: available.length,
+      scene_coverage_count: available.length,
       coverage_percent: coveragePercent,
+      layer_coverage,
       available_paddock_ids: available.map((p) => p.paddock_id),
       missing_paddock_ids: missing.map((m) => m.paddock_id),
       missing_paddocks: missing,
@@ -411,6 +447,7 @@ Deno.serve(async (req) => {
       updated_at: Array.from(per.values()).reduce((acc, b) => b.updatedAt > acc ? b.updatedAt : acc, ""),
     });
   }
+
   date_coverage.sort((a, b) => b.acquisition_date.localeCompare(a.acquisition_date));
 
   // Recommended default date: newest with full active coverage; else newest
