@@ -2936,7 +2936,11 @@ export default function SatelliteMappingPage() {
         </div>
 
         {/* Acquisition date slider — bottom-centre, on top of the map */}
-        <div className="absolute bottom-3 left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]">
+        <div
+          className="absolute left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]"
+          style={{ bottom: "max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))" }}
+        >
+
           {(() => {
             const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
             const singlePaddock = paddockId !== "all";
