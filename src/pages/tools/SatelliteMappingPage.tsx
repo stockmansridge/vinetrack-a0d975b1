@@ -1435,14 +1435,24 @@ export default function SatelliteMappingPage() {
       })();
 
       analyticalCacheRef.current.set(key, promise);
+      const vmKey = analyticalKeyFor(scene.paddock_id, scene.id, asset.index_type, asset.id);
+      setAnalyticalLoadState((prev) => {
+        const next = new Map(prev); next.set(vmKey, { phase: "loading" }); return next;
+      });
       setRasterCacheVersion((v) => v + 1);
       try {
         const decoded = await promise;
         if (cancelled) return;
         analyticalCacheRef.current.set(key, decoded);
+        setAnalyticalLoadState((prev) => {
+          const next = new Map(prev); next.set(vmKey, { phase: "loaded" }); return next;
+        });
       } catch (e: any) {
         if (cancelled) return;
         analyticalCacheRef.current.set(key, { error: String(e?.message ?? e) });
+        setAnalyticalLoadState((prev) => {
+          const next = new Map(prev); next.set(vmKey, { phase: "failed", errorMessage: String(e?.message ?? e) }); return next;
+        });
       } finally {
         if (!cancelled) setRasterCacheVersion((v) => v + 1);
       }
