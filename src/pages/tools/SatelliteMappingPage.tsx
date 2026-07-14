@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench } from "lucide-react";
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
+import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
 import SatelliteMap, { type SatelliteRasterOverlay } from "@/components/SatelliteMap";
 
