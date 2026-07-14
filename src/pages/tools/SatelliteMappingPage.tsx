@@ -2745,14 +2745,13 @@ export default function SatelliteMappingPage() {
                     );
                   })}
                 </div>
-                      );
-                    });
-                    // eslint-disable-next-line no-unreachable
-                    void selectedEntry;
-                  })()}
-                </div>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Overlay Health — reads exclusively from the unified view model. */}
+            <div className="pt-2 border-t">
+              <OverlayHealthPanel viewModel={viewModel} selectedLayer={layer} />
+            </div>
               </CollapsibleContent>
             </div>
           </Collapsible>
