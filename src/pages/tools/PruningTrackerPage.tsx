@@ -507,9 +507,9 @@ interface DetailProps {
 function BlockDetail({ block, entries, completion, canEdit, onBack, onOpenSettings, onOpenComplete }: DetailProps) {
   const p = block.progress;
   const hasWork = p.completedSegments > 0;
-  const rate = p.workingDayAvgRowEquivalents;
-  const vinesPerRow = block.identities.length ? p.estimatedVinesTotal / block.identities.length : 0;
-  const vinesPerDay = rate ? rate * vinesPerRow : null;
+  // Shared contract: vines/day = block.vinesDone / distinctEntryDays.
+  const distinctDays = new Set<string>(entries.map((e) => e.entry_date).filter(Boolean));
+  const vinesPerDay = distinctDays.size > 0 ? p.estimatedVinesCompleted / distinctDays.size : null;
   const labourHours = entries.reduce((s, e) => s + (Number(e.labour_hours) || 0), 0);
   const vinesPerHour = labourHours > 0 ? p.estimatedVinesCompleted / labourHours : null;
 
