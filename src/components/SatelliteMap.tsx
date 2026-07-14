@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { initMapKit } from "@/lib/mapkit";
+import { initMapKit, type MapKitReadinessState } from "@/lib/mapkit";
 import { LatLng } from "@/lib/paddockGeometry";
 
 export interface SatelliteMapPaddock {
@@ -34,6 +34,35 @@ export interface OverlayCallbackInfo {
   assetId: string | null;
 }
 
+export interface SatelliteMapDiagnostics {
+  readinessState: MapKitReadinessState;
+  tokenRequestStatus: "not_started" | "loading" | "success" | "failed";
+  tokenEndpointStatus: number | null;
+  tokenReceived: boolean;
+  tokenFieldName: string | null;
+  tokenLength: number | null;
+  tokenExpiresAt: number | null;
+  tokenJsonShape: string[];
+  tokenErrorBody: string | null;
+  scriptStatus: "not_started" | "loading" | "loaded" | "failed" | "already_available" | "existing";
+  scriptCount: number;
+  mapkitGlobalAvailable: boolean;
+  authCallbackInvoked: boolean;
+  authCallbackResolved: boolean;
+  mapInstanceCreated: boolean;
+  mapElementAttached: boolean;
+  mapReadyCallbackFired: boolean;
+  containerWidth: number;
+  containerHeight: number;
+  childNodeCount: number;
+  mapCanvasSubviewCount: number;
+  computedVisibility: string;
+  computedOpacity: string;
+  computedZIndex: string;
+  elementAtCenter: string | null;
+  lastError: string | null;
+}
+
 export interface SatelliteMapProps {
   paddocks: SatelliteMapPaddock[];
   selectedPaddockId?: string | null;
@@ -61,8 +90,39 @@ export interface SatelliteMapProps {
   onOverlayMounted?: (info: OverlayCallbackInfo) => void;
   /** Fires when an overlay is removed from the DOM (crossfade complete / superseded). */
   onOverlayUnmounted?: (info: OverlayCallbackInfo) => void;
+  onDiagnosticsChange?: (diagnostics: SatelliteMapDiagnostics) => void;
+  showDiagnostics?: boolean;
   className?: string;
 }
+
+const initialDiagnostics: SatelliteMapDiagnostics = {
+  readinessState: "not_started",
+  tokenRequestStatus: "not_started",
+  tokenEndpointStatus: null,
+  tokenReceived: false,
+  tokenFieldName: null,
+  tokenLength: null,
+  tokenExpiresAt: null,
+  tokenJsonShape: [],
+  tokenErrorBody: null,
+  scriptStatus: "not_started",
+  scriptCount: 0,
+  mapkitGlobalAvailable: false,
+  authCallbackInvoked: false,
+  authCallbackResolved: false,
+  mapInstanceCreated: false,
+  mapElementAttached: false,
+  mapReadyCallbackFired: false,
+  containerWidth: 0,
+  containerHeight: 0,
+  childNodeCount: 0,
+  mapCanvasSubviewCount: 0,
+  computedVisibility: "—",
+  computedOpacity: "—",
+  computedZIndex: "—",
+  elementAtCenter: null,
+  lastError: null,
+};
 
 /**
  * Apple MapKit JS adapter for VineTrack satellite mapping.
@@ -89,6 +149,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     onOverlayError,
     onOverlayMounted,
     onOverlayUnmounted,
+    onDiagnosticsChange,
+    showDiagnostics = false,
     className,
   } = props;
 
@@ -139,28 +201,110 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const overlaysRef = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<SatelliteMapDiagnostics>(initialDiagnostics);
+  const diagnosticsRef = useRef(initialDiagnostics);
+  const mapReadyCallbackFiredRef = useRef(false);
+
+  const snapshotDomDiagnostics = () => {
+    const container = containerRef.current;
+    const map = mapRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const cs = window.getComputedStyle(container);
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const topEl = rect.width > 0 && rect.height > 0
+      ? document.elementFromPoint(centerX, centerY)
+      : null;
+    const mapSubviews = container.querySelectorAll("canvas, img, svg, .mk-map-view, [class*='mk-'], [style*='translate3d']").length;
+    const next: SatelliteMapDiagnostics = {
+      ...diagnosticsRef.current,
+      mapkitGlobalAvailable: !!(window as any).mapkit,
+      mapInstanceCreated: !!map,
+      mapElementAttached: !!container.isConnected,
+      mapReadyCallbackFired: mapReadyCallbackFiredRef.current,
+      containerWidth: Math.round(rect.width),
+      containerHeight: Math.round(rect.height),
+      childNodeCount: container.childNodes.length,
+      mapCanvasSubviewCount: mapSubviews,
+      computedVisibility: cs.visibility,
+      computedOpacity: cs.opacity,
+      computedZIndex: cs.zIndex,
+      elementAtCenter: topEl ? `${topEl.tagName.toLowerCase()}${topEl.id ? `#${topEl.id}` : ""}${typeof (topEl as HTMLElement).className === "string" && (topEl as HTMLElement).className ? `.${String((topEl as HTMLElement).className).split(/\s+/).slice(0, 3).join(".")}` : ""}` : null,
+    };
+    diagnosticsRef.current = next;
+    setDiagnostics(next);
+    try { onDiagnosticsChange?.(next); } catch { /* diagnostics only */ }
+  };
+
+  const patchDiagnostics = (patch: Partial<SatelliteMapDiagnostics>) => {
+    diagnosticsRef.current = { ...diagnosticsRef.current, ...patch };
+    setDiagnostics(diagnosticsRef.current);
+    try { onDiagnosticsChange?.(diagnosticsRef.current); } catch { /* diagnostics only */ }
+  };
 
   // Init map
   useEffect(() => {
     let cancelled = false;
-    initMapKit()
+    patchDiagnostics({ readinessState: "not_started", lastError: null });
+    initMapKit((event) => {
+      if (cancelled) return;
+      if (event.type === "state") {
+        patchDiagnostics({ readinessState: event.state, lastError: event.error ?? diagnosticsRef.current.lastError });
+      } else if (event.type === "script") {
+        patchDiagnostics({
+          scriptStatus: event.status,
+          scriptCount: event.count ?? diagnosticsRef.current.scriptCount,
+          mapkitGlobalAvailable: event.globalAvailable ?? !!(window as any).mapkit,
+          lastError: event.error ?? diagnosticsRef.current.lastError,
+        });
+      } else if (event.type === "token") {
+        patchDiagnostics({
+          tokenRequestStatus: event.status === "loading" ? "loading" : event.status === "success" ? "success" : "failed",
+          tokenEndpointStatus: event.endpointStatus ?? diagnosticsRef.current.tokenEndpointStatus,
+          tokenReceived: event.status === "success" && (event.tokenLength ?? 0) > 0,
+          tokenFieldName: event.tokenFieldName ?? diagnosticsRef.current.tokenFieldName,
+          tokenLength: event.tokenLength ?? diagnosticsRef.current.tokenLength,
+          tokenExpiresAt: event.expiresAt ?? diagnosticsRef.current.tokenExpiresAt,
+          tokenJsonShape: event.shape ?? diagnosticsRef.current.tokenJsonShape,
+          tokenErrorBody: event.errorBody ?? diagnosticsRef.current.tokenErrorBody,
+          lastError: event.error ?? diagnosticsRef.current.lastError,
+        });
+      } else if (event.type === "auth_callback") {
+        patchDiagnostics({
+          authCallbackInvoked: event.status === "invoked" ? true : diagnosticsRef.current.authCallbackInvoked,
+          authCallbackResolved: event.status === "resolved" ? true : diagnosticsRef.current.authCallbackResolved,
+          lastError: event.error ?? diagnosticsRef.current.lastError,
+        });
+      }
+    })
       .then((mapkit) => {
         if (cancelled || !containerRef.current || mapRef.current) return;
-        mapRef.current = new mapkit.Map(containerRef.current, {
-          mapType: mapkit.Map.MapTypes.Hybrid,
-          isRotationEnabled: false,
-          showsCompass: mapkit.FeatureVisibility.Adaptive,
-          showsScale: mapkit.FeatureVisibility.Adaptive,
-          showsZoomControl: true,
-          showsUserLocationControl: false,
-        });
+        try {
+          mapRef.current = new mapkit.Map(containerRef.current, {
+            mapType: mapkit.Map.MapTypes.Hybrid,
+            isRotationEnabled: false,
+            showsCompass: mapkit.FeatureVisibility.Hidden,
+            showsScale: mapkit.FeatureVisibility.Adaptive,
+            showsZoomControl: true,
+            showsUserLocationControl: false,
+          });
+        } catch (e: any) {
+          const msg = e?.message || "Apple Maps render failed";
+          patchDiagnostics({ readinessState: "render_failed", lastError: msg });
+          throw e;
+        }
         setReady(true);
+        mapReadyCallbackFiredRef.current = true;
+        patchDiagnostics({ readinessState: "ready", mapInstanceCreated: true, mapReadyCallbackFired: true, lastError: null });
+        requestAnimationFrame(snapshotDomDiagnostics);
         onMapReady?.();
       })
       .catch((e) => {
         const msg = e?.message || "Apple Maps failed to load";
         if (!cancelled) {
           setError(msg);
+          patchDiagnostics({ lastError: msg, readinessState: diagnosticsRef.current.readinessState === "ready" ? "render_failed" : diagnosticsRef.current.readinessState });
           onUnavailable?.(msg);
         }
       });
@@ -172,6 +316,22 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep diagnostics and MapKit sizing current as the workspace/drawers change.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const update = () => {
+      try { mapRef.current?.resize?.(); } catch { /* MapKit versions vary */ }
+      snapshotDomDiagnostics();
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    const t = window.setInterval(update, 1000);
+    return () => { ro.disconnect(); window.clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // Signature to rebuild overlays only when inputs change
   const sig = useMemo(() => {
@@ -458,13 +618,13 @@ export default function SatelliteMap(props: SatelliteMapProps) {
 
   return (
     <div className={`relative isolate ${className ?? ""}`} style={{ zIndex: 0 }}>
-      <div ref={containerRef} className="h-full w-full" style={{ zIndex: 0 }} />
+      <div ref={containerRef} className="h-full w-full" style={{ zIndex: 0, background: "transparent" }} />
       {/* Raster overlay layer — sits above map tiles but below Radix portals. */}
       <div
         ref={imgLayerRef}
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
-        style={{ zIndex: 5 }}
+        style={{ zIndex: 5, background: "transparent" }}
       />
       {/* Highlighted native satellite cell — sits above rasters but below the tooltip. */}
       <div
@@ -484,6 +644,41 @@ export default function SatelliteMap(props: SatelliteMapProps) {
       {error && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 text-center text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {showDiagnostics && (
+        <div className="absolute left-3 top-16 z-[700] max-h-[calc(100%-5rem)] w-[360px] max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-md border bg-background/95 p-3 text-[11px] shadow-lg backdrop-blur">
+          <div className="mb-2 text-xs font-semibold text-foreground">MapKit diagnostics</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+            <div>MapKit state</div><div className="text-foreground">{diagnostics.readinessState}</div>
+            <div>Token request</div><div className="text-foreground">{diagnostics.tokenRequestStatus}</div>
+            <div>Token HTTP</div><div className="text-foreground">{diagnostics.tokenEndpointStatus ?? "—"}</div>
+            <div>Token received</div><div className="text-foreground">{diagnostics.tokenReceived ? "yes" : "no"}</div>
+            <div>Token field</div><div className="text-foreground">{diagnostics.tokenFieldName ?? "—"}</div>
+            <div>Token length</div><div className="text-foreground">{diagnostics.tokenLength ?? "—"}</div>
+            <div>Token expiry</div><div className="text-foreground">{diagnostics.tokenExpiresAt ? new Date(diagnostics.tokenExpiresAt).toLocaleTimeString() : "—"}</div>
+            <div>JSON shape</div><div className="text-foreground truncate">{diagnostics.tokenJsonShape.join(", ") || "—"}</div>
+            <div>Script status</div><div className="text-foreground">{diagnostics.scriptStatus}</div>
+            <div>Script count</div><div className="text-foreground">{diagnostics.scriptCount}</div>
+            <div>Global available</div><div className="text-foreground">{diagnostics.mapkitGlobalAvailable ? "yes" : "no"}</div>
+            <div>Auth callback</div><div className="text-foreground">{diagnostics.authCallbackInvoked ? (diagnostics.authCallbackResolved ? "resolved" : "invoked") : "no"}</div>
+            <div>Map instance</div><div className="text-foreground">{diagnostics.mapInstanceCreated ? "yes" : "no"}</div>
+            <div>Element attached</div><div className="text-foreground">{diagnostics.mapElementAttached ? "yes" : "no"}</div>
+            <div>Container</div><div className="text-foreground">{diagnostics.containerWidth} × {diagnostics.containerHeight}</div>
+            <div>Children</div><div className="text-foreground">{diagnostics.childNodeCount}</div>
+            <div>Canvas/subviews</div><div className="text-foreground">{diagnostics.mapCanvasSubviewCount}</div>
+            <div>Ready callback</div><div className="text-foreground">{diagnostics.mapReadyCallbackFired ? "yes" : "no"}</div>
+            <div>Visibility</div><div className="text-foreground">{diagnostics.computedVisibility}</div>
+            <div>Opacity</div><div className="text-foreground">{diagnostics.computedOpacity}</div>
+            <div>Z-index</div><div className="text-foreground">{diagnostics.computedZIndex}</div>
+            <div>Top at centre</div><div className="text-foreground truncate">{diagnostics.elementAtCenter ?? "—"}</div>
+          </div>
+          {(diagnostics.lastError || diagnostics.tokenErrorBody) && (
+            <div className="mt-2 rounded-sm bg-destructive/10 p-2 text-[10px] text-destructive">
+              {diagnostics.lastError ?? diagnostics.tokenErrorBody}
+            </div>
+          )}
         </div>
       )}
     </div>
