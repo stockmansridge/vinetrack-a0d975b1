@@ -15,7 +15,9 @@ vi.mock("@/lib/workTasksQuery", () => ({
   createLabourLine: vi.fn(),
   syncWorkTaskPaddocks: vi.fn(),
 }));
+vi.mock("@/lib/operatorCategoriesQuery", () => ({ fetchOperatorCategoriesForVineyard: vi.fn(async () => ({ categories: [] })) }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: true, loading: false }) }));
 
 function makeRows(nums: number[]): RowCompletionState[] {
   return nums.map((n, idx) => ({

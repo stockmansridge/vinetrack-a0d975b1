@@ -310,6 +310,19 @@ export default function CompleteTodayDialog({
     setLabourLines([makeLabourLine({ workerType: worker, hoursPerWorker: labourHours })]);
   };
 
+  useEffect(() => {
+    if (!createTask || labourLines.length !== 1) return;
+    setLabourLines((prev) => {
+      const [line] = prev;
+      if (!line) return prev;
+      return [{
+        ...line,
+        workerType: line.workerType || worker,
+        hoursPerWorker: line.hoursPerWorker || labourHours,
+      }];
+    });
+  }, [createTask, worker, labourHours, labourLines.length]);
+
   const setCreateTaskChecked = (checked: boolean) => {
     setCreateTask(checked);
     if (checked) seedLabourLines();
