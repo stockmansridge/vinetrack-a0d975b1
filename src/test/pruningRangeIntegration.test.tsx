@@ -111,12 +111,16 @@ describe("CompleteTodayDialog — Apply range integration", () => {
   it("merges with existing selection", () => {
     const rows = makeRows([44, 45, 46, 47]);
     renderDialog(rows);
-    // Pre-select row 47 Q1 by clicking it
     fireEvent.click(screen.getByLabelText(/Row 47 quarter 1/));
     fireEvent.change(screen.getByPlaceholderText(/Row ranges/i), { target: { value: "44-46" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply range/i }));
-    // 3×4 + 1 = 13 quarters
-    const footer = screen.getByText(/quarters/).closest("div");
-    expect(footer?.textContent).toMatch(/13/);
+    // rows 44,45,46 all quarters selected + row 47 Q1
+    for (const rn of [44, 45, 46]) {
+      for (const q of [1, 2, 3, 4]) {
+        expect(screen.getByLabelText(new RegExp(`Row ${rn} quarter ${q}`)).getAttribute("aria-pressed")).toBe("true");
+      }
+    }
+    expect(screen.getByLabelText(/Row 47 quarter 1/).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText(/Row 47 quarter 2/).getAttribute("aria-pressed")).toBe("false");
   });
 });
