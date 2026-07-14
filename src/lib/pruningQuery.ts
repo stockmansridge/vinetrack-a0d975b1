@@ -295,3 +295,12 @@ export function useReversePruningEntry(seasonId: string) {
     },
   });
 }
+
+/** SQL 113: link, unlink, or retry-link an existing pruning entry to a Work Task. */
+export async function setPruningEntryWorkTask(entryId: string, workTaskId: string | null) {
+  const { error } = await (supabase as any).rpc("set_pruning_entry_work_task", {
+    p_entry_id: entryId,
+    p_work_task_id: workTaskId,
+  });
+  if (error) throw error;
+}
