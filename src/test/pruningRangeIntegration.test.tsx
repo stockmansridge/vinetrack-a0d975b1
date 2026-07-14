@@ -60,9 +60,14 @@ describe("CompleteTodayDialog — Apply range integration", () => {
     fireEvent.change(input, { target: { value: "44-50" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply range/i }));
 
-    // Footer summary should read 28 quarters / 7.00 row equivalents.
-    expect(screen.getByText(/28/).textContent).toContain("28");
-    expect(screen.getByText(/7\.00/)).toBeTruthy();
+    // All 28 quarter buttons across 7 rows should be aria-pressed.
+    let pressed = 0;
+    for (const rn of [44, 45, 46, 47, 48, 49, 50]) {
+      for (const q of [1, 2, 3, 4]) {
+        if (screen.getByLabelText(new RegExp(`Row ${rn} quarter ${q}`)).getAttribute("aria-pressed") === "true") pressed += 1;
+      }
+    }
+    expect(pressed).toBe(28);
 
     // Each of the 7 rows should have all 4 quarter buttons in the "selected" state
     // (aria-pressed=true and NOT already completed).
