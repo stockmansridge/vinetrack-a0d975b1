@@ -74,9 +74,15 @@ export function buildRowCompletion(
   segments: PruningRowSegment[],
 ): RowCompletionState[] {
   // Index by paddock_row_id first (stable), fall back to row_number.
+  // IMPORTANT: only count segments that are actually completed. Reversed entries
+  // leave the row present with completed = false / pruning_entry_id = null.
   const byId = new Map<string, Set<number>>();
   const byNumber = new Map<number, Set<number>>();
   for (const s of segments) {
+    const isCompleted =
+      (s as any).completed === true &&
+      (s as any).pruning_entry_id != null;
+    if (!isCompleted) continue;
     if (s.paddock_row_id) {
       const set = byId.get(s.paddock_row_id) ?? new Set<number>();
       set.add(s.segment_number);
