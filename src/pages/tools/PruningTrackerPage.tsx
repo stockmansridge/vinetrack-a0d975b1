@@ -39,11 +39,14 @@ import {
   type RowIdentity,
   type RowCompletionState,
 } from "@/lib/pruningCalc";
+import { usePruningVineyardSummary, type PruningVineyardSummaryBlock } from "@/lib/pruningSummaryQuery";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
 import CompleteTodayDialog from "@/components/pruning/CompleteTodayDialog";
 import ActivityHistory from "@/components/pruning/ActivityHistory";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Paddock {
   id: string;
