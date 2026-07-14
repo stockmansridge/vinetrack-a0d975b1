@@ -34,6 +34,8 @@ import {
   Flag,
   ChevronDown,
   Globe2,
+  Scissors,
+  FlaskConical,
 } from "lucide-react";
 import {
   Collapsible,
@@ -128,6 +130,8 @@ const tools: NavItem[] = [
 // System-admin-only tools (visibility gated in render).
 const toolsSystemAdmin: NavItem[] = [
   { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite },
+  { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
+  { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical },
 ];
 
 
