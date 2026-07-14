@@ -1145,6 +1145,7 @@ export default function SatelliteMappingPage() {
   // If a preview date has assets still loading, we retain the committed-date
   // overlays instead of blanking the map, then crossfade when preview is ready.
   const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
+    if (disableCropOverlays) return [];
     const source = previewPending
       ? activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene }))
       : activeAssets;
@@ -1162,7 +1163,7 @@ export default function SatelliteMappingPage() {
         indexType: layer,
         assetId: asset.id,
       }));
-  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer]);
+  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer, disableCropOverlays]);
 
   // Crossfade-mounted overlays. When the target changes, keep the previous
   // set briefly with opacity 0 so its CSS transition animates out while the
@@ -1197,6 +1198,13 @@ export default function SatelliteMappingPage() {
   useEffect(() => { overlayLifecycleRef.current = overlayLifecycle; }, [overlayLifecycle]);
 
   const handleOverlayLoad = useCallback((info: OverlayCallbackInfo) => {
+    if (info.assetId) {
+      setAssetDiagnostics((prev) => {
+        const cur = prev[info.assetId!] ?? null;
+        if (!cur) return prev;
+        return { ...prev, [info.assetId!]: { ...cur, imageStatus: "loaded", finalStatus: "loaded", error: null } };
+      });
+    }
     setDisplayLoadState((prev) => {
       const cur = prev.get(info.overlayKey);
       if (cur?.phase === "loaded") return prev;
@@ -1204,6 +1212,13 @@ export default function SatelliteMappingPage() {
     });
   }, []);
   const handleOverlayError = useCallback((info: OverlayCallbackInfo) => {
+    if (info.assetId) {
+      setAssetDiagnostics((prev) => {
+        const cur = prev[info.assetId!] ?? null;
+        if (!cur) return prev;
+        return { ...prev, [info.assetId!]: { ...cur, imageStatus: "error", finalStatus: "failed", error: "image decode failed" } };
+      });
+    }
     setDisplayLoadState((prev) => {
       const next = new Map(prev); next.set(info.overlayKey, { phase: "failed", errorMessage: `${info.indexType ?? "asset"} could not be loaded` }); return next;
     });
@@ -1212,6 +1227,13 @@ export default function SatelliteMappingPage() {
     });
   }, []);
   const handleOverlayMounted = useCallback((info: OverlayCallbackInfo) => {
+    if (info.assetId) {
+      setAssetDiagnostics((prev) => {
+        const cur = prev[info.assetId!] ?? null;
+        if (!cur) return prev;
+        return { ...prev, [info.assetId!]: { ...cur, finalStatus: "loaded" } };
+      });
+    }
     setOverlayLifecycle((prev) => {
       const cur = prev.get(info.overlayKey);
       if (cur?.phase === "mounted") return prev;
