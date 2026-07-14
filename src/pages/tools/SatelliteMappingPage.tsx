@@ -1841,6 +1841,37 @@ export default function SatelliteMappingPage() {
         if (!cur) return prev;
         return { ...prev, paddocks: { ...prev.paddocks, [pid]: { ...cur, ...patch } } };
       });
+      const recordProcessingFailure = (
+        pid: string,
+        paddockName: string | null,
+        parsed: ReturnType<typeof parseSatelliteFunctionError>,
+        fallbackMessage: string,
+      ) => {
+        const message = parsed.message || fallbackMessage;
+        const failure: ProcessingFailureDiagnostic = {
+          paddockId: pid,
+          paddockName,
+          httpStatus: parsed.httpStatus,
+          code: parsed.code,
+          status: parsed.status,
+          failedStage: parsed.failedStage,
+          failedLayer: parsed.failedLayer,
+          providerStatus: parsed.providerStatus,
+          message,
+          failedLayers: parsed.failedLayers,
+        };
+        setProcessingFailures((prev) => [failure, ...prev.filter((x) => x.paddockId !== pid)].slice(0, 12));
+        patchPad(pid, {
+          processingHttpStatus: parsed.httpStatus,
+          processingCode: parsed.code,
+          processingStatus: parsed.status,
+          failedStage: parsed.failedStage,
+          failedLayer: parsed.failedLayer,
+          providerStatus: parsed.providerStatus,
+          failedLayers: parsed.failedLayers,
+          errorMessage: message,
+        });
+      };
       const setPad = (pid: string, s: PadStatus) => {
         // Bridge legacy statuses to the rich stage model.
         const map: Record<PadStatus, Partial<PadProgress>> = {
@@ -1994,6 +2025,7 @@ export default function SatelliteMappingPage() {
           if (process.error) {
             const parsed = parseSatelliteFunctionError(process.error);
             finalMsg = parsed.message ?? process.error.message ?? finalMsg;
+            recordProcessingFailure(pid, targetPaddock?.name ?? null, parsed, finalMsg);
             if (parsed.code === "rate_limited") {
               finalStatus = "rate_limited"; stopQueue = true;
               setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: finalMsg });
@@ -2002,8 +2034,44 @@ export default function SatelliteMappingPage() {
             continue;
           }
           const procStatus = String((process.data as any)?.status ?? "");
+          if (procStatus && procStatus !== "complete" && procStatus !== "partial") {
+            const failedLayers = Array.isArray((process.data as any)?.failed_layers)
+              ? (process.data as any).failed_layers
+              : Array.isArray((process.data as any)?.failures)
+                ? (process.data as any).failures
+                : undefined;
+            recordProcessingFailure(pid, targetPaddock?.name ?? null, {
+              code: (process.data as any)?.code ?? failedLayers?.[0]?.code ?? null,
+              providerStatus: (process.data as any)?.provider_status ?? null,
+              httpStatus: 200,
+              status: procStatus,
+              failedLayer: failedLayers?.[0]?.index ?? null,
+              failedStage: (process.data as any)?.failed_stage ?? (failedLayers?.length ? "layer_processing" : null),
+              failedLayers,
+              message: (process.data as any)?.message ?? failedLayers?.[0]?.message ?? procStatus,
+            }, procStatus);
+          }
           if (procStatus === "complete") { finalStatus = "complete"; break; }
-          if (procStatus === "partial") { finalStatus = "partial"; finalMsg = "Some layers were skipped."; break; }
+          if (procStatus === "partial") {
+            const failedLayers = Array.isArray((process.data as any)?.failed_layers)
+              ? (process.data as any).failed_layers
+              : Array.isArray((process.data as any)?.failures)
+                ? (process.data as any).failures
+                : undefined;
+            if (failedLayers?.length) {
+              recordProcessingFailure(pid, targetPaddock?.name ?? null, {
+                code: "partial_layers",
+                providerStatus: null,
+                httpStatus: 200,
+                status: "partial",
+                failedLayer: failedLayers[0]?.index ?? null,
+                failedStage: "layer_processing",
+                failedLayers,
+                message: failedLayers.map((f: any) => `${f.index ?? "layer"}: ${f.message ?? f.code ?? "failed"}`).join("; "),
+              }, "Some layers were skipped.");
+            }
+            finalStatus = "partial"; finalMsg = "Some layers were skipped."; break;
+          }
           if (procStatus === "rate_limited") {
             finalStatus = "rate_limited";
             finalMsg = (process.data as any)?.message ?? "Satellite provider is temporarily limiting requests. Try again in a few minutes.";
@@ -2054,6 +2122,7 @@ export default function SatelliteMappingPage() {
         if (process.error) {
           const parsed = parseSatelliteFunctionError(process.error);
           const msg = parsed.message ?? process.error.message ?? "Repair failed";
+          recordProcessingFailure(pid, targetPaddock?.name ?? null, parsed, msg);
           if (parsed.code === "rate_limited") {
             stopQueue = true;
             setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: msg });
@@ -2066,6 +2135,23 @@ export default function SatelliteMappingPage() {
           return;
         }
         const procStatus = String((process.data as any)?.status ?? "");
+        if (procStatus && procStatus !== "complete" && procStatus !== "partial") {
+          const failedLayers = Array.isArray((process.data as any)?.failed_layers)
+            ? (process.data as any).failed_layers
+            : Array.isArray((process.data as any)?.failures)
+              ? (process.data as any).failures
+              : undefined;
+          recordProcessingFailure(pid, targetPaddock?.name ?? null, {
+            code: (process.data as any)?.code ?? failedLayers?.[0]?.code ?? null,
+            providerStatus: (process.data as any)?.provider_status ?? null,
+            httpStatus: 200,
+            status: procStatus,
+            failedLayer: failedLayers?.[0]?.index ?? null,
+            failedStage: (process.data as any)?.failed_stage ?? (failedLayers?.length ? "layer_processing" : null),
+            failedLayers,
+            message: (process.data as any)?.message ?? failedLayers?.[0]?.message ?? procStatus,
+          }, procStatus);
+        }
         const finalStatus: ResultStatus =
           procStatus === "complete" ? "complete"
           : procStatus === "partial" ? "partial"
