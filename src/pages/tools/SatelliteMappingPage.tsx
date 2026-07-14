@@ -2810,6 +2810,19 @@ export default function SatelliteMappingPage() {
               />
             )}
 
+            {/* Persistent refresh progress / summary panel (Step 2) */}
+            {refreshProgress && (
+              <RefreshProgressPanel
+                progress={refreshProgress}
+                isSystemAdmin={isSystemAdmin}
+                mountedPaddockCount={mountedPaddockCount}
+                expectedCount={geoms.length}
+                onDismiss={() => setRefreshProgress(null)}
+              />
+            )}
+
+
+
             {/* Non-blocking status note during preview / playback / preview-load. */}
             {(hoverSuspended || previewPending) && (
               <div
