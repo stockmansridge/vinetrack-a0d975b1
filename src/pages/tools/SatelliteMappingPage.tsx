@@ -2544,15 +2544,39 @@ export default function SatelliteMappingPage() {
     </div>
   );
 
+  // Measured workspace height: the app portal has a sticky header, banners
+  // and main padding above this page, so a raw `calc(100dvh - header)` grows
+  // past the viewport and pushes the timeline below the fold. Instead we
+  // measure the wrapper's top offset and size the wrapper to fit exactly
+  // within the remaining viewport, with a 600px minimum for safety.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [wrapperHeight, setWrapperHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (mapFocus) { setWrapperHeight(null); return; }
+    const el = wrapperRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const avail = Math.floor(window.innerHeight - rect.top - 12);
+      setWrapperHeight(Math.max(600, avail));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.documentElement);
+    return () => { window.removeEventListener("resize", measure); ro.disconnect(); };
+  }, [mapFocus]);
+
   const focusWrapperClass = mapFocus
     ? "fixed inset-0 z-40 bg-background flex flex-col"
     : "w-full flex flex-col";
-  const focusWrapperStyle = mapFocus
-    ? undefined
-    : { minHeight: "calc(100dvh - var(--vt-header-h, 64px))" };
+  const focusWrapperStyle: React.CSSProperties = mapFocus
+    ? {}
+    : { height: wrapperHeight ? `${wrapperHeight}px` : undefined, minHeight: 600 };
 
   return (
-    <div className={focusWrapperClass} style={focusWrapperStyle}>
+    <div ref={wrapperRef} className={focusWrapperClass} style={focusWrapperStyle}>
+
       {!mapFocus && (
         <div className="px-3 pt-2 pb-1 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -2597,7 +2621,7 @@ export default function SatelliteMappingPage() {
       )}
 
       {/* Map workspace — all controls float over the map */}
-      <div className={`relative flex-1 min-h-0 ${mapFocus ? "" : "mx-2 mb-2 rounded-lg border overflow-hidden"}`}>
+      <div className={`relative flex-1 min-h-0 min-h-[600px] ${mapFocus ? "" : "mx-2 mb-2 rounded-lg border overflow-hidden"}`}>
         {paddocksLoading ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
             Loading paddocks…
@@ -2708,6 +2732,8 @@ export default function SatelliteMappingPage() {
               <ShieldAlert className="h-4 w-4 mr-1.5" />Admin
             </Button>
           )}
+          {/* Full-screen temporarily hidden during regression recovery. */}
+          {false && (
           <Button
             size="sm"
             variant="secondary"
@@ -2719,6 +2745,8 @@ export default function SatelliteMappingPage() {
             {mapFocus ? <Minimize2 className="h-4 w-4 mr-1.5" /> : <Maximize2 className="h-4 w-4 mr-1.5" />}
             {mapFocus ? "Exit Full Screen" : "Full Screen"}
           </Button>
+          )}
+
         </div>
 
         {/* Refresh progress — shifted below the actions bar */}
@@ -2908,7 +2936,11 @@ export default function SatelliteMappingPage() {
         </div>
 
         {/* Acquisition date slider — bottom-centre, on top of the map */}
-        <div className="absolute bottom-3 left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]">
+        <div
+          className="absolute left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]"
+          style={{ bottom: "max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))" }}
+        >
+
           {(() => {
             const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
             const singlePaddock = paddockId !== "all";
