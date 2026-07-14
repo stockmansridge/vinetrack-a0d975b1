@@ -187,6 +187,7 @@ export interface RecordSegmentInput {
 }
 
 export interface RecordEntryInput {
+  entryId?: string;
   vineyardId: string;
   seasonId: string;
   paddockId: string;
@@ -213,7 +214,7 @@ export function useRecordPruningEntry(seasonId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: RecordEntryInput): Promise<RecordEntryResult> => {
-      const entryId = crypto.randomUUID();
+      const entryId = input.entryId ?? crypto.randomUUID();
       const { data, error } = await (supabase as any).rpc("record_pruning_entry", {
         p_id: entryId,
         p_vineyard_id: input.vineyardId,

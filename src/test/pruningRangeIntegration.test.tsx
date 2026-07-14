@@ -10,8 +10,14 @@ vi.mock("@/lib/pruningQuery", async () => {
   const actual = await vi.importActual<any>("@/lib/pruningQuery");
   return { ...actual, useRecordPruningEntry: () => ({ mutateAsync: vi.fn(), isPending: false }) };
 });
-vi.mock("@/lib/workTasksQuery", () => ({ createWorkTask: vi.fn() }));
+vi.mock("@/lib/workTasksQuery", () => ({
+  createWorkTask: vi.fn(),
+  createLabourLine: vi.fn(),
+  syncWorkTaskPaddocks: vi.fn(),
+}));
+vi.mock("@/lib/operatorCategoriesQuery", () => ({ fetchOperatorCategoriesForVineyard: vi.fn(async () => ({ categories: [] })) }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: true, loading: false }) }));
 
 function makeRows(nums: number[]): RowCompletionState[] {
   return nums.map((n, idx) => ({

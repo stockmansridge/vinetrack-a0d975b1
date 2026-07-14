@@ -168,6 +168,7 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
   // Keep `date` populated as fallback for older iOS clients.
   const fallbackDate = input.date ?? input.start_date ?? null;
   const payload: any = {
+    ...(input.id ? { id: input.id } : {}),
     vineyard_id: input.vineyard_id,
     paddock_id: input.paddock_id ?? null,
     paddock_name: input.paddock_name ?? null,
@@ -188,11 +189,10 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     created_by: input.user_id ?? null,
     updated_by: input.user_id ?? null,
   };
-  const { data, error } = await supabase
-    .from("work_tasks")
-    .insert(payload)
-    .select("*")
-    .single();
+  const query = input.id
+    ? supabase.from("work_tasks").upsert(payload, { onConflict: "id" })
+    : supabase.from("work_tasks").insert(payload);
+  const { data, error } = await query.select("*").single();
   if (error) throw error;
   return data as WorkTask;
 }
@@ -249,6 +249,7 @@ export async function createLabourLine(input: UpsertLabourLineInput): Promise<Wo
   // project (computed from worker_count * hours_per_worker [* hourly_rate]),
   // so they must not appear in the insert payload.
   const payload: any = {
+    ...(input.id ? { id: input.id } : {}),
     work_task_id: input.work_task_id,
     vineyard_id: input.vineyard_id,
     work_date: input.work_date ?? null,
@@ -264,11 +265,10 @@ export async function createLabourLine(input: UpsertLabourLineInput): Promise<Wo
     created_by: input.user_id ?? null,
     updated_by: input.user_id ?? null,
   };
-  const { data, error } = await supabase
-    .from("work_task_labour_lines")
-    .insert(payload)
-    .select("*")
-    .single();
+  const query = input.id
+    ? supabase.from("work_task_labour_lines").upsert(payload, { onConflict: "id" })
+    : supabase.from("work_task_labour_lines").insert(payload);
+  const { data, error } = await query.select("*").single();
   if (error) throw error;
   return data as WorkTaskLabourLine;
 }
