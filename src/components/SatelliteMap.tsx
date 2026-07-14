@@ -15,8 +15,23 @@ export interface SatelliteRasterOverlay {
   url: string;
   bounds: { north: number; south: number; east: number; west: number };
   opacity?: number;
-  /** Optional stable identity. Defaults to `${paddockId}:${url}`. Different keys can co-exist during crossfade. */
+  /** Optional stable identity. Different keys can co-exist during crossfade. Required for view-model lookups. */
   key?: string;
+  /** Metadata forwarded through overlay lifecycle callbacks so consumers never identify overlays by object URL alone. */
+  sceneId?: string | null;
+  indexType?: string | null;
+  assetId?: string | null;
+}
+
+/** Payload passed to every overlay lifecycle callback. Identifies the overlay by stable ids — never by URL or DOM node. */
+export interface OverlayCallbackInfo {
+  paddockId: string;
+  overlayKey: string;
+  /** @deprecated Use `overlayKey`. Retained for backwards compatibility. */
+  key: string;
+  sceneId: string | null;
+  indexType: string | null;
+  assetId: string | null;
 }
 
 export interface SatelliteMapProps {
@@ -39,13 +54,13 @@ export interface SatelliteMapProps {
   /** Fires with the map coordinate under the pointer (or null on leave). `x`/`y` are relative to the map container. */
   onPointerMove?: (coord: { lat: number; lng: number; x: number; y: number } | null) => void;
   /** Fires when a raster overlay <img> successfully loads (bytes decoded). */
-  onOverlayLoad?: (info: { paddockId: string; key: string }) => void;
+  onOverlayLoad?: (info: OverlayCallbackInfo) => void;
   /** Fires when a raster overlay <img> fails to load. */
-  onOverlayError?: (info: { paddockId: string; key: string }) => void;
+  onOverlayError?: (info: OverlayCallbackInfo) => void;
   /** Fires when the overlay is loaded AND has been positioned with non-zero geometry (visible on map). */
-  onOverlayMounted?: (info: { paddockId: string; key: string }) => void;
+  onOverlayMounted?: (info: OverlayCallbackInfo) => void;
   /** Fires when an overlay is removed from the DOM (crossfade complete / superseded). */
-  onOverlayUnmounted?: (info: { paddockId: string; key: string }) => void;
+  onOverlayUnmounted?: (info: OverlayCallbackInfo) => void;
   className?: string;
 }
 
