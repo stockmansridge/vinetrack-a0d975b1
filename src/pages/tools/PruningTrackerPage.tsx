@@ -34,16 +34,18 @@ import {
   buildRowIdentities,
   buildRowCompletion,
   computeBlockProgress,
-  projectVineyardCompletion,
   type BlockProgress,
   type RowIdentity,
   type RowCompletionState,
 } from "@/lib/pruningCalc";
+import { usePruningVineyardSummary, type PruningVineyardSummaryBlock } from "@/lib/pruningSummaryQuery";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
 import CompleteTodayDialog from "@/components/pruning/CompleteTodayDialog";
 import ActivityHistory from "@/components/pruning/ActivityHistory";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Paddock {
   id: string;
@@ -240,64 +242,19 @@ export default function PruningTrackerPage() {
     return arr;
   }, [blocks, sortKey]);
 
-  const summary = useMemo(() => {
-    // Shared cross-platform contract:
-    //   progress = Σ completedSegments / Σ totalSegments  (row-equivalent)
-    //   vinesDone = Σ block.estimatedVinesCompleted  (each block rounded once)
-    //   vinesPerDay = vinesDone / distinctEntryDays (filtered to working days)
-    //   vinesPerHour = vinesDone / Σ labour_hours
-    //   projectedCompletion = today + ceil(remainingRE / vineyardAvgRE) working days
-    let vinesTotal = 0, vinesDone = 0, reTotal = 0, reDone = 0;
-    let complete = 0, atRisk = 0;
-    for (const b of blocks) {
-      vinesTotal += b.progress.estimatedVinesTotal;
-      vinesDone += b.progress.estimatedVinesCompleted;
-      reTotal += b.progress.totalRows;
-      reDone += b.progress.rowEquivalentsCompleted;
-      if (b.progress.dueStatus === "complete") complete += 1;
-      else if (b.progress.dueStatus === "at_risk" || b.progress.dueStatus === "overdue") atRisk += 1;
-    }
-    // Aggregate entries across the vineyard.
-    const ents = entriesQ.data ?? [];
-    // Working-day set: take the first season's list (all blocks in a
-    // vineyard share the same working schedule in the shared contract).
-    const workingDays = (() => {
-      for (const b of blocks) if (b.season?.working_days?.length) return b.season.working_days;
-      return [1, 2, 3, 4, 5];
-    })();
-    const workingSet = new Set(workingDays);
-    const isoWeekdayFromDateStr = (s: string): number => {
-      const [y, m, d] = s.split("-").map((n) => Number(n));
-      const wd = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1)).getUTCDay();
-      return wd === 0 ? 7 : wd;
-    };
-    const distinctDays = new Set<string>();
-    let labourHoursTotal = 0;
-    for (const e of ents) {
-      const dateStr = (e as any).entry_date as string | null;
-      if (dateStr && (!workingSet.size || workingSet.has(isoWeekdayFromDateStr(dateStr)))) {
-        distinctDays.add(dateStr);
-      }
-      labourHoursTotal += Number((e as any).labour_hours) || 0;
-    }
-    const vinesPerDay = distinctDays.size > 0 ? vinesDone / distinctDays.size : 0;
-    const vinesPerHour = labourHoursTotal > 0 ? vinesDone / labourHoursTotal : 0;
-    const pct = reTotal ? reDone / reTotal : 0;
-    const projection = projectVineyardCompletion({
-      totalRowEquivalents: reTotal,
-      completedRowEquivalents: reDone,
-      distinctWorkingDays: distinctDays.size,
-      workingDaysOfWeek: workingDays,
-    });
-    return {
-      pct, vinesTotal, vinesDone,
-      vinesRemaining: Math.max(0, vinesTotal - vinesDone),
-      vinesPerDay, vinesPerHour,
-      complete, atRisk,
-      latestEta: projection.estimatedCompletionDate,
-      blocksCount: blocks.length,
-    };
-  }, [blocks, entriesQ.data]);
+  // SQL 115: server-authoritative vineyard summary. Never recompute
+  // these numbers locally — cross-platform parity depends on the RPC
+  // being the sole source of truth.
+  const summaryQ = usePruningVineyardSummary(selectedVineyardId, vintage);
+  const summary = summaryQ.data ?? null;
+
+  // Per-block RPC values keyed by paddock_id for card overlays.
+  const rpcBlockByPaddock = useMemo(() => {
+    const m = new Map<string, PruningVineyardSummaryBlock>();
+    for (const b of summary?.blocks ?? []) if (b.paddock_id) m.set(b.paddock_id, b);
+    return m;
+  }, [summary]);
+
 
   const selected = selectedPaddockId ? blocks.find((b) => b.paddock.id === selectedPaddockId) ?? null : null;
   const selectedEntriesQ = usePruningEntries(selected?.season?.id ?? null);
@@ -360,37 +317,58 @@ export default function PruningTrackerPage() {
 
       {selectedVineyardId && !selected && (
         <>
-          {/* Vineyard Progress */}
+          {/* Vineyard Progress — SQL 115 RPC is the sole source of truth. */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Vineyard Progress</CardTitle>
               <CardDescription>Season {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="flex items-baseline justify-between mb-1">
-                  <div className="text-3xl font-semibold tabular-nums">{Math.round(summary.pct * 100)}%</div>
-                  <div className="text-sm text-muted-foreground tabular-nums">
-                    {summary.vinesDone.toLocaleString()} of {summary.vinesTotal.toLocaleString()} vines
+              {summaryQ.isLoading || !summary ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-2 w-full" />
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                    {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
                   </div>
                 </div>
-                <Progress value={summary.pct * 100} className="h-2" />
-              </div>
-              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                <Metric label="Vines pruned" value={summary.vinesDone.toLocaleString()} />
-                <Metric label="Vines remaining" value={summary.vinesRemaining.toLocaleString()} />
-                <Metric label="Vines / day" value={summary.vinesPerDay ? Math.round(summary.vinesPerDay).toLocaleString() : "—"} />
-                <Metric label="Vines / labour hr" value={summary.vinesPerHour ? Math.round(summary.vinesPerHour).toLocaleString() : "—"} />
-                <Metric label="Blocks complete" value={`${summary.complete} / ${summary.blocksCount}`} />
-                <Metric label="Blocks at risk" value={String(summary.atRisk)} />
-              </div>
-              {summary.latestEta && (
-                <div className="text-xs text-muted-foreground">
-                  Projected completion: <span className="tabular-nums">{formatDate(summary.latestEta)}</span>
-                </div>
+              ) : summaryQ.isError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Couldn't load vineyard summary</AlertTitle>
+                  <AlertDescription>
+                    {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+                    {" "}Retry shortly — figures are intentionally not calculated locally to keep parity with iOS and Android.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <div className="text-3xl font-semibold tabular-nums">{Math.round(summary.overall_progress * 100)}%</div>
+                      <div className="text-sm text-muted-foreground tabular-nums">
+                        {summary.vines_pruned.toLocaleString()} of {summary.total_vines.toLocaleString()} vines
+                      </div>
+                    </div>
+                    <Progress value={summary.overall_progress * 100} className="h-2" />
+                  </div>
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
+                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} />
+                    <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} />
+                    <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} />
+                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} />
+                    <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} />
+                    <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} />
+                  </div>
+                  {summary.projected_completion_date && (
+                    <div className="text-xs text-muted-foreground">
+                      Projected completion: <span className="tabular-nums">{formatDate(summary.projected_completion_date)}</span>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
+
 
           {/* Blocks */}
           <div className="space-y-3">
@@ -414,30 +392,39 @@ export default function PruningTrackerPage() {
               <Card><CardContent className="p-6 text-sm text-muted-foreground">This vineyard has no active blocks.</CardContent></Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {sortedBlocks.map((b) => (
-                  <button
-                    key={b.paddock.id}
-                    onClick={() => setSelectedPaddockId(b.paddock.id)}
-                    className="text-left rounded-lg border bg-card p-4 hover:bg-accent/40 transition"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="font-medium leading-tight">
-                        {b.paddock.name ?? "Unnamed block"}
-                        <span className="text-muted-foreground font-normal"> · {rowRangeLabel(b.identities)}</span>
+                {sortedBlocks.map((b) => {
+                  // Prefer RPC per-block values so cards reconcile with
+                  // the vineyard total. Fall back to local calc only for
+                  // paddocks the RPC didn't return (defensive).
+                  const rpcB = rpcBlockByPaddock.get(b.paddock.id);
+                  const pct = rpcB?.progress ?? b.progress.percentComplete;
+                  const reDone = rpcB?.completed_row_equivalents ?? b.progress.rowEquivalentsCompleted;
+                  const reTotal = rpcB?.total_row_equivalents ?? b.progress.totalRows;
+                  return (
+                    <button
+                      key={b.paddock.id}
+                      onClick={() => setSelectedPaddockId(b.paddock.id)}
+                      className="text-left rounded-lg border bg-card p-4 hover:bg-accent/40 transition"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="font-medium leading-tight">
+                          {b.paddock.name ?? "Unnamed block"}
+                          <span className="text-muted-foreground font-normal"> · {rowRangeLabel(b.identities)}</span>
+                        </div>
+                        <StatusBadge p={b.progress} hasSeason={!!b.season} />
                       </div>
-                      <StatusBadge p={b.progress} hasSeason={!!b.season} />
-                    </div>
-                    {b.variety && (
-                      <div className="text-xs text-muted-foreground mb-3">{b.variety}</div>
-                    )}
-                    <div className="text-sm tabular-nums">
-                      {b.progress.rowEquivalentsCompleted.toFixed(1)} of {b.progress.totalRows} row equivalents
-                      {" — "}
-                      {Math.round(b.progress.percentComplete * 100)}%
-                    </div>
-                    <Progress value={b.progress.percentComplete * 100} className="h-1.5 mt-2" />
-                  </button>
-                ))}
+                      {b.variety && (
+                        <div className="text-xs text-muted-foreground mb-3">{b.variety}</div>
+                      )}
+                      <div className="text-sm tabular-nums">
+                        {reDone.toFixed(1)} of {reTotal} row equivalents
+                        {" — "}
+                        {Math.round(pct * 100)}%
+                      </div>
+                      <Progress value={pct * 100} className="h-1.5 mt-2" />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
