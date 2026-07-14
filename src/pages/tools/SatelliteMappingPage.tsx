@@ -1136,9 +1136,14 @@ export default function SatelliteMappingPage() {
         url: signedUrls[asset.id],
         bounds: asset.bounds!,
         opacity: opacity / 100,
-        key: `${scene.paddock_id}:${asset.id}`,
+        // Stable identity — matches `displayKeyFor(paddockId, effectiveDate, layer, assetId)`
+        // so the view model and every overlay-lifecycle callback share ONE key space.
+        key: displayKeyFor(scene.paddock_id, effectiveDisplayDate, layer, asset.id),
+        sceneId: scene.id,
+        indexType: layer,
+        assetId: asset.id,
       }));
-  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending]);
+  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer]);
 
   // Crossfade-mounted overlays. When the target changes, keep the previous
   // set briefly with opacity 0 so its CSS transition animates out while the
@@ -1161,62 +1166,62 @@ export default function SatelliteMappingPage() {
     return () => clearTimeout(t);
   }, [targetMapOverlays, prefersReducedMotion]);
 
-  // --- Overlay lifecycle tracking -----------------------------------------
-  // Truth for "Paddocks displayed": count of unique paddockIds whose overlay
-  // <img> has actually loaded and mounted for the currently targeted set.
-  type OverlayLoadStatus = "loading" | "loaded" | "error";
-  const [overlayStatus, setOverlayStatus] = useState<Record<string, OverlayLoadStatus>>({});
-  const [overlayMountedKeys, setOverlayMountedKeys] = useState<Set<string>>(() => new Set());
+  // --- Overlay & asset lifecycle → unified view-model input maps ----------
+  // Keys use `displayKeyFor(paddockId, effectiveDisplayDate, layer, assetId)` and
+  // `analyticalKeyFor(paddockId, sceneId, layer, assetId)`. Every consumer of
+  // "is this paddock displayed / loading / failed" reads the derived view model,
+  // never these raw maps directly.
+  const [displayLoadState, setDisplayLoadState] = useState<Map<string, AssetLoadState>>(() => new Map());
+  const [overlayLifecycle, setOverlayLifecycle] = useState<Map<string, OverlayLifecycleState>>(() => new Map());
+  const [analyticalLoadState, setAnalyticalLoadState] = useState<Map<string, AssetLoadState>>(() => new Map());
+  const overlayLifecycleRef = useRef(overlayLifecycle);
+  useEffect(() => { overlayLifecycleRef.current = overlayLifecycle; }, [overlayLifecycle]);
 
-  const handleOverlayLoad = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayStatus((s) => (s[key] === "loaded" ? s : { ...s, [key]: "loaded" }));
-  }, []);
-
-  // Ref mirror of overlayMountedKeys — used by the refresh mutation to await
-  // MapKit lifecycle events without re-rendering.
-  const overlayMountedKeysRef = useRef(overlayMountedKeys);
-  useEffect(() => { overlayMountedKeysRef.current = overlayMountedKeys; }, [overlayMountedKeys]);
-  const handleOverlayError = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayStatus((s) => (s[key] === "error" ? s : { ...s, [key]: "error" }));
-  }, []);
-  const handleOverlayMounted = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayMountedKeys((s) => {
-      if (s.has(key)) return s;
-      const next = new Set(s); next.add(key); return next;
+  const handleOverlayLoad = useCallback((info: OverlayCallbackInfo) => {
+    setDisplayLoadState((prev) => {
+      const cur = prev.get(info.overlayKey);
+      if (cur?.phase === "loaded") return prev;
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "loaded" }); return next;
     });
   }, []);
-  const handleOverlayUnmounted = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayMountedKeys((s) => {
-      if (!s.has(key)) return s;
-      const next = new Set(s); next.delete(key); return next;
+  const handleOverlayError = useCallback((info: OverlayCallbackInfo) => {
+    setDisplayLoadState((prev) => {
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "failed", errorMessage: `${info.indexType ?? "asset"} could not be loaded` }); return next;
     });
-    setOverlayStatus((s) => {
-      if (!(key in s)) return s;
-      const { [key]: _drop, ...rest } = s; return rest;
+    setOverlayLifecycle((prev) => {
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "error", errorMessage: "Overlay <img> load failed" }); return next;
+    });
+  }, []);
+  const handleOverlayMounted = useCallback((info: OverlayCallbackInfo) => {
+    setOverlayLifecycle((prev) => {
+      const cur = prev.get(info.overlayKey);
+      if (cur?.phase === "mounted") return prev;
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "mounted" }); return next;
+    });
+  }, []);
+  const handleOverlayUnmounted = useCallback((info: OverlayCallbackInfo) => {
+    setOverlayLifecycle((prev) => {
+      if (!prev.has(info.overlayKey)) return prev;
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "unmounted" }); return next;
+    });
+    setDisplayLoadState((prev) => {
+      if (!prev.has(info.overlayKey)) return prev;
+      const next = new Map(prev); next.delete(info.overlayKey); return next;
     });
   }, []);
 
-  // Seed 'loading' state for any target overlay we don't already track.
+  // Seed 'loading' load-state for any target overlay we don't already track.
   useEffect(() => {
-    setOverlayStatus((s) => {
+    setDisplayLoadState((prev) => {
       let changed = false;
-      const next: Record<string, OverlayLoadStatus> = { ...s };
+      const next = new Map(prev);
       for (const o of targetMapOverlays) {
         const k = o.key!;
-        if (!(k in next)) { next[k] = "loading"; changed = true; }
+        if (!next.has(k)) { next.set(k, { phase: "loading" }); changed = true; }
       }
-      return changed ? next : s;
+      return changed ? next : prev;
     });
   }, [targetMapOverlays]);
-
-  // Count unique paddocks that have a currently-targeted overlay mounted.
-  const mountedPaddockCount = useMemo(() => {
-    const seen = new Set<string>();
-    for (const o of targetMapOverlays) {
-      if (overlayMountedKeys.has(o.key!)) seen.add(o.paddockId);
-    }
-    return seen.size;
-  }, [targetMapOverlays, overlayMountedKeys]);
 
   // Clear stale search / refresh errors when the user changes date or layer so
   // banners from a previous selection don't linger on a fresh view.
