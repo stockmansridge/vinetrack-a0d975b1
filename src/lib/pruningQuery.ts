@@ -40,6 +40,7 @@ export interface PruningEntry {
   notes: string;
   row_equivalents_completed: number;
   estimated_vines_completed: number;
+  work_task_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
