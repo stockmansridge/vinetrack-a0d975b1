@@ -1,9 +1,32 @@
-// Derived pruning metrics — matches iOS/Android calculation contract.
-// - Row equivalents = completedSegments / 4
-// - Vines-per-row uses per-row length / vine_spacing when available,
-//   otherwise falls back to totalVines / rowCount.
-// - Working-day average uses distinct entry_date days, filtered to the
-//   season's working_days when populated.
+// Derived pruning metrics — SHARED CROSS-PLATFORM CONTRACT.
+//
+// This module MUST produce identical unrounded totals to the iOS and
+// Android pruning trackers. Any change here needs a matching change in
+// Swift and Kotlin, verified against docs/pruning-calc-contract.md.
+//
+// Contract (v1, 2026-07-14):
+//   1. Vine-per-row precedence:
+//      a. paddock.vine_count_override    (authoritative paddock total,
+//         distributed proportionally across rows by row length; falls
+//         back to even split when row lengths are unknown).
+//      b. derived total = floor(sum(rowLength) / vine_spacing) at the
+//         paddock level, then distributed proportionally.
+//      c. manual_row_count fallback with 0 vines/row when neither above
+//         is available.
+//      Per-row values are kept as floats — no rounding until the block
+//      total is displayed. This eliminates per-row floor() drift.
+//   2. Row equivalents = completedSegments / 4.
+//   3. Vines completed for a block = round(paddockVineTotal *
+//      completedSegments / (rowCount * 4)) — one final rounding, never
+//      sum(round(each quarter)).
+//   4. Vineyard progress = Σ completedSegments / Σ totalSegments
+//      (row-equivalent weighted). Vine totals are for display only.
+//   5. Vines/day = Σ vinesDone / distinctEntryDaysFilteredByWorkingDays,
+//      aggregated at the vineyard level across all blocks.
+//   6. Vines/labour-hour = Σ vinesDone / Σ labour_hours.
+//   7. Projected completion = today + ceil(remainingRE /
+//      vineyardWorkingDayAvgRE) advanced by the season's working_days
+//      list, in the vineyard's local date (date-only arithmetic).
 import type { PruningEntry, PruningRowSegment, PruningSeason } from "./pruningQuery";
 import type { PaddockRow } from "./paddockGeometry";
 import { deriveMetrics, rowLengthMeters } from "./paddockGeometry";
@@ -14,11 +37,15 @@ export interface RowIdentity {
   rowLabel: string;
   order: number;
   lengthM: number;
+  /** Float — proportional share of the paddock's authoritative vine total. */
   estimatedVines: number;
 }
 
 /** Return the canonical list of rows for a paddock, preserving stored
- *  order and non-sequential row numbers. Falls back to 1..rowCount only
+ *  order and non-sequential row numbers. Per-row vine counts are floats
+ *  representing that row's proportional share of the paddock's
+ *  authoritative vine total, so summing them exactly reproduces the
+ *  paddock total without floor() drift. Falls back to 1..rowCount only
  *  when paddocks.rows is empty AND a manual_row_count is supplied. */
 export function buildRowIdentities(
   paddockRows: PaddockRow[],
@@ -26,17 +53,21 @@ export function buildRowIdentities(
   manualRowCount: number | null,
 ): RowIdentity[] {
   const metrics = deriveMetrics(paddock);
-  const totalVines = metrics.vineCount ?? 0;
-  const vineSpacing = Number(paddock?.vine_spacing) || 0;
+  const paddockVineTotal = metrics.vineCount ?? 0;
 
   if (paddockRows.length > 0) {
-    const rows = paddockRows
+    const lengths = paddockRows.map((r) => rowLengthMeters(r));
+    const totalLen = lengths.reduce((s, l) => s + l, 0);
+    return paddockRows
       .map((r, idx) => {
         const rowNumber = Number.isFinite(r.number) ? Number(r.number) : idx + 1;
-        const lengthM = rowLengthMeters(r);
+        const lengthM = lengths[idx];
         let vines = 0;
-        if (vineSpacing > 0 && lengthM > 0) vines = Math.floor(lengthM / vineSpacing);
-        else if (totalVines && paddockRows.length) vines = Math.floor(totalVines / paddockRows.length);
+        if (paddockVineTotal > 0) {
+          vines = totalLen > 0
+            ? paddockVineTotal * (lengthM / totalLen)
+            : paddockVineTotal / paddockRows.length;
+        }
         return {
           paddockRowId: r.id ?? null,
           rowNumber,
@@ -46,14 +77,12 @@ export function buildRowIdentities(
           estimatedVines: vines,
         } as RowIdentity;
       })
-      // preserve stored order but expose sorted-by-number for display when identical
       .sort((a, b) => a.order - b.order);
-    return rows;
   }
 
   const fallbackCount = Math.max(0, Math.floor(manualRowCount ?? 0));
   if (fallbackCount === 0) return [];
-  const vinesPerRow = totalVines && fallbackCount ? Math.floor(totalVines / fallbackCount) : 0;
+  const vinesPerRow = paddockVineTotal && fallbackCount ? paddockVineTotal / fallbackCount : 0;
   return Array.from({ length: fallbackCount }, (_, i) => ({
     paddockRowId: null,
     rowNumber: i + 1,
@@ -145,9 +174,20 @@ export function computeBlockProgress(
   const totalSegments = totalRows * 4;
   const completedSegments = completion.reduce((s, r) => s + r.completed.size, 0);
   const rowEquivalentsCompleted = completedSegments / 4;
+  // Row-equivalent weighted progress — shared contract with iOS/Android.
   const percentComplete = totalSegments ? completedSegments / totalSegments : 0;
-  const estimatedVinesTotal = identities.reduce((s, r) => s + r.estimatedVines, 0);
-  const estimatedVinesCompleted = entries.reduce((s, e) => s + (e.estimated_vines_completed ?? 0), 0);
+  // Paddock authoritative vine total: sum of per-row shares (float), one
+  // final rounding for display. Reconciles with paddock.vine_count.
+  const exactVinesTotal = identities.reduce((s, r) => s + r.estimatedVines, 0);
+  const estimatedVinesTotal = Math.round(exactVinesTotal);
+  // Vines completed = Σ(exact quarter vines from completed rows), one rounding.
+  let exactVinesCompleted = 0;
+  for (const r of completion) {
+    if (r.completed.size === 0) continue;
+    exactVinesCompleted += r.identity.estimatedVines * (r.completed.size / 4);
+  }
+  const estimatedVinesCompleted = Math.round(exactVinesCompleted);
+  void entries; // per-entry estimated_vines_completed is intentionally unused
 
   // Working-day average — group non-deleted entries by entry_date, sum row-equivalents.
   const byDay = new Map<string, number>();
@@ -204,6 +244,42 @@ export function computeBlockProgress(
     dueStatus,
     daysRemaining,
   };
+}
+
+/** Vineyard-level projection using the shared contract. Uses aggregated
+ *  row equivalents across all blocks and the union of season working
+ *  days so a single vineyard date is projected regardless of which block
+ *  finishes last. Date-only arithmetic in UTC — no timezone shift. */
+export function projectVineyardCompletion(args: {
+  totalRowEquivalents: number;
+  completedRowEquivalents: number;
+  distinctWorkingDays: number;
+  workingDaysOfWeek: number[]; // iso 1..7; empty = all days count
+  today?: Date;
+}): { estimatedCompletionDate: string | null; daysRemaining: number | null; avgRE: number | null } {
+  const today = args.today ?? new Date();
+  const remainingRE = Math.max(0, args.totalRowEquivalents - args.completedRowEquivalents);
+  if (remainingRE === 0) {
+    return {
+      estimatedCompletionDate: fmtDate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))),
+      daysRemaining: 0,
+      avgRE: null,
+    };
+  }
+  if (args.distinctWorkingDays <= 0) return { estimatedCompletionDate: null, daysRemaining: null, avgRE: null };
+  const avg = args.completedRowEquivalents / args.distinctWorkingDays;
+  if (avg <= 0) return { estimatedCompletionDate: null, daysRemaining: null, avgRE: avg };
+  const workingSet = new Set(args.workingDaysOfWeek);
+  const daysNeeded = Math.ceil(remainingRE / avg);
+  const cursor = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  let counted = 0;
+  let calDays = 0;
+  while (counted < daysNeeded && calDays < 3650) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    calDays += 1;
+    if (!workingSet.size || workingSet.has(isoWeekday(cursor))) counted += 1;
+  }
+  return { estimatedCompletionDate: fmtDate(cursor), daysRemaining: daysNeeded, avgRE: avg };
 }
 
 export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
