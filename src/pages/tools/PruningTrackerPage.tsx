@@ -242,64 +242,19 @@ export default function PruningTrackerPage() {
     return arr;
   }, [blocks, sortKey]);
 
-  const summary = useMemo(() => {
-    // Shared cross-platform contract:
-    //   progress = Σ completedSegments / Σ totalSegments  (row-equivalent)
-    //   vinesDone = Σ block.estimatedVinesCompleted  (each block rounded once)
-    //   vinesPerDay = vinesDone / distinctEntryDays (filtered to working days)
-    //   vinesPerHour = vinesDone / Σ labour_hours
-    //   projectedCompletion = today + ceil(remainingRE / vineyardAvgRE) working days
-    let vinesTotal = 0, vinesDone = 0, reTotal = 0, reDone = 0;
-    let complete = 0, atRisk = 0;
-    for (const b of blocks) {
-      vinesTotal += b.progress.estimatedVinesTotal;
-      vinesDone += b.progress.estimatedVinesCompleted;
-      reTotal += b.progress.totalRows;
-      reDone += b.progress.rowEquivalentsCompleted;
-      if (b.progress.dueStatus === "complete") complete += 1;
-      else if (b.progress.dueStatus === "at_risk" || b.progress.dueStatus === "overdue") atRisk += 1;
-    }
-    // Aggregate entries across the vineyard.
-    const ents = entriesQ.data ?? [];
-    // Working-day set: take the first season's list (all blocks in a
-    // vineyard share the same working schedule in the shared contract).
-    const workingDays = (() => {
-      for (const b of blocks) if (b.season?.working_days?.length) return b.season.working_days;
-      return [1, 2, 3, 4, 5];
-    })();
-    const workingSet = new Set(workingDays);
-    const isoWeekdayFromDateStr = (s: string): number => {
-      const [y, m, d] = s.split("-").map((n) => Number(n));
-      const wd = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1)).getUTCDay();
-      return wd === 0 ? 7 : wd;
-    };
-    const distinctDays = new Set<string>();
-    let labourHoursTotal = 0;
-    for (const e of ents) {
-      const dateStr = (e as any).entry_date as string | null;
-      if (dateStr && (!workingSet.size || workingSet.has(isoWeekdayFromDateStr(dateStr)))) {
-        distinctDays.add(dateStr);
-      }
-      labourHoursTotal += Number((e as any).labour_hours) || 0;
-    }
-    const vinesPerDay = distinctDays.size > 0 ? vinesDone / distinctDays.size : 0;
-    const vinesPerHour = labourHoursTotal > 0 ? vinesDone / labourHoursTotal : 0;
-    const pct = reTotal ? reDone / reTotal : 0;
-    const projection = projectVineyardCompletion({
-      totalRowEquivalents: reTotal,
-      completedRowEquivalents: reDone,
-      distinctWorkingDays: distinctDays.size,
-      workingDaysOfWeek: workingDays,
-    });
-    return {
-      pct, vinesTotal, vinesDone,
-      vinesRemaining: Math.max(0, vinesTotal - vinesDone),
-      vinesPerDay, vinesPerHour,
-      complete, atRisk,
-      latestEta: projection.estimatedCompletionDate,
-      blocksCount: blocks.length,
-    };
-  }, [blocks, entriesQ.data]);
+  // SQL 115: server-authoritative vineyard summary. Never recompute
+  // these numbers locally — cross-platform parity depends on the RPC
+  // being the sole source of truth.
+  const summaryQ = usePruningVineyardSummary(selectedVineyardId, vintage);
+  const summary = summaryQ.data ?? null;
+
+  // Per-block RPC values keyed by paddock_id for card overlays.
+  const rpcBlockByPaddock = useMemo(() => {
+    const m = new Map<string, PruningVineyardSummaryBlock>();
+    for (const b of summary?.blocks ?? []) if (b.paddock_id) m.set(b.paddock_id, b);
+    return m;
+  }, [summary]);
+
 
   const selected = selectedPaddockId ? blocks.find((b) => b.paddock.id === selectedPaddockId) ?? null : null;
   const selectedEntriesQ = usePruningEntries(selected?.season?.id ?? null);
