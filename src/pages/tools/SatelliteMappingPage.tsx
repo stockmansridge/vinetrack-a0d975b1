@@ -2726,68 +2726,25 @@ export default function SatelliteMappingPage() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-2 max-h-56 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
-                  {(() => {
-                    const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
-                    const missingSet = new Map<string, string>();
-                    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
-                    for (const m of group?.missing ?? []) {
-                      const label = m.reason === "scene_not_complete"
-                        ? "Imagery exists but processing is incomplete"
-                        : m.reason === "package_version_mismatch"
-                          ? "Imagery exists but requires a package upgrade"
-                          : "No saved imagery for this date";
-                      missingSet.set(m.paddock_id, label);
-                    }
-                    // Per-paddock lifecycle from live overlay tracking.
-                    const overlayByPaddock = new Map<string, { key: string; status: OverlayLoadStatus | "mounted" }>();
-                    for (const o of targetMapOverlays) {
-                      const mounted = overlayMountedKeys.has(o.key!);
-                      const status: OverlayLoadStatus | "mounted" = mounted
-                        ? "mounted"
-                        : (overlayStatus[o.key!] ?? "loading");
-                      overlayByPaddock.set(o.paddockId, { key: o.key!, status });
-                    }
-                    const dateLabel = selectedSceneKey ? formatDate(selectedSceneKey) : "this date";
-                    return geoms.map((g) => {
-                      const pkg = liveReport.perPaddock.find((p) => p.paddockId === g.id);
-                      const missingLabel = missingSet.get(g.id);
-                      const live = overlayByPaddock.get(g.id);
-                      let badge: string;
-                      let tone: "ok" | "warn" | "err" = "ok";
-                      if (missingLabel) {
-                        badge = missingLabel === "No saved imagery for this date"
-                          ? `No ${layer} imagery saved for ${dateLabel}`
-                          : missingLabel;
-                        tone = "warn";
-                      } else if (live?.status === "mounted") {
-                        badge = "Imagery displayed";
-                      } else if (live?.status === "loaded") {
-                        badge = "Image available but still loading";
-                      } else if (live?.status === "error") {
-                        badge = `${layer} asset could not be loaded`;
-                        tone = "err";
-                      } else if (live?.status === "loading") {
-                        badge = "Image available but still loading";
-                      } else if (pkg?.state === "old_processing_version") {
-                        badge = `${layer} processing incomplete`;
-                        tone = "warn";
-                      } else if (pkg && pkg.indicesRequiringWork.length > 0) {
-                        badge = "Cell data incomplete";
-                        tone = "warn";
-                      } else {
-                        badge = `No ${layer} imagery saved for ${dateLabel}`;
-                        tone = "warn";
-                      }
-                      const toneCls = tone === "err"
-                        ? "text-destructive"
-                        : tone === "warn"
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-muted-foreground";
-                      return (
-                        <div key={g.id} className="text-[11px] leading-tight">
-                          <span className="font-medium text-foreground">{g.name}</span>
-                          <span className={`ml-1 ${toneCls}`}>— {badge}</span>
-                        </div>
+                  {viewModel.paddocks.map((p) => {
+                    const badge = reasonToCustomerMessage(p.availabilityReason, p.selectedLayer);
+                    const tone: "ok" | "warn" | "err" =
+                      p.availabilityReason === "displayed" ? "ok"
+                      : (p.availabilityReason === "asset_load_failed" || p.availabilityReason === "overlay_mount_failed") ? "err"
+                      : "warn";
+                    const toneCls = tone === "err"
+                      ? "text-destructive"
+                      : tone === "warn"
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground";
+                    return (
+                      <div key={p.paddockId} className="text-[11px] leading-tight">
+                        <span className="font-medium text-foreground">{p.paddockName}</span>
+                        <span className={`ml-1 ${toneCls}`}>— {badge}</span>
+                      </div>
+                    );
+                  })}
+                </div>
                       );
                     });
                     // eslint-disable-next-line no-unreachable
