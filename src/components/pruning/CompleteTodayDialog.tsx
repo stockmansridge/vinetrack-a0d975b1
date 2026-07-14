@@ -9,10 +9,10 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { CheckSquare, Plus, Square, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PruningSeason, RecordSegmentInput } from "@/lib/pruningQuery";
+import type { PruningSeason, RecordEntryResult, RecordSegmentInput } from "@/lib/pruningQuery";
 import { useRecordPruningEntry } from "@/lib/pruningQuery";
 import type { RowCompletionState, RowIdentity } from "@/lib/pruningCalc";
-import { createWorkTask, createLabourLine, syncWorkTaskPaddocks } from "@/lib/workTasksQuery";
+import { createWorkTask, createLabourLine, fetchWorkTaskPaddocksForVineyard, syncWorkTaskPaddocks } from "@/lib/workTasksQuery";
 import type { UpsertLabourLineInput } from "@/lib/workTasksQuery";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import { useAuth } from "@/context/AuthContext";
@@ -125,6 +125,7 @@ export default function CompleteTodayDialog({
   const [labourLines, setLabourLines] = useState<LabourDraft[]>([]);
   const [pendingEntryId, setPendingEntryId] = useState<string | null>(null);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const [savedPruningResult, setSavedPruningResult] = useState<RecordEntryResult | null>(null);
 
   const { data: categoriesResult } = useQuery({
     queryKey: ["worker-types", vineyardId],
@@ -157,6 +158,7 @@ export default function CompleteTodayDialog({
     setLabourLines([]);
     setPendingEntryId(null);
     setPendingTaskId(null);
+    setSavedPruningResult(null);
   }, [open, season, paddockName]);
 
   const rowBySelectionKey = useMemo(() => {
@@ -226,15 +228,17 @@ export default function CompleteTodayDialog({
     }
 
     if (!additions.size && !invalid.length) setRangeError(`No incomplete quarters match "${rangeInput}"`);
+    const diagnosticSelection = new Set(selected);
+    additions.forEach((value) => diagnosticSelection.add(value));
+    setRangeDiagnostic({
+      parsed: rangeLabel(ranges),
+      matchedRows,
+      quartersAdded: additions.size,
+      selectedTotal: diagnosticSelection.size,
+    });
     setSelected((previous) => {
       const next = new Set(previous);
       additions.forEach((value) => next.add(value));
-      setRangeDiagnostic({
-        parsed: rangeLabel(ranges),
-        matchedRows,
-        quartersAdded: additions.size,
-        selectedTotal: next.size,
-      });
       return next;
     });
   };
@@ -401,7 +405,7 @@ export default function CompleteTodayDialog({
     const totalLabourHours = createTask ? labourTotals.hours : (labourHours ? Number(labourHours) : null);
 
     try {
-      const res = await record.mutateAsync({
+      const res = savedPruningResult ?? await record.mutateAsync({
         entryId,
         vineyardId,
         seasonId: season.id,
@@ -417,6 +421,7 @@ export default function CompleteTodayDialog({
         estimatedVines,
         segments,
       });
+      setSavedPruningResult(res);
 
       if (createTask) {
         try {
@@ -443,11 +448,13 @@ export default function CompleteTodayDialog({
             is_finalized: taskStatus === "completed",
             user_id: user?.id ?? null,
           });
+          const existingTaskPaddocks = (await fetchWorkTaskPaddocksForVineyard(vineyardId))
+            .filter((row) => row.work_task_id === task.id);
           await syncWorkTaskPaddocks({
             workTaskId: task.id,
             vineyardId,
             selections: [{ paddock_id: paddockId, area_ha: null }],
-            existing: [],
+            existing: existingTaskPaddocks,
             userId: user?.id ?? null,
           });
           for (const line of labourLines) await createLabourLine(toLabourInput(task.id, line));
@@ -462,6 +469,7 @@ export default function CompleteTodayDialog({
       if (dropped > 0) toast.warning(`${res.attributed}/${res.requested} quarters saved — ${dropped} were already completed and were skipped.`);
       else toast.success(createTask ? `Recorded pruning and Work Task labour` : `Recorded ${res.attributed} quarter${res.attributed === 1 ? "" : "s"}`);
       setPendingEntryId(null);
+      setSavedPruningResult(null);
       onOpenChange(false);
     } catch (e: any) {
       toast.error(`Failed to record: ${e?.message ?? e}`);
