@@ -203,21 +203,47 @@ export function computeBlockProgress(
 export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const ISO_DAY_NUMBERS = [1, 2, 3, 4, 5, 6, 7];
 
-export function parseRowRanges(input: string, available: number[]): number[] {
-  // "1-10, 15" → array of row numbers that exist in `available`.
-  if (!input.trim()) return [];
+export interface RowRangeParseResult {
+  nums: number[];
+  invalid: string[];
+}
+
+/**
+ * Parse a comma-separated list of row numbers or ranges into the subset that
+ * actually exists in `available`. Handles:
+ *   - single rows:            "44"
+ *   - ascending ranges:       "44-46"
+ *   - descending ranges:      "46-44"
+ *   - whitespace around dash: "44 - 46", "44 -46"
+ *   - multiple parts:         "1-10, 15, 20-22"
+ * Ignores duplicates and row numbers not present in `available` (never invents
+ * missing rows such as 4 in [1,2,3,5,6]). Reports malformed tokens via
+ * `invalid` so the UI can surface a validation message.
+ */
+export function parseRowRangesDetail(input: string, available: number[]): RowRangeParseResult {
+  const trimmed = input.trim();
+  if (!trimmed) return { nums: [], invalid: [] };
+  // Collapse whitespace around dashes so "44 - 46" behaves like "44-46".
+  const normalised = trimmed.replace(/\s*-\s*/g, "-");
   const set = new Set(available);
   const out = new Set<number>();
-  for (const part of input.split(/[,\s]+/).filter(Boolean)) {
+  const invalid: string[] = [];
+  for (const raw of normalised.split(/[,\n]+/)) {
+    const part = raw.trim();
+    if (!part) continue;
     const m = part.match(/^(\d+)(?:-(\d+))?$/);
-    if (!m) continue;
+    if (!m) { invalid.push(part); continue; }
     const a = Number(m[1]);
-    const b = m[2] ? Number(m[2]) : a;
+    const b = m[2] !== undefined ? Number(m[2]) : a;
     const lo = Math.min(a, b);
     const hi = Math.max(a, b);
     for (let n = lo; n <= hi; n++) if (set.has(n)) out.add(n);
   }
-  return Array.from(out).sort((x, y) => x - y);
+  return { nums: Array.from(out).sort((x, y) => x - y), invalid };
+}
+
+export function parseRowRanges(input: string, available: number[]): number[] {
+  return parseRowRangesDetail(input, available).nums;
 }
 
 // re-export to silence unused warning in dev builds
