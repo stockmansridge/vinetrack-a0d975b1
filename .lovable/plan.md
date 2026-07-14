@@ -1,71 +1,63 @@
-This is a large change touching the manifest edge function, the mapping page, the SatelliteMap component and the date slider. I'll ship it in two slices so we can validate each before moving on.
 
-## Slice 1 — Data & rendering consistency (Part A + Part C)
+# Slice 1 — Unified Crop Health View Model + Overlay Health
 
-**Manifest (server) — `satellite-get-manifest`**
-- Extend each `date_coverage` entry with `layer_coverage: Record<SatelliteIndexType, { available: number; total: number; percent: number; available_paddock_ids; missing_paddock_ids }>` computed from the per-paddock `layers[]` bundle (usable = display asset present + valid bounds + current processing version).
-- Keep the existing `coverage_percent` (scene-level) for back-compat, add `scene_coverage_count`.
+Scope note: Slice 2 (map-first layout, drawer, full-screen) is not started until you accept Slice 1 against the 9 July 2026 NDVI case. No Copernicus, manifest v3, asset endpoint, IDB cache identity, playback timing, or analytical-raster format changes in this phase.
 
-**Unified display-state model — `SatelliteMappingPage`**
-- New `useDisplayState(selectedDate, selectedLayer, activePaddocks, manifest, overlayStatus)` returning:
-  `{ totalPaddocks, sceneAvailable, layerAvailable, assetLoaded, overlayMounted, unavailable, perPaddock[] }`
-  where each `perPaddock` carries: `scene_id`, `acquired_at`, `display_asset_id`, `analytical_asset_id`, `processing_version`, `storage_path`, `bounds`, `load_status`, `mount_status`, `reason`.
-- Reasons: `displayed | no_scene_for_date | selected_layer_not_generated | display_asset_metadata_invalid | display_asset_fetch_failed | asset_decoded_overlay_not_mounted | bounds_invalid | package_version_mismatch`.
-- Every consumer (slider coverage, status counts, per-paddock detail card, diagnostics, legend) reads from this model.
+## 1. New files
 
-**Overlay selection & keying**
-- Replace any global "selected scene" fallback with per-paddock lookup keyed on `paddock_id + date + layer + DISPLAY_RASTER + preferred processing_version`.
-- Active overlay collection keyed `${paddockId}:${sceneId}:${indexType}:${assetId}`.
-- Remove the scene-shim reconstruction paths that borrow assets across dates/paddocks/layers or promote analytical→display.
+- `src/hooks/useCropHealthViewModel.ts` — single authoritative hook.
+  - Inputs: `manifest` (v3), `selectedDate`, `selectedLayer`, `activePaddockIds`, `activePaddocksMeta` (id → name), `displayLoadState` (Map key → `loading|loaded|failed` + error), `analyticalLoadState` (same), `overlayLifecycle` (Map key → `mounted|unmounted|error`), `refreshJob` (active job + per-paddock phase map), `packageHealth` (from manifest paddock rows).
+  - Outputs: `{ paddocks: CropHealthPaddockViewState[]; byId: Record<string, CropHealthPaddockViewState>; summary: CropHealthSelectedDateSummary; keys: { displayKey(p), analyticalKey(p) } }`.
+  - Keying: `displayKey = paddockId|acquisitionDate|selectedLayer|displayAssetId`, `analyticalKey = paddockId|sceneId|selectedLayer|analyticalAssetId`. No global "current scene id".
+  - Pure derivation only. No fetching, no side effects. Stable memoisation on inputs.
 
-**MapKit lifecycle observability — `SatelliteMap`**
-- Add `onOverlayLoad`, `onOverlayError`, `onOverlayMounted`, `onOverlayUnmounted` (paddockId, assetId).
-- Page tracks `overlayStatus: Map<key, 'loading'|'loaded'|'error'|'mounted'>`; `overlayMounted` count drives the customer-facing "Paddocks displayed" number.
+- `src/lib/cropHealthViewModel.ts` — types + pure `deriveCropHealthViewModel(input)` used by the hook and by tests.
+  - Exports `CropHealthPaddockViewState`, `CropHealthSelectedDateSummary`, `CropHealthAvailabilityReason`, `CropHealthDisplayStatus`, `CropHealthAnalyticalStatus`, `CropHealthPackageStatus`, `CropHealthRefreshPhase`.
+  - Deterministic reason resolution order (first match wins): package_upgrade_required → no_scene_for_date → selected_layer_missing → scene_incomplete → asset_load_failed → overlay_mount_failed → loading → cell_data_incomplete → displayed.
 
-**Wording**
-- Per-paddock strings: `Imagery displayed`, `Image available but still loading`, `No <LAYER> imagery saved for <date>`, `<LAYER> asset could not be loaded`, `<LAYER> processing incomplete`, `Cell data incomplete`.
-- Slider coverage line uses `layer_coverage[selectedLayer]`.
+- `src/lib/cropHealthCopy.ts` — single mapping `reasonToCustomerMessage(reason, layerLabel)` implementing the wording table in section 7. Reused by timeline coverage text, per-paddock list, refresh summary, drawer (Slice 2), missing-paddock statuses.
 
-**Refresh Imagery progress & reconciliation**
-- Replace toast-only feedback with a persistent progress panel (fixed, over the map) driven by the existing refresh-job heartbeat: overall (`Paddock X of N`), current paddock name, phase (`Checking Copernicus imagery` → `Processing NDVI, NDMI and other saved layers`), per-paddock rows (queued/searching/found/processing/saved/loaded/no-capture/failed).
-- On finish: refetch manifest, invalidate affected IDB cache entries by (paddock_id, date), await new asset loads + overlay mounts, then show summary: New captures, Paddocks updated, Unchanged, No suitable capture, Overlays now visible X of N. Separate line if processing succeeded but overlay failed to mount.
+- `src/components/satellite/OverlayHealthPanel.tsx` — admin-only diagnostic (section 10-11). Consumes the same view model. Compact header + collapsible per-paddock table (paddock, scene, display asset, load status, mount status, analytical status, availability reason, last error). Hidden entirely for non-admin.
 
-**Stale-error clearing**
-- On successful date/layer switch, clear prior missing-asset and refresh error banners.
+- `src/test/cropHealthViewModel.test.ts` — deterministic fixtures for: full coverage, mixed loading/mounted, layer missing on some paddocks, asset load failure, mount failure, package upgrade required, mid-refresh state, date/layer change clears stale errors.
 
-**Selected-date audit output (debug drawer)**
-- Table for every active paddock on the selected date with all fields listed in §2 + final reason.
+## 2. Edits to `SatelliteMappingPage.tsx`
 
-## Slice 2 — Laptop layout (Part B)
+Refactor in place — no rewrite. Concretely:
 
-**Full-width map + overlay controls**
-- Remove the permanent tall right sidebar. Map fills main width.
-- Top-left overlay: compact Vineyard/Paddock/Layer control group + opacity slider (in a translucent panel).
-- Top-right overlay: Map layer control, Refresh Imagery, Details, Full Screen (Admin tools for sysadmins).
-- Bottom-centre overlay: `SatelliteDateSlider` in translucent panel, `max-w-[900px] w-[calc(100%-32px)]`, `bottom-4`, above legend/attribution.
-- Bottom-right overlay: legend (unchanged).
+- Replace ad-hoc `useMemo` blocks that compute "paddocks displayed", coverage %, missing reasons, per-paddock status strings with a single `const vm = useCropHealthViewModel({...})` call.
+- Convert existing display/analytical loader `useState` maps to the keying scheme above and pass through to the hook.
+- Wire `SatelliteMap` callbacks (`onOverlayLoad/Error/Mounted/Unmounted`) to update `overlayLifecycle` keyed by `{paddockId, sceneId, indexType, assetId}` — never URL. Confirm `SatelliteMap` already emits these payload fields; if any field is missing, thread it through (props-only change, no lifecycle rework).
+- Coverage headline in timeline + per-paddock list + refresh completion summary + missing-paddock statuses + hover availability all read from `vm`.
+- Delete the client-side "borrow scene across dates/paddocks/layers" shims already flagged in `.lovable/plan.md`; the hook's reason resolver replaces them.
+- Stale-state clearing: on `selectedDate`/`selectedLayer` change, clear entries in `displayLoadState`/`analyticalLoadState`/`overlayLifecycle` whose key prefix no longer matches; keep last-mounted overlay visible until the new one mounts (existing crossfade path preserved).
+- Mount `OverlayHealthPanel` inside the existing admin diagnostics section — no layout changes to the page in this slice.
 
-**Right details drawer**
-- New `SatelliteDetailsDrawer` (shadcn `Sheet` or custom absolute panel inside map container).
-- Tabs: `Details` (per-paddock display state + selected-date audit), `History` (existing `SavedImageryHistory`), `Admin tools` (diagnostics, package health, cache diagnostics, Repair Missing Assets, Force Provider Check — sysadmin-only).
-- Positioned `absolute inset-y-0 right-0` inside the map container so it never overlaps the app header; internal scroll; Escape closes; width ~420px desktop, full-width mobile.
+## 3. Edits to `SatelliteMap.tsx`
 
-**Full-screen (application) mode**
-- CSS-only fixed container: `position: fixed; top: var(--app-header-height,56px); left:0; right:0; bottom:0; z-index:40`.
-- Toggle via Full Screen button; Escape exits; preserves MapKit instance and viewport (no remount).
-- Timeline, legend, drawer remain available.
+Callback payload audit only. Ensure `onOverlayLoad/Error/Mounted/Unmounted` each pass `{ paddockId, sceneId, indexType, assetId, overlayKey }`. No lifecycle logic change.
 
-**Laptop fit**
-- Normal mode map uses `h-[calc(100vh-var(--app-header-height,56px)-var(--satellite-toolbar-height,96px))]` with `min-h-[520px]`.
-- Verified against 1366×768 and 1440×900.
+## 4. Edits to `RefreshProgressPanel.tsx`
 
-## Technical notes
-- Files changed: `supabase/functions/satellite-get-manifest/index.ts`, `src/lib/satelliteManifest.ts` (types), `src/pages/tools/SatelliteMappingPage.tsx`, `src/components/SatelliteMap.tsx`, `src/components/satellite/SatelliteDateSlider.tsx`, new `src/components/satellite/SatelliteDetailsDrawer.tsx`, new `src/components/satellite/SatelliteRefreshProgressPanel.tsx`, new `src/hooks/useSatelliteDisplayState.ts`.
-- No changes to Copernicus formulas, index math, asset formats, provider credentials, IDB cache identity, manifest v3 asset shape, playback timing, crossfade behaviour.
-- Typecheck via `bunx tsgo --noEmit`; screenshots via Playwright at 1366×768 and 1440×900, normal + full-screen, full-coverage and partial-coverage NDVI dates.
+Read per-paddock phase from `vm` rather than internal derivation for the completion summary line. Progress rows during an in-flight job remain driven by the existing heartbeat data (unchanged in this slice).
 
-## Order
-1. Ship Slice 1, validate against the 2026-07-09 NDVI case (coverage matches mounted overlays; every "displayed" paddock has a visible raster; unavailable paddocks each have a specific reason; refresh shows progress + reconciles).
-2. Then ship Slice 2 layout rework.
+## 5. Explicitly out of scope for Slice 1
 
-Confirm to proceed with **Slice 1 first**, or say "both" and I'll ship them back-to-back.
+- No layout, drawer, full-screen, slider-repositioning changes.
+- No wording change to the "Refresh Imagery" button (that moves to Slice 2 per section 25).
+- No manifest edge-function edits — v3 already exposes `layer_coverage` per the prior plan; if it turns out it does not, I stop and report rather than editing the function in this slice.
+- No changes to IDB cache keys or the asset endpoint.
+
+## 6. Validation before declaring Slice 1 done
+
+- `bunx tsgo --noEmit` clean.
+- `bunx vitest run src/test/cropHealthViewModel.test.ts` green.
+- Manual: on 9 July 2026 NDVI, report per-paddock (scene found / layer asset found / asset loaded / overlay mounted / analytical ready / final status) and confirm the four invariants in section "Slice 1 validation".
+
+## 7. Open confirmations before I start
+
+1. OK to leave the "Refresh Imagery" → "Check for New Imagery" rename for Slice 2 (keeps Slice 1 diff smaller and consistent with section 25)?
+2. OK that `OverlayHealthPanel` sits inside the existing admin diagnostics block in Slice 1, then moves into the Admin drawer tab in Slice 2 — rather than building the drawer now?
+3. If the manifest edge function is missing `layer_coverage` on `date_coverage`, I stop and report (per scope), rather than editing `satellite-get-manifest`. Confirm.
+
+Reply "go" (or with adjustments) and I'll ship Slice 1 in the next turn.
