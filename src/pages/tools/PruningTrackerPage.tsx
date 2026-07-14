@@ -34,7 +34,6 @@ import {
   buildRowIdentities,
   buildRowCompletion,
   computeBlockProgress,
-  projectVineyardCompletion,
   type BlockProgress,
   type RowIdentity,
   type RowCompletionState,
