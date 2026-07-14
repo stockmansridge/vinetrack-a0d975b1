@@ -160,13 +160,14 @@ export default function RefreshProgressPanel({
             <>
               <Progress value={pct} className="h-1.5" />
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Overall: <span className="text-foreground font-medium">{doneCount} of {totalWork} paddocks completed</span></span>
+                <span>Overall: <span className="text-foreground font-medium">{doneCount} of {totalWork} paddocks finished</span></span>
                 {active && (
                   <span className="truncate max-w-[55%] text-right">Current: <span className="text-foreground font-medium">{active.name}</span></span>
                 )}
               </div>
             </>
           )}
+
 
           {summary && (
             <div className="rounded-md border bg-muted/30 p-2 text-[11px] space-y-1">
