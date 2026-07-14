@@ -1364,6 +1364,35 @@ export default function SatelliteMappingPage() {
         const kind = assetKind(asset);
         const pv = asset.processing_version ?? null;
         const isDisplay = kind === "DISPLAY_RASTER";
+        const boundsLabel = asset.bounds
+          ? `${asset.bounds.west.toFixed(5)},${asset.bounds.south.toFixed(5)} → ${asset.bounds.east.toFixed(5)},${asset.bounds.north.toFixed(5)}`
+          : "—";
+        const sceneForAsset = displayAssetPairs.find((p) => p.displayAsset.id === asset.id)?.scene
+          ?? activeAssetPairs.find((p) => p.analyticalAsset?.id === asset.id || p.displayAsset.id === asset.id)?.scene
+          ?? null;
+        const updateAssetDiag = (patch: Partial<AssetPipelineDiagnostic>) => {
+          if (!isDisplay) return;
+          setAssetDiagnostics((prev) => ({
+            ...prev,
+            [asset.id]: {
+              assetId: asset.id,
+              paddockId: sceneForAsset?.paddock_id ?? null,
+              layer: asset.index_type,
+              endpointStatus: null,
+              blobSize: null,
+              mimeType: null,
+              etag: null,
+              objectUrlCreated: false,
+              imageStatus: "not_checked",
+              bounds: boundsLabel,
+              finalStatus: "pending",
+              error: null,
+              ...(prev[asset.id] ?? {}),
+              ...patch,
+            },
+          }));
+        };
+        updateAssetDiag({ finalStatus: "pending" });
         if (isDisplay) cacheStatsRef.current.displayRequested += 1;
         else cacheStatsRef.current.analyticalRequested += 1;
 
@@ -1376,6 +1405,14 @@ export default function SatelliteMappingPage() {
           if (cancelled) return;
           const url = URL.createObjectURL(cachedProbe.blob);
           objectUrlsRef.current.set(asset.id, url);
+          updateAssetDiag({
+            endpointStatus: 304,
+            blobSize: cachedProbe.blob.size,
+            mimeType: cachedProbe.contentType ?? cachedProbe.blob.type ?? null,
+            etag: cachedProbe.etag,
+            objectUrlCreated: true,
+            finalStatus: "cached",
+          });
           setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
           bumpStats();
           continue;
@@ -1389,24 +1426,40 @@ export default function SatelliteMappingPage() {
             cacheStatsRef.current.assetRequests += 1;
             if (r.status === 304) cacheStatsRef.current.http304 += 1;
             else if (r.blob) cacheStatsRef.current.bytesDownloaded += r.blob.size;
+            updateAssetDiag({
+              endpointStatus: r.status,
+              blobSize: r.blob?.size ?? null,
+              mimeType: r.contentType,
+              etag: r.etag,
+            });
             return { status: r.status, blob: r.blob, etag: r.etag, contentType: r.contentType };
           });
 
           if (cancelled) return;
-          if (!blob) continue;
+          if (!blob) {
+            updateAssetDiag({ finalStatus: "failed", error: "No blob returned" });
+            continue;
+          }
           assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
           const url = URL.createObjectURL(blob);
           objectUrlsRef.current.set(asset.id, url);
+          updateAssetDiag({
+            blobSize: blob.size,
+            mimeType: blob.type || null,
+            objectUrlCreated: true,
+            finalStatus: "loaded",
+          });
           setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
           bumpStats();
-        } catch (e) {
+        } catch (e: any) {
+          updateAssetDiag({ finalStatus: "failed", error: String(e?.message ?? e) });
           console.error("asset load failed", e);
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs, activeAssetPairs]);
 
   // Revoke stale object URLs when the visible asset set changes. Keeps memory
   // bounded across date/layer switches. Adjacent-preload and preview-display
@@ -1415,11 +1468,11 @@ export default function SatelliteMappingPage() {
     const alive = new Set([
       ...activeAssets,
       ...activeAnalyticalAssets,
-      ...preloadDisplayAssets,
       ...displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
     ].map((x) => x.asset.id));
     for (const [assetId, url] of objectUrlsRef.current.entries()) {
       if (!alive.has(assetId)) {
+        if (import.meta.env.DEV) console.info("[CropHealth] revoke object URL", { assetId });
         try { URL.revokeObjectURL(url); } catch { /* ignore */ }
         objectUrlsRef.current.delete(assetId);
         setSignedUrls((prev) => {
@@ -1428,7 +1481,7 @@ export default function SatelliteMappingPage() {
         });
       }
     }
-  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
+  }, [activeAssets, activeAnalyticalAssets, displayAssetPairs, selectedSceneKey, layer]);
 
   // Clear decoded analytical rasters when the user changes the data context.
   useEffect(() => {
