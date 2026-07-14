@@ -59,8 +59,10 @@ export function loadMapKitScript(observer?: MapKitInitObserver): Promise<any> {
         reject(new Error(error));
       }, { once: true });
       // If the script tag already completed before this listener was attached,
-      // check the global on the next tick instead of hanging forever.
-      setTimeout(onReady, 0);
+      // check the global shortly after; do not fail immediately while it is
+      // still loading.
+      setTimeout(() => { if ((window as any).mapkit) onReady(); }, 0);
+      setTimeout(() => { if ((window as any).mapkit) onReady(); }, 5000);
       return;
     }
     const s = document.createElement("script");
