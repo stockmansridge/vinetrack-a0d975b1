@@ -5,7 +5,11 @@ import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wren
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
-import SatelliteMap, { type SatelliteRasterOverlay } from "@/components/SatelliteMap";
+import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo } from "@/components/SatelliteMap";
+import OverlayHealthPanel from "@/components/satellite/OverlayHealthPanel";
+import { useCropHealthViewModel } from "@/hooks/useCropHealthViewModel";
+import { displayKeyFor, analyticalKeyFor, type AssetLoadState, type OverlayLifecycleState } from "@/lib/cropHealthViewModel";
+import { reasonToCustomerMessage } from "@/lib/cropHealthCopy";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
