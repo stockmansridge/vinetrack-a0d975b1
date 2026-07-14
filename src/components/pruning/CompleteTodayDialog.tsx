@@ -115,12 +115,36 @@ export default function CompleteTodayDialog({
       if (!invalid.length) setRangeError(`No configured rows match "${rangeInput}"`);
       return;
     }
+    // Iterate `rows` directly (not via map lookup) and coerce identity.rowNumber
+    // to Number to guarantee equality against parsed numbers. This avoids any
+    // stale-map or string-vs-number key mismatch that could leave only the
+    // first row in the range selected.
+    const wanted = new Set<number>(nums.map((n) => Number(n)));
     setSelected((cur) => {
       const next = new Set(cur);
-      for (const n of nums) {
-        const row = rowIndexByNumber.get(n);
-        if (!row) continue;
-        for (const q of QUARTERS) if (!row.completed.has(q)) next.add(key(n, q));
+      let addedRows = 0;
+      let addedQuarters = 0;
+      for (const r of rows) {
+        const rn = Number(r.identity.rowNumber);
+        if (!wanted.has(rn)) continue;
+        let rowAdded = false;
+        for (const q of QUARTERS) {
+          if (r.completed.has(q)) continue;
+          const k = key(rn, q);
+          if (!next.has(k)) {
+            next.add(k);
+            addedQuarters += 1;
+            rowAdded = true;
+          }
+        }
+        if (rowAdded) addedRows += 1;
+      }
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug("[pruning] applyRange", {
+          input: rangeInput, parsed: nums, available: availableRowNumbers,
+          rowsMatched: addedRows, quartersAdded: addedQuarters, selectedTotal: next.size,
+        });
       }
       return next;
     });
