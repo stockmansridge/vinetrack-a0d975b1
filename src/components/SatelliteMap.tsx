@@ -105,7 +105,15 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   // Track which overlay keys have already fired 'mounted' so we don't double-emit
   // when the animation-loop resizes them each frame.
   const mountedKeysRef = useRef<Set<string>>(new Set());
-  const paddockIdByKeyRef = useRef<Map<string, string>>(new Map());
+  // Stable metadata by overlay key — used to populate lifecycle callback payloads
+  // with paddockId/sceneId/indexType/assetId so consumers never identify overlays
+  // by object URL or DOM node.
+  type OverlayMeta = { paddockId: string; sceneId: string | null; indexType: string | null; assetId: string | null };
+  const metaByKeyRef = useRef<Map<string, OverlayMeta>>(new Map());
+  const makeInfo = (key: string): OverlayCallbackInfo => {
+    const m = metaByKeyRef.current.get(key) ?? { paddockId: "", sceneId: null, indexType: null, assetId: null };
+    return { paddockId: m.paddockId, overlayKey: key, key, sceneId: m.sceneId, indexType: m.indexType, assetId: m.assetId };
+  };
 
   // Normalise to a single overlays[] list. Legacy overlayUrl/overlayBounds
   // become a one-item list so the rendering loop is uniform.
