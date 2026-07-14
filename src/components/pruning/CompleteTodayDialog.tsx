@@ -74,10 +74,13 @@ export default function CompleteTodayDialog({
 
   const rowIndexByNumber = useMemo(() => {
     const m = new Map<number, RowCompletionState>();
-    for (const r of rows) m.set(r.identity.rowNumber, r);
+    for (const r of rows) m.set(Number(r.identity.rowNumber), r);
     return m;
   }, [rows]);
-  const availableRowNumbers = useMemo(() => rows.map((r) => r.identity.rowNumber), [rows]);
+  const availableRowNumbers = useMemo(
+    () => rows.map((r) => Number(r.identity.rowNumber)).filter((n) => Number.isFinite(n)),
+    [rows],
+  );
 
   const isDone = (rowNumber: number, seg: number) => rowIndexByNumber.get(rowNumber)?.completed.has(seg) ?? false;
 
