@@ -561,7 +561,7 @@ export default function CompleteTodayDialog({
                     No rows configured for this block. Add row geometry or a manual row count.
                   </div>
                 )}
-                {rows.map((r) => {
+                {displayRows.map((r) => {
                   const available = QUARTERS.filter((q) => !r.completed.has(q));
                   const allSel = available.length > 0 && available.every((q) => selected.has(selectionKey(r.identity, q)));
                   const doneAll = r.completed.size === 4;
