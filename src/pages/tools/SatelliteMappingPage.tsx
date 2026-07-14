@@ -1758,8 +1758,8 @@ export default function SatelliteMappingPage() {
       async function waitForOverlayMount(pid: string, timeoutMs = 8000): Promise<boolean> {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-          for (const k of overlayMountedKeysRef.current) {
-            if (k.startsWith(`${pid}:`)) return true;
+          for (const [k, life] of overlayLifecycleRef.current) {
+            if (life.phase === "mounted" && k.startsWith(`${pid}|`)) return true;
           }
           await new Promise((r) => setTimeout(r, 200));
         }
