@@ -243,9 +243,13 @@ export function useRecordPruningEntry(seasonId: string) {
       if (error) throw error;
       return data as RecordEntryResult;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.entries(seasonId) });
-      qc.invalidateQueries({ queryKey: QK.segments(seasonId) });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: QK.entries(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(seasonId) }),
+        qc.invalidateQueries({ queryKey: ["pruning"] }),
+      ]);
+      await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
     },
   });
 }
@@ -256,10 +260,34 @@ export function useReversePruningEntry(seasonId: string) {
     mutationFn: async (entryId: string) => {
       const { error } = await (supabase as any).rpc("delete_pruning_entry", { p_id: entryId });
       if (error) throw error;
+      // Re-read segments for this entry so we can log the post-reversal state.
+      if (import.meta.env.DEV) {
+        const { data: segs } = await supabase
+          .from("pruning_row_segments")
+          .select("row_number, paddock_row_id, segment_number, completed, pruning_entry_id, completed_at")
+          .eq("pruning_season_id", seasonId);
+        const linked = (segs ?? []).filter((s: any) => s.pruning_entry_id === entryId);
+        const completedAfter = (segs ?? []).filter((s: any) => s.completed === true);
+        // eslint-disable-next-line no-console
+        console.debug("[pruning] reverse", {
+          entryId,
+          seasonId,
+          linkedSegmentsAfter: linked.length,
+          totalSegments: segs?.length ?? 0,
+          segmentsCompletedAfter: completedAfter.length,
+          refreshedSegments: segs,
+        });
+      }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QK.entries(seasonId) });
-      qc.invalidateQueries({ queryKey: QK.segments(seasonId) });
+    onSuccess: async () => {
+      // Broad invalidation — reversal touches segments, entries, season totals
+      // and any block/vineyard summaries derived from them.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: QK.entries(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(seasonId) }),
+        qc.invalidateQueries({ queryKey: ["pruning"] }),
+      ]);
+      await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
     },
   });
 }
