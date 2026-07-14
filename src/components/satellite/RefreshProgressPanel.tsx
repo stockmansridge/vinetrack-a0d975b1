@@ -33,6 +33,13 @@ export type PadProgress = {
   cacheInvalidated?: boolean;
   overlayRemounted?: boolean;
   overlayMountedAt?: string | null;
+  processingHttpStatus?: number | null;
+  processingCode?: string | null;
+  processingStatus?: string | null;
+  failedStage?: string | null;
+  failedLayer?: string | null;
+  providerStatus?: number | null;
+  failedLayers?: Array<{ index?: string; code?: string; message?: string }>;
 };
 
 export type RefreshSummary = {
@@ -222,6 +229,20 @@ export default function RefreshProgressPanel({
                         <div>cache invalidated: {String(!!p.cacheInvalidated)}</div>
                         <div>overlay remounted: {String(!!p.overlayRemounted)}</div>
                         <div>mounted at: {p.overlayMountedAt ?? "—"}</div>
+                        {p.outcome === "failed" && (
+                          <>
+                            <div>http status: {p.processingHttpStatus ?? "—"}</div>
+                            <div>code: {p.processingCode ?? "—"}</div>
+                            <div>status: {p.processingStatus ?? "—"}</div>
+                            <div>stage: {p.failedStage ?? "—"}</div>
+                            <div>layer: {p.failedLayer ?? "—"}</div>
+                            <div>provider: {p.providerStatus ?? "—"}</div>
+                            <div>message: {p.errorMessage ?? "—"}</div>
+                            {(p.failedLayers?.length ?? 0) > 0 && (
+                              <div>failed layers: {p.failedLayers!.map((f) => `${f.index ?? "?"}${f.code ? `/${f.code}` : ""}`).join(", ")}</div>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

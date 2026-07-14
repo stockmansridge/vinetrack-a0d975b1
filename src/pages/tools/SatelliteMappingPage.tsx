@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench, Maximize2, Minimize2, PanelRight, CalendarDays, ShieldAlert } from "lucide-react";
@@ -6,7 +6,7 @@ import MapWorkspaceDrawer, { type DrawerTab } from "@/components/satellite/MapWo
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
-import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo } from "@/components/SatelliteMap";
+import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo, type SatelliteMapDiagnostics } from "@/components/SatelliteMap";
 import OverlayHealthPanel from "@/components/satellite/OverlayHealthPanel";
 import { useCropHealthViewModel } from "@/hooks/useCropHealthViewModel";
 import { displayKeyFor, analyticalKeyFor, type AssetLoadState, type OverlayLifecycleState } from "@/lib/cropHealthViewModel";
@@ -463,33 +463,71 @@ type DecodedAnalyticalRaster = {
   processingVersion: string;
 };
 
+type AssetPipelineDiagnostic = {
+  assetId: string;
+  paddockId: string | null;
+  layer: SatelliteIndexType | string | null;
+  endpointStatus: number | null;
+  blobSize: number | null;
+  mimeType: string | null;
+  etag: string | null;
+  objectUrlCreated: boolean;
+  imageStatus: "not_checked" | "loaded" | "error";
+  bounds: string;
+  finalStatus: "pending" | "cached" | "loaded" | "failed";
+  error: string | null;
+};
+
+type ProcessingFailureDiagnostic = {
+  paddockId: string;
+  paddockName: string | null;
+  httpStatus: number | null;
+  code: string | null;
+  status: string | null;
+  failedStage: string | null;
+  failedLayer: string | null;
+  providerStatus: number | null;
+  message: string;
+  failedLayers?: Array<{ index?: string; code?: string; message?: string }>;
+};
+
 const assetKind = (a: DBAsset) => a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
 const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: SatelliteIndexType, processingVersion: string | null | undefined) =>
   `${paddockId}:${sceneId}:${indexType}:${processingVersion ?? "unknown"}`;
 
-function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
+function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string; httpStatus: number | null; status: string | null; failedLayer: string | null; failedStage: string | null; failedLayers?: Array<{ index?: string; code?: string; message?: string }> } {
   const fallback = String(error?.message ?? error ?? "Unknown error");
   const raw = error?.details ?? error?.context ?? fallback;
   if (typeof raw === "object" && raw) {
-    if (raw instanceof Response) return { code: null, providerStatus: raw.status, message: fallback };
+    if (raw instanceof Response) return { code: null, providerStatus: raw.status, httpStatus: raw.status, status: null, failedLayer: null, failedStage: null, message: fallback };
     return {
       code: raw.code ?? null,
       providerStatus: raw.provider_status ?? null,
+      httpStatus: raw.statusCode ?? raw.httpStatus ?? null,
+      status: raw.status ?? null,
+      failedLayer: raw.failed_layer ?? raw.layer ?? null,
+      failedStage: raw.failed_stage ?? raw.stage ?? null,
+      failedLayers: Array.isArray(raw.failed_layers) ? raw.failed_layers : undefined,
       message: raw.error ?? raw.message ?? fallback,
     };
   }
   const text = String(raw);
   const match = text.match(/\{.*\}$/s);
-  if (!match) return { code: null, providerStatus: null, message: fallback };
+  if (!match) return { code: null, providerStatus: null, httpStatus: null, status: null, failedLayer: null, failedStage: null, message: fallback };
   try {
     const parsed = JSON.parse(match[0]);
     return {
       code: parsed.code ?? null,
       providerStatus: parsed.provider_status ?? null,
+      httpStatus: parsed.statusCode ?? parsed.httpStatus ?? null,
+      status: parsed.status ?? null,
+      failedLayer: parsed.failed_layer ?? parsed.layer ?? null,
+      failedStage: parsed.failed_stage ?? parsed.stage ?? null,
+      failedLayers: Array.isArray(parsed.failed_layers) ? parsed.failed_layers : undefined,
       message: parsed.error ?? parsed.message ?? fallback,
     };
   } catch {
-    return { code: null, providerStatus: null, message: fallback };
+    return { code: null, providerStatus: null, httpStatus: null, status: null, failedLayer: null, failedStage: null, message: fallback };
   }
 }
 
@@ -545,11 +583,15 @@ export default function SatelliteMappingPage() {
   const [paddockId, setPaddockId] = useState<string>("all");
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
-  const [legendOpen, setLegendOpen] = useState<boolean>(true);
+  const [legendOpen, setLegendOpen] = useState<boolean>(false);
   const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // COMMITTED date (YYYY-MM-DD)
   const [previewDate, setPreviewDate] = useState<string | null>(null); // transient preview (null = same as committed)
   const [interacting, setInteracting] = useState(false); // slider drag / key in progress
   const [isPlaying, setIsPlaying] = useState(false); // timeline playback
+  const [disableCropOverlays, setDisableCropOverlays] = useState(false);
+  const [mapDiagnostics, setMapDiagnostics] = useState<SatelliteMapDiagnostics | null>(null);
+  const [assetDiagnostics, setAssetDiagnostics] = useState<Record<string, AssetPipelineDiagnostic>>({});
+  const [processingFailures, setProcessingFailures] = useState<ProcessingFailureDiagnostic[]>([]);
   const prefersReducedMotion = useMemo(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -638,6 +680,13 @@ export default function SatelliteMappingPage() {
     cacheInvalidated?: boolean;
     overlayRemounted?: boolean;
     overlayMountedAt?: string | null;
+    processingHttpStatus?: number | null;
+    processingCode?: string | null;
+    processingStatus?: string | null;
+    failedStage?: string | null;
+    failedLayer?: string | null;
+    providerStatus?: number | null;
+    failedLayers?: Array<{ index?: string; code?: string; message?: string }>;
   };
   type RefreshSummary = {
     updated: number;
@@ -1096,6 +1145,7 @@ export default function SatelliteMappingPage() {
   // If a preview date has assets still loading, we retain the committed-date
   // overlays instead of blanking the map, then crossfade when preview is ready.
   const targetMapOverlays = useMemo<SatelliteRasterOverlay[]>(() => {
+    if (disableCropOverlays) return [];
     const source = previewPending
       ? activeAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene }))
       : activeAssets;
@@ -1113,7 +1163,7 @@ export default function SatelliteMappingPage() {
         indexType: layer,
         assetId: asset.id,
       }));
-  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer]);
+  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer, disableCropOverlays]);
 
   // Crossfade-mounted overlays. When the target changes, keep the previous
   // set briefly with opacity 0 so its CSS transition animates out while the
@@ -1148,6 +1198,13 @@ export default function SatelliteMappingPage() {
   useEffect(() => { overlayLifecycleRef.current = overlayLifecycle; }, [overlayLifecycle]);
 
   const handleOverlayLoad = useCallback((info: OverlayCallbackInfo) => {
+    if (info.assetId) {
+      setAssetDiagnostics((prev) => {
+        const cur = prev[info.assetId!] ?? null;
+        if (!cur) return prev;
+        return { ...prev, [info.assetId!]: { ...cur, imageStatus: "loaded", finalStatus: "loaded", error: null } };
+      });
+    }
     setDisplayLoadState((prev) => {
       const cur = prev.get(info.overlayKey);
       if (cur?.phase === "loaded") return prev;
@@ -1155,6 +1212,13 @@ export default function SatelliteMappingPage() {
     });
   }, []);
   const handleOverlayError = useCallback((info: OverlayCallbackInfo) => {
+    if (info.assetId) {
+      setAssetDiagnostics((prev) => {
+        const cur = prev[info.assetId!] ?? null;
+        if (!cur) return prev;
+        return { ...prev, [info.assetId!]: { ...cur, imageStatus: "error", finalStatus: "failed", error: "image decode failed" } };
+      });
+    }
     setDisplayLoadState((prev) => {
       const next = new Map(prev); next.set(info.overlayKey, { phase: "failed", errorMessage: `${info.indexType ?? "asset"} could not be loaded` }); return next;
     });
@@ -1163,6 +1227,13 @@ export default function SatelliteMappingPage() {
     });
   }, []);
   const handleOverlayMounted = useCallback((info: OverlayCallbackInfo) => {
+    if (info.assetId) {
+      setAssetDiagnostics((prev) => {
+        const cur = prev[info.assetId!] ?? null;
+        if (!cur) return prev;
+        return { ...prev, [info.assetId!]: { ...cur, finalStatus: "loaded" } };
+      });
+    }
     setOverlayLifecycle((prev) => {
       const cur = prev.get(info.overlayKey);
       if (cur?.phase === "mounted") return prev;
@@ -1293,6 +1364,35 @@ export default function SatelliteMappingPage() {
         const kind = assetKind(asset);
         const pv = asset.processing_version ?? null;
         const isDisplay = kind === "DISPLAY_RASTER";
+        const boundsLabel = asset.bounds
+          ? `${asset.bounds.west.toFixed(5)},${asset.bounds.south.toFixed(5)} → ${asset.bounds.east.toFixed(5)},${asset.bounds.north.toFixed(5)}`
+          : "—";
+        const sceneForAsset = displayAssetPairs.find((p) => p.displayAsset.id === asset.id)?.scene
+          ?? activeAssetPairs.find((p) => p.analyticalAsset?.id === asset.id || p.displayAsset.id === asset.id)?.scene
+          ?? null;
+        const updateAssetDiag = (patch: Partial<AssetPipelineDiagnostic>) => {
+          if (!isDisplay) return;
+          setAssetDiagnostics((prev) => ({
+            ...prev,
+            [asset.id]: {
+              assetId: asset.id,
+              paddockId: sceneForAsset?.paddock_id ?? null,
+              layer: asset.index_type,
+              endpointStatus: null,
+              blobSize: null,
+              mimeType: null,
+              etag: null,
+              objectUrlCreated: false,
+              imageStatus: "not_checked",
+              bounds: boundsLabel,
+              finalStatus: "pending",
+              error: null,
+              ...(prev[asset.id] ?? {}),
+              ...patch,
+            },
+          }));
+        };
+        updateAssetDiag({ finalStatus: "pending" });
         if (isDisplay) cacheStatsRef.current.displayRequested += 1;
         else cacheStatsRef.current.analyticalRequested += 1;
 
@@ -1305,6 +1405,14 @@ export default function SatelliteMappingPage() {
           if (cancelled) return;
           const url = URL.createObjectURL(cachedProbe.blob);
           objectUrlsRef.current.set(asset.id, url);
+          updateAssetDiag({
+            endpointStatus: 304,
+            blobSize: cachedProbe.blob.size,
+            mimeType: cachedProbe.contentType ?? cachedProbe.blob.type ?? null,
+            etag: cachedProbe.etag,
+            objectUrlCreated: true,
+            finalStatus: "cached",
+          });
           setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
           bumpStats();
           continue;
@@ -1318,24 +1426,40 @@ export default function SatelliteMappingPage() {
             cacheStatsRef.current.assetRequests += 1;
             if (r.status === 304) cacheStatsRef.current.http304 += 1;
             else if (r.blob) cacheStatsRef.current.bytesDownloaded += r.blob.size;
+            updateAssetDiag({
+              endpointStatus: r.status,
+              blobSize: r.blob?.size ?? null,
+              mimeType: r.contentType,
+              etag: r.etag,
+            });
             return { status: r.status, blob: r.blob, etag: r.etag, contentType: r.contentType };
           });
 
           if (cancelled) return;
-          if (!blob) continue;
+          if (!blob) {
+            updateAssetDiag({ finalStatus: "failed", error: "No blob returned" });
+            continue;
+          }
           assetBlobsRef.current.set(`${asset.id}:${pv ?? "unknown"}`, blob);
           const url = URL.createObjectURL(blob);
           objectUrlsRef.current.set(asset.id, url);
+          updateAssetDiag({
+            blobSize: blob.size,
+            mimeType: blob.type || null,
+            objectUrlCreated: true,
+            finalStatus: "loaded",
+          });
           setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
           bumpStats();
-        } catch (e) {
+        } catch (e: any) {
+          updateAssetDiag({ finalStatus: "failed", error: String(e?.message ?? e) });
           console.error("asset load failed", e);
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs, activeAssetPairs]);
 
   // Revoke stale object URLs when the visible asset set changes. Keeps memory
   // bounded across date/layer switches. Adjacent-preload and preview-display
@@ -1344,11 +1468,11 @@ export default function SatelliteMappingPage() {
     const alive = new Set([
       ...activeAssets,
       ...activeAnalyticalAssets,
-      ...preloadDisplayAssets,
       ...displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
     ].map((x) => x.asset.id));
     for (const [assetId, url] of objectUrlsRef.current.entries()) {
       if (!alive.has(assetId)) {
+        if (import.meta.env.DEV) console.info("[CropHealth] revoke object URL", { assetId });
         try { URL.revokeObjectURL(url); } catch { /* ignore */ }
         objectUrlsRef.current.delete(assetId);
         setSignedUrls((prev) => {
@@ -1357,7 +1481,7 @@ export default function SatelliteMappingPage() {
         });
       }
     }
-  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs]);
+  }, [activeAssets, activeAnalyticalAssets, displayAssetPairs, selectedSceneKey, layer]);
 
   // Clear decoded analytical rasters when the user changes the data context.
   useEffect(() => {
@@ -1717,6 +1841,37 @@ export default function SatelliteMappingPage() {
         if (!cur) return prev;
         return { ...prev, paddocks: { ...prev.paddocks, [pid]: { ...cur, ...patch } } };
       });
+      const recordProcessingFailure = (
+        pid: string,
+        paddockName: string | null,
+        parsed: ReturnType<typeof parseSatelliteFunctionError>,
+        fallbackMessage: string,
+      ) => {
+        const message = parsed.message || fallbackMessage;
+        const failure: ProcessingFailureDiagnostic = {
+          paddockId: pid,
+          paddockName,
+          httpStatus: parsed.httpStatus,
+          code: parsed.code,
+          status: parsed.status,
+          failedStage: parsed.failedStage,
+          failedLayer: parsed.failedLayer,
+          providerStatus: parsed.providerStatus,
+          message,
+          failedLayers: parsed.failedLayers,
+        };
+        setProcessingFailures((prev) => [failure, ...prev.filter((x) => x.paddockId !== pid)].slice(0, 12));
+        patchPad(pid, {
+          processingHttpStatus: parsed.httpStatus,
+          processingCode: parsed.code,
+          processingStatus: parsed.status,
+          failedStage: parsed.failedStage,
+          failedLayer: parsed.failedLayer,
+          providerStatus: parsed.providerStatus,
+          failedLayers: parsed.failedLayers,
+          errorMessage: message,
+        });
+      };
       const setPad = (pid: string, s: PadStatus) => {
         // Bridge legacy statuses to the rich stage model.
         const map: Record<PadStatus, Partial<PadProgress>> = {
@@ -1870,6 +2025,7 @@ export default function SatelliteMappingPage() {
           if (process.error) {
             const parsed = parseSatelliteFunctionError(process.error);
             finalMsg = parsed.message ?? process.error.message ?? finalMsg;
+            recordProcessingFailure(pid, targetPaddock?.name ?? null, parsed, finalMsg);
             if (parsed.code === "rate_limited") {
               finalStatus = "rate_limited"; stopQueue = true;
               setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: finalMsg });
@@ -1878,8 +2034,44 @@ export default function SatelliteMappingPage() {
             continue;
           }
           const procStatus = String((process.data as any)?.status ?? "");
+          if (procStatus && procStatus !== "complete" && procStatus !== "partial") {
+            const failedLayers = Array.isArray((process.data as any)?.failed_layers)
+              ? (process.data as any).failed_layers
+              : Array.isArray((process.data as any)?.failures)
+                ? (process.data as any).failures
+                : undefined;
+            recordProcessingFailure(pid, targetPaddock?.name ?? null, {
+              code: (process.data as any)?.code ?? failedLayers?.[0]?.code ?? null,
+              providerStatus: (process.data as any)?.provider_status ?? null,
+              httpStatus: 200,
+              status: procStatus,
+              failedLayer: failedLayers?.[0]?.index ?? null,
+              failedStage: (process.data as any)?.failed_stage ?? (failedLayers?.length ? "layer_processing" : null),
+              failedLayers,
+              message: (process.data as any)?.message ?? failedLayers?.[0]?.message ?? procStatus,
+            }, procStatus);
+          }
           if (procStatus === "complete") { finalStatus = "complete"; break; }
-          if (procStatus === "partial") { finalStatus = "partial"; finalMsg = "Some layers were skipped."; break; }
+          if (procStatus === "partial") {
+            const failedLayers = Array.isArray((process.data as any)?.failed_layers)
+              ? (process.data as any).failed_layers
+              : Array.isArray((process.data as any)?.failures)
+                ? (process.data as any).failures
+                : undefined;
+            if (failedLayers?.length) {
+              recordProcessingFailure(pid, targetPaddock?.name ?? null, {
+                code: "partial_layers",
+                providerStatus: null,
+                httpStatus: 200,
+                status: "partial",
+                failedLayer: failedLayers[0]?.index ?? null,
+                failedStage: "layer_processing",
+                failedLayers,
+                message: failedLayers.map((f: any) => `${f.index ?? "layer"}: ${f.message ?? f.code ?? "failed"}`).join("; "),
+              }, "Some layers were skipped.");
+            }
+            finalStatus = "partial"; finalMsg = "Some layers were skipped."; break;
+          }
           if (procStatus === "rate_limited") {
             finalStatus = "rate_limited";
             finalMsg = (process.data as any)?.message ?? "Satellite provider is temporarily limiting requests. Try again in a few minutes.";
@@ -1905,7 +2097,7 @@ export default function SatelliteMappingPage() {
         } else if (finalStatus === "rate_limited") {
           patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: finalMsg });
         } else {
-          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: finalMsg });
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed" });
         }
       }
 
@@ -1930,6 +2122,7 @@ export default function SatelliteMappingPage() {
         if (process.error) {
           const parsed = parseSatelliteFunctionError(process.error);
           const msg = parsed.message ?? process.error.message ?? "Repair failed";
+          recordProcessingFailure(pid, targetPaddock?.name ?? null, parsed, msg);
           if (parsed.code === "rate_limited") {
             stopQueue = true;
             setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: msg });
@@ -1942,6 +2135,23 @@ export default function SatelliteMappingPage() {
           return;
         }
         const procStatus = String((process.data as any)?.status ?? "");
+        if (procStatus && procStatus !== "complete" && procStatus !== "partial") {
+          const failedLayers = Array.isArray((process.data as any)?.failed_layers)
+            ? (process.data as any).failed_layers
+            : Array.isArray((process.data as any)?.failures)
+              ? (process.data as any).failures
+              : undefined;
+          recordProcessingFailure(pid, targetPaddock?.name ?? null, {
+            code: (process.data as any)?.code ?? failedLayers?.[0]?.code ?? null,
+            providerStatus: (process.data as any)?.provider_status ?? null,
+            httpStatus: 200,
+            status: procStatus,
+            failedLayer: failedLayers?.[0]?.index ?? null,
+            failedStage: (process.data as any)?.failed_stage ?? (failedLayers?.length ? "layer_processing" : null),
+            failedLayers,
+            message: (process.data as any)?.message ?? failedLayers?.[0]?.message ?? procStatus,
+          }, procStatus);
+        }
         const finalStatus: ResultStatus =
           procStatus === "complete" ? "complete"
           : procStatus === "partial" ? "partial"
@@ -1960,9 +2170,9 @@ export default function SatelliteMappingPage() {
           patchPad(pid, { stage: "saving" });
           await reconcilePaddock(pid, false);
         } else if (finalStatus === "rate_limited") {
-          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: "Provider paused" });
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable" });
         } else {
-          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "Repair did not complete." });
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed" });
         }
       }
 
@@ -2284,10 +2494,6 @@ export default function SatelliteMappingPage() {
     return { list, doneCount: terminal.filter((p) => p.outcome !== "skipped").length, total: refreshProgress.total };
   }, [refreshProgress]);
 
-  // ---------- Guards ----------
-  if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
-  if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
-
   const busy = checkForNewImage.isPending;
   const isRetryPass = busy && retryInFlightRef.current;
   const refreshLabel = busy
@@ -2432,6 +2638,14 @@ export default function SatelliteMappingPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
+          variant={disableCropOverlays ? "secondary" : "outline"}
+          onClick={() => setDisableCropOverlays((v) => !v)}
+          title="Temporarily render Apple Maps and paddock boundaries without crop-health rasters."
+        >
+          Disable Crop Overlays: {disableCropOverlays ? "On" : "Off"}
+        </Button>
+        <Button
+          size="sm"
           variant="outline"
           disabled={busy || backfillLayers.isPending || !activeVineyardId}
           onClick={() => backfillLayers.mutate()}
@@ -2488,6 +2702,56 @@ export default function SatelliteMappingPage() {
           <Wrench className="h-3.5 w-3.5" />
           Diagnostics
         </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">MapKit readiness</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <div>State: <span className="text-foreground">{mapDiagnostics?.readinessState ?? "—"}</span></div>
+            <div>Token HTTP: <span className="text-foreground">{mapDiagnostics?.tokenEndpointStatus ?? "—"}</span></div>
+            <div>Token received: <span className="text-foreground">{mapDiagnostics?.tokenReceived ? "yes" : "no"}</span></div>
+            <div>Token field: <span className="text-foreground">{mapDiagnostics?.tokenFieldName ?? "—"}</span></div>
+            <div>Token length: <span className="text-foreground">{mapDiagnostics?.tokenLength ?? "—"}</span></div>
+            <div>Global: <span className="text-foreground">{mapDiagnostics?.mapkitGlobalAvailable ? "yes" : "no"}</span></div>
+            <div>Map instance: <span className="text-foreground">{mapDiagnostics?.mapInstanceCreated ? "yes" : "no"}</span></div>
+            <div>Attached: <span className="text-foreground">{mapDiagnostics?.mapElementAttached ? "yes" : "no"}</span></div>
+            <div>Container: <span className="text-foreground">{mapDiagnostics ? `${mapDiagnostics.containerWidth}×${mapDiagnostics.containerHeight}` : "—"}</span></div>
+            <div>Subviews: <span className="text-foreground">{mapDiagnostics?.mapCanvasSubviewCount ?? "—"}</span></div>
+            <div className="col-span-2">Top at centre: <span className="text-foreground">{mapDiagnostics?.elementAtCenter ?? "—"}</span></div>
+            {mapDiagnostics?.lastError && <div className="col-span-2 text-destructive">{mapDiagnostics.lastError}</div>}
+          </div>
+        </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">Saved asset pipeline</div>
+          <div className="max-h-36 overflow-y-auto space-y-1">
+            {Object.values(assetDiagnostics).length === 0 ? (
+              <div>No display asset requests recorded yet.</div>
+            ) : Object.values(assetDiagnostics).slice(0, 8).map((d) => (
+              <div key={d.assetId} className="rounded-sm bg-background/60 p-1.5">
+                <div className="text-foreground">{d.layer} · {d.paddockId?.slice(0, 8) ?? "—"}</div>
+                <div>asset: <span className="text-foreground">{d.assetId.slice(0, 8)}…</span> · HTTP <span className="text-foreground">{d.endpointStatus ?? "—"}</span> · blob <span className="text-foreground">{d.blobSize ?? "—"}</span> · {d.mimeType ?? "—"}</div>
+                <div>object URL: <span className="text-foreground">{d.objectUrlCreated ? "yes" : "no"}</span> · image: <span className="text-foreground">{d.imageStatus}</span> · final: <span className="text-foreground">{d.finalStatus}</span></div>
+                {d.error && <div className="text-destructive">{d.error}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {processingFailures.length > 0 && (
+          <div className="space-y-1 pt-2 border-t">
+            <div className="text-xs font-semibold text-foreground">Processing failures</div>
+            <div className="max-h-36 overflow-y-auto space-y-1">
+              {processingFailures.map((f) => (
+                <div key={f.paddockId} className="rounded-sm bg-destructive/10 p-1.5">
+                  <div className="text-foreground">{f.paddockName ?? f.paddockId.slice(0, 8)}</div>
+                  <div>HTTP {f.httpStatus ?? "—"} · code {f.code ?? "—"} · status {f.status ?? "—"}</div>
+                  <div>stage {f.failedStage ?? "—"} · layer {f.failedLayer ?? "—"} · provider {f.providerStatus ?? "—"}</div>
+                  <div className="text-destructive">{f.message}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1 pt-2 border-t">
           <div className="text-xs font-semibold text-foreground">Saved history</div>
@@ -2571,9 +2835,13 @@ export default function SatelliteMappingPage() {
   const focusWrapperClass = mapFocus
     ? "fixed inset-0 z-40 bg-background flex flex-col"
     : "w-full flex flex-col";
-  const focusWrapperStyle: React.CSSProperties = mapFocus
+  const focusWrapperStyle: CSSProperties = mapFocus
     ? {}
     : { height: wrapperHeight ? `${wrapperHeight}px` : undefined, minHeight: 600 };
+
+  // ---------- Guards ----------
+  if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
+  if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
     <div ref={wrapperRef} className={focusWrapperClass} style={focusWrapperStyle}>
@@ -2643,16 +2911,18 @@ export default function SatelliteMappingPage() {
               color: paddockColor(g.id),
             }))}
             selectedPaddockId={paddockId === "all" ? null : paddockId}
-            overlays={mapOverlays}
+            overlays={disableCropOverlays ? [] : mapOverlays}
             overlayOpacity={opacity / 100}
             overlayTransitionMs={prefersReducedMotion ? 0 : 220}
-            cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
+            cellRect={disableCropOverlays || hoverSuspended ? null : hover?.cellRect ?? null}
             onPaddockClick={(id) => setPaddockId(id)}
             onPointerMove={handlePointerMove}
             onOverlayLoad={handleOverlayLoad}
             onOverlayError={handleOverlayError}
             onOverlayMounted={handleOverlayMounted}
             onOverlayUnmounted={handleOverlayUnmounted}
+            onDiagnosticsChange={setMapDiagnostics}
+            showDiagnostics={isSystemAdmin}
           />
         )}
 
@@ -2700,6 +2970,16 @@ export default function SatelliteMappingPage() {
               </SelectContent>
             </Select>
           </div>
+          {isSystemAdmin && (
+            <Button
+              size="sm"
+              variant={disableCropOverlays ? "secondary" : "outline"}
+              className="h-9 bg-background/95 backdrop-blur shadow-sm"
+              onClick={() => setDisableCropOverlays((v) => !v)}
+            >
+              Disable Crop Overlays: {disableCropOverlays ? "On" : "Off"}
+            </Button>
+          )}
         </div>
 
         {/* Top-right: workspace actions */}
@@ -2938,8 +3218,12 @@ export default function SatelliteMappingPage() {
 
         {/* Acquisition date slider — bottom-centre, on top of the map */}
         <div
-          className="absolute left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]"
-          style={{ bottom: "max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))" }}
+          className="absolute left-1/2 z-[540] -translate-x-1/2"
+          style={{
+            bottom: "96px",
+            width: legendOpen ? "min(760px, calc(100% - 420px))" : "min(900px, calc(100% - 2rem))",
+            minWidth: "min(520px, calc(100% - 2rem))",
+          }}
         >
 
           {(() => {

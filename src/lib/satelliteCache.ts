@@ -155,19 +155,15 @@ export async function getAssetBlob(
 ): Promise<Blob | null> {
   const cached = await readCachedAsset(assetId, processingVersion);
   if (cached) return cached.blob;
-  try {
-    const result = await fetchBytes(null);
-    if (result.status === 304 || !result.blob) return null;
-    await writeCachedAsset(
-      assetId,
-      processingVersion,
-      result.etag ?? `${assetId}:${processingVersion ?? "unknown"}`,
-      result.blob,
-      result.contentType,
-    );
-    return result.blob;
-  } catch {
-    return null;
-  }
+  const result = await fetchBytes(null);
+  if (result.status === 304 || !result.blob) return null;
+  await writeCachedAsset(
+    assetId,
+    processingVersion,
+    result.etag ?? `${assetId}:${processingVersion ?? "unknown"}`,
+    result.blob,
+    result.contentType,
+  );
+  return result.blob;
 }
 
