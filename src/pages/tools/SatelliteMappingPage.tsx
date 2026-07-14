@@ -617,13 +617,71 @@ export default function SatelliteMappingPage() {
       }
   >(null);
 
-  // Batch progress for All-Paddocks processing.
-  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "rate_limited" | "failed" | "skipped";
-  const [batchProgress, setBatchProgress] = useState<{
+  // Batch progress for Refresh Imagery. Rich per-paddock stage tracking that
+  // drives the persistent progress panel over the map (Step 2 of the crop
+  // health refresh polish). Old `batchProgress` shape has been replaced.
+  type PadStage =
+    | "waiting"
+    | "searching"
+    | "found"
+    | "downloading"
+    | "processing"
+    | "saving"
+    | "manifest"
+    | "loading_overlay"
+    | "complete"
+    | "no_imagery"
+    | "failed"
+    | "skipped";
+  type PadOutcome =
+    | "updated"
+    | "reprocessed"
+    | "already_current"
+    | "no_newer"
+    | "failed"
+    | "skipped";
+  type PadErrorKind =
+    | "provider_unavailable"
+    | "no_newer_capture"
+    | "processing_failed"
+    | "asset_failed"
+    | "overlay_failed"
+    | null;
+  type PadProgress = {
+    id: string;
+    name: string;
+    stage: PadStage;
+    errorKind: PadErrorKind;
+    errorMessage?: string | null;
+    oldSceneId?: string | null;
+    oldProcessingVersion?: string | null;
+    oldAssetId?: string | null;
+    newSceneId?: string | null;
+    newProcessingVersion?: string | null;
+    newAssetId?: string | null;
+    outcome?: PadOutcome;
+    cacheInvalidated?: boolean;
+    overlayRemounted?: boolean;
+    overlayMountedAt?: string | null;
+  };
+  type RefreshSummary = {
+    updated: number;
+    reprocessed: number;
+    alreadyCurrent: number;
+    noNewer: number;
+    failed: number;
+    displayed: number;
+    expected: number;
+  };
+  const [refreshProgress, setRefreshProgress] = useState<{
+    running: boolean;
     total: number;
-    done: number;
-    statuses: Record<string, PadStatus>;
+    order: string[];
+    paddocks: Record<string, PadProgress>;
+    summary?: RefreshSummary;
   } | null>(null);
+  // Legacy alias so downstream code that expects a rollup keeps compiling.
+  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "rate_limited" | "failed" | "skipped";
 
   // Summary of the most recent Refresh Imagery pass. Populated by the mutation
   // and shown in the admin diagnostics panel.
