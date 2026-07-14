@@ -397,10 +397,12 @@ export default function CompleteTodayDialog({
     if (createTask && !taskTitle.trim()) { toast.error("Task title is required"); return; }
     if (!validateLabourLines()) return;
 
+    // SQL 113/114: generate stable IDs BEFORE the RPC so we can pass
+    // p_work_task_id upfront and retry idempotently.
     const entryId = pendingEntryId ?? crypto.randomUUID();
-    const taskId = pendingTaskId ?? crypto.randomUUID();
+    const taskId = createTask ? (pendingTaskId ?? crypto.randomUUID()) : null;
     setPendingEntryId(entryId);
-    if (createTask) setPendingTaskId(taskId);
+    if (taskId) setPendingTaskId(taskId);
 
     const totalLabourHours = createTask ? labourTotals.hours : (labourHours ? Number(labourHours) : null);
 
@@ -420,10 +422,11 @@ export default function CompleteTodayDialog({
         notes,
         estimatedVines,
         segments,
+        workTaskId: taskId,
       });
       setSavedPruningResult(res);
 
-      if (createTask) {
+      if (createTask && taskId) {
         try {
           const linkTag = `\n\n[Pruning entry: ${res.entry_id ?? entryId}]`;
           const descParts = [
@@ -458,9 +461,15 @@ export default function CompleteTodayDialog({
             userId: user?.id ?? null,
           });
           for (const line of labourLines) await createLabourLine(toLabourInput(task.id, line));
+          // Belt-and-braces: ensure the entry is linked even if the RPC ran
+          // before the Work Task row existed on an older server.
+          try {
+            const { setPruningEntryWorkTask } = await import("@/lib/pruningQuery");
+            await setPruningEntryWorkTask(res.entry_id ?? entryId, task.id);
+          } catch { /* non-fatal */ }
           setPendingTaskId(null);
         } catch (e: any) {
-          toast.error(`Pruning saved, but Work Task labour could not be saved: ${e?.message ?? e}`);
+          toast.error(`Pruning saved, but Work Task labour could not be saved: ${e?.message ?? e}. Submit again to retry.`);
           return;
         }
       }
