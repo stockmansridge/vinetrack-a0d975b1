@@ -2732,6 +2732,8 @@ export default function SatelliteMappingPage() {
               <ShieldAlert className="h-4 w-4 mr-1.5" />Admin
             </Button>
           )}
+          {/* Full-screen temporarily hidden during regression recovery. */}
+          {false && (
           <Button
             size="sm"
             variant="secondary"
@@ -2743,6 +2745,8 @@ export default function SatelliteMappingPage() {
             {mapFocus ? <Minimize2 className="h-4 w-4 mr-1.5" /> : <Maximize2 className="h-4 w-4 mr-1.5" />}
             {mapFocus ? "Exit Full Screen" : "Full Screen"}
           </Button>
+          )}
+
         </div>
 
         {/* Refresh progress — shifted below the actions bar */}
