@@ -1223,6 +1223,28 @@ export default function SatelliteMappingPage() {
     });
   }, [targetMapOverlays]);
 
+  // ============= Unified Crop Health View Model =============
+  // ONE derived state consumed by every customer-facing surface: paddocks
+  // displayed, coverage %, per-paddock list, missing chips, hover availability,
+  // refresh completion summary, selected-date diagnostics, Overlay Health panel.
+  // Never re-derive availability from raw manifest/state anywhere else.
+  const activePaddockMetas = useMemo(
+    () => geoms.map((g) => ({ id: g.id, name: g.name })),
+    [geoms],
+  );
+  const viewModel = useCropHealthViewModel({
+    manifest: manifestQuery.data ?? null,
+    selectedDate: effectiveDisplayDate,
+    selectedLayer: layer,
+    activePaddocks: activePaddockMetas,
+    displayLoadState,
+    analyticalLoadState,
+    overlayLifecycle,
+  });
+  const mountedPaddockCount = viewModel.summary.overlaysMounted;
+
+
+
   // Clear stale search / refresh errors when the user changes date or layer so
   // banners from a previous selection don't linger on a fresh view.
   const errorClearKey = `${selectedSceneKey ?? ""}::${layer}`;
