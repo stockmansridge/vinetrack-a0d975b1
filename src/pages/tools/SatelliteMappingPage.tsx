@@ -1814,17 +1814,21 @@ export default function SatelliteMappingPage() {
             stopQueue = true;
             results.push({ paddock_id: pid, status: "rate_limited", message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
             setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
-            setPad(pid, "rate_limited"); bumpDone(); return;
+            patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: "Satellite provider is temporarily limiting requests." });
+            return;
           }
           setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: parsed.message });
           results.push({ paddock_id: pid, status: "failed", message: parsed.message });
-          setPad(pid, "failed"); bumpDone(); return;
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: parsed.message });
+          return;
         }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
         if (candidates.length === 0) {
-          results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" });
-          setPad(pid, "failed"); bumpDone(); return;
+          results.push({ paddock_id: pid, status: "no_scenes", message: "No newer capture available" });
+          patchPad(pid, { stage: "no_imagery", outcome: "no_newer", errorKind: "no_newer_capture", errorMessage: "No newer capture from Copernicus" });
+          return;
         }
+        patchPad(pid, { stage: "found" });
         const sorted = [...candidates].sort((a, b) => {
           const ca = Number(a?.scene_cloud_cover_pct ?? 100);
           const cb = Number(b?.scene_cloud_cover_pct ?? 100);
@@ -1834,12 +1838,13 @@ export default function SatelliteMappingPage() {
           return String(b?.acquired_at ?? "").localeCompare(String(a?.acquired_at ?? ""));
         });
 
-        setPad(pid, "processing");
+        patchPad(pid, { stage: "downloading" });
         let finalStatus: ResultStatus = "failed";
         let finalMsg = "Processing did not complete.";
         const maxTries = Math.min(4, sorted.length);
         for (let i = 0; i < maxTries; i++) {
           const c = sorted[i];
+          patchPad(pid, { stage: "processing" });
           const process = await invokeSatelliteFn("satellite-process-scene", {
             vineyard_id: activeVineyardId,
             paddock_id: pid,
@@ -1880,11 +1885,16 @@ export default function SatelliteMappingPage() {
         }
 
         results.push({ paddock_id: pid, status: finalStatus, message: finalMsg });
-        setPad(pid, finalStatus === "complete" || finalStatus === "partial" ? "complete"
-          : finalStatus === "insufficient_coverage" ? "insufficient_coverage"
-          : finalStatus === "rate_limited" ? "rate_limited"
-          : "failed");
-        bumpDone();
+        if (finalStatus === "complete" || finalStatus === "partial") {
+          patchPad(pid, { stage: "saving" });
+          await reconcilePaddock(pid, false);
+        } else if (finalStatus === "insufficient_coverage") {
+          patchPad(pid, { stage: "no_imagery", outcome: "no_newer", errorKind: "no_newer_capture", errorMessage: finalMsg });
+        } else if (finalStatus === "rate_limited") {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: finalMsg });
+        } else {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: finalMsg });
+        }
       }
 
       async function repairScene(p: PaddockCompleteness): Promise<void> {
@@ -1893,9 +1903,10 @@ export default function SatelliteMappingPage() {
         if (!p.latestProviderSceneId || !p.latestAcquiredAt) {
           // Should be unreachable — repair states always carry a latest scene.
           results.push({ paddock_id: pid, status: "failed", message: "No latest scene to repair." });
-          setPad(pid, "failed"); bumpDone(); return;
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "No latest scene to repair." });
+          return;
         }
-        setPad(pid, "processing");
+        patchPad(pid, { stage: "processing" });
         const process = await invokeSatelliteFn("satellite-process-scene", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
@@ -1911,10 +1922,12 @@ export default function SatelliteMappingPage() {
             stopQueue = true;
             setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: msg });
             results.push({ paddock_id: pid, status: "rate_limited", message: msg });
-            setPad(pid, "rate_limited"); bumpDone(); return;
+            patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: msg });
+            return;
           }
           results.push({ paddock_id: pid, status: "failed", message: msg });
-          setPad(pid, "failed"); bumpDone(); return;
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: msg });
+          return;
         }
         const procStatus = String((process.data as any)?.status ?? "");
         const finalStatus: ResultStatus =
@@ -1931,10 +1944,16 @@ export default function SatelliteMappingPage() {
           status: finalStatus,
           repairedIndices: finalStatus === "complete" || finalStatus === "partial" ? p.indicesRequiringWork : [],
         });
-        setPad(pid, finalStatus === "complete" || finalStatus === "partial" ? "complete"
-          : finalStatus === "rate_limited" ? "rate_limited" : "failed");
-        bumpDone();
+        if (finalStatus === "complete" || finalStatus === "partial") {
+          patchPad(pid, { stage: "saving" });
+          await reconcilePaddock(pid, false);
+        } else if (finalStatus === "rate_limited") {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: "Provider paused" });
+        } else {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "Repair did not complete." });
+        }
       }
+
 
       async function processOne(p: PaddockCompleteness): Promise<void> {
         if (stopQueue) {
