@@ -2306,30 +2306,264 @@ export default function SatelliteMappingPage() {
 
 
 
-  return (
-    <div className="w-full p-2 md:p-3 space-y-3 flex flex-col">
-      {/* Compact header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="rounded-md bg-amber-500/15 p-1.5 text-amber-600 dark:text-amber-400">
-            <SatelliteIcon className="h-4 w-4" />
-          </div>
-          <h1 className="text-lg font-semibold truncate">Crop Health Maps</h1>
-          <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]">
-            System Admin · Beta
-          </Badge>
+  // ---------- Slice 2 map-first layout ----------
+  // Panels below are declared as JSX chunks so the map workspace can host them
+  // in the drawer / overlays without duplicating logic. All numbers still come
+  // from useCropHealthViewModel.
+
+  const detailsPanel = (
+    <div className="space-y-3 text-xs">
+      <div className="rounded-md border bg-muted/30 p-3 space-y-1">
+        <div className="text-sm font-semibold text-foreground">{activeLayer.label}</div>
+        <div className="text-muted-foreground">{activeLayer.description}</div>
+        <div className="text-[11px] text-muted-foreground pt-1 italic">
+          Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (20 m native data, resampled for display)" : ""}. {LAYER_DISCLAIMER}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {layer === "PSRI" && (
+          <div className="text-[11px] text-amber-600 dark:text-amber-400 pt-1">{PSRI_CAUTION}</div>
+        )}
+      </div>
+
+      <div className="rounded-md border bg-muted/20 p-3 space-y-1">
+        <div className="text-sm font-semibold text-foreground">Selected date</div>
+        {(() => {
+          const s = viewModel.summary;
+          const pct = Number.isInteger(s.coveragePercent) ? `${s.coveragePercent}` : s.coveragePercent.toFixed(1);
+          return (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+              <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
+              <div>Layer: <span className="text-foreground">{activeLayer.short}</span></div>
+              <div>Paddocks displayed: <span className="text-foreground">{s.overlaysMounted}</span></div>
+              <div>Unavailable: <span className="text-foreground">{s.unavailable}</span></div>
+              <div>Active paddocks: <span className="text-foreground">{s.activePaddocks}</span></div>
+              <div>Coverage: <span className="text-foreground">{pct}%</span></div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {selectedSceneKey && (() => {
+        const missing = viewModel.paddocks.filter(
+          (p) => p.availabilityReason === "no_scene_for_date"
+            || p.availabilityReason === "selected_layer_missing"
+            || p.availabilityReason === "scene_incomplete",
+        );
+        if (missing.length === 0) return null;
+        return (
+          <div className="rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-1">
+            <div className="text-xs font-semibold text-foreground">Paddocks without imagery</div>
+            <div>
+              No imagery saved for {formatDate(selectedSceneKey)} on these paddocks. Their outlines remain visible on the map.
+            </div>
+            <div className="flex flex-wrap gap-1 pt-1">
+              {missing.map((p) => (
+                <span key={p.paddockId} className="inline-flex items-center rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 text-[10px]">
+                  {p.paddockName}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+        <div className="text-xs font-semibold text-foreground">Per-paddock status</div>
+        <div className="max-h-64 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
+          {viewModel.paddocks.map((p) => {
+            const badge = reasonToCustomerMessage(p.availabilityReason, p.selectedLayer);
+            const tone: "ok" | "warn" | "err" =
+              p.availabilityReason === "displayed" ? "ok"
+              : (p.availabilityReason === "asset_load_failed" || p.availabilityReason === "overlay_mount_failed") ? "err"
+              : "warn";
+            const toneCls = tone === "err" ? "text-destructive"
+              : tone === "warn" ? "text-amber-600 dark:text-amber-400"
+              : "text-muted-foreground";
+            return (
+              <div key={p.paddockId} className="text-[11px] leading-tight">
+                <span className="font-medium text-foreground">{p.paddockName}</span>
+                <span className={`ml-1 ${toneCls}`}>— {badge}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+        <label className="text-xs font-semibold text-foreground block">
+          Overlay Transparency — {opacity}%
+        </label>
+        <Slider
+          className="w-full min-w-0"
+          value={[opacity]}
+          onValueChange={(v) => setOpacity(v[0])}
+          min={0}
+          max={100}
+          step={1}
+        />
+        <div className="flex flex-wrap gap-1">
+          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>20%</Button>
+          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>65%</Button>
+          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>95%</Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const historyPanel = (
+    (manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 ? (
+      <SavedImageryHistory
+        entries={dateOptions}
+        committedDate={selectedSceneKey}
+        onSelectDate={(d) => {
+          setIsPlaying(false);
+          setPreviewDate(null);
+          setSelectedSceneKey(d);
+        }}
+        totalPaddocks={totalPaddocks}
+      />
+    ) : (
+      <div className="text-xs text-muted-foreground p-3">No saved imagery yet. Use "Check for New Imagery" to look for a Copernicus capture.</div>
+    )
+  );
+
+  const adminPanel = (
+    <div className="space-y-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy || backfillLayers.isPending || !activeVineyardId}
+          onClick={() => backfillLayers.mutate()}
+          title="Generate any missing display / analytical / summary assets on already-stored scenes."
+        >
+          {backfillLayers.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SatelliteIcon className="h-3.5 w-3.5 mr-1.5" />}
+          {backfillLayers.isPending ? "Repairing…" : "Repair Missing Assets"}
+        </Button>
+        {providerFreshness?.provider_check_status === "checked_recently" && (
           <Button
             size="sm"
-            variant="outline"
-            disabled={busy || backfillLayers.isPending || !activeVineyardId}
-            onClick={() => backfillLayers.mutate()}
-            title="Generate any missing display / analytical / summary assets on already-stored scenes. Skips complete outputs."
+            variant="ghost"
+            disabled={busy || geoms.length === 0}
+            onClick={() => checkForNewImage.mutate({ force: true })}
+            title="Force a Copernicus search even though a recent check exists."
           >
-            {backfillLayers.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SatelliteIcon className="h-3.5 w-3.5 mr-1.5" />}
-            {backfillLayers.isPending ? "Repairing…" : "Repair Missing Assets"}
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Force provider check
           </Button>
+        )}
+      </div>
+
+      <div className="rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-1">
+        <div className="text-xs font-semibold text-foreground">Copernicus status</div>
+        {(() => {
+          const pf = providerFreshness;
+          const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "—";
+          const statusLabel = (() => {
+            switch (pf?.provider_check_status) {
+              case "checked_recently": return "Checked recently";
+              case "check_due": return "Check due";
+              case "checking": return "Checking Copernicus for newer imagery…";
+              case "failed": return "Last check failed";
+              case "never_checked": return "Never checked";
+              default: return "—";
+            }
+          })();
+          return (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              <div>Last checked: <span className="text-foreground">{fmt(pf?.last_provider_check_at ?? null)}</span></div>
+              <div>Next recommended: <span className="text-foreground">{fmt(pf?.next_recommended_provider_check_at ?? null)}</span></div>
+              <div>Status: <span className="text-foreground">{statusLabel}</span></div>
+              <div>Interval: <span className="text-foreground">{pf?.provider_check_interval_days ?? 5} days</span></div>
+              {pf?.active_job_id && (
+                <div className="col-span-2">Active job: <span className="text-foreground">{pf.active_job_id.slice(0, 8)}…</span></div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+      <div className="rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
+        <div className="text-xs font-semibold text-foreground inline-flex items-center gap-1.5">
+          <Wrench className="h-3.5 w-3.5" />
+          Diagnostics
+        </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">Saved history</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <div>Saved dates: <span className="text-foreground">{manifestQuery.data?.total_saved_dates ?? dateOptions.length}</span></div>
+            <div>Newest: <span className="text-foreground">{manifestQuery.data?.newest_saved_date ?? "—"}</span></div>
+            <div>Oldest: <span className="text-foreground">{manifestQuery.data?.oldest_saved_date ?? "—"}</span></div>
+          </div>
+        </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">Package health</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <div>Complete: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
+            <div>Partial: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
+            <div>Upgrade required: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
+            <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
+            <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
+            <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
+          </div>
+        </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">Browser cache</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <div>Display requested: <span className="text-foreground">{cacheStatsRef.current.displayRequested}</span></div>
+            <div>Display hits: <span className="text-foreground">{cacheStatsRef.current.displayHits}</span></div>
+            <div>Display misses: <span className="text-foreground">{cacheStatsRef.current.displayMisses}</span></div>
+            <div>Analytical hits: <span className="text-foreground">{cacheStatsRef.current.analyticalHits}</span></div>
+            <div>Analytical misses: <span className="text-foreground">{cacheStatsRef.current.analyticalMisses}</span></div>
+            <div>Decoded hits: <span className="text-foreground">{cacheStatsRef.current.decodedHits}</span></div>
+            <div>Object URLs: <span className="text-foreground">{objectUrlsRef.current.size}</span></div>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+          <div>Manifest version: <span className="text-foreground">{manifestQuery.data?.manifest_version ?? "—"}</span></div>
+          <div>Manifest loaded: <span className="text-foreground">{manifestQuery.data ? "yes" : "no"}</span></div>
+          <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
+          <div>Asset requests: <span className="text-foreground">{cacheStatsRef.current.assetRequests}</span></div>
+          <div>HTTP 304: <span className="text-foreground">{cacheStatsRef.current.http304}</span></div>
+          <div>Bytes downloaded: <span className="text-foreground">{(cacheStatsRef.current.bytesDownloaded / 1024).toFixed(1)} KB</span></div>
+          {lastRefreshSummary && (
+            <>
+              <div>Last refresh: <span className="text-foreground">{lastRefreshSummary.processedPaddocks} processed</span></div>
+              <div>Provider calls avoided: <span className="text-foreground">{lastRefreshSummary.providerCallsAvoided}</span></div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="pt-1 border-t">
+        <OverlayHealthPanel viewModel={viewModel} selectedLayer={layer} />
+      </div>
+    </div>
+  );
+
+  const focusWrapperClass = mapFocus
+    ? "fixed inset-0 z-40 bg-background flex flex-col"
+    : "w-full flex flex-col";
+  const focusWrapperStyle = mapFocus
+    ? undefined
+    : { minHeight: "calc(100dvh - var(--vt-header-h, 64px))" };
+
+  return (
+    <div className={focusWrapperClass} style={focusWrapperStyle}>
+      {!mapFocus && (
+        <div className="px-3 pt-2 pb-1 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="rounded-md bg-amber-500/15 p-1.5 text-amber-600 dark:text-amber-400">
+              <SatelliteIcon className="h-4 w-4" />
+            </div>
+            <h1 className="text-lg font-semibold truncate">Crop Health Maps</h1>
+            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]">
+              System Admin · Beta
+            </Badge>
+          </div>
           <Button
             size="sm"
             disabled={busy || geoms.length === 0}
@@ -2337,47 +2571,20 @@ export default function SatelliteMappingPage() {
             title="Search Copernicus for newer imagery. Skipped when a check ran within the last 5 days."
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            {refreshLabel}
+            {busy ? refreshLabel : "Check for New Imagery"}
           </Button>
-          {providerFreshness?.provider_check_status === "checked_recently" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy || geoms.length === 0}
-              onClick={() => checkForNewImage.mutate({ force: true })}
-              title="Force a Copernicus search even though a recent check exists."
-            >
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              Force provider check
-            </Button>
-          )}
         </div>
-      </div>
+      )}
 
-
-      {searchError && (
-        <Card className="border-destructive/40 bg-destructive/5">
+      {searchError && !mapFocus && (
+        <Card className="mx-3 mb-2 border-destructive/40 bg-destructive/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Crop Health Maps search failed</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          <CardContent className="space-y-2 text-sm">
             <p className="text-muted-foreground">
               VineTrack could not search Copernicus imagery. The existing vineyard map remains available.
             </p>
-            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-              <div>
-                <div className="font-medium text-foreground">Error code</div>
-                <div>{searchError.code ?? "—"}</div>
-              </div>
-              <div>
-                <div className="font-medium text-foreground">Provider status</div>
-                <div>{searchError.providerStatus ?? "—"}</div>
-              </div>
-              <div>
-                <div className="font-medium text-foreground">Paddock</div>
-                <div>{searchError.paddockName ?? searchError.paddockId ?? "—"}</div>
-              </div>
-            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" disabled={busy} onClick={() => checkForNewImage.mutate(undefined)}>
                 {busy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
@@ -2389,688 +2596,371 @@ export default function SatelliteMappingPage() {
         </Card>
       )}
 
-      {/* Map + controls — side-by-side on desktop, stacked on mobile */}
-      <div className="flex flex-col lg:flex-row gap-3 lg:h-[calc(100vh-9rem)] lg:min-h-[520px]">
-      {/* Toolbar */}
-      <Card className="relative z-30 order-2 lg:order-2 w-full lg:w-[360px] lg:shrink-0 lg:overflow-y-auto">
-        <CardContent className="p-3 md:p-4">
+      {/* Map workspace — all controls float over the map */}
+      <div className={`relative flex-1 min-h-0 ${mapFocus ? "" : "mx-2 mb-2 rounded-lg border overflow-hidden"}`}>
+        {paddocksLoading ? (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+            Loading paddocks…
+          </div>
+        ) : visibleGeoms.length === 0 ? (
+          <div className="h-full flex items-center justify-center p-8">
+            <div className="text-center text-sm text-muted-foreground max-w-md">
+              No paddock boundaries are available for this vineyard. Add paddock polygons in Setup to display them on the satellite map.
+            </div>
+          </div>
+        ) : (
+          <SatelliteMap
+            className="absolute inset-0"
+            paddocks={visibleGeoms.map((g) => ({
+              id: g.id,
+              name: g.name,
+              polys: g.polys,
+              color: paddockColor(g.id),
+            }))}
+            selectedPaddockId={paddockId === "all" ? null : paddockId}
+            overlays={mapOverlays}
+            overlayOpacity={opacity / 100}
+            overlayTransitionMs={prefersReducedMotion ? 0 : 220}
+            cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
+            onPaddockClick={(id) => setPaddockId(id)}
+            onPointerMove={handlePointerMove}
+            onOverlayLoad={handleOverlayLoad}
+            onOverlayError={handleOverlayError}
+            onOverlayMounted={handleOverlayMounted}
+            onOverlayUnmounted={handleOverlayUnmounted}
+          />
+        )}
 
+        {/* Top-left: compact map controls */}
+        <div className="absolute top-3 left-3 z-[520] flex flex-wrap gap-2 max-w-[calc(100%-14rem)]">
+          <div className="min-w-[140px]">
+            <Select value={activeVineyardId ?? ""} onValueChange={(v) => { setVineyardId(v); setPaddockId("all"); setSelectedSceneKey(null); }}>
+              <SelectTrigger className="h-9 bg-background/95 backdrop-blur shadow-sm"><SelectValue placeholder="Vineyard" /></SelectTrigger>
+              <SelectContent>
+                {memberships.map((m) => (
+                  <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
+                    {m.vineyard_name ?? m.vineyard_id.slice(0, 8)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[140px]">
+            <Select value={paddockId} onValueChange={(v) => { setPaddockId(v); setSelectedSceneKey(null); }}>
+              <SelectTrigger className="h-9 bg-background/95 backdrop-blur shadow-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Paddocks</SelectItem>
+                {geoms.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[160px]">
+            <Select value={layer} onValueChange={(v) => setLayer(v as SatelliteIndexType)}>
+              <SelectTrigger className="h-9 bg-background/95 backdrop-blur shadow-sm"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-[420px]">
+                {LAYER_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {group.label}
+                    </SelectLabel>
+                    {group.ids.map((id) => {
+                      const l = LAYERS.find((x) => x.id === id);
+                      if (!l) return null;
+                      return <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>;
+                    })}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Top-right: workspace actions */}
+        <div className="absolute top-3 right-3 z-[520] flex flex-wrap gap-1.5 justify-end">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-9 bg-background/95 backdrop-blur shadow-sm"
+            onClick={() => openDrawer("details")}
+            aria-label="Open details panel"
+          >
+            <PanelRight className="h-4 w-4 mr-1.5" />Details
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-9 bg-background/95 backdrop-blur shadow-sm"
+            onClick={() => openDrawer("history")}
+            aria-label="Open history panel"
+          >
+            <CalendarDays className="h-4 w-4 mr-1.5" />History
+          </Button>
+          {isSystemAdmin && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 bg-background/95 backdrop-blur shadow-sm"
+              onClick={() => openDrawer("admin")}
+              aria-label="Open admin panel"
+            >
+              <ShieldAlert className="h-4 w-4 mr-1.5" />Admin
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-9 bg-background/95 backdrop-blur shadow-sm"
+            onClick={() => setMapFocus((v) => !v)}
+            aria-label={mapFocus ? "Exit full screen" : "Enter full screen"}
+            aria-pressed={mapFocus}
+          >
+            {mapFocus ? <Minimize2 className="h-4 w-4 mr-1.5" /> : <Maximize2 className="h-4 w-4 mr-1.5" />}
+            {mapFocus ? "Exit Full Screen" : "Full Screen"}
+          </Button>
+        </div>
+
+        {/* Refresh progress — shifted below the actions bar */}
+        {refreshProgress && (
+          <div className="absolute top-16 right-3 z-[560] [&>[role=status]]:!static">
+            <RefreshProgressPanel
+              progress={refreshProgress}
+              isSystemAdmin={isSystemAdmin}
+              mountedPaddockCount={mountedPaddockCount}
+              expectedCount={geoms.length}
+              onDismiss={() => setRefreshProgress(null)}
+            />
+          </div>
+        )}
+
+        {/* Playback / preview banner */}
+        {(hoverSuspended || previewPending) && (
           <div
-            className="grid gap-3 items-end"
+            className="pointer-events-none absolute left-1/2 top-14 z-[550] -translate-x-1/2 rounded-md border bg-background/95 px-3 py-1.5 text-[11px] font-medium text-foreground shadow-md backdrop-blur"
+            role="status"
+            aria-live="polite"
+          >
+            {previewPending && effectiveDisplayDate
+              ? `Loading imagery for ${new Date(effectiveDisplayDate + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}…`
+              : isPlaying
+                ? "Pause playback to inspect cell values."
+                : "Release the timeline to inspect cell values."}
+          </div>
+        )}
+
+        {/* Hover tooltip */}
+        {hover && hover.paddockId && (() => {
+          const dateLong = hover.acquiredAt
+            ? new Date(hover.acquiredAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+            : null;
+          return (
+          <div
+            className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[220px] max-w-[320px]"
             style={{
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(180px, 1fr))",
+              left: Math.max(8, hover.x + 12),
+              top: Math.max(8, hover.y - 72),
             }}
           >
-            {/* Vineyard */}
-            <div className="space-y-1 min-w-0">
-              <label className="text-xs font-medium text-muted-foreground">Vineyard</label>
-              <Select value={activeVineyardId ?? ""} onValueChange={(v) => { setVineyardId(v); setPaddockId("all"); setSelectedSceneKey(null); }}>
-                <SelectTrigger className="min-h-[44px]"><SelectValue placeholder="Select vineyard" /></SelectTrigger>
-                <SelectContent>
-                  {memberships.map((m) => (
-                    <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
-                      {m.vineyard_name ?? m.vineyard_id.slice(0, 8)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Paddock */}
-            <div className="space-y-1 min-w-0">
-              <label className="text-xs font-medium text-muted-foreground">Paddock</label>
-              <Select value={paddockId} onValueChange={(v) => { setPaddockId(v); setSelectedSceneKey(null); }}>
-                <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Paddocks</SelectItem>
-                  {geoms.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {/* Image Date moved to timeline slider below the map. */}
-
-
-
-
-            {/* Map Layer */}
-            <div className="space-y-1 min-w-0">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                Map Layer
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs text-xs">
-                      {activeLayer.description}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </label>
-              <Select value={layer} onValueChange={(v) => setLayer(v as SatelliteIndexType)}>
-                <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-[420px]">
-                  {LAYER_GROUPS.map((group) => (
-                    <SelectGroup key={group.label}>
-                      <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {group.label}
-                      </SelectLabel>
-                      {group.ids.map((id) => {
-                        const l = LAYERS.find((x) => x.id === id);
-                        if (!l) return null;
-                        return (
-                          <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
-                        );
-                      })}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Opacity — must fit inside its own grid cell */}
-            <div className="min-w-0 space-y-2">
-              <label className="text-xs font-medium text-muted-foreground block">
-                Overlay Transparency — {opacity}%
-              </label>
-              <Slider
-                className="w-full min-w-0"
-                value={[opacity]}
-                onValueChange={(v) => setOpacity(v[0])}
-                min={0}
-                max={100}
-                step={1}
-              />
-              <div className="flex min-w-0 flex-wrap gap-1">
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(20)}>20%</Button>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(65)}>65%</Button>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setOpacity(95)}>95%</Button>
-              </div>
-            </div>
-          </div>
-
-
-
-          {/* Batch progress moved into the persistent RefreshProgressPanel over the map. */}
-
-
-
-
-          {/* Layer description panel */}
-          <div className="mt-3 rounded-md border bg-muted/30 p-3">
-            <div className="text-xs font-semibold text-foreground">{activeLayer.label}</div>
-            <div className="text-xs text-muted-foreground mt-1">{activeLayer.description}</div>
-            <div className="text-[11px] text-muted-foreground mt-2 italic">
-              Native input resolution: {activeLayer.nativeResM} m{activeLayer.resamplingNote ? " (20 m native data, resampled for display; resampling does not improve real ground resolution)" : ""}. {LAYER_DISCLAIMER}
-            </div>
-            {layer === "PSRI" && (
-              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
-                {PSRI_CAUTION}
+            <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
+            {hover.estRow != null && (
+              <div className="text-[10px] text-muted-foreground">
+                Est. Row: <span className="font-medium text-foreground tabular-nums">{hover.estRow}</span>
               </div>
             )}
-            {selectedSceneKey && (() => {
-              // Missing = paddocks the unified view model reports as unavailable for
-              // the current (date, layer). Single source — no re-derivation.
-              const missing = viewModel.paddocks.filter(
-                (p) => p.availabilityReason === "no_scene_for_date"
-                  || p.availabilityReason === "selected_layer_missing"
-                  || p.availabilityReason === "scene_incomplete",
-              );
-              if (missing.length === 0) return null;
-              return (
-                <div className="text-[11px] text-muted-foreground mt-2 space-y-1">
-                  <div>
-                    No imagery saved for {formatDate(selectedSceneKey)} on these paddocks. Their outlines remain on the map; other dates may be available.
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {missing.map((p) => (
-                      <span
-                        key={p.paddockId}
-                        className="inline-flex items-center rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                      >
-                        {p.paddockName}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-
-
-          {/* Copernicus status */}
-          <div className="mt-3 rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-1">
-            <div className="text-xs font-semibold text-foreground">Copernicus status</div>
-            {(() => {
-              const pf = providerFreshness;
-              const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "—";
-              const statusLabel = (() => {
-                switch (pf?.provider_check_status) {
-                  case "checked_recently": return "Checked recently";
-                  case "check_due": return "Check due";
-                  case "checking": return "Checking Copernicus for newer imagery…";
-                  case "failed": return "Last check failed";
-                  case "never_checked": return "Never checked";
-                  default: return "—";
-                }
-              })();
-              return (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-                  <div>Last checked: <span className="text-foreground">{fmt(pf?.last_provider_check_at ?? null)}</span></div>
-                  <div>Next recommended: <span className="text-foreground">{fmt(pf?.next_recommended_provider_check_at ?? null)}</span></div>
-                  <div>Status: <span className="text-foreground">{statusLabel}</span></div>
-                  <div>Interval: <span className="text-foreground">{pf?.provider_check_interval_days ?? 5} days</span></div>
-                  {pf?.active_job_id && (
-                    <div className="col-span-2 md:col-span-3">Active job: <span className="text-foreground">{pf.active_job_id.slice(0, 8)}…</span></div>
-                  )}
-                </div>
-              );
-            })()}
-            {providerFreshness?.provider_check_status === "check_due" && (
-              <div className="text-[11px] text-foreground/80 pt-1">A new Copernicus check is recommended. Saved imagery remains available.</div>
-            )}
-            {providerFreshness?.provider_check_status === "failed" && (
-              <div className="text-[11px] text-destructive pt-1">Copernicus imagery search failed. Existing saved imagery remains available.</div>
-            )}
-          </div>
-
-          {/* Date history — grouped by month */}
-          {dateOptions.length > 0 && (
-            <Collapsible defaultOpen={false}>
-              <div className="mt-3 rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
-                <CollapsibleTrigger className="flex w-full items-center justify-between text-xs font-semibold text-foreground">
-                  <span>Saved image dates ({dateOptions.length})</span>
-                  <ChevronDown className="h-3 w-3" />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  {(() => {
-                    const groups = new Map<string, typeof dateOptions>();
-                    for (const d of dateOptions) {
-                      const key = d.date.slice(0, 7); // YYYY-MM
-                      const arr = groups.get(key) ?? [];
-                      arr.push(d);
-                      groups.set(key, arr);
-                    }
-                    const monthLabel = (ym: string) => {
-                      const [y, m] = ym.split("-");
-                      return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
-                    };
-                    return (
-                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                        {Array.from(groups.entries()).map(([ym, arr]) => (
-                          <div key={ym}>
-                            <div className="text-[11px] font-medium text-foreground mb-1">{monthLabel(ym)}</div>
-                            <div className="space-y-0.5">
-                              {arr.map((d) => {
-                                const isSel = d.date === selectedSceneKey;
-                                const pct = Number.isInteger(d.coveragePercent) ? `${d.coveragePercent}` : d.coveragePercent.toFixed(1);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={d.date}
-                                    onClick={() => setSelectedSceneKey(d.date)}
-                                    className={`w-full text-left rounded-sm px-2 py-1 text-[11px] leading-tight ${isSel ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}
-                                  >
-                                    <span className="font-medium text-foreground">{formatDate(d.date)}</span>
-                                    <span className="ml-1">· {pct}% · {d.paddockCount}/{d.activeCount || totalPaddocks} paddocks</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
-          )}
-
-          {/* Admin tools · Diagnostics — collapsed by default */}
-          <Collapsible defaultOpen={false}>
-            <div className="mt-3 rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
-              <CollapsibleTrigger className="flex w-full items-center justify-between text-xs font-semibold text-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <Wrench className="h-3.5 w-3.5" />
-                  Admin tools · Diagnostics
-                </span>
-                <ChevronDown className="h-3 w-3" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
-            {(() => {
-              // Selected-date diagnostics — all numbers come from the unified view
-              // model. Coverage % = mounted overlays ÷ active paddocks × 100.
-              const s = viewModel.summary;
-              const pct = Number.isInteger(s.coveragePercent)
-                ? `${s.coveragePercent}`
-                : s.coveragePercent.toFixed(1);
-              return (
-                <div className="space-y-1">
-                  <div className="text-xs font-semibold text-foreground">Selected date</div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-                    <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
-                    <div>Active paddocks: <span className="text-foreground">{s.activePaddocks}</span></div>
-                    <div>Paddocks displayed: <span className="text-foreground">{s.overlaysMounted}</span><span className="text-muted-foreground"> (manifest layer assets: {s.layerAssetsAvailable})</span></div>
-                    <div>Unavailable: <span className="text-foreground">{s.unavailable}</span></div>
-                    <div>Coverage: <span className="text-foreground">{pct}%</span></div>
-                    <div>Layer: <span className="text-foreground">{layer}</span></div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            <div className="space-y-1 pt-2 border-t">
-              <div className="text-xs font-semibold text-foreground">Saved history</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-                <div>Saved dates: <span className="text-foreground">{manifestQuery.data?.total_saved_dates ?? dateOptions.length}</span></div>
-                <div>Newest: <span className="text-foreground">{manifestQuery.data?.newest_saved_date ?? "—"}</span></div>
-                <div>Oldest: <span className="text-foreground">{manifestQuery.data?.oldest_saved_date ?? "—"}</span></div>
-              </div>
+            <div className="text-[10px] text-muted-foreground">
+              {activeLayer.short}{dateLong ? ` · ${dateLong}` : ""}
             </div>
-
-            <div className="space-y-1 pt-2 border-t">
-              <div className="text-xs font-semibold text-foreground">Package health</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-                <div>Complete: <span className="text-foreground">{liveReport.totals.completePaddocks}</span></div>
-                <div>Partial: <span className="text-foreground">{liveReport.totals.incompletePaddocks}</span></div>
-                <div>Upgrade required: <span className="text-foreground">{liveReport.totals.oldVersionPaddocks}</span></div>
-                <div>Missing display: <span className="text-foreground">{liveReport.totals.missingDisplay}</span></div>
-                <div>Missing analytical: <span className="text-foreground">{liveReport.totals.missingAnalytical}</span></div>
-                <div>Missing summaries: <span className="text-foreground">{liveReport.totals.missingSummaries}</span></div>
-              </div>
-            </div>
-
-            <div className="space-y-1 pt-2 border-t">
-              <div className="text-xs font-semibold text-foreground">Browser cache</div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1">
-                <div>Display requested: <span className="text-foreground">{cacheStatsRef.current.displayRequested}</span></div>
-                <div>Display hits: <span className="text-foreground">{cacheStatsRef.current.displayHits}</span></div>
-                <div>Display misses: <span className="text-foreground">{cacheStatsRef.current.displayMisses}</span></div>
-                <div>Analytical hits: <span className="text-foreground">{cacheStatsRef.current.analyticalHits}</span></div>
-                <div>Analytical misses: <span className="text-foreground">{cacheStatsRef.current.analyticalMisses}</span></div>
-                <div>Decoded hits: <span className="text-foreground">{cacheStatsRef.current.decodedHits}</span></div>
-                <div>Decoded misses: <span className="text-foreground">{cacheStatsRef.current.decodedMisses}</span></div>
-                <div>Object URLs: <span className="text-foreground">{objectUrlsRef.current.size}</span></div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[10px]">
-              <div>Manifest version: <span className="text-foreground">{manifestQuery.data?.manifest_version ?? "—"}</span></div>
-              <div>Manifest loaded: <span className="text-foreground">{manifestQuery.data ? "yes" : "no"}</span></div>
-              <div>Processing version: <span className="text-foreground">{CURRENT_PROCESSING_VERSION}</span></div>
-              <div>Asset requests: <span className="text-foreground">{cacheStatsRef.current.assetRequests}</span></div>
-              <div>HTTP 304: <span className="text-foreground">{cacheStatsRef.current.http304}</span></div>
-              <div>Bytes downloaded: <span className="text-foreground">{(cacheStatsRef.current.bytesDownloaded / 1024).toFixed(1)} KB</span></div>
-              {lastRefreshSummary && (
+            <div className="mt-1">
+              {layer === "TRUE_COLOUR" ? (
                 <>
-                  <div>Last refresh: <span className="text-foreground">{lastRefreshSummary.processedPaddocks} processed</span></div>
-                  <div>Provider calls avoided: <span className="text-foreground">{lastRefreshSummary.providerCallsAvoided}</span></div>
+                  <div className="text-sm font-medium text-foreground">True-colour satellite image</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m — no numerical index value.</div>
                 </>
-              )}
+              ) : !hover.acquiredAt ? (
+                <span className="text-muted-foreground">No saved imagery for this date</span>
+              ) : hover.status === "loading" ? (
+                <span className="text-muted-foreground inline-flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading cell data…"}
+                </span>
+              ) : hover.status === "missing_analytical" ? (
+                <>
+                  <div className="text-muted-foreground">{hover.message}</div>
+                  <div className="text-[10px] text-muted-foreground mt-1 italic">
+                    Use "Check for New Imagery" above.
+                  </div>
+                </>
+              ) : hover.status === "ready" && hover.value != null ? (() => {
+                  const value = hover.value;
+                  const meaning =
+                    generalBand(layer, value) ??
+                    relativeMeaning(layer, value, hoverSummary) ??
+                    "Value recorded for this cell";
+                  return (
+                    <>
+                      <div className="text-sm font-medium text-foreground tabular-nums">Cell value: {value.toFixed(2)}</div>
+                      <div className="text-[11px] font-semibold text-foreground mt-0.5">{meaning}</div>
+                    </>
+                  );
+                })() : hover.status === "no_data" ? (
+                <span className="text-muted-foreground">{hover.message ?? "No satellite data for this cell"}</span>
+              ) : hover.status === "error" ? (
+                <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
+              ) : null}
             </div>
+            <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+              {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
+            </div>
+            <div className="mt-1 text-[10px] text-muted-foreground italic">
+              Each cell may include vines, inter-row vegetation, exposed soil and shadow.
+            </div>
+          </div>
+          );
+        })()}
 
-
-            <Collapsible open={missingDetailOpen} onOpenChange={setMissingDetailOpen}>
-              <CollapsibleTrigger className="inline-flex items-center gap-1 text-[11px] text-foreground/80 hover:text-foreground">
-                <ChevronDown className={`h-3 w-3 transition-transform ${missingDetailOpen ? "" : "-rotate-90"}`} />
-                Show per-paddock detail
+        {/* Legend bottom-right */}
+        <div className="absolute bottom-24 right-3 z-[500] w-72 max-w-[92%] md:bottom-3">
+          <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
+            <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
+              <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5 min-w-0">
+                  <span className="truncate">
+                    Legend — {activeLayer.short}
+                    {!legendOpen && selectedSceneKey && (
+                      <span className="ml-1 font-normal text-muted-foreground">· {formatDate(selectedSceneKey)}</span>
+                    )}
+                  </span>
+                  <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                          aria-label={`What ${activeLayer.short} shows`}
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[280px] text-xs space-y-2 leading-snug">
+                        <div><div className="font-semibold">What it shows</div><div className="text-muted-foreground">{activeLayer.infoWhat}</div></div>
+                        <div><div className="font-semibold">Lower values</div><div className="text-muted-foreground">{activeLayer.infoLow}</div></div>
+                        <div><div className="font-semibold">Higher values</div><div className="text-muted-foreground">{activeLayer.infoHigh}</div></div>
+                        <div><div className="font-semibold">Native resolution</div><div className="text-muted-foreground">{activeLayer.nativeResM} m</div></div>
+                        <div><div className="font-semibold">Important</div><div className="text-muted-foreground">{activeLayer.infoImportant}</div></div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </span>
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${legendOpen ? "" : "-rotate-90"}`} />
               </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="mt-2 max-h-56 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
-                  {viewModel.paddocks.map((p) => {
-                    const badge = reasonToCustomerMessage(p.availabilityReason, p.selectedLayer);
-                    const tone: "ok" | "warn" | "err" =
-                      p.availabilityReason === "displayed" ? "ok"
-                      : (p.availabilityReason === "asset_load_failed" || p.availabilityReason === "overlay_mount_failed") ? "err"
-                      : "warn";
-                    const toneCls = tone === "err"
-                      ? "text-destructive"
-                      : tone === "warn"
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-muted-foreground";
-                    return (
-                      <div key={p.paddockId} className="text-[11px] leading-tight">
-                        <span className="font-medium text-foreground">{p.paddockName}</span>
-                        <span className={`ml-1 ${toneCls}`}>— {badge}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
 
-            {/* Overlay Health — reads exclusively from the unified view model. */}
-            <div className="pt-2 border-t">
-              <OverlayHealthPanel viewModel={viewModel} selectedLayer={layer} />
-            </div>
+              <CollapsibleContent>
+                <div className="px-3 pb-3 space-y-2">
+                  <div className="h-2.5 w-full rounded-sm" style={{
+                    background: `linear-gradient(to right, ${activeLayer.legend.join(", ")})`,
+                  }} />
+                  {layer !== "TRUE_COLOUR" ? (
+                    <>
+                      <div className="flex justify-between gap-2 text-[10px]">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMin)}</div>
+                          <div className="text-muted-foreground leading-tight">{activeLayer.legendLow}</div>
+                        </div>
+                        <div className="flex-1 min-w-0 text-right">
+                          <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMax)}</div>
+                          <div className="text-muted-foreground leading-tight">{activeLayer.legendHigh}</div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground leading-snug">{activeLayer.legendNote}</div>
+                      {activeLayer.extraCaution && (
+                        <div className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">{activeLayer.extraCaution}</div>
+                      )}
+                      {legendSummary && (legendSummary.median_value != null || legendSummary.percentile_10 != null) && (
+                        <div className="text-[10px] text-muted-foreground border-t pt-1 space-y-0.5">
+                          {legendSummary.percentile_10 != null && legendSummary.percentile_90 != null && (
+                            <div>Current paddock range: <span className="tabular-nums text-foreground">{legendSummary.percentile_10.toFixed(2)}–{legendSummary.percentile_90.toFixed(2)}</span></div>
+                          )}
+                          {legendSummary.median_value != null && (
+                            <div>Median: <span className="tabular-nums text-foreground">{legendSummary.median_value.toFixed(2)}</span></div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[10px] text-muted-foreground">Natural-colour Sentinel-2 image. No numerical index value.</div>
+                  )}
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm border" style={{ background: "repeating-linear-gradient(45deg,#666,#666 2px,#999 2px,#999 4px)" }} />
+                    No valid data
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm bg-white border ml-2" />
+                    Cloud / shadow
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[10px] text-muted-foreground border-t">
+                    <div>Date</div><div className="text-right">{selectedSceneKey ?? "—"}</div>
+                    <div>Provider</div><div className="text-right">Sentinel-2 L2A (CDSE)</div>
+                    <div>Native resolution</div><div className="text-right">{activeLayer.nativeResM} m</div>
+                  </div>
+                </div>
               </CollapsibleContent>
             </div>
           </Collapsible>
-        </CardContent>
-      </Card>
+        </div>
 
-
-
-      {/* Map */}
-      <Card className="overflow-hidden order-1 lg:order-1 flex-1 min-w-0 lg:h-full">
-        <CardContent className="p-0 relative h-full">
-          <div className="h-[65vh] lg:h-full w-full relative">
-
-            {paddocksLoading ? (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                Loading paddocks…
+        {/* Acquisition date slider — bottom-centre, on top of the map */}
+        <div className="absolute bottom-3 left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]">
+          {(() => {
+            const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
+            const singlePaddock = paddockId !== "all";
+            const layerAvailIds = scopedGroup?.layerCoverage?.[layer]?.available_paddock_ids;
+            const scopedMissing = singlePaddock && scopedGroup
+              ? (layerAvailIds ? !layerAvailIds.includes(paddockId) : !scopedGroup.sceneByPaddock.has(paddockId))
+              : false;
+            return (
+              <div className="rounded-md bg-background/90 backdrop-blur shadow-md border">
+                <SatelliteDateSlider
+                  entries={dateOptions.map((d) => {
+                    const group = dateCoverage.find((g) => g.date === d.date);
+                    const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
+                    return {
+                      date: d.date,
+                      coveragePercent: d.coveragePercent,
+                      paddockCount: singlePaddock
+                        ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
+                        : d.paddockCount,
+                      activeCount: singlePaddock ? 1 : d.activeCount,
+                    };
+                  })}
+                  committedDate={selectedSceneKey}
+                  previewDate={previewDate}
+                  onPreviewChange={(d) => setPreviewDate(d)}
+                  onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
+                  onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
+                  onInteractionEnd={() => setInteracting(false)}
+                  isPlaying={isPlaying}
+                  onTogglePlay={togglePlay}
+                  totalPaddocks={singlePaddock ? 1 : totalPaddocks}
+                  singlePaddockScope={singlePaddock}
+                  scopedPaddockMissing={scopedMissing}
+                  layerShortLabel={activeLayer.short}
+                />
               </div>
-            ) : visibleGeoms.length === 0 ? (
-              <div className="h-full flex items-center justify-center p-8">
-                <div className="text-center text-sm text-muted-foreground max-w-md">
-                  No paddock boundaries are available for this vineyard. Add paddock polygons in Setup to display them on the satellite map.
-                </div>
-              </div>
-            ) : (
-              <SatelliteMap
-                className="h-full w-full"
-                paddocks={visibleGeoms.map((g) => ({
-                  id: g.id,
-                  name: g.name,
-                  polys: g.polys,
-                  color: paddockColor(g.id),
-                }))}
-                selectedPaddockId={paddockId === "all" ? null : paddockId}
-                overlays={mapOverlays}
-                overlayOpacity={opacity / 100}
-                overlayTransitionMs={prefersReducedMotion ? 0 : 220}
-                cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
-                onPaddockClick={(id) => setPaddockId(id)}
-                onPointerMove={handlePointerMove}
-                onOverlayLoad={handleOverlayLoad}
-                onOverlayError={handleOverlayError}
-                onOverlayMounted={handleOverlayMounted}
-                onOverlayUnmounted={handleOverlayUnmounted}
-              />
-            )}
+            );
+          })()}
+        </div>
 
-            {/* Persistent refresh progress / summary panel (Step 2) */}
-            {refreshProgress && (
-              <RefreshProgressPanel
-                progress={refreshProgress}
-                isSystemAdmin={isSystemAdmin}
-                mountedPaddockCount={mountedPaddockCount}
-                expectedCount={geoms.length}
-                onDismiss={() => setRefreshProgress(null)}
-              />
-            )}
-
-
-
-            {/* Non-blocking status note during preview / playback / preview-load. */}
-            {(hoverSuspended || previewPending) && (
-              <div
-                className="pointer-events-none absolute left-1/2 top-3 z-[550] -translate-x-1/2 rounded-md border bg-background/95 px-3 py-1.5 text-[11px] font-medium text-foreground shadow-md backdrop-blur"
-                role="status"
-                aria-live="polite"
-              >
-                {previewPending && effectiveDisplayDate
-                  ? `Loading imagery for ${new Date(effectiveDisplayDate + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}…`
-                  : isPlaying
-                    ? "Pause playback to inspect cell values."
-                    : "Release the timeline to inspect cell values."}
-              </div>
-            )}
-
-            {hover && hover.paddockId && (() => {
-              const dateLong = hover.acquiredAt
-                ? new Date(hover.acquiredAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
-                : null;
-              return (
-              <div
-                className="pointer-events-none absolute z-[600] rounded-md border bg-background/95 backdrop-blur shadow-md px-3 py-2 text-xs min-w-[220px] max-w-[320px]"
-                style={{
-                  left: Math.max(8, hover.x + 12),
-                  top: Math.max(8, hover.y - 72),
-                }}
-              >
-                <div className="font-semibold text-foreground">{hover.paddockName ?? "Paddock"}</div>
-                {hover.estRow != null && (
-                  <div className="text-[10px] text-muted-foreground">
-                    Est. Row: <span className="font-medium text-foreground tabular-nums">{hover.estRow}</span>
-                  </div>
-                )}
-                <div className="text-[10px] text-muted-foreground">
-                  {activeLayer.short}{dateLong ? ` · ${dateLong}` : ""}
-                </div>
-                <div className="mt-1">
-                  {layer === "TRUE_COLOUR" ? (
-                    <>
-                      <div className="text-sm font-medium text-foreground">True-colour satellite image</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">Resolution: 10 m — no numerical index value.</div>
-                    </>
-                  ) : !hover.acquiredAt ? (
-                    <span className="text-muted-foreground">No saved imagery for this date</span>
-                  ) : hover.status === "loading" ? (
-
-                    <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> {hover.message ?? "Loading cell data…"}
-                    </span>
-                  ) : hover.status === "missing_analytical" ? (
-                    <>
-                      <div className="text-muted-foreground">{hover.message}</div>
-                      <div className="text-[10px] text-muted-foreground mt-1 italic">
-                        Use “Refresh Imagery” above.
-                      </div>
-                    </>
-                  ) : hover.status === "ready" && hover.value != null ? (() => {
-                      const value = hover.value;
-                      const meaning =
-                        generalBand(layer, value) ??
-                        relativeMeaning(layer, value, hoverSummary) ??
-                        "Value recorded for this cell";
-                      return (
-                        <>
-                          <div className="text-sm font-medium text-foreground tabular-nums">
-                            Cell value: {value.toFixed(2)}
-                          </div>
-                          <div className="text-[11px] font-semibold text-foreground mt-0.5">
-                            {meaning}
-                          </div>
-                        </>
-                      );
-                    })() : hover.status === "no_data" ? (
-                    <span className="text-muted-foreground">{hover.message ?? "No satellite data for this cell"}</span>
-                  ) : hover.status === "error" ? (
-                    <span className="text-destructive">{hover.message ?? "Sample failed"}</span>
-                  ) : null}
-                </div>
-                <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
-                  {hover.lat.toFixed(5)}, {hover.lng.toFixed(5)}
-                </div>
-                <div className="mt-1 text-[10px] text-muted-foreground italic">
-                  Each cell may include vines, inter-row vegetation, exposed soil and shadow.
-                </div>
-              </div>
-              );
-            })()}
-
-
-
-
-            {/* Legend */}
-            <div className="absolute bottom-3 right-3 z-[500] w-72 max-w-[92%]">
-              <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
-                <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
-                  <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
-                    <span className="inline-flex items-center gap-1.5 min-w-0">
-                      <span className="truncate">
-                        Legend — {activeLayer.short}
-                        {!legendOpen && selectedSceneKey && (
-                          <span className="ml-1 font-normal text-muted-foreground">· {formatDate(selectedSceneKey)}</span>
-                        )}
-                      </span>
-                      <TooltipProvider delayDuration={100}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-                              aria-label={`What ${activeLayer.short} shows`}
-                            >
-                              <Info className="h-3.5 w-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="max-w-[280px] text-xs space-y-2 leading-snug">
-                            <div>
-                              <div className="font-semibold">What it shows</div>
-                              <div className="text-muted-foreground">{activeLayer.infoWhat}</div>
-                            </div>
-                            <div>
-                              <div className="font-semibold">Lower values</div>
-                              <div className="text-muted-foreground">{activeLayer.infoLow}</div>
-                            </div>
-                            <div>
-                              <div className="font-semibold">Higher values</div>
-                              <div className="text-muted-foreground">{activeLayer.infoHigh}</div>
-                            </div>
-                            <div>
-                              <div className="font-semibold">Native resolution</div>
-                              <div className="text-muted-foreground">{activeLayer.nativeResM} m</div>
-                            </div>
-                            <div>
-                              <div className="font-semibold">Important</div>
-                              <div className="text-muted-foreground">{activeLayer.infoImportant}</div>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${legendOpen ? "" : "-rotate-90"}`} />
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <div className="px-3 pb-3 space-y-2">
-                      <div className="h-2.5 w-full rounded-sm" style={{
-                        background: `linear-gradient(to right, ${activeLayer.legend.join(", ")})`,
-                      }} />
-                      {layer !== "TRUE_COLOUR" ? (
-                        <>
-                          <div className="flex justify-between gap-2 text-[10px]">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMin)}</div>
-                              <div className="text-muted-foreground leading-tight">{activeLayer.legendLow}</div>
-                            </div>
-                            <div className="flex-1 min-w-0 text-right">
-                              <div className="font-medium text-foreground tabular-nums">{fmt(activeLayer.displayMax)}</div>
-                              <div className="text-muted-foreground leading-tight">{activeLayer.legendHigh}</div>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-muted-foreground leading-snug">
-                            {activeLayer.legendNote}
-                          </div>
-                          {activeLayer.extraCaution && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">
-                              {activeLayer.extraCaution}
-                            </div>
-                          )}
-                          {legendSummary && (legendSummary.median_value != null || legendSummary.percentile_10 != null) && (
-                            <div className="text-[10px] text-muted-foreground border-t pt-1 space-y-0.5">
-                              {legendSummary.percentile_10 != null && legendSummary.percentile_90 != null && (
-                                <div>
-                                  Current paddock range:{" "}
-                                  <span className="tabular-nums text-foreground">
-                                    {legendSummary.percentile_10.toFixed(2)}–{legendSummary.percentile_90.toFixed(2)}
-                                  </span>
-                                </div>
-                              )}
-                              {legendSummary.median_value != null && (
-                                <div>
-                                  Median: <span className="tabular-nums text-foreground">{legendSummary.median_value.toFixed(2)}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-[10px] text-muted-foreground">
-                          Natural-colour Sentinel-2 image. No numerical index value.
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                        <span className="inline-block h-2.5 w-2.5 rounded-sm border" style={{ background: "repeating-linear-gradient(45deg,#666,#666 2px,#999 2px,#999 4px)" }} />
-                        No valid data
-                        <span className="inline-block h-2.5 w-2.5 rounded-sm bg-white border ml-2" />
-                        Cloud / shadow
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[10px] text-muted-foreground border-t">
-                        <div>Date</div>
-                        <div className="text-right">{selectedSceneKey ?? "—"}</div>
-                        <div>Provider</div>
-                        <div className="text-right">Sentinel-2 L2A (CDSE)</div>
-                        <div>Native resolution</div>
-                        <div className="text-right">{activeLayer.nativeResM} m</div>
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Collapsible>
-            </div>
-
-          </div>
-        </CardContent>
-      </Card>
-      </div>
-
-      {/* Acquisition-date timeline slider — primary date navigation */}
-      {(() => {
-        const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
-        const singlePaddock = paddockId !== "all";
-        const layerAvailIds = scopedGroup?.layerCoverage?.[layer]?.available_paddock_ids;
-        const scopedMissing = singlePaddock && scopedGroup
-          ? (layerAvailIds ? !layerAvailIds.includes(paddockId) : !scopedGroup.sceneByPaddock.has(paddockId))
-          : false;
-        return (
-          <SatelliteDateSlider
-            entries={dateOptions.map((d) => {
-              const group = dateCoverage.find((g) => g.date === d.date);
-              const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
-              return {
-                date: d.date,
-                coveragePercent: d.coveragePercent,
-                paddockCount: singlePaddock
-                  ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
-                  : d.paddockCount,
-                activeCount: singlePaddock ? 1 : d.activeCount,
-              };
-            })}
-            committedDate={selectedSceneKey}
-            previewDate={previewDate}
-            onPreviewChange={(d) => setPreviewDate(d)}
-            onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
-            onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
-            onInteractionEnd={() => setInteracting(false)}
-            isPlaying={isPlaying}
-            onTogglePlay={togglePlay}
-            totalPaddocks={singlePaddock ? 1 : totalPaddocks}
-            singlePaddockScope={singlePaddock}
-            scopedPaddockMissing={scopedMissing}
-            layerShortLabel={activeLayer.short}
-          />
-        );
-      })()}
-
-
-
-      {/* Saved imagery — compact month summary with filters */}
-      {(manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 && (
-        <SavedImageryHistory
-          entries={dateOptions}
-          committedDate={selectedSceneKey}
-          onSelectDate={(d) => { setIsPlaying(false); setPreviewDate(null); setSelectedSceneKey(d); }}
-          totalPaddocks={totalPaddocks}
+        {/* Right-side workspace drawer */}
+        <MapWorkspaceDrawer
+          open={drawerOpen}
+          tab={drawerTab}
+          onTabChange={setDrawerTab}
+          onClose={() => setDrawerOpen(false)}
+          isSystemAdmin={isSystemAdmin}
+          details={detailsPanel}
+          history={historyPanel}
+          admin={adminPanel}
         />
-      )}
+      </div>
     </div>
   );
 }
