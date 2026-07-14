@@ -289,11 +289,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         imgRefs.current.delete(id);
         if (mountedKeysRef.current.has(id)) {
           mountedKeysRef.current.delete(id);
-          const pid = paddockIdByKeyRef.current.get(id) ?? "";
-          paddockIdByKeyRef.current.delete(id);
-          try { onOverlayUnmountedRef.current?.({ paddockId: pid, key: id }); } catch { /* noop */ }
+          const info = makeInfo(id);
+          metaByKeyRef.current.delete(id);
+          try { onOverlayUnmountedRef.current?.(info); } catch { /* noop */ }
         } else {
-          paddockIdByKeyRef.current.delete(id);
+          metaByKeyRef.current.delete(id);
         }
       }
     }
@@ -311,7 +311,12 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     // Ensure an <img> exists for each overlay and set its src / opacity.
     for (const o of effectiveOverlays) {
       const key = keyFor(o);
-      paddockIdByKeyRef.current.set(key, o.paddockId);
+      metaByKeyRef.current.set(key, {
+        paddockId: o.paddockId,
+        sceneId: o.sceneId ?? null,
+        indexType: o.indexType ?? null,
+        assetId: o.assetId ?? null,
+      });
       const targetOpacity = String(o.opacity ?? overlayOpacity);
       let img = imgRefs.current.get(key);
       const fresh = !img;
@@ -326,16 +331,15 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
         // Lifecycle callbacks — invoked once per <img> instance.
         const boundKey = key;
-        const boundPid = o.paddockId;
         img.addEventListener("load", () => {
-          try { onOverlayLoadRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          try { onOverlayLoadRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
           if (!mountedKeysRef.current.has(boundKey)) {
             mountedKeysRef.current.add(boundKey);
-            try { onOverlayMountedRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+            try { onOverlayMountedRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
           }
         }, { once: false });
         img.addEventListener("error", () => {
-          try { onOverlayErrorRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          try { onOverlayErrorRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
         }, { once: false });
         layer.appendChild(img);
         imgRefs.current.set(key, img);
