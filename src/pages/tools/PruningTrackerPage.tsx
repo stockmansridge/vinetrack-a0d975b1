@@ -317,37 +317,58 @@ export default function PruningTrackerPage() {
 
       {selectedVineyardId && !selected && (
         <>
-          {/* Vineyard Progress */}
+          {/* Vineyard Progress — SQL 115 RPC is the sole source of truth. */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Vineyard Progress</CardTitle>
               <CardDescription>Season {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="flex items-baseline justify-between mb-1">
-                  <div className="text-3xl font-semibold tabular-nums">{Math.round(summary.pct * 100)}%</div>
-                  <div className="text-sm text-muted-foreground tabular-nums">
-                    {summary.vinesDone.toLocaleString()} of {summary.vinesTotal.toLocaleString()} vines
+              {summaryQ.isLoading || !summary ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-2 w-full" />
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                    {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
                   </div>
                 </div>
-                <Progress value={summary.pct * 100} className="h-2" />
-              </div>
-              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                <Metric label="Vines pruned" value={summary.vinesDone.toLocaleString()} />
-                <Metric label="Vines remaining" value={summary.vinesRemaining.toLocaleString()} />
-                <Metric label="Vines / day" value={summary.vinesPerDay ? Math.round(summary.vinesPerDay).toLocaleString() : "—"} />
-                <Metric label="Vines / labour hr" value={summary.vinesPerHour ? Math.round(summary.vinesPerHour).toLocaleString() : "—"} />
-                <Metric label="Blocks complete" value={`${summary.complete} / ${summary.blocksCount}`} />
-                <Metric label="Blocks at risk" value={String(summary.atRisk)} />
-              </div>
-              {summary.latestEta && (
-                <div className="text-xs text-muted-foreground">
-                  Projected completion: <span className="tabular-nums">{formatDate(summary.latestEta)}</span>
-                </div>
+              ) : summaryQ.isError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Couldn't load vineyard summary</AlertTitle>
+                  <AlertDescription>
+                    {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+                    {" "}Retry shortly — figures are intentionally not calculated locally to keep parity with iOS and Android.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <div className="text-3xl font-semibold tabular-nums">{Math.round(summary.overall_progress * 100)}%</div>
+                      <div className="text-sm text-muted-foreground tabular-nums">
+                        {summary.vines_pruned.toLocaleString()} of {summary.total_vines.toLocaleString()} vines
+                      </div>
+                    </div>
+                    <Progress value={summary.overall_progress * 100} className="h-2" />
+                  </div>
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
+                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} />
+                    <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} />
+                    <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} />
+                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} />
+                    <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} />
+                    <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} />
+                  </div>
+                  {summary.projected_completion_date && (
+                    <div className="text-xs text-muted-foreground">
+                      Projected completion: <span className="tabular-nums">{formatDate(summary.projected_completion_date)}</span>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
+
 
           {/* Blocks */}
           <div className="space-y-3">
