@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench } from "lucide-react";
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
+import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
 import SatelliteMap, { type SatelliteRasterOverlay } from "@/components/SatelliteMap";
 
@@ -617,13 +618,71 @@ export default function SatelliteMappingPage() {
       }
   >(null);
 
-  // Batch progress for All-Paddocks processing.
-  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "rate_limited" | "failed" | "skipped";
-  const [batchProgress, setBatchProgress] = useState<{
+  // Batch progress for Refresh Imagery. Rich per-paddock stage tracking that
+  // drives the persistent progress panel over the map (Step 2 of the crop
+  // health refresh polish). Old `batchProgress` shape has been replaced.
+  type PadStage =
+    | "waiting"
+    | "searching"
+    | "found"
+    | "downloading"
+    | "processing"
+    | "saving"
+    | "manifest"
+    | "loading_overlay"
+    | "complete"
+    | "no_imagery"
+    | "failed"
+    | "skipped";
+  type PadOutcome =
+    | "updated"
+    | "reprocessed"
+    | "already_current"
+    | "no_newer"
+    | "failed"
+    | "skipped";
+  type PadErrorKind =
+    | "provider_unavailable"
+    | "no_newer_capture"
+    | "processing_failed"
+    | "asset_failed"
+    | "overlay_failed"
+    | null;
+  type PadProgress = {
+    id: string;
+    name: string;
+    stage: PadStage;
+    errorKind: PadErrorKind;
+    errorMessage?: string | null;
+    oldSceneId?: string | null;
+    oldProcessingVersion?: string | null;
+    oldAssetId?: string | null;
+    newSceneId?: string | null;
+    newProcessingVersion?: string | null;
+    newAssetId?: string | null;
+    outcome?: PadOutcome;
+    cacheInvalidated?: boolean;
+    overlayRemounted?: boolean;
+    overlayMountedAt?: string | null;
+  };
+  type RefreshSummary = {
+    updated: number;
+    reprocessed: number;
+    alreadyCurrent: number;
+    noNewer: number;
+    failed: number;
+    displayed: number;
+    expected: number;
+  };
+  const [refreshProgress, setRefreshProgress] = useState<{
+    running: boolean;
     total: number;
-    done: number;
-    statuses: Record<string, PadStatus>;
+    order: string[];
+    paddocks: Record<string, PadProgress>;
+    summary?: RefreshSummary;
   } | null>(null);
+  // Legacy alias so downstream code that expects a rollup keeps compiling.
+  type PadStatus = "queued" | "searching" | "processing" | "complete" | "insufficient_coverage" | "rate_limited" | "failed" | "skipped";
 
   // Summary of the most recent Refresh Imagery pass. Populated by the mutation
   // and shown in the admin diagnostics panel.
@@ -1108,6 +1167,11 @@ export default function SatelliteMappingPage() {
   const handleOverlayLoad = useCallback(({ key }: { paddockId: string; key: string }) => {
     setOverlayStatus((s) => (s[key] === "loaded" ? s : { ...s, [key]: "loaded" }));
   }, []);
+
+  // Ref mirror of overlayMountedKeys — used by the refresh mutation to await
+  // MapKit lifecycle events without re-rendering.
+  const overlayMountedKeysRef = useRef(overlayMountedKeys);
+  useEffect(() => { overlayMountedKeysRef.current = overlayMountedKeys; }, [overlayMountedKeys]);
   const handleOverlayError = useCallback(({ key }: { paddockId: string; key: string }) => {
     setOverlayStatus((s) => (s[key] === "error" ? s : { ...s, [key]: "error" }));
   }, []);
@@ -1561,7 +1625,7 @@ export default function SatelliteMappingPage() {
 
       // Nothing to do → return early with an "up to date" result set.
       if (inScopeNeedingWork.length === 0) {
-        setBatchProgress(null);
+        setRefreshProgress(null);
         return {
           results,
           skippedNoGeometry,
@@ -1587,16 +1651,154 @@ export default function SatelliteMappingPage() {
         description: preflightParts.join(" · ") + ". Only missing items will be processed.",
       });
 
-      // Seed batch progress. Complete paddocks are shown as skipped so users
-      // can see exactly what was NOT reprocessed.
-      const initialStatuses: Record<string, PadStatus> = {};
-      for (const p of inScopeAll) initialStatuses[p.paddockId] = p.state === "complete" ? "skipped" : "queued";
-      setBatchProgress({ total: inScopeNeedingWork.length, done: 0, statuses: initialStatuses });
+      // Seed rich progress: every in-scope paddock has a row; complete ones
+      // start in `skipped`, work items start in `waiting`.
+      const initialOrder: string[] = inScopeAll.map((p) => p.paddockId);
+      const nameFor = (pid: string) => geoms.find((g) => g.id === pid)?.name ?? paddocks.find((pp) => pp.id === pid)?.name ?? pid.slice(0, 8);
+      // Snapshot old scene/version/asset per paddock so we can reconcile after
+      // processing (Updated / Reprocessed / Already current / No newer).
+      const manifestSnap = manifestQuery.data;
+      const oldByPaddock = new Map<string, { sceneId: string | null; procVersion: string | null; assetId: string | null }>();
+      const layerNow = layer;
+      for (const p of inScopeAll) {
+        const mp = (manifestSnap?.paddocks ?? []).find((x: any) => x.paddock_id === p.paddockId);
+        // Look up the asset id for the current layer, if present in date_coverage.
+        let assetId: string | null = null;
+        if (mp?.latest_display_scene_id) {
+          for (const entry of manifestSnap?.date_coverage ?? []) {
+            const found = entry.paddocks.find((x) => x.scene_id === mp.latest_display_scene_id);
+            if (found) {
+              assetId = found.layers.find((l) => l.index_type === layerNow)?.display?.asset_id ?? null;
+              break;
+            }
+          }
+        }
+        oldByPaddock.set(p.paddockId, {
+          sceneId: mp?.latest_display_scene_id ?? null,
+          procVersion: mp?.latest_processing_version ?? null,
+          assetId,
+        });
+      }
+      const initialPaddocks: Record<string, PadProgress> = {};
+      for (const p of inScopeAll) {
+        const old = oldByPaddock.get(p.paddockId);
+        initialPaddocks[p.paddockId] = {
+          id: p.paddockId,
+          name: nameFor(p.paddockId),
+          stage: p.state === "complete" ? "skipped" : "waiting",
+          errorKind: null,
+          outcome: p.state === "complete" ? "already_current" : undefined,
+          oldSceneId: old?.sceneId ?? null,
+          oldProcessingVersion: old?.procVersion ?? null,
+          oldAssetId: old?.assetId ?? null,
+        };
+      }
+      setRefreshProgress({
+        running: true,
+        total: inScopeNeedingWork.length,
+        order: initialOrder,
+        paddocks: initialPaddocks,
+      });
 
-      const setPad = (pid: string, s: PadStatus) => setBatchProgress((prev) => prev
-        ? { ...prev, statuses: { ...prev.statuses, [pid]: s } }
-        : prev);
-      const bumpDone = () => setBatchProgress((prev) => prev ? { ...prev, done: prev.done + 1 } : prev);
+      const patchPad = (pid: string, patch: Partial<PadProgress>) => setRefreshProgress((prev) => {
+        if (!prev) return prev;
+        const cur = prev.paddocks[pid];
+        if (!cur) return prev;
+        return { ...prev, paddocks: { ...prev.paddocks, [pid]: { ...cur, ...patch } } };
+      });
+      const setPad = (pid: string, s: PadStatus) => {
+        // Bridge legacy statuses to the rich stage model.
+        const map: Record<PadStatus, Partial<PadProgress>> = {
+          queued: { stage: "waiting" },
+          searching: { stage: "searching" },
+          processing: { stage: "processing" },
+          complete: { stage: "complete" },
+          insufficient_coverage: { stage: "no_imagery", errorKind: "no_newer_capture", outcome: "no_newer" },
+          rate_limited: { stage: "failed", errorKind: "provider_unavailable", outcome: "failed" },
+          failed: { stage: "failed", errorKind: "processing_failed", outcome: "failed" },
+          skipped: { stage: "skipped", outcome: "skipped" },
+        };
+        patchPad(pid, map[s] ?? {});
+      };
+      const bumpDone = () => { /* per-paddock counters derive from the paddocks map now */ };
+
+      // Wait for MapKit to actually mount an overlay for this paddock after a
+      // manifest refetch. Returns true on mount, false on timeout.
+      async function waitForOverlayMount(pid: string, timeoutMs = 8000): Promise<boolean> {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+          for (const k of overlayMountedKeysRef.current) {
+            if (k.startsWith(`${pid}:`)) return true;
+          }
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        return false;
+      }
+
+      // Refetch the manifest, then reconcile old vs new asset for this paddock
+      // and set the outcome + drive the overlay-load stage.
+      async function reconcilePaddock(pid: string, providerSaidNoScenes: boolean): Promise<void> {
+        patchPad(pid, { stage: "manifest" });
+        await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
+        const refreshed = await qc.refetchQueries({
+          queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+        });
+        const data = refreshed?.[0]?.data as ManifestResponse | undefined;
+        const mp = (data?.paddocks ?? []).find((x: any) => x.paddock_id === pid) as any;
+        const newSceneId: string | null = mp?.latest_display_scene_id ?? null;
+        const newProc: string | null = mp?.latest_processing_version ?? null;
+        let newAssetId: string | null = null;
+        if (newSceneId) {
+          for (const entry of data?.date_coverage ?? []) {
+            const found = entry.paddocks.find((x) => x.scene_id === newSceneId);
+            if (found) {
+              newAssetId = found.layers.find((l) => l.index_type === layerNow)?.display?.asset_id ?? null;
+              break;
+            }
+          }
+        }
+        const old = oldByPaddock.get(pid) ?? { sceneId: null, procVersion: null, assetId: null };
+        patchPad(pid, { newSceneId, newProcessingVersion: newProc, newAssetId });
+
+        // Case D: provider search yielded nothing and the scene id did not change.
+        if (providerSaidNoScenes && newSceneId === old.sceneId) {
+          patchPad(pid, { stage: "no_imagery", outcome: "no_newer", errorKind: "no_newer_capture" });
+          return;
+        }
+        // Case A: identical scene AND version → already up to date.
+        if (newSceneId === old.sceneId && newProc === old.procVersion) {
+          patchPad(pid, { stage: "complete", outcome: "already_current" });
+          return;
+        }
+        // Case C: same scene, new processing version → reprocessed.
+        // Case B: new scene id → updated.
+        const outcome: PadOutcome = newSceneId !== old.sceneId ? "updated" : "reprocessed";
+        patchPad(pid, { stage: "loading_overlay", outcome });
+
+        // Invalidate the browser cache entry for the OLD asset if a new one
+        // has replaced it (safety net; new asset ids don't collide with old).
+        let cacheInvalidated = false;
+        if (old.assetId && old.assetId !== newAssetId) {
+          try { await deleteCachedAsset(old.assetId, old.procVersion ?? null); cacheInvalidated = true; } catch { /* ignore */ }
+          const url = objectUrlsRef.current.get(old.assetId);
+          if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } objectUrlsRef.current.delete(old.assetId); }
+          assetBlobsRef.current.delete(`${old.assetId}:${old.procVersion ?? "unknown"}`);
+        }
+        patchPad(pid, { cacheInvalidated });
+
+        // Auto-select the newest saved date so overlays mount promptly.
+        const newest = data?.newest_saved_date ?? null;
+        if (newest) setSelectedSceneKey((prev) => (prev === newest ? prev : newest));
+
+        // Wait for MapKit to mount the new overlay for this paddock.
+        const mounted = await waitForOverlayMount(pid);
+        if (mounted) {
+          patchPad(pid, { stage: "complete", overlayRemounted: true, overlayMountedAt: new Date().toISOString() });
+        } else {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "overlay_failed", errorMessage: "Overlay did not mount within 8s" });
+        }
+      }
+
 
       async function processMissingScene(p: PaddockCompleteness): Promise<void> {
         const pid = p.paddockId;
@@ -1613,17 +1815,21 @@ export default function SatelliteMappingPage() {
             stopQueue = true;
             results.push({ paddock_id: pid, status: "rate_limited", message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
             setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: "Satellite provider is temporarily limiting requests. Try again in a few minutes." });
-            setPad(pid, "rate_limited"); bumpDone(); return;
+            patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: "Satellite provider is temporarily limiting requests." });
+            return;
           }
           setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: parsed.message });
           results.push({ paddock_id: pid, status: "failed", message: parsed.message });
-          setPad(pid, "failed"); bumpDone(); return;
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: parsed.message });
+          return;
         }
         const candidates: any[] = (search.data as any)?.candidates ?? [];
         if (candidates.length === 0) {
-          results.push({ paddock_id: pid, status: "no_scenes", message: "No scenes found" });
-          setPad(pid, "failed"); bumpDone(); return;
+          results.push({ paddock_id: pid, status: "no_scenes", message: "No newer capture available" });
+          patchPad(pid, { stage: "no_imagery", outcome: "no_newer", errorKind: "no_newer_capture", errorMessage: "No newer capture from Copernicus" });
+          return;
         }
+        patchPad(pid, { stage: "found" });
         const sorted = [...candidates].sort((a, b) => {
           const ca = Number(a?.scene_cloud_cover_pct ?? 100);
           const cb = Number(b?.scene_cloud_cover_pct ?? 100);
@@ -1633,12 +1839,13 @@ export default function SatelliteMappingPage() {
           return String(b?.acquired_at ?? "").localeCompare(String(a?.acquired_at ?? ""));
         });
 
-        setPad(pid, "processing");
+        patchPad(pid, { stage: "downloading" });
         let finalStatus: ResultStatus = "failed";
         let finalMsg = "Processing did not complete.";
         const maxTries = Math.min(4, sorted.length);
         for (let i = 0; i < maxTries; i++) {
           const c = sorted[i];
+          patchPad(pid, { stage: "processing" });
           const process = await invokeSatelliteFn("satellite-process-scene", {
             vineyard_id: activeVineyardId,
             paddock_id: pid,
@@ -1679,11 +1886,16 @@ export default function SatelliteMappingPage() {
         }
 
         results.push({ paddock_id: pid, status: finalStatus, message: finalMsg });
-        setPad(pid, finalStatus === "complete" || finalStatus === "partial" ? "complete"
-          : finalStatus === "insufficient_coverage" ? "insufficient_coverage"
-          : finalStatus === "rate_limited" ? "rate_limited"
-          : "failed");
-        bumpDone();
+        if (finalStatus === "complete" || finalStatus === "partial") {
+          patchPad(pid, { stage: "saving" });
+          await reconcilePaddock(pid, false);
+        } else if (finalStatus === "insufficient_coverage") {
+          patchPad(pid, { stage: "no_imagery", outcome: "no_newer", errorKind: "no_newer_capture", errorMessage: finalMsg });
+        } else if (finalStatus === "rate_limited") {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: finalMsg });
+        } else {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: finalMsg });
+        }
       }
 
       async function repairScene(p: PaddockCompleteness): Promise<void> {
@@ -1692,9 +1904,10 @@ export default function SatelliteMappingPage() {
         if (!p.latestProviderSceneId || !p.latestAcquiredAt) {
           // Should be unreachable — repair states always carry a latest scene.
           results.push({ paddock_id: pid, status: "failed", message: "No latest scene to repair." });
-          setPad(pid, "failed"); bumpDone(); return;
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "No latest scene to repair." });
+          return;
         }
-        setPad(pid, "processing");
+        patchPad(pid, { stage: "processing" });
         const process = await invokeSatelliteFn("satellite-process-scene", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
@@ -1710,10 +1923,12 @@ export default function SatelliteMappingPage() {
             stopQueue = true;
             setSearchError((prev) => prev ?? { code: parsed.code, providerStatus: parsed.providerStatus, paddockId: pid, paddockName: targetPaddock?.name ?? null, message: msg });
             results.push({ paddock_id: pid, status: "rate_limited", message: msg });
-            setPad(pid, "rate_limited"); bumpDone(); return;
+            patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: msg });
+            return;
           }
           results.push({ paddock_id: pid, status: "failed", message: msg });
-          setPad(pid, "failed"); bumpDone(); return;
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: msg });
+          return;
         }
         const procStatus = String((process.data as any)?.status ?? "");
         const finalStatus: ResultStatus =
@@ -1730,10 +1945,16 @@ export default function SatelliteMappingPage() {
           status: finalStatus,
           repairedIndices: finalStatus === "complete" || finalStatus === "partial" ? p.indicesRequiringWork : [],
         });
-        setPad(pid, finalStatus === "complete" || finalStatus === "partial" ? "complete"
-          : finalStatus === "rate_limited" ? "rate_limited" : "failed");
-        bumpDone();
+        if (finalStatus === "complete" || finalStatus === "partial") {
+          patchPad(pid, { stage: "saving" });
+          await reconcilePaddock(pid, false);
+        } else if (finalStatus === "rate_limited") {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: "Provider paused" });
+        } else {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "Repair did not complete." });
+        }
       }
+
 
       async function processOne(p: PaddockCompleteness): Promise<void> {
         if (stopQueue) {
@@ -1777,6 +1998,20 @@ export default function SatelliteMappingPage() {
           providerCallsAvoided: 0,
         });
         retryInFlightRef.current = false;
+        // Persist a completion panel so the user sees explicit "Already current".
+        const expected = geoms.length;
+        setRefreshProgress({
+          running: false,
+          total: 0,
+          order: geoms.map((g) => g.id),
+          paddocks: Object.fromEntries(
+            geoms.map((g) => [g.id, {
+              id: g.id, name: g.name, stage: "complete" as PadStage,
+              outcome: "already_current" as PadOutcome, errorKind: null,
+            }]),
+          ),
+          summary: { updated: 0, reprocessed: 0, alreadyCurrent: expected, noNewer: 0, failed: 0, displayed: mountedPaddockCount, expected },
+        });
         toast({
           title: "No updates required",
           description: "All current imagery and analytical layers are complete.",
@@ -1790,7 +2025,9 @@ export default function SatelliteMappingPage() {
       const skipped = results.filter((r) => r.status === "skipped").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
-      // Refresh + wait for the manifest to reflect any new scenes.
+      // Refresh + wait for the manifest to reflect any new scenes. Reconcile
+      // already ran per-paddock, but keep this fallback so a fully-empty
+      // manifest gets an extra tick before we render the summary.
       let loaded = false;
       let latestManifest: ManifestResponse | undefined = manifestQuery.data;
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
@@ -1804,7 +2041,8 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
-      // Auto-select the newest date the refresh just produced (if any).
+      // Auto-select the newest date the refresh just produced (if any) — the
+      // per-paddock reconcile already advances this, but confirm at the end.
       if (complete > 0) {
         const newestDate = latestManifest?.newest_saved_date
           ?? (latestManifest?.date_coverage?.[0]?.acquisition_date ?? null);
@@ -1829,13 +2067,32 @@ export default function SatelliteMappingPage() {
       }
       retryInFlightRef.current = false;
 
-
       setLastRefreshSummary({
         at: new Date().toISOString(),
         processedPaddocks: complete,
         repairedItems,
         skippedPaddocks: skippedComplete,
         providerCallsAvoided,
+      });
+
+      // Finalize the persistent progress panel: derive summary from the
+      // per-paddock outcomes recorded during reconciliation.
+      setRefreshProgress((prev) => {
+        if (!prev) return prev;
+        const list = Object.values(prev.paddocks);
+        const updated = list.filter((p) => p.outcome === "updated").length;
+        const reprocessed = list.filter((p) => p.outcome === "reprocessed").length;
+        const alreadyCurrent = list.filter((p) => p.outcome === "already_current").length;
+        const noNewer = list.filter((p) => p.outcome === "no_newer").length;
+        const failedN = list.filter((p) => p.outcome === "failed").length;
+        return {
+          ...prev,
+          running: false,
+          summary: {
+            updated, reprocessed, alreadyCurrent, noNewer, failed: failedN,
+            displayed: mountedPaddockCount, expected: geoms.length,
+          },
+        };
       });
 
       const parts: string[] = [];
@@ -2005,11 +2262,19 @@ export default function SatelliteMappingPage() {
 
   const busy = checkForNewImage.isPending;
   const isRetryPass = busy && retryInFlightRef.current;
+  const refreshCounts = useMemo(() => {
+    if (!refreshProgress) return null;
+    const list = Object.values(refreshProgress.paddocks);
+    const terminal = list.filter((p) => p.stage === "complete" || p.stage === "failed" || p.stage === "no_imagery" || p.stage === "skipped");
+    return { list, doneCount: terminal.filter((p) => p.outcome !== "skipped").length, total: refreshProgress.total };
+  }, [refreshProgress]);
   const refreshLabel = busy
     ? (isRetryPass
         ? "Retrying skipped…"
-        : (batchProgress ? `Refreshing ${Math.min(batchProgress.done + 1, batchProgress.total)} / ${batchProgress.total}…` : "Refreshing…"))
-    : "Refresh Imagery";
+        : (refreshCounts
+            ? `Refreshing ${Math.min(refreshCounts.doneCount + 1, refreshCounts.total)} / ${refreshCounts.total}…`
+            : "Refreshing…"))
+    : (refreshProgress?.summary ? "Refresh Imagery" : "Refresh Imagery");
 
   // Summary for the currently hovered paddock (used to build the tooltip's
   // paddock-relative interpretation and to show the current-scene range/median
@@ -2208,34 +2473,9 @@ export default function SatelliteMappingPage() {
 
 
 
-          {/* Batch progress */}
-          {busy && (
-            <div className="mt-3 rounded-md border bg-muted/30 p-3 text-xs space-y-2">
-              <div className="font-medium text-foreground">
-                {isRetryPass
-                  ? "Retrying skipped paddocks…"
-                  : batchProgress
-                    ? `Checking imagery for ${Math.min(batchProgress.done + 1, batchProgress.total)} of ${batchProgress.total} paddocks…`
-                    : "Preparing…"}
-              </div>
-              {batchProgress && (
-                <>
-                  <Progress
-                    value={batchProgress.total > 0 ? (batchProgress.done / batchProgress.total) * 100 : 0}
-                    className="h-1.5"
-                  />
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
-                    <span>Completed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "complete").length}</span></span>
-                    <span>Processing: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "processing" || s === "searching").length}</span></span>
-                    <span>Too cloudy: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "insufficient_coverage").length}</span></span>
-                    <span>Provider paused: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "rate_limited").length}</span></span>
-                    <span>Failed: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "failed").length}</span></span>
-                    <span>Queued: <span className="text-foreground">{Object.values(batchProgress.statuses).filter((s) => s === "queued").length}</span></span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          {/* Batch progress moved into the persistent RefreshProgressPanel over the map. */}
+
+
 
 
           {/* Layer description panel */}
@@ -2570,6 +2810,19 @@ export default function SatelliteMappingPage() {
                 onOverlayUnmounted={handleOverlayUnmounted}
               />
             )}
+
+            {/* Persistent refresh progress / summary panel (Step 2) */}
+            {refreshProgress && (
+              <RefreshProgressPanel
+                progress={refreshProgress}
+                isSystemAdmin={isSystemAdmin}
+                mountedPaddockCount={mountedPaddockCount}
+                expectedCount={geoms.length}
+                onDismiss={() => setRefreshProgress(null)}
+              />
+            )}
+
+
 
             {/* Non-blocking status note during preview / playback / preview-load. */}
             {(hoverSuspended || previewPending) && (
