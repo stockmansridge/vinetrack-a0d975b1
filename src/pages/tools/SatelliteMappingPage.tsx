@@ -680,6 +680,13 @@ export default function SatelliteMappingPage() {
     cacheInvalidated?: boolean;
     overlayRemounted?: boolean;
     overlayMountedAt?: string | null;
+    processingHttpStatus?: number | null;
+    processingCode?: string | null;
+    processingStatus?: string | null;
+    failedStage?: string | null;
+    failedLayer?: string | null;
+    providerStatus?: number | null;
+    failedLayers?: Array<{ index?: string; code?: string; message?: string }>;
   };
   type RefreshSummary = {
     updated: number;
