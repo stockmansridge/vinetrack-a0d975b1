@@ -1166,6 +1166,11 @@ export default function SatelliteMappingPage() {
   const handleOverlayLoad = useCallback(({ key }: { paddockId: string; key: string }) => {
     setOverlayStatus((s) => (s[key] === "loaded" ? s : { ...s, [key]: "loaded" }));
   }, []);
+
+  // Ref mirror of overlayMountedKeys — used by the refresh mutation to await
+  // MapKit lifecycle events without re-rendering.
+  const overlayMountedKeysRef = useRef(overlayMountedKeys);
+  useEffect(() => { overlayMountedKeysRef.current = overlayMountedKeys; }, [overlayMountedKeys]);
   const handleOverlayError = useCallback(({ key }: { paddockId: string; key: string }) => {
     setOverlayStatus((s) => (s[key] === "error" ? s : { ...s, [key]: "error" }));
   }, []);
