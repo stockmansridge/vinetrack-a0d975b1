@@ -806,8 +806,8 @@ export default function SatelliteMappingPage() {
     return { scenes, assets, summaries };
   }, [manifestQuery.data, activeVineyardId]);
 
-  // Compat shim so legacy consumers keep working while we transition.
-  const scenesQuery = { data: derivedFromManifest };
+  // (Legacy `scenesQuery` shim removed — every consumer reads `derivedFromManifest`
+  // and the unified `viewModel` below directly. Manifest v3 is the sole source.)
 
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
