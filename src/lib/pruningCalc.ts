@@ -174,9 +174,20 @@ export function computeBlockProgress(
   const totalSegments = totalRows * 4;
   const completedSegments = completion.reduce((s, r) => s + r.completed.size, 0);
   const rowEquivalentsCompleted = completedSegments / 4;
+  // Row-equivalent weighted progress — shared contract with iOS/Android.
   const percentComplete = totalSegments ? completedSegments / totalSegments : 0;
-  const estimatedVinesTotal = identities.reduce((s, r) => s + r.estimatedVines, 0);
-  const estimatedVinesCompleted = entries.reduce((s, e) => s + (e.estimated_vines_completed ?? 0), 0);
+  // Paddock authoritative vine total: sum of per-row shares (float), one
+  // final rounding for display. Reconciles with paddock.vine_count.
+  const exactVinesTotal = identities.reduce((s, r) => s + r.estimatedVines, 0);
+  const estimatedVinesTotal = Math.round(exactVinesTotal);
+  // Vines completed = Σ(exact quarter vines from completed rows), one rounding.
+  let exactVinesCompleted = 0;
+  for (const r of completion) {
+    if (r.completed.size === 0) continue;
+    exactVinesCompleted += r.identity.estimatedVines * (r.completed.size / 4);
+  }
+  const estimatedVinesCompleted = Math.round(exactVinesCompleted);
+  void entries; // per-entry estimated_vines_completed is intentionally unused
 
   // Working-day average — group non-deleted entries by entry_date, sum row-equivalents.
   const byDay = new Map<string, number>();
@@ -233,6 +244,42 @@ export function computeBlockProgress(
     dueStatus,
     daysRemaining,
   };
+}
+
+/** Vineyard-level projection using the shared contract. Uses aggregated
+ *  row equivalents across all blocks and the union of season working
+ *  days so a single vineyard date is projected regardless of which block
+ *  finishes last. Date-only arithmetic in UTC — no timezone shift. */
+export function projectVineyardCompletion(args: {
+  totalRowEquivalents: number;
+  completedRowEquivalents: number;
+  distinctWorkingDays: number;
+  workingDaysOfWeek: number[]; // iso 1..7; empty = all days count
+  today?: Date;
+}): { estimatedCompletionDate: string | null; daysRemaining: number | null; avgRE: number | null } {
+  const today = args.today ?? new Date();
+  const remainingRE = Math.max(0, args.totalRowEquivalents - args.completedRowEquivalents);
+  if (remainingRE === 0) {
+    return {
+      estimatedCompletionDate: fmtDate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))),
+      daysRemaining: 0,
+      avgRE: null,
+    };
+  }
+  if (args.distinctWorkingDays <= 0) return { estimatedCompletionDate: null, daysRemaining: null, avgRE: null };
+  const avg = args.completedRowEquivalents / args.distinctWorkingDays;
+  if (avg <= 0) return { estimatedCompletionDate: null, daysRemaining: null, avgRE: avg };
+  const workingSet = new Set(args.workingDaysOfWeek);
+  const daysNeeded = Math.ceil(remainingRE / avg);
+  const cursor = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  let counted = 0;
+  let calDays = 0;
+  while (counted < daysNeeded && calDays < 3650) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    calDays += 1;
+    if (!workingSet.size || workingSet.has(isoWeekday(cursor))) counted += 1;
+  }
+  return { estimatedCompletionDate: fmtDate(cursor), daysRemaining: daysNeeded, avgRE: avg };
 }
 
 export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
