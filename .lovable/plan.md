@@ -1,63 +1,102 @@
+# Slice 2 — Map-First Crop Health Maps
 
-# Slice 1 — Unified Crop Health View Model + Overlay Health
+Convert `SatelliteMappingPage` from a stacked layout with a tall right-side toolbar into a map-first workspace where controls live over the map and secondary information moves into a right-hand drawer.
 
-Scope note: Slice 2 (map-first layout, drawer, full-screen) is not started until you accept Slice 1 against the 9 July 2026 NDVI case. No Copernicus, manifest v3, asset endpoint, IDB cache identity, playback timing, or analytical-raster format changes in this phase.
+No changes to the view model, manifest v3, Copernicus/asset endpoints, IndexedDB cache identity, playback timing, crossfade, analytical raster format, or overlay lifecycle identity.
 
-## 1. New files
+## New components
 
-- `src/hooks/useCropHealthViewModel.ts` — single authoritative hook.
-  - Inputs: `manifest` (v3), `selectedDate`, `selectedLayer`, `activePaddockIds`, `activePaddocksMeta` (id → name), `displayLoadState` (Map key → `loading|loaded|failed` + error), `analyticalLoadState` (same), `overlayLifecycle` (Map key → `mounted|unmounted|error`), `refreshJob` (active job + per-paddock phase map), `packageHealth` (from manifest paddock rows).
-  - Outputs: `{ paddocks: CropHealthPaddockViewState[]; byId: Record<string, CropHealthPaddockViewState>; summary: CropHealthSelectedDateSummary; keys: { displayKey(p), analyticalKey(p) } }`.
-  - Keying: `displayKey = paddockId|acquisitionDate|selectedLayer|displayAssetId`, `analyticalKey = paddockId|sceneId|selectedLayer|analyticalAssetId`. No global "current scene id".
-  - Pure derivation only. No fetching, no side effects. Stable memoisation on inputs.
+Create four small components under `src/components/satellite/`:
 
-- `src/lib/cropHealthViewModel.ts` — types + pure `deriveCropHealthViewModel(input)` used by the hook and by tests.
-  - Exports `CropHealthPaddockViewState`, `CropHealthSelectedDateSummary`, `CropHealthAvailabilityReason`, `CropHealthDisplayStatus`, `CropHealthAnalyticalStatus`, `CropHealthPackageStatus`, `CropHealthRefreshPhase`.
-  - Deterministic reason resolution order (first match wins): package_upgrade_required → no_scene_for_date → selected_layer_missing → scene_incomplete → asset_load_failed → overlay_mount_failed → loading → cell_data_incomplete → displayed.
+1. **`MapWorkspaceDrawer.tsx`** — right-side drawer overlaid on the map container. Tabs: `Details`, `History`, `Admin` (Admin tab hidden unless `isSystemAdmin`). Uses shadcn `Sheet` with `side="right"` on desktop (width 380–440 px) and bottom sheet on mobile. Escape closes; returns focus to the trigger. Body is scrollable.
+2. **`MapControlsBar.tsx`** — top-left overlay: `Vineyard`, `Paddock`, `Map Layer` compact selects; collapses to a "Map controls" popover under 900 px.
+3. **`MapActionsBar.tsx`** — top-right overlay: `Details`, `History`, `Full Screen`, and (admin only) `Admin` buttons plus the primary `Check for New Imagery` action.
+4. **`MapLegend.tsx`** — extract existing legend markup, add an opacity slider in the expanded state.
 
-- `src/lib/cropHealthCopy.ts` — single mapping `reasonToCustomerMessage(reason, layerLabel)` implementing the wording table in section 7. Reused by timeline coverage text, per-paddock list, refresh summary, drawer (Slice 2), missing-paddock statuses.
+## Layout restructure — `SatelliteMappingPage.tsx`
 
-- `src/components/satellite/OverlayHealthPanel.tsx` — admin-only diagnostic (section 10-11). Consumes the same view model. Compact header + collapsible per-paddock table (paddock, scene, display asset, load status, mount status, analytical status, availability reason, last error). Hidden entirely for non-admin.
+Replace the outer `flex-col lg:flex-row` (map + right toolbar + stacked timeline + saved history) with:
 
-- `src/test/cropHealthViewModel.test.ts` — deterministic fixtures for: full coverage, mixed loading/mounted, layer missing on some paddocks, asset load failure, mount failure, package upgrade required, mid-refresh state, date/layer change clears stale errors.
+```text
+<div class="flex flex-col h-[calc(100dvh-var(--vt-header-h,4rem))]">
+  <header row (compact title + admin/beta badge + short description)>
+  <div ref=workspace class="relative flex-1 min-h-0">
+      <SatelliteMap fills 100%/100%>
+      <MapControlsBar   absolute top-3 left-3 />
+      <MapActionsBar    absolute top-3 right-3 />
+      <RefreshProgressPanel absolute top-3 right-3 (offset when actions bar present) />
+      <SatelliteDateSlider absolute bottom-3 left-1/2 -translate-x-1/2 w-[min(900px,calc(100%-32px))] />
+      <MapLegend        absolute bottom-3 right-3 />
+      <MapWorkspaceDrawer opens as absolute right-0 top-0 bottom-0 width 400 />
+  </div>
+</div>
+```
 
-## 2. Edits to `SatelliteMappingPage.tsx`
+Remove the permanent right sidebar `Card` and the below-map `SavedImageryHistory` card — their contents move into the drawer.
 
-Refactor in place — no rewrite. Concretely:
+## Drawer content mapping
 
-- Replace ad-hoc `useMemo` blocks that compute "paddocks displayed", coverage %, missing reasons, per-paddock status strings with a single `const vm = useCropHealthViewModel({...})` call.
-- Convert existing display/analytical loader `useState` maps to the keying scheme above and pass through to the hook.
-- Wire `SatelliteMap` callbacks (`onOverlayLoad/Error/Mounted/Unmounted`) to update `overlayLifecycle` keyed by `{paddockId, sceneId, indexType, assetId}` — never URL. Confirm `SatelliteMap` already emits these payload fields; if any field is missing, thread it through (props-only change, no lifecycle rework).
-- Coverage headline in timeline + per-paddock list + refresh completion summary + missing-paddock statuses + hover availability all read from `vm`.
-- Delete the client-side "borrow scene across dates/paddocks/layers" shims already flagged in `.lovable/plan.md`; the hook's reason resolver replaces them.
-- Stale-state clearing: on `selectedDate`/`selectedLayer` change, clear entries in `displayLoadState`/`analyticalLoadState`/`overlayLifecycle` whose key prefix no longer matches; keep last-mounted overlay visible until the new one mounts (existing crossfade path preserved).
-- Mount `OverlayHealthPanel` inside the existing admin diagnostics section — no layout changes to the page in this slice.
+- **Details** — selected date, layer name, mounted coverage, paddocks displayed/unavailable, per-paddock status list, selected paddock info, cell/package warnings. Sourced only from `useCropHealthViewModel`.
+- **History** — existing `SavedImageryHistory` component with monthly grouping and filters. Selecting a date stops playback, clears preview, commits date.
+- **Admin** — Repair Missing Assets, Build 12-Month History, Package Health, Overlay Health, Copernicus status, processing jobs, browser-cache/manifest diagnostics.
 
-## 3. Edits to `SatelliteMap.tsx`
+## Map-focus mode
 
-Callback payload audit only. Ensure `onOverlayLoad/Error/Mounted/Unmounted` each pass `{ paddockId, sceneId, indexType, assetId, overlayKey }`. No lifecycle logic change.
+Add local `mapFocus` boolean. When on, the workspace div becomes `fixed inset-0 top-[var(--vt-header-h)] left-[var(--vt-sidebar-w,0)]` with `z-40`. All overlays keep working. `Esc` exits focus (only if no drawer open). "Exit Full Screen" button appears in the actions bar.
 
-## 4. Edits to `RefreshProgressPanel.tsx`
+Do **not** call MapKit `fitBounds` on focus toggle or drawer open/close — only call `map.mapkit?.map?.invalidateSize?.()` (or the local resize helper `SatelliteMap` already exposes via `ResizeObserver`; verify it does — otherwise add a `mapRef.current?.resize()` hook). Preserve region.
 
-Read per-paddock phase from `vm` rather than internal derivation for the completion summary line. Progress rows during an in-flight job remain driven by the existing heartbeat data (unchanged in this slice).
+## Timeline / legend / refresh placement
 
-## 5. Explicitly out of scope for Slice 1
+- `SatelliteDateSlider` — bottom-centre, translucent panel `bg-background/90 backdrop-blur border shadow-md`; keep all existing props.
+- `MapLegend` — bottom-right, collapsed by default under 1024 px width.
+- `RefreshProgressPanel` — already absolute top-3 right-3; shift to `top-16` when actions bar is present so they don't overlap.
 
-- No layout, drawer, full-screen, slider-repositioning changes.
-- No wording change to the "Refresh Imagery" button (that moves to Slice 2 per section 25).
-- No manifest edge-function edits — v3 already exposes `layer_coverage` per the prior plan; if it turns out it does not, I stop and report rather than editing the function in this slice.
-- No changes to IDB cache keys or the asset endpoint.
+## Opacity control
 
-## 6. Validation before declaring Slice 1 done
+Move opacity slider into the expanded `MapLegend`. Delete from the toolbar. Behaviour unchanged (`setOpacity` on the same state).
 
-- `bunx tsgo --noEmit` clean.
-- `bunx vitest run src/test/cropHealthViewModel.test.ts` green.
-- Manual: on 9 July 2026 NDVI, report per-paddock (scene found / layer asset found / asset loaded / overlay mounted / analytical ready / final status) and confirm the four invariants in section "Slice 1 validation".
+## Header offset
 
-## 7. Open confirmations before I start
+Read `var(--vt-header-h)` if defined; fall back to `4rem`. Do not hard-code totals.
 
-1. OK to leave the "Refresh Imagery" → "Check for New Imagery" rename for Slice 2 (keeps Slice 1 diff smaller and consistent with section 25)?
-2. OK that `OverlayHealthPanel` sits inside the existing admin diagnostics block in Slice 1, then moves into the Admin drawer tab in Slice 2 — rather than building the drawer now?
-3. If the manifest edge function is missing `layer_coverage` on `date_coverage`, I stop and report (per scope), rather than editing `satellite-get-manifest`. Confirm.
+## Accessibility
 
-Reply "go" (or with adjustments) and I'll ship Slice 1 in the next turn.
+- All icon buttons get `aria-label`.
+- Drawer tabs use `Tabs` from shadcn.
+- Escape closes drawer first, then exits map focus.
+- `useEffect` to trap Escape at page level.
+- Focus returns to the button that opened the drawer (Sheet handles this).
+
+## Files
+
+**New:**
+- `src/components/satellite/MapWorkspaceDrawer.tsx`
+- `src/components/satellite/MapControlsBar.tsx`
+- `src/components/satellite/MapActionsBar.tsx`
+- `src/components/satellite/MapLegend.tsx`
+
+**Edited:**
+- `src/pages/tools/SatelliteMappingPage.tsx` — swap layout, hoist state, delete replaced markup.
+
+**Untouched:**
+- `src/components/SatelliteMap.tsx`
+- `src/components/satellite/SatelliteDateSlider.tsx`
+- `src/components/satellite/RefreshProgressPanel.tsx`
+- `src/components/satellite/OverlayHealthPanel.tsx`
+- `src/lib/cropHealthViewModel.ts`, `src/hooks/useCropHealthViewModel.ts`
+
+## Validation
+
+- `bunx tsgo --noEmit` passes.
+- Vitest suite passes (9/9 view model + others).
+- Playwright screenshots at 1366×768 normal + focus, Details/History drawers open, tablet 768.
+- Manual: MapKit centre/zoom preserved across drawer open, focus toggle, layer change.
+
+## Deliberately deferred
+
+- Compare Dates (next phase).
+- Wording overhaul beyond the primary action label and copy strings listed in §12.
+- Refactoring `SatelliteMap.tsx` internals — Slice 1 already stabilised overlay identity.
+
+Awaiting approval — this is a heavy restructure of a 3245-line file and I want to confirm the approach before ripping the old layout apart.
