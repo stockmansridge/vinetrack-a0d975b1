@@ -15,8 +15,23 @@ export interface SatelliteRasterOverlay {
   url: string;
   bounds: { north: number; south: number; east: number; west: number };
   opacity?: number;
-  /** Optional stable identity. Defaults to `${paddockId}:${url}`. Different keys can co-exist during crossfade. */
+  /** Optional stable identity. Different keys can co-exist during crossfade. Required for view-model lookups. */
   key?: string;
+  /** Metadata forwarded through overlay lifecycle callbacks so consumers never identify overlays by object URL alone. */
+  sceneId?: string | null;
+  indexType?: string | null;
+  assetId?: string | null;
+}
+
+/** Payload passed to every overlay lifecycle callback. Identifies the overlay by stable ids — never by URL or DOM node. */
+export interface OverlayCallbackInfo {
+  paddockId: string;
+  overlayKey: string;
+  /** @deprecated Use `overlayKey`. Retained for backwards compatibility. */
+  key: string;
+  sceneId: string | null;
+  indexType: string | null;
+  assetId: string | null;
 }
 
 export interface SatelliteMapProps {
@@ -39,13 +54,13 @@ export interface SatelliteMapProps {
   /** Fires with the map coordinate under the pointer (or null on leave). `x`/`y` are relative to the map container. */
   onPointerMove?: (coord: { lat: number; lng: number; x: number; y: number } | null) => void;
   /** Fires when a raster overlay <img> successfully loads (bytes decoded). */
-  onOverlayLoad?: (info: { paddockId: string; key: string }) => void;
+  onOverlayLoad?: (info: OverlayCallbackInfo) => void;
   /** Fires when a raster overlay <img> fails to load. */
-  onOverlayError?: (info: { paddockId: string; key: string }) => void;
+  onOverlayError?: (info: OverlayCallbackInfo) => void;
   /** Fires when the overlay is loaded AND has been positioned with non-zero geometry (visible on map). */
-  onOverlayMounted?: (info: { paddockId: string; key: string }) => void;
+  onOverlayMounted?: (info: OverlayCallbackInfo) => void;
   /** Fires when an overlay is removed from the DOM (crossfade complete / superseded). */
-  onOverlayUnmounted?: (info: { paddockId: string; key: string }) => void;
+  onOverlayUnmounted?: (info: OverlayCallbackInfo) => void;
   className?: string;
 }
 
@@ -90,7 +105,15 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   // Track which overlay keys have already fired 'mounted' so we don't double-emit
   // when the animation-loop resizes them each frame.
   const mountedKeysRef = useRef<Set<string>>(new Set());
-  const paddockIdByKeyRef = useRef<Map<string, string>>(new Map());
+  // Stable metadata by overlay key — used to populate lifecycle callback payloads
+  // with paddockId/sceneId/indexType/assetId so consumers never identify overlays
+  // by object URL or DOM node.
+  type OverlayMeta = { paddockId: string; sceneId: string | null; indexType: string | null; assetId: string | null };
+  const metaByKeyRef = useRef<Map<string, OverlayMeta>>(new Map());
+  const makeInfo = (key: string): OverlayCallbackInfo => {
+    const m = metaByKeyRef.current.get(key) ?? { paddockId: "", sceneId: null, indexType: null, assetId: null };
+    return { paddockId: m.paddockId, overlayKey: key, key, sceneId: m.sceneId, indexType: m.indexType, assetId: m.assetId };
+  };
 
   // Normalise to a single overlays[] list. Legacy overlayUrl/overlayBounds
   // become a one-item list so the rendering loop is uniform.
@@ -266,11 +289,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         imgRefs.current.delete(id);
         if (mountedKeysRef.current.has(id)) {
           mountedKeysRef.current.delete(id);
-          const pid = paddockIdByKeyRef.current.get(id) ?? "";
-          paddockIdByKeyRef.current.delete(id);
-          try { onOverlayUnmountedRef.current?.({ paddockId: pid, key: id }); } catch { /* noop */ }
+          const info = makeInfo(id);
+          metaByKeyRef.current.delete(id);
+          try { onOverlayUnmountedRef.current?.(info); } catch { /* noop */ }
         } else {
-          paddockIdByKeyRef.current.delete(id);
+          metaByKeyRef.current.delete(id);
         }
       }
     }
@@ -288,7 +311,12 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     // Ensure an <img> exists for each overlay and set its src / opacity.
     for (const o of effectiveOverlays) {
       const key = keyFor(o);
-      paddockIdByKeyRef.current.set(key, o.paddockId);
+      metaByKeyRef.current.set(key, {
+        paddockId: o.paddockId,
+        sceneId: o.sceneId ?? null,
+        indexType: o.indexType ?? null,
+        assetId: o.assetId ?? null,
+      });
       const targetOpacity = String(o.opacity ?? overlayOpacity);
       let img = imgRefs.current.get(key);
       const fresh = !img;
@@ -303,16 +331,15 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
         // Lifecycle callbacks — invoked once per <img> instance.
         const boundKey = key;
-        const boundPid = o.paddockId;
         img.addEventListener("load", () => {
-          try { onOverlayLoadRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          try { onOverlayLoadRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
           if (!mountedKeysRef.current.has(boundKey)) {
             mountedKeysRef.current.add(boundKey);
-            try { onOverlayMountedRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+            try { onOverlayMountedRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
           }
         }, { once: false });
         img.addEventListener("error", () => {
-          try { onOverlayErrorRef.current?.({ paddockId: boundPid, key: boundKey }); } catch { /* noop */ }
+          try { onOverlayErrorRef.current?.(makeInfo(boundKey)); } catch { /* noop */ }
         }, { once: false });
         layer.appendChild(img);
         imgRefs.current.set(key, img);

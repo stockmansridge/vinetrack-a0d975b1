@@ -5,7 +5,11 @@ import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wren
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
-import SatelliteMap, { type SatelliteRasterOverlay } from "@/components/SatelliteMap";
+import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo } from "@/components/SatelliteMap";
+import OverlayHealthPanel from "@/components/satellite/OverlayHealthPanel";
+import { useCropHealthViewModel } from "@/hooks/useCropHealthViewModel";
+import { displayKeyFor, analyticalKeyFor, type AssetLoadState, type OverlayLifecycleState } from "@/lib/cropHealthViewModel";
+import { reasonToCustomerMessage } from "@/lib/cropHealthCopy";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
@@ -520,39 +524,8 @@ function parseGeometry(raw: any): LatLng[][][] {
   return [];
 }
 
-const STALE_DAYS = 3;
-
-function computeStalePaddockIds(
-  paddockIds: string[],
-  scenes: DBScene[],
-  assets: DBAsset[],
-  layer: SatelliteIndexType,
-): string[] {
-  const cutoff = Date.now() - STALE_DAYS * 86400_000;
-  // Newest completed scene per paddock.
-  const newestByPad = new Map<string, DBScene>();
-  for (const s of scenes) {
-    if (s.processing_status !== "complete") continue;
-    const cur = newestByPad.get(s.paddock_id);
-    if (!cur || s.acquired_at > cur.acquired_at) newestByPad.set(s.paddock_id, s);
-  }
-  const analyticalBySceneLayer = new Set<string>();
-  for (const a of assets) {
-    const kind = a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
-    if (kind === "ANALYTICAL_RASTER" && a.index_type === layer) {
-      analyticalBySceneLayer.add(a.satellite_scene_id);
-    }
-  }
-  const stale: string[] = [];
-  for (const pid of paddockIds) {
-    const s = newestByPad.get(pid);
-    if (!s) { stale.push(pid); continue; }
-    const acqMs = new Date(s.acquired_at).getTime();
-    if (Number.isFinite(acqMs) && acqMs < cutoff) { stale.push(pid); continue; }
-    if (layer !== "TRUE_COLOUR" && !analyticalBySceneLayer.has(s.id)) { stale.push(pid); continue; }
-  }
-  return stale;
-}
+// (Legacy `computeStalePaddockIds` removed — availability is decided by the
+// unified Crop Health view model.)
 
 // Module-level so it survives page unmount/remount within the tab session.
 // Records the last time we auto-triggered a refresh for a given vineyard.
@@ -802,8 +775,8 @@ export default function SatelliteMappingPage() {
     return { scenes, assets, summaries };
   }, [manifestQuery.data, activeVineyardId]);
 
-  // Compat shim so legacy consumers keep working while we transition.
-  const scenesQuery = { data: derivedFromManifest };
+  // (Legacy `scenesQuery` shim removed — every consumer reads `derivedFromManifest`
+  // and the unified `viewModel` below directly. Manifest v3 is the sole source.)
 
 
   const activeLayer = LAYERS.find((l) => l.id === layer)!;
@@ -879,7 +852,7 @@ export default function SatelliteMappingPage() {
       // eslint-disable-next-line no-console
       console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present.");
     }
-    const scenes = scenesQuery.data?.scenes ?? [];
+    const scenes = derivedFromManifest?.scenes ?? [];
     const grouped = new Map<string, Map<string, DBScene>>();
     const better = (a: DBScene, b: DBScene): DBScene => {
       const cov = (b.paddock_valid_coverage_pct ?? -1) - (a.paddock_valid_coverage_pct ?? -1);
@@ -908,7 +881,7 @@ export default function SatelliteMappingPage() {
         missing: [] as { paddock_id: string; reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch" }[],
         layerCoverage: {} as Partial<Record<string, { available: number; total: number; percent: number; available_paddock_ids: string[]; missing_paddock_ids: string[] }>>,
       }));
-  }, [manifestQuery.data, scenesQuery.data, activeVineyardId, geoms]);
+  }, [manifestQuery.data, derivedFromManifest, activeVineyardId, geoms]);
 
 
   const isAllPaddocks = paddockId === "all";
@@ -1043,8 +1016,8 @@ export default function SatelliteMappingPage() {
   // Build asset pairs (display + optional analytical) for a given date +
   // current layer. Uses the best scene per paddock for that date.
   const buildAssetPairsFor = (dateKey: string | null) => {
-    if (!dateKey || !scenesQuery.data) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
-    const { assets } = scenesQuery.data;
+    if (!dateKey || !derivedFromManifest) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
+    const { assets } = derivedFromManifest;
     const displayFor = (sceneId: string) => assets.find((x) =>
       x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "DISPLAY_RASTER"
     );
@@ -1065,14 +1038,14 @@ export default function SatelliteMappingPage() {
   const activeAssetPairs = useMemo(
     () => buildAssetPairsFor(selectedSceneKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scenesQuery.data, selectedSceneKey, layer, dateCoverage],
+    [derivedFromManifest, selectedSceneKey, layer, dateCoverage],
   );
 
   // Effective display pairs — drive the map overlay images.
   const displayAssetPairs = useMemo(
     () => (effectiveDisplayDate === selectedSceneKey ? activeAssetPairs : buildAssetPairsFor(effectiveDisplayDate)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scenesQuery.data, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
+    [derivedFromManifest, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
   );
 
   const activeAssets = useMemo(
@@ -1109,7 +1082,7 @@ export default function SatelliteMappingPage() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedDatesAsc, selectedSceneKey, layer, scenesQuery.data, dateCoverage]);
+  }, [sortedDatesAsc, selectedSceneKey, layer, derivedFromManifest, dateCoverage]);
 
   // Are any preview-date display assets still loading? Drives the loading
   // caption shown near the map during a scrub.
@@ -1132,9 +1105,14 @@ export default function SatelliteMappingPage() {
         url: signedUrls[asset.id],
         bounds: asset.bounds!,
         opacity: opacity / 100,
-        key: `${scene.paddock_id}:${asset.id}`,
+        // Stable identity — matches `displayKeyFor(paddockId, effectiveDate, layer, assetId)`
+        // so the view model and every overlay-lifecycle callback share ONE key space.
+        key: displayKeyFor(scene.paddock_id, effectiveDisplayDate, layer, asset.id),
+        sceneId: scene.id,
+        indexType: layer,
+        assetId: asset.id,
       }));
-  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending]);
+  }, [activeAssets, activeAssetPairs, signedUrls, opacity, previewPending, effectiveDisplayDate, layer]);
 
   // Crossfade-mounted overlays. When the target changes, keep the previous
   // set briefly with opacity 0 so its CSS transition animates out while the
@@ -1157,62 +1135,84 @@ export default function SatelliteMappingPage() {
     return () => clearTimeout(t);
   }, [targetMapOverlays, prefersReducedMotion]);
 
-  // --- Overlay lifecycle tracking -----------------------------------------
-  // Truth for "Paddocks displayed": count of unique paddockIds whose overlay
-  // <img> has actually loaded and mounted for the currently targeted set.
-  type OverlayLoadStatus = "loading" | "loaded" | "error";
-  const [overlayStatus, setOverlayStatus] = useState<Record<string, OverlayLoadStatus>>({});
-  const [overlayMountedKeys, setOverlayMountedKeys] = useState<Set<string>>(() => new Set());
+  // --- Overlay & asset lifecycle → unified view-model input maps ----------
+  // Keys use `displayKeyFor(paddockId, effectiveDisplayDate, layer, assetId)` and
+  // `analyticalKeyFor(paddockId, sceneId, layer, assetId)`. Every consumer of
+  // "is this paddock displayed / loading / failed" reads the derived view model,
+  // never these raw maps directly.
+  const [displayLoadState, setDisplayLoadState] = useState<Map<string, AssetLoadState>>(() => new Map());
+  const [overlayLifecycle, setOverlayLifecycle] = useState<Map<string, OverlayLifecycleState>>(() => new Map());
+  const [analyticalLoadState, setAnalyticalLoadState] = useState<Map<string, AssetLoadState>>(() => new Map());
+  const overlayLifecycleRef = useRef(overlayLifecycle);
+  useEffect(() => { overlayLifecycleRef.current = overlayLifecycle; }, [overlayLifecycle]);
 
-  const handleOverlayLoad = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayStatus((s) => (s[key] === "loaded" ? s : { ...s, [key]: "loaded" }));
-  }, []);
-
-  // Ref mirror of overlayMountedKeys — used by the refresh mutation to await
-  // MapKit lifecycle events without re-rendering.
-  const overlayMountedKeysRef = useRef(overlayMountedKeys);
-  useEffect(() => { overlayMountedKeysRef.current = overlayMountedKeys; }, [overlayMountedKeys]);
-  const handleOverlayError = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayStatus((s) => (s[key] === "error" ? s : { ...s, [key]: "error" }));
-  }, []);
-  const handleOverlayMounted = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayMountedKeys((s) => {
-      if (s.has(key)) return s;
-      const next = new Set(s); next.add(key); return next;
+  const handleOverlayLoad = useCallback((info: OverlayCallbackInfo) => {
+    setDisplayLoadState((prev) => {
+      const cur = prev.get(info.overlayKey);
+      if (cur?.phase === "loaded") return prev;
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "loaded" }); return next;
     });
   }, []);
-  const handleOverlayUnmounted = useCallback(({ key }: { paddockId: string; key: string }) => {
-    setOverlayMountedKeys((s) => {
-      if (!s.has(key)) return s;
-      const next = new Set(s); next.delete(key); return next;
+  const handleOverlayError = useCallback((info: OverlayCallbackInfo) => {
+    setDisplayLoadState((prev) => {
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "failed", errorMessage: `${info.indexType ?? "asset"} could not be loaded` }); return next;
     });
-    setOverlayStatus((s) => {
-      if (!(key in s)) return s;
-      const { [key]: _drop, ...rest } = s; return rest;
+    setOverlayLifecycle((prev) => {
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "error", errorMessage: "Overlay <img> load failed" }); return next;
+    });
+  }, []);
+  const handleOverlayMounted = useCallback((info: OverlayCallbackInfo) => {
+    setOverlayLifecycle((prev) => {
+      const cur = prev.get(info.overlayKey);
+      if (cur?.phase === "mounted") return prev;
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "mounted" }); return next;
+    });
+  }, []);
+  const handleOverlayUnmounted = useCallback((info: OverlayCallbackInfo) => {
+    setOverlayLifecycle((prev) => {
+      if (!prev.has(info.overlayKey)) return prev;
+      const next = new Map(prev); next.set(info.overlayKey, { phase: "unmounted" }); return next;
+    });
+    setDisplayLoadState((prev) => {
+      if (!prev.has(info.overlayKey)) return prev;
+      const next = new Map(prev); next.delete(info.overlayKey); return next;
     });
   }, []);
 
-  // Seed 'loading' state for any target overlay we don't already track.
+  // Seed 'loading' load-state for any target overlay we don't already track.
   useEffect(() => {
-    setOverlayStatus((s) => {
+    setDisplayLoadState((prev) => {
       let changed = false;
-      const next: Record<string, OverlayLoadStatus> = { ...s };
+      const next = new Map(prev);
       for (const o of targetMapOverlays) {
         const k = o.key!;
-        if (!(k in next)) { next[k] = "loading"; changed = true; }
+        if (!next.has(k)) { next.set(k, { phase: "loading" }); changed = true; }
       }
-      return changed ? next : s;
+      return changed ? next : prev;
     });
   }, [targetMapOverlays]);
 
-  // Count unique paddocks that have a currently-targeted overlay mounted.
-  const mountedPaddockCount = useMemo(() => {
-    const seen = new Set<string>();
-    for (const o of targetMapOverlays) {
-      if (overlayMountedKeys.has(o.key!)) seen.add(o.paddockId);
-    }
-    return seen.size;
-  }, [targetMapOverlays, overlayMountedKeys]);
+  // ============= Unified Crop Health View Model =============
+  // ONE derived state consumed by every customer-facing surface: paddocks
+  // displayed, coverage %, per-paddock list, missing chips, hover availability,
+  // refresh completion summary, selected-date diagnostics, Overlay Health panel.
+  // Never re-derive availability from raw manifest/state anywhere else.
+  const activePaddockMetas = useMemo(
+    () => geoms.map((g) => ({ id: g.id, name: g.name })),
+    [geoms],
+  );
+  const viewModel = useCropHealthViewModel({
+    manifest: manifestQuery.data ?? null,
+    selectedDate: effectiveDisplayDate,
+    selectedLayer: layer,
+    activePaddocks: activePaddockMetas,
+    displayLoadState,
+    analyticalLoadState,
+    overlayLifecycle,
+  });
+  const mountedPaddockCount = viewModel.summary.overlaysMounted;
+
+
 
   // Clear stale search / refresh errors when the user changes date or layer so
   // banners from a previous selection don't linger on a fresh view.
@@ -1404,14 +1404,24 @@ export default function SatelliteMappingPage() {
       })();
 
       analyticalCacheRef.current.set(key, promise);
+      const vmKey = analyticalKeyFor(scene.paddock_id, scene.id, asset.index_type, asset.id);
+      setAnalyticalLoadState((prev) => {
+        const next = new Map(prev); next.set(vmKey, { phase: "loading" }); return next;
+      });
       setRasterCacheVersion((v) => v + 1);
       try {
         const decoded = await promise;
         if (cancelled) return;
         analyticalCacheRef.current.set(key, decoded);
+        setAnalyticalLoadState((prev) => {
+          const next = new Map(prev); next.set(vmKey, { phase: "loaded" }); return next;
+        });
       } catch (e: any) {
         if (cancelled) return;
         analyticalCacheRef.current.set(key, { error: String(e?.message ?? e) });
+        setAnalyticalLoadState((prev) => {
+          const next = new Map(prev); next.set(vmKey, { phase: "failed", errorMessage: String(e?.message ?? e) }); return next;
+        });
       } finally {
         if (!cancelled) setRasterCacheVersion((v) => v + 1);
       }
@@ -1430,18 +1440,18 @@ export default function SatelliteMappingPage() {
   // Summaries lookup by paddock (for hover + selected-scene classification)
   const summaryByPaddock = useMemo(() => {
     const map = new Map<string, DBSummary>();
-    if (!scenesQuery.data || !selectedSceneKey) return map;
-    const relevantScenes = scenesQuery.data.scenes.filter(
+    if (!derivedFromManifest || !selectedSceneKey) return map;
+    const relevantScenes = derivedFromManifest.scenes.filter(
       (s) => s.acquired_at.slice(0, 10) === selectedSceneKey,
     );
     const bySceneId = new Map(relevantScenes.map((s) => [s.id, s]));
-    for (const sum of scenesQuery.data.summaries) {
+    for (const sum of derivedFromManifest.summaries) {
       if (sum.index_type !== layer) continue;
       const scene = bySceneId.get(sum.satellite_scene_id);
       if (scene) map.set(scene.paddock_id, sum);
     }
     return map;
-  }, [scenesQuery.data, selectedSceneKey, layer, activeAssets]);
+  }, [derivedFromManifest, selectedSceneKey, layer, activeAssets]);
 
 
   // ---------- Hover sampling ----------
@@ -1727,8 +1737,8 @@ export default function SatelliteMappingPage() {
       async function waitForOverlayMount(pid: string, timeoutMs = 8000): Promise<boolean> {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-          for (const k of overlayMountedKeysRef.current) {
-            if (k.startsWith(`${pid}:`)) return true;
+          for (const [k, life] of overlayLifecycleRef.current) {
+            if (life.phase === "mounted" && k.startsWith(`${pid}|`)) return true;
           }
           await new Promise((r) => setTimeout(r, 200));
         }
@@ -2251,10 +2261,6 @@ export default function SatelliteMappingPage() {
   }, [geoms, manifestQuery.data]);
 
   const [missingDetailOpen, setMissingDetailOpen] = useState(false);
-  const paddocksMissingLatestSet = useMemo(
-    () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
-    [liveReport],
-  );
 
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
@@ -2491,10 +2497,13 @@ export default function SatelliteMappingPage() {
               </div>
             )}
             {selectedSceneKey && (() => {
-              const group = dateCoverage.find((g) => g.date === selectedSceneKey);
-              const missing = group
-                ? geoms.filter((g) => !group.sceneByPaddock.has(g.id))
-                : geoms;
+              // Missing = paddocks the unified view model reports as unavailable for
+              // the current (date, layer). Single source — no re-derivation.
+              const missing = viewModel.paddocks.filter(
+                (p) => p.availabilityReason === "no_scene_for_date"
+                  || p.availabilityReason === "selected_layer_missing"
+                  || p.availabilityReason === "scene_incomplete",
+              );
               if (missing.length === 0) return null;
               return (
                 <div className="text-[11px] text-muted-foreground mt-2 space-y-1">
@@ -2504,10 +2513,10 @@ export default function SatelliteMappingPage() {
                   <div className="flex flex-wrap gap-1">
                     {missing.map((p) => (
                       <span
-                        key={p.id}
+                        key={p.paddockId}
                         className="inline-flex items-center rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
                       >
-                        {p.name}
+                        {p.paddockName}
                       </span>
                     ))}
                   </div>
@@ -2618,18 +2627,20 @@ export default function SatelliteMappingPage() {
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-3 pt-2">
             {(() => {
-              const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
-              const pct = selectedEntry
-                ? (Number.isInteger(selectedEntry.coveragePercent) ? `${selectedEntry.coveragePercent}` : selectedEntry.coveragePercent.toFixed(1))
-                : "—";
+              // Selected-date diagnostics — all numbers come from the unified view
+              // model. Coverage % = mounted overlays ÷ active paddocks × 100.
+              const s = viewModel.summary;
+              const pct = Number.isInteger(s.coveragePercent)
+                ? `${s.coveragePercent}`
+                : s.coveragePercent.toFixed(1);
               return (
                 <div className="space-y-1">
                   <div className="text-xs font-semibold text-foreground">Selected date</div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
                     <div>Date: <span className="text-foreground">{selectedSceneKey ? formatDate(selectedSceneKey) : "—"}</span></div>
-                    <div>Active paddocks: <span className="text-foreground">{selectedEntry?.activeCount ?? totalPaddocks}</span></div>
-                    <div>Paddocks displayed: <span className="text-foreground">{mountedPaddockCount}</span><span className="text-muted-foreground"> (manifest expects {selectedEntry?.paddockCount ?? 0})</span></div>
-                    <div>Unavailable: <span className="text-foreground">{Math.max(0, (selectedEntry?.activeCount ?? totalPaddocks) - mountedPaddockCount)}</span></div>
+                    <div>Active paddocks: <span className="text-foreground">{s.activePaddocks}</span></div>
+                    <div>Paddocks displayed: <span className="text-foreground">{s.overlaysMounted}</span><span className="text-muted-foreground"> (manifest layer assets: {s.layerAssetsAvailable})</span></div>
+                    <div>Unavailable: <span className="text-foreground">{s.unavailable}</span></div>
                     <div>Coverage: <span className="text-foreground">{pct}%</span></div>
                     <div>Layer: <span className="text-foreground">{layer}</span></div>
                   </div>
@@ -2695,76 +2706,32 @@ export default function SatelliteMappingPage() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-2 max-h-56 overflow-y-auto space-y-1 rounded-sm bg-background/60 p-2">
-                  {(() => {
-                    const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
-                    const missingSet = new Map<string, string>();
-                    const group = dateCoverage.find((g) => g.date === selectedSceneKey);
-                    for (const m of group?.missing ?? []) {
-                      const label = m.reason === "scene_not_complete"
-                        ? "Imagery exists but processing is incomplete"
-                        : m.reason === "package_version_mismatch"
-                          ? "Imagery exists but requires a package upgrade"
-                          : "No saved imagery for this date";
-                      missingSet.set(m.paddock_id, label);
-                    }
-                    // Per-paddock lifecycle from live overlay tracking.
-                    const overlayByPaddock = new Map<string, { key: string; status: OverlayLoadStatus | "mounted" }>();
-                    for (const o of targetMapOverlays) {
-                      const mounted = overlayMountedKeys.has(o.key!);
-                      const status: OverlayLoadStatus | "mounted" = mounted
-                        ? "mounted"
-                        : (overlayStatus[o.key!] ?? "loading");
-                      overlayByPaddock.set(o.paddockId, { key: o.key!, status });
-                    }
-                    const dateLabel = selectedSceneKey ? formatDate(selectedSceneKey) : "this date";
-                    return geoms.map((g) => {
-                      const pkg = liveReport.perPaddock.find((p) => p.paddockId === g.id);
-                      const missingLabel = missingSet.get(g.id);
-                      const live = overlayByPaddock.get(g.id);
-                      let badge: string;
-                      let tone: "ok" | "warn" | "err" = "ok";
-                      if (missingLabel) {
-                        badge = missingLabel === "No saved imagery for this date"
-                          ? `No ${layer} imagery saved for ${dateLabel}`
-                          : missingLabel;
-                        tone = "warn";
-                      } else if (live?.status === "mounted") {
-                        badge = "Imagery displayed";
-                      } else if (live?.status === "loaded") {
-                        badge = "Image available but still loading";
-                      } else if (live?.status === "error") {
-                        badge = `${layer} asset could not be loaded`;
-                        tone = "err";
-                      } else if (live?.status === "loading") {
-                        badge = "Image available but still loading";
-                      } else if (pkg?.state === "old_processing_version") {
-                        badge = `${layer} processing incomplete`;
-                        tone = "warn";
-                      } else if (pkg && pkg.indicesRequiringWork.length > 0) {
-                        badge = "Cell data incomplete";
-                        tone = "warn";
-                      } else {
-                        badge = `No ${layer} imagery saved for ${dateLabel}`;
-                        tone = "warn";
-                      }
-                      const toneCls = tone === "err"
-                        ? "text-destructive"
-                        : tone === "warn"
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-muted-foreground";
-                      return (
-                        <div key={g.id} className="text-[11px] leading-tight">
-                          <span className="font-medium text-foreground">{g.name}</span>
-                          <span className={`ml-1 ${toneCls}`}>— {badge}</span>
-                        </div>
-                      );
-                    });
-                    // eslint-disable-next-line no-unreachable
-                    void selectedEntry;
-                  })()}
+                  {viewModel.paddocks.map((p) => {
+                    const badge = reasonToCustomerMessage(p.availabilityReason, p.selectedLayer);
+                    const tone: "ok" | "warn" | "err" =
+                      p.availabilityReason === "displayed" ? "ok"
+                      : (p.availabilityReason === "asset_load_failed" || p.availabilityReason === "overlay_mount_failed") ? "err"
+                      : "warn";
+                    const toneCls = tone === "err"
+                      ? "text-destructive"
+                      : tone === "warn"
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground";
+                    return (
+                      <div key={p.paddockId} className="text-[11px] leading-tight">
+                        <span className="font-medium text-foreground">{p.paddockName}</span>
+                        <span className={`ml-1 ${toneCls}`}>— {badge}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Overlay Health — reads exclusively from the unified view model. */}
+            <div className="pt-2 border-t">
+              <OverlayHealthPanel viewModel={viewModel} selectedLayer={layer} />
+            </div>
               </CollapsibleContent>
             </div>
           </Collapsible>
