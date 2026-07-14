@@ -6,7 +6,7 @@ import MapWorkspaceDrawer, { type DrawerTab } from "@/components/satellite/MapWo
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
-import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo } from "@/components/SatelliteMap";
+import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo, type SatelliteMapDiagnostics } from "@/components/SatelliteMap";
 import OverlayHealthPanel from "@/components/satellite/OverlayHealthPanel";
 import { useCropHealthViewModel } from "@/hooks/useCropHealthViewModel";
 import { displayKeyFor, analyticalKeyFor, type AssetLoadState, type OverlayLifecycleState } from "@/lib/cropHealthViewModel";
@@ -463,33 +463,71 @@ type DecodedAnalyticalRaster = {
   processingVersion: string;
 };
 
+type AssetPipelineDiagnostic = {
+  assetId: string;
+  paddockId: string | null;
+  layer: SatelliteIndexType | string | null;
+  endpointStatus: number | null;
+  blobSize: number | null;
+  mimeType: string | null;
+  etag: string | null;
+  objectUrlCreated: boolean;
+  imageStatus: "not_checked" | "loaded" | "error";
+  bounds: string;
+  finalStatus: "pending" | "cached" | "loaded" | "failed";
+  error: string | null;
+};
+
+type ProcessingFailureDiagnostic = {
+  paddockId: string;
+  paddockName: string | null;
+  httpStatus: number | null;
+  code: string | null;
+  status: string | null;
+  failedStage: string | null;
+  failedLayer: string | null;
+  providerStatus: number | null;
+  message: string;
+  failedLayers?: Array<{ index?: string; code?: string; message?: string }>;
+};
+
 const assetKind = (a: DBAsset) => a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
 const analyticalCacheKey = (paddockId: string, sceneId: string, indexType: SatelliteIndexType, processingVersion: string | null | undefined) =>
   `${paddockId}:${sceneId}:${indexType}:${processingVersion ?? "unknown"}`;
 
-function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string } {
+function parseSatelliteFunctionError(error: any): { code: string | null; providerStatus: number | null; message: string; httpStatus: number | null; status: string | null; failedLayer: string | null; failedStage: string | null; failedLayers?: Array<{ index?: string; code?: string; message?: string }> } {
   const fallback = String(error?.message ?? error ?? "Unknown error");
   const raw = error?.details ?? error?.context ?? fallback;
   if (typeof raw === "object" && raw) {
-    if (raw instanceof Response) return { code: null, providerStatus: raw.status, message: fallback };
+    if (raw instanceof Response) return { code: null, providerStatus: raw.status, httpStatus: raw.status, status: null, failedLayer: null, failedStage: null, message: fallback };
     return {
       code: raw.code ?? null,
       providerStatus: raw.provider_status ?? null,
+      httpStatus: raw.statusCode ?? raw.httpStatus ?? null,
+      status: raw.status ?? null,
+      failedLayer: raw.failed_layer ?? raw.layer ?? null,
+      failedStage: raw.failed_stage ?? raw.stage ?? null,
+      failedLayers: Array.isArray(raw.failed_layers) ? raw.failed_layers : undefined,
       message: raw.error ?? raw.message ?? fallback,
     };
   }
   const text = String(raw);
   const match = text.match(/\{.*\}$/s);
-  if (!match) return { code: null, providerStatus: null, message: fallback };
+  if (!match) return { code: null, providerStatus: null, httpStatus: null, status: null, failedLayer: null, failedStage: null, message: fallback };
   try {
     const parsed = JSON.parse(match[0]);
     return {
       code: parsed.code ?? null,
       providerStatus: parsed.provider_status ?? null,
+      httpStatus: parsed.statusCode ?? parsed.httpStatus ?? null,
+      status: parsed.status ?? null,
+      failedLayer: parsed.failed_layer ?? parsed.layer ?? null,
+      failedStage: parsed.failed_stage ?? parsed.stage ?? null,
+      failedLayers: Array.isArray(parsed.failed_layers) ? parsed.failed_layers : undefined,
       message: parsed.error ?? parsed.message ?? fallback,
     };
   } catch {
-    return { code: null, providerStatus: null, message: fallback };
+    return { code: null, providerStatus: null, httpStatus: null, status: null, failedLayer: null, failedStage: null, message: fallback };
   }
 }
 
