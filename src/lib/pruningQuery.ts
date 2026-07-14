@@ -40,6 +40,7 @@ export interface PruningEntry {
   notes: string;
   row_equivalents_completed: number;
   estimated_vines_completed: number;
+  work_task_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -204,6 +205,8 @@ export interface RecordEntryInput {
   notes: string;
   estimatedVines: number;
   segments: RecordSegmentInput[];
+  /** SQL 113: durable link to a work_tasks row. Null to leave unlinked. */
+  workTaskId?: string | null;
 }
 
 export interface RecordEntryResult {
@@ -239,6 +242,7 @@ export function useRecordPruningEntry(seasonId: string) {
           row_id: s.paddockRowId ?? null,
           label: s.rowLabel,
         })),
+        p_work_task_id: input.workTaskId ?? null,
       });
       if (error) throw error;
       return data as RecordEntryResult;
@@ -290,4 +294,13 @@ export function useReversePruningEntry(seasonId: string) {
       await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
     },
   });
+}
+
+/** SQL 113: link, unlink, or retry-link an existing pruning entry to a Work Task. */
+export async function setPruningEntryWorkTask(entryId: string, workTaskId: string | null) {
+  const { error } = await (supabase as any).rpc("set_pruning_entry_work_task", {
+    p_entry_id: entryId,
+    p_work_task_id: workTaskId,
+  });
+  if (error) throw error;
 }
