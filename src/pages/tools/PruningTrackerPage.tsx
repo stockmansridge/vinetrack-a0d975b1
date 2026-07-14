@@ -576,7 +576,15 @@ function BlockDetail({ block, entries, completion, canEdit, onBack, onOpenSettin
             </p>
           ) : (
             <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {completion.map((r) => (
+              {[...completion].sort((a, b) => {
+                const an = Number(a.identity.rowNumber);
+                const bn = Number(b.identity.rowNumber);
+                const aF = Number.isFinite(an), bF = Number.isFinite(bn);
+                if (aF && bF && an !== bn) return an - bn;
+                if (aF && !bF) return -1;
+                if (!aF && bF) return 1;
+                return String(a.identity.rowLabel).localeCompare(String(b.identity.rowLabel), undefined, { numeric: true });
+              }).map((r) => (
                 <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="flex items-center gap-2 rounded border p-2">
                   <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
                     {r.identity.rowLabel}
