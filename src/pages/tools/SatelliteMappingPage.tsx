@@ -2262,6 +2262,20 @@ export default function SatelliteMappingPage() {
   }, [geoms, manifestQuery.data]);
 
   const [missingDetailOpen, setMissingDetailOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>("details");
+  const [mapFocus, setMapFocus] = useState(false);
+  const openDrawer = useCallback((t: DrawerTab) => { setDrawerTab(t); setDrawerOpen(true); }, []);
+
+  // Escape exits map-focus when no drawer is open (drawer handles its own Escape).
+  useEffect(() => {
+    if (!mapFocus) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !drawerOpen) setMapFocus(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mapFocus, drawerOpen]);
 
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
