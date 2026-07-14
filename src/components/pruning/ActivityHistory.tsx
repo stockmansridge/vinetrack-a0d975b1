@@ -16,7 +16,7 @@ export default function ActivityHistory({ seasonId, entries, canReverse }: Props
     if (!confirm("Reverse this entry? Its row quarters will become available again.")) return;
     try {
       await reverse.mutateAsync(id);
-      toast.success("Entry reversed");
+      toast.success("Pruning record reversed.");
     } catch (e: any) {
       toast.error(`Failed to reverse: ${e?.message ?? e}`);
     }
