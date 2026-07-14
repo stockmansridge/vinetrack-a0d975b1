@@ -10,7 +10,11 @@ vi.mock("@/lib/pruningQuery", async () => {
   const actual = await vi.importActual<any>("@/lib/pruningQuery");
   return { ...actual, useRecordPruningEntry: () => ({ mutateAsync: vi.fn(), isPending: false }) };
 });
-vi.mock("@/lib/workTasksQuery", () => ({ createWorkTask: vi.fn() }));
+vi.mock("@/lib/workTasksQuery", () => ({
+  createWorkTask: vi.fn(),
+  createLabourLine: vi.fn(),
+  syncWorkTaskPaddocks: vi.fn(),
+}));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 
 function makeRows(nums: number[]): RowCompletionState[] {
