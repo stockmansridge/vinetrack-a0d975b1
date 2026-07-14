@@ -2097,7 +2097,7 @@ export default function SatelliteMappingPage() {
         } else if (finalStatus === "rate_limited") {
           patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: finalMsg });
         } else {
-          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: finalMsg });
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed" });
         }
       }
 
@@ -2170,9 +2170,9 @@ export default function SatelliteMappingPage() {
           patchPad(pid, { stage: "saving" });
           await reconcilePaddock(pid, false);
         } else if (finalStatus === "rate_limited") {
-          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable", errorMessage: "Provider paused" });
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "provider_unavailable" });
         } else {
-          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "Repair did not complete." });
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed" });
         }
       }
 
