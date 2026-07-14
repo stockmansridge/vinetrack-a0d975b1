@@ -2911,16 +2911,18 @@ export default function SatelliteMappingPage() {
               color: paddockColor(g.id),
             }))}
             selectedPaddockId={paddockId === "all" ? null : paddockId}
-            overlays={mapOverlays}
+            overlays={disableCropOverlays ? [] : mapOverlays}
             overlayOpacity={opacity / 100}
             overlayTransitionMs={prefersReducedMotion ? 0 : 220}
-            cellRect={hoverSuspended ? null : hover?.cellRect ?? null}
+            cellRect={disableCropOverlays || hoverSuspended ? null : hover?.cellRect ?? null}
             onPaddockClick={(id) => setPaddockId(id)}
             onPointerMove={handlePointerMove}
             onOverlayLoad={handleOverlayLoad}
             onOverlayError={handleOverlayError}
             onOverlayMounted={handleOverlayMounted}
             onOverlayUnmounted={handleOverlayUnmounted}
+            onDiagnosticsChange={setMapDiagnostics}
+            showDiagnostics={isSystemAdmin}
           />
         )}
 
@@ -2968,6 +2970,16 @@ export default function SatelliteMappingPage() {
               </SelectContent>
             </Select>
           </div>
+          {isSystemAdmin && (
+            <Button
+              size="sm"
+              variant={disableCropOverlays ? "secondary" : "outline"}
+              className="h-9 bg-background/95 backdrop-blur shadow-sm"
+              onClick={() => setDisableCropOverlays((v) => !v)}
+            >
+              Disable Crop Overlays: {disableCropOverlays ? "On" : "Off"}
+            </Button>
+          )}
         </div>
 
         {/* Top-right: workspace actions */}
@@ -3206,8 +3218,12 @@ export default function SatelliteMappingPage() {
 
         {/* Acquisition date slider — bottom-centre, on top of the map */}
         <div
-          className="absolute left-1/2 z-[540] -translate-x-1/2 w-[min(900px,calc(100%-2rem))]"
-          style={{ bottom: "max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))" }}
+          className="absolute left-1/2 z-[540] -translate-x-1/2"
+          style={{
+            bottom: "96px",
+            width: legendOpen ? "min(760px, calc(100% - 420px))" : "min(900px, calc(100% - 2rem))",
+            minWidth: "min(520px, calc(100% - 2rem))",
+          }}
         >
 
           {(() => {
