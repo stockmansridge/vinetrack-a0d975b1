@@ -2522,10 +2522,13 @@ export default function SatelliteMappingPage() {
               </div>
             )}
             {selectedSceneKey && (() => {
-              const group = dateCoverage.find((g) => g.date === selectedSceneKey);
-              const missing = group
-                ? geoms.filter((g) => !group.sceneByPaddock.has(g.id))
-                : geoms;
+              // Missing = paddocks the unified view model reports as unavailable for
+              // the current (date, layer). Single source — no re-derivation.
+              const missing = viewModel.paddocks.filter(
+                (p) => p.availabilityReason === "no_scene_for_date"
+                  || p.availabilityReason === "selected_layer_missing"
+                  || p.availabilityReason === "scene_incomplete",
+              );
               if (missing.length === 0) return null;
               return (
                 <div className="text-[11px] text-muted-foreground mt-2 space-y-1">
