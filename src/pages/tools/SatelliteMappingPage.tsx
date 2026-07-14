@@ -583,7 +583,7 @@ export default function SatelliteMappingPage() {
   const [paddockId, setPaddockId] = useState<string>("all");
   const [layer, setLayer] = useState<SatelliteIndexType>("NDVI");
   const [opacity, setOpacity] = useState<number>(70);
-  const [legendOpen, setLegendOpen] = useState<boolean>(true);
+  const [legendOpen, setLegendOpen] = useState<boolean>(false);
   const [selectedSceneKey, setSelectedSceneKey] = useState<string | null>(null); // COMMITTED date (YYYY-MM-DD)
   const [previewDate, setPreviewDate] = useState<string | null>(null); // transient preview (null = same as committed)
   const [interacting, setInteracting] = useState(false); // slider drag / key in progress
@@ -2494,10 +2494,6 @@ export default function SatelliteMappingPage() {
     return { list, doneCount: terminal.filter((p) => p.outcome !== "skipped").length, total: refreshProgress.total };
   }, [refreshProgress]);
 
-  // ---------- Guards ----------
-  if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
-  if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
-
   const busy = checkForNewImage.isPending;
   const isRetryPass = busy && retryInFlightRef.current;
   const refreshLabel = busy
@@ -2642,6 +2638,14 @@ export default function SatelliteMappingPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
+          variant={disableCropOverlays ? "secondary" : "outline"}
+          onClick={() => setDisableCropOverlays((v) => !v)}
+          title="Temporarily render Apple Maps and paddock boundaries without crop-health rasters."
+        >
+          Disable Crop Overlays: {disableCropOverlays ? "On" : "Off"}
+        </Button>
+        <Button
+          size="sm"
           variant="outline"
           disabled={busy || backfillLayers.isPending || !activeVineyardId}
           onClick={() => backfillLayers.mutate()}
@@ -2698,6 +2702,56 @@ export default function SatelliteMappingPage() {
           <Wrench className="h-3.5 w-3.5" />
           Diagnostics
         </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">MapKit readiness</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <div>State: <span className="text-foreground">{mapDiagnostics?.readinessState ?? "—"}</span></div>
+            <div>Token HTTP: <span className="text-foreground">{mapDiagnostics?.tokenEndpointStatus ?? "—"}</span></div>
+            <div>Token received: <span className="text-foreground">{mapDiagnostics?.tokenReceived ? "yes" : "no"}</span></div>
+            <div>Token field: <span className="text-foreground">{mapDiagnostics?.tokenFieldName ?? "—"}</span></div>
+            <div>Token length: <span className="text-foreground">{mapDiagnostics?.tokenLength ?? "—"}</span></div>
+            <div>Global: <span className="text-foreground">{mapDiagnostics?.mapkitGlobalAvailable ? "yes" : "no"}</span></div>
+            <div>Map instance: <span className="text-foreground">{mapDiagnostics?.mapInstanceCreated ? "yes" : "no"}</span></div>
+            <div>Attached: <span className="text-foreground">{mapDiagnostics?.mapElementAttached ? "yes" : "no"}</span></div>
+            <div>Container: <span className="text-foreground">{mapDiagnostics ? `${mapDiagnostics.containerWidth}×${mapDiagnostics.containerHeight}` : "—"}</span></div>
+            <div>Subviews: <span className="text-foreground">{mapDiagnostics?.mapCanvasSubviewCount ?? "—"}</span></div>
+            <div className="col-span-2">Top at centre: <span className="text-foreground">{mapDiagnostics?.elementAtCenter ?? "—"}</span></div>
+            {mapDiagnostics?.lastError && <div className="col-span-2 text-destructive">{mapDiagnostics.lastError}</div>}
+          </div>
+        </div>
+
+        <div className="space-y-1 pt-2 border-t">
+          <div className="text-xs font-semibold text-foreground">Saved asset pipeline</div>
+          <div className="max-h-36 overflow-y-auto space-y-1">
+            {Object.values(assetDiagnostics).length === 0 ? (
+              <div>No display asset requests recorded yet.</div>
+            ) : Object.values(assetDiagnostics).slice(0, 8).map((d) => (
+              <div key={d.assetId} className="rounded-sm bg-background/60 p-1.5">
+                <div className="text-foreground">{d.layer} · {d.paddockId?.slice(0, 8) ?? "—"}</div>
+                <div>asset: <span className="text-foreground">{d.assetId.slice(0, 8)}…</span> · HTTP <span className="text-foreground">{d.endpointStatus ?? "—"}</span> · blob <span className="text-foreground">{d.blobSize ?? "—"}</span> · {d.mimeType ?? "—"}</div>
+                <div>object URL: <span className="text-foreground">{d.objectUrlCreated ? "yes" : "no"}</span> · image: <span className="text-foreground">{d.imageStatus}</span> · final: <span className="text-foreground">{d.finalStatus}</span></div>
+                {d.error && <div className="text-destructive">{d.error}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {processingFailures.length > 0 && (
+          <div className="space-y-1 pt-2 border-t">
+            <div className="text-xs font-semibold text-foreground">Processing failures</div>
+            <div className="max-h-36 overflow-y-auto space-y-1">
+              {processingFailures.map((f) => (
+                <div key={f.paddockId} className="rounded-sm bg-destructive/10 p-1.5">
+                  <div className="text-foreground">{f.paddockName ?? f.paddockId.slice(0, 8)}</div>
+                  <div>HTTP {f.httpStatus ?? "—"} · code {f.code ?? "—"} · status {f.status ?? "—"}</div>
+                  <div>stage {f.failedStage ?? "—"} · layer {f.failedLayer ?? "—"} · provider {f.providerStatus ?? "—"}</div>
+                  <div className="text-destructive">{f.message}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1 pt-2 border-t">
           <div className="text-xs font-semibold text-foreground">Saved history</div>
@@ -2781,9 +2835,13 @@ export default function SatelliteMappingPage() {
   const focusWrapperClass = mapFocus
     ? "fixed inset-0 z-40 bg-background flex flex-col"
     : "w-full flex flex-col";
-  const focusWrapperStyle: React.CSSProperties = mapFocus
+  const focusWrapperStyle: CSSProperties = mapFocus
     ? {}
     : { height: wrapperHeight ? `${wrapperHeight}px` : undefined, minHeight: 600 };
+
+  // ---------- Guards ----------
+  if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
+  if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
     <div ref={wrapperRef} className={focusWrapperClass} style={focusWrapperStyle}>
