@@ -524,39 +524,8 @@ function parseGeometry(raw: any): LatLng[][][] {
   return [];
 }
 
-const STALE_DAYS = 3;
-
-function computeStalePaddockIds(
-  paddockIds: string[],
-  scenes: DBScene[],
-  assets: DBAsset[],
-  layer: SatelliteIndexType,
-): string[] {
-  const cutoff = Date.now() - STALE_DAYS * 86400_000;
-  // Newest completed scene per paddock.
-  const newestByPad = new Map<string, DBScene>();
-  for (const s of scenes) {
-    if (s.processing_status !== "complete") continue;
-    const cur = newestByPad.get(s.paddock_id);
-    if (!cur || s.acquired_at > cur.acquired_at) newestByPad.set(s.paddock_id, s);
-  }
-  const analyticalBySceneLayer = new Set<string>();
-  for (const a of assets) {
-    const kind = a.asset_type ?? (a.storage_path.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
-    if (kind === "ANALYTICAL_RASTER" && a.index_type === layer) {
-      analyticalBySceneLayer.add(a.satellite_scene_id);
-    }
-  }
-  const stale: string[] = [];
-  for (const pid of paddockIds) {
-    const s = newestByPad.get(pid);
-    if (!s) { stale.push(pid); continue; }
-    const acqMs = new Date(s.acquired_at).getTime();
-    if (Number.isFinite(acqMs) && acqMs < cutoff) { stale.push(pid); continue; }
-    if (layer !== "TRUE_COLOUR" && !analyticalBySceneLayer.has(s.id)) { stale.push(pid); continue; }
-  }
-  return stale;
-}
+// (Legacy `computeStalePaddockIds` removed — availability is decided by the
+// unified Crop Health view model.)
 
 // Module-level so it survives page unmount/remount within the tab session.
 // Records the last time we auto-triggered a refresh for a given vineyard.
