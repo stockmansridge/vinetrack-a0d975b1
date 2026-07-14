@@ -2225,11 +2225,19 @@ export default function SatelliteMappingPage() {
 
   const busy = checkForNewImage.isPending;
   const isRetryPass = busy && retryInFlightRef.current;
+  const refreshCounts = useMemo(() => {
+    if (!refreshProgress) return null;
+    const list = Object.values(refreshProgress.paddocks);
+    const terminal = list.filter((p) => p.stage === "complete" || p.stage === "failed" || p.stage === "no_imagery" || p.stage === "skipped");
+    return { list, doneCount: terminal.filter((p) => p.outcome !== "skipped").length, total: refreshProgress.total };
+  }, [refreshProgress]);
   const refreshLabel = busy
     ? (isRetryPass
         ? "Retrying skipped…"
-        : (batchProgress ? `Refreshing ${Math.min(batchProgress.done + 1, batchProgress.total)} / ${batchProgress.total}…` : "Refreshing…"))
-    : "Refresh Imagery";
+        : (refreshCounts
+            ? `Refreshing ${Math.min(refreshCounts.doneCount + 1, refreshCounts.total)} / ${refreshCounts.total}…`
+            : "Refreshing…"))
+    : (refreshProgress?.summary ? "Refresh Imagery" : "Refresh Imagery");
 
   // Summary for the currently hovered paddock (used to build the tooltip's
   // paddock-relative interpretation and to show the current-scene range/median
