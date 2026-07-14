@@ -204,6 +204,8 @@ export interface RecordEntryInput {
   notes: string;
   estimatedVines: number;
   segments: RecordSegmentInput[];
+  /** SQL 113: durable link to a work_tasks row. Null to leave unlinked. */
+  workTaskId?: string | null;
 }
 
 export interface RecordEntryResult {
@@ -239,6 +241,7 @@ export function useRecordPruningEntry(seasonId: string) {
           row_id: s.paddockRowId ?? null,
           label: s.rowLabel,
         })),
+        p_work_task_id: input.workTaskId ?? null,
       });
       if (error) throw error;
       return data as RecordEntryResult;
