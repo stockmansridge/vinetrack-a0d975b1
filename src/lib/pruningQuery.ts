@@ -47,7 +47,7 @@ export interface PruningEntry {
 
 export interface PruningRowSegment {
   id: string;
-  pruning_entry_id: string;
+  pruning_entry_id: string | null;
   pruning_season_id: string;
   vineyard_id: string;
   paddock_id: string;
@@ -55,6 +55,9 @@ export interface PruningRowSegment {
   row_number: number;
   segment_number: number; // 1..4
   row_label: string;
+  completed: boolean;
+  completed_at: string | null;
+  completed_by: string | null;
   created_at: string;
 }
 
