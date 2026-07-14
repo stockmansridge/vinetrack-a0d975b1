@@ -1624,7 +1624,7 @@ export default function SatelliteMappingPage() {
 
       // Nothing to do → return early with an "up to date" result set.
       if (inScopeNeedingWork.length === 0) {
-        setBatchProgress(null);
+        setRefreshProgress(null);
         return {
           results,
           skippedNoGeometry,
@@ -1650,16 +1650,154 @@ export default function SatelliteMappingPage() {
         description: preflightParts.join(" · ") + ". Only missing items will be processed.",
       });
 
-      // Seed batch progress. Complete paddocks are shown as skipped so users
-      // can see exactly what was NOT reprocessed.
-      const initialStatuses: Record<string, PadStatus> = {};
-      for (const p of inScopeAll) initialStatuses[p.paddockId] = p.state === "complete" ? "skipped" : "queued";
-      setBatchProgress({ total: inScopeNeedingWork.length, done: 0, statuses: initialStatuses });
+      // Seed rich progress: every in-scope paddock has a row; complete ones
+      // start in `skipped`, work items start in `waiting`.
+      const initialOrder: string[] = inScopeAll.map((p) => p.paddockId);
+      const nameFor = (pid: string) => geoms.find((g) => g.id === pid)?.name ?? paddocks.find((pp) => pp.id === pid)?.name ?? pid.slice(0, 8);
+      // Snapshot old scene/version/asset per paddock so we can reconcile after
+      // processing (Updated / Reprocessed / Already current / No newer).
+      const manifestSnap = manifestQuery.data;
+      const oldByPaddock = new Map<string, { sceneId: string | null; procVersion: string | null; assetId: string | null }>();
+      const layerNow = layer;
+      for (const p of inScopeAll) {
+        const mp = (manifestSnap?.paddocks ?? []).find((x: any) => x.paddock_id === p.paddockId);
+        // Look up the asset id for the current layer, if present in date_coverage.
+        let assetId: string | null = null;
+        if (mp?.latest_display_scene_id) {
+          for (const entry of manifestSnap?.date_coverage ?? []) {
+            const found = entry.paddocks.find((x) => x.scene_id === mp.latest_display_scene_id);
+            if (found) {
+              assetId = found.layers.find((l) => l.index_type === layerNow)?.display?.asset_id ?? null;
+              break;
+            }
+          }
+        }
+        oldByPaddock.set(p.paddockId, {
+          sceneId: mp?.latest_display_scene_id ?? null,
+          procVersion: mp?.latest_processing_version ?? null,
+          assetId,
+        });
+      }
+      const initialPaddocks: Record<string, PadProgress> = {};
+      for (const p of inScopeAll) {
+        const old = oldByPaddock.get(p.paddockId);
+        initialPaddocks[p.paddockId] = {
+          id: p.paddockId,
+          name: nameFor(p.paddockId),
+          stage: p.state === "complete" ? "skipped" : "waiting",
+          errorKind: null,
+          outcome: p.state === "complete" ? "already_current" : undefined,
+          oldSceneId: old?.sceneId ?? null,
+          oldProcessingVersion: old?.procVersion ?? null,
+          oldAssetId: old?.assetId ?? null,
+        };
+      }
+      setRefreshProgress({
+        running: true,
+        total: inScopeNeedingWork.length,
+        order: initialOrder,
+        paddocks: initialPaddocks,
+      });
 
-      const setPad = (pid: string, s: PadStatus) => setBatchProgress((prev) => prev
-        ? { ...prev, statuses: { ...prev.statuses, [pid]: s } }
-        : prev);
-      const bumpDone = () => setBatchProgress((prev) => prev ? { ...prev, done: prev.done + 1 } : prev);
+      const patchPad = (pid: string, patch: Partial<PadProgress>) => setRefreshProgress((prev) => {
+        if (!prev) return prev;
+        const cur = prev.paddocks[pid];
+        if (!cur) return prev;
+        return { ...prev, paddocks: { ...prev.paddocks, [pid]: { ...cur, ...patch } } };
+      });
+      const setPad = (pid: string, s: PadStatus) => {
+        // Bridge legacy statuses to the rich stage model.
+        const map: Record<PadStatus, Partial<PadProgress>> = {
+          queued: { stage: "waiting" },
+          searching: { stage: "searching" },
+          processing: { stage: "processing" },
+          complete: { stage: "complete" },
+          insufficient_coverage: { stage: "no_imagery", errorKind: "no_newer_capture", outcome: "no_newer" },
+          rate_limited: { stage: "failed", errorKind: "provider_unavailable", outcome: "failed" },
+          failed: { stage: "failed", errorKind: "processing_failed", outcome: "failed" },
+          skipped: { stage: "skipped", outcome: "skipped" },
+        };
+        patchPad(pid, map[s] ?? {});
+      };
+      const bumpDone = () => { /* per-paddock counters derive from the paddocks map now */ };
+
+      // Wait for MapKit to actually mount an overlay for this paddock after a
+      // manifest refetch. Returns true on mount, false on timeout.
+      async function waitForOverlayMount(pid: string, timeoutMs = 8000): Promise<boolean> {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+          for (const k of overlayMountedKeysRef.current) {
+            if (k.startsWith(`${pid}:`)) return true;
+          }
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        return false;
+      }
+
+      // Refetch the manifest, then reconcile old vs new asset for this paddock
+      // and set the outcome + drive the overlay-load stage.
+      async function reconcilePaddock(pid: string, providerSaidNoScenes: boolean): Promise<void> {
+        patchPad(pid, { stage: "manifest" });
+        await qc.invalidateQueries({ queryKey: ["satellite-manifest", activeVineyardId] });
+        const refreshed = await qc.refetchQueries({
+          queryKey: ["satellite-manifest", activeVineyardId, activePaddockIds.join(",")],
+        });
+        const data = refreshed?.[0]?.data as ManifestResponse | undefined;
+        const mp = (data?.paddocks ?? []).find((x: any) => x.paddock_id === pid) as any;
+        const newSceneId: string | null = mp?.latest_display_scene_id ?? null;
+        const newProc: string | null = mp?.latest_processing_version ?? null;
+        let newAssetId: string | null = null;
+        if (newSceneId) {
+          for (const entry of data?.date_coverage ?? []) {
+            const found = entry.paddocks.find((x) => x.scene_id === newSceneId);
+            if (found) {
+              newAssetId = found.layers.find((l) => l.index_type === layerNow)?.display?.asset_id ?? null;
+              break;
+            }
+          }
+        }
+        const old = oldByPaddock.get(pid) ?? { sceneId: null, procVersion: null, assetId: null };
+        patchPad(pid, { newSceneId, newProcessingVersion: newProc, newAssetId });
+
+        // Case D: provider search yielded nothing and the scene id did not change.
+        if (providerSaidNoScenes && newSceneId === old.sceneId) {
+          patchPad(pid, { stage: "no_imagery", outcome: "no_newer", errorKind: "no_newer_capture" });
+          return;
+        }
+        // Case A: identical scene AND version → already up to date.
+        if (newSceneId === old.sceneId && newProc === old.procVersion) {
+          patchPad(pid, { stage: "complete", outcome: "already_current" });
+          return;
+        }
+        // Case C: same scene, new processing version → reprocessed.
+        // Case B: new scene id → updated.
+        const outcome: PadOutcome = newSceneId !== old.sceneId ? "updated" : "reprocessed";
+        patchPad(pid, { stage: "loading_overlay", outcome });
+
+        // Invalidate the browser cache entry for the OLD asset if a new one
+        // has replaced it (safety net; new asset ids don't collide with old).
+        let cacheInvalidated = false;
+        if (old.assetId && old.assetId !== newAssetId) {
+          try { await deleteCachedAsset(old.assetId, old.procVersion ?? null); cacheInvalidated = true; } catch { /* ignore */ }
+          const url = objectUrlsRef.current.get(old.assetId);
+          if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } objectUrlsRef.current.delete(old.assetId); }
+          assetBlobsRef.current.delete(`${old.assetId}:${old.procVersion ?? "unknown"}`);
+        }
+        patchPad(pid, { cacheInvalidated });
+
+        // Auto-select the newest saved date so overlays mount promptly.
+        const newest = data?.newest_saved_date ?? null;
+        if (newest) setSelectedSceneKey((prev) => (prev === newest ? prev : newest));
+
+        // Wait for MapKit to mount the new overlay for this paddock.
+        const mounted = await waitForOverlayMount(pid);
+        if (mounted) {
+          patchPad(pid, { stage: "complete", overlayRemounted: true, overlayMountedAt: new Date().toISOString() });
+        } else {
+          patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "overlay_failed", errorMessage: "Overlay did not mount within 8s" });
+        }
+      }
+
 
       async function processMissingScene(p: PaddockCompleteness): Promise<void> {
         const pid = p.paddockId;
