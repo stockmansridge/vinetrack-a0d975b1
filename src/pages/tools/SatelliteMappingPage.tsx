@@ -2261,10 +2261,6 @@ export default function SatelliteMappingPage() {
   }, [geoms, manifestQuery.data]);
 
   const [missingDetailOpen, setMissingDetailOpen] = useState(false);
-  const paddocksMissingLatestSet = useMemo(
-    () => new Set(liveReport.perPaddock.filter((p) => p.state === "missing_latest_scene").map((p) => p.paddockId)),
-    [liveReport],
-  );
 
   // ---------- Guards ----------
   if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
