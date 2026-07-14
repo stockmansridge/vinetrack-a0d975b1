@@ -2277,18 +2277,19 @@ export default function SatelliteMappingPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mapFocus, drawerOpen]);
 
-  // ---------- Guards ----------
-  if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
-  if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
-
-  const busy = checkForNewImage.isPending;
-  const isRetryPass = busy && retryInFlightRef.current;
   const refreshCounts = useMemo(() => {
     if (!refreshProgress) return null;
     const list = Object.values(refreshProgress.paddocks);
     const terminal = list.filter((p) => p.stage === "complete" || p.stage === "failed" || p.stage === "no_imagery" || p.stage === "skipped");
     return { list, doneCount: terminal.filter((p) => p.outcome !== "skipped").length, total: refreshProgress.total };
   }, [refreshProgress]);
+
+  // ---------- Guards ----------
+  if (adminLoading) return <div className="p-6 text-sm text-muted-foreground">Checking access…</div>;
+  if (!isSystemAdmin) return <Navigate to="/dashboard" replace />;
+
+  const busy = checkForNewImage.isPending;
+  const isRetryPass = busy && retryInFlightRef.current;
   const refreshLabel = busy
     ? (isRetryPass
         ? "Retrying skipped…"
