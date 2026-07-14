@@ -2621,7 +2621,7 @@ export default function SatelliteMappingPage() {
       )}
 
       {/* Map workspace — all controls float over the map */}
-      <div className={`relative flex-1 min-h-0 ${mapFocus ? "" : "mx-2 mb-2 rounded-lg border overflow-hidden"}`}>
+      <div className={`relative flex-1 min-h-0 min-h-[600px] ${mapFocus ? "" : "mx-2 mb-2 rounded-lg border overflow-hidden"}`}>
         {paddocksLoading ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
             Loading paddocks…
