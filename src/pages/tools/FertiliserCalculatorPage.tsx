@@ -12,7 +12,7 @@ export default function FertiliserCalculatorPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <PageHead title="Fertiliser Calculator" description="Calculate fertiliser applications and record costs." />
+      <PageHead title="Fertiliser Calculator" description="Calculate fertiliser applications and record costs." path="/tools/fertiliser-calculator" />
       <BetaAdminBanner />
 
       <div className="flex items-center justify-between gap-3 mb-6">

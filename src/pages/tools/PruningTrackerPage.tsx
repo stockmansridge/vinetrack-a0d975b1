@@ -10,7 +10,7 @@ export default function PruningTrackerPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." />
+      <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." path="/tools/pruning-tracker" />
       <BetaAdminBanner />
 
       <div className="flex items-center gap-3 mb-6">
