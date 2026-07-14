@@ -2538,10 +2538,10 @@ export default function SatelliteMappingPage() {
                   <div className="flex flex-wrap gap-1">
                     {missing.map((p) => (
                       <span
-                        key={p.id}
+                        key={p.paddockId}
                         className="inline-flex items-center rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
                       >
-                        {p.name}
+                        {p.paddockName}
                       </span>
                     ))}
                   </div>
