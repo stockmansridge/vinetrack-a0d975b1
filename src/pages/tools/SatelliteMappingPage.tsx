@@ -2652,10 +2652,12 @@ export default function SatelliteMappingPage() {
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-3 pt-2">
             {(() => {
-              const selectedEntry = dateOptions.find((d) => d.date === selectedSceneKey);
-              const pct = selectedEntry
-                ? (Number.isInteger(selectedEntry.coveragePercent) ? `${selectedEntry.coveragePercent}` : selectedEntry.coveragePercent.toFixed(1))
-                : "—";
+              // Selected-date diagnostics — all numbers come from the unified view
+              // model. Coverage % = mounted overlays ÷ active paddocks × 100.
+              const s = viewModel.summary;
+              const pct = Number.isInteger(s.coveragePercent)
+                ? `${s.coveragePercent}`
+                : s.coveragePercent.toFixed(1);
               return (
                 <div className="space-y-1">
                   <div className="text-xs font-semibold text-foreground">Selected date</div>
