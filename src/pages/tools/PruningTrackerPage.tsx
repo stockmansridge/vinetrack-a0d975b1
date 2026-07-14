@@ -392,30 +392,39 @@ export default function PruningTrackerPage() {
               <Card><CardContent className="p-6 text-sm text-muted-foreground">This vineyard has no active blocks.</CardContent></Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {sortedBlocks.map((b) => (
-                  <button
-                    key={b.paddock.id}
-                    onClick={() => setSelectedPaddockId(b.paddock.id)}
-                    className="text-left rounded-lg border bg-card p-4 hover:bg-accent/40 transition"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="font-medium leading-tight">
-                        {b.paddock.name ?? "Unnamed block"}
-                        <span className="text-muted-foreground font-normal"> · {rowRangeLabel(b.identities)}</span>
+                {sortedBlocks.map((b) => {
+                  // Prefer RPC per-block values so cards reconcile with
+                  // the vineyard total. Fall back to local calc only for
+                  // paddocks the RPC didn't return (defensive).
+                  const rpcB = rpcBlockByPaddock.get(b.paddock.id);
+                  const pct = rpcB?.progress ?? b.progress.percentComplete;
+                  const reDone = rpcB?.completed_row_equivalents ?? b.progress.rowEquivalentsCompleted;
+                  const reTotal = rpcB?.total_row_equivalents ?? b.progress.totalRows;
+                  return (
+                    <button
+                      key={b.paddock.id}
+                      onClick={() => setSelectedPaddockId(b.paddock.id)}
+                      className="text-left rounded-lg border bg-card p-4 hover:bg-accent/40 transition"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="font-medium leading-tight">
+                          {b.paddock.name ?? "Unnamed block"}
+                          <span className="text-muted-foreground font-normal"> · {rowRangeLabel(b.identities)}</span>
+                        </div>
+                        <StatusBadge p={b.progress} hasSeason={!!b.season} />
                       </div>
-                      <StatusBadge p={b.progress} hasSeason={!!b.season} />
-                    </div>
-                    {b.variety && (
-                      <div className="text-xs text-muted-foreground mb-3">{b.variety}</div>
-                    )}
-                    <div className="text-sm tabular-nums">
-                      {b.progress.rowEquivalentsCompleted.toFixed(1)} of {b.progress.totalRows} row equivalents
-                      {" — "}
-                      {Math.round(b.progress.percentComplete * 100)}%
-                    </div>
-                    <Progress value={b.progress.percentComplete * 100} className="h-1.5 mt-2" />
-                  </button>
-                ))}
+                      {b.variety && (
+                        <div className="text-xs text-muted-foreground mb-3">{b.variety}</div>
+                      )}
+                      <div className="text-sm tabular-nums">
+                        {reDone.toFixed(1)} of {reTotal} row equivalents
+                        {" — "}
+                        {Math.round(pct * 100)}%
+                      </div>
+                      <Progress value={pct * 100} className="h-1.5 mt-2" />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
