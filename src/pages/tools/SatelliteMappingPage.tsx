@@ -883,7 +883,7 @@ export default function SatelliteMappingPage() {
       // eslint-disable-next-line no-console
       console.warn("[SatelliteMappingPage] Falling back to client-side date coverage; server date_coverage not present.");
     }
-    const scenes = scenesQuery.data?.scenes ?? [];
+    const scenes = derivedFromManifest?.scenes ?? [];
     const grouped = new Map<string, Map<string, DBScene>>();
     const better = (a: DBScene, b: DBScene): DBScene => {
       const cov = (b.paddock_valid_coverage_pct ?? -1) - (a.paddock_valid_coverage_pct ?? -1);
@@ -912,7 +912,7 @@ export default function SatelliteMappingPage() {
         missing: [] as { paddock_id: string; reason: "no_scene_for_date" | "scene_not_complete" | "package_version_mismatch" }[],
         layerCoverage: {} as Partial<Record<string, { available: number; total: number; percent: number; available_paddock_ids: string[]; missing_paddock_ids: string[] }>>,
       }));
-  }, [manifestQuery.data, scenesQuery.data, activeVineyardId, geoms]);
+  }, [manifestQuery.data, derivedFromManifest, activeVineyardId, geoms]);
 
 
   const isAllPaddocks = paddockId === "all";
@@ -1047,8 +1047,8 @@ export default function SatelliteMappingPage() {
   // Build asset pairs (display + optional analytical) for a given date +
   // current layer. Uses the best scene per paddock for that date.
   const buildAssetPairsFor = (dateKey: string | null) => {
-    if (!dateKey || !scenesQuery.data) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
-    const { assets } = scenesQuery.data;
+    if (!dateKey || !derivedFromManifest) return [] as Array<{ displayAsset: DBAsset; analyticalAsset?: DBAsset; scene: DBScene }>;
+    const { assets } = derivedFromManifest;
     const displayFor = (sceneId: string) => assets.find((x) =>
       x.satellite_scene_id === sceneId && x.index_type === layer && assetKind(x) === "DISPLAY_RASTER"
     );
@@ -1069,14 +1069,14 @@ export default function SatelliteMappingPage() {
   const activeAssetPairs = useMemo(
     () => buildAssetPairsFor(selectedSceneKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scenesQuery.data, selectedSceneKey, layer, dateCoverage],
+    [derivedFromManifest, selectedSceneKey, layer, dateCoverage],
   );
 
   // Effective display pairs — drive the map overlay images.
   const displayAssetPairs = useMemo(
     () => (effectiveDisplayDate === selectedSceneKey ? activeAssetPairs : buildAssetPairsFor(effectiveDisplayDate)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scenesQuery.data, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
+    [derivedFromManifest, effectiveDisplayDate, selectedSceneKey, layer, dateCoverage, activeAssetPairs],
   );
 
   const activeAssets = useMemo(
@@ -1113,7 +1113,7 @@ export default function SatelliteMappingPage() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedDatesAsc, selectedSceneKey, layer, scenesQuery.data, dateCoverage]);
+  }, [sortedDatesAsc, selectedSceneKey, layer, derivedFromManifest, dateCoverage]);
 
   // Are any preview-date display assets still loading? Drives the loading
   // caption shown near the map during a scrub.
@@ -1434,18 +1434,18 @@ export default function SatelliteMappingPage() {
   // Summaries lookup by paddock (for hover + selected-scene classification)
   const summaryByPaddock = useMemo(() => {
     const map = new Map<string, DBSummary>();
-    if (!scenesQuery.data || !selectedSceneKey) return map;
-    const relevantScenes = scenesQuery.data.scenes.filter(
+    if (!derivedFromManifest || !selectedSceneKey) return map;
+    const relevantScenes = derivedFromManifest.scenes.filter(
       (s) => s.acquired_at.slice(0, 10) === selectedSceneKey,
     );
     const bySceneId = new Map(relevantScenes.map((s) => [s.id, s]));
-    for (const sum of scenesQuery.data.summaries) {
+    for (const sum of derivedFromManifest.summaries) {
       if (sum.index_type !== layer) continue;
       const scene = bySceneId.get(sum.satellite_scene_id);
       if (scene) map.set(scene.paddock_id, sum);
     }
     return map;
-  }, [scenesQuery.data, selectedSceneKey, layer, activeAssets]);
+  }, [derivedFromManifest, selectedSceneKey, layer, activeAssets]);
 
 
   // ---------- Hover sampling ----------
