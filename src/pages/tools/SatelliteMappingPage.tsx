@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench, Maximize2, Minimize2, PanelRight, CalendarDays, ShieldAlert } from "lucide-react";
@@ -588,6 +588,10 @@ export default function SatelliteMappingPage() {
   const [previewDate, setPreviewDate] = useState<string | null>(null); // transient preview (null = same as committed)
   const [interacting, setInteracting] = useState(false); // slider drag / key in progress
   const [isPlaying, setIsPlaying] = useState(false); // timeline playback
+  const [disableCropOverlays, setDisableCropOverlays] = useState(false);
+  const [mapDiagnostics, setMapDiagnostics] = useState<SatelliteMapDiagnostics | null>(null);
+  const [assetDiagnostics, setAssetDiagnostics] = useState<Record<string, AssetPipelineDiagnostic>>({});
+  const [processingFailures, setProcessingFailures] = useState<ProcessingFailureDiagnostic[]>([]);
   const prefersReducedMotion = useMemo(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
