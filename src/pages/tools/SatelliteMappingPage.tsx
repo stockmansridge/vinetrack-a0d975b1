@@ -1997,6 +1997,20 @@ export default function SatelliteMappingPage() {
           providerCallsAvoided: 0,
         });
         retryInFlightRef.current = false;
+        // Persist a completion panel so the user sees explicit "Already current".
+        const expected = geoms.length;
+        setRefreshProgress({
+          running: false,
+          total: 0,
+          order: geoms.map((g) => g.id),
+          paddocks: Object.fromEntries(
+            geoms.map((g) => [g.id, {
+              id: g.id, name: g.name, stage: "complete" as PadStage,
+              outcome: "already_current" as PadOutcome, errorKind: null,
+            }]),
+          ),
+          summary: { updated: 0, reprocessed: 0, alreadyCurrent: expected, noNewer: 0, failed: 0, displayed: mountedPaddockCount, expected },
+        });
         toast({
           title: "No updates required",
           description: "All current imagery and analytical layers are complete.",
@@ -2010,7 +2024,9 @@ export default function SatelliteMappingPage() {
       const skipped = results.filter((r) => r.status === "skipped").length;
       const failed = results.filter((r) => r.status === "failed" || r.status === "no_scenes").length;
 
-      // Refresh + wait for the manifest to reflect any new scenes.
+      // Refresh + wait for the manifest to reflect any new scenes. Reconcile
+      // already ran per-paddock, but keep this fallback so a fully-empty
+      // manifest gets an extra tick before we render the summary.
       let loaded = false;
       let latestManifest: ManifestResponse | undefined = manifestQuery.data;
       for (let i = 0; i < 3 && complete > 0 && !loaded; i++) {
@@ -2024,7 +2040,8 @@ export default function SatelliteMappingPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
-      // Auto-select the newest date the refresh just produced (if any).
+      // Auto-select the newest date the refresh just produced (if any) — the
+      // per-paddock reconcile already advances this, but confirm at the end.
       if (complete > 0) {
         const newestDate = latestManifest?.newest_saved_date
           ?? (latestManifest?.date_coverage?.[0]?.acquisition_date ?? null);
@@ -2049,13 +2066,32 @@ export default function SatelliteMappingPage() {
       }
       retryInFlightRef.current = false;
 
-
       setLastRefreshSummary({
         at: new Date().toISOString(),
         processedPaddocks: complete,
         repairedItems,
         skippedPaddocks: skippedComplete,
         providerCallsAvoided,
+      });
+
+      // Finalize the persistent progress panel: derive summary from the
+      // per-paddock outcomes recorded during reconciliation.
+      setRefreshProgress((prev) => {
+        if (!prev) return prev;
+        const list = Object.values(prev.paddocks);
+        const updated = list.filter((p) => p.outcome === "updated").length;
+        const reprocessed = list.filter((p) => p.outcome === "reprocessed").length;
+        const alreadyCurrent = list.filter((p) => p.outcome === "already_current").length;
+        const noNewer = list.filter((p) => p.outcome === "no_newer").length;
+        const failedN = list.filter((p) => p.outcome === "failed").length;
+        return {
+          ...prev,
+          running: false,
+          summary: {
+            updated, reprocessed, alreadyCurrent, noNewer, failed: failedN,
+            displayed: mountedPaddockCount, expected: geoms.length,
+          },
+        };
       });
 
       const parts: string[] = [];
