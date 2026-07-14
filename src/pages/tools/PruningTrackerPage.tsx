@@ -241,11 +241,14 @@ export default function PruningTrackerPage() {
   }, [blocks, sortKey]);
 
   const summary = useMemo(() => {
+    // Shared cross-platform contract:
+    //   progress = Σ completedSegments / Σ totalSegments  (row-equivalent)
+    //   vinesDone = Σ block.estimatedVinesCompleted  (each block rounded once)
+    //   vinesPerDay = vinesDone / distinctEntryDays (filtered to working days)
+    //   vinesPerHour = vinesDone / Σ labour_hours
+    //   projectedCompletion = today + ceil(remainingRE / vineyardAvgRE) working days
     let vinesTotal = 0, vinesDone = 0, reTotal = 0, reDone = 0;
     let complete = 0, atRisk = 0;
-    let vinesPerDaySum = 0, vinesPerHourSum = 0, avgCount = 0;
-    let latestEta: string | null = null;
-    let labourHoursTotal = 0;
     for (const b of blocks) {
       vinesTotal += b.progress.estimatedVinesTotal;
       vinesDone += b.progress.estimatedVinesCompleted;
@@ -253,29 +256,45 @@ export default function PruningTrackerPage() {
       reDone += b.progress.rowEquivalentsCompleted;
       if (b.progress.dueStatus === "complete") complete += 1;
       else if (b.progress.dueStatus === "at_risk" || b.progress.dueStatus === "overdue") atRisk += 1;
-      if (b.progress.workingDayAvgRowEquivalents && b.identities.length) {
-        const vinesPerRow = b.identities.length ? b.progress.estimatedVinesTotal / b.identities.length : 0;
-        vinesPerDaySum += b.progress.workingDayAvgRowEquivalents * vinesPerRow;
-        avgCount += 1;
-      }
-      if (b.progress.estimatedCompletionDate) {
-        if (!latestEta || b.progress.estimatedCompletionDate > latestEta) latestEta = b.progress.estimatedCompletionDate;
-      }
     }
-    // Labour hours + vines/hour from entries
-    for (const e of (entriesQ.data ?? [])) {
-      const lh = Number((e as any).labour_hours) || 0;
-      labourHoursTotal += lh;
+    // Aggregate entries across the vineyard.
+    const ents = entriesQ.data ?? [];
+    // Working-day set: take the first season's list (all blocks in a
+    // vineyard share the same working schedule in the shared contract).
+    const workingDays = (() => {
+      for (const b of blocks) if (b.season?.working_days?.length) return b.season.working_days;
+      return [1, 2, 3, 4, 5];
+    })();
+    const workingSet = new Set(workingDays);
+    const isoWeekdayFromDateStr = (s: string): number => {
+      const [y, m, d] = s.split("-").map((n) => Number(n));
+      const wd = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+      return wd === 0 ? 7 : wd;
+    };
+    const distinctDays = new Set<string>();
+    let labourHoursTotal = 0;
+    for (const e of ents) {
+      const dateStr = (e as any).entry_date as string | null;
+      if (dateStr && (!workingSet.size || workingSet.has(isoWeekdayFromDateStr(dateStr)))) {
+        distinctDays.add(dateStr);
+      }
+      labourHoursTotal += Number((e as any).labour_hours) || 0;
     }
+    const vinesPerDay = distinctDays.size > 0 ? vinesDone / distinctDays.size : 0;
     const vinesPerHour = labourHoursTotal > 0 ? vinesDone / labourHoursTotal : 0;
-    void vinesPerHourSum;
-    const vinesPerDay = avgCount ? vinesPerDaySum / avgCount : 0;
-    const pct = vinesTotal ? vinesDone / vinesTotal : (reTotal ? reDone / reTotal : 0);
+    const pct = reTotal ? reDone / reTotal : 0;
+    const projection = projectVineyardCompletion({
+      totalRowEquivalents: reTotal,
+      completedRowEquivalents: reDone,
+      distinctWorkingDays: distinctDays.size,
+      workingDaysOfWeek: workingDays,
+    });
     return {
       pct, vinesTotal, vinesDone,
       vinesRemaining: Math.max(0, vinesTotal - vinesDone),
       vinesPerDay, vinesPerHour,
-      complete, atRisk, latestEta,
+      complete, atRisk,
+      latestEta: projection.estimatedCompletionDate,
       blocksCount: blocks.length,
     };
   }, [blocks, entriesQ.data]);
