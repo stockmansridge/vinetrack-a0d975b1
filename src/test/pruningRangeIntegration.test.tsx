@@ -79,7 +79,10 @@ describe("CompleteTodayDialog — Apply range integration", () => {
     renderDialog(rows);
     fireEvent.change(screen.getByPlaceholderText(/Row ranges/i), { target: { value: "50-44" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply range/i }));
-    expect(screen.getByText(/7\.00/)).toBeTruthy();
+    for (const rn of [44, 45, 46, 47, 48, 49, 50]) {
+      const btn = screen.getByLabelText(new RegExp(`Row ${rn} quarter 1`));
+      expect(btn.getAttribute("aria-pressed")).toBe("true");
+    }
   });
 
   it("non-sequential configured rows never invents missing rows", () => {
