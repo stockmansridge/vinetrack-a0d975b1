@@ -65,9 +65,46 @@ function normalise(raw: any, vineyardId: string, seasonYear: number): PruningVin
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
-  const progress = num(pick("overall_progress", "progress", "progress_pct", "overallProgress"));
-  // Some RPCs express progress as 0..100. Normalise to 0..1.
-  const overall = progress > 1.5 ? progress / 100 : progress;
+  // Vineyard-level progress is derived directly from the RPC's own
+  // row-equivalent totals. Those two fields (completed_row_equivalents /
+  // total_row_equivalents) are the same numbers the RPC uses server-side
+  // and match iOS/Android exactly, so the ratio can't drift and there's
+  // no ambiguity about whether a "progress" field is a fraction (0..1)
+  // or a percentage (0..100).
+  const completedRE = num(pick("completed_row_equivalents", "row_equivalents_completed", "completedRowEquivalents"));
+  const totalRE = num(pick("total_row_equivalents", "totalRowEquivalents"));
+  const derivedFraction = totalRE > 0 ? completedRE / totalRE : 0;
+
+  // Read the RPC's own progress field (if present) purely for a
+  // dev-mode consistency check. Never used as the display value.
+  const rpcProgressRaw = pick<number>(
+    "overall_progress_fraction",
+    "completion_fraction",
+    "progress_fraction",
+    "overall_progress",
+    "progress",
+    "progress_pct",
+    "progress_percent",
+    "overall_progress_pct",
+  );
+  if (import.meta.env.DEV && rpcProgressRaw != null) {
+    const rpcNum = Number(rpcProgressRaw);
+    if (Number.isFinite(rpcNum)) {
+      const rpcAsFraction = rpcNum > 1.5 ? rpcNum / 100 : rpcNum;
+      if (Math.abs(rpcAsFraction - derivedFraction) > 0.01) {
+        // eslint-disable-next-line no-console
+        console.warn("[pruning] RPC progress field disagrees with row-equivalent ratio", {
+          rpcProgress: rpcNum,
+          rpcAsFraction,
+          derivedFraction,
+          completedRE,
+          totalRE,
+        });
+      }
+    }
+  }
+
+  const overall = derivedFraction;
   const blocksRaw: any[] = (pick<any[]>("blocks", "block_breakdown", "per_block") ?? []) as any[];
   const blocks: PruningVineyardSummaryBlock[] = blocksRaw.map((b: any) => ({
     paddock_id: b?.paddock_id ?? b?.paddockId ?? b?.id,
