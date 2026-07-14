@@ -506,7 +506,7 @@ function BlockDetail({ block, entries, completion, canEdit, onBack, onOpenSettin
                 <Settings2 className="h-4 w-4 mr-1" /> Settings
               </Button>
               <Button size="sm" onClick={onOpenComplete} disabled={block.identities.length === 0}>
-                Complete Today
+                Record Pruning
               </Button>
             </>
           )}
@@ -566,7 +566,7 @@ function BlockDetail({ block, entries, completion, canEdit, onBack, onOpenSettin
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Rows</CardTitle>
-          <CardDescription>Green quarters are done. Use Complete Today to record work.</CardDescription>
+          <CardDescription>Green quarters are done. Use <b>Record Pruning</b> to log work.</CardDescription>
         </CardHeader>
         <CardContent>
           {completion.length === 0 ? (
