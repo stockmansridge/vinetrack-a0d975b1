@@ -169,20 +169,32 @@ export default function RefreshProgressPanel({
           )}
 
 
-          {summary && (
-            <div className="rounded-md border bg-muted/30 p-2 text-[11px] space-y-1">
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                <span>New imagery: <span className="text-foreground font-medium">{summary.updated}</span></span>
-                <span>Reprocessed: <span className="text-foreground font-medium">{summary.reprocessed}</span></span>
-                <span>Already current: <span className="text-foreground font-medium">{summary.alreadyCurrent}</span></span>
-                <span>No newer imagery: <span className="text-foreground font-medium">{summary.noNewer}</span></span>
-                <span>Failed: <span className="text-foreground font-medium">{summary.failed}</span></span>
+          {summary && (() => {
+            const successful = summary.updated + summary.reprocessed + summary.alreadyCurrent + summary.noNewer;
+            const finished = successful + summary.failed;
+            const total = summary.expected ?? expectedCount;
+            return (
+              <div className="rounded-md border bg-muted/30 p-2 text-[11px] space-y-1">
+                <div className="text-foreground font-medium">
+                  {finished} of {total} paddocks finished
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  <span>Successful: <span className="text-foreground font-medium">{successful}</span></span>
+                  <span>Failed: <span className="text-foreground font-medium">{summary.failed}</span></span>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                  <span>New imagery: <span className="text-foreground font-medium">{summary.updated}</span></span>
+                  <span>Reprocessed: <span className="text-foreground font-medium">{summary.reprocessed}</span></span>
+                  <span>Already current: <span className="text-foreground font-medium">{summary.alreadyCurrent}</span></span>
+                  <span>No newer imagery: <span className="text-foreground font-medium">{summary.noNewer}</span></span>
+                </div>
+                <div className="text-muted-foreground">
+                  Overlays displayed: <span className="text-foreground font-medium">{mountedPaddockCount} of {expectedCount} paddocks</span>
+                </div>
               </div>
-              <div className="text-muted-foreground">
-                Displayed: <span className="text-foreground font-medium">{mountedPaddockCount} of {expectedCount} paddocks</span>
-              </div>
-            </div>
-          )}
+            );
+          })()}
+
 
           <div className="divide-y divide-border/60">
             {list.map((p) => {
