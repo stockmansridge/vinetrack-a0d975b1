@@ -167,6 +167,22 @@ export default function CompleteTodayDialog({
     return m;
   }, [rows]);
 
+  // Display-only ascending sort by numeric row number. Does not alter stored
+  // order, row identity, or paddock_row_id — selection/range logic keeps using
+  // the original `rows` array and stable identities.
+  const displayRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const an = Number(a.identity.rowNumber);
+      const bn = Number(b.identity.rowNumber);
+      const aFinite = Number.isFinite(an);
+      const bFinite = Number.isFinite(bn);
+      if (aFinite && bFinite && an !== bn) return an - bn;
+      if (aFinite && !bFinite) return -1;
+      if (!aFinite && bFinite) return 1;
+      return String(a.identity.rowLabel).localeCompare(String(b.identity.rowLabel), undefined, { numeric: true });
+    });
+  }, [rows]);
+
   const isQuarterCompleted = (identity: RowIdentity, quarter: Quarter) =>
     rows.find((row) => row.identity === identity)?.completed.has(quarter) ?? false;
 
