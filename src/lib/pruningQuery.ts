@@ -1,8 +1,15 @@
 // Shared pruning queries/mutations. Reads pruning_* tables directly.
 // All WRITES go through RPCs: record_pruning_entry, delete_pruning_entry,
 // soft_delete_pruning_season. Season INSERT/UPDATE is allowed subject to RLS.
+//
+// Cross-platform sync: pruning_seasons IDs are deterministic (see
+// `pruningSeasonId`) AND we always resolve the live row before writing —
+// if a row already exists for (vineyard, paddock, season_year) we adopt
+// its id whatever it is, and only insert with the deterministic id when
+// none exists. Never generate random season IDs.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { pruningSeasonId } from "@/lib/pruningSeasonId";
 
 export type PruningMethod = "spur" | "cane" | "mechanical" | "mixed";
 export type PruningStatus = "active" | "complete" | "archived";
