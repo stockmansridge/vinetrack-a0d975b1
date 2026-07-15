@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { canSeeCosts } from "@/lib/permissions";
 import { toast } from "@/hooks/use-toast";
-import { BetaAdminBanner } from "@/components/BetaAdminBanner";
 import { PageHead } from "@/components/PageHead";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -194,7 +193,6 @@ export default function FertiliserCalculatorPage() {
         description="Calculate fertiliser applications and record costs."
         path="/tools/fertiliser-calculator"
       />
-      <BetaAdminBanner />
 
       <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-center gap-3">

@@ -16,7 +16,6 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
-import { BetaAdminBanner } from "@/components/BetaAdminBanner";
 import { PageHead } from "@/components/PageHead";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -354,7 +353,6 @@ export default function PruningTrackerPage() {
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." path="/tools/pruning-tracker" />
-      <BetaAdminBanner />
 
       <div className="flex items-center gap-3">
         <div className="rounded-lg bg-primary/10 p-2 text-primary">
