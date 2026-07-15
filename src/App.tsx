@@ -175,10 +175,8 @@ const App = () => (
                     <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/satellite-mapping" element={<SatelliteMappingPage />} />
-                    <Route element={<RequireSystemAdmin />}>
-                      <Route path="/tools/pruning-tracker" element={<PruningTrackerPage />} />
-                      <Route path="/tools/fertiliser-calculator" element={<FertiliserCalculatorPage />} />
-                    </Route>
+                    <Route path="/tools/pruning-tracker" element={<PruningTrackerPage />} />
+                    <Route path="/tools/fertiliser-calculator" element={<FertiliserCalculatorPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
                     <Route
                       path="/tools/yield-estimation"
