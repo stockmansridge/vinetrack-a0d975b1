@@ -526,9 +526,12 @@ export default function PruningTrackerPage() {
       {selectedVineyardId && selected && (
         <BlockDetail
           block={selected}
+          rpcBlock={rpcBlockByPaddock.get(selected.paddock.id) ?? null}
           entries={selectedEntriesQ.data ?? []}
+          segments={selectedSegmentsQ.data ?? []}
           completion={selectedCompletion}
           canEdit={canEdit}
+          isSystemAdmin={isSystemAdmin}
           onBack={() => setSelectedPaddockId(null)}
           onOpenSettings={openSettings}
           onOpenComplete={openComplete}
