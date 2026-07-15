@@ -10,7 +10,7 @@ export function pruningSeasonId(
   seasonYear: number,
 ): string {
   const name = `vinetrack-pruning-season|${vineyardId.toLowerCase()}|${paddockId.toLowerCase()}|${seasonYear}`;
-  const bytes = new Uint8Array(md5.arrayBuffer(name));
+  const bytes = new Uint8Array(md5.create().update(name).arrayBuffer());
   bytes[6] = (bytes[6] & 0x0f) | 0x30; // version 3
   bytes[8] = (bytes[8] & 0x3f) | 0x80; // IETF variant
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
