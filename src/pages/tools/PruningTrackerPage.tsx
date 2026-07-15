@@ -578,22 +578,43 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 interface DetailProps {
   block: BlockView;
+  rpcBlock: PruningVineyardSummaryBlock | null;
   entries: any[];
+  segments: any[];
   completion: RowCompletionState[];
   canEdit: boolean;
+  isSystemAdmin: boolean;
   onBack: () => void;
   onOpenSettings: () => void;
   onOpenComplete: () => void;
 }
 
-function BlockDetail({ block, entries, completion, canEdit, onBack, onOpenSettings, onOpenComplete }: DetailProps) {
-  const p = block.progress;
-  const hasWork = p.completedSegments > 0;
+function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, isSystemAdmin, onBack, onOpenSettings, onOpenComplete }: DetailProps) {
+  const local = block.progress;
+  // Prefer SQL 115 per-block values (server-authoritative, canonical
+  // season). Fall back to local calc for any field the RPC didn't return.
+  const reDone = rpcBlock?.completed_row_equivalents ?? local.rowEquivalentsCompleted;
+  const reTotal = rpcBlock?.total_row_equivalents ?? local.totalRows;
+  const pct = reTotal > 0 ? reDone / reTotal : 0;
+  const vinesDone = rpcBlock?.vines_pruned ?? local.estimatedVinesCompleted;
+  const vinesTotal = rpcBlock?.total_vines ?? local.estimatedVinesTotal;
+  const effectiveProgress: BlockProgress = {
+    ...local,
+    completedSegments: reDone > 0 ? Math.max(1, local.completedSegments) : 0,
+    rowEquivalentsCompleted: reDone,
+    totalRows: reTotal,
+    percentComplete: pct,
+    estimatedVinesCompleted: vinesDone,
+    estimatedVinesTotal: vinesTotal,
+    dueStatus: pct >= 1 ? "complete" : local.dueStatus,
+  };
+  const hasWork = reDone > 0;
   // Shared contract: vines/day = block.vinesDone / distinctEntryDays.
   const distinctDays = new Set<string>(entries.map((e) => e.entry_date).filter(Boolean));
-  const vinesPerDay = distinctDays.size > 0 ? p.estimatedVinesCompleted / distinctDays.size : null;
+  const vinesPerDay = distinctDays.size > 0 ? vinesDone / distinctDays.size : null;
   const labourHours = entries.reduce((s, e) => s + (Number(e.labour_hours) || 0), 0);
-  const vinesPerHour = labourHours > 0 ? p.estimatedVinesCompleted / labourHours : null;
+  const vinesPerHour = labourHours > 0 ? vinesDone / labourHours : null;
+  const completedSegCount = (segments ?? []).filter((s: any) => s?.completed === true).length;
 
   return (
     <div className="space-y-4">
@@ -626,22 +647,33 @@ function BlockDetail({ block, entries, completion, canEdit, onBack, onOpenSettin
                 {block.season?.season_year ? ` · Season ${block.season.season_year}` : ""}
               </CardDescription>
             </div>
-            <StatusBadge p={p} hasSeason={!!block.season} />
+            <StatusBadge p={effectiveProgress} hasSeason={!!block.season} />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
             <div className="flex items-baseline justify-between mb-1">
-              <div className="text-3xl font-semibold tabular-nums">{Math.round(p.percentComplete * 100)}%</div>
+              <div className="text-3xl font-semibold tabular-nums">{Math.round(pct * 100)}%</div>
               <div className="text-sm text-muted-foreground tabular-nums">
-                {p.rowEquivalentsCompleted.toFixed(2)} / {p.totalRows} row equivalents
+                {reDone.toFixed(2)} / {reTotal} row equivalents
               </div>
             </div>
-            <Progress value={p.percentComplete * 100} className="h-2" />
+            <Progress value={pct * 100} className="h-2" />
             <div className="text-xs text-muted-foreground mt-1 tabular-nums">
-              {p.estimatedVinesCompleted.toLocaleString()} of {p.estimatedVinesTotal.toLocaleString()} vines
+              {Math.round(vinesDone).toLocaleString()} of {Math.round(vinesTotal).toLocaleString()} vines
             </div>
           </div>
+          {isSystemAdmin && (
+            <div className="rounded border border-dashed p-2 text-[11px] text-muted-foreground font-mono space-y-0.5">
+              <div>Paddock ID: {block.paddock.id}</div>
+              <div>Season ID (portal): {block.season?.id ?? "—"}</div>
+              <div>Season year: {block.season?.season_year ?? "—"}</div>
+              <div>Entries loaded: {entries.length}</div>
+              <div>Segments loaded: {segments.length} · completed: {completedSegCount}</div>
+              <div>RPC reDone/reTotal: {rpcBlock?.completed_row_equivalents ?? "—"} / {rpcBlock?.total_row_equivalents ?? "—"}</div>
+              <div>RPC vines pruned: {rpcBlock?.vines_pruned ?? "—"}</div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
