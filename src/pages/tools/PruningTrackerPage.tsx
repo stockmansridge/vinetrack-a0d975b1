@@ -313,12 +313,18 @@ export default function PruningTrackerPage() {
   }, [currentSeasonsByPaddock, selectedPaddockId]);
 
   const selectedEntries = useMemo(
-    () => (entriesQ.data ?? []).filter((e: any) => e.paddock_id === selectedPaddockId),
-    [entriesQ.data, selectedPaddockId],
+    () => (entriesQ.data ?? []).filter((e: any) => {
+      const pid = e.paddock_id ?? paddockBySeasonId.get(e.pruning_season_id);
+      return pid === selectedPaddockId;
+    }),
+    [entriesQ.data, paddockBySeasonId, selectedPaddockId],
   );
   const selectedSegments = useMemo(
-    () => (segmentsQ.data ?? []).filter((s: any) => s.paddock_id === selectedPaddockId),
-    [segmentsQ.data, selectedPaddockId],
+    () => (segmentsQ.data ?? []).filter((s: any) => {
+      const pid = s.paddock_id ?? paddockBySeasonId.get(s.pruning_season_id);
+      return pid === selectedPaddockId;
+    }),
+    [segmentsQ.data, paddockBySeasonId, selectedPaddockId],
   );
   void selectedSeasonIds;
   const selectedEntriesQ = { data: selectedEntries };
