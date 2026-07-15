@@ -28,6 +28,7 @@ import {
   usePruningSeasons,
   usePruningEntries,
   usePruningSegments,
+  resolvePruningSeasonId,
   type PruningSeason,
 } from "@/lib/pruningQuery";
 import {
@@ -266,28 +267,36 @@ export default function PruningTrackerPage() {
 
   const openSettings = () => setSettingsOpen(true);
 
-  // Ensure a season row exists for the selected block before opening Complete Today.
+  // Ensure a season row exists for the selected block before opening Complete
+  // Today. Resolve-then-adopt: never generate a random season id, and if a
+  // live row already exists (iOS/Android may have created it) we adopt it.
   const openComplete = async () => {
     if (!selected || !selectedVineyardId) return;
     if (!selected.season) {
       try {
-        const id = crypto.randomUUID();
-        const { error } = await supabase.from("pruning_seasons").insert({
-          id,
-          vineyard_id: selectedVineyardId,
-          paddock_id: selected.paddock.id,
-          season_year: vintage,
-          pruning_method: "spur",
-          assigned_crew: "",
-          working_days: [1, 2, 3, 4, 5],
-          notes: "",
-          status: "active",
-          client_updated_at: new Date().toISOString(),
-        });
-        if (error) throw error;
+        const resolved = await resolvePruningSeasonId(
+          selectedVineyardId, selected.paddock.id, vintage,
+        );
+        if (!resolved.existed) {
+          const { error } = await supabase.from("pruning_seasons").insert({
+            id: resolved.id,
+            vineyard_id: selectedVineyardId,
+            paddock_id: selected.paddock.id,
+            season_year: vintage,
+            pruning_method: "spur",
+            assigned_crew: "",
+            working_days: [1, 2, 3, 4, 5],
+            notes: "",
+            status: "active",
+            client_updated_at: new Date().toISOString(),
+          });
+          // Duplicate-key = another client won the race; refetch will pick
+          // up the existing row. Any other error surfaces to the caller.
+          if (error && !/duplicate|unique/i.test(error.message)) throw error;
+        }
         await seasonsQ.refetch();
-      } catch (e: any) {
-        // If a race created it already, refetching will pick it up.
+      } catch {
+        // Refetch and let the user retry from the reopened dialog.
         await seasonsQ.refetch();
       }
     }

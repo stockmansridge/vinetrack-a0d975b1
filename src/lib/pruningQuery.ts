@@ -1,8 +1,15 @@
 // Shared pruning queries/mutations. Reads pruning_* tables directly.
 // All WRITES go through RPCs: record_pruning_entry, delete_pruning_entry,
 // soft_delete_pruning_season. Season INSERT/UPDATE is allowed subject to RLS.
+//
+// Cross-platform sync: pruning_seasons IDs are deterministic (see
+// `pruningSeasonId`) AND we always resolve the live row before writing —
+// if a row already exists for (vineyard, paddock, season_year) we adopt
+// its id whatever it is, and only insert with the deterministic id when
+// none exists. Never generate random season IDs.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { pruningSeasonId } from "@/lib/pruningSeasonId";
 
 export type PruningMethod = "spur" | "cane" | "mechanical" | "mixed";
 export type PruningStatus = "active" | "complete" | "archived";
@@ -104,6 +111,31 @@ export interface SeasonUpsertInput {
   status?: PruningStatus;
 }
 
+/**
+ * Resolve the live pruning_seasons row id for (vineyard, paddock, season_year),
+ * or return the deterministic id that a fresh insert would use. Never caches
+ * across sessions — always re-query. Callers that then insert MUST be prepared
+ * for a benign duplicate-key error caused by a concurrent client (retry the
+ * resolve in that case).
+ */
+export async function resolvePruningSeasonId(
+  vineyardId: string,
+  paddockId: string,
+  seasonYear: number,
+): Promise<{ id: string; existed: boolean }> {
+  const { data, error } = await supabase
+    .from("pruning_seasons")
+    .select("id")
+    .eq("vineyard_id", vineyardId)
+    .eq("paddock_id", paddockId)
+    .eq("season_year", seasonYear)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  if (data?.id) return { id: data.id, existed: true };
+  return { id: pruningSeasonId(vineyardId, paddockId, seasonYear), existed: false };
+}
+
 export function useUpsertPruningSeason(vineyardId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -112,20 +144,25 @@ export function useUpsertPruningSeason(vineyardId: string) {
         ...input,
         client_updated_at: new Date().toISOString(),
       };
-      if (input.id) {
+      // Resolve-then-adopt: always look up the live row first so we don't
+      // create a duplicate season with a different id than iOS/Android used.
+      const resolved = input.id
+        ? { id: input.id, existed: true }
+        : await resolvePruningSeasonId(input.vineyard_id, input.paddock_id, input.season_year);
+
+      if (resolved.existed) {
         const { data, error } = await supabase
           .from("pruning_seasons")
           .update(payload)
-          .eq("id", input.id)
+          .eq("id", resolved.id)
           .select("*")
           .maybeSingle();
         if (error) throw error;
         return data as PruningSeason;
       }
-      const id = crypto.randomUUID();
       const { data, error } = await supabase
         .from("pruning_seasons")
-        .insert({ id, ...payload })
+        .insert({ id: resolved.id, ...payload })
         .select("*")
         .maybeSingle();
       if (error) throw error;
@@ -211,6 +248,9 @@ export interface RecordEntryInput {
 
 export interface RecordEntryResult {
   entry_id: string;
+  /** Server-canonical season the entry was attached to. May differ from
+   *  the id the caller passed if the server adopted a different row. */
+  season_id?: string;
   requested: number;
   attributed: number;
   deleted?: boolean;
@@ -219,6 +259,9 @@ export interface RecordEntryResult {
 export function useRecordPruningEntry(seasonId: string) {
   const qc = useQueryClient();
   return useMutation({
+    // Idempotency: entryId must be supplied and reused on retry. The RPC is
+    // idempotent on p_id, so the SAME uuid is safe to replay; do NOT roll a
+    // fresh uuid here or a retry would double-save.
     mutationFn: async (input: RecordEntryInput): Promise<RecordEntryResult> => {
       const entryId = input.entryId ?? crypto.randomUUID();
       const { data, error } = await (supabase as any).rpc("record_pruning_entry", {
@@ -244,13 +287,21 @@ export function useRecordPruningEntry(seasonId: string) {
         })),
         p_work_task_id: input.workTaskId ?? null,
       });
+      // Never swallow RPC errors as success — a 409 / duplicate-key is NOT
+      // "already saved" for our purposes; surface it so the caller can retry
+      // idempotently with the same entryId.
       if (error) throw error;
       return data as RecordEntryResult;
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // The server may have attached the entry to a canonical season row
+      // that differs from the id the caller passed — invalidate BOTH.
+      const canonicalSeasonId = data?.season_id ?? seasonId;
       await Promise.all([
         qc.invalidateQueries({ queryKey: QK.entries(seasonId) }),
         qc.invalidateQueries({ queryKey: QK.segments(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.entries(canonicalSeasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(canonicalSeasonId) }),
         qc.invalidateQueries({ queryKey: ["pruning"] }),
       ]);
       await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
