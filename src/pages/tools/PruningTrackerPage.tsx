@@ -614,7 +614,7 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
   const vinesPerDay = distinctDays.size > 0 ? vinesDone / distinctDays.size : null;
   const labourHours = entries.reduce((s, e) => s + (Number(e.labour_hours) || 0), 0);
   const vinesPerHour = labourHours > 0 ? vinesDone / labourHours : null;
-  const completedSegCount = (segments ?? []).filter((s: any) => s?.completed === true).length;
+  
 
   return (
     <div className="space-y-4">
