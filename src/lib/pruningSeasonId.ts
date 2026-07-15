@@ -2,7 +2,7 @@
 // Byte-for-byte identical to Kotlin UUID.nameUUIDFromBytes /
 // iOS PruningSeasonId.make. Never generate random season IDs — sync
 // alignment across platforms depends on this deterministic derivation.
-import md5 from "js-md5";
+import { md5 } from "js-md5";
 
 export function pruningSeasonId(
   vineyardId: string,
