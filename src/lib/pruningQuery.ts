@@ -111,6 +111,31 @@ export interface SeasonUpsertInput {
   status?: PruningStatus;
 }
 
+/**
+ * Resolve the live pruning_seasons row id for (vineyard, paddock, season_year),
+ * or return the deterministic id that a fresh insert would use. Never caches
+ * across sessions — always re-query. Callers that then insert MUST be prepared
+ * for a benign duplicate-key error caused by a concurrent client (retry the
+ * resolve in that case).
+ */
+export async function resolvePruningSeasonId(
+  vineyardId: string,
+  paddockId: string,
+  seasonYear: number,
+): Promise<{ id: string; existed: boolean }> {
+  const { data, error } = await supabase
+    .from("pruning_seasons")
+    .select("id")
+    .eq("vineyard_id", vineyardId)
+    .eq("paddock_id", paddockId)
+    .eq("season_year", seasonYear)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  if (data?.id) return { id: data.id, existed: true };
+  return { id: pruningSeasonId(vineyardId, paddockId, seasonYear), existed: false };
+}
+
 export function useUpsertPruningSeason(vineyardId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -119,20 +144,25 @@ export function useUpsertPruningSeason(vineyardId: string) {
         ...input,
         client_updated_at: new Date().toISOString(),
       };
-      if (input.id) {
+      // Resolve-then-adopt: always look up the live row first so we don't
+      // create a duplicate season with a different id than iOS/Android used.
+      const resolved = input.id
+        ? { id: input.id, existed: true }
+        : await resolvePruningSeasonId(input.vineyard_id, input.paddock_id, input.season_year);
+
+      if (resolved.existed) {
         const { data, error } = await supabase
           .from("pruning_seasons")
           .update(payload)
-          .eq("id", input.id)
+          .eq("id", resolved.id)
           .select("*")
           .maybeSingle();
         if (error) throw error;
         return data as PruningSeason;
       }
-      const id = crypto.randomUUID();
       const { data, error } = await supabase
         .from("pruning_seasons")
-        .insert({ id, ...payload })
+        .insert({ id: resolved.id, ...payload })
         .select("*")
         .maybeSingle();
       if (error) throw error;
