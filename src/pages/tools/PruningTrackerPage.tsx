@@ -690,7 +690,7 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-sm">
               <Metric label="Vines / day" value={vinesPerDay ? Math.round(vinesPerDay).toLocaleString() : "—"} />
               <Metric label="Vines / labour hr" value={vinesPerHour ? Math.round(vinesPerHour).toLocaleString() : "—"} />
-              <Metric label="Estimated completion" value={p.estimatedCompletionDate ? formatDate(p.estimatedCompletionDate) : "—"} />
+              <Metric label="Estimated completion" value={rpcBlock?.estimated_completion_date ? formatDate(rpcBlock.estimated_completion_date) : (local.estimatedCompletionDate ? formatDate(local.estimatedCompletionDate) : "—")} />
               <Metric label="Due date" value={block.season?.due_date ? formatDate(block.season.due_date) : "—"} />
             </div>
           )}
