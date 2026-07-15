@@ -108,10 +108,11 @@ export function buildRowCompletion(
   const byId = new Map<string, Set<number>>();
   const byNumber = new Map<number, Set<number>>();
   for (const s of segments) {
-    const isCompleted =
-      (s as any).completed === true &&
-      (s as any).pruning_entry_id != null;
-    if (!isCompleted) continue;
+    // Shared contract with iOS/Android: a quarter is done iff completed === true.
+    // Do NOT also require pruning_entry_id — cross-platform records (and some
+    // legacy rows) may leave it null while completed remains true. Reversal
+    // sets completed = false, so this stays consistent with the reverse flow.
+    if ((s as any).completed !== true) continue;
     if (s.paddock_row_id) {
       const set = byId.get(s.paddock_row_id) ?? new Set<number>();
       set.add(s.segment_number);
