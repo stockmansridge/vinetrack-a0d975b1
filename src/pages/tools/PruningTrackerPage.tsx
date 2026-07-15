@@ -663,17 +663,6 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
               {Math.round(vinesDone).toLocaleString()} of {Math.round(vinesTotal).toLocaleString()} vines
             </div>
           </div>
-          {isSystemAdmin && (
-            <div className="rounded border border-dashed p-2 text-[11px] text-muted-foreground font-mono space-y-0.5">
-              <div>Paddock ID: {block.paddock.id}</div>
-              <div>Season ID (portal): {block.season?.id ?? "—"}</div>
-              <div>Season year: {block.season?.season_year ?? "—"}</div>
-              <div>Entries loaded: {entries.length}</div>
-              <div>Segments loaded: {segments.length} · completed: {completedSegCount}</div>
-              <div>RPC reDone/reTotal: {rpcBlock?.completed_row_equivalents ?? "—"} / {rpcBlock?.total_row_equivalents ?? "—"}</div>
-              <div>RPC vines pruned: {rpcBlock?.vines_pruned ?? "—"}</div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
