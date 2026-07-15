@@ -31,6 +31,7 @@ import {
   resolvePruningSeasonId,
   type PruningSeason,
 } from "@/lib/pruningQuery";
+import { pruningSeasonId } from "@/lib/pruningSeasonId";
 import {
   buildRowIdentities,
   buildRowCompletion,
@@ -130,16 +131,45 @@ export default function PruningTrackerPage() {
   const seasons = seasonsQ.data ?? [];
   const paddocks = paddocksQ.data ?? [];
 
-  // Season for current vintage, keyed by paddock
-  const currentSeasonByPaddock = useMemo(() => {
-    const m = new Map<string, PruningSeason>();
-    for (const s of seasons) if (s.season_year === vintage) m.set(s.paddock_id, s);
+  // All season rows for the current vintage, grouped by paddock. There may
+  // be more than one per paddock (legacy random-UUID season rows created by
+  // an earlier portal build can coexist with the deterministic iOS/Android
+  // row). We aggregate segments/entries across ALL of them so per-block
+  // stats reflect every recorded quarter, whichever season row it landed
+  // on. `pruningSeasonId` gives the canonical id to prefer for display.
+  const currentSeasonsByPaddock = useMemo(() => {
+    const m = new Map<string, PruningSeason[]>();
+    for (const s of seasons) {
+      if (s.season_year !== vintage) continue;
+      const list = m.get(s.paddock_id) ?? [];
+      list.push(s);
+      m.set(s.paddock_id, list);
+    }
     return m;
   }, [seasons, vintage]);
 
+  const canonicalSeasonByPaddock = useMemo(() => {
+    const m = new Map<string, PruningSeason>();
+    for (const [paddockId, list] of currentSeasonsByPaddock) {
+      if (!list.length) continue;
+      // Prefer the deterministic id if present, otherwise the newest row.
+      const deterministic = selectedVineyardId
+        ? pruningSeasonId(selectedVineyardId, paddockId, vintage)
+        : null;
+      const preferred = list.find((s) => s.id === deterministic)
+        ?? [...list].sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0];
+      m.set(paddockId, preferred);
+    }
+    return m;
+  }, [currentSeasonsByPaddock, selectedVineyardId, vintage]);
+
   const currentSeasonIds = useMemo(
-    () => Array.from(currentSeasonByPaddock.values()).map((s) => s.id),
-    [currentSeasonByPaddock],
+    () => {
+      const ids: string[] = [];
+      for (const list of currentSeasonsByPaddock.values()) for (const s of list) ids.push(s.id);
+      return ids;
+    },
+    [currentSeasonsByPaddock],
   );
 
   const segmentsQ = useQuery({
@@ -173,23 +203,25 @@ export default function PruningTrackerPage() {
   const blocks: BlockView[] = useMemo(() => {
     const segs = segmentsQ.data ?? [];
     const ents = entriesQ.data ?? [];
+    // Group by paddock_id, not pruning_season_id, so records split across
+    // duplicate season rows still contribute to the same block.
     const bySeg = new Map<string, any[]>();
     const byEnt = new Map<string, any[]>();
     for (const s of segs) {
-      const list = bySeg.get(s.pruning_season_id) ?? [];
+      const list = bySeg.get(s.paddock_id) ?? [];
       list.push(s);
-      bySeg.set(s.pruning_season_id, list);
+      bySeg.set(s.paddock_id, list);
     }
     for (const e of ents) {
-      const list = byEnt.get(e.pruning_season_id) ?? [];
+      const list = byEnt.get(e.paddock_id) ?? [];
       list.push(e);
-      byEnt.set(e.pruning_season_id, list);
+      byEnt.set(e.paddock_id, list);
     }
     return paddocks.map((paddock) => {
-      const season = currentSeasonByPaddock.get(paddock.id) ?? null;
+      const season = canonicalSeasonByPaddock.get(paddock.id) ?? null;
       const paddockRows = parseRows(paddock.rows);
       const identities = buildRowIdentities(paddockRows, paddock, season?.manual_row_count ?? null);
-      const completion = buildRowCompletion(identities, season ? (bySeg.get(season.id) ?? []) as any : []);
+      const completion = buildRowCompletion(identities, (bySeg.get(paddock.id) ?? []) as any);
       const shellSeason: PruningSeason = season ?? {
         id: "",
         vineyard_id: selectedVineyardId ?? "",
@@ -211,7 +243,7 @@ export default function PruningTrackerPage() {
       const progress = computeBlockProgress(
         identities,
         completion,
-        season ? (byEnt.get(season.id) ?? []) as any : [],
+        (byEnt.get(paddock.id) ?? []) as any,
         shellSeason,
       );
       const firstRowNumber = identities.length ? identities[0].rowNumber : null;
@@ -225,7 +257,7 @@ export default function PruningTrackerPage() {
         firstRowNumber,
       };
     });
-  }, [paddocks, currentSeasonByPaddock, segmentsQ.data, entriesQ.data, selectedVineyardId, vintage]);
+  }, [paddocks, canonicalSeasonByPaddock, segmentsQ.data, entriesQ.data, selectedVineyardId, vintage]);
 
   const sortedBlocks = useMemo(() => {
     const arr = [...blocks];
@@ -258,8 +290,24 @@ export default function PruningTrackerPage() {
 
 
   const selected = selectedPaddockId ? blocks.find((b) => b.paddock.id === selectedPaddockId) ?? null : null;
-  const selectedEntriesQ = usePruningEntries(selected?.season?.id ?? null);
-  const selectedSegmentsQ = usePruningSegments(selected?.season?.id ?? null);
+  // Aggregate segments/entries across ALL season rows for this paddock+vintage
+  // so the detail view matches the block card (which already merges them).
+  const selectedSeasonIds = useMemo(() => {
+    if (!selectedPaddockId) return [] as string[];
+    return (currentSeasonsByPaddock.get(selectedPaddockId) ?? []).map((s) => s.id);
+  }, [currentSeasonsByPaddock, selectedPaddockId]);
+
+  const selectedEntries = useMemo(
+    () => (entriesQ.data ?? []).filter((e: any) => e.paddock_id === selectedPaddockId),
+    [entriesQ.data, selectedPaddockId],
+  );
+  const selectedSegments = useMemo(
+    () => (segmentsQ.data ?? []).filter((s: any) => s.paddock_id === selectedPaddockId),
+    [segmentsQ.data, selectedPaddockId],
+  );
+  void selectedSeasonIds;
+  const selectedEntriesQ = { data: selectedEntries };
+  const selectedSegmentsQ = { data: selectedSegments };
   const selectedCompletion = useMemo(() => {
     if (!selected) return [];
     return buildRowCompletion(selected.identities, (selectedSegmentsQ.data ?? []) as any);
