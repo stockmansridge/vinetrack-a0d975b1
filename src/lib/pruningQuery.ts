@@ -248,6 +248,9 @@ export interface RecordEntryInput {
 
 export interface RecordEntryResult {
   entry_id: string;
+  /** Server-canonical season the entry was attached to. May differ from
+   *  the id the caller passed if the server adopted a different row. */
+  season_id?: string;
   requested: number;
   attributed: number;
   deleted?: boolean;
@@ -256,6 +259,9 @@ export interface RecordEntryResult {
 export function useRecordPruningEntry(seasonId: string) {
   const qc = useQueryClient();
   return useMutation({
+    // Idempotency: entryId must be supplied and reused on retry. The RPC is
+    // idempotent on p_id, so the SAME uuid is safe to replay; do NOT roll a
+    // fresh uuid here or a retry would double-save.
     mutationFn: async (input: RecordEntryInput): Promise<RecordEntryResult> => {
       const entryId = input.entryId ?? crypto.randomUUID();
       const { data, error } = await (supabase as any).rpc("record_pruning_entry", {
@@ -281,13 +287,21 @@ export function useRecordPruningEntry(seasonId: string) {
         })),
         p_work_task_id: input.workTaskId ?? null,
       });
+      // Never swallow RPC errors as success — a 409 / duplicate-key is NOT
+      // "already saved" for our purposes; surface it so the caller can retry
+      // idempotently with the same entryId.
       if (error) throw error;
       return data as RecordEntryResult;
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // The server may have attached the entry to a canonical season row
+      // that differs from the id the caller passed — invalidate BOTH.
+      const canonicalSeasonId = data?.season_id ?? seasonId;
       await Promise.all([
         qc.invalidateQueries({ queryKey: QK.entries(seasonId) }),
         qc.invalidateQueries({ queryKey: QK.segments(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.entries(canonicalSeasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(canonicalSeasonId) }),
         qc.invalidateQueries({ queryKey: ["pruning"] }),
       ]);
       await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
