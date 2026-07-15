@@ -199,22 +199,38 @@ export default function PruningTrackerPage() {
     },
   });
 
+  // Map season_id -> paddock_id so we can resolve records even when the
+  // row's own paddock_id column is null (older records / cross-platform
+  // inserts sometimes leave it unset).
+  const paddockBySeasonId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const [paddockId, list] of currentSeasonsByPaddock) {
+      for (const s of list) m.set(s.id, paddockId);
+    }
+    return m;
+  }, [currentSeasonsByPaddock]);
+
   const blocks: BlockView[] = useMemo(() => {
     const segs = segmentsQ.data ?? [];
     const ents = entriesQ.data ?? [];
-    // Group by paddock_id, not pruning_season_id, so records split across
-    // duplicate season rows still contribute to the same block.
+    // Group by paddock_id, resolving via the season row when the record's
+    // own paddock_id is null, so records split across duplicate season
+    // rows (or missing paddock_id) still contribute to the same block.
     const bySeg = new Map<string, any[]>();
     const byEnt = new Map<string, any[]>();
     for (const s of segs) {
-      const list = bySeg.get(s.paddock_id) ?? [];
+      const pid = s.paddock_id ?? paddockBySeasonId.get(s.pruning_season_id);
+      if (!pid) continue;
+      const list = bySeg.get(pid) ?? [];
       list.push(s);
-      bySeg.set(s.paddock_id, list);
+      bySeg.set(pid, list);
     }
     for (const e of ents) {
-      const list = byEnt.get(e.paddock_id) ?? [];
+      const pid = e.paddock_id ?? paddockBySeasonId.get(e.pruning_season_id);
+      if (!pid) continue;
+      const list = byEnt.get(pid) ?? [];
       list.push(e);
-      byEnt.set(e.paddock_id, list);
+      byEnt.set(pid, list);
     }
     return paddocks.map((paddock) => {
       const season = canonicalSeasonByPaddock.get(paddock.id) ?? null;
@@ -256,7 +272,7 @@ export default function PruningTrackerPage() {
         firstRowNumber,
       };
     });
-  }, [paddocks, canonicalSeasonByPaddock, segmentsQ.data, entriesQ.data, selectedVineyardId, vintage]);
+  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, selectedVineyardId, vintage]);
 
   const sortedBlocks = useMemo(() => {
     const arr = [...blocks];
@@ -297,12 +313,18 @@ export default function PruningTrackerPage() {
   }, [currentSeasonsByPaddock, selectedPaddockId]);
 
   const selectedEntries = useMemo(
-    () => (entriesQ.data ?? []).filter((e: any) => e.paddock_id === selectedPaddockId),
-    [entriesQ.data, selectedPaddockId],
+    () => (entriesQ.data ?? []).filter((e: any) => {
+      const pid = e.paddock_id ?? paddockBySeasonId.get(e.pruning_season_id);
+      return pid === selectedPaddockId;
+    }),
+    [entriesQ.data, paddockBySeasonId, selectedPaddockId],
   );
   const selectedSegments = useMemo(
-    () => (segmentsQ.data ?? []).filter((s: any) => s.paddock_id === selectedPaddockId),
-    [segmentsQ.data, selectedPaddockId],
+    () => (segmentsQ.data ?? []).filter((s: any) => {
+      const pid = s.paddock_id ?? paddockBySeasonId.get(s.pruning_season_id);
+      return pid === selectedPaddockId;
+    }),
+    [segmentsQ.data, paddockBySeasonId, selectedPaddockId],
   );
   void selectedSeasonIds;
   const selectedEntriesQ = { data: selectedEntries };
