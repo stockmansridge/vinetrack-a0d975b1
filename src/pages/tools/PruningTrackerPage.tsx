@@ -474,9 +474,24 @@ export default function PruningTrackerPage() {
                   // the vineyard total. Fall back to local calc only for
                   // paddocks the RPC didn't return (defensive).
                   const rpcB = rpcBlockByPaddock.get(b.paddock.id);
-                  const pct = rpcB?.progress ?? b.progress.percentComplete;
                   const reDone = rpcB?.completed_row_equivalents ?? b.progress.rowEquivalentsCompleted;
                   const reTotal = rpcB?.total_row_equivalents ?? b.progress.totalRows;
+                  // Derive the fraction locally from the RE totals — never
+                  // trust an rpc `progress` field to be a 0..1 fraction
+                  // (some installs return 0 when it isn't populated), which
+                  // is how block cards ended up displaying 0% next to
+                  // "2.5 of 11 row equivalents".
+                  const pct = reTotal > 0 ? reDone / reTotal : 0;
+                  // Status: RPC-driven progress wins. If reDone > 0 we're
+                  // In progress at minimum — never "Not started".
+                  const effectiveProgress: BlockProgress = {
+                    ...b.progress,
+                    completedSegments: reDone > 0 ? Math.max(1, b.progress.completedSegments) : 0,
+                    rowEquivalentsCompleted: reDone,
+                    totalRows: reTotal,
+                    percentComplete: pct,
+                    dueStatus: pct >= 1 ? "complete" : b.progress.dueStatus,
+                  };
                   return (
                     <button
                       key={b.paddock.id}
@@ -488,7 +503,7 @@ export default function PruningTrackerPage() {
                           {b.paddock.name ?? "Unnamed block"}
                           <span className="text-muted-foreground font-normal"> · {rowRangeLabel(b.identities)}</span>
                         </div>
-                        <StatusBadge p={b.progress} hasSeason={!!b.season} />
+                        <StatusBadge p={effectiveProgress} hasSeason={!!b.season} />
                       </div>
                       {b.variety && (
                         <div className="text-xs text-muted-foreground mb-3">{b.variety}</div>
