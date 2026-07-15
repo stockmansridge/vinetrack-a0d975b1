@@ -31,6 +31,7 @@ import {
   resolvePruningSeasonId,
   type PruningSeason,
 } from "@/lib/pruningQuery";
+import { pruningSeasonId } from "@/lib/pruningSeasonId";
 import {
   buildRowIdentities,
   buildRowCompletion,
