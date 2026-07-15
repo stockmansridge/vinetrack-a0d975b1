@@ -74,6 +74,7 @@ const dashboard: NavItem[] = [
 const work: NavItem[] = [
   { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
   { title: "Work Tasks", url: "/work-tasks", icon: ClipboardList },
+  { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
   { title: "Field Trips", url: "/trips", icon: Sprout },
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
@@ -130,7 +131,6 @@ const tools: NavItem[] = [
 // System-admin-only tools (visibility gated in render).
 const toolsSystemAdmin: NavItem[] = [
   { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite },
-  { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
   { title: "Fertiliser Calculator", url: "/tools/fertiliser-calculator", icon: FlaskConical },
 ];
 
