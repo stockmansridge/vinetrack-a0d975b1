@@ -290,8 +290,24 @@ export default function PruningTrackerPage() {
 
 
   const selected = selectedPaddockId ? blocks.find((b) => b.paddock.id === selectedPaddockId) ?? null : null;
-  const selectedEntriesQ = usePruningEntries(selected?.season?.id ?? null);
-  const selectedSegmentsQ = usePruningSegments(selected?.season?.id ?? null);
+  // Aggregate segments/entries across ALL season rows for this paddock+vintage
+  // so the detail view matches the block card (which already merges them).
+  const selectedSeasonIds = useMemo(() => {
+    if (!selectedPaddockId) return [] as string[];
+    return (currentSeasonsByPaddock.get(selectedPaddockId) ?? []).map((s) => s.id);
+  }, [currentSeasonsByPaddock, selectedPaddockId]);
+
+  const selectedEntries = useMemo(
+    () => (entriesQ.data ?? []).filter((e: any) => e.paddock_id === selectedPaddockId),
+    [entriesQ.data, selectedPaddockId],
+  );
+  const selectedSegments = useMemo(
+    () => (segmentsQ.data ?? []).filter((s: any) => s.paddock_id === selectedPaddockId),
+    [segmentsQ.data, selectedPaddockId],
+  );
+  void selectedSeasonIds;
+  const selectedEntriesQ = { data: selectedEntries };
+  const selectedSegmentsQ = { data: selectedSegments };
   const selectedCompletion = useMemo(() => {
     if (!selected) return [];
     return buildRowCompletion(selected.identities, (selectedSegmentsQ.data ?? []) as any);
