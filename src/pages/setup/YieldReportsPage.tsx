@@ -4,6 +4,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PortalNotice } from "@/components/ui/PortalNotice";
 import {
   Select,
   SelectContent,
