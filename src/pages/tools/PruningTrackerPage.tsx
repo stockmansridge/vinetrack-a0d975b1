@@ -136,6 +136,12 @@ export default function PruningTrackerPage() {
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const { vintage, isLoading: vintageLoading } = useVintage();
+  // Pruning season year is the CALENDAR year in which pruning work is
+  // recorded — NOT the vintage year. Winter pruning in July 2026 belongs
+  // to season_year 2026 even though it contributes to Vintage 2027. iOS
+  // and Android group rows the same way; using useVintage() here caused
+  // the portal to query an empty year. See SQL 116/118 contract notes.
+  const pruningSeasonYear = new Date().getFullYear();
 
   const seasonsQ = usePruningSeasons(selectedVineyardId);
   const paddocksQ = usePaddocks(selectedVineyardId);
