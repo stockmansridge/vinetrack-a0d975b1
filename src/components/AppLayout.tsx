@@ -29,7 +29,7 @@ import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useState } from "react";
-import vineyardBg from "@/assets/vineyard-bg.png.asset.json";
+import vineyardBg from "@/assets/vineyard-bg.webp.asset.json";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
