@@ -635,7 +635,7 @@ export default function PruningTrackerPage() {
                       onClick={() => setSelectedPaddockId(b.paddock.id)}
                       className={`text-left rounded-lg border bg-card p-4 transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                         selectedPaddockId === b.paddock.id
-                          ? "border-primary/50 ring-2 ring-primary/30"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-primary ring-2 ring-sidebar-primary/40"
                           : ""
                       }`}
                     >
