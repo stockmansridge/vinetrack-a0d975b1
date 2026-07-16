@@ -518,7 +518,7 @@ export default function PruningTrackerPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
           <p className="text-sm text-muted-foreground">
-            {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · Season ${vintage}` : "No vineyard selected"}
+            {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · Pruning season ${pruningSeasonYear} · Vintage ${vintage}` : "No vineyard selected"}
           </p>
         </div>
       </div>
