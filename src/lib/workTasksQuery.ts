@@ -23,6 +23,11 @@ export interface WorkTask {
   is_archived?: boolean | null;
   is_finalized?: boolean | null;
   finalized_at?: string | null;
+  /** SQL 119: authoritative production/costing vintage for this task,
+   *  resolved server-side from the vineyard's season settings. All linked
+   *  cost lines (labour, machinery, trips) report under this value —
+   *  never derive vintage from year(date) on the client. */
+  vintage_year?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
   client_updated_at?: string | null;
@@ -31,6 +36,7 @@ export interface WorkTask {
   created_by?: string | null;
   updated_by?: string | null;
 }
+
 
 export interface WorkTaskLabourLine {
   id: string;
