@@ -10,7 +10,7 @@
 // The season year comes from the shared vineyard season settings via
 // useVintage() — never the local calendar year — so it stays in sync with
 // iOS, Android and Operational Preferences.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
