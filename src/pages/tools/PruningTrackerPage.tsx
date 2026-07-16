@@ -564,12 +564,12 @@ export default function PruningTrackerPage() {
                     <Progress value={summary.overall_progress * 100} className="h-2" />
                   </div>
                   <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} />
-                    <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} />
-                    <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} />
-                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} />
-                    <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} />
-                    <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} />
+                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} icon={Scissors} />
+                    <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} icon={Grape} />
+                    <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} icon={CalendarDays} />
+                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} icon={User} />
+                    <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} icon={CheckCircle2} />
+                    <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} icon={AlertTriangle} tone="warning" />
                   </div>
                   {summary.projected_completion_date && (
                     <div className="text-xs text-muted-foreground">
