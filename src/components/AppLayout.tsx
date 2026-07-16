@@ -102,22 +102,23 @@ export default function AppLayout() {
           </header>
           <PortalInfoBanner />
           <PendingInvitesBanner />
-          <main className="relative flex-1 p-4 md:p-6 lg:p-8 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">
+          <main className="relative flex-1 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[320px] overflow-hidden dark:hidden"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[280px] md:h-[330px] xl:h-[380px] overflow-hidden dark:hidden"
             >
               <img
                 src={vineyardBg.url}
                 alt=""
                 loading="lazy"
-                width={1920}
-                height={704}
-                className="h-full w-full object-cover object-center opacity-35"
+                width={2400}
+                height={700}
+                className="absolute inset-0 h-full w-full object-cover object-[center_52%]"
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/65 to-background" />
+              <div className="absolute inset-0 vineyard-background-fade" />
+              <div className="absolute inset-0 bg-gradient-to-r from-background/20 via-background/5 to-transparent" />
             </div>
-            <div className="relative z-10">
+            <div className="relative z-10 p-4 md:p-6 lg:p-8">
               <Outlet />
             </div>
           </main>
