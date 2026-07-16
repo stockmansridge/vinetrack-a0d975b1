@@ -187,8 +187,9 @@
      amber tint in light mode. Use for overdue, missing, due-soon, beta and
      general caution banners. Keep destructive red for critical errors. */
   .warning-banner {
-    @apply !border-warning/40 !bg-warning/10;
-    color: #78350f !important;
+    border-color: #f2b84b !important;
+    background: linear-gradient(90deg, #fff8e6 0%, #fffdf7 100%) !important;
+    color: #4b5563 !important;
   }
 
   .dark .warning-banner {
@@ -211,7 +212,7 @@
   .warning-banner h5,
   .warning-banner__title,
   .warning-banner strong {
-    color: #78350f !important;
+    color: #92400e !important;
   }
 
   .dark .warning-banner h3,
@@ -223,13 +224,14 @@
 
   .warning-banner p,
   .warning-banner__body {
-    color: #78350f !important;
+    color: #4b5563 !important;
   }
 
   .dark .warning-banner p,
   .dark .warning-banner__body {
     color: #d7d9d5 !important;
   }
+
 
   .warning-banner__button {
     @apply bg-background border border-border text-foreground rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary;
