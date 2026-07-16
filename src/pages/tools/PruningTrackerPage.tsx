@@ -512,7 +512,7 @@ export default function PruningTrackerPage() {
       <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." path="/tools/pruning-tracker" />
 
       <div className="flex items-center gap-3">
-        <div className="rounded-lg bg-primary/10 p-2 text-primary">
+        <div className="rounded-full bg-primary/10 p-2 text-primary">
           <Scissors className="h-6 w-6" />
         </div>
         <div>
