@@ -10,10 +10,11 @@
 // The season year comes from the shared vineyard season settings via
 // useVintage() — never the local calendar year — so it stays in sync with
 // iOS, Android and Operational Preferences.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
+import { useAuth } from "@/context/AuthContext";
 import { useVintage } from "@/lib/useVintage";
 import { useIsSystemAdmin } from "@/lib/systemAdmin";
 import { PageHead } from "@/components/PageHead";
@@ -39,7 +40,7 @@ import {
   type RowIdentity,
   type RowCompletionState,
 } from "@/lib/pruningCalc";
-import { usePruningVineyardSummary, type PruningVineyardSummaryBlock } from "@/lib/pruningSummaryQuery";
+import { usePruningVineyardSummary, type PruningVineyardSummary, type PruningVineyardSummaryBlock } from "@/lib/pruningSummaryQuery";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
@@ -85,6 +86,15 @@ function StatusBadge({ p, hasSeason }: { p: BlockProgress; hasSeason: boolean })
   return <Badge variant="outline">Not started</Badge>;
 }
 
+function rpcStatusToDueStatus(status: string | null | undefined): BlockProgress["dueStatus"] | null {
+  if (!status) return null;
+  if (status === "complete") return "complete";
+  if (status === "on_track") return "on_track";
+  if (status === "at_risk") return "at_risk";
+  if (status === "overdue") return "overdue";
+  return null;
+}
+
 function primaryVariety(p: Paddock): string {
   const allocs = parseVarietyAllocations(p.variety_allocations);
   if (!allocs.length) return "";
@@ -98,6 +108,13 @@ function rowRangeLabel(ids: RowIdentity[]): string {
   if (!nums.length) return `${ids.length} rows`;
   const min = Math.min(...nums), max = Math.max(...nums);
   return min === max ? `Row ${min}` : `Rows ${min}–${max}`;
+}
+
+function searchName(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 interface BlockView {
@@ -114,6 +131,7 @@ type SortKey = "name" | "row";
 
 export default function PruningTrackerPage() {
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
+  const { user } = useAuth();
   const vineyard = memberships.find((m) => m.vineyard_id === selectedVineyardId);
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
@@ -305,12 +323,62 @@ export default function PruningTrackerPage() {
   const summaryQ = usePruningVineyardSummary(selectedVineyardId, vintage);
   const summary = summaryQ.data ?? null;
 
+  const membershipCheckQ = useQuery({
+    queryKey: ["pruning", "membership-check", selectedVineyardId, user?.id ?? null],
+    enabled: !!selectedVineyardId && !!user && isSystemAdmin,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("is_vineyard_member", {
+        p_vineyard_id: selectedVineyardId,
+      });
+      if (error) throw error;
+      return Boolean(data);
+    },
+  });
+
   // Per-block RPC values keyed by paddock_id for card overlays.
   const rpcBlockByPaddock = useMemo(() => {
     const m = new Map<string, PruningVineyardSummaryBlock>();
-    for (const b of summary?.blocks ?? []) if (b.paddock_id) m.set(b.paddock_id, b);
+    for (const b of summary?.blocks ?? []) if (b.paddock_id) m.set(String(b.paddock_id).toLowerCase(), b);
     return m;
   }, [summary]);
+
+  const grunerPaddock = useMemo(
+    () => paddocks.find((p) => searchName(p.name).includes("gruner veltliner")) ?? null,
+    [paddocks],
+  );
+
+  const grunerDirectQ = useQuery({
+    queryKey: ["pruning", "diagnostic-gruner-direct", selectedVineyardId, grunerPaddock?.id ?? null, vintage],
+    enabled: !!selectedVineyardId && !!grunerPaddock && isSystemAdmin,
+    queryFn: async () => {
+      const { data: seasons, error: seasonsError } = await supabase
+        .from("pruning_seasons")
+        .select("*")
+        .eq("vineyard_id", selectedVineyardId!)
+        .eq("paddock_id", grunerPaddock!.id)
+        .eq("season_year", vintage)
+        .is("deleted_at", null);
+      if (seasonsError) throw seasonsError;
+      const seasonIds = (seasons ?? []).map((s: any) => s.id).filter(Boolean);
+      if (seasonIds.length === 0) {
+        return { seasons: seasons ?? [], entries: [], segments: [], seasonIds };
+      }
+      const [{ data: entries, error: entriesError }, { data: segments, error: segmentsError }] = await Promise.all([
+        supabase
+          .from("pruning_entries")
+          .select("*")
+          .in("pruning_season_id", seasonIds)
+          .is("deleted_at", null),
+        supabase
+          .from("pruning_row_segments")
+          .select("*")
+          .in("pruning_season_id", seasonIds),
+      ]);
+      if (entriesError) throw entriesError;
+      if (segmentsError) throw segmentsError;
+      return { seasons: seasons ?? [], entries: entries ?? [], segments: segments ?? [], seasonIds };
+    },
+  });
 
 
   const selected = selectedPaddockId ? blocks.find((b) => b.paddock.id === selectedPaddockId) ?? null : null;
@@ -342,6 +410,58 @@ export default function PruningTrackerPage() {
     if (!selected) return [];
     return buildRowCompletion(selected.identities, (selectedSegmentsQ.data ?? []) as any);
   }, [selected, selectedSegmentsQ.data]);
+
+  const selectedCanonicalQ = useQuery({
+    queryKey: ["pruning", "canonical-season-detail", selectedVineyardId, selectedPaddockId, vintage, summary?.blocks.map((b) => `${b.paddock_id}:${b.season_id ?? ""}`).join("|") ?? ""],
+    enabled: !!selectedVineyardId && !!selectedPaddockId,
+    queryFn: async () => {
+      const { data: splitSeasons, error: splitError } = await supabase
+        .from("pruning_seasons")
+        .select("*")
+        .eq("vineyard_id", selectedVineyardId!)
+        .eq("paddock_id", selectedPaddockId!)
+        .eq("season_year", vintage)
+        .is("deleted_at", null);
+      if (splitError) throw splitError;
+
+      const seasonIds = (splitSeasons ?? []).map((s: any) => s.id).filter(Boolean);
+      const rpcSeasonId = summary?.blocks.find((b) => b.paddock_id.toLowerCase() === selectedPaddockId!.toLowerCase())?.season_id ?? null;
+      const deterministicId = pruningSeasonId(selectedVineyardId!, selectedPaddockId!, vintage);
+      const season = (splitSeasons ?? []).find((s: any) => s.id === rpcSeasonId)
+        ?? (splitSeasons ?? []).find((s: any) => s.id === deterministicId)
+        ?? [...(splitSeasons ?? [])].sort((a: any, b: any) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0]
+        ?? null;
+      if (seasonIds.length === 0) {
+        return {
+          season: season as PruningSeason | null,
+          entries: [] as any[],
+          segments: [] as any[],
+          seasonIds,
+        };
+      }
+
+      const [{ data: entries, error: entriesError }, { data: segments, error: segmentsError }] = await Promise.all([
+        supabase
+          .from("pruning_entries")
+          .select("*")
+          .in("pruning_season_id", seasonIds)
+          .is("deleted_at", null)
+          .order("entry_date", { ascending: false }),
+        supabase
+          .from("pruning_row_segments")
+          .select("*")
+          .in("pruning_season_id", seasonIds),
+      ]);
+      if (entriesError) throw entriesError;
+      if (segmentsError) throw segmentsError;
+      return {
+        season: season as PruningSeason | null,
+        entries: entries ?? [],
+        segments: segments ?? [],
+        seasonIds,
+      };
+    },
+  });
 
   const openSettings = () => setSettingsOpen(true);
 
@@ -410,7 +530,15 @@ export default function PruningTrackerPage() {
               <CardDescription>Season {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {summaryQ.isLoading || !summary ? (
+              {summaryQ.isError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Couldn't load vineyard summary</AlertTitle>
+                  <AlertDescription>
+                    {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+                    {" "}Figures are intentionally not calculated locally to keep parity with iOS and Android.
+                  </AlertDescription>
+                </Alert>
+              ) : summaryQ.isLoading || !summary ? (
                 <div className="space-y-3">
                   <Skeleton className="h-8 w-32" />
                   <Skeleton className="h-2 w-full" />
@@ -418,14 +546,6 @@ export default function PruningTrackerPage() {
                     {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
                   </div>
                 </div>
-              ) : summaryQ.isError ? (
-                <Alert variant="destructive">
-                  <AlertTitle>Couldn't load vineyard summary</AlertTitle>
-                  <AlertDescription>
-                    {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
-                    {" "}Retry shortly — figures are intentionally not calculated locally to keep parity with iOS and Android.
-                  </AlertDescription>
-                </Alert>
               ) : (
                 <>
                   <div>
@@ -455,6 +575,22 @@ export default function PruningTrackerPage() {
             </CardContent>
           </Card>
 
+          {isSystemAdmin && (
+            <PruningDiagnosticsPanel
+              summary={summary}
+              summaryError={(summaryQ.error as any)?.message ?? null}
+              selectedVineyardId={selectedVineyardId}
+              selectedVineyardName={vineyard?.vineyard_name ?? null}
+              seasonYear={vintage}
+              authenticatedUserId={user?.id ?? null}
+              membershipOk={membershipCheckQ.data ?? null}
+              membershipError={(membershipCheckQ.error as any)?.message ?? null}
+              grunerPaddock={grunerPaddock}
+              grunerDirect={grunerDirectQ.data ?? null}
+              grunerDirectError={(grunerDirectQ.error as any)?.message ?? null}
+            />
+          )}
+
 
           {/* Blocks */}
           <div className="space-y-3">
@@ -472,35 +608,34 @@ export default function PruningTrackerPage() {
               </div>
             </div>
 
-            {paddocksQ.isLoading ? (
+            {summaryQ.isError ? (
+              <Alert variant="destructive">
+                <AlertTitle>Couldn't load block summaries</AlertTitle>
+                <AlertDescription>
+                  {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+                  {" "}Block cards are not calculated locally because SQL 115 is the shared source of truth.
+                </AlertDescription>
+              </Alert>
+            ) : paddocksQ.isLoading || summaryQ.isLoading || !summary ? (
               <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading blocks…</CardContent></Card>
             ) : sortedBlocks.length === 0 ? (
               <Card><CardContent className="p-6 text-sm text-muted-foreground">This vineyard has no active blocks.</CardContent></Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {sortedBlocks.map((b) => {
-                  // Prefer RPC per-block values so cards reconcile with
-                  // the vineyard total. Fall back to local calc only for
-                  // paddocks the RPC didn't return (defensive).
-                  const rpcB = rpcBlockByPaddock.get(b.paddock.id);
-                  const reDone = rpcB?.completed_row_equivalents ?? b.progress.rowEquivalentsCompleted;
-                  const reTotal = rpcB?.total_row_equivalents ?? b.progress.totalRows;
-                  // Derive the fraction locally from the RE totals — never
-                  // trust an rpc `progress` field to be a 0..1 fraction
-                  // (some installs return 0 when it isn't populated), which
-                  // is how block cards ended up displaying 0% next to
-                  // "2.5 of 11 row equivalents".
+                  const rpcB = rpcBlockByPaddock.get(b.paddock.id.toLowerCase());
+                  const reDone = rpcB?.completed_row_equivalents ?? 0;
+                  const reTotal = rpcB?.total_row_equivalents ?? 0;
                   const pct = reTotal > 0 ? reDone / reTotal : 0;
-                  // Status: RPC-driven progress wins. If reDone > 0 we're
-                  // In progress at minimum — never "Not started".
                   const effectiveProgress: BlockProgress = {
                     ...b.progress,
                     completedSegments: reDone > 0 ? Math.max(1, b.progress.completedSegments) : 0,
                     rowEquivalentsCompleted: reDone,
                     totalRows: reTotal,
                     percentComplete: pct,
-                    dueStatus: pct >= 1 ? "complete" : b.progress.dueStatus,
+                    dueStatus: rpcStatusToDueStatus(rpcB?.status) ?? (pct >= 1 ? "complete" : b.progress.dueStatus),
                   };
+                  const hasSeason = !!b.season || !!rpcB?.season_id || reDone > 0;
                   return (
                     <button
                       key={b.paddock.id}
@@ -512,17 +647,23 @@ export default function PruningTrackerPage() {
                           {b.paddock.name ?? "Unnamed block"}
                           <span className="text-muted-foreground font-normal"> · {rowRangeLabel(b.identities)}</span>
                         </div>
-                        <StatusBadge p={effectiveProgress} hasSeason={!!b.season} />
+                        <StatusBadge p={effectiveProgress} hasSeason={hasSeason} />
                       </div>
                       {b.variety && (
                         <div className="text-xs text-muted-foreground mb-3">{b.variety}</div>
                       )}
-                      <div className="text-sm tabular-nums">
-                        {reDone.toFixed(1)} of {reTotal} row equivalents
-                        {" — "}
-                        {Math.round(pct * 100)}%
-                      </div>
-                      <Progress value={pct * 100} className="h-1.5 mt-2" />
+                      {!rpcB ? (
+                        <div className="text-sm text-destructive">Missing SQL 115 block payload</div>
+                      ) : (
+                        <>
+                          <div className="text-sm tabular-nums">
+                            {reDone.toFixed(1)} of {reTotal} row equivalents
+                            {" — "}
+                            {Math.round(pct * 100)}%
+                          </div>
+                          <Progress value={pct * 100} className="h-1.5 mt-2" />
+                        </>
+                      )}
                     </button>
                   );
                 })}
@@ -533,18 +674,41 @@ export default function PruningTrackerPage() {
       )}
 
       {selectedVineyardId && selected && (
-        <BlockDetail
-          block={selected}
-          rpcBlock={rpcBlockByPaddock.get(selected.paddock.id) ?? null}
-          entries={selectedEntriesQ.data ?? []}
-          segments={selectedSegmentsQ.data ?? []}
-          completion={selectedCompletion}
-          canEdit={canEdit}
-          isSystemAdmin={isSystemAdmin}
-          onBack={() => setSelectedPaddockId(null)}
-          onOpenSettings={openSettings}
-          onOpenComplete={openComplete}
-        />
+        summaryQ.isError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Couldn't load block summary</AlertTitle>
+            <AlertDescription>
+              {(summaryQ.error as any)?.message ?? "The pruning summary service is unavailable."}
+              {" "}This block is not calculated locally because SQL 115 is the shared source of truth.
+            </AlertDescription>
+          </Alert>
+        ) : summaryQ.isLoading || !summary ? (
+          <Card><CardContent className="p-6 space-y-3"><Skeleton className="h-8 w-40" /><Skeleton className="h-2 w-full" /></CardContent></Card>
+        ) : (
+          <BlockDetail
+            block={selected}
+            summary={summary}
+            rpcBlock={rpcBlockByPaddock.get(selected.paddock.id.toLowerCase()) ?? null}
+            selectedVineyardId={selectedVineyardId}
+            selectedVineyardName={vineyard?.vineyard_name ?? null}
+            seasonYear={vintage}
+            authenticatedUserId={user?.id ?? null}
+            membershipOk={membershipCheckQ.data ?? null}
+            membershipError={(membershipCheckQ.error as any)?.message ?? null}
+            canonicalSeason={selectedCanonicalQ.data?.season ?? null}
+            canonicalSeasonIds={selectedCanonicalQ.data?.seasonIds ?? selectedSeasonIds}
+            canonicalLoading={selectedCanonicalQ.isLoading}
+            canonicalError={(selectedCanonicalQ.error as any)?.message ?? null}
+            entries={selectedCanonicalQ.data?.entries ?? selectedEntriesQ.data ?? []}
+            segments={selectedCanonicalQ.data?.segments ?? selectedSegmentsQ.data ?? []}
+            completion={selectedCanonicalQ.data?.segments ? buildRowCompletion(selected.identities, selectedCanonicalQ.data.segments as any) : selectedCompletion}
+            canEdit={canEdit}
+            isSystemAdmin={isSystemAdmin}
+            onBack={() => setSelectedPaddockId(null)}
+            onOpenSettings={openSettings}
+            onOpenComplete={openComplete}
+          />
+        )
       )}
 
       {settingsOpen && selected && selectedVineyardId && (
@@ -587,7 +751,18 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 interface DetailProps {
   block: BlockView;
+  summary: PruningVineyardSummary;
   rpcBlock: PruningVineyardSummaryBlock | null;
+  selectedVineyardId: string;
+  selectedVineyardName: string | null;
+  seasonYear: number;
+  authenticatedUserId: string | null;
+  membershipOk: boolean | null;
+  membershipError: string | null;
+  canonicalSeason: PruningSeason | null;
+  canonicalSeasonIds: string[];
+  canonicalLoading: boolean;
+  canonicalError: string | null;
   entries: any[];
   segments: any[];
   completion: RowCompletionState[];
@@ -598,15 +773,35 @@ interface DetailProps {
   onOpenComplete: () => void;
 }
 
-function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, isSystemAdmin, onBack, onOpenSettings, onOpenComplete }: DetailProps) {
+function BlockDetail({
+  block,
+  summary,
+  rpcBlock,
+  selectedVineyardId,
+  selectedVineyardName,
+  seasonYear,
+  authenticatedUserId,
+  membershipOk,
+  membershipError,
+  canonicalSeason,
+  canonicalSeasonIds,
+  canonicalLoading,
+  canonicalError,
+  entries,
+  segments,
+  completion,
+  canEdit,
+  isSystemAdmin,
+  onBack,
+  onOpenSettings,
+  onOpenComplete,
+}: DetailProps) {
   const local = block.progress;
-  // Prefer SQL 115 per-block values (server-authoritative, canonical
-  // season). Fall back to local calc for any field the RPC didn't return.
-  const reDone = rpcBlock?.completed_row_equivalents ?? local.rowEquivalentsCompleted;
-  const reTotal = rpcBlock?.total_row_equivalents ?? local.totalRows;
+  const reDone = rpcBlock?.completed_row_equivalents ?? 0;
+  const reTotal = rpcBlock?.total_row_equivalents ?? 0;
   const pct = reTotal > 0 ? reDone / reTotal : 0;
-  const vinesDone = rpcBlock?.vines_pruned ?? local.estimatedVinesCompleted;
-  const vinesTotal = rpcBlock?.total_vines ?? local.estimatedVinesTotal;
+  const vinesDone = rpcBlock?.vines_pruned ?? 0;
+  const vinesTotal = rpcBlock?.total_vines ?? 0;
   const effectiveProgress: BlockProgress = {
     ...local,
     completedSegments: reDone > 0 ? Math.max(1, local.completedSegments) : 0,
@@ -615,7 +810,7 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
     percentComplete: pct,
     estimatedVinesCompleted: vinesDone,
     estimatedVinesTotal: vinesTotal,
-    dueStatus: pct >= 1 ? "complete" : local.dueStatus,
+    dueStatus: rpcStatusToDueStatus(rpcBlock?.status) ?? (pct >= 1 ? "complete" : reDone > 0 ? "on_track" : "no_due"),
   };
   const hasWork = reDone > 0;
   // Shared contract: vines/day = block.vinesDone / distinctEntryDays.
@@ -623,6 +818,8 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
   const vinesPerDay = distinctDays.size > 0 ? vinesDone / distinctDays.size : null;
   const labourHours = entries.reduce((s, e) => s + (Number(e.labour_hours) || 0), 0);
   const vinesPerHour = labourHours > 0 ? vinesDone / labourHours : null;
+  const hasSeason = !!canonicalSeason || !!block.season || !!rpcBlock?.season_id || reDone > 0;
+  const activitySeasonId = canonicalSeason?.id ?? block.season?.id ?? rpcBlock?.season_id ?? null;
   
 
   return (
@@ -653,10 +850,10 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
               <CardDescription>
                 {rowRangeLabel(block.identities)}
                 {block.variety ? ` · ${block.variety}` : ""}
-                {block.season?.season_year ? ` · Season ${block.season.season_year}` : ""}
+                {` · Season ${seasonYear}`}
               </CardDescription>
             </div>
-            <StatusBadge p={effectiveProgress} hasSeason={!!block.season} />
+            <StatusBadge p={effectiveProgress} hasSeason={hasSeason} />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -689,11 +886,35 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
               <Metric label="Vines / day" value={vinesPerDay ? Math.round(vinesPerDay).toLocaleString() : "—"} />
               <Metric label="Vines / labour hr" value={vinesPerHour ? Math.round(vinesPerHour).toLocaleString() : "—"} />
               <Metric label="Estimated completion" value={rpcBlock?.estimated_completion_date ? formatDate(rpcBlock.estimated_completion_date) : (local.estimatedCompletionDate ? formatDate(local.estimatedCompletionDate) : "—")} />
-              <Metric label="Due date" value={block.season?.due_date ? formatDate(block.season.due_date) : "—"} />
+              <Metric label="Due date" value={(canonicalSeason ?? block.season)?.due_date ? formatDate((canonicalSeason ?? block.season)!.due_date!) : "—"} />
             </div>
           )}
         </CardContent>
       </Card>
+
+      {isSystemAdmin && (
+        <PruningDiagnosticsPanel
+          summary={summary}
+          summaryError={null}
+          selectedVineyardId={selectedVineyardId}
+          selectedVineyardName={selectedVineyardName}
+          seasonYear={seasonYear}
+          authenticatedUserId={authenticatedUserId}
+          membershipOk={membershipOk}
+          membershipError={membershipError}
+          grunerPaddock={searchName(block.paddock.name).includes("gruner veltliner") ? block.paddock : null}
+          grunerDirect={searchName(block.paddock.name).includes("gruner veltliner") ? {
+            seasons: canonicalSeason ? [canonicalSeason] : [],
+            entries,
+            segments,
+            seasonIds: canonicalSeasonIds,
+          } : null}
+          grunerDirectError={canonicalError}
+          selectedBlock={block}
+          selectedRpcBlock={rpcBlock}
+          canonicalLoading={canonicalLoading}
+        />
+      )}
 
       <Card>
         <CardHeader className="pb-3">
@@ -743,9 +964,123 @@ function BlockDetail({ block, rpcBlock, entries, segments, completion, canEdit, 
         </CardContent>
       </Card>
 
-      {block.season && (
-        <ActivityHistory seasonId={block.season.id} entries={entries} canReverse={canEdit} />
+      {activitySeasonId && (
+        <ActivityHistory seasonId={activitySeasonId} entries={entries} canReverse={canEdit} />
       )}
     </div>
+  );
+}
+
+function DiagnosticValue({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="break-all font-mono text-xs">{value ?? "—"}</div>
+    </div>
+  );
+}
+
+function PruningDiagnosticsPanel({
+  summary,
+  summaryError,
+  selectedVineyardId,
+  selectedVineyardName,
+  seasonYear,
+  authenticatedUserId,
+  membershipOk,
+  membershipError,
+  grunerPaddock,
+  grunerDirect,
+  grunerDirectError,
+  selectedBlock,
+  selectedRpcBlock,
+  canonicalLoading,
+}: {
+  summary: PruningVineyardSummary | null;
+  summaryError: string | null;
+  selectedVineyardId: string;
+  selectedVineyardName: string | null;
+  seasonYear: number;
+  authenticatedUserId: string | null;
+  membershipOk: boolean | null;
+  membershipError: string | null;
+  grunerPaddock: Paddock | null;
+  grunerDirect: { seasons: any[]; entries: any[]; segments: any[]; seasonIds: string[] } | null;
+  grunerDirectError: string | null;
+  selectedBlock?: BlockView;
+  selectedRpcBlock?: PruningVineyardSummaryBlock | null;
+  canonicalLoading?: boolean;
+}) {
+  const grunerRpcBlock = summary?.blocks.find((b) => b.paddock_id.toLowerCase() === grunerPaddock?.id.toLowerCase()) ?? null;
+  const displayedRpcBlock = selectedRpcBlock ?? grunerRpcBlock;
+  const directEntries = grunerDirect?.entries ?? [];
+  const directSegments = grunerDirect?.segments ?? [];
+  const completedSegments = directSegments.filter((s: any) => s?.completed === true);
+  const entryRowEq = directEntries.reduce((sum: number, e: any) => sum + (Number(e.row_equivalents_completed) || 0), 0);
+  const distinctSeasonIds = Array.from(new Set([
+    ...(grunerDirect?.seasonIds ?? []),
+    ...directEntries.map((e: any) => e.pruning_season_id).filter(Boolean),
+    ...directSegments.map((s: any) => s.pruning_season_id).filter(Boolean),
+  ]));
+  const rawForDisplay = summary?.diagnostics?.rawData ?? null;
+
+  return (
+    <Card className="border-amber-300/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">SQL 115 diagnostic</CardTitle>
+        <CardDescription>System Admin only. Temporary parity diagnostics.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {summaryError && (
+          <Alert variant="destructive">
+            <AlertTitle>Summary RPC error</AlertTitle>
+            <AlertDescription>{summaryError}</AlertDescription>
+          </Alert>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <DiagnosticValue label="Selected vineyard ID" value={selectedVineyardId} />
+          <DiagnosticValue label="Selected vineyard name" value={selectedVineyardName ?? "—"} />
+          <DiagnosticValue label="Shared season year" value={`${seasonYear} (${typeof seasonYear})`} />
+          <DiagnosticValue label="RPC vineyard ID sent" value={summary?.diagnostics.request.vineyardId ?? selectedVineyardId} />
+          <DiagnosticValue label="RPC season year sent" value={`${summary?.diagnostics.request.seasonYear ?? seasonYear} (${summary?.diagnostics.request.seasonYearType ?? typeof seasonYear})`} />
+          <DiagnosticValue label="Authenticated user ID" value={authenticatedUserId ?? "—"} />
+          <DiagnosticValue label="Backend client" value="iOS/mobile shared pruning client" />
+          <DiagnosticValue label="Membership check" value={membershipError ? `error: ${membershipError}` : membershipOk == null ? "not checked" : membershipOk ? "true" : "false"} />
+          <DiagnosticValue label="Response shape" value={summary?.diagnostics.responseKind ?? "—"} />
+          <DiagnosticValue label="Block-array field" value={summary?.diagnostics.blockArrayFieldName ?? "—"} />
+          <DiagnosticValue label="Blocks returned" value={summary?.diagnostics.blockCount ?? "—"} />
+          <DiagnosticValue label="Top-level fields" value={summary?.diagnostics.fieldNames.join(", ") ?? "—"} />
+          <DiagnosticValue label="Block fields" value={summary?.diagnostics.blockFieldNames.join(", ") ?? "—"} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <DiagnosticValue label="Grüner Veltliner paddock ID" value={grunerPaddock?.id ?? "not found"} />
+          <DiagnosticValue label="Matching RPC block found" value={grunerRpcBlock ? "yes" : "no"} />
+          <DiagnosticValue label="RPC completed row equivalents" value={displayedRpcBlock?.completed_row_equivalents ?? "—"} />
+          <DiagnosticValue label="RPC total row equivalents" value={displayedRpcBlock?.total_row_equivalents ?? "—"} />
+          <DiagnosticValue label="RPC progress" value={displayedRpcBlock?.progress == null ? "—" : `${Math.round(displayedRpcBlock.progress * 100)}%`} />
+          <DiagnosticValue label="RPC vines pruned" value={displayedRpcBlock?.vines_pruned ?? "—"} />
+          <DiagnosticValue label="RPC status" value={displayedRpcBlock?.status ?? "—"} />
+          <DiagnosticValue label="Canonical season ID" value={displayedRpcBlock?.season_id ?? grunerDirect?.seasonIds?.[0] ?? "—"} />
+          <DiagnosticValue label="Direct entry count" value={directEntries.length} />
+          <DiagnosticValue label="Direct segment count" value={directSegments.length} />
+          <DiagnosticValue label="Completed segment count" value={completedSegments.length} />
+          <DiagnosticValue label="Entry row-equivalent sum" value={entryRowEq.toFixed(2)} />
+          <DiagnosticValue label="Completed RE from segments" value={(completedSegments.length / 4).toFixed(2)} />
+          <DiagnosticValue label="Distinct season IDs present" value={distinctSeasonIds.length ? distinctSeasonIds.join(", ") : "—"} />
+          <DiagnosticValue label="Historical split seasons" value={distinctSeasonIds.length > 1 ? "yes" : "no"} />
+          {selectedBlock && <DiagnosticValue label="Selected block paddock ID" value={selectedBlock.paddock.id} />}
+          {canonicalLoading && <DiagnosticValue label="Canonical detail" value="loading" />}
+          {grunerDirectError && <DiagnosticValue label="Direct query error" value={grunerDirectError} />}
+        </div>
+
+        <details className="rounded border p-3">
+          <summary className="cursor-pointer text-sm font-medium">Raw SQL 115 response</summary>
+          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs">
+            {JSON.stringify(rawForDisplay, null, 2)}
+          </pre>
+        </details>
+      </CardContent>
+    </Card>
   );
 }
