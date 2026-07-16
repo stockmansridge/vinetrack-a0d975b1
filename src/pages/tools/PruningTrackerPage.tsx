@@ -581,21 +581,6 @@ export default function PruningTrackerPage() {
             </CardContent>
           </Card>
 
-          {isSystemAdmin && (
-            <PruningDiagnosticsPanel
-              summary={summary}
-              summaryError={(summaryQ.error as any)?.message ?? null}
-              selectedVineyardId={selectedVineyardId}
-              selectedVineyardName={vineyard?.vineyard_name ?? null}
-              seasonYear={pruningSeasonYear}
-              authenticatedUserId={user?.id ?? null}
-              membershipOk={membershipCheckQ.data ?? null}
-              membershipError={(membershipCheckQ.error as any)?.message ?? null}
-              grunerPaddock={grunerPaddock}
-              grunerDirect={grunerDirectQ.data ?? null}
-              grunerDirectError={(grunerDirectQ.error as any)?.message ?? null}
-            />
-          )}
 
 
           {/* Blocks */}
