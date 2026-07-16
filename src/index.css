@@ -182,4 +182,67 @@
     min-height: 120px;
     padding: 14px 16px;
   }
+
+  /* Shared warning/notice banner — charcoal + restrained amber in dark mode,
+     amber tint in light mode. Use for overdue, missing, due-soon, beta and
+     general caution banners. Keep destructive red for critical errors. */
+  .warning-banner {
+    @apply !border-warning/40 !bg-warning/10;
+    color: #78350f !important;
+  }
+
+  .dark .warning-banner {
+    border-color: #6a4a0e !important;
+    color: #d7d9d5 !important;
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.07), rgba(245, 158, 11, 0.02)), #171a17 !important;
+  }
+
+  .warning-banner > svg,
+  .warning-banner__icon {
+    color: #d97706 !important;
+  }
+
+  .dark .warning-banner > svg,
+  .dark .warning-banner__icon {
+    color: #f5b000 !important;
+  }
+
+  .warning-banner h3,
+  .warning-banner h5,
+  .warning-banner__title,
+  .warning-banner strong {
+    color: #78350f !important;
+  }
+
+  .dark .warning-banner h3,
+  .dark .warning-banner h5,
+  .dark .warning-banner__title,
+  .dark .warning-banner strong {
+    color: #f6c453 !important;
+  }
+
+  .warning-banner p,
+  .warning-banner__body {
+    color: #78350f !important;
+  }
+
+  .dark .warning-banner p,
+  .dark .warning-banner__body {
+    color: #d7d9d5 !important;
+  }
+
+  .warning-banner__button {
+    @apply bg-background border border-border text-foreground rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary;
+  }
+
+  .dark .warning-banner__button {
+    background: #20252a !important;
+    border-color: #394047 !important;
+    color: #f3f4f2 !important;
+  }
+
+  .dark .warning-banner__button:hover {
+    background: #292f35 !important;
+  }
 }
+

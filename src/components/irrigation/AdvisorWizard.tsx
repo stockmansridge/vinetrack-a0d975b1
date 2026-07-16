@@ -10,11 +10,11 @@ export default function AdvisorWizard({ items }: { items: WizardItem[] }) {
   const warning = items.filter((i) => i.severity === "warning");
 
   return (
-    <Card className="border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-          Setup checklist
+          <AlertTriangle className="h-4 w-4 warning-banner__icon" />
+          <span className="warning-banner__title">Setup checklist</span>
           <Badge variant="outline" className="ml-1">
             {items.length}
           </Badge>
@@ -22,12 +22,12 @@ export default function AdvisorWizard({ items }: { items: WizardItem[] }) {
       </CardHeader>
       <CardContent className="space-y-2">
         {missing.map((item) => (
-          <Alert key={item.id} className="border-destructive/40 bg-destructive/5">
-            <CircleAlert className="h-4 w-4 text-destructive" />
+          <Alert key={item.id} variant="warning">
+            <CircleAlert className="h-4 w-4" />
             <AlertDescription>
-              <div className="font-medium">{item.title}</div>
+              <strong className="font-medium block">{item.title}</strong>
               {item.detail && (
-                <div className="text-xs text-muted-foreground whitespace-pre-line">
+                <div className="text-xs whitespace-pre-line">
                   {item.detail}
                 </div>
               )}
@@ -35,12 +35,12 @@ export default function AdvisorWizard({ items }: { items: WizardItem[] }) {
           </Alert>
         ))}
         {warning.map((item) => (
-          <Alert key={item.id}>
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <Alert key={item.id} variant="warning">
+            <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <div className="font-medium">{item.title}</div>
+              <strong className="font-medium block">{item.title}</strong>
               {item.detail && (
-                <div className="text-xs text-muted-foreground whitespace-pre-line">
+                <div className="text-xs whitespace-pre-line">
                   {item.detail}
                 </div>
               )}
@@ -50,6 +50,7 @@ export default function AdvisorWizard({ items }: { items: WizardItem[] }) {
       </CardContent>
     </Card>
   );
+
 }
 
 export function AdvisorAllClear() {

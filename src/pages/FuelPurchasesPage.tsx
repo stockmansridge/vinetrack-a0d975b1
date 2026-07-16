@@ -8,7 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Plus, Pencil, Trash2, Download, AlertTriangle } from "lucide-react";
+
 import {
   Table,
   TableBody,
@@ -239,22 +241,21 @@ export default function FuelPurchasesPage({ embedded = false }: { embedded?: boo
       </div>
 
       {canSeeCosts && summary.flagged > 0 && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-          <div className="space-y-0.5">
-            <div className="font-medium">
-              {summary.flagged === 1
-                ? "One fuel purchase may contain an incorrect total cost"
-                : `${summary.flagged} fuel purchases may contain an incorrect total cost`}
-              {" "}and are affecting the average price per litre.
-            </div>
-            <div className="text-muted-foreground">
-              Rows flagged below with a warning icon likely have a unit price stored where the full
-              purchase amount is expected. Open the record to review and correct it.
-            </div>
-          </div>
-        </div>
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {summary.flagged === 1
+              ? "One fuel purchase may contain an incorrect total cost"
+              : `${summary.flagged} fuel purchases may contain an incorrect total cost`}
+            {" "}and are affecting the average price per litre.
+          </AlertTitle>
+          <AlertDescription>
+            Rows flagged below with a warning icon likely have a unit price stored where the full
+            purchase amount is expected. Open the record to review and correct it.
+          </AlertDescription>
+        </Alert>
       )}
+
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
