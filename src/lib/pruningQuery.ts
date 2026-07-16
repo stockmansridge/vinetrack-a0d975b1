@@ -48,10 +48,15 @@ export interface PruningEntry {
   row_equivalents_completed: number;
   estimated_vines_completed: number;
   work_task_id: string | null;
+  /** SQL 119: production/costing vintage resolved server-side from the
+   *  vineyard's season settings + entry_date. Authoritative for cost
+   *  reports — do NOT derive from entry_date on the client. */
+  vintage_year: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
 
 export interface PruningRowSegment {
   id: string;
