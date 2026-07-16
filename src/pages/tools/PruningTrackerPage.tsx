@@ -889,29 +889,6 @@ function BlockDetail({
         </CardContent>
       </Card>
 
-      {isSystemAdmin && (
-        <PruningDiagnosticsPanel
-          summary={summary}
-          summaryError={null}
-          selectedVineyardId={selectedVineyardId}
-          selectedVineyardName={selectedVineyardName}
-          seasonYear={seasonYear}
-          authenticatedUserId={authenticatedUserId}
-          membershipOk={membershipOk}
-          membershipError={membershipError}
-          grunerPaddock={searchName(block.paddock.name).includes("gruner veltliner") ? block.paddock : null}
-          grunerDirect={searchName(block.paddock.name).includes("gruner veltliner") ? {
-            seasons: canonicalSeason ? [canonicalSeason] : [],
-            entries,
-            segments,
-            seasonIds: canonicalSeasonIds,
-          } : null}
-          grunerDirectError={canonicalError}
-          selectedBlock={block}
-          selectedRpcBlock={rpcBlock}
-          canonicalLoading={canonicalLoading}
-        />
-      )}
 
       <Card>
         <CardHeader className="pb-3">
