@@ -48,10 +48,15 @@ export interface PruningEntry {
   row_equivalents_completed: number;
   estimated_vines_completed: number;
   work_task_id: string | null;
+  /** SQL 119: production/costing vintage resolved server-side from the
+   *  vineyard's season settings + entry_date. Authoritative for cost
+   *  reports — do NOT derive from entry_date on the client. */
+  vintage_year: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
 
 export interface PruningRowSegment {
   id: string;
@@ -251,6 +256,9 @@ export interface RecordEntryResult {
   /** Server-canonical season the entry was attached to. May differ from
    *  the id the caller passed if the server adopted a different row. */
   season_id?: string;
+  /** SQL 119: costing vintage the server assigned to this entry (and any
+   *  linked Work Task). Prefer this over any client-derived value. */
+  vintage_year?: number | null;
   requested: number;
   attributed: number;
   deleted?: boolean;
@@ -286,7 +294,12 @@ export function useRecordPruningEntry(seasonId: string) {
           label: s.rowLabel,
         })),
         p_work_task_id: input.workTaskId ?? null,
+        // SQL 119: server resolves + validates vintage from the vineyard's
+        // season settings and the entry date. Passing null is preferred —
+        // the client must not claim a costing vintage as authoritative.
+        p_vintage_year: null,
       });
+
       // Never swallow RPC errors as success — a 409 / duplicate-key is NOT
       // "already saved" for our purposes; surface it so the caller can retry
       // idempotently with the same entryId.

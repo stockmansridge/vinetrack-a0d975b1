@@ -473,9 +473,15 @@ export default function WorkTaskReportsPage() {
   }, [rows]);
 
   const rowVintage = (r: TaskRow): number => {
+    // SQL 119: prefer the server-resolved vintage_year stored on the task.
+    // Fall back to date-based resolution only for legacy rows that predate
+    // the backfill (should not occur after SQL 119 is live).
+    const stored = r.task.vintage_year;
+    if (typeof stored === "number" && Number.isFinite(stored)) return stored;
     if (!r.date) return currentVintageYear;
     return vintageForDate(new Date(r.date), seasonStartMonth, seasonStartDay);
   };
+
 
   const seasonOptions = useMemo(() => {
     const s = new Set<number>();

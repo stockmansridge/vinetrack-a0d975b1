@@ -518,7 +518,7 @@ export default function PruningTrackerPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
           <p className="text-sm text-muted-foreground">
-            {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · Pruning season ${pruningSeasonYear} · Vintage ${vintage}` : "No vineyard selected"}
+            {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · ${pruningSeasonYear} Winter Pruning · Vintage ${vintage}` : "No vineyard selected"}
           </p>
         </div>
       </div>
@@ -533,7 +533,7 @@ export default function PruningTrackerPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Vineyard Progress</CardTitle>
-              <CardDescription>Pruning season {pruningSeasonYear} · Vintage {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
+              <CardDescription>{pruningSeasonYear} Winter Pruning · Vintage {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {summaryQ.isError ? (
