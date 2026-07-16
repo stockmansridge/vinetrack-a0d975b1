@@ -45,7 +45,7 @@ export function MetricCard({ label, value, icon: Icon, hint, to, tone = "primary
       )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", TONES[tone])}>
+        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", TONES[tone])}>
           <Icon className="h-5 w-5" strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
