@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTriangle } from "@/components/ui/alert";
+
 import { Label } from "@/components/ui/label";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -250,10 +252,14 @@ export default function Team() {
       )}
 
       {rawCategories.length > categories.length && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200">
-          Duplicate worker types detected — hiding {rawCategories.length - categories.length} from the dropdown so each appears once.
-        </div>
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Duplicate worker types detected — hiding {rawCategories.length - categories.length} from the dropdown so each appears once.
+          </AlertDescription>
+        </Alert>
       )}
+
 
       {data?.forbidden && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
