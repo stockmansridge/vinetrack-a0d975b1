@@ -135,6 +135,16 @@
     border-radius: 9999px;
   }
   .vt-scroll::-webkit-scrollbar-track { background: transparent; }
+
+  .vineyard-background-fade {
+    background: linear-gradient(
+      to bottom,
+      rgba(248, 249, 246, 0.08) 0%,
+      rgba(248, 249, 246, 0.18) 35%,
+      rgba(248, 249, 246, 0.58) 72%,
+      rgba(248, 249, 246, 1) 100%
+    );
+  }
 }
 
 @layer components {
