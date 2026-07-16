@@ -9,11 +9,13 @@
 // interactive row-selection previews only (Record Pruning, block-detail
 // row grid).
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/ios-supabase/client";
+import { IOS_SUPABASE_URL, iosSupabase } from "@/integrations/ios-supabase/client";
 
 export interface PruningVineyardSummaryBlock {
   paddock_id: string;
   paddock_name?: string | null;
+  season_id?: string | null;
+  row_count?: number | null;
   total_vines?: number | null;
   vines_pruned?: number | null;
   vines_remaining?: number | null;
@@ -23,6 +25,23 @@ export interface PruningVineyardSummaryBlock {
   estimated_completion_date?: string | null; // yyyy-mm-dd
   status?: string | null;                    // complete | at_risk | on_track | overdue | in_progress | not_started
   due_date?: string | null;
+  raw: any;
+}
+
+export interface PruningVineyardSummaryDiagnostics {
+  projectUrl: string;
+  request: {
+    vineyardId: string;
+    seasonYear: number;
+    seasonYearType: string;
+  };
+  rawData: any;
+  rawError: any;
+  responseKind: "object" | "one-element-array" | "array" | "null" | "other";
+  fieldNames: string[];
+  blockArrayFieldName: "blocks";
+  blockCount: number;
+  blockFieldNames: string[];
 }
 
 export interface PruningVineyardSummary {
@@ -41,107 +60,146 @@ export interface PruningVineyardSummary {
   blocks_total: number;
   projected_completion_date: string | null;
   blocks: PruningVineyardSummaryBlock[];
+  diagnostics: PruningVineyardSummaryDiagnostics;
   // Raw untouched RPC payload — kept for forward compatibility and
   // debugging. UI must prefer the normalised fields above.
   raw: any;
 }
 
-/** Coerce whatever the RPC returns into the normalised shape. Field
- *  names are read defensively (snake_case first, camelCase second) so
- *  small naming differences in the installed signature don't break the
- *  portal. If a field is missing it falls through as null / 0. */
-function normalise(raw: any, vineyardId: string, seasonYear: number): PruningVineyardSummary {
-  const r = raw ?? {};
-  const pick = <T,>(...keys: string[]): T | null => {
-    for (const k of keys) {
-      const v = r?.[k];
-      if (v !== undefined && v !== null) return v as T;
-    }
-    return null;
-  };
-  const num = (v: any): number => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
+function responseKind(data: any): PruningVineyardSummaryDiagnostics["responseKind"] {
+  if (data == null) return "null";
+  if (Array.isArray(data)) return data.length === 1 ? "one-element-array" : "array";
+  if (typeof data === "object") return "object";
+  return "other";
+}
+
+function assertObject(raw: any): asserts raw is Record<string, any> {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Unexpected pruning summary RPC response: expected an object payload");
+  }
+}
+
+function requireField<T = any>(raw: Record<string, any>, key: string): T {
+  if (!(key in raw)) {
+    throw new Error(`Unexpected pruning summary RPC response: missing required field ${key}`);
+  }
+  return raw[key] as T;
+}
+
+function numRequired(raw: Record<string, any>, key: string): number {
+  const n = Number(requireField(raw, key));
+  if (!Number.isFinite(n)) {
+    throw new Error(`Unexpected pruning summary RPC response: field ${key} is not numeric`);
+  }
+  return n;
+}
+
+function normaliseRpcStatus(status: any): string | null {
+  if (status == null) return null;
+  const s = String(status).trim();
+  if (!s) return null;
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+}
+
+/** SQL 115 exact installed contract, verified from live network response:
+ *  object payload with top-level `blocks`, `vines_pruned`,
+ *  `completion_fraction`, and row-equivalent totals. Missing contract fields
+ *  are errors, not legitimate zero values. */
+function normalise(data: any, error: any, vineyardId: string, seasonYear: number): PruningVineyardSummary {
+  const kind = responseKind(data);
+  const raw = Array.isArray(data) ? data[0] : data;
+  assertObject(raw);
+
+  const blocksRaw = requireField<any[]>(raw, "blocks");
+  if (!Array.isArray(blocksRaw)) {
+    throw new Error("Unexpected pruning summary RPC response: blocks is not an array");
+  }
+
+  const requiredTopLevel = [
+    "vineyard_id",
+    "season_year",
+    "total_vines",
+    "vines_pruned",
+    "vines_remaining",
+    "completion_fraction",
+    "completed_row_equivalents",
+    "total_row_equivalents",
+  ];
+  for (const key of requiredTopLevel) requireField(raw, key);
+
   const numOrNull = (v: any): number | null => {
     if (v === null || v === undefined) return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
-  // Vineyard-level progress is derived directly from the RPC's own
-  // row-equivalent totals. Those two fields (completed_row_equivalents /
-  // total_row_equivalents) are the same numbers the RPC uses server-side
-  // and match iOS/Android exactly, so the ratio can't drift and there's
-  // no ambiguity about whether a "progress" field is a fraction (0..1)
-  // or a percentage (0..100).
-  const completedRE = num(pick("completed_row_equivalents", "row_equivalents_completed", "completedRowEquivalents"));
-  const totalRE = num(pick("total_row_equivalents", "totalRowEquivalents"));
-  const derivedFraction = totalRE > 0 ? completedRE / totalRE : 0;
+  const completedRE = numRequired(raw, "completed_row_equivalents");
+  const totalRE = numRequired(raw, "total_row_equivalents");
+  const overall = numRequired(raw, "completion_fraction");
 
-  // Read the RPC's own progress field (if present) purely for a
-  // dev-mode consistency check. Never used as the display value.
-  const rpcProgressRaw = pick<number>(
-    "overall_progress_fraction",
-    "completion_fraction",
-    "progress_fraction",
-    "overall_progress",
-    "progress",
-    "progress_pct",
-    "progress_percent",
-    "overall_progress_pct",
-  );
-  if (import.meta.env.DEV && rpcProgressRaw != null) {
-    const rpcNum = Number(rpcProgressRaw);
-    if (Number.isFinite(rpcNum)) {
-      const rpcAsFraction = rpcNum > 1.5 ? rpcNum / 100 : rpcNum;
-      if (Math.abs(rpcAsFraction - derivedFraction) > 0.01) {
-        // eslint-disable-next-line no-console
-        console.warn("[pruning] RPC progress field disagrees with row-equivalent ratio", {
-          rpcProgress: rpcNum,
-          rpcAsFraction,
-          derivedFraction,
-          completedRE,
-          totalRE,
-        });
-      }
+  const blocks: PruningVineyardSummaryBlock[] = blocksRaw.map((b: any, index) => {
+    assertObject(b);
+    for (const key of ["paddock_id", "total_vines", "vines_pruned", "total_row_equivalents", "completed_row_equivalents", "status"]) {
+      requireField(b, `blocks[${index}].${key}`.replace(/^blocks\[\d+\]\./, ""));
     }
-  }
+    const blockCompleted = Number(b.completed_row_equivalents);
+    const blockTotal = Number(b.total_row_equivalents);
+    return {
+      paddock_id: String(b.paddock_id).toLowerCase(),
+      paddock_name: b.name ?? null,
+      season_id: b.season_id ?? null,
+      row_count: numOrNull(b.row_count),
+      total_vines: numOrNull(b.total_vines),
+      vines_pruned: numOrNull(b.vines_pruned),
+      vines_remaining: numOrNull(b.vines_remaining),
+      total_row_equivalents: numOrNull(b.total_row_equivalents),
+      completed_row_equivalents: numOrNull(b.completed_row_equivalents),
+      progress: Number.isFinite(blockCompleted) && Number.isFinite(blockTotal) && blockTotal > 0
+        ? blockCompleted / blockTotal
+        : null,
+      estimated_completion_date: b.projected_completion_date ?? null,
+      status: normaliseRpcStatus(b.status),
+      due_date: b.due_date ?? null,
+      raw: b,
+    };
+  });
 
-  const overall = derivedFraction;
-  const blocksRaw: any[] = (pick<any[]>("blocks", "block_breakdown", "per_block") ?? []) as any[];
-  const blocks: PruningVineyardSummaryBlock[] = blocksRaw.map((b: any) => ({
-    paddock_id: b?.paddock_id ?? b?.paddockId ?? b?.id,
-    paddock_name: b?.paddock_name ?? b?.name ?? null,
-    total_vines: numOrNull(b?.total_vines ?? b?.vines_total ?? b?.totalVines),
-    vines_pruned: numOrNull(b?.vines_pruned ?? b?.vines_completed ?? b?.vinesPruned),
-    vines_remaining: numOrNull(b?.vines_remaining ?? b?.vinesRemaining),
-    total_row_equivalents: numOrNull(b?.total_row_equivalents ?? b?.total_rows ?? b?.totalRowEquivalents),
-    completed_row_equivalents: numOrNull(b?.completed_row_equivalents ?? b?.row_equivalents_completed ?? b?.completedRowEquivalents),
-    progress: (() => {
-      const p = numOrNull(b?.progress ?? b?.progress_pct ?? b?.percent_complete);
-      if (p == null) return null;
-      return p > 1.5 ? p / 100 : p;
-    })(),
-    estimated_completion_date: b?.estimated_completion_date ?? b?.eta ?? null,
-    status: b?.status ?? b?.due_status ?? null,
-    due_date: b?.due_date ?? null,
-  }));
+  const diagnostics: PruningVineyardSummaryDiagnostics = {
+    projectUrl: IOS_SUPABASE_URL,
+    request: {
+      vineyardId,
+      seasonYear,
+      seasonYearType: typeof seasonYear,
+    },
+    rawData: data,
+    rawError: error,
+    responseKind: kind,
+    fieldNames: Object.keys(raw),
+    blockArrayFieldName: "blocks",
+    blockCount: blocksRaw.length,
+    blockFieldNames: blocksRaw[0] && typeof blocksRaw[0] === "object" ? Object.keys(blocksRaw[0]) : [],
+  };
+
   return {
-    vineyard_id: vineyardId,
-    season_year: seasonYear,
+    vineyard_id: String(raw.vineyard_id),
+    season_year: Number(raw.season_year),
     overall_progress: overall,
     total_row_equivalents: totalRE,
     completed_row_equivalents: completedRE,
-    total_vines: num(pick("total_vines", "vines_total", "totalVines")),
-    vines_pruned: num(pick("vines_pruned", "vines_completed", "vinesPruned")),
-    vines_remaining: num(pick("vines_remaining", "vinesRemaining")),
-    vines_per_day: numOrNull(pick("vines_per_day", "vinesPerDay")),
-    vines_per_labour_hour: numOrNull(pick("vines_per_labour_hour", "vines_per_hour", "vinesPerLabourHour")),
-    blocks_complete: num(pick("blocks_complete", "blocksComplete")),
-    blocks_at_risk: num(pick("blocks_at_risk", "blocksAtRisk")),
-    blocks_total: num(pick("blocks_total", "total_blocks", "blocksTotal")) || blocks.length,
-    projected_completion_date:
-      (pick<string>("projected_completion_date", "projected_completion", "vineyard_estimated_completion_date", "eta") as string | null) ??
-      null,
+    total_vines: numRequired(raw, "total_vines"),
+    vines_pruned: numRequired(raw, "vines_pruned"),
+    vines_remaining: numRequired(raw, "vines_remaining"),
+    vines_per_day: numOrNull(raw.vines_per_day),
+    vines_per_labour_hour: numOrNull(raw.vines_per_labour_hour),
+    blocks_complete: numOrNull(raw.blocks_complete) ?? 0,
+    blocks_at_risk: numOrNull(raw.blocks_at_risk) ?? 0,
+    blocks_total: numOrNull(raw.blocks_total) ?? blocks.length,
+    projected_completion_date: raw.projected_completion_date ?? null,
     blocks,
-    raw: r,
+    diagnostics,
+    raw,
   };
 }
 
@@ -155,19 +213,16 @@ export function usePruningVineyardSummary(
     queryKey: ["pruning", "summary", vineyardId, seasonYear],
     enabled: !!vineyardId && !!seasonYear,
     queryFn: async (): Promise<PruningVineyardSummary> => {
-      const { data, error } = await (supabase as any).rpc("get_pruning_vineyard_summary", {
+      const { data, error } = await (iosSupabase as any).rpc("get_pruning_vineyard_summary", {
         p_vineyard_id: vineyardId,
         p_season_year: seasonYear,
       });
       if (error) throw error;
-      // The RPC may return a single row (object) or an array with one row
-      // depending on how it's defined (RETURNS TABLE vs RETURNS record).
-      const payload = Array.isArray(data) ? data[0] : data;
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console
-        console.debug("[pruning] summary RPC", { vineyardId, seasonYear, payload });
+        console.debug("[pruning] summary RPC", { vineyardId, seasonYear, type: typeof seasonYear, data, error });
       }
-      return normalise(payload, vineyardId!, seasonYear!);
+      return normalise(data, error, vineyardId!, seasonYear!);
     },
   });
 }
