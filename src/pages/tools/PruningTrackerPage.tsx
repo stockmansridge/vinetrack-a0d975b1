@@ -856,7 +856,7 @@ function BlockDetail({
               <CardDescription>
                 {rowRangeLabel(block.identities)}
                 {block.variety ? ` · ${block.variety}` : ""}
-                {` · Season ${seasonYear}`}
+                {` · Pruning season ${seasonYear}`}
               </CardDescription>
             </div>
             <StatusBadge p={effectiveProgress} hasSeason={hasSeason} />
