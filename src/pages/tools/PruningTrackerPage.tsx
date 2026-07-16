@@ -127,6 +127,15 @@ export default function PruningTrackerPage() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("name");
 
+  // Switching vineyards must not leak a stale block selection or dialog
+  // state from the previous vineyard — cross-vineyard paddock IDs won't
+  // match and we'd render an empty detail view.
+  useEffect(() => {
+    setSelectedPaddockId(null);
+    setSettingsOpen(false);
+    setCompleteOpen(false);
+  }, [selectedVineyardId]);
+
   const seasons = seasonsQ.data ?? [];
   const paddocks = paddocksQ.data ?? [];
 
