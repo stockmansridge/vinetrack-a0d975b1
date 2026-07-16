@@ -10,6 +10,7 @@ const alertVariants = cva(
       variant: {
         default: "bg-background text-foreground",
         destructive: "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+        warning: "warning-banner",
       },
     },
     defaultVariants: {
@@ -17,6 +18,7 @@ const alertVariants = cva(
     },
   },
 );
+
 
 const Alert = React.forwardRef<
   HTMLDivElement,
