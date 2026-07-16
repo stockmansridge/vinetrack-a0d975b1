@@ -29,7 +29,7 @@ import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useState } from "react";
-import vineyardBg from "@/assets/vineyard-bg.png.asset.json";
+import vineyardBg from "@/assets/vineyard-bg.webp.asset.json";
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
@@ -102,20 +102,22 @@ export default function AppLayout() {
           </header>
           <PortalInfoBanner />
           <PendingInvitesBanner />
-          <main className="relative flex-1 p-4 md:p-6 lg:p-8 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
+          <main className="relative flex-1 p-4 md:p-6 lg:p-8 bg-transparent min-w-0 w-full max-w-full overflow-x-hidden">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[360px] bg-no-repeat bg-right-top opacity-[0.12] dark:hidden"
-              style={{
-                backgroundImage: `url(${vineyardBg.url})`,
-                backgroundSize: "min(900px, 65vw) auto",
-                WebkitMaskImage:
-                  "linear-gradient(to bottom left, rgba(0,0,0,0.9), rgba(0,0,0,0.3) 55%, transparent 85%)",
-                maskImage:
-                  "linear-gradient(to bottom left, rgba(0,0,0,0.9), rgba(0,0,0,0.3) 55%, transparent 85%)",
-              }}
-            />
-            <div className="relative">
+              className="pointer-events-none absolute inset-x-0 top-0 h-[320px] overflow-hidden dark:hidden"
+            >
+              <img
+                src={vineyardBg.url}
+                alt=""
+                loading="lazy"
+                width={1920}
+                height={704}
+                className="h-full w-full object-cover object-[60%_center] opacity-30"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/65 to-background" />
+            </div>
+            <div className="relative z-10">
               <Outlet />
             </div>
           </main>
