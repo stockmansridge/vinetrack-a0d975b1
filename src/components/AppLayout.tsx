@@ -113,7 +113,7 @@ export default function AppLayout() {
                 loading="lazy"
                 width={1920}
                 height={704}
-                className="h-full w-full object-cover object-[60%_center] opacity-30"
+                className="h-full w-full object-cover object-center opacity-35"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/65 to-background" />
             </div>
