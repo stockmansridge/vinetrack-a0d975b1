@@ -533,7 +533,7 @@ export default function PruningTrackerPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Vineyard Progress</CardTitle>
-              <CardDescription>Season {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
+              <CardDescription>Pruning season {pruningSeasonYear} · Vintage {vintage}{vintageLoading ? " · loading…" : ""}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {summaryQ.isError ? (
