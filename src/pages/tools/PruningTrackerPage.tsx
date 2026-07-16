@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Scissors, Settings2, ArrowLeft, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { Scissors, Settings2, ArrowLeft, CheckCircle2, AlertTriangle, Clock, Grape, CalendarDays, User, LucideIcon } from "lucide-react";
 import {
   usePruningSeasons,
   usePruningEntries,
@@ -564,12 +564,12 @@ export default function PruningTrackerPage() {
                     <Progress value={summary.overall_progress * 100} className="h-2" />
                   </div>
                   <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} />
-                    <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} />
-                    <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} />
-                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} />
-                    <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} />
-                    <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} />
+                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} icon={Scissors} />
+                    <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} icon={Grape} />
+                    <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} icon={CalendarDays} />
+                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} icon={User} />
+                    <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} icon={CheckCircle2} />
+                    <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} icon={AlertTriangle} tone="warning" />
                   </div>
                   {summary.projected_completion_date && (
                     <div className="text-xs text-muted-foreground">
@@ -737,11 +737,32 @@ export default function PruningTrackerPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  icon: Icon,
+  tone = "primary",
+}: {
+  label: string;
+  value: string;
+  icon?: LucideIcon;
+  tone?: "primary" | "warning";
+}) {
+  const toneClass =
+    tone === "warning"
+      ? "bg-destructive/10 text-destructive dark:bg-destructive/20"
+      : "bg-primary/10 text-primary dark:bg-primary/15";
   return (
-    <div>
-      <div className="text-xs uppercase text-muted-foreground tracking-wide">{label}</div>
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
+    <div className="flex items-center gap-3">
+      {Icon && (
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="text-xs uppercase text-muted-foreground tracking-wide">{label}</div>
+        <div className="text-lg font-semibold tabular-nums">{value}</div>
+      </div>
     </div>
   );
 }

@@ -98,7 +98,7 @@ function OperationTypeBadge({ value }: { value?: string | null }) {
       ? "bg-purple-500/15 text-purple-700 border-purple-500/30 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-700/60"
       : "bg-secondary text-secondary-foreground";
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${cls}`}>
       {label}
     </span>
   );
