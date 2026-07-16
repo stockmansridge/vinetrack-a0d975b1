@@ -178,7 +178,7 @@ export default function PruningTrackerPage() {
       m.set(s.paddock_id, list);
     }
     return m;
-  }, [seasons, vintage]);
+  }, [seasons, pruningSeasonYear]);
 
   const canonicalSeasonByPaddock = useMemo(() => {
     const m = new Map<string, PruningSeason>();
@@ -205,7 +205,7 @@ export default function PruningTrackerPage() {
   );
 
   const segmentsQ = useQuery({
-    queryKey: ["pruning", "pruningSeasonYear-segments", selectedVineyardId, vintage, currentSeasonIds.join(",")],
+    queryKey: ["pruning", "vintage-segments", selectedVineyardId, pruningSeasonYear, currentSeasonIds.join(",")],
     enabled: !!selectedVineyardId && currentSeasonIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -218,7 +218,7 @@ export default function PruningTrackerPage() {
   });
 
   const entriesQ = useQuery({
-    queryKey: ["pruning", "pruningSeasonYear-entries", selectedVineyardId, vintage, currentSeasonIds.join(",")],
+    queryKey: ["pruning", "vintage-entries", selectedVineyardId, pruningSeasonYear, currentSeasonIds.join(",")],
     enabled: !!selectedVineyardId && currentSeasonIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
