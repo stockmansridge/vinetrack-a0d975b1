@@ -101,8 +101,22 @@ export default function AppLayout() {
           </header>
           <PortalInfoBanner />
           <PendingInvitesBanner />
-          <main className="flex-1 p-4 md:p-6 lg:p-8 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
-            <Outlet />
+          <main className="relative flex-1 p-4 md:p-6 lg:p-8 bg-background min-w-0 w-full max-w-full overflow-x-hidden">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[360px] bg-no-repeat bg-right-top opacity-[0.12] dark:hidden"
+              style={{
+                backgroundImage: `url(${vineyardBg.url})`,
+                backgroundSize: "min(900px, 65vw) auto",
+                WebkitMaskImage:
+                  "linear-gradient(to bottom left, rgba(0,0,0,0.9), rgba(0,0,0,0.3) 55%, transparent 85%)",
+                maskImage:
+                  "linear-gradient(to bottom left, rgba(0,0,0,0.9), rgba(0,0,0,0.3) 55%, transparent 85%)",
+              }}
+            />
+            <div className="relative">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>
