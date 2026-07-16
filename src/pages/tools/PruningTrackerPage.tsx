@@ -581,21 +581,6 @@ export default function PruningTrackerPage() {
             </CardContent>
           </Card>
 
-          {isSystemAdmin && (
-            <PruningDiagnosticsPanel
-              summary={summary}
-              summaryError={(summaryQ.error as any)?.message ?? null}
-              selectedVineyardId={selectedVineyardId}
-              selectedVineyardName={vineyard?.vineyard_name ?? null}
-              seasonYear={pruningSeasonYear}
-              authenticatedUserId={user?.id ?? null}
-              membershipOk={membershipCheckQ.data ?? null}
-              membershipError={(membershipCheckQ.error as any)?.message ?? null}
-              grunerPaddock={grunerPaddock}
-              grunerDirect={grunerDirectQ.data ?? null}
-              grunerDirectError={(grunerDirectQ.error as any)?.message ?? null}
-            />
-          )}
 
 
           {/* Blocks */}
@@ -645,8 +630,14 @@ export default function PruningTrackerPage() {
                   return (
                     <button
                       key={b.paddock.id}
+                      type="button"
+                      aria-pressed={selectedPaddockId === b.paddock.id}
                       onClick={() => setSelectedPaddockId(b.paddock.id)}
-                      className="text-left rounded-lg border bg-card p-4 hover:bg-accent/40 transition"
+                      className={`text-left rounded-lg border bg-card p-4 transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                        selectedPaddockId === b.paddock.id
+                          ? "border-primary/50 ring-2 ring-primary/30"
+                          : ""
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <div className="font-medium leading-tight">
@@ -898,29 +889,6 @@ function BlockDetail({
         </CardContent>
       </Card>
 
-      {isSystemAdmin && (
-        <PruningDiagnosticsPanel
-          summary={summary}
-          summaryError={null}
-          selectedVineyardId={selectedVineyardId}
-          selectedVineyardName={selectedVineyardName}
-          seasonYear={seasonYear}
-          authenticatedUserId={authenticatedUserId}
-          membershipOk={membershipOk}
-          membershipError={membershipError}
-          grunerPaddock={searchName(block.paddock.name).includes("gruner veltliner") ? block.paddock : null}
-          grunerDirect={searchName(block.paddock.name).includes("gruner veltliner") ? {
-            seasons: canonicalSeason ? [canonicalSeason] : [],
-            entries,
-            segments,
-            seasonIds: canonicalSeasonIds,
-          } : null}
-          grunerDirectError={canonicalError}
-          selectedBlock={block}
-          selectedRpcBlock={rpcBlock}
-          canonicalLoading={canonicalLoading}
-        />
-      )}
 
       <Card>
         <CardHeader className="pb-3">
