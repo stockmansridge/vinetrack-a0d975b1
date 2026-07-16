@@ -186,14 +186,14 @@ export default function PruningTrackerPage() {
       if (!list.length) continue;
       // Prefer the deterministic id if present, otherwise the newest row.
       const deterministic = selectedVineyardId
-        ? pruningSeasonId(selectedVineyardId, paddockId, vintage)
+        ? pruningSeasonId(selectedVineyardId, paddockId, pruningSeasonYear)
         : null;
       const preferred = list.find((s) => s.id === deterministic)
         ?? [...list].sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0];
       m.set(paddockId, preferred);
     }
     return m;
-  }, [currentSeasonsByPaddock, selectedVineyardId, vintage]);
+  }, [currentSeasonsByPaddock, selectedVineyardId, pruningSeasonYear]);
 
   const currentSeasonIds = useMemo(
     () => {
@@ -205,7 +205,7 @@ export default function PruningTrackerPage() {
   );
 
   const segmentsQ = useQuery({
-    queryKey: ["pruning", "vintage-segments", selectedVineyardId, vintage, currentSeasonIds.join(",")],
+    queryKey: ["pruning", "pruningSeasonYear-segments", selectedVineyardId, vintage, currentSeasonIds.join(",")],
     enabled: !!selectedVineyardId && currentSeasonIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -218,7 +218,7 @@ export default function PruningTrackerPage() {
   });
 
   const entriesQ = useQuery({
-    queryKey: ["pruning", "vintage-entries", selectedVineyardId, vintage, currentSeasonIds.join(",")],
+    queryKey: ["pruning", "pruningSeasonYear-entries", selectedVineyardId, vintage, currentSeasonIds.join(",")],
     enabled: !!selectedVineyardId && currentSeasonIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
