@@ -4,6 +4,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { PortalNotice } from "@/components/ui/PortalNotice";
 import {
   Select,
   SelectContent,
@@ -208,17 +209,25 @@ export default function YieldReportsPage() {
         </p>
       </div>
 
-      <div className="rounded-md border bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-900 dark:text-emerald-200">
-        <strong>Actual yield records</strong> (Historical tab) are used by
-        Cost Reports to calculate cost per tonne. Make sure each block has an
-        actual yield record for the relevant season.
-      </div>
+      <PortalNotice
+        variant="success"
+        compact
+        title="Actual yield records"
+        description="Historical yield records are used by Cost Reports to calculate cost per tonne. Make sure each block has an actual yield record for the relevant season."
+      />
 
-      <div className="rounded-md border bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-        Production data — read-only view in the portal. Add or edit actual
-        yield records from the iOS app (table: <code>historical_yield_records</code>).
-        Estimation/sampling sessions are also captured on iOS.
-      </div>
+      <PortalNotice
+        variant="warning"
+        compact
+        title="Production data — read-only view in the portal"
+        description={
+          <>
+            Add or edit actual yield records from the iOS app (table:{" "}
+            <code>historical_yield_records</code>). Estimation and sampling
+            sessions are also captured on iOS.
+          </>
+        }
+      />
 
       <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
 
