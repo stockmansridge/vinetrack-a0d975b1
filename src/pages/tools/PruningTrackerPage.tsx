@@ -172,7 +172,7 @@ export default function PruningTrackerPage() {
   const currentSeasonsByPaddock = useMemo(() => {
     const m = new Map<string, PruningSeason[]>();
     for (const s of seasons) {
-      if (s.season_year !== vintage) continue;
+      if (s.season_year !== pruningSeasonYear) continue;
       const list = m.get(s.paddock_id) ?? [];
       list.push(s);
       m.set(s.paddock_id, list);
@@ -274,7 +274,7 @@ export default function PruningTrackerPage() {
         id: "",
         vineyard_id: selectedVineyardId ?? "",
         paddock_id: paddock.id,
-        season_year: vintage,
+        season_year: pruningSeasonYear,
         start_date: null,
         due_date: null,
         pruning_method: "spur",
@@ -305,7 +305,7 @@ export default function PruningTrackerPage() {
         firstRowNumber,
       };
     });
-  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, selectedVineyardId, vintage]);
+  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, selectedVineyardId, pruningSeasonYear]);
 
   const sortedBlocks = useMemo(() => {
     const arr = [...blocks];
@@ -326,7 +326,7 @@ export default function PruningTrackerPage() {
   // SQL 115: server-authoritative vineyard summary. Never recompute
   // these numbers locally — cross-platform parity depends on the RPC
   // being the sole source of truth.
-  const summaryQ = usePruningVineyardSummary(selectedVineyardId, vintage);
+  const summaryQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
   const summary = summaryQ.data ?? null;
 
   const membershipCheckQ = useQuery({
@@ -354,7 +354,7 @@ export default function PruningTrackerPage() {
   );
 
   const grunerDirectQ = useQuery({
-    queryKey: ["pruning", "diagnostic-gruner-direct", selectedVineyardId, grunerPaddock?.id ?? null, vintage],
+    queryKey: ["pruning", "diagnostic-gruner-direct", selectedVineyardId, grunerPaddock?.id ?? null, pruningSeasonYear],
     enabled: !!selectedVineyardId && !!grunerPaddock && isSystemAdmin,
     queryFn: async () => {
       const { data: seasons, error: seasonsError } = await supabase
@@ -362,7 +362,7 @@ export default function PruningTrackerPage() {
         .select("*")
         .eq("vineyard_id", selectedVineyardId!)
         .eq("paddock_id", grunerPaddock!.id)
-        .eq("season_year", vintage)
+        .eq("season_year", pruningSeasonYear)
         .is("deleted_at", null);
       if (seasonsError) throw seasonsError;
       const seasonIds = (seasons ?? []).map((s: any) => s.id).filter(Boolean);
@@ -418,7 +418,7 @@ export default function PruningTrackerPage() {
   }, [selected, selectedSegmentsQ.data]);
 
   const selectedCanonicalQ = useQuery({
-    queryKey: ["pruning", "canonical-season-detail", selectedVineyardId, selectedPaddockId, vintage, summary?.blocks.map((b) => `${b.paddock_id}:${b.season_id ?? ""}`).join("|") ?? ""],
+    queryKey: ["pruning", "canonical-season-detail", selectedVineyardId, selectedPaddockId, pruningSeasonYear, summary?.blocks.map((b) => `${b.paddock_id}:${b.season_id ?? ""}`).join("|") ?? ""],
     enabled: !!selectedVineyardId && !!selectedPaddockId,
     queryFn: async () => {
       const { data: splitSeasons, error: splitError } = await supabase
@@ -426,13 +426,13 @@ export default function PruningTrackerPage() {
         .select("*")
         .eq("vineyard_id", selectedVineyardId!)
         .eq("paddock_id", selectedPaddockId!)
-        .eq("season_year", vintage)
+        .eq("season_year", pruningSeasonYear)
         .is("deleted_at", null);
       if (splitError) throw splitError;
 
       const seasonIds = (splitSeasons ?? []).map((s: any) => s.id).filter(Boolean);
       const rpcSeasonId = summary?.blocks.find((b) => b.paddock_id.toLowerCase() === selectedPaddockId!.toLowerCase())?.season_id ?? null;
-      const deterministicId = pruningSeasonId(selectedVineyardId!, selectedPaddockId!, vintage);
+      const deterministicId = pruningSeasonId(selectedVineyardId!, selectedPaddockId!, pruningSeasonYear);
       const season = (splitSeasons ?? []).find((s: any) => s.id === rpcSeasonId)
         ?? (splitSeasons ?? []).find((s: any) => s.id === deterministicId)
         ?? [...(splitSeasons ?? [])].sort((a: any, b: any) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0]
@@ -479,14 +479,14 @@ export default function PruningTrackerPage() {
     if (!selected.season) {
       try {
         const resolved = await resolvePruningSeasonId(
-          selectedVineyardId, selected.paddock.id, vintage,
+          selectedVineyardId, selected.paddock.id, pruningSeasonYear,
         );
         if (!resolved.existed) {
           const { error } = await supabase.from("pruning_seasons").insert({
             id: resolved.id,
             vineyard_id: selectedVineyardId,
             paddock_id: selected.paddock.id,
-            season_year: vintage,
+            season_year: pruningSeasonYear,
             pruning_method: "spur",
             assigned_crew: "",
             working_days: [1, 2, 3, 4, 5],
@@ -587,7 +587,7 @@ export default function PruningTrackerPage() {
               summaryError={(summaryQ.error as any)?.message ?? null}
               selectedVineyardId={selectedVineyardId}
               selectedVineyardName={vineyard?.vineyard_name ?? null}
-              seasonYear={vintage}
+              seasonYear={pruningSeasonYear}
               authenticatedUserId={user?.id ?? null}
               membershipOk={membershipCheckQ.data ?? null}
               membershipError={(membershipCheckQ.error as any)?.message ?? null}
@@ -697,7 +697,7 @@ export default function PruningTrackerPage() {
             rpcBlock={rpcBlockByPaddock.get(selected.paddock.id.toLowerCase()) ?? null}
             selectedVineyardId={selectedVineyardId}
             selectedVineyardName={vineyard?.vineyard_name ?? null}
-            seasonYear={vintage}
+            seasonYear={pruningSeasonYear}
             authenticatedUserId={user?.id ?? null}
             membershipOk={membershipCheckQ.data ?? null}
             membershipError={(membershipCheckQ.error as any)?.message ?? null}
@@ -724,7 +724,7 @@ export default function PruningTrackerPage() {
           vineyardId={selectedVineyardId}
           paddockId={selected.paddock.id}
           paddockName={selected.paddock.name ?? "Block"}
-          seasonYear={vintage}
+          seasonYear={pruningSeasonYear}
           existing={selected.season}
           hasConfiguredRows={parseRows(selected.paddock.rows).length > 0}
           isSystemAdmin={isSystemAdmin}
