@@ -737,11 +737,32 @@ export default function PruningTrackerPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  icon: Icon,
+  tone = "primary",
+}: {
+  label: string;
+  value: string;
+  icon?: LucideIcon;
+  tone?: "primary" | "warning";
+}) {
+  const toneClass =
+    tone === "warning"
+      ? "bg-destructive/10 text-destructive dark:bg-destructive/20"
+      : "bg-primary/10 text-primary dark:bg-primary/15";
   return (
-    <div>
-      <div className="text-xs uppercase text-muted-foreground tracking-wide">{label}</div>
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
+    <div className="flex items-center gap-3">
+      {Icon && (
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="text-xs uppercase text-muted-foreground tracking-wide">{label}</div>
+        <div className="text-lg font-semibold tabular-nums">{value}</div>
+      </div>
     </div>
   );
 }
