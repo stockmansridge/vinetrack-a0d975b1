@@ -630,8 +630,14 @@ export default function PruningTrackerPage() {
                   return (
                     <button
                       key={b.paddock.id}
+                      type="button"
+                      aria-pressed={selectedPaddockId === b.paddock.id}
                       onClick={() => setSelectedPaddockId(b.paddock.id)}
-                      className="text-left rounded-lg border bg-card p-4 hover:bg-accent/40 transition"
+                      className={`text-left rounded-lg border bg-card p-4 transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                        selectedPaddockId === b.paddock.id
+                          ? "border-primary/50 ring-2 ring-primary/30"
+                          : ""
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <div className="font-medium leading-tight">
