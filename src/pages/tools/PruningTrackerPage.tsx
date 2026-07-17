@@ -960,8 +960,18 @@ function BlockDetail({
       </Card>
 
       {activitySeasonId && (
-        <ActivityHistory seasonId={activitySeasonId} entries={entries} canReverse={canEdit} />
+        <ActivityHistory
+          seasonId={activitySeasonId}
+          entries={entries}
+          canReverse={canEdit}
+          canEdit={canEdit}
+          vineyardId={selectedVineyardId}
+          identities={block.identities}
+          allSegments={segments as any}
+          paddockName={block.paddock.name ?? "Block"}
+        />
       )}
+
     </div>
   );
 }
