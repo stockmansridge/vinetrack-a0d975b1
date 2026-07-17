@@ -368,3 +368,105 @@ export async function setPruningEntryWorkTask(entryId: string, workTaskId: strin
   });
   if (error) throw error;
 }
+
+// ---------- SQL 120: Edit an existing pruning entry ----------
+
+export interface UpdateEntryInput {
+  entryId: string;
+  entryDate: string;
+  worker: string;
+  labourHours: number | null;
+  startTime: string | null;
+  finishTime: string | null;
+  method: string;
+  notes: string;
+  estimatedVines: number | null;
+  /** FULL desired quarter set — never a delta. */
+  segments: RecordSegmentInput[];
+  /** null = no change to link; use `clearWorkTask` to unlink. */
+  workTaskId: string | null;
+  clearWorkTask: boolean;
+  clientUpdatedAt: string;
+}
+
+export interface UpdateEntryConflict {
+  row: number;
+  segment: number;
+  reason: string;
+}
+
+export interface UpdateEntryResult {
+  entry_id: string;
+  season_id?: string;
+  vintage_year?: number | null;
+  requested?: number;
+  attributed?: number;
+  removed?: number;
+  added?: number;
+  conflicts?: UpdateEntryConflict[];
+  work_task_id?: string | null;
+  work_task_conflict?: boolean;
+  stale?: boolean;
+  error?: string;
+}
+
+/**
+ * Update an existing pruning entry via SQL 120's `update_pruning_entry` RPC.
+ *
+ * Critical contract:
+ *  - `p_segments` MUST be the FULL desired quarter set for the entry.
+ *  - `p_work_task_id: null` means NO change to the existing link. To unlink,
+ *    pass `clearWorkTask: true` (sends `p_clear_work_task: true`).
+ *  - The RPC may return HTTP 200 with a logical error, stale flag, or
+ *    per-quarter conflicts. Callers MUST inspect the response body.
+ */
+export async function updatePruningEntry(input: UpdateEntryInput): Promise<UpdateEntryResult> {
+  const { data, error } = await (supabase as any).rpc("update_pruning_entry", {
+    p_entry_id: input.entryId,
+    p_entry_date: input.entryDate,
+    p_worker: input.worker,
+    p_labour_hours: input.labourHours ?? null,
+    p_start_time: input.startTime ?? null,
+    p_finish_time: input.finishTime ?? null,
+    p_method: input.method ?? null,
+    p_notes: input.notes ?? null,
+    p_estimated_vines: input.estimatedVines == null ? null : Math.max(0, Math.round(input.estimatedVines)),
+    p_segments: input.segments.map((s) => ({
+      row: s.rowNumber,
+      segment: s.segmentNumber,
+      row_id: s.paddockRowId ?? null,
+      label: s.rowLabel,
+    })),
+    // null = leave existing link alone; only p_clear_work_task=true unlinks.
+    p_work_task_id: input.clearWorkTask ? null : (input.workTaskId ?? null),
+    p_clear_work_task: input.clearWorkTask,
+    // SQL 119 resolves the authoritative vintage server-side.
+    p_vintage_year: null,
+    p_client_updated_at: input.clientUpdatedAt,
+  });
+  if (error) throw error;
+  return (data ?? {}) as UpdateEntryResult;
+}
+
+export function useUpdatePruningEntry(seasonId: string, vineyardId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: updatePruningEntry,
+    onSuccess: async (data) => {
+      const canonicalSeasonId = data?.season_id ?? seasonId;
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: QK.entries(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.entries(canonicalSeasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(canonicalSeasonId) }),
+        qc.invalidateQueries({ queryKey: ["pruning"] }),
+        qc.invalidateQueries({ queryKey: ["workTasks"] }),
+        qc.invalidateQueries({ queryKey: ["costReports"] }),
+        vineyardId ? qc.invalidateQueries({ queryKey: ["workTasks", vineyardId] }) : Promise.resolve(),
+        vineyardId ? qc.invalidateQueries({ queryKey: ["costReports", vineyardId] }) : Promise.resolve(),
+      ]);
+      await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
+    },
+  });
+}
+

@@ -147,6 +147,29 @@ export async function fetchLabourLinesForVineyard(
   return (data ?? []) as WorkTaskLabourLine[];
 }
 
+export async function fetchWorkTaskById(id: string): Promise<WorkTask | null> {
+  const { data, error } = await supabase
+    .from("work_tasks")
+    .select("*")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as WorkTask | null;
+}
+
+export async function fetchLabourLinesForTask(workTaskId: string): Promise<WorkTaskLabourLine[]> {
+  const { data, error } = await supabase
+    .from("work_task_labour_lines")
+    .select("*")
+    .eq("work_task_id", workTaskId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as WorkTaskLabourLine[];
+}
+
+
 // ------------------- Writes -------------------
 
 const nowIso = () => new Date().toISOString();
