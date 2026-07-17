@@ -113,23 +113,33 @@ export function buildRowCompletion(
     // legacy rows) may leave it null while completed remains true. Reversal
     // sets completed = false, so this stays consistent with the reverse flow.
     if ((s as any).completed !== true) continue;
+    // Index by BOTH paddock_row_id and row_number. Some records only have
+    // one or the other, and paddock row ids can change when a block's rows
+    // are regenerated — falling back to row_number keeps green quarters
+    // visible instead of silently orphaning completed segments.
     if (s.paddock_row_id) {
       const set = byId.get(s.paddock_row_id) ?? new Set<number>();
       set.add(s.segment_number);
       byId.set(s.paddock_row_id, set);
-    } else {
+    }
+    if (Number.isFinite(s.row_number)) {
       const set = byNumber.get(s.row_number) ?? new Set<number>();
       set.add(s.segment_number);
       byNumber.set(s.row_number, set);
     }
   }
-  return identities.map((id) => ({
-    identity: id,
-    completed:
-      (id.paddockRowId && byId.get(id.paddockRowId)) ||
-      byNumber.get(id.rowNumber) ||
-      new Set<number>(),
-  }));
+  return identities.map((id) => {
+    const byIdMatch = id.paddockRowId ? byId.get(id.paddockRowId) : null;
+    const byNumMatch = byNumber.get(id.rowNumber);
+    let completed: Set<number>;
+    if (byIdMatch && byNumMatch) {
+      completed = new Set<number>([...byIdMatch, ...byNumMatch]);
+    } else {
+      completed = byIdMatch ?? byNumMatch ?? new Set<number>();
+    }
+    return { identity: id, completed };
+  });
+
 }
 
 export interface BlockProgress {
