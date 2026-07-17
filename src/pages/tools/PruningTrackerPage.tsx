@@ -809,11 +809,11 @@ function BlockDetail({
   onOpenComplete,
 }: DetailProps) {
   const local = block.progress;
-  const reDone = rpcBlock?.completed_row_equivalents ?? 0;
-  const reTotal = rpcBlock?.total_row_equivalents ?? 0;
+  const reDone = rpcBlock?.completed_row_equivalents ?? local.rowEquivalentsCompleted ?? 0;
+  const reTotal = rpcBlock?.total_row_equivalents ?? local.totalRows ?? 0;
   const pct = reTotal > 0 ? reDone / reTotal : 0;
-  const vinesDone = rpcBlock?.vines_pruned ?? 0;
-  const vinesTotal = rpcBlock?.total_vines ?? 0;
+  const vinesDone = rpcBlock?.vines_pruned ?? local.estimatedVinesCompleted ?? 0;
+  const vinesTotal = rpcBlock?.total_vines ?? local.estimatedVinesTotal ?? 0;
   const effectiveProgress: BlockProgress = {
     ...local,
     completedSegments: reDone > 0 ? Math.max(1, local.completedSegments) : 0,
