@@ -917,7 +917,7 @@ function BlockDetail({
               {canEdit && "Add a manual row count in Settings, or configure row geometry in Setup → Paddocks."}
             </p>
           ) : (
-            <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-1.5 [column-fill:_balance]">
               {[...completion].sort((a, b) => {
                 const an = Number(a.identity.rowNumber);
                 const bn = Number(b.identity.rowNumber);
@@ -927,7 +927,7 @@ function BlockDetail({
                 if (!aF && bF) return 1;
                 return String(a.identity.rowLabel).localeCompare(String(b.identity.rowLabel), undefined, { numeric: true });
               }).map((r) => (
-                <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="flex items-center gap-2 rounded border p-2">
+                <div key={r.identity.paddockRowId ?? r.identity.rowNumber} className="mb-1.5 break-inside-avoid flex items-center gap-2 rounded border p-2">
                   <div className="w-10 text-sm font-medium tabular-nums text-muted-foreground">
                     {r.identity.rowLabel}
                   </div>
