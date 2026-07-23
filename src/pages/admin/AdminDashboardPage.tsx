@@ -255,6 +255,7 @@ export default function AdminDashboardPage() {
         <Tile to="/admin/pins" label="Pins" value={s?.total_pins ?? "—"} />
         <Tile to="/admin/spray-records" label="Spray Records" value={s?.total_spray_records ?? "—"} />
         <Tile to="/admin/work-tasks" label="Work Tasks" value={s?.total_work_tasks ?? "—"} />
+        <Tile to="/admin/email-diagnostics" label="Email Test" value="Send" hint="Verify Resend delivery" />
       </div>
       <p className="text-xs text-muted-foreground">
         Tap any tile to see the underlying records. Active = signed in within the period.
