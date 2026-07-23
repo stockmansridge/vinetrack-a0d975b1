@@ -36,6 +36,7 @@ import {
   Globe2,
   Scissors,
   FlaskConical,
+  Mail,
 } from "lucide-react";
 import {
   Collapsible,
@@ -146,6 +147,7 @@ const systemAdmin: NavItem[] = [
   { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign },
   { title: "App Notices", url: "/admin/notices", icon: Bell },
   { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
+  { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail },
   { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
 ];
 
