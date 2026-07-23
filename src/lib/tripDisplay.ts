@@ -44,32 +44,17 @@ export function formatTripFunctionLabel(
   return formatTripPatternLabel(s);
 }
 
-const KNOWN_PATTERN_KEYS = new Set([
-  "sequential",
-  "everysecondrow",
-  "every_second_row",
-  "every-second-row",
-  "alternaterows",
-  "alternate_rows",
-  "fivethree",
-  "five_three",
-]);
-
 /** Decide a friendly trip name.
- *  - If trip_title looks like an internal pattern key, format it.
- *  - Otherwise preserve user wording. */
+ *  `trip_title` is the user-entered name — always shown verbatim if present.
+ *  If it is empty, fall back to the tracking pattern (formatted) and then
+ *  the caller-supplied fallback (e.g. the trip function label). */
 export function formatTripNameLabel(
   tripTitle?: string | null,
   pattern?: string | null,
   fallback?: string | null,
 ): string {
   const title = (tripTitle ?? "").trim();
-  if (title) {
-    if (KNOWN_PATTERN_KEYS.has(title.toLowerCase())) {
-      return formatTripPatternLabel(title);
-    }
-    return title;
-  }
+  if (title) return title;
   if (pattern && String(pattern).trim()) {
     return formatTripPatternLabel(pattern);
   }
