@@ -86,6 +86,7 @@ import BillingGrantsPage from "./pages/admin/BillingGrantsPage";
 import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
 import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
+import EmailDiagnosticsPage from "./pages/admin/EmailDiagnosticsPage";
 import BillingPage from "./pages/BillingPage";
 
 const queryClient = new QueryClient();
@@ -213,6 +214,7 @@ const App = () => (
                     <Route path="/admin/user-activity" element={<AdminUserActivityPage />} />
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
+                    <Route path="/admin/email-diagnostics" element={<EmailDiagnosticsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
                    </Route>
                   </Route>
