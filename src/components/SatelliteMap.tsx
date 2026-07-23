@@ -617,8 +617,8 @@ export default function SatelliteMap(props: SatelliteMapProps) {
 
 
   return (
-    <div className={`relative isolate ${className ?? ""}`} style={{ zIndex: 0 }}>
-      <div ref={containerRef} className="h-full w-full" style={{ zIndex: 0, background: "transparent" }} />
+    <div className={`isolate h-full min-h-[600px] w-full ${className ?? ""}`} style={{ zIndex: 0 }}>
+      <div ref={containerRef} className="absolute inset-0 min-h-[600px] w-full" style={{ zIndex: 0, background: "transparent" }} />
       {/* Raster overlay layer — sits above map tiles but below Radix portals. */}
       <div
         ref={imgLayerRef}
