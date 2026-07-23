@@ -2104,8 +2104,25 @@ export default function SatelliteMappingPage() {
       async function repairScene(p: PaddockCompleteness): Promise<void> {
         const pid = p.paddockId;
         const targetPaddock = geoms.find((g) => g.id === pid);
-        if (!p.latestProviderSceneId || !p.latestAcquiredAt) {
-          // Should be unreachable — repair states always carry a latest scene.
+        let providerSceneId = p.latestProviderSceneId;
+        let acquiredAt = p.latestAcquiredAt;
+        let sceneCloudCoverPct = p.latestSceneCloudCoverPct;
+        // Manifest-derived completeness does not carry provider_scene_id (see
+        // reportFromManifest). Fetch it from satellite_scenes by latestSceneId
+        // so repair can hit satellite-process-scene without falling through.
+        if ((!providerSceneId || !acquiredAt) && p.latestSceneId) {
+          const { data: sceneRow, error: sceneErr } = await supabase
+            .from("satellite_scenes")
+            .select("provider_scene_id, acquired_at, scene_cloud_cover_pct")
+            .eq("id", p.latestSceneId)
+            .maybeSingle();
+          if (!sceneErr && sceneRow) {
+            providerSceneId = providerSceneId ?? (sceneRow as any).provider_scene_id ?? null;
+            acquiredAt = acquiredAt ?? (sceneRow as any).acquired_at ?? null;
+            sceneCloudCoverPct = sceneCloudCoverPct ?? (sceneRow as any).scene_cloud_cover_pct ?? null;
+          }
+        }
+        if (!providerSceneId || !acquiredAt) {
           results.push({ paddock_id: pid, status: "failed", message: "No latest scene to repair." });
           patchPad(pid, { stage: "failed", outcome: "failed", errorKind: "processing_failed", errorMessage: "No latest scene to repair." });
           return;
@@ -2114,9 +2131,9 @@ export default function SatelliteMappingPage() {
         const process = await invokeSatelliteFn("satellite-process-scene", {
           vineyard_id: activeVineyardId,
           paddock_id: pid,
-          provider_scene_id: p.latestProviderSceneId,
-          acquired_at: p.latestAcquiredAt,
-          scene_cloud_cover_pct: p.latestSceneCloudCoverPct,
+          provider_scene_id: providerSceneId,
+          acquired_at: acquiredAt,
+          scene_cloud_cover_pct: sceneCloudCoverPct,
           requested_index_types: p.indicesRequiringWork,
         });
         if (process.error) {
