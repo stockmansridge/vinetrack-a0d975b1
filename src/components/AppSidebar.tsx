@@ -36,6 +36,7 @@ import {
   Globe2,
   Scissors,
   FlaskConical,
+  Mail,
 } from "lucide-react";
 import {
   Collapsible,
