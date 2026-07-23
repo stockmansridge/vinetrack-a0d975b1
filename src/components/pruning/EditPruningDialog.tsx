@@ -349,8 +349,53 @@ export default function EditPruningDialog({
       if (!confirm("This edit removes ALL quarters from the entry. Continue?")) return;
     }
 
-    // 1. Sync the linked Work Task (labour lines diff) first when applicable.
-    let workTaskSaveError: string | null = null;
+    // 1. Call the pruning update RPC FIRST. We must not mutate the linked
+    //    Work Task (hours, labour lines) until the pruning entry has actually
+    //    saved cleanly — otherwise a stale/error/conflict response would
+    //    leave the Work Task's hours and workers out of sync with pruning.
+    const clientUpdatedAt = new Date().toISOString();
+    let res: UpdateEntryResult;
+    try {
+      res = await update.mutateAsync({
+        entryId: entry.id,
+        entryDate,
+        worker,
+        labourHours: nextHours,
+        startTime: startTime ? new Date(`${entryDate}T${startTime}:00`).toISOString() : null,
+        finishTime: finishTime ? new Date(`${entryDate}T${finishTime}:00`).toISOString() : null,
+        method,
+        notes,
+        estimatedVines,
+        segments,
+        workTaskId: entry.work_task_id ?? null,
+        clearWorkTask,
+        clientUpdatedAt,
+      });
+    } catch (e: any) {
+      toast.error(`Failed to save: ${e?.message ?? e}`);
+      return;
+    }
+
+    // 2. Inspect body — RPC may return HTTP 200 with a logical failure.
+    //    In every failure branch below the linked Work Task is UNCHANGED,
+    //    so hours/labour lines stay consistent with the pruning entry.
+    if (res.error) {
+      toast.error(`Could not save: ${res.error}`);
+      return;
+    }
+    if (res.stale === true) {
+      toast.warning("This record was updated on another device. The latest version has been loaded.");
+      setPostSaveWarning(res);
+      return;
+    }
+    const conflicts = res.conflicts ?? [];
+    if (conflicts.length > 0) {
+      setPostSaveWarning(res);
+      toast.warning(`${conflicts.length} quarter${conflicts.length === 1 ? "" : "s"} could not be attributed.`);
+      return;
+    }
+
+    // 3. Pruning saved cleanly — now sync the linked Work Task if requested.
     if (linkedTask && syncLinkedTask && !clearWorkTask) {
       try {
         await updateWorkTask({
@@ -382,54 +427,13 @@ export default function EditPruningDialog({
           await softDeleteLabourLine(removedId, user?.id ?? null);
         }
       } catch (e: any) {
-        workTaskSaveError = e?.message ?? String(e);
+        toast.error(`Pruning saved, but linked Work Task update failed: ${e?.message ?? e}`);
+        return;
       }
     }
 
-    // 2. Call the pruning update RPC.
-    const clientUpdatedAt = new Date().toISOString();
-    try {
-      const res = await update.mutateAsync({
-        entryId: entry.id,
-        entryDate,
-        worker,
-        labourHours: nextHours,
-        startTime: startTime ? new Date(`${entryDate}T${startTime}:00`).toISOString() : null,
-        finishTime: finishTime ? new Date(`${entryDate}T${finishTime}:00`).toISOString() : null,
-        method,
-        notes,
-        estimatedVines,
-        segments,
-        workTaskId: entry.work_task_id ?? null,
-        clearWorkTask,
-        clientUpdatedAt,
-      });
-
-      // 3. Inspect body — RPC may return HTTP 200 with a logical failure.
-      if (res.error) {
-        toast.error(`Could not save: ${res.error}`);
-        return;
-      }
-      if (res.stale === true) {
-        toast.warning("This record was updated on another device. The latest version has been loaded.");
-        setPostSaveWarning(res);
-        return;
-      }
-      const conflicts = res.conflicts ?? [];
-      if (conflicts.length > 0) {
-        setPostSaveWarning(res);
-        toast.warning(`${conflicts.length} quarter${conflicts.length === 1 ? "" : "s"} could not be attributed.`);
-        return;
-      }
-      if (workTaskSaveError) {
-        toast.error(`Pruning saved, but linked Work Task update failed: ${workTaskSaveError}`);
-        return;
-      }
-      toast.success("Pruning record updated.");
-      onOpenChange(false);
-    } catch (e: any) {
-      toast.error(`Failed to save: ${e?.message ?? e}`);
-    }
+    toast.success("Pruning record updated.");
+    onOpenChange(false);
   };
 
   const handleConfirmUnlink = () => {
