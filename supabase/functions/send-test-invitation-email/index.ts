@@ -50,10 +50,18 @@ Deno.serve(async (req) => {
   }
 
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const fromAddress = Deno.env.get("INVITE_FROM_EMAIL") ?? "VineTrack <onboarding@resend.dev>";
+  const fromAddress = Deno.env.get("INVITE_FROM_EMAIL")?.trim();
   const replyTo = Deno.env.get("INVITE_REPLY_TO") ?? undefined;
   if (!apiKey) {
-    return json(500, { success: false, email_sent: false, error_code: "email_configuration_missing", message: "The email service is not fully configured." });
+    return json(500, { success: false, email_sent: false, error_code: "email_configuration_missing", message: "The email service is not fully configured. RESEND_API_KEY is not set." });
+  }
+  if (!fromAddress) {
+    return json(500, {
+      success: false,
+      email_sent: false,
+      error_code: "email_configuration_missing",
+      message: "INVITE_FROM_EMAIL must be configured. Set it to a verified sender address (e.g. 'VineTrack <notify@yourdomain.com>') in the Edge Function secrets before sending test emails.",
+    });
   }
 
   const submittedAt = new Date().toISOString();
