@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, XCircle, RefreshCw, KeyRound } from "lucide-react";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import {
   runDiagnosticSend,
@@ -37,6 +37,7 @@ import {
   type NotificationTestExtras,
 } from "@/lib/emailDiagnostics";
 import { formatDate } from "@/lib/dateFormat";
+import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
