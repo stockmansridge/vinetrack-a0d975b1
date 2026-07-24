@@ -1,4 +1,7 @@
-// Invitations RPCs (shared iOS Supabase project, SQL 79).
+// Invitations RPCs (VineTrack Supabase project).
+// Email delivery is handled by the unified `send-invitation-email` Edge
+// Function on the VineTrack project. The portal never composes emails
+// directly — it only passes the invitation id and context.
 import { supabase } from "@/integrations/ios-supabase/client";
 
 export type InvitationRole = "manager" | "supervisor" | "operator";
@@ -23,6 +26,17 @@ export interface VineyardInvitation {
   expires_at: string | null;
 }
 
+export interface InvitationEmailOutcome {
+  sent: boolean;
+  errorMessage?: string;
+  errorCode?: string;
+}
+
+export interface InvitationOperationResult {
+  invitation: VineyardInvitation;
+  email: InvitationEmailOutcome;
+}
+
 export async function listVineyardInvitations(
   vineyardId: string,
 ): Promise<VineyardInvitation[]> {
@@ -44,9 +58,63 @@ export interface CreateInvitationInput {
   expires_in_days?: number;
 }
 
+async function readInvokeErrorContext(error: unknown): Promise<{ message?: string; code?: string }> {
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (ctx instanceof Response) {
+    try {
+      const text = await ctx.clone().text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          return {
+            message: parsed?.message || parsed?.error || undefined,
+            code: parsed?.error_code || parsed?.code || undefined,
+          };
+        } catch {
+          return { message: text.slice(0, 300) };
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return { message: (error as Error)?.message };
+}
+
+/** Invoke the unified send-invitation-email Edge Function on the VineTrack
+ *  project. Never throws — returns an outcome the caller can render honestly. */
+export async function sendInvitationEmail(
+  invitationId: string,
+  context: "new" | "resend",
+): Promise<InvitationEmailOutcome> {
+  try {
+    const { error } = await supabase.functions.invoke("send-invitation-email", {
+      body: {
+        invitation_id: invitationId,
+        source_platform: "portal",
+        context,
+      },
+    });
+    if (error) {
+      const ctx = await readInvokeErrorContext(error);
+      return {
+        sent: false,
+        errorMessage: ctx.message ?? "The email could not be sent.",
+        errorCode: ctx.code,
+      };
+    }
+    return { sent: true };
+  } catch (err) {
+    return {
+      sent: false,
+      errorMessage: err instanceof Error ? err.message : "Unexpected error sending the email.",
+    };
+  }
+}
+
 export async function createInvitation(
   input: CreateInvitationInput,
-): Promise<VineyardInvitation> {
+): Promise<InvitationOperationResult> {
   // create_invitation signature is unchanged after the Worker Types rename —
   // it still takes p_operator_category_id even though the underlying column
   // is now invitations.worker_type_id.
@@ -61,8 +129,9 @@ export async function createInvitation(
     p_expires_at: expiresAt.toISOString(),
   });
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  return row as VineyardInvitation;
+  const row = (Array.isArray(data) ? data[0] : data) as VineyardInvitation;
+  const email = await sendInvitationEmail(row.id, "new");
+  return { invitation: row, email };
 }
 
 export async function cancelInvitation(id: string): Promise<void> {
@@ -73,14 +142,16 @@ export async function cancelInvitation(id: string): Promise<void> {
 export async function resendInvitation(
   id: string,
   extendDays = 14,
-): Promise<VineyardInvitation> {
+): Promise<InvitationOperationResult> {
+  // resend_invitation(p_id uuid, p_extend_days int = 14) returns invitations.
   const { data, error } = await supabase.rpc("resend_invitation", {
     p_id: id,
     p_extend_days: extendDays,
   });
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  return row as VineyardInvitation;
+  const row = (Array.isArray(data) ? data[0] : data) as VineyardInvitation;
+  const email = await sendInvitationEmail(row.id, "resend");
+  return { invitation: row, email };
 }
 
 export function describeInvitationError(err: unknown): string {

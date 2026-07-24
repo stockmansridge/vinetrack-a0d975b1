@@ -206,12 +206,22 @@ export default function Team() {
 
   const resendMut = useMutation({
     mutationFn: (id: string) => resendInvitation(id, 14),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["vineyard-invitations", selectedVineyardId] });
-      toast({
-        title: "Invite reactivated",
-        description: "Expiry extended by 14 days. (No email is sent yet.)",
-      });
+      if (result.email.sent) {
+        toast({
+          title: "Invitation resent",
+          description: `Invitation email resent to ${result.invitation.email}.`,
+        });
+      } else {
+        toast({
+          title: "Invitation refreshed, email failed",
+          description:
+            result.email.errorMessage ||
+            "The invitation remains active, but the email could not be sent.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (e) => {
       toast({ title: "Couldn't resend invite", description: describeInvitationError(e), variant: "destructive" });
@@ -569,16 +579,32 @@ function InviteDialog({
         expires_in_days: days,
       });
     },
-    onSuccess: () => {
-      toast({
-        title: "Invitation created",
-        description: "The user will see it when they sign in with this email.",
-      });
+    onSuccess: (result) => {
+      if (result.email.sent) {
+        toast({
+          title: "Invitation sent",
+          description: `Invitation email sent to ${result.invitation.email}.`,
+        });
+      } else {
+        toast({
+          title: "Invitation created, email failed",
+          description:
+            result.email.errorMessage ||
+            "The invitation was created, but the email could not be sent. They can still accept it after signing in with the invited email address.",
+          variant: "destructive",
+        });
+      }
       reset();
       onCreated();
     },
     onError: (e) => {
-      toast({ title: "Couldn't create invite", description: describeInvitationError(e), variant: "destructive" });
+      toast({
+        title: "Couldn't create invitation",
+        description:
+          describeInvitationError(e) ||
+          "The invitation could not be created. Please check the details and try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -590,7 +616,7 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Invite user</DialogTitle>
           <DialogDescription>
-            Creates an invitation row. The user will see it when they sign in with this email — no email is sent yet.
+            Creates an invitation and emails the recipient. They can also accept it after signing in with this email.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
