@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, XCircle, RefreshCw, KeyRound } from "lucide-react";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import {
   runDiagnosticSend,
@@ -37,6 +37,7 @@ import {
   type NotificationTestExtras,
 } from "@/lib/emailDiagnostics";
 import { formatDate } from "@/lib/dateFormat";
+import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -234,6 +235,130 @@ function StatusBadge({ status }: { status: string | null }) {
   return <Badge variant={variant}>{status ?? "—"}</Badge>;
 }
 
+interface RecoveryResult {
+  success: boolean;
+  message: string;
+  redirectTo?: string;
+  errorCode?: string;
+}
+
+function PasswordRecoveryCard() {
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<RecoveryResult | null>(null);
+
+  const trimmed = email.trim();
+  const valid = trimmed.length > 0 && trimmed.length <= 254 && EMAIL_RE.test(trimmed);
+  const disabled = !valid || sending;
+  const redirectTo = `${window.location.origin}/reset-password`;
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (disabled) return;
+    setSending(true);
+    setResult(null);
+    try {
+      const { error } = await iosSupabase.auth.resetPasswordForEmail(trimmed, { redirectTo });
+      if (error) {
+        setResult({
+          success: false,
+          message: error.message || "Supabase Auth rejected the recovery request.",
+          errorCode: (error as { code?: string }).code ?? String(error.status ?? ""),
+          redirectTo,
+        });
+      } else {
+        setResult({
+          success: true,
+          message:
+            "Supabase Auth accepted the recovery request. Confirm final delivery in Resend and by checking the recipient's inbox — this response does not guarantee the email was delivered.",
+          redirectTo,
+        });
+      }
+    } catch (err) {
+      setResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Unexpected error contacting Supabase Auth.",
+        redirectTo,
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Card className="p-5 border-primary/40">
+      <div className="mb-3 flex items-start gap-2">
+        <KeyRound className="h-4 w-4 mt-0.5 text-primary" />
+        <div>
+          <h3 className="font-semibold">Password recovery test</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Invokes the real Supabase Auth <span className="font-mono">resetPasswordForEmail</span> on the VineTrack
+            project. Uses the same recovery template and delivery path as the Sign-in page's "Forgot password" link.
+            Separate from the Resend provider diagnostic.
+          </p>
+        </div>
+      </div>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div>
+          <Label htmlFor="recovery-recipient" className="text-xs text-muted-foreground">
+            Recipient email
+          </Label>
+          <Input
+            id="recovery-recipient"
+            type="email"
+            autoComplete="off"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            maxLength={254}
+            disabled={sending}
+          />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Redirect URL: <span className="font-mono break-all">{redirectTo}</span>
+          </p>
+        </div>
+        <Button type="submit" disabled={disabled}>
+          {sending ? "Sending…" : "Send recovery email"}
+        </Button>
+      </form>
+      {result && (
+        <div
+          className={
+            "mt-3 rounded-md border p-3 text-sm " +
+            (result.success
+              ? "border-emerald-500/40 bg-emerald-500/10"
+              : "border-destructive/40 bg-destructive/10")
+          }
+        >
+          <div className="flex items-start gap-2">
+            {result.success ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5" />
+            ) : (
+              <XCircle className="h-4 w-4 text-destructive mt-0.5" />
+            )}
+            <div className="min-w-0">
+              <div className="font-medium">
+                {result.success ? "Recovery request accepted" : "Recovery request failed"}
+              </div>
+              <div className="text-sm mt-1">{result.message}</div>
+              {result.errorCode && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Code: <span className="font-mono">{result.errorCode}</span>
+                </div>
+              )}
+              {result.redirectTo && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Redirect: <span className="font-mono break-all">{result.redirectTo}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function DeliveryHistory() {
   const [emailType, setEmailType] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
@@ -401,6 +526,7 @@ export default function EmailDiagnosticsPage() {
         subtitle="Test the unified VineTrack email pipeline and inspect delivery history."
       />
       <div className="space-y-4">
+        <PasswordRecoveryCard />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {CARDS.map((spec) => <DiagnosticCard key={spec.key} spec={spec} />)}
         </div>
