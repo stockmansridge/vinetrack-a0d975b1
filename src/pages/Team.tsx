@@ -579,16 +579,32 @@ function InviteDialog({
         expires_in_days: days,
       });
     },
-    onSuccess: () => {
-      toast({
-        title: "Invitation created",
-        description: "The user will see it when they sign in with this email.",
-      });
+    onSuccess: (result) => {
+      if (result.email.sent) {
+        toast({
+          title: "Invitation sent",
+          description: `Invitation email sent to ${result.invitation.email}.`,
+        });
+      } else {
+        toast({
+          title: "Invitation created, email failed",
+          description:
+            result.email.errorMessage ||
+            "The invitation was created, but the email could not be sent. They can still accept it after signing in with the invited email address.",
+          variant: "destructive",
+        });
+      }
       reset();
       onCreated();
     },
     onError: (e) => {
-      toast({ title: "Couldn't create invite", description: describeInvitationError(e), variant: "destructive" });
+      toast({
+        title: "Couldn't create invitation",
+        description:
+          describeInvitationError(e) ||
+          "The invitation could not be created. Please check the details and try again.",
+        variant: "destructive",
+      });
     },
   });
 
