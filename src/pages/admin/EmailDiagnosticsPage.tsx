@@ -526,6 +526,7 @@ export default function EmailDiagnosticsPage() {
         subtitle="Test the unified VineTrack email pipeline and inspect delivery history."
       />
       <div className="space-y-4">
+        <PasswordRecoveryCard />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {CARDS.map((spec) => <DiagnosticCard key={spec.key} spec={spec} />)}
         </div>
