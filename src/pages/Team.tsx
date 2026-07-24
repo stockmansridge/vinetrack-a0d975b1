@@ -616,7 +616,7 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Invite user</DialogTitle>
           <DialogDescription>
-            Creates an invitation row. The user will see it when they sign in with this email — no email is sent yet.
+            Creates an invitation and emails the recipient. They can also accept it after signing in with this email.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
