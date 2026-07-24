@@ -206,12 +206,22 @@ export default function Team() {
 
   const resendMut = useMutation({
     mutationFn: (id: string) => resendInvitation(id, 14),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["vineyard-invitations", selectedVineyardId] });
-      toast({
-        title: "Invite reactivated",
-        description: "Expiry extended by 14 days. (No email is sent yet.)",
-      });
+      if (result.email.sent) {
+        toast({
+          title: "Invitation resent",
+          description: `Invitation email resent to ${result.invitation.email}.`,
+        });
+      } else {
+        toast({
+          title: "Invitation refreshed, email failed",
+          description:
+            result.email.errorMessage ||
+            "The invitation remains active, but the email could not be sent.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (e) => {
       toast({ title: "Couldn't resend invite", description: describeInvitationError(e), variant: "destructive" });
