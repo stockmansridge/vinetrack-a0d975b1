@@ -1,6 +1,11 @@
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { supabase as lovableCloud } from "@/integrations/supabase/client";
+import {
+  submitSupportRequest,
+  type SupportSubmitResult,
+  type DeliveryState,
+} from "@/lib/supportRequestSubmit";
+
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
@@ -63,7 +68,43 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function StatusLine({
+  label,
+  state,
+  savedWording,
+}: {
+  label: string;
+  state: DeliveryState;
+  savedWording?: boolean;
+}) {
+  const text =
+    state === "submitted"
+      ? savedWording
+        ? "Saved"
+        : "Email submitted for delivery"
+      : state === "failed"
+        ? savedWording
+          ? "Not saved"
+          : "Not sent"
+        : state === "skipped"
+          ? "Not applicable"
+          : "Pending";
+  const tone =
+    state === "submitted"
+      ? "text-foreground"
+      : state === "failed"
+        ? "text-destructive"
+        : "text-muted-foreground";
+  return (
+    <li className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={tone}>{text}</span>
+    </li>
+  );
+}
+
 export function SupportRequestSheet({ open, onOpenChange }: Props) {
+
   const { user } = useAuth();
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { pathname } = useLocation();
@@ -74,6 +115,8 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<SupportSubmitResult | null>(null);
+
 
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -152,6 +195,7 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   };
 
   const submit = async () => {
+    if (submitting) return; // guard against double clicks
     if (!subject.trim()) {
       toast.error("Please add a subject");
       return;
@@ -161,51 +205,40 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
       return;
     }
     setSubmitting(true);
+    setResult(null);
     try {
       const categoryLabel =
         CATEGORY_OPTIONS.find((c) => c.value === category)?.label ?? category;
-      const payload = {
-        request_type: mapToRequestType(category),
-        // Prefix the subject with the iOS-style category label so admins
-        // see the full taxonomy (Account/Billing) even though backend
-        // request_type collapses to the allowed set.
+      const res = await submitSupportRequest({
+        category,
         subject: `[${categoryLabel}] ${subject.trim()}`,
         message: message.trim(),
-        page_path: pathname,
-        browser_info: navigator.userAgent,
-        vineyard_id: selectedVineyardId,
-        vineyard_name: vineyardName,
-        user_id: user?.id ?? null,
-        user_email: contactEmail.trim() || submitterEmail,
-        user_name: contactName.trim() || submitterName,
-        user_role: currentRole,
+        vineyardId: selectedVineyardId,
+        vineyardName,
+        userId: user?.id ?? null,
+        contactName: contactName.trim() || submitterName,
+        contactEmail: contactEmail.trim() || submitterEmail,
+        userRole: currentRole,
+        pagePath: pathname,
+        browserInfo: navigator.userAgent,
         attachments: attachments.map((a) => ({
           name: a.name,
           mime: a.mime,
           base64: a.base64,
         })),
-      };
-      const { data, error } = await lovableCloud.functions.invoke(
-        "submit-support-request",
-        { body: payload },
-      );
-      if (error) throw error;
-      const result = data as { ok?: boolean; email_queued?: boolean; email_error?: string | null };
-      if (!result?.ok) throw new Error("Submission failed");
-      if (result.email_queued === false) {
-        toast.success("Request received. Email delivery is pending — your message has been saved.");
+      });
+      setResult(res);
+      if (res.ok) {
+        toast.success(res.message);
+        reset();
       } else {
-        toast.success("Thanks! Your message has been sent.");
+        toast.error(res.message);
       }
-      reset();
-      onOpenChange(false);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      toast.error(`Could not submit: ${msg}`);
     } finally {
       setSubmitting(false);
     }
   };
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => !submitting && onOpenChange(v)}>
@@ -347,6 +380,31 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
             </div>
           </details>
 
+          {result && (
+            <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1.5">
+              <p className="font-medium">{result.message}</p>
+              {result.requestId && (
+                <>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Reference:</span>{" "}
+                    <span className="font-mono">{result.requestId.slice(0, 8)}</span>
+                  </div>
+                  {result.submittedAt && (
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Submitted:</span>{" "}
+                      {new Date(result.submittedAt).toLocaleString()}
+                    </div>
+                  )}
+                </>
+              )}
+              <ul className="space-y-0.5 text-xs">
+                <StatusLine label="Request saved" state={result.saved ? "submitted" : "failed"} savedWording />
+                <StatusLine label="Staff notification" state={result.staff} />
+                <StatusLine label="Confirmation receipt" state={result.receipt} />
+              </ul>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -358,9 +416,10 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
             </Button>
             <Button type="button" onClick={submit} disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Send
+              {submitting ? "Submitting…" : "Send"}
             </Button>
           </div>
+
         </div>
       </SheetContent>
     </Sheet>
