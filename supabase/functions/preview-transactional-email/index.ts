@@ -127,7 +127,7 @@ async function fetchFromVineTrack(endpoint: string, templateName: string): Promi
     if (response.status === 404) {
       return {
         status: 'unavailable',
-        message: `The production backend preview endpoint "${endpoint}" is not deployed yet. The browser request was safely handled by this proxy, so no runtime 404 overlay is triggered.`,
+        message: `The VineTrack backend has not deployed a "${endpoint}" preview renderer yet, so there is no HTML to show. Use the "Send test" buttons to check the real email in an inbox until that endpoint ships.`,
       }
     }
     if (!response.ok) {
