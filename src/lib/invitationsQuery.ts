@@ -143,22 +143,20 @@ export async function resendInvitation(
   id: string,
   extendDays = 14,
 ): Promise<InvitationOperationResult> {
-  // Prefer the two-arg signature (p_id, p_extend_days). Some deployments only
-  // expose the single-arg form — fall back on PostgREST "function not found
-  // in schema cache" (PGRST202).
-  let data: unknown;
-  let error: { code?: string; message?: string } | null = null;
-  ({ data, error } = await supabase.rpc("resend_invitation", {
-    p_id: id,
-    p_extend_days: extendDays,
-  }));
-  if (error && (error.code === "PGRST202" || /schema cache/i.test(error.message ?? ""))) {
-    ({ data, error } = await supabase.rpc("resend_invitation", { p_id: id }));
-  }
+  // Live deployed signature on the VineTrack project:
+  //   resend_invitation(p_expires_at, p_invitation_id)
+  // p_expires_at is an absolute timestamptz (there is no p_extend_days /
+  // p_id form deployed). Only send the email once the RPC has succeeded.
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + extendDays);
+  const { data, error } = await supabase.rpc("resend_invitation", {
+    p_invitation_id: id,
+    p_expires_at: expiresAt.toISOString(),
+  });
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as VineyardInvitation;
-  const email = await sendInvitationEmail(row.id, "resend");
-  return { invitation: row, email };
+  const email = await sendInvitationEmail(row?.id ?? id, "resend");
+  return { invitation: row ?? ({ id } as VineyardInvitation), email };
 }
 
 export function describeInvitationError(err: unknown): string {
