@@ -97,17 +97,13 @@ function extractPreview(payload: unknown, templateName: string, source: string):
 // The VineTrack backend project is the only source of truth for template HTML.
 // These are publishable values (project URL + anon key), never secrets.
 const VINETRACK_URL = 'https://tbafuqwruefgkbyxrxyb.supabase.co'
+const VINETRACK_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiYWZ1cXdydWVmZ2tieXhyeHliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyOTY0NDcsImV4cCI6MjA5Mjg3MjQ0N30.tvOzn1ketbd0zYJWDujh_DGcWVDeitJaoVWw3aqtuRw'
 
 async function fetchFromVineTrack(endpoint: string, templateName: string): Promise<PreviewResponse> {
   const baseUrl = Deno.env.get('VINETRACK_SUPABASE_URL') ?? VINETRACK_URL
-  const anonKey = Deno.env.get('VINETRACK_ANON_KEY')
-  if (!anonKey) {
-    return {
-      status: 'unavailable',
-      message:
-        'Preview rendering is not configured yet: the VineTrack backend has no preview endpoint deployed, so there is nothing for this proxy to fetch.',
-    }
-  }
+  const anonKey = Deno.env.get('VINETRACK_ANON_KEY') ?? VINETRACK_ANON_KEY
+
 
 
   const url = new URL(`${baseUrl.replace(/\/$/, '')}/functions/v1/${endpoint}`)
