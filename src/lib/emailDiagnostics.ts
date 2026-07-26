@@ -102,13 +102,73 @@ export interface EmailDeliveryEvent {
   provider: string | null;
   provider_message_id: string | null;
   error_code: string | null;
+  submitted_at: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  last_event_at: string | null;
+  last_provider_event: string | null;
+  failure_reason: string | null;
+  reference_kind: string | null;
+  reference_id: string | null;
+  template_version: string | null;
   metadata: Record<string, unknown> | null;
 }
 
 export interface DeliveryHistoryFilters {
   emailType?: string | null;
   status?: string | null;
+  sourcePlatform?: string | null;
+  /** ISO date (inclusive lower bound) applied to created_at. */
+  from?: string | null;
+  /** ISO date (inclusive upper bound) applied to created_at. */
+  to?: string | null;
   limit?: number;
+}
+
+type RawRow = Record<string, unknown>;
+
+function str(row: RawRow, ...keys: string[]): string | null {
+  for (const k of keys) {
+    const v = row[k];
+    if (typeof v === "string" && v.trim() !== "") return v;
+    if (typeof v === "number") return String(v);
+  }
+  const meta = row.metadata;
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    for (const k of keys) {
+      const v = (meta as RawRow)[k];
+      if (typeof v === "string" && v.trim() !== "") return v;
+      if (typeof v === "number") return String(v);
+    }
+  }
+  return null;
+}
+
+function normalise(row: RawRow): EmailDeliveryEvent {
+  const created = str(row, "created_at") ?? "";
+  return {
+    id: String(row.id ?? created),
+    created_at: created,
+    email_type: str(row, "email_type", "template_name"),
+    recipient_email: str(row, "recipient_email", "recipient"),
+    source_platform: str(row, "source_platform", "platform"),
+    status: str(row, "status"),
+    provider: str(row, "provider"),
+    provider_message_id: str(row, "provider_message_id", "message_id"),
+    error_code: str(row, "error_code"),
+    submitted_at: str(row, "submitted_at", "created_at"),
+    sent_at: str(row, "sent_at"),
+    delivered_at: str(row, "delivered_at"),
+    last_event_at: str(row, "last_event_at", "updated_at"),
+    last_provider_event: str(row, "last_provider_event", "provider_event", "last_event_type"),
+    failure_reason: str(row, "failure_reason", "error_message", "bounce_reason"),
+    reference_kind: str(row, "reference_kind", "reference_type"),
+    reference_id: str(row, "reference_id", "support_request_id", "invitation_id"),
+    template_version: str(row, "template_version"),
+    metadata: (row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : null),
+  };
 }
 
 export async function fetchEmailDeliveryEvents(
@@ -116,14 +176,15 @@ export async function fetchEmailDeliveryEvents(
 ): Promise<EmailDeliveryEvent[]> {
   let q = supabase
     .from("email_delivery_events")
-    .select(
-      "id, created_at, email_type, recipient_email, source_platform, status, provider, provider_message_id, error_code, metadata",
-    )
+    .select("*")
     .order("created_at", { ascending: false })
-    .limit(filters.limit ?? 100);
+    .limit(filters.limit ?? 200);
   if (filters.emailType) q = q.eq("email_type", filters.emailType);
   if (filters.status) q = q.eq("status", filters.status);
+  if (filters.sourcePlatform) q = q.eq("source_platform", filters.sourcePlatform);
+  if (filters.from) q = q.gte("created_at", new Date(`${filters.from}T00:00:00`).toISOString());
+  if (filters.to) q = q.lte("created_at", new Date(`${filters.to}T23:59:59.999`).toISOString());
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as EmailDeliveryEvent[];
+  return ((data ?? []) as RawRow[]).map(normalise);
 }
