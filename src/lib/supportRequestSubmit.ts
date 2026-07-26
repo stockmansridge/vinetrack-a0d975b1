@@ -82,43 +82,63 @@ function readState(value: unknown): DeliveryState {
   return "pending";
 }
 
-/** Upload attachments via the legacy pathway (email suppressed). */
+/** SQL 123 attachment limits. */
+export const SUPPORT_ATTACHMENT_BUCKET = "support-attachments";
+export const SUPPORT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const SUPPORT_ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
+
+const EXT_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+function base64ToBlob(base64: string, mime: string): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+/**
+ * Upload attachments straight into the VineTrack private bucket using the
+ * authenticated VineTrack client. Canonical path:
+ *   {user_id}/{request_id}/attachment-N.{ext}
+ * Only canonical VineTrack storage paths are returned.
+ */
 async function uploadAttachments(
   input: SupportSubmitInput,
+  requestId: string,
+  userId: string,
 ): Promise<{ paths: string[]; ok: boolean }> {
   if (!input.attachments.length) return { paths: [], ok: true };
+  const paths: string[] = [];
   try {
-    const { data, error } = await lovableCloud.functions.invoke("submit-support-request", {
-      body: {
-        request_type:
-          input.category === "general"
-            ? "support"
-            : ["bug", "feature"].includes(input.category)
-              ? input.category
-              : "other",
-        subject: input.subject,
-        message: input.message,
-        page_path: input.pagePath,
-        browser_info: input.browserInfo,
-        vineyard_id: input.vineyardId,
-        vineyard_name: input.vineyardName,
-        user_id: input.userId,
-        user_email: input.contactEmail,
-        user_name: input.contactName,
-        user_role: input.userRole,
-        attachments: input.attachments,
-        // Legacy email pipeline stays deployed but is never triggered.
-        skip_email: true,
-      },
-    });
-    if (error) throw error;
-    const paths = (data as { attachment_paths?: string[] } | null)?.attachment_paths ?? [];
+    let n = 0;
+    for (const att of input.attachments) {
+      const mime = att.mime;
+      if (!(SUPPORT_ALLOWED_MIME as readonly string[]).includes(mime)) {
+        throw new Error("unsupported attachment type");
+      }
+      const blob = base64ToBlob(att.base64, mime);
+      if (blob.size > SUPPORT_MAX_ATTACHMENT_BYTES) {
+        throw new Error("attachment too large");
+      }
+      n += 1;
+      const path = `${userId}/${requestId}/attachment-${n}.${EXT_BY_MIME[mime]}`;
+      const { error } = await vinetrack.storage
+        .from(SUPPORT_ATTACHMENT_BUCKET)
+        .upload(path, blob, { contentType: mime, upsert: true });
+      if (error) throw error;
+      paths.push(path);
+    }
     return { paths, ok: true };
   } catch (e) {
     console.error("support attachment upload failed", e);
     return { paths: [], ok: false };
   }
 }
+
 
 export async function submitSupportRequest(
   input: SupportSubmitInput,
