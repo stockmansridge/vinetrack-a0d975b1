@@ -44,6 +44,9 @@ interface Body {
   user_name?: string | null;
   user_role?: string | null;
   attachments?: Attachment[];
+  // When true, the legacy Lovable email queue is not triggered. The portal
+  // now sends staff/receipt emails through the shared VineTrack backend.
+  skip_email?: boolean;
 }
 
 function decodeBase64(b64: string): Uint8Array {
@@ -177,7 +180,10 @@ Deno.serve(async (req) => {
     // The "support_request" template defines its own recipient (team inbox).
     let emailQueued = false;
     let emailError: string | null = null;
-    try {
+    if (body.skip_email) {
+      emailError = null;
+      console.log('skip_email set — legacy email pipeline not triggered');
+    } else try {
       const sendUrl = `${url}/functions/v1/send-transactional-email`;
       const res = await fetch(sendUrl, {
         method: "POST",
