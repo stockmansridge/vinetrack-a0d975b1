@@ -154,65 +154,81 @@ const ENDPOINTS: Record<TemplateSource, string[]> = {
   auth: ["preview-auth-email-template", "preview-email-template"],
 };
 
-function isNotFound(error: unknown): boolean {
-  const msg = (error as Error | null)?.message ?? "";
-  return /not\s*found|404|failed to fetch|non-2xx/i.test(msg);
-}
-
-async function readErrorBody(error: unknown): Promise<string | null> {
-  const ctx = (error as { context?: unknown } | null)?.context;
-  if (!(ctx instanceof Response)) return null;
-  try {
-    const text = await ctx.clone().text();
-    return text ? text.slice(0, 300) : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Pull a sample-value preview for one template from the backend. */
 export async function fetchTemplatePreview(
   template: GalleryTemplate,
 ): Promise<TemplatePreviewResult> {
+  const candidates = ENDPOINTS[template.source];
   let lastMessage: string | null = null;
+  let allMissing = true;
 
-  for (const fn of ENDPOINTS[template.source]) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  for (const fn of candidates) {
     try {
-      const { data, error } = await supabase.functions.invoke<Record<string, unknown>>(fn, {
-        body: { template: template.key, template_name: template.key, sample: true },
+      const res = await fetch(`${IOS_SUPABASE_URL}/functions/v1/${fn}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: IOS_SUPABASE_ANON_KEY,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ template: template.key, template_name: template.key, sample: true }),
       });
-      if (error) {
-        const body = await readErrorBody(error);
-        if (body && /NOT_FOUND|Requested function was not found/i.test(body)) continue;
-        if (!body && isNotFound(error)) {
-          lastMessage = body ?? (error as Error).message;
-          continue;
-        }
-        lastMessage = body ?? (error as Error).message;
+
+      const text = await res.text();
+
+      if (res.status === 404 || /NOT_FOUND|Requested function was not found/i.test(text)) {
         continue;
       }
-      const html = extractHtml(data, template.key);
+
+      allMissing = false;
+
+      if (!res.ok) {
+        lastMessage = `${fn} responded ${res.status}: ${text.slice(0, 200)}`;
+        continue;
+      }
+
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = null;
+      }
+      const html = extractHtml(parsed, template.key);
       if (html) {
+        const obj = parsed as Record<string, unknown>;
         return {
           status: "ready",
           html,
-          subject: typeof data?.subject === "string" ? (data.subject as string) : undefined,
+          subject: typeof obj?.subject === "string" ? (obj.subject as string) : undefined,
           source: fn,
         };
       }
-      lastMessage = "The preview endpoint responded without HTML for this template.";
+      lastMessage = `${fn} responded without HTML for this template.`;
     } catch (err) {
+      allMissing = false;
       lastMessage = err instanceof Error ? err.message : String(err);
     }
   }
 
+  if (allMissing) {
+    return {
+      status: "unavailable",
+      message:
+        `No preview endpoint is deployed on the VineTrack backend yet. The portal looked for ${candidates
+          .map((c) => `"${c}"`)
+          .join(" and ")} and both returned "function not found". Once the backend exposes a sample-value preview function under one of those names, the real template renders here automatically.`,
+    };
+  }
+
   return {
-    status: "unavailable",
-    message:
-      lastMessage ??
-      "No backend preview endpoint is deployed for this template yet. Ask the backend team to expose a sample-value preview function; the portal will render it here without duplicating template HTML.",
+    status: "error",
+    message: lastMessage ?? "The preview endpoint could not render this template.",
   };
 }
+
 
 function extractHtml(data: unknown, key: string): string | null {
   if (!data || typeof data !== "object") return null;
