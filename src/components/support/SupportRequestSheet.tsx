@@ -152,6 +152,7 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   };
 
   const submit = async () => {
+    if (submitting) return; // guard against double clicks
     if (!subject.trim()) {
       toast.error("Please add a subject");
       return;
@@ -161,51 +162,40 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
       return;
     }
     setSubmitting(true);
+    setResult(null);
     try {
       const categoryLabel =
         CATEGORY_OPTIONS.find((c) => c.value === category)?.label ?? category;
-      const payload = {
-        request_type: mapToRequestType(category),
-        // Prefix the subject with the iOS-style category label so admins
-        // see the full taxonomy (Account/Billing) even though backend
-        // request_type collapses to the allowed set.
+      const res = await submitSupportRequest({
+        category,
         subject: `[${categoryLabel}] ${subject.trim()}`,
         message: message.trim(),
-        page_path: pathname,
-        browser_info: navigator.userAgent,
-        vineyard_id: selectedVineyardId,
-        vineyard_name: vineyardName,
-        user_id: user?.id ?? null,
-        user_email: contactEmail.trim() || submitterEmail,
-        user_name: contactName.trim() || submitterName,
-        user_role: currentRole,
+        vineyardId: selectedVineyardId,
+        vineyardName,
+        userId: user?.id ?? null,
+        contactName: contactName.trim() || submitterName,
+        contactEmail: contactEmail.trim() || submitterEmail,
+        userRole: currentRole,
+        pagePath: pathname,
+        browserInfo: navigator.userAgent,
         attachments: attachments.map((a) => ({
           name: a.name,
           mime: a.mime,
           base64: a.base64,
         })),
-      };
-      const { data, error } = await lovableCloud.functions.invoke(
-        "submit-support-request",
-        { body: payload },
-      );
-      if (error) throw error;
-      const result = data as { ok?: boolean; email_queued?: boolean; email_error?: string | null };
-      if (!result?.ok) throw new Error("Submission failed");
-      if (result.email_queued === false) {
-        toast.success("Request received. Email delivery is pending — your message has been saved.");
+      });
+      setResult(res);
+      if (res.ok) {
+        toast.success(res.message);
+        reset();
       } else {
-        toast.success("Thanks! Your message has been sent.");
+        toast.error(res.message);
       }
-      reset();
-      onOpenChange(false);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      toast.error(`Could not submit: ${msg}`);
     } finally {
       setSubmitting(false);
     }
   };
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => !submitting && onOpenChange(v)}>
