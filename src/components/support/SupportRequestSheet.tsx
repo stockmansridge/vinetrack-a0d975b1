@@ -68,7 +68,43 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function StatusLine({
+  label,
+  state,
+  savedWording,
+}: {
+  label: string;
+  state: DeliveryState;
+  savedWording?: boolean;
+}) {
+  const text =
+    state === "submitted"
+      ? savedWording
+        ? "Saved"
+        : "Email submitted for delivery"
+      : state === "failed"
+        ? savedWording
+          ? "Not saved"
+          : "Not sent"
+        : state === "skipped"
+          ? "Not applicable"
+          : "Pending";
+  const tone =
+    state === "submitted"
+      ? "text-foreground"
+      : state === "failed"
+        ? "text-destructive"
+        : "text-muted-foreground";
+  return (
+    <li className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={tone}>{text}</span>
+    </li>
+  );
+}
+
 export function SupportRequestSheet({ open, onOpenChange }: Props) {
+
   const { user } = useAuth();
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const { pathname } = useLocation();
