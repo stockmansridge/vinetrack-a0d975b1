@@ -135,7 +135,8 @@ export async function createInvitation(
 }
 
 export async function cancelInvitation(id: string): Promise<void> {
-  const { error } = await supabase.rpc("cancel_invitation", { p_id: id });
+  // Live signature: cancel_invitation(p_invitation_id)
+  const { error } = await supabase.rpc("cancel_invitation", { p_invitation_id: id });
   if (error) throw error;
 }
 
