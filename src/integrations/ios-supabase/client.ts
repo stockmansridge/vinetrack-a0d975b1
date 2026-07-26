@@ -8,7 +8,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 export const IOS_SUPABASE_URL = "https://tbafuqwruefgkbyxrxyb.supabase.co";
-const IOS_SUPABASE_ANON_KEY =
+export const IOS_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiYWZ1cXdydWVmZ2tieXhyeHliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyOTY0NDcsImV4cCI6MjA5Mjg3MjQ0N30.tvOzn1ketbd0zYJWDujh_DGcWVDeitJaoVWw3aqtuRw";
 
 export const iosSupabase = createClient(IOS_SUPABASE_URL, IOS_SUPABASE_ANON_KEY, {

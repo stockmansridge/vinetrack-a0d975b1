@@ -5,7 +5,7 @@
 // to render a sample (token-free) preview and displays whatever HTML comes
 // back. If no preview endpoint is deployed yet, the gallery says so plainly
 // instead of inventing a look-alike template.
-import { supabase } from "@/integrations/ios-supabase/client";
+import { supabase, IOS_SUPABASE_URL, IOS_SUPABASE_ANON_KEY } from "@/integrations/ios-supabase/client";
 import type { DiagnosticTestName, NotificationTestExtras } from "@/lib/emailDiagnostics";
 
 export type TemplateSource = "auth" | "application";
