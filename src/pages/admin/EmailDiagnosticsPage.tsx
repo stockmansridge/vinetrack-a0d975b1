@@ -38,6 +38,7 @@ import {
 } from "@/lib/emailDiagnostics";
 import { formatDate } from "@/lib/dateFormat";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
+import EmailTemplateGallery from "@/components/admin/EmailTemplateGallery";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -530,6 +531,7 @@ export default function EmailDiagnosticsPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {CARDS.map((spec) => <DiagnosticCard key={spec.key} spec={spec} />)}
         </div>
+        <EmailTemplateGallery />
         <DeliveryHistory />
       </div>
     </AdminGate>

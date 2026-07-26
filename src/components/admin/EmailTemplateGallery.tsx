@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,8 +69,10 @@ function PreviewDialog({
     mutationFn: () => fetchTemplatePreview(template),
   });
 
-  // Kick off on first render.
-  if (preview.isIdle) preview.mutate();
+  useEffect(() => {
+    preview.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template.key]);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
