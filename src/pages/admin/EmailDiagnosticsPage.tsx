@@ -36,7 +36,7 @@ import {
   type EmailDeliveryEvent,
   type NotificationTestExtras,
 } from "@/lib/emailDiagnostics";
-import { formatDate } from "@/lib/dateFormat";
+import { formatDateTime } from "@/lib/dateFormat";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import EmailTemplateGallery from "@/components/admin/EmailTemplateGallery";
 
@@ -385,15 +385,21 @@ function PasswordRecoveryCard() {
 function DeliveryHistory() {
   const [emailType, setEmailType] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
+  const [platform, setPlatform] = useState<string>("all");
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
   const [detail, setDetail] = useState<EmailDeliveryEvent | null>(null);
 
   const q = useQuery({
-    queryKey: ["email-delivery-events", emailType, status],
+    queryKey: ["email-delivery-events", emailType, status, platform, from, to],
     queryFn: () =>
       fetchEmailDeliveryEvents({
         emailType: emailType === "all" ? null : emailType,
         status: status === "all" ? null : status,
-        limit: 100,
+        sourcePlatform: platform === "all" ? null : platform,
+        from: from || null,
+        to: to || null,
+        limit: 200,
       }),
     staleTime: 15_000,
   });
@@ -404,24 +410,48 @@ function DeliveryHistory() {
     return Array.from(set).sort();
   }, [q.data]);
 
-  const statuses = useMemo(() => {
+  const platforms = useMemo(() => {
     const set = new Set<string>();
-    (q.data ?? []).forEach((r) => r.status && set.add(r.status));
+    (q.data ?? []).forEach((r) => r.source_platform && set.add(r.source_platform));
     return Array.from(set).sort();
   }, [q.data]);
+
+  const rows = q.data ?? [];
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = {};
+    rows.forEach((r) => {
+      const s = (r.status ?? "unknown").toLowerCase();
+      map[s] = (map[s] ?? 0) + 1;
+    });
+    return map;
+  }, [rows]);
+
+  const time = (v: string | null) => (v ? formatDateTime(v) : "—");
 
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div>
-          <h3 className="font-semibold">Delivery history</h3>
+          <h3 className="font-semibold">Delivery status</h3>
           <p className="text-xs text-muted-foreground">
-            Latest 100 events from <span className="font-mono">email_delivery_events</span>.
+            Lifecycle events recorded from the provider webhook. Raw payloads, signatures and signed
+            links are never shown.
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-end gap-2">
           <div className="w-40">
-            <Label className="text-xs text-muted-foreground">Type</Label>
+            <Label className="text-xs text-muted-foreground">Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-44">
+            <Label className="text-xs text-muted-foreground">Email type</Label>
             <Select value={emailType} onValueChange={setEmailType}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -430,22 +460,53 @@ function DeliveryHistory() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-36">
-            <Label className="text-xs text-muted-foreground">Status</Label>
-            <Select value={status} onValueChange={setStatus}>
+          <div className="w-40">
+            <Label className="text-xs text-muted-foreground">Source platform</Label>
+            <Select value={platform} onValueChange={setPlatform}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                <SelectItem value="all">All platforms</SelectItem>
+                {platforms.map((pf) => <SelectItem key={pf} value={pf}>{pf}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">From</Label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-[150px]" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">To</Label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-[150px]" />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setStatus("all");
+              setEmailType("all");
+              setPlatform("all");
+              setFrom("");
+              setTo("");
+            }}
+          >
+            Clear
+          </Button>
           <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>
             <RefreshCw className={`h-4 w-4 mr-1 ${q.isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
       </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        {STATUS_OPTIONS.filter((s) => counts[s]).map((s) => (
+          <span key={s} className="inline-flex items-center gap-1 text-xs">
+            <StatusBadge status={s} />
+            <span className="text-muted-foreground">{counts[s]}</span>
+          </span>
+        ))}
+      </div>
+
       {q.error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm mb-3">
           Couldn't load delivery history: {(q.error as Error).message}
@@ -455,36 +516,46 @@ function DeliveryHistory() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>When</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Recipient</TableHead>
               <TableHead>Source</TableHead>
+              <TableHead>Submitted</TableHead>
+              <TableHead>Sent</TableHead>
+              <TableHead>Delivered</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Provider</TableHead>
-              <TableHead>Message ID</TableHead>
-              <TableHead>Error</TableHead>
+              <TableHead>Last event</TableHead>
+              <TableHead>Failure reason</TableHead>
+              <TableHead>Reference</TableHead>
+              <TableHead>Template</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(q.data ?? []).map((row) => (
+            {rows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell className="whitespace-nowrap text-xs">{formatDate(row.created_at)}</TableCell>
-                <TableCell className="text-xs">{row.email_type ?? "—"}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{row.email_type ?? "—"}</TableCell>
                 <TableCell className="text-xs font-mono truncate max-w-[200px]">{row.recipient_email ?? "—"}</TableCell>
                 <TableCell className="text-xs">{row.source_platform ?? "—"}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{time(row.submitted_at)}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{time(row.sent_at)}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{time(row.delivered_at)}</TableCell>
                 <TableCell><StatusBadge status={row.status} /></TableCell>
-                <TableCell className="text-xs">{row.provider ?? "—"}</TableCell>
-                <TableCell className="text-xs font-mono truncate max-w-[180px]">{row.provider_message_id ?? "—"}</TableCell>
-                <TableCell className="text-xs text-destructive">{row.error_code ?? ""}</TableCell>
+                <TableCell className="text-xs">{row.last_provider_event ?? "—"}</TableCell>
+                <TableCell className="text-xs text-destructive truncate max-w-[220px]">
+                  {row.failure_reason ?? row.error_code ?? ""}
+                </TableCell>
+                <TableCell className="text-xs font-mono truncate max-w-[180px]">
+                  {row.reference_id ? `${row.reference_kind ? `${row.reference_kind}: ` : ""}${row.reference_id}` : "—"}
+                </TableCell>
+                <TableCell className="text-xs">{row.template_version ?? "—"}</TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => setDetail(row)}>Details</Button>
                 </TableCell>
               </TableRow>
             ))}
-            {!q.isLoading && (q.data ?? []).length === 0 && (
+            {!q.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={12} className="text-center text-sm text-muted-foreground py-6">
                   No delivery events match the current filters.
                 </TableCell>
               </TableRow>
@@ -501,23 +572,26 @@ function DeliveryHistory() {
           {detail && (
             <div className="space-y-3 text-sm">
               <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
-                <dt className="text-muted-foreground">When</dt><dd>{formatDate(detail.created_at)}</dd>
                 <dt className="text-muted-foreground">Type</dt><dd>{detail.email_type ?? "—"}</dd>
                 <dt className="text-muted-foreground">Recipient</dt><dd className="font-mono break-all">{detail.recipient_email ?? "—"}</dd>
-                <dt className="text-muted-foreground">Source</dt><dd>{detail.source_platform ?? "—"}</dd>
-                <dt className="text-muted-foreground">Status</dt><dd>{detail.status ?? "—"}</dd>
+                <dt className="text-muted-foreground">Source platform</dt><dd>{detail.source_platform ?? "—"}</dd>
+                <dt className="text-muted-foreground">Submitted</dt><dd>{time(detail.submitted_at)}</dd>
+                <dt className="text-muted-foreground">Sent</dt><dd>{time(detail.sent_at)}</dd>
+                <dt className="text-muted-foreground">Delivered</dt><dd>{time(detail.delivered_at)}</dd>
+                <dt className="text-muted-foreground">Status</dt><dd><StatusBadge status={detail.status} /></dd>
+                <dt className="text-muted-foreground">Last provider event</dt><dd>{detail.last_provider_event ?? "—"}</dd>
+                <dt className="text-muted-foreground">Last event at</dt><dd>{time(detail.last_event_at)}</dd>
+                <dt className="text-muted-foreground">Failure reason</dt><dd>{detail.failure_reason ?? detail.error_code ?? "—"}</dd>
+                <dt className="text-muted-foreground">Reference</dt>
+                <dd className="font-mono break-all">
+                  {detail.reference_id ? `${detail.reference_kind ? `${detail.reference_kind}: ` : ""}${detail.reference_id}` : "—"}
+                </dd>
+                <dt className="text-muted-foreground">Template version</dt><dd>{detail.template_version ?? "—"}</dd>
                 <dt className="text-muted-foreground">Provider</dt><dd>{detail.provider ?? "—"}</dd>
-                <dt className="text-muted-foreground">Message ID</dt><dd className="font-mono break-all">{detail.provider_message_id ?? "—"}</dd>
-                <dt className="text-muted-foreground">Error code</dt><dd>{detail.error_code ?? "—"}</dd>
               </dl>
-              {detail.metadata && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Metadata (safe view — HTML and secrets excluded)</div>
-                  <pre className="rounded-md bg-muted p-3 text-xs overflow-auto max-h-64">
-                    {JSON.stringify(sanitiseMetadata(detail.metadata), null, 2)}
-                  </pre>
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Raw webhook payloads, signatures, signed URLs and secrets are intentionally not shown.
+              </p>
             </div>
           )}
         </DialogContent>
@@ -526,20 +600,6 @@ function DeliveryHistory() {
   );
 }
 
-function sanitiseMetadata(meta: Record<string, unknown>): Record<string, unknown> {
-  const REDACT_KEYS = /html|body|secret|token|api_key|apikey|password|authorization/i;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(meta)) {
-    if (REDACT_KEYS.test(k)) {
-      out[k] = "[redacted]";
-    } else if (v && typeof v === "object" && !Array.isArray(v)) {
-      out[k] = sanitiseMetadata(v as Record<string, unknown>);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
 
 export default function EmailDiagnosticsPage() {
   return (
