@@ -344,6 +344,31 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
             </div>
           </details>
 
+          {result && (
+            <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1.5">
+              <p className="font-medium">{result.message}</p>
+              {result.requestId && (
+                <>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Reference:</span>{" "}
+                    <span className="font-mono">{result.requestId.slice(0, 8)}</span>
+                  </div>
+                  {result.submittedAt && (
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Submitted:</span>{" "}
+                      {new Date(result.submittedAt).toLocaleString()}
+                    </div>
+                  )}
+                </>
+              )}
+              <ul className="space-y-0.5 text-xs">
+                <StatusLine label="Request saved" state={result.saved ? "submitted" : "failed"} savedWording />
+                <StatusLine label="Staff notification" state={result.staff} />
+                <StatusLine label="Confirmation receipt" state={result.receipt} />
+              </ul>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -355,9 +380,10 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
             </Button>
             <Button type="button" onClick={submit} disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Send
+              {submitting ? "Submitting…" : "Send"}
             </Button>
           </div>
+
         </div>
       </SheetContent>
     </Sheet>
