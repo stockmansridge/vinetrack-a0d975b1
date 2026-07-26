@@ -154,6 +154,32 @@ const ENDPOINTS: Record<TemplateSource, string[]> = {
   auth: ["preview-auth-email-template", "preview-email-template"],
 };
 
+// Endpoint availability is probed at most once per page load. A missing
+// preview function returns 404 for every template, so re-probing on each card
+// only produces noise (and trips the dev error overlay).
+const endpointAvailability = new Map<string, Promise<boolean>>();
+
+function isEndpointDeployed(fn: string): Promise<boolean> {
+  const cached = endpointAvailability.get(fn);
+  if (cached) return cached;
+
+  // Probe with a CORS "simple request" (no custom headers, so no preflight).
+  // A missing function makes the gateway answer the OPTIONS preflight with
+  // 404, which the browser surfaces only as an opaque "NetworkError".
+  const probe = fetch(
+    `${IOS_SUPABASE_URL}/functions/v1/${fn}?apikey=${encodeURIComponent(IOS_SUPABASE_ANON_KEY)}&probe=1`,
+    { method: "GET" },
+  )
+    .then(async (res) => {
+      const text = await res.text();
+      return !(res.status === 404 || /NOT_FOUND|Requested function was not found/i.test(text));
+    })
+    .catch(() => false);
+
+  endpointAvailability.set(fn, probe);
+  return probe;
+}
+
 /** Pull a sample-value preview for one template from the backend. */
 export async function fetchTemplatePreview(
   template: GalleryTemplate,
@@ -166,25 +192,9 @@ export async function fetchTemplatePreview(
   const accessToken = sessionData.session?.access_token;
 
   for (const fn of candidates) {
-    // Probe first with a CORS "simple request" (no custom headers, so no
-    // preflight). A missing function makes the gateway answer the OPTIONS
-    // preflight with 404, which the browser surfaces only as an opaque
-    // "NetworkError" — the probe lets us read the real 404 instead.
-    try {
-      const probe = await fetch(
-        `${IOS_SUPABASE_URL}/functions/v1/${fn}?apikey=${encodeURIComponent(IOS_SUPABASE_ANON_KEY)}&template=${encodeURIComponent(template.key)}&sample=1`,
-        { method: "GET" },
-      );
-      const probeText = await probe.text();
-      if (probe.status === 404 || /NOT_FOUND|Requested function was not found/i.test(probeText)) {
-        continue;
-      }
-    } catch (err) {
-      // A network-level failure on a header-free GET means the endpoint is
-      // not reachable at all — treat it as "not deployed" rather than an error.
-      lastMessage = err instanceof Error ? err.message : String(err);
-      continue;
-    }
+    if (!(await isEndpointDeployed(fn))) continue;
+
+
 
     try {
       const res = await fetch(`${IOS_SUPABASE_URL}/functions/v1/${fn}`, {
