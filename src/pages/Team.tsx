@@ -216,15 +216,17 @@ export default function Team() {
       } else {
         toast({
           title: "Invitation refreshed, email failed",
-          description:
-            result.email.errorMessage ||
-            "The invitation remains active, but the email could not be sent.",
+          description: "The invitation remains active, but the email could not be sent.",
           variant: "destructive",
         });
       }
     },
-    onError: (e) => {
-      toast({ title: "Couldn't resend invite", description: describeInvitationError(e), variant: "destructive" });
+    onError: () => {
+      toast({
+        title: "Couldn't resend invite",
+        description: "The invitation could not be renewed. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
