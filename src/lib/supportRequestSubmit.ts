@@ -1,20 +1,24 @@
 // Shared VineTrack support submission path.
 //
 // Flow:
-//   1. Upload attachments through the legacy Lovable Cloud function
-//      (`submit-support-request`) with `skip_email: true` — this preserves the
-//      existing attachment bucket behaviour and keeps the legacy row for
-//      auditing, but sends NO email (old staff notification stays disabled).
+//   1. Upload attachments directly to the VineTrack project's private
+//      `support-attachments` bucket using the authenticated VineTrack client,
+//      under the canonical path {user_id}/{request_id}/attachment-N.{ext}.
+//      The request id is generated client-side so uploads finish before the
+//      record is inserted. The legacy Lovable Cloud upload function is no
+//      longer used by the portal.
 //   2. Insert the canonical record into public.support_requests on the
 //      VineTrack project (tbafuqwruefgkbyxrxyb) using the signed-in session.
 //   3. Invoke the shared `support-request` Edge Function with
 //      { request_id, source_platform: "portal" } to send the staff
 //      notification and the submitter receipt via the shared Resend backend.
+//      Signed links are generated server-side only (24h, staff email only);
+//      the browser never produces signed URLs and the receipt has no links.
 //
 // Rules: never email when saving fails; never delete the request when an
 // email fails; never surface raw Supabase/Resend errors to the user.
 import { supabase as vinetrack } from "@/integrations/ios-supabase/client";
-import { supabase as lovableCloud } from "@/integrations/supabase/client";
+
 
 export interface SupportAttachmentInput {
   name: string;
