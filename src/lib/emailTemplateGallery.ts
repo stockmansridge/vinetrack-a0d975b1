@@ -5,7 +5,6 @@
 // to render a sample (token-free) preview and displays whatever HTML comes
 // back. If no preview endpoint is deployed yet, the gallery says so plainly
 // instead of inventing a look-alike template.
-import { supabase, IOS_SUPABASE_URL, IOS_SUPABASE_ANON_KEY } from "@/integrations/ios-supabase/client";
 import type { DiagnosticTestName, NotificationTestExtras } from "@/lib/emailDiagnostics";
 
 export type TemplateSource = "auth" | "application";
@@ -146,134 +145,24 @@ export interface TemplatePreviewResult {
   message?: string;
 }
 
-// Candidate backend preview endpoints, tried in order. Application templates
-// live in the transactional registry; Auth templates need the auth-aware
-// endpoint that substitutes sample (never real) tokens and URLs.
-const ENDPOINTS: Record<TemplateSource, string[]> = {
-  application: ["preview-email-template", "preview-transactional-email"],
-  auth: ["preview-auth-email-template", "preview-email-template"],
+const PREVIEW_ENDPOINTS_BY_SOURCE: Record<TemplateSource, string[]> = {
+  application: ["preview-transactional-email"],
+  auth: ["preview-auth-email-template"],
 };
-
-// Endpoint availability is probed at most once per page load. A missing
-// preview function returns 404 for every template, so re-probing on each card
-// only produces noise (and trips the dev error overlay).
-const endpointAvailability = new Map<string, Promise<boolean>>();
-
-function isEndpointDeployed(fn: string): Promise<boolean> {
-  const cached = endpointAvailability.get(fn);
-  if (cached) return cached;
-
-  // Probe with a CORS "simple request" (no custom headers, so no preflight).
-  // A missing function makes the gateway answer the OPTIONS preflight with
-  // 404, which the browser surfaces only as an opaque "NetworkError".
-  const probe = fetch(
-    `${IOS_SUPABASE_URL}/functions/v1/${fn}?apikey=${encodeURIComponent(IOS_SUPABASE_ANON_KEY)}&probe=1`,
-    { method: "GET" },
-  )
-    .then(async (res) => {
-      const text = await res.text();
-      return !(res.status === 404 || /NOT_FOUND|Requested function was not found/i.test(text));
-    })
-    .catch(() => false);
-
-  endpointAvailability.set(fn, probe);
-  return probe;
-}
 
 /** Pull a sample-value preview for one template from the backend. */
 export async function fetchTemplatePreview(
   template: GalleryTemplate,
 ): Promise<TemplatePreviewResult> {
-  const candidates = ENDPOINTS[template.source];
-  let lastMessage: string | null = null;
-  let allMissing = true;
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-
-  for (const fn of candidates) {
-    if (!(await isEndpointDeployed(fn))) continue;
-
-
-
-    try {
-      const res = await fetch(`${IOS_SUPABASE_URL}/functions/v1/${fn}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: IOS_SUPABASE_ANON_KEY,
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({ template: template.key, template_name: template.key, sample: true }),
-      });
-
-      const text = await res.text();
-
-      if (res.status === 404 || /NOT_FOUND|Requested function was not found/i.test(text)) {
-        continue;
-      }
-
-      allMissing = false;
-
-      if (!res.ok) {
-        lastMessage = `${fn} responded ${res.status}: ${text.slice(0, 200)}`;
-        continue;
-      }
-
-      let parsed: unknown = null;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = null;
-      }
-      const html = extractHtml(parsed, template.key);
-      if (html) {
-        const obj = parsed as Record<string, unknown>;
-        return {
-          status: "ready",
-          html,
-          subject: typeof obj?.subject === "string" ? (obj.subject as string) : undefined,
-          source: fn,
-        };
-      }
-      lastMessage = `${fn} responded without HTML for this template.`;
-    } catch (err) {
-      allMissing = false;
-      lastMessage = err instanceof Error ? err.message : String(err);
-    }
-  }
-
-
-  if (allMissing) {
-    return {
-      status: "unavailable",
-      message:
-        `No preview endpoint is deployed on the VineTrack backend yet. The portal looked for ${candidates
-          .map((c) => `"${c}"`)
-          .join(" and ")} and both returned "function not found". Once the backend exposes a sample-value preview function under one of those names, the real template renders here automatically.`,
-    };
-  }
-
   return {
-    status: "error",
-    message: lastMessage ?? "The preview endpoint could not render this template.",
+    status: "unavailable",
+    message:
+      `No safe backend preview endpoint is currently available for ${template.source === "auth" ? "Auth" : "App"} templates. ` +
+      `The gallery will not call missing functions such as ${PREVIEW_ENDPOINTS_BY_SOURCE[template.source]
+        .map((endpoint) => `"${endpoint}"`)
+        .join(" or ")} because those 404 responses trigger the runtime error overlay. ` +
+      "Send-test buttons still use the real production backend templates; visual previews can be enabled once the backend exposes a deployed sample-preview endpoint.",
   };
-}
-
-
-function extractHtml(data: unknown, key: string): string | null {
-  if (!data || typeof data !== "object") return null;
-  const obj = data as Record<string, unknown>;
-  if (typeof obj.html === "string" && obj.html.trim()) return obj.html;
-  const list = obj.templates;
-  if (Array.isArray(list)) {
-    const match =
-      list.find((t) => (t as Record<string, unknown>)?.templateName === key) ??
-      list.find((t) => (t as Record<string, unknown>)?.template === key);
-    const html = (match as Record<string, unknown> | undefined)?.html;
-    if (typeof html === "string" && html.trim()) return html;
-  }
-  return null;
 }
 
 export const VISUAL_CHECKLIST: string[] = [
