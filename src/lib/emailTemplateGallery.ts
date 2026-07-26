@@ -166,6 +166,26 @@ export async function fetchTemplatePreview(
   const accessToken = sessionData.session?.access_token;
 
   for (const fn of candidates) {
+    // Probe first with a CORS "simple request" (no custom headers, so no
+    // preflight). A missing function makes the gateway answer the OPTIONS
+    // preflight with 404, which the browser surfaces only as an opaque
+    // "NetworkError" — the probe lets us read the real 404 instead.
+    try {
+      const probe = await fetch(
+        `${IOS_SUPABASE_URL}/functions/v1/${fn}?apikey=${encodeURIComponent(IOS_SUPABASE_ANON_KEY)}&template=${encodeURIComponent(template.key)}&sample=1`,
+        { method: "GET" },
+      );
+      const probeText = await probe.text();
+      if (probe.status === 404 || /NOT_FOUND|Requested function was not found/i.test(probeText)) {
+        continue;
+      }
+    } catch (err) {
+      // A network-level failure on a header-free GET means the endpoint is
+      // not reachable at all — treat it as "not deployed" rather than an error.
+      lastMessage = err instanceof Error ? err.message : String(err);
+      continue;
+    }
+
     try {
       const res = await fetch(`${IOS_SUPABASE_URL}/functions/v1/${fn}`, {
         method: "POST",
@@ -212,6 +232,7 @@ export async function fetchTemplatePreview(
       lastMessage = err instanceof Error ? err.message : String(err);
     }
   }
+
 
   if (allMissing) {
     return {
