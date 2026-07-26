@@ -79,6 +79,8 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
   const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<SupportSubmitResult | null>(null);
+
 
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
