@@ -225,16 +225,38 @@ function DiagnosticCard({ spec }: { spec: CardSpec }) {
   );
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  submitted: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  sent: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  delivered: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  delayed: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  bounced: "border-destructive/40 bg-destructive/10 text-destructive",
+  complained: "border-destructive/40 bg-destructive/10 text-destructive",
+  failed: "border-destructive/40 bg-destructive/10 text-destructive",
+  suppressed: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
+};
+
+const STATUS_OPTIONS = [
+  "submitted",
+  "sent",
+  "delivered",
+  "delayed",
+  "bounced",
+  "complained",
+  "failed",
+  "suppressed",
+];
+
 function StatusBadge({ status }: { status: string | null }) {
   const s = (status ?? "").toLowerCase();
-  const variant: "default" | "secondary" | "destructive" | "outline" =
-    s === "sent" || s === "delivered"
-      ? "default"
-      : s === "failed" || s === "bounced" || s === "error"
-        ? "destructive"
-        : "secondary";
-  return <Badge variant={variant}>{status ?? "—"}</Badge>;
+  const cls = STATUS_STYLES[s] ?? "border-muted-foreground/30 bg-muted text-muted-foreground";
+  return (
+    <Badge variant="outline" className={cls}>
+      {status ?? "—"}
+    </Badge>
+  );
 }
+
 
 interface RecoveryResult {
   success: boolean;
