@@ -6,6 +6,7 @@
 // back. If no preview endpoint is deployed yet, the gallery says so plainly
 // instead of inventing a look-alike template.
 import type { DiagnosticTestName, NotificationTestExtras } from "@/lib/emailDiagnostics";
+import { supabase } from "@/integrations/supabase/client";
 
 export type TemplateSource = "auth" | "application";
 
@@ -154,15 +155,28 @@ const PREVIEW_ENDPOINTS_BY_SOURCE: Record<TemplateSource, string[]> = {
 export async function fetchTemplatePreview(
   template: GalleryTemplate,
 ): Promise<TemplatePreviewResult> {
-  return {
-    status: "unavailable",
-    message:
-      `No safe backend preview endpoint is currently available for ${template.source === "auth" ? "Auth" : "App"} templates. ` +
-      `The gallery will not call missing functions such as ${PREVIEW_ENDPOINTS_BY_SOURCE[template.source]
-        .map((endpoint) => `"${endpoint}"`)
-        .join(" or ")} because those 404 responses trigger the runtime error overlay. ` +
-      "Send-test buttons still use the real production backend templates; visual previews can be enabled once the backend exposes a deployed sample-preview endpoint.",
-  };
+  const { data, error } = await supabase.functions.invoke<TemplatePreviewResult>("preview-transactional-email", {
+    body: {
+      source: template.source,
+      templateName: template.key,
+      expectedEndpoints: PREVIEW_ENDPOINTS_BY_SOURCE[template.source],
+    },
+  });
+
+  if (error) {
+    return {
+      status: "error",
+      message:
+        "The safe preview proxy is unavailable. The browser did not call the production preview endpoint directly, so no template HTML was duplicated in the portal.",
+    };
+  }
+
+  return (
+    data ?? {
+      status: "unavailable",
+      message: "The preview service returned an empty response.",
+    }
+  );
 }
 
 export const VISUAL_CHECKLIST: string[] = [
