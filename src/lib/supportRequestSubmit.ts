@@ -153,13 +153,25 @@ export async function submitSupportRequest(
     message: SAVE_FAILED,
   };
 
-  // 1. Attachments first — the email function must see the final record.
-  const upload = await uploadAttachments(input);
+  // 1. Resolve the authenticated VineTrack user and pre-allocate the request
+  //    id so attachments land on the canonical path before the insert.
+  const { data: authData } = await vinetrack.auth.getUser();
+  const userId = authData?.user?.id ?? input.userId;
+  if (!userId) {
+    return { ...base, message: SAVE_FAILED };
+  }
+  const newRequestId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}`;
+
+  // 2. Attachments upload first — the email function must see the final record.
+  const upload = await uploadAttachments(input, newRequestId, userId);
   if (!upload.ok) {
     return { ...base, message: SAVE_FAILED };
   }
 
-  // 2. Canonical record on the VineTrack project.
+  // 3. Canonical record on the VineTrack project.
   const contactLines = [
     input.contactName ? `Name: ${input.contactName}` : null,
     input.contactEmail ? `Email: ${input.contactEmail}` : null,
@@ -177,7 +189,8 @@ export async function submitSupportRequest(
     const { data, error } = await vinetrack
       .from("support_requests")
       .insert({
-        user_id: input.userId,
+        id: newRequestId,
+        user_id: userId,
         vineyard_id: input.vineyardId,
         vineyard_name: input.vineyardName,
         category: input.category,
@@ -190,6 +203,7 @@ export async function submitSupportRequest(
       .single();
     if (error) throw error;
     requestId = (data as { id: string }).id;
+
     submittedAt = (data as { created_at?: string }).created_at ?? new Date().toISOString();
   } catch (e) {
     console.error("support request save failed", e);
