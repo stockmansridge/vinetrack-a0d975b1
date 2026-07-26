@@ -1,6 +1,11 @@
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { supabase as lovableCloud } from "@/integrations/supabase/client";
+import {
+  submitSupportRequest,
+  type SupportSubmitResult,
+  type DeliveryState,
+} from "@/lib/supportRequestSubmit";
+
 import { useAuth } from "@/context/AuthContext";
 import { useVineyard } from "@/context/VineyardContext";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
