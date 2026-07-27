@@ -311,6 +311,14 @@ export interface SnapshotRowBlock {
   row_count: number;
   allocation_percentage: number | null;
   weighting_basis: string | null;
+  /** SQL 127 snapshot values — frozen at the time the session was recorded. */
+  selected_vine_count: number | null;
+  selected_emitter_count: number | null;
+  selected_row_length_metres: number | null;
+  vine_count_basis: string | null;
+  emitter_count_basis: string | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
 }
 
 /**
@@ -343,8 +351,18 @@ export function snapshotRowBlocks(snapshot: any): {
       row_count: numOrNull(b.row_count) ?? rows.length,
       allocation_percentage: numOrNull(b.allocation_percentage),
       weighting_basis: b.weighting_basis ?? basis,
+      selected_vine_count: numOrNull(b.selected_vine_count ?? b.vine_count),
+      selected_emitter_count: numOrNull(b.selected_emitter_count ?? b.emitter_count),
+      selected_row_length_metres: numOrNull(
+        b.selected_row_length_metres ?? b.row_length_metres,
+      ),
+      vine_count_basis: b.vine_count_basis ?? null,
+      emitter_count_basis: b.emitter_count_basis ?? null,
+      vine_count_is_estimated: boolOrNull(b.vine_count_is_estimated),
+      emitter_count_is_estimated: boolOrNull(b.emitter_count_is_estimated),
     });
   }
+
   if (blocks.length === 0) {
     if (snapshot.allocation_method !== "rows" && !snapshot.uses_rows) return null;
     return { blocks: [], weighting_basis: basis, row_count: numOrNull(snapshot.row_count) ?? 0 };
