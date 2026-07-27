@@ -770,7 +770,10 @@ function RowsConnection({
     }
   };
 
-  const warnings = (result?.warnings ?? []).filter(Boolean);
+  const warnings = Array.from(
+    new Set([...(result?.warnings ?? []), ...savedSummary.warnings]),
+  ).filter(Boolean);
+
   const totalRows = allRows.length;
 
   return (
