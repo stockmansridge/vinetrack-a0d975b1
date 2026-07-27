@@ -61,10 +61,14 @@ import {
 import {
   blockCoveragePercent,
   extractSelectedRowIds,
+  formatEstimate,
   formatRowRanges,
   normaliseAvailableRows,
+  normaliseServerRowSummary,
   weightingBasisLabel,
+  type ServerRowSummary,
 } from "@/lib/irrigationRows";
+
 import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
 
 
