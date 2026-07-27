@@ -443,50 +443,74 @@ function ValvesTab({
           <div className="text-sm text-muted-foreground">No valves yet.</div>
         )}
         <div className="divide-y divide-border">
-          {valves.data?.map((v) => (
-            <div key={v.id} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{v.name}</span>
-                  {!v.is_active && <Badge variant="outline">Inactive</Badge>}
+          {valves.data?.map((v) => {
+            const s = summaries[v.id];
+            const ready = valveIsReady(s);
+            return (
+              <div key={v.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium">{v.name}</span>
+                    {!v.is_active && <Badge variant="outline">Inactive</Badge>}
+                    <Badge variant="outline">
+                      {s?.configured
+                        ? s.uses_rows
+                          ? "Rows"
+                          : ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]
+                        : "No method"}
+                    </Badge>
+                    <Badge variant="secondary">{valveStatusText(s)}</Badge>
+                    <Badge variant={ready ? "default" : "outline"}>
+                      {s?.loading
+                        ? "Checking…"
+                        : ready
+                          ? "Ready to record"
+                          : s?.configured
+                            ? "Needs attention"
+                            : "Setup required"}
+                    </Badge>
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {v.system_name} ·{" "}
+                    {v.configured_flow_litres_per_hour != null
+                      ? `${v.configured_flow_litres_per_hour} L/h configured`
+                      : "No configured flow"}
+                  </div>
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {v.system_name} ·{" "}
-                  {v.configured_flow_litres_per_hour != null
-                    ? `${v.configured_flow_litres_per_hour} L/h configured`
-                    : "No configured flow"}{" "}
-                  · {v.active_block_count ?? 0} block{v.active_block_count === 1 ? "" : "s"}
+                <div className="flex shrink-0 gap-1">
+                  <Button size="sm" variant="outline" onClick={() => onConfigure(v.id)}>
+                    Configure connections
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditing(v);
+                      setOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      update
+                        .mutateAsync({ id: v.id, is_active: !v.is_active })
+                        .catch((e: Error) =>
+                          toast({ title: "Couldn't update", description: e.message, variant: "destructive" }),
+                        )
+                    }
+                  >
+                    {v.is_active ? "Deactivate" : "Reactivate"}
+                  </Button>
                 </div>
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setEditing(v);
-                    setOpen(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    update
-                      .mutateAsync({ id: v.id, is_active: !v.is_active })
-                      .catch((e: Error) =>
-                        toast({ title: "Couldn't update", description: e.message, variant: "destructive" }),
-                      )
-                  }
-                >
-                  {v.is_active ? "Deactivate" : "Reactivate"}
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
+
       {open && (
         <ValveDialog
           key={editing?.id ?? "new"}
