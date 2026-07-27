@@ -1210,19 +1210,23 @@ function ConnectionsOverview({
         const s = summaries[v.id];
         const ready = valveIsReady(s);
         const vines = s?.uses_rows
-          ? savedEstimateText(
+          ? savedEstimate(
               s.estimated_vine_count,
               s.vine_count_is_estimated,
+              s.rows_with_vine_estimate,
               s.rows_missing_vine_estimate,
+              "vines",
             )
-          : "—";
+          : null;
         const emitters = s?.uses_rows
-          ? savedEstimateText(
+          ? savedEstimate(
               s.estimated_emitter_count,
               s.emitter_count_is_estimated,
+              s.rows_with_emitter_estimate,
               s.rows_missing_emitter_estimate,
+              "emitters",
             )
-          : "—";
+          : null;
         return (
           <button
             key={v.id}
@@ -1241,20 +1245,21 @@ function ConnectionsOverview({
             <span className="truncate text-xs text-muted-foreground">{valveMethodText(s)}</span>
             <span className="truncate text-xs text-muted-foreground">
               {valveConnectionsText(s)}
-              {s?.uses_rows && (
-                <span className="block truncate tabular-nums md:hidden">
-                  {vines} vines · {emitters} emitters
+              {vines && emitters && (
+                <span className="block tabular-nums md:hidden">
+                  {vines.primary} · {emitters.primary}
+                  {vines.secondary && <span className="block">{vines.secondary}</span>}
                 </span>
               )}
             </span>
-            <span className="hidden truncate text-xs tabular-nums text-muted-foreground md:block">
-              {vines}
+            <span className="hidden text-xs tabular-nums text-muted-foreground md:block">
+              {vines ? <SavedEstimate lines={vines} /> : "—"}
             </span>
-            <span className="hidden truncate text-xs tabular-nums text-muted-foreground md:block">
-              {emitters}
+            <span className="hidden text-xs tabular-nums text-muted-foreground md:block">
+              {emitters ? <SavedEstimate lines={emitters} /> : "—"}
             </span>
-            <span className="truncate text-xs text-muted-foreground">
-              {valveReadinessText(s)}
+            <span className="truncate text-xs">
+              <Badge variant={ready ? "secondary" : "outline"}>{valveReadinessText(s)}</Badge>
             </span>
 
           </button>
