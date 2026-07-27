@@ -63,7 +63,14 @@ import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import SatelliteMappingPage from "./pages/tools/SatelliteMappingPage";
 import PruningTrackerPage from "./pages/tools/PruningTrackerPage";
 import FertiliserCalculatorPage from "./pages/tools/FertiliserCalculatorPage";
+import IrrigationRecordsPage from "./pages/tools/IrrigationRecordsPage";
+import IrrigationSetupPage from "./pages/tools/IrrigationSetupPage";
+import IrrigationRecordPage from "./pages/tools/IrrigationRecordPage";
+import IrrigationHistoryPage from "./pages/tools/IrrigationHistoryPage";
+import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
+import { RequireIrrigationAccess } from "./components/irrigation/RequireIrrigationAccess";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
+
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
 import FuelPage from "./pages/FuelPage";
