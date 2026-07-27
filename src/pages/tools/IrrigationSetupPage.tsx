@@ -1166,9 +1166,9 @@ function RowsConnection({
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Vine and emitter figures are estimates returned by the vineyard backend (SQL 127) and do
-          not change the allocation basis. Share of valve water and length coverage are the
-          server-calculated values; draft selections show as pending until saved.
+          Vine and emitter figures are the estimates stored by the vineyard backend against each
+          saved row; they do not change the allocation basis. Share of valve water and length
+          coverage are server-calculated. An unsaved draft has no server figures until it is saved.
         </p>
       </div>
     </div>
