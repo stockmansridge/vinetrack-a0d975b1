@@ -323,7 +323,10 @@ export default function IrrigationHistoryPage() {
                 ))}
               </div>
 
+              <RowsIrrigated session={s} />
+
               {s.notes && <p className="mt-2 text-sm text-muted-foreground">{s.notes}</p>}
+
             </CardContent>
           </Card>
         ))}
