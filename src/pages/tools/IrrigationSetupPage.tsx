@@ -817,10 +817,22 @@ function RowsConnection({
     }
   };
 
-  const clearSaved = async () => {
+  /** Discards the unsaved selection only — the saved configuration is untouched. */
+  const resetDraft = () => {
+    setSelected(new Set(savedIds));
+    setResult(null);
+    onDirtyChange(false);
+  };
+
+  /**
+   * Destructive: removes the valve's saved row configuration on the server.
+   * Verified against SQL 126/129 — `set_irrigation_valve_rows` with an empty
+   * `p_row_ids` clears both the saved rows and their block allocations.
+   */
+  const deleteConnection = async () => {
     if (
       !window.confirm(
-        "Remove all saved connections for this valve? It will no longer be able to record sessions until it is configured again.",
+        "Delete this valve's saved connection? The valve will not be able to record sessions until it is configured again. Existing irrigation records keep their own snapshot and are unaffected.",
       )
     )
       return;
@@ -839,10 +851,10 @@ function RowsConnection({
       setSelected(new Set(extractSelectedRowIds(refreshed.data ?? [])));
       setLoadedFor(valveId);
       onDirtyChange(false);
-      toast({ title: "Saved connections cleared" });
+      toast({ title: "Connection deleted" });
     } catch (e) {
       toast({
-        title: "Couldn't clear connections",
+        title: "Couldn't delete the connection",
         description: (e as Error).message,
         variant: "destructive",
       });
