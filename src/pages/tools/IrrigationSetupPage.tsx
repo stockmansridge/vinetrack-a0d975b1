@@ -903,7 +903,7 @@ function RowsConnection({
           <strong className="tabular-nums">
             {shownIds.size} row{shownIds.size === 1 ? "" : "s"}
           </strong>{" "}
-          <span className="text-muted-foreground">of {totalRows} mapped across the vineyard</span>
+          <span className="text-muted-foreground">of {mappedText}</span>
           {" · "}Blocks supplied:{" "}
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
