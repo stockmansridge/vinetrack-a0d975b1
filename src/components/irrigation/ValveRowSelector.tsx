@@ -58,7 +58,7 @@ function RowLine({
   onToggle: (v: boolean) => void;
 }) {
   return (
-    <label className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,130px)_repeat(2,minmax(0,110px))_minmax(0,1.2fr)]">
+    <label className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,120px)_repeat(2,minmax(0,150px))_minmax(0,1.2fr)]">
       <Checkbox
         checked={checked}
         onCheckedChange={(c) => onToggle(!!c)}
@@ -269,7 +269,7 @@ export function ValveRowSelector({
 
                 {!isCollapsed && (
                   <>
-                    <div className="hidden grid-cols-[auto_minmax(0,1.2fr)_minmax(0,130px)_repeat(2,minmax(0,110px))_minmax(0,1.2fr)] gap-3 border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+                    <div className="hidden grid-cols-[auto_minmax(0,1.2fr)_minmax(0,120px)_repeat(2,minmax(0,150px))_minmax(0,1.2fr)] gap-3 border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
                       <span />
                       <span>Row</span>
                       <span>Length</span>
