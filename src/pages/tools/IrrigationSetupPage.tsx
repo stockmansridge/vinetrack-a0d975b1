@@ -1214,6 +1214,31 @@ function ConnectionsTab({
                     <span className="text-muted-foreground">Allocation basis: </span>
                     {weightingBasisLabel(currentSummary.weighting_basis)}
                   </div>
+                  {currentSummary.uses_rows && (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">Estimated vines: </span>
+                        <span className="tabular-nums">
+                          {savedEstimateText(
+                            currentSummary.estimated_vine_count,
+                            currentSummary.vine_count_is_estimated,
+                            currentSummary.rows_missing_vine_estimate,
+                          )}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Estimated emitters: </span>
+                        <span className="tabular-nums">
+                          {savedEstimateText(
+                            currentSummary.estimated_emitter_count,
+                            currentSummary.emitter_count_is_estimated,
+                            currentSummary.rows_missing_emitter_estimate,
+                          )}
+                        </span>
+                      </div>
+                    </>
+                  )}
+
                   {currentSummary.last_saved && (
                     <div>
                       <span className="text-muted-foreground">Last saved: </span>
