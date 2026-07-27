@@ -836,6 +836,13 @@ function RowsConnection({
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
         </div>
+        <div className="text-sm">
+          <span className="text-muted-foreground">Estimated vines: </span>
+          <strong className="tabular-nums">{estimateText(shownSummary?.selected_vine_count ?? sumSummary(shownSummary, "selected_vine_count"), shownSummary?.vine_count_is_estimated ?? true, dirty)}</strong>
+          {" · "}
+          <span className="text-muted-foreground">Estimated emitters: </span>
+          <strong className="tabular-nums">{estimateText(shownSummary?.selected_emitter_count ?? sumSummary(shownSummary, "selected_emitter_count"), shownSummary?.emitter_count_is_estimated ?? true, dirty)}</strong>
+        </div>
         {shownRows.length > 0 && (
           <div className="text-xs text-muted-foreground">
             {dirty ? "Draft rows" : "Saved rows"}:{" "}
@@ -845,31 +852,52 @@ function RowsConnection({
 
 
         <div className="rounded-lg border border-border">
-          <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_repeat(6,minmax(0,110px))] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Block</span>
-            <span className="text-right">Block rows selected</span>
-            <span className="text-right">Block coverage</span>
+            <span className="text-right">Selected rows</span>
+            <span className="text-right">Estimated vines</span>
+            <span className="text-right">Estimated emitters</span>
+            <span className="text-right">Row coverage</span>
+            <span className="text-right">Length coverage</span>
             <span className="text-right">Share of valve water</span>
           </div>
-          {coverageBlocks.map((b) => (
-            <div
-              key={b.block_id}
-              className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border px-3 py-1.5 text-sm last:border-0"
-            >
-              <span className="truncate">{b.block_name}</span>
-              <span className="text-right tabular-nums">
-                {b.selected} of {b.total}
-              </span>
-              <span className="text-right tabular-nums">{pct(b.coverage)}</span>
-              <span className="text-right tabular-nums">
-                {dirty ? (
-                  <span className="text-muted-foreground">Pending save</span>
-                ) : (
-                  pct(waterShare.get(b.block_id) ?? null, 2)
-                )}
-              </span>
-            </div>
-          ))}
+          {coverageBlocks.map((b) => {
+            const srv = shownSummary?.blocks.get(b.block_id) ?? null;
+            return (
+              <div
+                key={b.block_id}
+                className="grid grid-cols-[minmax(0,1fr)_repeat(6,minmax(0,110px))] gap-2 border-b border-border px-3 py-1.5 text-sm last:border-0"
+              >
+                <span className="truncate">{b.block_name}</span>
+                <span className="text-right tabular-nums">
+                  {b.selected} of {srv?.total_block_row_count ?? b.total}
+                </span>
+                <span className="text-right tabular-nums">
+                  {estimateText(srv?.selected_vine_count ?? null, srv?.vine_count_is_estimated ?? true, dirty)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {estimateText(srv?.selected_emitter_count ?? null, srv?.emitter_count_is_estimated ?? true, dirty)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {pct(srv?.row_coverage_percent ?? b.coverage)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {srv?.length_coverage_percent == null
+                    ? dirty
+                      ? "Pending save"
+                      : "Not available"
+                    : pct(srv.length_coverage_percent)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {dirty ? (
+                    <span className="text-muted-foreground">Pending save</span>
+                  ) : (
+                    pct(srv?.allocation_percentage ?? waterShare.get(b.block_id) ?? null, 2)
+                  )}
+                </span>
+              </div>
+            );
+          })}
           {coverageBlocks.length === 0 && (
             <div className="px-3 py-3 text-sm text-muted-foreground">
               No connections configured.
@@ -877,13 +905,15 @@ function RowsConnection({
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Block coverage is descriptive (selected rows ÷ mapped rows in that block). Share of
-          valve water is the server-calculated hydraulic allocation from SQL 126.
+          Vine and emitter figures are estimates returned by the vineyard backend (SQL 127) and do
+          not change the allocation basis. Share of valve water and length coverage are the
+          server-calculated values; draft selections show as pending until saved.
         </p>
       </div>
     </div>
   );
 }
+
 
 function ConnectionsOverview({
   valves,
