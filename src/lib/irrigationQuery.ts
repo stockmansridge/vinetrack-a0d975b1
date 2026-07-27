@@ -97,7 +97,12 @@ export interface IrrigationValveBlock {
   row_end: number | null;
   configured_flow_litres_per_hour: number | null;
   is_active: boolean;
+  /** SQL 126 additions */
+  uses_rows?: boolean | null;
+  row_count?: number | null;
+  weighting_basis?: string | null;
 }
+
 
 export interface SetupStatus {
   season: {
