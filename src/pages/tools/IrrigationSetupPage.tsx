@@ -874,6 +874,21 @@ function RowsConnection({
     : `${totalRows} mapped rows across the vineyard`;
 
 
+  const savedVineLines = savedEstimate(
+    savedRowSnapshot.vines.total,
+    savedRowSnapshot.vines.is_estimated,
+    savedRowSnapshot.vines.rows_with_value,
+    savedRowSnapshot.vines.rows_missing,
+    "vines",
+  );
+  const savedEmitterLines = savedEstimate(
+    savedRowSnapshot.emitters.total,
+    savedRowSnapshot.emitters.is_estimated,
+    savedRowSnapshot.emitters.rows_with_value,
+    savedRowSnapshot.emitters.rows_missing,
+    "emitters",
+  );
+
   return (
     <div className="space-y-4">
       <ValveRowSelector
@@ -884,6 +899,7 @@ function RowsConnection({
         loading={available.isLoading || linked.isLoading}
         error={(available.error as Error) ?? (linked.error as Error) ?? null}
         weightingBasis={serverBasis}
+        expandedBlockIds={savedBlockIds}
       />
 
       {linked.error && (
@@ -894,38 +910,72 @@ function RowsConnection({
         />
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
-        <div className="text-sm">
-          <div>
-            <span className="text-muted-foreground">Saved:</span>{" "}
+      {/* Saved configuration and unsaved draft are deliberately kept apart:
+          deleting the saved connection is a server change, resetting the draft
+          only discards the current selection. */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Saved connection</span>
+            <Badge variant={savedIds.size > 0 ? "secondary" : "outline"}>
+              {savedIds.size > 0 ? "Saved" : "Not configured"}
+            </Badge>
+          </div>
+          <div className="text-sm">
             <strong className="tabular-nums">
               {savedIds.size} row{savedIds.size === 1 ? "" : "s"}
             </strong>{" "}
             <span className="text-muted-foreground">of {mappedText}</span>
           </div>
-          <div>
-            <span className="text-muted-foreground">Draft total:</span>{" "}
-            <strong className="tabular-nums">
-              {selected.size} row{selected.size === 1 ? "" : "s"} selected across the vineyard
-            </strong>
-            <span className="text-muted-foreground">
-              {" "}
-              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
-              {dirty ? " · unsaved changes" : " · matches saved configuration"}
-            </span>
+          {savedIds.size > 0 && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {savedVineLines.primary} · {savedEmitterLines.primary}
+              {(savedVineLines.secondary || savedEmitterLines.secondary) && (
+                <span className="block">
+                  {savedVineLines.secondary ?? savedEmitterLines.secondary}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="mt-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={deleteConnection}
+              disabled={savedIds.size === 0 || save.isPending || clear.isPending}
+            >
+              {clear.isPending ? "Deleting…" : "Delete connection"}
+            </Button>
           </div>
-
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {savedIds.size > 0 && (
-            <Button variant="outline" onClick={clearSaved} disabled={clear.isPending}>
-              {clear.isPending ? "Clearing…" : "Clear saved connections"}
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Draft selection</span>
+            <Badge variant={dirty ? "outline" : "secondary"}>
+              {dirty ? "Unsaved changes" : "Matches saved"}
+            </Badge>
+          </div>
+          <div className="text-sm">
+            <strong className="tabular-nums">
+              {selected.size} row{selected.size === 1 ? "" : "s"} selected
+            </strong>{" "}
+            <span className="text-muted-foreground">
+              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={resetDraft} disabled={!dirty}>
+              Reset draft
             </Button>
-          )}
-          <Button onClick={submit} disabled={save.isPending || selected.size === 0 || !dirty}>
-            {save.isPending ? "Saving…" : "Save connections"}
-          </Button>
+            <Button
+              size="sm"
+              onClick={submit}
+              disabled={save.isPending || selected.size === 0 || !dirty}
+            >
+              {save.isPending ? "Saving…" : "Save connections"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -935,8 +985,8 @@ function RowsConnection({
           variant="warning"
           description={
             savedIds.size > 0
-              ? "You have removed all rows from the draft. The saved configuration remains active until you select Save Connections. Select at least one row before saving, or use Clear saved connections to remove this valve's configuration."
-              : "Select at least one row before saving."
+              ? "No rows are selected in the draft. The saved connection is still active — use Reset draft to bring back the saved rows, or Delete connection to remove it from this valve."
+              : "Tick the rows this valve waters, then choose Save connections."
           }
         />
       )}
@@ -985,12 +1035,46 @@ function RowsConnection({
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
         </div>
-        <div className="text-sm">
-          <span className="text-muted-foreground">Estimated vines: </span>
-          <strong className="tabular-nums">{estimateText(shownSummary?.selected_vine_count ?? sumSummary(shownSummary, "selected_vine_count"), shownSummary?.vine_count_is_estimated ?? true, dirty)}</strong>
-          {" · "}
-          <span className="text-muted-foreground">Estimated emitters: </span>
-          <strong className="tabular-nums">{estimateText(shownSummary?.selected_emitter_count ?? sumSummary(shownSummary, "selected_emitter_count"), shownSummary?.emitter_count_is_estimated ?? true, dirty)}</strong>
+        <div className="flex flex-wrap gap-x-6 text-sm">
+          <span>
+            <span className="text-muted-foreground">Estimated vines: </span>
+            {dirty ? (
+              <strong>Recalculated on save</strong>
+            ) : (
+              <SavedEstimate
+                className="font-semibold"
+                lines={savedEstimate(
+                  shownSummary?.selected_vine_count ??
+                    sumSummary(shownSummary, "selected_vine_count") ??
+                    savedRowSnapshot.vines.total,
+                  shownSummary?.vine_count_is_estimated ?? savedRowSnapshot.vines.is_estimated,
+                  savedRowSnapshot.vines.rows_with_value,
+                  savedRowSnapshot.vines.rows_missing,
+                  "vines",
+                )}
+              />
+            )}
+          </span>
+          <span>
+            <span className="text-muted-foreground">Estimated emitters: </span>
+            {dirty ? (
+              <strong>Recalculated on save</strong>
+            ) : (
+              <SavedEstimate
+                className="font-semibold"
+                lines={savedEstimate(
+                  shownSummary?.selected_emitter_count ??
+                    sumSummary(shownSummary, "selected_emitter_count") ??
+                    savedRowSnapshot.emitters.total,
+                  shownSummary?.emitter_count_is_estimated ??
+                    savedRowSnapshot.emitters.is_estimated,
+                  savedRowSnapshot.emitters.rows_with_value,
+                  savedRowSnapshot.emitters.rows_missing,
+                  "emitters",
+                )}
+              />
+            )}
+          </span>
         </div>
         {shownRows.length > 0 && (
           <div className="text-xs text-muted-foreground">
