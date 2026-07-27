@@ -994,7 +994,7 @@ function ConnectionsOverview({
 }) {
   if (valves.length === 0) return null;
   const cols =
-    "grid w-full grid-cols-[auto_minmax(0,1.2fr)_minmax(0,140px)_minmax(0,1fr)_minmax(0,130px)] items-center gap-2";
+    "grid w-full grid-cols-[auto_minmax(0,1.2fr)_minmax(0,140px)_minmax(0,1fr)_minmax(0,130px)] items-center gap-2 md:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,130px)_minmax(0,1fr)_minmax(0,110px)_minmax(0,110px)_minmax(0,120px)]";
   return (
     <div className="rounded-lg border border-border">
       <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1007,11 +1007,27 @@ function ConnectionsOverview({
         <span>Valve</span>
         <span>Allocation method</span>
         <span>Connections</span>
+        <span className="hidden md:block">Estimated vines</span>
+        <span className="hidden md:block">Estimated emitters</span>
         <span>Status</span>
       </div>
       {valves.map((v) => {
         const s = summaries[v.id];
         const ready = valveIsReady(s);
+        const vines = s?.uses_rows
+          ? savedEstimateText(
+              s.estimated_vine_count,
+              s.vine_count_is_estimated,
+              s.rows_missing_vine_estimate,
+            )
+          : "—";
+        const emitters = s?.uses_rows
+          ? savedEstimateText(
+              s.estimated_emitter_count,
+              s.emitter_count_is_estimated,
+              s.rows_missing_emitter_estimate,
+            )
+          : "—";
         return (
           <button
             key={v.id}
@@ -1030,10 +1046,22 @@ function ConnectionsOverview({
             <span className="truncate text-xs text-muted-foreground">{valveMethodText(s)}</span>
             <span className="truncate text-xs text-muted-foreground">
               {valveConnectionsText(s)}
+              {s?.uses_rows && (
+                <span className="block truncate tabular-nums md:hidden">
+                  {vines} vines · {emitters} emitters
+                </span>
+              )}
+            </span>
+            <span className="hidden truncate text-xs tabular-nums text-muted-foreground md:block">
+              {vines}
+            </span>
+            <span className="hidden truncate text-xs tabular-nums text-muted-foreground md:block">
+              {emitters}
             </span>
             <span className="truncate text-xs text-muted-foreground">
               {valveReadinessText(s)}
             </span>
+
           </button>
         );
       })}
