@@ -888,10 +888,21 @@ function ConnectionsOverview({
   onSelect: (id: string) => void;
 }) {
   if (valves.length === 0) return null;
+  const cols =
+    "grid w-full grid-cols-[auto_minmax(0,1.2fr)_minmax(0,140px)_minmax(0,1fr)_minmax(0,130px)] items-center gap-2";
   return (
     <div className="rounded-lg border border-border">
       <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         Configured valves
+      </div>
+      <div
+        className={`${cols} border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`}
+      >
+        <span />
+        <span>Valve</span>
+        <span>Allocation method</span>
+        <span>Connections</span>
+        <span>Status</span>
       </div>
       {valves.map((v) => {
         const s = summaries[v.id];
@@ -901,7 +912,7 @@ function ConnectionsOverview({
             key={v.id}
             type="button"
             onClick={() => onSelect(v.id)}
-            className={`grid w-full grid-cols-[auto_minmax(0,1fr)_110px_minmax(0,1fr)] items-center gap-2 border-b border-border px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 ${
+            className={`${cols} border-b border-border px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 ${
               v.id === selectedValveId ? "bg-sidebar-accent" : ""
             }`}
           >
@@ -911,20 +922,20 @@ function ConnectionsOverview({
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             )}
             <span className="truncate font-medium">{v.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {s?.configured
-                ? s.uses_rows
-                  ? "Rows"
-                  : ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]
-                : "—"}
+            <span className="truncate text-xs text-muted-foreground">{valveMethodText(s)}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {valveConnectionsText(s)}
             </span>
-            <span className="truncate text-xs text-muted-foreground">{valveStatusText(s)}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {valveReadinessText(s)}
+            </span>
           </button>
         );
       })}
     </div>
   );
 }
+
 
 function ConnectionsTab({
   vineyardId,
