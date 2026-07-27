@@ -824,9 +824,7 @@ function RowsConnection({
             <strong className="tabular-nums">
               {savedIds.size} row{savedIds.size === 1 ? "" : "s"}
             </strong>{" "}
-            <span className="text-muted-foreground">
-              of {totalRows} mapped rows across the vineyard
-            </span>
+            <span className="text-muted-foreground">of {mappedText}</span>
           </div>
           <div>
             <span className="text-muted-foreground">Draft total:</span>{" "}
@@ -835,10 +833,11 @@ function RowsConnection({
             </strong>
             <span className="text-muted-foreground">
               {" "}
-              (of {totalRows} mapped rows)
+              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
               {dirty ? " · unsaved changes" : " · matches saved configuration"}
             </span>
           </div>
+
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
