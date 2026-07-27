@@ -938,7 +938,7 @@ function RowsConnection({
         currentValveId={valveId}
         selected={selected}
         onChange={setSelected}
-        loading={available.isLoading || linked.isLoading}
+        loading={!editorInitialised && !available.error && !linked.error}
         error={(available.error as Error) ?? (linked.error as Error) ?? null}
         weightingBasis={serverBasis}
         expandedBlockIds={savedBlockIds}
@@ -995,25 +995,33 @@ function RowsConnection({
           <div className="mb-1 flex items-center justify-between gap-2">
             <span className="text-sm font-semibold">Draft selection</span>
             <Badge variant={dirty ? "outline" : "secondary"}>
-              {dirty ? "Unsaved changes" : "Matches saved"}
+              {!editorInitialised ? "Loading…" : dirty ? "Unsaved changes" : "No unsaved changes"}
             </Badge>
           </div>
           <div className="text-sm">
-            <strong className="tabular-nums">
-              {selected.size} row{selected.size === 1 ? "" : "s"} selected
-            </strong>{" "}
-            <span className="text-muted-foreground">
-              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
-            </span>
+            {editorInitialised ? (
+              <>
+                <strong className="tabular-nums">
+                  {selected.size} row{selected.size === 1 ? "" : "s"} selected
+                </strong>{" "}
+                <span className="text-muted-foreground">
+                  ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Loading saved selection…</span>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={resetDraft} disabled={!dirty}>
-              Reset draft
-            </Button>
+            {dirty && (
+              <Button variant="outline" size="sm" onClick={resetDraft}>
+                Reset draft
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={submit}
-              disabled={save.isPending || selected.size === 0 || !dirty}
+              disabled={!editorInitialised || save.isPending || selected.size === 0 || !dirty}
             >
               {save.isPending ? "Saving…" : "Save connections"}
             </Button>
@@ -1021,17 +1029,26 @@ function RowsConnection({
         </div>
       </div>
 
-      {selected.size === 0 && (
+      {staleBaseline && (
+        <PortalNotice
+          compact
+          variant="warning"
+          description="This valve's saved connection changed elsewhere while you have unsaved changes. Your draft has been kept — use Reset draft to load the latest saved rows, or Save connections to overwrite them."
+        />
+      )}
+
+      {editorInitialised && selected.size === 0 && (dirty || savedIds.size === 0) && (
         <PortalNotice
           compact
           variant="warning"
           description={
             savedIds.size > 0
-              ? "No rows are selected in the draft. The saved connection is still active — use Reset draft to bring back the saved rows, or Delete connection to remove it from this valve."
+              ? "No rows are selected in the draft. Your saved connection is still active. Use Reset draft to restore it, or Delete connection to remove it permanently."
               : "Tick the rows this valve waters, then choose Save connections."
           }
         />
       )}
+
 
       {missingLength.length > 0 && (
         <PortalNotice
