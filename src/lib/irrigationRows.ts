@@ -374,3 +374,95 @@ export function snapshotRowBlocks(snapshot: any): {
       numOrNull(snapshot.row_count) ?? blocks.reduce((s, b) => s + b.row_count, 0),
   };
 }
+
+// ---------------------------------------------------------------------------
+// SQL 127 block summaries (server-authoritative — never computed locally)
+// ---------------------------------------------------------------------------
+
+export interface ServerRowBlockSummary {
+  block_id: string;
+  block_name: string | null;
+  selected_row_count: number | null;
+  total_block_row_count: number | null;
+  selected_row_length_metres: number | null;
+  total_block_row_length_metres: number | null;
+  selected_vine_count: number | null;
+  selected_emitter_count: number | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
+  vine_count_basis: string | null;
+  emitter_count_basis: string | null;
+  row_coverage_percent: number | null;
+  length_coverage_percent: number | null;
+  allocation_percentage: number | null;
+  weighting_basis: string | null;
+  warnings: string[];
+}
+
+export interface ServerRowSummary {
+  blocks: Map<string, ServerRowBlockSummary>;
+  weighting_basis: string | null;
+  selected_vine_count: number | null;
+  selected_emitter_count: number | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
+  row_count: number | null;
+  warnings: string[];
+}
+
+const stringList = (v: unknown): string[] =>
+  Array.isArray(v)
+    ? v.map((x) => (typeof x === "string" ? x : (x?.message ?? x?.warning ?? null))).filter(Boolean).map(String)
+    : v
+      ? [String(v)]
+      : [];
+
+/**
+ * Reads the SQL 127 block-summary payload returned by
+ * list_irrigation_valve_rows / set_irrigation_valve_rows. Any field the backend
+ * does not return stays null — the portal never substitutes a computed value.
+ */
+export function normaliseServerRowSummary(payload: unknown): ServerRowSummary {
+  const root: any = payload && typeof payload === "object" ? payload : {};
+  const blocksRaw: any[] = Array.isArray(root.blocks)
+    ? root.blocks
+    : Array.isArray(root.block_summaries)
+      ? root.block_summaries
+      : [];
+
+  const blocks = new Map<string, ServerRowBlockSummary>();
+  for (const b of blocksRaw) {
+    const id = String(b?.block_id ?? b?.paddock_id ?? "");
+    if (!id) continue;
+    blocks.set(id, {
+      block_id: id,
+      block_name: b?.block_name ?? b?.paddock_name ?? null,
+      selected_row_count: numOrNull(b?.selected_row_count ?? b?.row_count),
+      total_block_row_count: numOrNull(b?.total_block_row_count),
+      selected_row_length_metres: numOrNull(b?.selected_row_length_metres),
+      total_block_row_length_metres: numOrNull(b?.total_block_row_length_metres),
+      selected_vine_count: numOrNull(b?.selected_vine_count),
+      selected_emitter_count: numOrNull(b?.selected_emitter_count),
+      vine_count_is_estimated: boolOrNull(b?.vine_count_is_estimated),
+      emitter_count_is_estimated: boolOrNull(b?.emitter_count_is_estimated),
+      vine_count_basis: b?.vine_count_basis ?? null,
+      emitter_count_basis: b?.emitter_count_basis ?? null,
+      row_coverage_percent: numOrNull(b?.row_coverage_percent),
+      length_coverage_percent: numOrNull(b?.length_coverage_percent),
+      allocation_percentage: numOrNull(b?.allocation_percentage),
+      weighting_basis: b?.weighting_basis ?? root?.weighting_basis ?? null,
+      warnings: stringList(b?.warnings),
+    });
+  }
+
+  return {
+    blocks,
+    weighting_basis: root?.weighting_basis ?? null,
+    selected_vine_count: numOrNull(root?.selected_vine_count),
+    selected_emitter_count: numOrNull(root?.selected_emitter_count),
+    vine_count_is_estimated: boolOrNull(root?.vine_count_is_estimated),
+    emitter_count_is_estimated: boolOrNull(root?.emitter_count_is_estimated),
+    row_count: numOrNull(root?.row_count ?? root?.selected_row_count),
+    warnings: stringList(root?.warnings),
+  };
+}
