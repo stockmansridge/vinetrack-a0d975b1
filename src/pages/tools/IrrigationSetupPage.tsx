@@ -789,6 +789,13 @@ function RowsConnection({
   ).filter(Boolean);
 
   const totalRows = allRows.length;
+  // The vineyard row list can fail independently of the saved configuration
+  // (e.g. a backend function error). Never present that as "0 mapped rows".
+  const rowsUnavailable = !!available.error || (available.isLoading && totalRows === 0);
+  const mappedText = rowsUnavailable
+    ? "vineyard row list unavailable"
+    : `${totalRows} mapped rows across the vineyard`;
+
 
   return (
     <div className="space-y-4">
@@ -817,9 +824,7 @@ function RowsConnection({
             <strong className="tabular-nums">
               {savedIds.size} row{savedIds.size === 1 ? "" : "s"}
             </strong>{" "}
-            <span className="text-muted-foreground">
-              of {totalRows} mapped rows across the vineyard
-            </span>
+            <span className="text-muted-foreground">of {mappedText}</span>
           </div>
           <div>
             <span className="text-muted-foreground">Draft total:</span>{" "}
@@ -828,10 +833,11 @@ function RowsConnection({
             </strong>
             <span className="text-muted-foreground">
               {" "}
-              (of {totalRows} mapped rows)
+              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
               {dirty ? " · unsaved changes" : " · matches saved configuration"}
             </span>
           </div>
+
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -897,7 +903,7 @@ function RowsConnection({
           <strong className="tabular-nums">
             {shownIds.size} row{shownIds.size === 1 ? "" : "s"}
           </strong>{" "}
-          <span className="text-muted-foreground">of {totalRows} mapped across the vineyard</span>
+          <span className="text-muted-foreground">of {mappedText}</span>
           {" · "}Blocks supplied:{" "}
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>

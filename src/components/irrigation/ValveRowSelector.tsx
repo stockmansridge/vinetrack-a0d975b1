@@ -195,14 +195,29 @@ export function ValveRowSelector({
   };
 
   if (error) {
+    // A backend-side fault (e.g. a missing SQL 127 helper) must not look like a
+    // portal bug, and must never be shown as "0 rows".
+    const backendFault = /does not exist|function .*\(/i.test(error.message);
     return (
       <PortalNotice
         variant="error"
         title="Couldn't load vineyard rows"
-        description={error.message}
+        description={
+          <>
+            <div>{error.message}</div>
+            {backendFault && (
+              <div className="mt-1">
+                This is a vineyard backend error, not a saved-configuration problem. Your existing
+                row connections are unchanged — row selection will work again once the backend
+                function is fixed.
+              </div>
+            )}
+          </>
+        }
       />
     );
   }
+
   if (loading) return <div className="text-sm text-muted-foreground">Loading vineyard rows…</div>;
   if (blocks.length === 0) {
     return (
