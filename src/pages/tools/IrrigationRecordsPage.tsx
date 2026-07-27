@@ -109,7 +109,7 @@ export default function IrrigationRecordsPage() {
         <PortalNotice
           variant="warning"
           title="Irrigation setup is incomplete"
-          description="Add an irrigation system, at least one valve, and connect each valve to blocks totalling 100% before recording sessions."
+          description="Add an irrigation system, at least one valve, and connect each valve to blocks or vineyard rows before recording sessions."
           action={
             <Button asChild size="sm" variant="outline">
               <Link to="/irrigation/setup">Finish setup</Link>

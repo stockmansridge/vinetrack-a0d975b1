@@ -864,7 +864,7 @@ export default function IrrigationSetupPage() {
     <div className="space-y-6">
       <PageHead
         title="Irrigation Setup | VineTrack"
-        description="Configure irrigation systems, valves and valve-to-block connections."
+        description="Configure irrigation systems, valves and valve-to-block or valve-to-row connections."
         path="/irrigation/setup"
         noindex
       />
@@ -877,7 +877,7 @@ export default function IrrigationSetupPage() {
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">Irrigation setup</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Systems, valves and the blocks each valve waters.
+            Systems, valves, and valve-to-block or valve-to-row connections.
           </p>
         </div>
         {status.data && (
