@@ -1637,10 +1637,25 @@ export default function IrrigationSetupPage() {
       </header>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="systems">Systems</TabsTrigger>
-          <TabsTrigger value="valves">Valves</TabsTrigger>
-          <TabsTrigger value="connections">Connections</TabsTrigger>
+        <TabsList className="h-auto w-full justify-start gap-1 rounded-lg border border-border bg-muted/60 p-1 sm:w-auto">
+          <TabsTrigger
+            value="systems"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Systems
+          </TabsTrigger>
+          <TabsTrigger
+            value="valves"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Valves
+          </TabsTrigger>
+          <TabsTrigger
+            value="connections"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Connections
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="systems" className="mt-4">
           <SystemsTab vineyardId={selectedVineyardId} />
