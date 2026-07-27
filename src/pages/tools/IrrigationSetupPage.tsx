@@ -538,20 +538,39 @@ function pct(v: number | null | undefined, digits = 1) {
   return v == null ? "—" : `${Number(v).toFixed(digits)}%`;
 }
 
-/** Short status text for a valve's saved connection configuration. */
+/** Allocation method label for a valve's saved configuration. */
+function valveMethodText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "…";
+  if (!s.configured) return "—";
+  if (s.uses_rows) return "Rows";
+  return ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"];
+}
+
+/** Connections count text — always includes the number, never a bare "Rows". */
+function valveConnectionsText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "…";
+  if (!s.configured) return "No connections";
+  const blocks = `${s.block_count} block${s.block_count === 1 ? "" : "s"}`;
+  if (s.uses_rows) {
+    if (!s.row_count) return `No rows assigned · ${blocks}`;
+    return `${s.row_count} row${s.row_count === 1 ? "" : "s"} · ${blocks}`;
+  }
+  return blocks;
+}
+
+/** Short combined status text used in dropdowns. */
 function valveStatusText(s: ValveConnectionSummary | undefined): string {
   if (!s || s.loading) return "…";
   if (!s.configured) return "Not configured";
-  if (s.uses_rows) {
-    if (!s.row_count) return "Rows · no rows assigned";
-    return `${s.row_count} row${s.row_count === 1 ? "" : "s"} · ${s.block_count} block${
-      s.block_count === 1 ? "" : "s"
-    }`;
-  }
-  return `${ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]} · ${s.block_count} block${
-    s.block_count === 1 ? "" : "s"
-  }`;
+  return `${valveMethodText(s)} · ${valveConnectionsText(s)}`;
 }
+
+function valveReadinessText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "Checking…";
+  if (!s.configured) return "Setup required";
+  return valveIsReady(s) ? "Ready" : "Needs attention";
+}
+
 
 function valveIsReady(s: ValveConnectionSummary | undefined): boolean {
   if (!s || !s.configured) return false;
