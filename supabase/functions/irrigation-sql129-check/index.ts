@@ -44,12 +44,21 @@ Deno.serve(async (req) => {
   });
 
   // Vineyard + valve discovery
-  const { data: vineyards } = await user
-    .from("vineyards")
-    .select("id, name")
-    .ilike("name", body.vineyard ?? "%Stockmans Ridge%");
-  const vineyardId = vineyards?.[0]?.id;
-  out.vineyard = vineyards?.[0];
+  const { data: vineyards } = await user.from("vineyards").select("id, name");
+  out.all_vineyards = vineyards;
+  const rpcv = async (name: string, args: Record<string, unknown>) => {
+    const { data, error } = await (user as any).rpc(name, args);
+    return error ? { error: error.message, code: (error as any).code } : data;
+  };
+  const probe: any[] = [];
+  for (const v of vineyards ?? []) {
+    const r = await rpcv("list_irrigation_valves", { p_vineyard_id: v.id, p_include_inactive: true });
+    probe.push({ vineyard: v.name, id: v.id, valves: Array.isArray(r) ? r.map((x: any) => x.name) : r });
+  }
+  out.valve_probe = probe;
+  const hit = probe.find((p) => Array.isArray(p.valves) && p.valves.length > 0);
+  const vineyardId = body.vineyard_id ?? hit?.id;
+  out.vineyard = { id: vineyardId, name: hit?.vineyard };
   if (!vineyardId) return json(out);
 
   const rpc0 = async (name: string, args: Record<string, unknown>) => {
