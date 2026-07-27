@@ -66,6 +66,63 @@ export interface AvailableRowBlock {
 const numOrNull = (v: unknown): number | null =>
   v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
 
+const boolOrNull = (v: unknown): boolean | null =>
+  v == null ? null : v === true || v === "true" || v === 1;
+
+// --- SQL 127 basis metadata -------------------------------------------------
+
+const VINE_BASIS_LABELS: Record<string, string> = {
+  block_total_by_row_length: "Configured block total distributed by row length",
+  block_vine_count_by_row_length: "Configured block total distributed by row length",
+  block_total: "Configured block total distributed by row length",
+  row_length_and_vine_spacing: "Estimated from row length and vine spacing",
+  vine_spacing: "Estimated from row length and vine spacing",
+  row_length: "Estimated from row length and vine spacing",
+  exact_row_count: "Exact row count",
+  row_vine_count: "Exact row count",
+  exact: "Exact row count",
+  unavailable: "Unavailable",
+  none: "Unavailable",
+};
+
+const EMITTER_BASIS_LABELS: Record<string, string> = {
+  row_length_and_emitter_spacing: "Estimated from row length and emitter spacing",
+  emitter_spacing: "Estimated from row length and emitter spacing",
+  row_length: "Estimated from row length and emitter spacing",
+  configured_exact_count: "Configured exact count",
+  exact_emitter_count: "Configured exact count",
+  exact: "Configured exact count",
+  unavailable: "Unavailable",
+  none: "Unavailable",
+};
+
+function basisLabel(map: Record<string, string>, basis: string | null | undefined): string | null {
+  if (!basis) return null;
+  return (
+    map[basis] ?? basis.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+  );
+}
+
+/** User-facing explanation of the server-returned vine-count basis. */
+export const vineBasisLabel = (b: string | null | undefined) => basisLabel(VINE_BASIS_LABELS, b);
+/** User-facing explanation of the server-returned emitter-count basis. */
+export const emitterBasisLabel = (b: string | null | undefined) =>
+  basisLabel(EMITTER_BASIS_LABELS, b);
+
+/**
+ * Formats a server-returned count. `≈` is used only when the backend marks the
+ * value as estimated; null is never rendered as zero.
+ */
+export function formatEstimate(
+  value: number | null | undefined,
+  isEstimated: boolean | null | undefined,
+): string | null {
+  if (value == null) return null;
+  const n = Math.round(Number(value)).toLocaleString();
+  return isEstimated ? `≈${n}` : n;
+}
+
+
 /** True when the payload contains a usable lat/lng pair for a row endpoint. */
 function hasPoint(...candidates: unknown[]): boolean {
   for (const c of candidates) {
