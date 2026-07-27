@@ -398,12 +398,20 @@ function ValveDialog({
   );
 }
 
-function ValvesTab({ vineyardId }: { vineyardId: string | null }) {
+function ValvesTab({
+  vineyardId,
+  onConfigure,
+}: {
+  vineyardId: string | null;
+  onConfigure: (valveId: string) => void;
+}) {
   const systems = useIrrigationSystems(vineyardId);
   const valves = useIrrigationValves(vineyardId, true);
   const update = useUpdateValve(vineyardId);
   const [editing, setEditing] = useState<IrrigationValve | null>(null);
   const [open, setOpen] = useState(false);
+  const valveIds = useMemo(() => (valves.data ?? []).map((v) => v.id), [valves.data]);
+  const summaries = useValveConnectionSummaries(vineyardId, valveIds);
 
   return (
     <Card>
