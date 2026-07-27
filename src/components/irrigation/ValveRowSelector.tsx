@@ -81,16 +81,17 @@ function RowLine({
         {row.vine_count != null ? (
           row.vine_count.toLocaleString()
         ) : (
-          <Unavailable tip="Per-row vine counts have not been configured." />
+          <Unavailable label={PENDING_LABEL} tip={VINE_TIP} />
         )}
       </span>
       <span className="hidden text-xs tabular-nums text-muted-foreground sm:block">
         {row.emitter_count != null ? (
           row.emitter_count.toLocaleString()
         ) : (
-          <Unavailable tip="Per-row emitter counts have not been configured." />
+          <Unavailable label={PENDING_LABEL} tip={EMITTER_TIP} />
         )}
       </span>
+
       <span className="truncate text-xs text-muted-foreground">
         {row.other_valve_names.length > 0 ? `Also on ${row.other_valve_names.join(", ")}` : ""}
       </span>
