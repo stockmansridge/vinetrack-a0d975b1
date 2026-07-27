@@ -453,13 +453,9 @@ function ValvesTab({
                     <span className="truncate text-sm font-medium">{v.name}</span>
                     {!v.is_active && <Badge variant="outline">Inactive</Badge>}
                     <Badge variant="outline">
-                      {s?.configured
-                        ? s.uses_rows
-                          ? "Rows"
-                          : ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]
-                        : "No method"}
+                      Allocation method: {s?.configured ? valveMethodText(s) : "None"}
                     </Badge>
-                    <Badge variant="secondary">{valveStatusText(s)}</Badge>
+                    <Badge variant="secondary">{valveConnectionsText(s)}</Badge>
                     <Badge variant={ready ? "default" : "outline"}>
                       {s?.loading
                         ? "Checking…"
@@ -469,6 +465,7 @@ function ValvesTab({
                             ? "Needs attention"
                             : "Setup required"}
                     </Badge>
+
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {v.system_name} ·{" "}
@@ -538,20 +535,39 @@ function pct(v: number | null | undefined, digits = 1) {
   return v == null ? "—" : `${Number(v).toFixed(digits)}%`;
 }
 
-/** Short status text for a valve's saved connection configuration. */
+/** Allocation method label for a valve's saved configuration. */
+function valveMethodText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "…";
+  if (!s.configured) return "—";
+  if (s.uses_rows) return "Rows";
+  return ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"];
+}
+
+/** Connections count text — always includes the number, never a bare "Rows". */
+function valveConnectionsText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "…";
+  if (!s.configured) return "No connections";
+  const blocks = `${s.block_count} block${s.block_count === 1 ? "" : "s"}`;
+  if (s.uses_rows) {
+    if (!s.row_count) return `No rows assigned · ${blocks}`;
+    return `${s.row_count} row${s.row_count === 1 ? "" : "s"} · ${blocks}`;
+  }
+  return blocks;
+}
+
+/** Short combined status text used in dropdowns. */
 function valveStatusText(s: ValveConnectionSummary | undefined): string {
   if (!s || s.loading) return "…";
   if (!s.configured) return "Not configured";
-  if (s.uses_rows) {
-    if (!s.row_count) return "Rows · no rows assigned";
-    return `${s.row_count} row${s.row_count === 1 ? "" : "s"} · ${s.block_count} block${
-      s.block_count === 1 ? "" : "s"
-    }`;
-  }
-  return `${ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]} · ${s.block_count} block${
-    s.block_count === 1 ? "" : "s"
-  }`;
+  return `${valveMethodText(s)} · ${valveConnectionsText(s)}`;
 }
+
+function valveReadinessText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "Checking…";
+  if (!s.configured) return "Setup required";
+  return valveIsReady(s) ? "Ready" : "Needs attention";
+}
+
 
 function valveIsReady(s: ValveConnectionSummary | undefined): boolean {
   if (!s || !s.configured) return false;
@@ -733,17 +749,25 @@ function RowsConnection({
           <div>
             <span className="text-muted-foreground">Saved:</span>{" "}
             <strong className="tabular-nums">
-              {savedIds.size} of {totalRows} rows
-            </strong>
+              {savedIds.size} row{savedIds.size === 1 ? "" : "s"}
+            </strong>{" "}
+            <span className="text-muted-foreground">
+              of {totalRows} mapped rows across the vineyard
+            </span>
           </div>
           <div>
-            <span className="text-muted-foreground">Draft:</span>{" "}
+            <span className="text-muted-foreground">Draft total:</span>{" "}
             <strong className="tabular-nums">
-              {selected.size} of {totalRows} rows selected
+              {selected.size} row{selected.size === 1 ? "" : "s"} selected across the vineyard
             </strong>
-            {dirty ? " · unsaved changes" : " · matches saved configuration"}
+            <span className="text-muted-foreground">
+              {" "}
+              (of {totalRows} mapped rows)
+              {dirty ? " · unsaved changes" : " · matches saved configuration"}
+            </span>
           </div>
         </div>
+
         <div className="flex flex-wrap items-center gap-2">
           {savedIds.size > 0 && (
             <Button variant="outline" onClick={clearSaved} disabled={clear.isPending}>
@@ -802,24 +826,28 @@ function RowsConnection({
           </Badge>
         </div>
         <div className="text-sm">
-          Rows:{" "}
+          Allocation method: <strong>Rows</strong>
+          {" · "}Rows:{" "}
           <strong className="tabular-nums">
-            {shownIds.size} / {totalRows}
-          </strong>
+            {shownIds.size} row{shownIds.size === 1 ? "" : "s"}
+          </strong>{" "}
+          <span className="text-muted-foreground">of {totalRows} mapped across the vineyard</span>
           {" · "}Blocks supplied:{" "}
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
         </div>
         {shownRows.length > 0 && (
           <div className="text-xs text-muted-foreground">
-            Rows {formatRowRanges(shownRows.map((r) => r!.row_number))}
+            {dirty ? "Draft rows" : "Saved rows"}:{" "}
+            {formatRowRanges(shownRows.map((r) => r!.row_number))}
           </div>
         )}
+
 
         <div className="rounded-lg border border-border">
           <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Block</span>
-            <span className="text-right">Selected rows</span>
+            <span className="text-right">Block rows selected</span>
             <span className="text-right">Block coverage</span>
             <span className="text-right">Share of valve water</span>
           </div>
@@ -869,10 +897,21 @@ function ConnectionsOverview({
   onSelect: (id: string) => void;
 }) {
   if (valves.length === 0) return null;
+  const cols =
+    "grid w-full grid-cols-[auto_minmax(0,1.2fr)_minmax(0,140px)_minmax(0,1fr)_minmax(0,130px)] items-center gap-2";
   return (
     <div className="rounded-lg border border-border">
       <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         Configured valves
+      </div>
+      <div
+        className={`${cols} border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`}
+      >
+        <span />
+        <span>Valve</span>
+        <span>Allocation method</span>
+        <span>Connections</span>
+        <span>Status</span>
       </div>
       {valves.map((v) => {
         const s = summaries[v.id];
@@ -882,7 +921,7 @@ function ConnectionsOverview({
             key={v.id}
             type="button"
             onClick={() => onSelect(v.id)}
-            className={`grid w-full grid-cols-[auto_minmax(0,1fr)_110px_minmax(0,1fr)] items-center gap-2 border-b border-border px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 ${
+            className={`${cols} border-b border-border px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 ${
               v.id === selectedValveId ? "bg-sidebar-accent" : ""
             }`}
           >
@@ -892,20 +931,20 @@ function ConnectionsOverview({
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             )}
             <span className="truncate font-medium">{v.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {s?.configured
-                ? s.uses_rows
-                  ? "Rows"
-                  : ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]
-                : "—"}
+            <span className="truncate text-xs text-muted-foreground">{valveMethodText(s)}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {valveConnectionsText(s)}
             </span>
-            <span className="truncate text-xs text-muted-foreground">{valveStatusText(s)}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {valveReadinessText(s)}
+            </span>
           </button>
         );
       })}
     </div>
   );
 }
+
 
 function ConnectionsTab({
   vineyardId,
@@ -1073,38 +1112,44 @@ function ConnectionsTab({
             ) : !currentSummary.configured ? (
               <div className="text-muted-foreground">No connections configured</div>
             ) : (
-              <dl className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
-                <div>
-                  <span className="text-muted-foreground">Method: </span>
-                  {currentSummary.uses_rows
-                    ? "Rows"
-                    : ALLOCATION_METHOD_LABEL[currentSummary.method ?? "manual_percentage"]}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Rows: </span>
-                  <span className="tabular-nums">
-                    {currentSummary.uses_rows ? currentSummary.row_count : "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Blocks: </span>
-                  <span className="tabular-nums">{currentSummary.block_count}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Allocation basis: </span>
-                  {weightingBasisLabel(currentSummary.weighting_basis)}
-                </div>
-                {currentSummary.last_saved && (
+              <>
+                <dl className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
                   <div>
-                    <span className="text-muted-foreground">Last saved: </span>
-                    {new Date(currentSummary.last_saved).toLocaleDateString(undefined, {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
+                    <span className="text-muted-foreground">Method: </span>
+                    {valveMethodText(currentSummary)}
+                  </div>
+                  {currentSummary.uses_rows && (
+                    <div>
+                      <span className="text-muted-foreground">Rows: </span>
+                      <span className="tabular-nums">{currentSummary.row_count}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Blocks: </span>
+                    <span className="tabular-nums">{currentSummary.block_count}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Allocation basis: </span>
+                    {weightingBasisLabel(currentSummary.weighting_basis)}
+                  </div>
+                  {currentSummary.last_saved && (
+                    <div>
+                      <span className="text-muted-foreground">Last saved: </span>
+                      {new Date(currentSummary.last_saved).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </div>
+                  )}
+                </dl>
+                {currentSummary.uses_rows && currentSummary.row_numbers.length > 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Saved rows: {formatRowRanges(currentSummary.row_numbers)}
                   </div>
                 )}
-              </dl>
+              </>
+
             )}
           </div>
         )}

@@ -35,10 +35,18 @@ function Unavailable({ tip, label = "Not available" }: { tip: string; label?: st
           {label}
         </span>
       </TooltipTrigger>
-      <TooltipContent>{tip}</TooltipContent>
+      <TooltipContent className="max-w-xs">{tip}</TooltipContent>
     </Tooltip>
   );
 }
+
+/** Placeholder until the shared SQL 127 estimates land — never computed locally. */
+const PENDING_LABEL = "Calculation pending backend update";
+const VINE_TIP =
+  "Estimated vine count will be calculated from the row length and the block's Vineyard Setup information.";
+const EMITTER_TIP =
+  "Estimated emitter count will be calculated from row length and the block's configured emitter spacing.";
+
 
 function RowLine({
   row,
@@ -50,7 +58,7 @@ function RowLine({
   onToggle: (v: boolean) => void;
 }) {
   return (
-    <label className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,130px)_repeat(2,minmax(0,110px))_minmax(0,1.2fr)]">
+    <label className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,120px)_repeat(2,minmax(0,150px))_minmax(0,1.2fr)]">
       <Checkbox
         checked={checked}
         onCheckedChange={(c) => onToggle(!!c)}
@@ -73,16 +81,17 @@ function RowLine({
         {row.vine_count != null ? (
           row.vine_count.toLocaleString()
         ) : (
-          <Unavailable tip="Per-row vine counts have not been configured." />
+          <Unavailable label={PENDING_LABEL} tip={VINE_TIP} />
         )}
       </span>
       <span className="hidden text-xs tabular-nums text-muted-foreground sm:block">
         {row.emitter_count != null ? (
           row.emitter_count.toLocaleString()
         ) : (
-          <Unavailable tip="Per-row emitter counts have not been configured." />
+          <Unavailable label={PENDING_LABEL} tip={EMITTER_TIP} />
         )}
       </span>
+
       <span className="truncate text-xs text-muted-foreground">
         {row.other_valve_names.length > 0 ? `Also on ${row.other_valve_names.join(", ")}` : ""}
       </span>
@@ -260,7 +269,7 @@ export function ValveRowSelector({
 
                 {!isCollapsed && (
                   <>
-                    <div className="hidden grid-cols-[auto_minmax(0,1.2fr)_minmax(0,130px)_repeat(2,minmax(0,110px))_minmax(0,1.2fr)] gap-3 border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+                    <div className="hidden grid-cols-[auto_minmax(0,1.2fr)_minmax(0,120px)_repeat(2,minmax(0,150px))_minmax(0,1.2fr)] gap-3 border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
                       <span />
                       <span>Row</span>
                       <span>Length</span>
