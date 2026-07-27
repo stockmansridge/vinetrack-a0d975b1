@@ -540,8 +540,8 @@ function pct(v: number | null | undefined, digits = 1) {
 }
 
 /**
- * Renders a SQL 127 estimate. Never shows a missing value as zero, and never
- * invents a total for an unsaved draft.
+ * Renders a server estimate. Never shows a missing value as zero. A dirty draft
+ * has no server figures yet, which is stated plainly rather than as an error.
  */
 function estimateText(
   value: number | null | undefined,
@@ -550,7 +550,7 @@ function estimateText(
 ): string {
   const text = formatEstimate(value ?? null, isEstimated ?? true);
   if (text != null) return text;
-  return dirty ? "Pending save" : "Not available";
+  return dirty ? "Recalculated on save" : "Not available";
 }
 
 /** Sums server block totals only when every block reports one. */
@@ -564,15 +564,47 @@ function sumSummary(
   return blocks.reduce((s, b) => s + Number(b[key]), 0);
 }
 
-/** Saved-configuration estimate, flagging rows the backend could not estimate. */
-function savedEstimateText(
-  value: number | null,
+/**
+ * Saved-configuration estimate. The available total always shows; rows the
+ * backend could not estimate are reported alongside it rather than collapsing
+ * the whole figure to "Not available".
+ */
+function savedEstimate(
+  total: number | null,
   isEstimated: boolean | null,
-  missingRows: number,
-): string {
-  const text = formatEstimate(value, isEstimated ?? true);
-  if (text == null) return missingRows > 0 ? "Partially unavailable" : "Not available";
-  return missingRows > 0 ? `${text} · partially unavailable` : text;
+  rowsWithValue: number,
+  rowsMissing: number,
+  noun: string,
+): { primary: string; secondary: string | null } {
+  return savedEstimateLines(
+    {
+      total,
+      rows_with_value: rowsWithValue,
+      rows_missing: rowsMissing,
+      is_estimated: isEstimated,
+      basis: null,
+    },
+    rowsWithValue + rowsMissing,
+    noun,
+  );
+}
+
+/** Two-line estimate cell used in the saved-configuration surfaces. */
+function SavedEstimate({
+  lines,
+  className,
+}: {
+  lines: { primary: string; secondary: string | null };
+  className?: string;
+}) {
+  return (
+    <span className={className}>
+      <span className="tabular-nums">{lines.primary}</span>
+      {lines.secondary && (
+        <span className="block text-xs text-muted-foreground">{lines.secondary}</span>
+      )}
+    </span>
+  );
 }
 
 
