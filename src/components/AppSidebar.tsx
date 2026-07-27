@@ -63,6 +63,8 @@ import {
 } from "@/components/ui/sidebar";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
+import { useIrrigationAccess } from "@/lib/irrigationQuery";
+
 
 type NavItem = { title: string; url: string; icon: any; soon?: boolean };
 
