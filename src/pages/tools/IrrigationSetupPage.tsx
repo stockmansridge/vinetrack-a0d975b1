@@ -789,6 +789,13 @@ function RowsConnection({
   ).filter(Boolean);
 
   const totalRows = allRows.length;
+  // The vineyard row list can fail independently of the saved configuration
+  // (e.g. a backend function error). Never present that as "0 mapped rows".
+  const rowsUnavailable = !!available.error || (available.isLoading && totalRows === 0);
+  const mappedText = rowsUnavailable
+    ? "vineyard row list unavailable"
+    : `${totalRows} mapped rows across the vineyard`;
+
 
   return (
     <div className="space-y-4">
