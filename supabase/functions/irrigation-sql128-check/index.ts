@@ -63,6 +63,22 @@ Deno.serve(async (req) => {
     });
   }
 
+  if (body.save_valve_id && Array.isArray(body.save_row_ids)) {
+    await run("save_result", "set_irrigation_valve_rows", {
+      p_vineyard_id: vineyardId,
+      p_valve_id: body.save_valve_id,
+      p_row_ids: body.save_row_ids,
+    });
+    await run("save_valve_rows_after", "list_irrigation_valve_rows", {
+      p_vineyard_id: vineyardId,
+      p_valve_id: body.save_valve_id,
+    });
+    await run("save_valve_blocks_after", "list_irrigation_valve_blocks", {
+      p_vineyard_id: vineyardId,
+      p_valve_id: body.save_valve_id,
+    });
+  }
+
   await user.auth.signOut();
 
   return new Response(JSON.stringify(out, null, 2), {
