@@ -6,7 +6,12 @@
 // renders what the RPCs return.
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
-import { extractSelectedRowIds } from "@/lib/irrigationRows";
+import {
+  extractSelectedRowIds,
+  normaliseServerRowSummary,
+  type ServerRowBlockSummary,
+} from "@/lib/irrigationRows";
+
 
 
 const rpc = (name: string, args: Record<string, unknown>) =>
