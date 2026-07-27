@@ -43,6 +43,9 @@ export interface AvailableRow {
   row_length_m: number | null;
   vine_count: number | null;
   emitter_count: number | null;
+  /** Whether the RPC payload carries usable mapped coordinates for this row. */
+  has_start_point: boolean;
+  has_end_point: boolean;
   /** Names of other valves already linked to this row (overlap warning source). */
   other_valve_names: string[];
 }
@@ -56,6 +59,36 @@ export interface AvailableRowBlock {
 
 const numOrNull = (v: unknown): number | null =>
   v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
+
+/** True when the payload contains a usable lat/lng pair for a row endpoint. */
+function hasPoint(...candidates: unknown[]): boolean {
+  for (const c of candidates) {
+    if (c == null) continue;
+    if (typeof c === "number" && Number.isFinite(c)) return true;
+    if (typeof c === "string" && c.trim() !== "") return true;
+    if (Array.isArray(c)) {
+      if (c.length >= 2 && c.slice(0, 2).every((n) => Number.isFinite(Number(n)))) return true;
+      continue;
+    }
+    if (typeof c === "object") {
+      const o = c as Record<string, unknown>;
+      const lat = numOrNull(o.lat ?? o.latitude ?? o.y);
+      const lng = numOrNull(o.lng ?? o.lon ?? o.longitude ?? o.x);
+      if (lat != null && lng != null) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Descriptive block coverage: how much of a block's mapped rows are linked.
+ * This is NOT the hydraulic allocation — that only ever comes from the server.
+ */
+export function blockCoveragePercent(selected: number, total: number): number | null {
+  if (!total) return null;
+  return (selected / total) * 100;
+}
+
 
 function otherValves(raw: any, currentValveId?: string | null): string[] {
   // Live SQL 126 shape: connected_valve_names + connected_valve_ids.
