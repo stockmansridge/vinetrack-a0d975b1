@@ -573,6 +573,9 @@ function savedEstimateText(
   const text = formatEstimate(value, isEstimated ?? true);
   if (text == null) return missingRows > 0 ? "Partially unavailable" : "Not available";
   return missingRows > 0 ? `${text} · partially unavailable` : text;
+}
+
+
 
 
 
