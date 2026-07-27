@@ -524,6 +524,71 @@ export function useSetValveBlocks(vineyardId: string | null) {
 }
 
 // ---------------------------------------------------------------------------
+// Row-based allocation (SQL 126)
+// ---------------------------------------------------------------------------
+
+export interface SetValveRowsResult {
+  valve_id?: string;
+  row_count?: number | null;
+  weighting_basis?: string | null;
+  warnings?: string[] | null;
+  blocks?: Array<{
+    block_id: string;
+    block_name?: string | null;
+    row_count?: number | null;
+    allocation_percentage?: number | null;
+    rows?: Array<Record<string, any>> | null;
+  }> | null;
+  [key: string]: any;
+}
+
+/** All vineyard rows (from paddocks.rows) that can be linked to a valve. */
+export function useAvailableRows(vineyardId: string | null, valveId: string | null) {
+  return useQuery({
+    queryKey: ["irrigation", "available-rows", vineyardId, valveId],
+    enabled: !!vineyardId && !!valveId,
+    queryFn: () =>
+      call<unknown>("list_irrigation_available_rows", {
+        p_vineyard_id: vineyardId,
+        p_valve_id: valveId,
+      }),
+  });
+}
+
+/** Rows currently linked to a valve — authoritative selection source. */
+export function useValveRows(vineyardId: string | null, valveId: string | null) {
+  return useQuery({
+    queryKey: ["irrigation", "valve-rows", vineyardId, valveId],
+    enabled: !!vineyardId && !!valveId,
+    queryFn: () =>
+      call<unknown>("list_irrigation_valve_rows", {
+        p_vineyard_id: vineyardId,
+        p_valve_id: valveId,
+      }),
+  });
+}
+
+/**
+ * Saves the exact row UUID set for a valve. SQL 126 derives and writes the
+ * corresponding block connections, so set_irrigation_valve_blocks is not
+ * called for row-based saves.
+ */
+export function useSetValveRows(vineyardId: string | null) {
+  const invalidate = useIrrigationInvalidate(vineyardId);
+  return useMutation({
+    mutationFn: (input: { valve_id: string; row_ids: string[] }) =>
+      call<SetValveRowsResult>("set_irrigation_valve_rows", {
+        p_vineyard_id: vineyardId,
+        p_valve_id: input.valve_id,
+        p_row_ids: input.row_ids,
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+
+
+// ---------------------------------------------------------------------------
 // Recording
 // ---------------------------------------------------------------------------
 
