@@ -101,6 +101,7 @@ export interface IrrigationValveBlock {
   uses_rows?: boolean | null;
   row_count?: number | null;
   weighting_basis?: string | null;
+  updated_at?: string | null;
 }
 
 
