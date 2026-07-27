@@ -63,6 +63,8 @@ import {
 } from "@/components/ui/sidebar";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
+import { useIrrigationAccess } from "@/lib/irrigationQuery";
+
 
 type NavItem = { title: string; url: string; icon: any; soon?: boolean };
 
@@ -81,6 +83,15 @@ const work: NavItem[] = [
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
+];
+
+// Irrigation Records — Phase 1 is gated server-side (System Admins only).
+const irrigationWork: NavItem[] = [
+  { title: "Irrigation Records", url: "/irrigation", icon: Droplet },
+];
+const irrigationReports: NavItem[] = [
+  { title: "Irrigation Reports", url: "/reports/irrigation", icon: Droplet },
+
 ];
 
 // "Equipment" — physical assets and fuel
@@ -157,6 +168,7 @@ export function AppSidebar() {
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { hasAccess: hasIrrigationRecords } = useIrrigationAccess(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -167,6 +179,7 @@ export function AppSidebar() {
     items.filter((i) => canAccessRoute(i.url, currentRole));
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+
 
   const renderItems = (items: NavItem[]) =>
     items.map((item) => (
@@ -252,10 +265,19 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {renderGroup("Dashboard", visible(dashboard))}
-        {renderGroup("Work", visible(work))}
+        {renderGroup("Work", visible(hasIrrigationRecords ? [...work, ...irrigationWork] : work))}
         {renderGroup("Equipment", visible(equipment), false)}
         {renderGroup("Tools", visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin] : tools), false)}
-        {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports), false)}
+        {renderGroup(
+          "Reports",
+          visible([
+            ...reports,
+            ...(isAdmin ? reportsAdmin : []),
+            ...(hasIrrigationRecords ? irrigationReports : []),
+          ]),
+          false,
+        )}
+
         {renderGroup("Setup", visible(setup), false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 

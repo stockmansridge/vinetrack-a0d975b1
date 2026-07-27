@@ -63,7 +63,14 @@ import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import SatelliteMappingPage from "./pages/tools/SatelliteMappingPage";
 import PruningTrackerPage from "./pages/tools/PruningTrackerPage";
 import FertiliserCalculatorPage from "./pages/tools/FertiliserCalculatorPage";
+import IrrigationRecordsPage from "./pages/tools/IrrigationRecordsPage";
+import IrrigationSetupPage from "./pages/tools/IrrigationSetupPage";
+import IrrigationRecordPage from "./pages/tools/IrrigationRecordPage";
+import IrrigationHistoryPage from "./pages/tools/IrrigationHistoryPage";
+import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
+import { RequireIrrigationAccess } from "./components/irrigation/RequireIrrigationAccess";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
+
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
 import FuelPage from "./pages/FuelPage";
@@ -179,6 +186,14 @@ const App = () => (
                     <Route path="/tools/pruning-tracker" element={<PruningTrackerPage />} />
                     <Route path="/tools/fertiliser-calculator" element={<FertiliserCalculatorPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
+                    <Route element={<RequireIrrigationAccess />}>
+                      <Route path="/irrigation" element={<IrrigationRecordsPage />} />
+                      <Route path="/irrigation/setup" element={<IrrigationSetupPage />} />
+                      <Route path="/irrigation/record" element={<IrrigationRecordPage />} />
+                      <Route path="/irrigation/history" element={<IrrigationHistoryPage />} />
+                      <Route path="/reports/irrigation" element={<IrrigationReportsPage />} />
+                    </Route>
+
                     <Route
                       path="/tools/yield-estimation"
                       element={
