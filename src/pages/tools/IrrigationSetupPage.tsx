@@ -653,6 +653,19 @@ function valveIsReady(s: ValveConnectionSummary | undefined): boolean {
   return s.allocation_total != null && Math.abs(s.allocation_total - 100) <= 0.05;
 }
 
+/** Stable, de-duplicated, sorted UUID list — the only shape draft/saved compare on. */
+function normaliseIds(ids: Iterable<string>): string[] {
+  return Array.from(new Set(Array.from(ids).map((id) => String(id)))).sort();
+}
+
+/** Set equality on UUID strings; ignores ordering and duplicates. */
+function sameIds(a: Iterable<string>, b: Iterable<string>): boolean {
+  const x = normaliseIds(a);
+  const y = normaliseIds(b);
+  return x.length === y.length && x.every((id, i) => id === y[i]);
+}
+
+
 function RowsConnection({
   vineyardId,
   valveId,
@@ -671,29 +684,55 @@ function RowsConnection({
   const clear = useSetValveBlocks(vineyardId);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  /** Valve whose saved rows the editor has already hydrated from. */
+  const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
+  /** Baseline = the saved UUID set the draft was hydrated from. */
+  const [baseline, setBaseline] = useState<string[]>([]);
   const [result, setResult] = useState<SetValveRowsResult | null>(null);
 
-  // Preselect exactly the linked row UUIDs (never inferred from row_start/end).
-  useEffect(() => {
-    if (!linked.data || loadedFor === valveId) return;
-    setSelected(new Set(extractSelectedRowIds(linked.data)));
-    setLoadedFor(valveId);
-    onDirtyChange(false);
-  }, [linked.data, valveId, loadedFor, onDirtyChange]);
-
-  const savedIds = useMemo(
-    () => new Set(extractSelectedRowIds(linked.data ?? [])),
+  // Saved row UUIDs exactly as returned by list_irrigation_valve_rows.
+  const savedIdList = useMemo(
+    () => normaliseIds(extractSelectedRowIds(linked.data ?? [])),
     [linked.data],
   );
-  const dirty =
-    savedIds.size !== selected.size ||
-    Array.from(selected).some((id) => !savedIds.has(id));
+  const savedIds = useMemo(() => new Set(savedIdList), [savedIdList]);
+
+  // The editor may not judge "unsaved changes" until every query backing the
+  // saved configuration has resolved — otherwise hydration looks like an edit.
+  const queriesReady =
+    linked.data !== undefined &&
+    !linked.isLoading &&
+    !available.isLoading &&
+    !savedBlocks.isLoading;
+  const editorInitialised = queriesReady && initialisedFor === valveId;
+
+  // Hydration: server → draft. Never treated as a user edit.
+  useEffect(() => {
+    if (!queriesReady) return;
+    if (initialisedFor !== valveId) {
+      setSelected(new Set(savedIdList));
+      setBaseline(savedIdList);
+      setResult(null);
+      setInitialisedFor(valveId);
+      return;
+    }
+    // A refetch while the draft is clean re-baselines silently; a refetch while
+    // the user has genuine unsaved changes leaves their draft alone.
+    if (!sameIds(baseline, savedIdList) && sameIds(baseline, Array.from(selected))) {
+      setSelected(new Set(savedIdList));
+      setBaseline(savedIdList);
+    }
+  }, [queriesReady, valveId, initialisedFor, savedIdList, baseline, selected]);
+
+  const dirty = editorInitialised && !sameIds(Array.from(selected), baseline);
+  /** Saved configuration changed on the server while a draft was in progress. */
+  const staleBaseline = editorInitialised && dirty && !sameIds(baseline, savedIdList);
 
   useEffect(() => {
     onDirtyChange(dirty);
     guardChange(dirty);
   }, [dirty, onDirtyChange, guardChange]);
+
 
   const blocks = useMemo(
     () => normaliseAvailableRows(available.data, valveId),
@@ -805,8 +844,12 @@ function RowsConnection({
         row_ids: Array.from(selected),
       });
       setResult(res ?? null);
-      setLoadedFor(null);
-      await Promise.all([linked.refetch(), savedBlocks.refetch()]);
+      const [refreshed] = await Promise.all([linked.refetch(), savedBlocks.refetch()]);
+      // The server response is the new baseline for both saved and draft state.
+      const serverIds = normaliseIds(extractSelectedRowIds(refreshed.data ?? []));
+      setSelected(new Set(serverIds));
+      setBaseline(serverIds);
+      setInitialisedFor(valveId);
       toast({ title: "Valve rows saved" });
     } catch (e) {
       toast({
@@ -819,9 +862,8 @@ function RowsConnection({
 
   /** Discards the unsaved selection only — the saved configuration is untouched. */
   const resetDraft = () => {
-    setSelected(new Set(savedIds));
+    setSelected(new Set(baseline));
     setResult(null);
-    onDirtyChange(false);
   };
 
   /**
@@ -842,15 +884,14 @@ function RowsConnection({
       await save.mutateAsync({ valve_id: valveId, row_ids: [] });
       await clear.mutateAsync({ valve_id: valveId, blocks: [] });
       setResult(null);
-      setSelected(new Set());
       const [refreshed] = await Promise.all([
         linked.refetch(),
         savedBlocks.refetch(),
       ]);
-      // Re-run the preselect effect against the freshly cleared server state.
-      setSelected(new Set(extractSelectedRowIds(refreshed.data ?? [])));
-      setLoadedFor(valveId);
-      onDirtyChange(false);
+      const serverIds = normaliseIds(extractSelectedRowIds(refreshed.data ?? []));
+      setSelected(new Set(serverIds));
+      setBaseline(serverIds);
+      setInitialisedFor(valveId);
       toast({ title: "Connection deleted" });
     } catch (e) {
       toast({
@@ -860,6 +901,7 @@ function RowsConnection({
       });
     }
   };
+
 
   const warnings = Array.from(
     new Set([...(result?.warnings ?? []), ...savedSummary.warnings]),
@@ -896,7 +938,7 @@ function RowsConnection({
         currentValveId={valveId}
         selected={selected}
         onChange={setSelected}
-        loading={available.isLoading || linked.isLoading}
+        loading={!editorInitialised && !available.error && !linked.error}
         error={(available.error as Error) ?? (linked.error as Error) ?? null}
         weightingBasis={serverBasis}
         expandedBlockIds={savedBlockIds}
@@ -953,25 +995,33 @@ function RowsConnection({
           <div className="mb-1 flex items-center justify-between gap-2">
             <span className="text-sm font-semibold">Draft selection</span>
             <Badge variant={dirty ? "outline" : "secondary"}>
-              {dirty ? "Unsaved changes" : "Matches saved"}
+              {!editorInitialised ? "Loading…" : dirty ? "Unsaved changes" : "No unsaved changes"}
             </Badge>
           </div>
           <div className="text-sm">
-            <strong className="tabular-nums">
-              {selected.size} row{selected.size === 1 ? "" : "s"} selected
-            </strong>{" "}
-            <span className="text-muted-foreground">
-              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
-            </span>
+            {editorInitialised ? (
+              <>
+                <strong className="tabular-nums">
+                  {selected.size} row{selected.size === 1 ? "" : "s"} selected
+                </strong>{" "}
+                <span className="text-muted-foreground">
+                  ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Loading saved selection…</span>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={resetDraft} disabled={!dirty}>
-              Reset draft
-            </Button>
+            {dirty && (
+              <Button variant="outline" size="sm" onClick={resetDraft}>
+                Reset draft
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={submit}
-              disabled={save.isPending || selected.size === 0 || !dirty}
+              disabled={!editorInitialised || save.isPending || selected.size === 0 || !dirty}
             >
               {save.isPending ? "Saving…" : "Save connections"}
             </Button>
@@ -979,17 +1029,26 @@ function RowsConnection({
         </div>
       </div>
 
-      {selected.size === 0 && (
+      {staleBaseline && (
+        <PortalNotice
+          compact
+          variant="warning"
+          description="This valve's saved connection changed elsewhere while you have unsaved changes. Your draft has been kept — use Reset draft to load the latest saved rows, or Save connections to overwrite them."
+        />
+      )}
+
+      {editorInitialised && selected.size === 0 && (dirty || savedIds.size === 0) && (
         <PortalNotice
           compact
           variant="warning"
           description={
             savedIds.size > 0
-              ? "No rows are selected in the draft. The saved connection is still active — use Reset draft to bring back the saved rows, or Delete connection to remove it from this valve."
+              ? "No rows are selected in the draft. Your saved connection is still active. Use Reset draft to restore it, or Delete connection to remove it permanently."
               : "Tick the rows this valve waters, then choose Save connections."
           }
         />
       )}
+
 
       {missingLength.length > 0 && (
         <PortalNotice
