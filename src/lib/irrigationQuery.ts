@@ -542,18 +542,27 @@ export interface SetValveRowsResult {
   [key: string]: any;
 }
 
-/** All vineyard rows (from paddocks.rows) that can be linked to a valve. */
-export function useAvailableRows(vineyardId: string | null, valveId: string | null) {
+/**
+ * All vineyard rows (from paddocks.rows) that can be linked to a valve.
+ * Live SQL 126 signature: list_irrigation_available_rows(p_block_id, p_vineyard_id)
+ * — p_block_id is null to return every block's rows.
+ */
+export function useAvailableRows(
+  vineyardId: string | null,
+  valveId: string | null,
+  blockId: string | null = null,
+) {
   return useQuery({
-    queryKey: ["irrigation", "available-rows", vineyardId, valveId],
+    queryKey: ["irrigation", "available-rows", vineyardId, blockId],
     enabled: !!vineyardId && !!valveId,
     queryFn: () =>
       call<unknown>("list_irrigation_available_rows", {
         p_vineyard_id: vineyardId,
-        p_valve_id: valveId,
+        p_block_id: blockId,
       }),
   });
 }
+
 
 /** Rows currently linked to a valve — authoritative selection source. */
 export function useValveRows(vineyardId: string | null, valveId: string | null) {
