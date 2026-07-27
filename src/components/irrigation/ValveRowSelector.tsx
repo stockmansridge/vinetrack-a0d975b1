@@ -6,7 +6,7 @@
 // `set_irrigation_valve_rows` and the server response is rendered verbatim.
 // The only locally derived figure is "block coverage", which is descriptive
 // (selected rows ÷ available rows) and clearly labelled as such.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
