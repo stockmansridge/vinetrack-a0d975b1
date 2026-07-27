@@ -45,14 +45,17 @@ export type AllocationMethod =
   | "manual_percentage"
   | "emitter_count"
   | "vine_count"
-  | "irrigated_area";
+  | "irrigated_area"
+  | "rows";
 
 export const ALLOCATION_METHOD_LABEL: Record<AllocationMethod, string> = {
   manual_percentage: "Manual percentage",
   emitter_count: "Emitter count",
   vine_count: "Vine count",
   irrigated_area: "Irrigated area",
+  rows: "Rows",
 };
+
 
 export interface IrrigationSystem {
   id: string;
