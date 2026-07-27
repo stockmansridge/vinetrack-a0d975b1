@@ -133,6 +133,13 @@ function normaliseRow(
     ),
     vine_count: numOrNull(raw?.vine_count ?? raw?.vines),
     emitter_count: numOrNull(raw?.emitter_count ?? raw?.emitters),
+    has_start_point: hasPoint(
+      raw?.start_point,
+      raw?.startPoint,
+      raw?.start_latitude,
+      raw?.start_lat,
+    ),
+    has_end_point: hasPoint(raw?.end_point, raw?.endPoint, raw?.end_latitude, raw?.end_lat),
     other_valve_names: otherValves(raw, currentValveId),
   };
 }
