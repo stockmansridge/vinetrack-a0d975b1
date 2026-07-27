@@ -564,6 +564,17 @@ function sumSummary(
   return blocks.reduce((s, b) => s + Number(b[key]), 0);
 }
 
+/** Saved-configuration estimate, flagging rows the backend could not estimate. */
+function savedEstimateText(
+  value: number | null,
+  isEstimated: boolean | null,
+  missingRows: number,
+): string {
+  const text = formatEstimate(value, isEstimated ?? true);
+  if (text == null) return missingRows > 0 ? "Partially unavailable" : "Not available";
+  return missingRows > 0 ? `${text} · partially unavailable` : text;
+
+
 
 /** Allocation method label for a valve's saved configuration. */
 function valveMethodText(s: ValveConnectionSummary | undefined): string {
