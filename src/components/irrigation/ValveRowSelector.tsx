@@ -35,10 +35,18 @@ function Unavailable({ tip, label = "Not available" }: { tip: string; label?: st
           {label}
         </span>
       </TooltipTrigger>
-      <TooltipContent>{tip}</TooltipContent>
+      <TooltipContent className="max-w-xs">{tip}</TooltipContent>
     </Tooltip>
   );
 }
+
+/** Placeholder until the shared SQL 127 estimates land — never computed locally. */
+const PENDING_LABEL = "Calculation pending backend update";
+const VINE_TIP =
+  "Estimated vine count will be calculated from the row length and the block's Vineyard Setup information.";
+const EMITTER_TIP =
+  "Estimated emitter count will be calculated from row length and the block's configured emitter spacing.";
+
 
 function RowLine({
   row,
