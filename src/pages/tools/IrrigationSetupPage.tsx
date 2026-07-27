@@ -653,6 +653,19 @@ function valveIsReady(s: ValveConnectionSummary | undefined): boolean {
   return s.allocation_total != null && Math.abs(s.allocation_total - 100) <= 0.05;
 }
 
+/** Stable, de-duplicated, sorted UUID list — the only shape draft/saved compare on. */
+function normaliseIds(ids: Iterable<string>): string[] {
+  return Array.from(new Set(Array.from(ids).map((id) => String(id)))).sort();
+}
+
+/** Set equality on UUID strings; ignores ordering and duplicates. */
+function sameIds(a: Iterable<string>, b: Iterable<string>): boolean {
+  const x = normaliseIds(a);
+  const y = normaliseIds(b);
+  return x.length === y.length && x.every((id, i) => id === y[i]);
+}
+
+
 function RowsConnection({
   vineyardId,
   valveId,
@@ -831,8 +844,12 @@ function RowsConnection({
         row_ids: Array.from(selected),
       });
       setResult(res ?? null);
-      setLoadedFor(null);
-      await Promise.all([linked.refetch(), savedBlocks.refetch()]);
+      const [refreshed] = await Promise.all([linked.refetch(), savedBlocks.refetch()]);
+      // The server response is the new baseline for both saved and draft state.
+      const serverIds = normaliseIds(extractSelectedRowIds(refreshed.data ?? []));
+      setSelected(new Set(serverIds));
+      setBaseline(serverIds);
+      setInitialisedFor(valveId);
       toast({ title: "Valve rows saved" });
     } catch (e) {
       toast({
@@ -845,9 +862,8 @@ function RowsConnection({
 
   /** Discards the unsaved selection only — the saved configuration is untouched. */
   const resetDraft = () => {
-    setSelected(new Set(savedIds));
+    setSelected(new Set(baseline));
     setResult(null);
-    onDirtyChange(false);
   };
 
   /**
@@ -868,15 +884,14 @@ function RowsConnection({
       await save.mutateAsync({ valve_id: valveId, row_ids: [] });
       await clear.mutateAsync({ valve_id: valveId, blocks: [] });
       setResult(null);
-      setSelected(new Set());
       const [refreshed] = await Promise.all([
         linked.refetch(),
         savedBlocks.refetch(),
       ]);
-      // Re-run the preselect effect against the freshly cleared server state.
-      setSelected(new Set(extractSelectedRowIds(refreshed.data ?? [])));
-      setLoadedFor(valveId);
-      onDirtyChange(false);
+      const serverIds = normaliseIds(extractSelectedRowIds(refreshed.data ?? []));
+      setSelected(new Set(serverIds));
+      setBaseline(serverIds);
+      setInitialisedFor(valveId);
       toast({ title: "Connection deleted" });
     } catch (e) {
       toast({
@@ -886,6 +901,7 @@ function RowsConnection({
       });
     }
   };
+
 
   const warnings = Array.from(
     new Set([...(result?.warnings ?? []), ...savedSummary.warnings]),
