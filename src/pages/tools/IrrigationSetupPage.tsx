@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Pencil, Plus } from "lucide-react";
 import {
   ALLOCATION_METHOD_LABEL,
   useAvailableRows,
@@ -49,14 +49,22 @@ import {
   useUpdateSystem,
   useUpdateValve,
   useValveBlocks,
+  useValveConnectionSummaries,
   useValveRows,
   type AllocationMethod,
   type IrrigationSystem,
   type IrrigationValve,
   type SetValveRowsResult,
   type ValveBlockInput,
+  type ValveConnectionSummary,
 } from "@/lib/irrigationQuery";
-import { extractSelectedRowIds, weightingBasisLabel } from "@/lib/irrigationRows";
+import {
+  blockCoveragePercent,
+  extractSelectedRowIds,
+  formatRowRanges,
+  normaliseAvailableRows,
+  weightingBasisLabel,
+} from "@/lib/irrigationRows";
 import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
 
 
