@@ -223,7 +223,7 @@ export function ValveRowSelector({
           <PortalNotice
             compact
             variant="info"
-            description="Row length is currently used to divide the valve's water. Per-row vine and emitter counts are not yet available."
+            description="Row length is the allocation basis returned by the backend for this valve. Vine and emitter figures below are estimates and do not change how the water is divided."
           />
         )}
 
