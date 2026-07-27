@@ -139,6 +139,11 @@ function normaliseRow(
     ),
     vine_count: numOrNull(raw?.vine_count ?? raw?.vines),
     emitter_count: numOrNull(raw?.emitter_count ?? raw?.emitters),
+    vine_count_basis: raw?.vine_count_basis ?? null,
+    vine_count_is_estimated: boolOrNull(raw?.vine_count_is_estimated),
+    emitter_count_basis: raw?.emitter_count_basis ?? null,
+    emitter_count_is_estimated: boolOrNull(raw?.emitter_count_is_estimated),
+
     has_start_point: hasPoint(
       raw?.start_point,
       raw?.startPoint,
