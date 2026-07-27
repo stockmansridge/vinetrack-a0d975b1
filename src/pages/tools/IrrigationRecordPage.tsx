@@ -35,7 +35,7 @@ import {
   type CalculationMethod,
   type IrrigationPreview,
 } from "@/lib/irrigationQuery";
-import { weightingBasisLabel } from "@/lib/irrigationRows";
+import { formatEstimate, weightingBasisLabel } from "@/lib/irrigationRows";
 
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
