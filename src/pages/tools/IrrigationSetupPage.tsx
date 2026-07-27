@@ -826,19 +826,23 @@ function RowsConnection({
           </Badge>
         </div>
         <div className="text-sm">
-          Rows:{" "}
+          Allocation method: <strong>Rows</strong>
+          {" · "}Rows:{" "}
           <strong className="tabular-nums">
-            {shownIds.size} / {totalRows}
-          </strong>
+            {shownIds.size} row{shownIds.size === 1 ? "" : "s"}
+          </strong>{" "}
+          <span className="text-muted-foreground">of {totalRows} mapped across the vineyard</span>
           {" · "}Blocks supplied:{" "}
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
         </div>
         {shownRows.length > 0 && (
           <div className="text-xs text-muted-foreground">
-            Rows {formatRowRanges(shownRows.map((r) => r!.row_number))}
+            {dirty ? "Draft rows" : "Saved rows"}:{" "}
+            {formatRowRanges(shownRows.map((r) => r!.row_number))}
           </div>
         )}
+
 
         <div className="rounded-lg border border-border">
           <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
