@@ -769,11 +769,20 @@ function RowsConnection({
     )
       return;
     try {
+      // Rows are the authoritative link; clearing block allocations alone left
+      // every saved row still connected (and ticked after a reload).
+      await save.mutateAsync({ valve_id: valveId, row_ids: [] });
       await clear.mutateAsync({ valve_id: valveId, blocks: [] });
       setResult(null);
       setSelected(new Set());
-      setLoadedFor(null);
-      await Promise.all([linked.refetch(), savedBlocks.refetch()]);
+      const [refreshed] = await Promise.all([
+        linked.refetch(),
+        savedBlocks.refetch(),
+      ]);
+      // Re-run the preselect effect against the freshly cleared server state.
+      setSelected(new Set(extractSelectedRowIds(refreshed.data ?? [])));
+      setLoadedFor(valveId);
+      onDirtyChange(false);
       toast({ title: "Saved connections cleared" });
     } catch (e) {
       toast({
