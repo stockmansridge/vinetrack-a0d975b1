@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -38,20 +38,27 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Pencil, Plus } from "lucide-react";
 import {
   ALLOCATION_METHOD_LABEL,
+  useAvailableRows,
   useCreateSystem,
   useCreateValve,
   useIrrigationSystems,
   useIrrigationValves,
   useSetValveBlocks,
+  useSetValveRows,
   useSetupStatus,
   useUpdateSystem,
   useUpdateValve,
   useValveBlocks,
+  useValveRows,
   type AllocationMethod,
   type IrrigationSystem,
   type IrrigationValve,
+  type SetValveRowsResult,
   type ValveBlockInput,
 } from "@/lib/irrigationQuery";
+import { extractSelectedRowIds, weightingBasisLabel } from "@/lib/irrigationRows";
+import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
+
 
 function useBlocks(vineyardId: string | null) {
   return useQuery({
@@ -479,12 +486,152 @@ function ValvesTab({ vineyardId }: { vineyardId: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Connections (valve → blocks)
+// Connections (valve → blocks or valve → rows)
 // ---------------------------------------------------------------------------
 
 interface DraftRow extends ValveBlockInput {
   block_name: string;
   selected: boolean;
+}
+
+function RowsConnection({
+  vineyardId,
+  valveId,
+  guardChange,
+  onDirtyChange,
+}: {
+  vineyardId: string | null;
+  valveId: string;
+  guardChange: (dirty: boolean) => void;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const available = useAvailableRows(vineyardId, valveId);
+  const linked = useValveRows(vineyardId, valveId);
+  const save = useSetValveRows(vineyardId);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [result, setResult] = useState<SetValveRowsResult | null>(null);
+
+  // Preselect exactly the linked row UUIDs (never inferred from row_start/end).
+  useEffect(() => {
+    if (!linked.data || loadedFor === valveId) return;
+    setSelected(new Set(extractSelectedRowIds(linked.data)));
+    setLoadedFor(valveId);
+    onDirtyChange(false);
+  }, [linked.data, valveId, loadedFor, onDirtyChange]);
+
+  const savedIds = useMemo(
+    () => new Set(extractSelectedRowIds(linked.data ?? [])),
+    [linked.data],
+  );
+  const dirty =
+    savedIds.size !== selected.size ||
+    Array.from(selected).some((id) => !savedIds.has(id));
+
+  useEffect(() => {
+    onDirtyChange(dirty);
+    guardChange(dirty);
+  }, [dirty, onDirtyChange, guardChange]);
+
+  const submit = async () => {
+    try {
+      const res = await save.mutateAsync({
+        valve_id: valveId,
+        row_ids: Array.from(selected),
+      });
+      setResult(res ?? null);
+      setLoadedFor(null);
+      await linked.refetch();
+      toast({ title: "Valve rows saved" });
+    } catch (e) {
+      toast({
+        title: "Couldn't save rows",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const warnings = (result?.warnings ?? []).filter(Boolean);
+  const resultBlocks = result?.blocks ?? [];
+
+  return (
+    <div className="space-y-4">
+      <ValveRowSelector
+        payload={available.data}
+        selected={selected}
+        onChange={setSelected}
+        loading={available.isLoading || linked.isLoading}
+        error={(available.error as Error) ?? (linked.error as Error) ?? null}
+      />
+
+      {linked.error && (
+        <PortalNotice
+          variant="error"
+          title="Couldn't load the valve's saved rows"
+          description={(linked.error as Error).message}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-muted-foreground">
+          {selected.size} row{selected.size === 1 ? "" : "s"} selected
+          {dirty ? " · unsaved changes" : ""}
+        </span>
+        <Button onClick={submit} disabled={save.isPending || selected.size === 0}>
+          {save.isPending ? "Saving…" : "Save connections"}
+        </Button>
+      </div>
+
+      {warnings.length > 0 && (
+        <PortalNotice
+          variant="warning"
+          title="Allocation warnings"
+          description={
+            <ul className="list-disc pl-4">
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          }
+        />
+      )}
+
+      {result && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <div className="text-sm">
+            Rows selected: <strong className="tabular-nums">{result.row_count ?? selected.size}</strong>
+            {" · "}Blocks supplied:{" "}
+            <strong className="tabular-nums">{resultBlocks.length}</strong>
+            {" · "}Allocation basis:{" "}
+            <strong>{weightingBasisLabel(result.weighting_basis)}</strong>
+          </div>
+          <div className="rounded-lg border border-border">
+            <div className="grid grid-cols-[minmax(0,1fr)_90px_120px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span>Block</span>
+              <span className="text-right">Rows</span>
+              <span className="text-right">Allocation</span>
+            </div>
+            {resultBlocks.map((b) => (
+              <div
+                key={b.block_id}
+                className="grid grid-cols-[minmax(0,1fr)_90px_120px] gap-2 border-b border-border px-3 py-1.5 text-sm last:border-0"
+              >
+                <span className="truncate">{b.block_name ?? "Block"}</span>
+                <span className="text-right tabular-nums">{b.row_count ?? "—"}</span>
+                <span className="text-right tabular-nums">
+                  {b.allocation_percentage == null
+                    ? "—"
+                    : `${Number(b.allocation_percentage).toFixed(2)}%`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
@@ -496,6 +643,11 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
   const [method, setMethod] = useState<AllocationMethod>("manual_percentage");
   const [draft, setDraft] = useState<Record<string, DraftRow>>({});
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [rowsDirty, setRowsDirty] = useState(false);
+
+  const confirmDiscard = () =>
+    !rowsDirty ||
+    window.confirm("You have unsaved row changes. Discard them?");
 
   // Seed the draft from the saved configuration whenever the valve changes.
   if (valveId && existing.data && loadedFor !== valveId) {
@@ -524,6 +676,7 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
   const selected = rows.filter((r) => r.selected);
   const percentTotal = selected.reduce((sum, r) => sum + (r.allocation_percentage ?? 0), 0);
   const manual = method === "manual_percentage";
+  const rowsMode = method === "rows";
 
   const patch = (id: string, values: Partial<DraftRow>) =>
     setDraft((d) => ({ ...d, [id]: { ...d[id], ...values } }));
@@ -552,10 +705,11 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
     }
   };
 
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Valve to block connections</CardTitle>
+        <CardTitle className="text-base">Valve to block or valve to row connections</CardTitle>
         <CardDescription>
           Allocations decide how each session&rsquo;s water is split between blocks. Saving
           replaces the active configuration; existing records keep their own snapshot.
@@ -568,6 +722,8 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
             <Select
               value={valveId}
               onValueChange={(v) => {
+                if (!confirmDiscard()) return;
+                setRowsDirty(false);
                 setValveId(v);
                 setLoadedFor(null);
               }}
@@ -586,7 +742,14 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
           </div>
           <div>
             <Label>Allocation method</Label>
-            <Select value={method} onValueChange={(v) => setMethod(v as AllocationMethod)}>
+            <Select
+              value={method}
+              onValueChange={(v) => {
+                if (!confirmDiscard()) return;
+                setRowsDirty(false);
+                setMethod(v as AllocationMethod);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -601,7 +764,17 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
           </div>
         </div>
 
-        {valveId && (
+        {valveId && rowsMode && (
+          <RowsConnection
+            key={valveId}
+            vineyardId={vineyardId}
+            valveId={valveId}
+            guardChange={setRowsDirty}
+            onDirtyChange={setRowsDirty}
+          />
+        )}
+
+        {valveId && !rowsMode && (
           <>
             <div className="rounded-lg border border-border">
               <div className="grid grid-cols-[auto_1fr_repeat(3,minmax(0,120px))] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -674,6 +847,7 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
               </Button>
             </div>
           </>
+
         )}
       </CardContent>
     </Card>
@@ -690,7 +864,7 @@ export default function IrrigationSetupPage() {
     <div className="space-y-6">
       <PageHead
         title="Irrigation Setup | VineTrack"
-        description="Configure irrigation systems, valves and valve-to-block connections."
+        description="Configure irrigation systems, valves and valve-to-block or valve-to-row connections."
         path="/irrigation/setup"
         noindex
       />
@@ -703,7 +877,7 @@ export default function IrrigationSetupPage() {
           </Button>
           <h1 className="text-2xl font-semibold tracking-tight">Irrigation setup</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Systems, valves and the blocks each valve waters.
+            Systems, valves, and valve-to-block or valve-to-row connections.
           </p>
         </div>
         {status.data && (

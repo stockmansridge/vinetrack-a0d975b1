@@ -55,9 +55,46 @@ import {
   useUpdateSession,
   type IrrigationSession,
 } from "@/lib/irrigationQuery";
+import {
+  formatRowRanges,
+  snapshotRowBlocks,
+  weightingBasisLabel,
+} from "@/lib/irrigationRows";
 
 const ALL = "all";
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+/** Human-readable frozen row detail from the session's configuration snapshot. */
+function RowsIrrigated({ session }: { session: IrrigationSession }) {
+  const snap = snapshotRowBlocks(session.configuration_snapshot);
+  if (!snap || snap.blocks.length === 0) return null;
+  return (
+    <div className="mt-3 rounded-lg border border-border p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Rows irrigated
+      </div>
+      <div className="mt-2 space-y-2">
+        {snap.blocks.map((b) => (
+          <div key={b.block_id || b.block_name} className="text-sm">
+            <div className="font-medium">{b.block_name}</div>
+            <div className="text-xs text-muted-foreground">
+              {b.row_count} row{b.row_count === 1 ? "" : "s"}:{" "}
+              {formatRowRanges(b.row_numbers)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Allocation:{" "}
+              {b.allocation_percentage == null
+                ? "—"
+                : `${Number(b.allocation_percentage).toFixed(2)}%`}{" "}
+              · Basis: {weightingBasisLabel(b.weighting_basis ?? snap.weighting_basis)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 function EditDialog({
   vineyardId,
@@ -323,7 +360,10 @@ export default function IrrigationHistoryPage() {
                 ))}
               </div>
 
+              <RowsIrrigated session={s} />
+
               {s.notes && <p className="mt-2 text-sm text-muted-foreground">{s.notes}</p>}
+
             </CardContent>
           </Card>
         ))}

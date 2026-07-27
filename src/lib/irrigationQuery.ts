@@ -45,14 +45,17 @@ export type AllocationMethod =
   | "manual_percentage"
   | "emitter_count"
   | "vine_count"
-  | "irrigated_area";
+  | "irrigated_area"
+  | "rows";
 
 export const ALLOCATION_METHOD_LABEL: Record<AllocationMethod, string> = {
   manual_percentage: "Manual percentage",
   emitter_count: "Emitter count",
   vine_count: "Vine count",
   irrigated_area: "Irrigated area",
+  rows: "Rows",
 };
+
 
 export interface IrrigationSystem {
   id: string;
@@ -94,7 +97,12 @@ export interface IrrigationValveBlock {
   row_end: number | null;
   configured_flow_litres_per_hour: number | null;
   is_active: boolean;
+  /** SQL 126 additions */
+  uses_rows?: boolean | null;
+  row_count?: number | null;
+  weighting_basis?: string | null;
 }
+
 
 export interface SetupStatus {
   season: {
@@ -130,6 +138,11 @@ export interface SetupStatus {
     allocation_total: number;
     allocation_ok: boolean;
     has_configured_flow: boolean;
+    /** SQL 126 additions */
+    uses_rows?: boolean | null;
+    row_count?: number | null;
+    weighting_basis?: string | null;
+    is_operational?: boolean | null;
   }>;
   is_operational: boolean;
 }
@@ -145,6 +158,11 @@ export interface ValveValidation {
   allocations: Array<Record<string, any>>;
   allocation_total: number;
   issues: string[];
+  /** SQL 126 additions */
+  uses_rows?: boolean | null;
+  row_count?: number | null;
+  weighting_basis?: string | null;
+  warnings?: string[] | null;
 }
 
 export interface PreviewBlock {
@@ -162,6 +180,10 @@ export interface PreviewBlock {
   water_litres_per_hectare: number | null;
   irrigation_depth_mm: number | null;
   effective_irrigation_depth_mm: number | null;
+  /** SQL 126 additions */
+  row_count?: number | null;
+  rows?: Array<Record<string, any>> | null;
+  weighting_basis?: string | null;
 }
 
 export interface IrrigationPreview {
@@ -179,7 +201,12 @@ export interface IrrigationPreview {
   session_date: string;
   duration_minutes: number;
   vintage_year: number;
+  /** SQL 126 additions */
+  uses_rows?: boolean | null;
+  row_count?: number | null;
+  weighting_basis?: string | null;
 }
+
 
 export interface IrrigationSessionBlock extends PreviewBlock {
   id: string;
@@ -495,6 +522,71 @@ export function useSetValveBlocks(vineyardId: string | null) {
     onSuccess: invalidate,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Row-based allocation (SQL 126)
+// ---------------------------------------------------------------------------
+
+export interface SetValveRowsResult {
+  valve_id?: string;
+  row_count?: number | null;
+  weighting_basis?: string | null;
+  warnings?: string[] | null;
+  blocks?: Array<{
+    block_id: string;
+    block_name?: string | null;
+    row_count?: number | null;
+    allocation_percentage?: number | null;
+    rows?: Array<Record<string, any>> | null;
+  }> | null;
+  [key: string]: any;
+}
+
+/** All vineyard rows (from paddocks.rows) that can be linked to a valve. */
+export function useAvailableRows(vineyardId: string | null, valveId: string | null) {
+  return useQuery({
+    queryKey: ["irrigation", "available-rows", vineyardId, valveId],
+    enabled: !!vineyardId && !!valveId,
+    queryFn: () =>
+      call<unknown>("list_irrigation_available_rows", {
+        p_vineyard_id: vineyardId,
+        p_valve_id: valveId,
+      }),
+  });
+}
+
+/** Rows currently linked to a valve — authoritative selection source. */
+export function useValveRows(vineyardId: string | null, valveId: string | null) {
+  return useQuery({
+    queryKey: ["irrigation", "valve-rows", vineyardId, valveId],
+    enabled: !!vineyardId && !!valveId,
+    queryFn: () =>
+      call<unknown>("list_irrigation_valve_rows", {
+        p_vineyard_id: vineyardId,
+        p_valve_id: valveId,
+      }),
+  });
+}
+
+/**
+ * Saves the exact row UUID set for a valve. SQL 126 derives and writes the
+ * corresponding block connections, so set_irrigation_valve_blocks is not
+ * called for row-based saves.
+ */
+export function useSetValveRows(vineyardId: string | null) {
+  const invalidate = useIrrigationInvalidate(vineyardId);
+  return useMutation({
+    mutationFn: (input: { valve_id: string; row_ids: string[] }) =>
+      call<SetValveRowsResult>("set_irrigation_valve_rows", {
+        p_vineyard_id: vineyardId,
+        p_valve_id: input.valve_id,
+        p_row_ids: input.row_ids,
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+
 
 // ---------------------------------------------------------------------------
 // Recording
