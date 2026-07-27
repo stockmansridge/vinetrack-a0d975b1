@@ -265,10 +265,19 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {renderGroup("Dashboard", visible(dashboard))}
-        {renderGroup("Work", visible(work))}
+        {renderGroup("Work", visible(hasIrrigationRecords ? [...work, ...irrigationWork] : work))}
         {renderGroup("Equipment", visible(equipment), false)}
         {renderGroup("Tools", visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin] : tools), false)}
-        {renderGroup("Reports", visible(isAdmin ? [...reports, ...reportsAdmin] : reports), false)}
+        {renderGroup(
+          "Reports",
+          visible([
+            ...reports,
+            ...(isAdmin ? reportsAdmin : []),
+            ...(hasIrrigationRecords ? irrigationReports : []),
+          ]),
+          false,
+        )}
+
         {renderGroup("Setup", visible(setup), false)}
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
