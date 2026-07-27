@@ -85,6 +85,15 @@ const work: NavItem[] = [
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
 ];
 
+// Irrigation Records — Phase 1 is gated server-side (System Admins only).
+const irrigationWork: NavItem[] = [
+  { title: "Irrigation Records", url: "/irrigation", icon: Droplet },
+];
+const irrigationReports: NavItem[] = [
+  { title: "Irrigation Reports", url: "/reports/irrigation", icon: Droplet },
+
+];
+
 // "Equipment" — physical assets and fuel
 const equipment: NavItem[] = [
   { title: "Tractors", url: "/setup/tractors", icon: Tractor },
