@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   const { data: vineyards } = await user
     .from("vineyards")
     .select("id, name")
-    .ilike("name", "%Stockman%");
+    .ilike("name", body.vineyard ?? "%Stockmans Ridge%");
   const vineyardId = vineyards?.[0]?.id;
   out.vineyard = vineyards?.[0];
   if (!vineyardId) return json(out);
