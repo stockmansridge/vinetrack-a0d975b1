@@ -335,7 +335,15 @@ export default function IrrigationRecordPage() {
                     {preview.effective_volume_litres != null &&
                       ` · ${formatLitres(preview.effective_volume_litres)} effective`}
                   </div>
+                  {(preview.uses_rows || preview.row_count != null) && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Rows supplied: {preview.row_count ?? "—"} · Allocation basis:{" "}
+                      {weightingBasisLabel(preview.weighting_basis)} · Blocks supplied:{" "}
+                      {preview.blocks.length}
+                    </div>
+                  )}
                 </div>
+
 
                 <div className="divide-y divide-border rounded-lg border border-border">
                   {preview.blocks.map((b) => (
