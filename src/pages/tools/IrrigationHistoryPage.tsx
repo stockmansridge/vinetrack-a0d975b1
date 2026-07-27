@@ -56,8 +56,11 @@ import {
   type IrrigationSession,
 } from "@/lib/irrigationQuery";
 import {
+  emitterBasisLabel,
+  formatEstimate,
   formatRowRanges,
   snapshotRowBlocks,
+  vineBasisLabel,
   weightingBasisLabel,
 } from "@/lib/irrigationRows";
 
@@ -74,20 +77,41 @@ function RowsIrrigated({ session }: { session: IrrigationSession }) {
         Rows irrigated
       </div>
       <div className="mt-2 space-y-2">
-        {snap.blocks.map((b) => (
+        {snap.blocks.map((b) => {
+          // Snapshot values only — historical sessions are never recalculated
+          // from the current vineyard setup.
+          const vines = formatEstimate(b.selected_vine_count, b.vine_count_is_estimated ?? true);
+          const emitters = formatEstimate(
+            b.selected_emitter_count,
+            b.emitter_count_is_estimated ?? true,
+          );
+          return (
           <div key={b.block_id || b.block_name} className="text-sm">
             <div className="font-medium">{b.block_name}</div>
             <div className="text-xs text-muted-foreground">
               {b.row_count} row{b.row_count === 1 ? "" : "s"}:{" "}
               {formatRowRanges(b.row_numbers)}
+              {b.selected_row_length_metres != null &&
+                ` · ${Number(b.selected_row_length_metres).toLocaleString()} m`}
             </div>
             <div className="text-xs text-muted-foreground">
-              Allocation:{" "}
+              Estimated vines: {vines ?? "Not available"}
+              {b.vine_count_basis && ` (${vineBasisLabel(b.vine_count_basis)})`} · Estimated
+              emitters: {emitters ?? "Not available"}
+              {b.emitter_count_basis && ` (${emitterBasisLabel(b.emitter_count_basis)})`}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Share of valve water:{" "}
               {b.allocation_percentage == null
                 ? "—"
                 : `${Number(b.allocation_percentage).toFixed(2)}%`}{" "}
-              · Basis: {weightingBasisLabel(b.weighting_basis ?? snap.weighting_basis)}
+              · Allocation basis:{" "}
+              {weightingBasisLabel(b.weighting_basis ?? snap.weighting_basis)}
             </div>
+          </div>
+          );
+        })}
+
           </div>
         ))}
       </div>
