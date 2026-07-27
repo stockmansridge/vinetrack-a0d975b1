@@ -111,9 +111,6 @@ function RowsIrrigated({ session }: { session: IrrigationSession }) {
           </div>
           );
         })}
-
-          </div>
-        ))}
       </div>
     </div>
   );
