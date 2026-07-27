@@ -65,6 +65,8 @@ import {
   formatRowRanges,
   normaliseAvailableRows,
   normaliseServerRowSummary,
+  savedEstimateLines,
+  summariseSavedRows,
   weightingBasisLabel,
   type ServerRowSummary,
 } from "@/lib/irrigationRows";
@@ -540,8 +542,8 @@ function pct(v: number | null | undefined, digits = 1) {
 }
 
 /**
- * Renders a SQL 127 estimate. Never shows a missing value as zero, and never
- * invents a total for an unsaved draft.
+ * Renders a server estimate. Never shows a missing value as zero. A dirty draft
+ * has no server figures yet, which is stated plainly rather than as an error.
  */
 function estimateText(
   value: number | null | undefined,
@@ -550,7 +552,7 @@ function estimateText(
 ): string {
   const text = formatEstimate(value ?? null, isEstimated ?? true);
   if (text != null) return text;
-  return dirty ? "Pending save" : "Not available";
+  return dirty ? "Recalculated on save" : "Not available";
 }
 
 /** Sums server block totals only when every block reports one. */
@@ -564,15 +566,47 @@ function sumSummary(
   return blocks.reduce((s, b) => s + Number(b[key]), 0);
 }
 
-/** Saved-configuration estimate, flagging rows the backend could not estimate. */
-function savedEstimateText(
-  value: number | null,
+/**
+ * Saved-configuration estimate. The available total always shows; rows the
+ * backend could not estimate are reported alongside it rather than collapsing
+ * the whole figure to "Not available".
+ */
+function savedEstimate(
+  total: number | null,
   isEstimated: boolean | null,
-  missingRows: number,
-): string {
-  const text = formatEstimate(value, isEstimated ?? true);
-  if (text == null) return missingRows > 0 ? "Partially unavailable" : "Not available";
-  return missingRows > 0 ? `${text} · partially unavailable` : text;
+  rowsWithValue: number,
+  rowsMissing: number,
+  noun: string,
+): { primary: string; secondary: string | null } {
+  return savedEstimateLines(
+    {
+      total,
+      rows_with_value: rowsWithValue,
+      rows_missing: rowsMissing,
+      is_estimated: isEstimated,
+      basis: null,
+    },
+    rowsWithValue + rowsMissing,
+    noun,
+  );
+}
+
+/** Two-line estimate cell used in the saved-configuration surfaces. */
+function SavedEstimate({
+  lines,
+  className,
+}: {
+  lines: { primary: string; secondary: string | null };
+  className?: string;
+}) {
+  return (
+    <span className={className}>
+      <span className="tabular-nums">{lines.primary}</span>
+      {lines.secondary && (
+        <span className="block text-xs text-muted-foreground">{lines.secondary}</span>
+      )}
+    </span>
+  );
 }
 
 
@@ -718,13 +752,16 @@ function RowsConnection({
     return map;
   }, [result, savedBlocks.data]);
 
-  // SQL 127 block summaries. Saved state is reloaded from
+  // Server row summaries. Saved state is reloaded from
   // list_irrigation_valve_rows; the save response is only a fallback. A dirty
   // draft has no server summary, so nothing authoritative is shown for it.
   const savedSummary = useMemo(
     () => normaliseServerRowSummary(linked.data),
     [linked.data],
   );
+  // SQL 129 saved snapshots: each saved row carries the backend's own vine and
+  // emitter figure, so the totals below are those server values added up.
+  const savedRowSnapshot = useMemo(() => summariseSavedRows(linked.data), [linked.data]);
   const resultSummary = useMemo(
     () => (result ? normaliseServerRowSummary(result) : null),
     [result],
@@ -735,11 +772,30 @@ function RowsConnection({
       ? savedSummary
       : resultSummary;
 
+  const savedBlockTotals = useMemo(() => {
+    const map = new Map<string, { vines: number | null; emitters: number | null }>();
+    for (const b of savedBlocks.data ?? []) {
+      if (b.is_active === false) continue;
+      map.set(String(b.block_id), {
+        vines: b.serviced_vine_count ?? null,
+        emitters: b.serviced_emitter_count ?? null,
+      });
+    }
+    return map;
+  }, [savedBlocks.data]);
+
   const serverBasis =
     savedSummary.weighting_basis ??
+    savedRowSnapshot.weighting_basis ??
     result?.weighting_basis ??
     (savedBlocks.data ?? []).find((b) => b.weighting_basis)?.weighting_basis ??
     null;
+
+  /** Blocks that already hold saved rows — these open expanded in the selector. */
+  const savedBlockIds = useMemo(
+    () => Array.from(savedRowSnapshot.blocks.keys()),
+    [savedRowSnapshot],
+  );
 
 
   const submit = async () => {
@@ -761,10 +817,22 @@ function RowsConnection({
     }
   };
 
-  const clearSaved = async () => {
+  /** Discards the unsaved selection only — the saved configuration is untouched. */
+  const resetDraft = () => {
+    setSelected(new Set(savedIds));
+    setResult(null);
+    onDirtyChange(false);
+  };
+
+  /**
+   * Destructive: removes the valve's saved row configuration on the server.
+   * Verified against SQL 126/129 — `set_irrigation_valve_rows` with an empty
+   * `p_row_ids` clears both the saved rows and their block allocations.
+   */
+  const deleteConnection = async () => {
     if (
       !window.confirm(
-        "Remove all saved connections for this valve? It will no longer be able to record sessions until it is configured again.",
+        "Delete this valve's saved connection? The valve will not be able to record sessions until it is configured again. Existing irrigation records keep their own snapshot and are unaffected.",
       )
     )
       return;
@@ -783,10 +851,10 @@ function RowsConnection({
       setSelected(new Set(extractSelectedRowIds(refreshed.data ?? [])));
       setLoadedFor(valveId);
       onDirtyChange(false);
-      toast({ title: "Saved connections cleared" });
+      toast({ title: "Connection deleted" });
     } catch (e) {
       toast({
-        title: "Couldn't clear connections",
+        title: "Couldn't delete the connection",
         description: (e as Error).message,
         variant: "destructive",
       });
@@ -806,6 +874,21 @@ function RowsConnection({
     : `${totalRows} mapped rows across the vineyard`;
 
 
+  const savedVineLines = savedEstimate(
+    savedRowSnapshot.vines.total,
+    savedRowSnapshot.vines.is_estimated,
+    savedRowSnapshot.vines.rows_with_value,
+    savedRowSnapshot.vines.rows_missing,
+    "vines",
+  );
+  const savedEmitterLines = savedEstimate(
+    savedRowSnapshot.emitters.total,
+    savedRowSnapshot.emitters.is_estimated,
+    savedRowSnapshot.emitters.rows_with_value,
+    savedRowSnapshot.emitters.rows_missing,
+    "emitters",
+  );
+
   return (
     <div className="space-y-4">
       <ValveRowSelector
@@ -816,6 +899,7 @@ function RowsConnection({
         loading={available.isLoading || linked.isLoading}
         error={(available.error as Error) ?? (linked.error as Error) ?? null}
         weightingBasis={serverBasis}
+        expandedBlockIds={savedBlockIds}
       />
 
       {linked.error && (
@@ -826,38 +910,72 @@ function RowsConnection({
         />
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
-        <div className="text-sm">
-          <div>
-            <span className="text-muted-foreground">Saved:</span>{" "}
+      {/* Saved configuration and unsaved draft are deliberately kept apart:
+          deleting the saved connection is a server change, resetting the draft
+          only discards the current selection. */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Saved connection</span>
+            <Badge variant={savedIds.size > 0 ? "secondary" : "outline"}>
+              {savedIds.size > 0 ? "Saved" : "Not configured"}
+            </Badge>
+          </div>
+          <div className="text-sm">
             <strong className="tabular-nums">
               {savedIds.size} row{savedIds.size === 1 ? "" : "s"}
             </strong>{" "}
             <span className="text-muted-foreground">of {mappedText}</span>
           </div>
-          <div>
-            <span className="text-muted-foreground">Draft total:</span>{" "}
-            <strong className="tabular-nums">
-              {selected.size} row{selected.size === 1 ? "" : "s"} selected across the vineyard
-            </strong>
-            <span className="text-muted-foreground">
-              {" "}
-              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
-              {dirty ? " · unsaved changes" : " · matches saved configuration"}
-            </span>
+          {savedIds.size > 0 && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {savedVineLines.primary} · {savedEmitterLines.primary}
+              {(savedVineLines.secondary || savedEmitterLines.secondary) && (
+                <span className="block">
+                  {savedVineLines.secondary ?? savedEmitterLines.secondary}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="mt-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={deleteConnection}
+              disabled={savedIds.size === 0 || save.isPending || clear.isPending}
+            >
+              {clear.isPending ? "Deleting…" : "Delete connection"}
+            </Button>
           </div>
-
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {savedIds.size > 0 && (
-            <Button variant="outline" onClick={clearSaved} disabled={clear.isPending}>
-              {clear.isPending ? "Clearing…" : "Clear saved connections"}
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Draft selection</span>
+            <Badge variant={dirty ? "outline" : "secondary"}>
+              {dirty ? "Unsaved changes" : "Matches saved"}
+            </Badge>
+          </div>
+          <div className="text-sm">
+            <strong className="tabular-nums">
+              {selected.size} row{selected.size === 1 ? "" : "s"} selected
+            </strong>{" "}
+            <span className="text-muted-foreground">
+              ({rowsUnavailable ? mappedText : `of ${totalRows} mapped rows`})
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={resetDraft} disabled={!dirty}>
+              Reset draft
             </Button>
-          )}
-          <Button onClick={submit} disabled={save.isPending || selected.size === 0 || !dirty}>
-            {save.isPending ? "Saving…" : "Save connections"}
-          </Button>
+            <Button
+              size="sm"
+              onClick={submit}
+              disabled={save.isPending || selected.size === 0 || !dirty}
+            >
+              {save.isPending ? "Saving…" : "Save connections"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -867,8 +985,8 @@ function RowsConnection({
           variant="warning"
           description={
             savedIds.size > 0
-              ? "You have removed all rows from the draft. The saved configuration remains active until you select Save Connections. Select at least one row before saving, or use Clear saved connections to remove this valve's configuration."
-              : "Select at least one row before saving."
+              ? "No rows are selected in the draft. The saved connection is still active — use Reset draft to bring back the saved rows, or Delete connection to remove it from this valve."
+              : "Tick the rows this valve waters, then choose Save connections."
           }
         />
       )}
@@ -917,12 +1035,46 @@ function RowsConnection({
           <strong className="tabular-nums">{coverageBlocks.length}</strong>
           {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
         </div>
-        <div className="text-sm">
-          <span className="text-muted-foreground">Estimated vines: </span>
-          <strong className="tabular-nums">{estimateText(shownSummary?.selected_vine_count ?? sumSummary(shownSummary, "selected_vine_count"), shownSummary?.vine_count_is_estimated ?? true, dirty)}</strong>
-          {" · "}
-          <span className="text-muted-foreground">Estimated emitters: </span>
-          <strong className="tabular-nums">{estimateText(shownSummary?.selected_emitter_count ?? sumSummary(shownSummary, "selected_emitter_count"), shownSummary?.emitter_count_is_estimated ?? true, dirty)}</strong>
+        <div className="flex flex-wrap gap-x-6 text-sm">
+          <span>
+            <span className="text-muted-foreground">Estimated vines: </span>
+            {dirty ? (
+              <strong>Recalculated on save</strong>
+            ) : (
+              <SavedEstimate
+                className="font-semibold"
+                lines={savedEstimate(
+                  shownSummary?.selected_vine_count ??
+                    sumSummary(shownSummary, "selected_vine_count") ??
+                    savedRowSnapshot.vines.total,
+                  shownSummary?.vine_count_is_estimated ?? savedRowSnapshot.vines.is_estimated,
+                  savedRowSnapshot.vines.rows_with_value,
+                  savedRowSnapshot.vines.rows_missing,
+                  "vines",
+                )}
+              />
+            )}
+          </span>
+          <span>
+            <span className="text-muted-foreground">Estimated emitters: </span>
+            {dirty ? (
+              <strong>Recalculated on save</strong>
+            ) : (
+              <SavedEstimate
+                className="font-semibold"
+                lines={savedEstimate(
+                  shownSummary?.selected_emitter_count ??
+                    sumSummary(shownSummary, "selected_emitter_count") ??
+                    savedRowSnapshot.emitters.total,
+                  shownSummary?.emitter_count_is_estimated ??
+                    savedRowSnapshot.emitters.is_estimated,
+                  savedRowSnapshot.emitters.rows_with_value,
+                  savedRowSnapshot.emitters.rows_missing,
+                  "emitters",
+                )}
+              />
+            )}
+          </span>
         </div>
         {shownRows.length > 0 && (
           <div className="text-xs text-muted-foreground">
@@ -944,6 +1096,26 @@ function RowsConnection({
           </div>
           {coverageBlocks.map((b) => {
             const srv = shownSummary?.blocks.get(b.block_id) ?? null;
+            const snap = dirty ? null : savedRowSnapshot.blocks.get(b.block_id) ?? null;
+            const servicedBlock = dirty ? null : savedBlockTotals.get(b.block_id) ?? null;
+            const vineLines = snap
+              ? savedEstimate(
+                  srv?.selected_vine_count ?? servicedBlock?.vines ?? snap.vines.total,
+                  srv?.vine_count_is_estimated ?? snap.vines.is_estimated,
+                  snap.vines.rows_with_value,
+                  snap.vines.rows_missing,
+                  "vines",
+                )
+              : null;
+            const emitterLines = snap
+              ? savedEstimate(
+                  srv?.selected_emitter_count ?? servicedBlock?.emitters ?? snap.emitters.total,
+                  srv?.emitter_count_is_estimated ?? snap.emitters.is_estimated,
+                  snap.emitters.rows_with_value,
+                  snap.emitters.rows_missing,
+                  "emitters",
+                )
+              : null;
             return (
               <div
                 key={b.block_id}
@@ -954,10 +1126,18 @@ function RowsConnection({
                   {b.selected} of {srv?.total_block_row_count ?? b.total}
                 </span>
                 <span className="text-right tabular-nums">
-                  {estimateText(srv?.selected_vine_count ?? null, srv?.vine_count_is_estimated ?? true, dirty)}
+                  {vineLines ? (
+                    <SavedEstimate lines={vineLines} />
+                  ) : (
+                    estimateText(srv?.selected_vine_count ?? null, srv?.vine_count_is_estimated ?? true, dirty)
+                  )}
                 </span>
                 <span className="text-right tabular-nums">
-                  {estimateText(srv?.selected_emitter_count ?? null, srv?.emitter_count_is_estimated ?? true, dirty)}
+                  {emitterLines ? (
+                    <SavedEstimate lines={emitterLines} />
+                  ) : (
+                    estimateText(srv?.selected_emitter_count ?? null, srv?.emitter_count_is_estimated ?? true, dirty)
+                  )}
                 </span>
                 <span className="text-right tabular-nums">
                   {pct(srv?.row_coverage_percent ?? b.coverage)}
@@ -965,13 +1145,13 @@ function RowsConnection({
                 <span className="text-right tabular-nums">
                   {srv?.length_coverage_percent == null
                     ? dirty
-                      ? "Pending save"
+                      ? "Recalculated on save"
                       : "Not available"
                     : pct(srv.length_coverage_percent)}
                 </span>
                 <span className="text-right tabular-nums">
                   {dirty ? (
-                    <span className="text-muted-foreground">Pending save</span>
+                    <span className="text-muted-foreground">Recalculated on save</span>
                   ) : (
                     pct(srv?.allocation_percentage ?? waterShare.get(b.block_id) ?? null, 2)
                   )}
@@ -986,9 +1166,9 @@ function RowsConnection({
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Vine and emitter figures are estimates returned by the vineyard backend (SQL 127) and do
-          not change the allocation basis. Share of valve water and length coverage are the
-          server-calculated values; draft selections show as pending until saved.
+          Vine and emitter figures are the estimates stored by the vineyard backend against each
+          saved row; they do not change the allocation basis. Share of valve water and length
+          coverage are server-calculated. An unsaved draft has no server figures until it is saved.
         </p>
       </div>
     </div>
@@ -1030,19 +1210,23 @@ function ConnectionsOverview({
         const s = summaries[v.id];
         const ready = valveIsReady(s);
         const vines = s?.uses_rows
-          ? savedEstimateText(
+          ? savedEstimate(
               s.estimated_vine_count,
               s.vine_count_is_estimated,
+              s.rows_with_vine_estimate,
               s.rows_missing_vine_estimate,
+              "vines",
             )
-          : "—";
+          : null;
         const emitters = s?.uses_rows
-          ? savedEstimateText(
+          ? savedEstimate(
               s.estimated_emitter_count,
               s.emitter_count_is_estimated,
+              s.rows_with_emitter_estimate,
               s.rows_missing_emitter_estimate,
+              "emitters",
             )
-          : "—";
+          : null;
         return (
           <button
             key={v.id}
@@ -1061,20 +1245,21 @@ function ConnectionsOverview({
             <span className="truncate text-xs text-muted-foreground">{valveMethodText(s)}</span>
             <span className="truncate text-xs text-muted-foreground">
               {valveConnectionsText(s)}
-              {s?.uses_rows && (
-                <span className="block truncate tabular-nums md:hidden">
-                  {vines} vines · {emitters} emitters
+              {vines && emitters && (
+                <span className="block tabular-nums md:hidden">
+                  {vines.primary} · {emitters.primary}
+                  {vines.secondary && <span className="block">{vines.secondary}</span>}
                 </span>
               )}
             </span>
-            <span className="hidden truncate text-xs tabular-nums text-muted-foreground md:block">
-              {vines}
+            <span className="hidden text-xs tabular-nums text-muted-foreground md:block">
+              {vines ? <SavedEstimate lines={vines} /> : "—"}
             </span>
-            <span className="hidden truncate text-xs tabular-nums text-muted-foreground md:block">
-              {emitters}
+            <span className="hidden text-xs tabular-nums text-muted-foreground md:block">
+              {emitters ? <SavedEstimate lines={emitters} /> : "—"}
             </span>
-            <span className="truncate text-xs text-muted-foreground">
-              {valveReadinessText(s)}
+            <span className="truncate text-xs">
+              <Badge variant={ready ? "secondary" : "outline"}>{valveReadinessText(s)}</Badge>
             </span>
 
           </button>
@@ -1275,23 +1460,27 @@ function ConnectionsTab({
                     <>
                       <div>
                         <span className="text-muted-foreground">Estimated vines: </span>
-                        <span className="tabular-nums">
-                          {savedEstimateText(
+                        <SavedEstimate
+                          lines={savedEstimate(
                             currentSummary.estimated_vine_count,
                             currentSummary.vine_count_is_estimated,
+                            currentSummary.rows_with_vine_estimate,
                             currentSummary.rows_missing_vine_estimate,
+                            "vines",
                           )}
-                        </span>
+                        />
                       </div>
                       <div>
                         <span className="text-muted-foreground">Estimated emitters: </span>
-                        <span className="tabular-nums">
-                          {savedEstimateText(
+                        <SavedEstimate
+                          lines={savedEstimate(
                             currentSummary.estimated_emitter_count,
                             currentSummary.emitter_count_is_estimated,
+                            currentSummary.rows_with_emitter_estimate,
                             currentSummary.rows_missing_emitter_estimate,
+                            "emitters",
                           )}
-                        </span>
+                        />
                       </div>
                     </>
                   )}
@@ -1448,10 +1637,25 @@ export default function IrrigationSetupPage() {
       </header>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="systems">Systems</TabsTrigger>
-          <TabsTrigger value="valves">Valves</TabsTrigger>
-          <TabsTrigger value="connections">Connections</TabsTrigger>
+        <TabsList className="h-auto w-full justify-start gap-1 rounded-lg border border-border bg-muted/60 p-1 sm:w-auto">
+          <TabsTrigger
+            value="systems"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Systems
+          </TabsTrigger>
+          <TabsTrigger
+            value="valves"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Valves
+          </TabsTrigger>
+          <TabsTrigger
+            value="connections"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Connections
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="systems" className="mt-4">
           <SystemsTab vineyardId={selectedVineyardId} />

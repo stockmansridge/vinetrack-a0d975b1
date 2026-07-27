@@ -468,3 +468,178 @@ export function normaliseServerRowSummary(payload: unknown): ServerRowSummary {
     warnings: stringList(root?.warnings),
   };
 }
+
+// ---------------------------------------------------------------------------
+// SQL 129 saved-row snapshots
+// ---------------------------------------------------------------------------
+//
+// `list_irrigation_valve_rows` returns a flat array of saved rows, each already
+// carrying the backend's own `vine_count` / `emitter_count` estimate and its
+// basis. The portal only adds those server values together — it never derives a
+// count from spacing, length or anything else, and a row the backend could not
+// estimate is reported as unavailable rather than counted as zero.
+
+export interface SavedRowEstimate {
+  /** Sum of the server values that are present. Null when none are. */
+  total: number | null;
+  /** How many saved rows carried a server value. */
+  rows_with_value: number;
+  /** How many saved rows the backend could not estimate. */
+  rows_missing: number;
+  is_estimated: boolean | null;
+  basis: string | null;
+}
+
+export interface SavedRowsBlockSummary {
+  block_id: string;
+  block_name: string;
+  row_count: number;
+  row_numbers: number[];
+  row_length_metres: number | null;
+  vines: SavedRowEstimate;
+  emitters: SavedRowEstimate;
+}
+
+export interface SavedRowsSummary {
+  row_count: number;
+  row_numbers: number[];
+  weighting_basis: string | null;
+  vines: SavedRowEstimate;
+  emitters: SavedRowEstimate;
+  blocks: Map<string, SavedRowsBlockSummary>;
+}
+
+const EMPTY_ESTIMATE: SavedRowEstimate = {
+  total: null,
+  rows_with_value: 0,
+  rows_missing: 0,
+  is_estimated: null,
+  basis: null,
+};
+
+function accumulate(
+  rows: any[],
+  valueKey: "vine_count" | "emitter_count",
+  estimatedKey: "vine_count_is_estimated" | "emitter_count_is_estimated",
+  basisKey: "vine_count_basis" | "emitter_count_basis",
+): SavedRowEstimate {
+  let total = 0;
+  let withValue = 0;
+  let missing = 0;
+  let estimated: boolean | null = null;
+  let basis: string | null = null;
+  for (const r of rows) {
+    const v = numOrNull(r?.[valueKey]);
+    if (v == null) {
+      missing += 1;
+      continue;
+    }
+    total += v;
+    withValue += 1;
+    if (r?.[estimatedKey] === true) estimated = true;
+    else if (estimated == null && r?.[estimatedKey] === false) estimated = false;
+    if (basis == null && r?.[basisKey]) basis = String(r[basisKey]);
+  }
+  return {
+    total: withValue > 0 ? total : null,
+    rows_with_value: withValue,
+    rows_missing: missing,
+    is_estimated: estimated,
+    basis,
+  };
+}
+
+/** Flattens the saved-rows payload into a plain array of row records. */
+export function savedRowRecords(payload: unknown): any[] {
+  const list: any[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as any)?.rows)
+      ? (payload as any).rows
+      : Array.isArray((payload as any)?.blocks)
+        ? (payload as any).blocks.flatMap((b: any) => b?.rows ?? [])
+        : [];
+  return list.filter((r) => r && typeof r === "object" && r.is_active !== false);
+}
+
+/** Server-value roll-up of a valve's saved rows (SQL 129). */
+export function summariseSavedRows(payload: unknown): SavedRowsSummary {
+  const rows = savedRowRecords(payload);
+  const blocks = new Map<string, SavedRowsBlockSummary>();
+
+  const byBlock = new Map<string, any[]>();
+  for (const r of rows) {
+    const id = String(r.block_id ?? r.paddock_id ?? "unknown");
+    const bucket = byBlock.get(id);
+    if (bucket) bucket.push(r);
+    else byBlock.set(id, [r]);
+  }
+
+  for (const [id, list] of byBlock) {
+    const lengths = list.map((r) => numOrNull(r.row_length_metres)).filter((n): n is number => n != null);
+    blocks.set(id, {
+      block_id: id,
+      block_name: String(list[0]?.block_name ?? list[0]?.paddock_name ?? "Block"),
+      row_count: list.length,
+      row_numbers: list
+        .map((r) => numOrNull(r.row_number))
+        .filter((n): n is number => n != null),
+      row_length_metres: lengths.length === list.length && lengths.length > 0
+        ? lengths.reduce((s, n) => s + n, 0)
+        : null,
+      vines: accumulate(list, "vine_count", "vine_count_is_estimated", "vine_count_basis"),
+      emitters: accumulate(
+        list,
+        "emitter_count",
+        "emitter_count_is_estimated",
+        "emitter_count_basis",
+      ),
+    });
+  }
+
+  return {
+    row_count: rows.length,
+    row_numbers: rows.map((r) => numOrNull(r.row_number)).filter((n): n is number => n != null),
+    weighting_basis:
+      rows.find((r) => r.weighting_basis)?.weighting_basis ??
+      (payload as any)?.weighting_basis ??
+      null,
+    vines: rows.length
+      ? accumulate(rows, "vine_count", "vine_count_is_estimated", "vine_count_basis")
+      : EMPTY_ESTIMATE,
+    emitters: rows.length
+      ? accumulate(rows, "emitter_count", "emitter_count_is_estimated", "emitter_count_basis")
+      : EMPTY_ESTIMATE,
+    blocks,
+  };
+}
+
+/**
+ * Renders a saved estimate honestly: the available total always shows, with the
+ * unavailable row count alongside it. Only a total with no server values at all
+ * reads as unavailable.
+ */
+export function savedEstimateLines(
+  estimate: SavedRowEstimate | null | undefined,
+  totalRows: number,
+  noun: string,
+): { primary: string; secondary: string | null } {
+  if (!estimate || estimate.rows_with_value === 0) {
+    return {
+      primary: "Not available",
+      secondary:
+        estimate && estimate.rows_missing > 0
+          ? `${estimate.rows_missing} row${estimate.rows_missing === 1 ? "" : "s"} unavailable`
+          : null,
+    };
+  }
+  const value = formatEstimate(estimate.total, estimate.is_estimated ?? true)!;
+  const partial = estimate.rows_missing > 0;
+  return {
+    primary: partial
+      ? `${value} ${noun} across ${estimate.rows_with_value} of ${totalRows} rows`
+      : `${value} ${noun}`,
+    secondary: partial
+      ? `${estimate.rows_missing} row${estimate.rows_missing === 1 ? "" : "s"} unavailable`
+      : null,
+  };
+}

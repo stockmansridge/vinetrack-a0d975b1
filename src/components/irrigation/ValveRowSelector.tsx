@@ -6,7 +6,7 @@
 // `set_irrigation_valve_rows` and the server response is rendered verbatim.
 // The only locally derived figure is "block coverage", which is descriptive
 // (selected rows ÷ available rows) and clearly labelled as such.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +142,7 @@ export function ValveRowSelector({
   loading,
   error,
   weightingBasis,
+  expandedBlockIds,
 }: {
   payload: unknown;
   currentValveId?: string | null;
@@ -151,15 +152,29 @@ export function ValveRowSelector({
   error?: Error | null;
   /** Server-reported basis; drives the row-length explanation message only. */
   weightingBasis?: string | null;
+  /** Blocks that already hold saved rows — these open expanded. */
+  expandedBlockIds?: string[];
 }) {
   const [search, setSearch] = useState("");
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [seeded, setSeeded] = useState(false);
 
   const blocks: AvailableRowBlock[] = useMemo(
     () => normaliseAvailableRows(payload, currentValveId),
     [payload, currentValveId],
   );
+
+  // Blocks start collapsed; only those with a saved selection open on load, so
+  // a large vineyard doesn't dump every row on screen.
+  const expandedKey = (expandedBlockIds ?? []).join(",");
+  useEffect(() => {
+    if (seeded || blocks.length === 0) return;
+    const open = new Set(expandedBlockIds ?? []);
+    setCollapsed(Object.fromEntries(blocks.map((b) => [b.block_id, !open.has(b.block_id)])));
+    setSeeded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks.length, expandedKey, seeded]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

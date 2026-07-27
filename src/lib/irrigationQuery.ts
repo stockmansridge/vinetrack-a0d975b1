@@ -9,6 +9,9 @@ import { supabase } from "@/integrations/ios-supabase/client";
 import {
   extractSelectedRowIds,
   normaliseServerRowSummary,
+  savedRowRecords,
+  summariseSavedRows,
+  type SavedRowsBlockSummary,
   type ServerRowBlockSummary,
 } from "@/lib/irrigationRows";
 
@@ -621,14 +624,18 @@ export interface ValveConnectionSummary {
   weighting_basis: string | null;
   allocation_total: number | null;
   last_saved: string | null;
-  /** SQL 127 saved estimates — null when the backend does not return them. */
+  /** SQL 127/129 saved estimates — null when the backend does not return them. */
   estimated_vine_count: number | null;
   estimated_emitter_count: number | null;
   vine_count_is_estimated: boolean | null;
   emitter_count_is_estimated: boolean | null;
-  /** Saved rows the backend could not estimate (incomplete geometry). */
+  /** Saved rows the backend could estimate / could not estimate. */
+  rows_with_vine_estimate: number;
+  rows_with_emitter_estimate: number;
   rows_missing_vine_estimate: number;
   rows_missing_emitter_estimate: number;
+  /** Per-block roll-up of the saved row snapshots, keyed by block_id. */
+  saved_blocks: Map<string, SavedRowsBlockSummary>;
   warnings: string[];
 }
 
@@ -639,44 +646,47 @@ function summariseValveBlocks(
   loading: boolean,
 ): ValveConnectionSummary {
   const active = (blocks ?? []).filter((b) => b.is_active !== false);
-  const rowList: any[] = Array.isArray(savedRows)
-    ? savedRows
-    : Array.isArray((savedRows as any)?.rows)
-      ? (savedRows as any).rows
-      : Array.isArray((savedRows as any)?.blocks)
-        ? (savedRows as any).blocks.flatMap((b: any) => b?.rows ?? [])
-        : [];
+  const rowList = savedRowRecords(savedRows);
   const savedRowIds = extractSelectedRowIds(savedRows ?? []);
   const usesRows = active.some((b) => !!b.uses_rows) || savedRowIds.length > 0;
   const rowCount =
     savedRowIds.length > 0
       ? savedRowIds.length
       : active.reduce((s, b) => s + (Number(b.row_count) || 0), 0);
-  const rowNumbers = rowList
-    .map((r: any) => Number(r?.row_number ?? r?.number))
-    .filter((n) => Number.isFinite(n));
   const total = active.reduce(
     (s, b) => s + (b.allocation_percentage == null ? 0 : Number(b.allocation_percentage)),
     0,
   );
   const dates = active.map((b) => b.updated_at).filter(Boolean) as string[];
-  const rowBasis =
-    rowList.find((r: any) => r?.weighting_basis)?.weighting_basis ??
-    (savedRows as any)?.weighting_basis ??
-    null;
 
-  // SQL 127 totals: server-returned only. Block summaries are preferred; if the
-  // payload has none, the per-block `selected_*` fields are used. Nothing is
-  // summed from per-row values, and null is never coerced to zero.
+  // SQL 129 saved snapshots. Preference order is strictly server-authoritative:
+  // the block summary payload, then the valve-block `serviced_*` totals, then
+  // the sum of the per-row values the backend itself stored. Nothing is derived
+  // from spacing or length here, and a row without a value stays unavailable
+  // rather than being counted as zero.
   const summary = normaliseServerRowSummary(savedRows);
   const blockSummaries = Array.from(summary.blocks.values());
+  const saved = summariseSavedRows(savedRows);
   const sumField = (key: "selected_vine_count" | "selected_emitter_count") => {
     if (blockSummaries.length === 0) return null;
     if (blockSummaries.some((b) => b[key] == null)) return null;
     return blockSummaries.reduce((s, b) => s + Number(b[key]), 0);
   };
-  const vineTotal = summary.selected_vine_count ?? sumField("selected_vine_count");
-  const emitterTotal = summary.selected_emitter_count ?? sumField("selected_emitter_count");
+  const servicedTotal = (key: "serviced_vine_count" | "serviced_emitter_count") => {
+    if (active.length === 0) return null;
+    if (active.some((b) => b[key] == null)) return null;
+    return active.reduce((s, b) => s + Number(b[key]), 0);
+  };
+  const vineTotal =
+    summary.selected_vine_count ??
+    sumField("selected_vine_count") ??
+    servicedTotal("serviced_vine_count") ??
+    saved.vines.total;
+  const emitterTotal =
+    summary.selected_emitter_count ??
+    sumField("selected_emitter_count") ??
+    servicedTotal("serviced_emitter_count") ??
+    saved.emitters.total;
 
   return {
     valve_id: valveId,
@@ -686,25 +696,27 @@ function summariseValveBlocks(
     uses_rows: usesRows,
     block_count: active.length,
     row_count: rowCount,
-    row_numbers: rowNumbers,
+    row_numbers: saved.row_numbers,
     weighting_basis:
-      active.find((b) => b.weighting_basis)?.weighting_basis ?? rowBasis ?? null,
+      active.find((b) => b.weighting_basis)?.weighting_basis ?? saved.weighting_basis ?? null,
     allocation_total: active.length > 0 ? total : null,
     last_saved: dates.length > 0 ? dates.sort().at(-1)! : null,
     estimated_vine_count: vineTotal,
     estimated_emitter_count: emitterTotal,
     vine_count_is_estimated:
       summary.vine_count_is_estimated ??
+      saved.vines.is_estimated ??
       (blockSummaries.some((b) => b.vine_count_is_estimated) ? true : null),
     emitter_count_is_estimated:
       summary.emitter_count_is_estimated ??
+      saved.emitters.is_estimated ??
       (blockSummaries.some((b) => b.emitter_count_is_estimated) ? true : null),
-    rows_missing_vine_estimate: rowList.filter((r: any) => r?.vine_count == null).length,
-    rows_missing_emitter_estimate: rowList.filter((r: any) => r?.emitter_count == null).length,
-    warnings: [
-      ...summary.warnings,
-      ...blockSummaries.flatMap((b) => b.warnings),
-    ],
+    rows_with_vine_estimate: saved.vines.rows_with_value,
+    rows_with_emitter_estimate: saved.emitters.rows_with_value,
+    rows_missing_vine_estimate: saved.vines.rows_missing,
+    rows_missing_emitter_estimate: saved.emitters.rows_missing,
+    saved_blocks: saved.blocks,
+    warnings: [...summary.warnings, ...blockSummaries.flatMap((b) => b.warnings)],
   };
 }
 
