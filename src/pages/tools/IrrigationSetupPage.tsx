@@ -860,6 +860,13 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
 export default function IrrigationSetupPage() {
   const { selectedVineyardId } = useVineyard();
   const status = useSetupStatus(selectedVineyardId);
+  const [tab, setTab] = useState("systems");
+  const [focusValveId, setFocusValveId] = useState<string | null>(null);
+
+  const configureValve = (valveId: string) => {
+    setFocusValveId(valveId);
+    setTab("connections");
+  };
 
   return (
     <div className="space-y-6">
@@ -888,7 +895,7 @@ export default function IrrigationSetupPage() {
         )}
       </header>
 
-      <Tabs defaultValue="systems">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="systems">Systems</TabsTrigger>
           <TabsTrigger value="valves">Valves</TabsTrigger>
@@ -898,10 +905,10 @@ export default function IrrigationSetupPage() {
           <SystemsTab vineyardId={selectedVineyardId} />
         </TabsContent>
         <TabsContent value="valves" className="mt-4">
-          <ValvesTab vineyardId={selectedVineyardId} />
+          <ValvesTab vineyardId={selectedVineyardId} onConfigure={configureValve} />
         </TabsContent>
         <TabsContent value="connections" className="mt-4">
-          <ConnectionsTab vineyardId={selectedVineyardId} />
+          <ConnectionsTab vineyardId={selectedVineyardId} focusValveId={focusValveId} />
         </TabsContent>
       </Tabs>
     </div>
