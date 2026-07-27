@@ -752,13 +752,16 @@ function RowsConnection({
     return map;
   }, [result, savedBlocks.data]);
 
-  // SQL 127 block summaries. Saved state is reloaded from
+  // Server row summaries. Saved state is reloaded from
   // list_irrigation_valve_rows; the save response is only a fallback. A dirty
   // draft has no server summary, so nothing authoritative is shown for it.
   const savedSummary = useMemo(
     () => normaliseServerRowSummary(linked.data),
     [linked.data],
   );
+  // SQL 129 saved snapshots: each saved row carries the backend's own vine and
+  // emitter figure, so the totals below are those server values added up.
+  const savedRowSnapshot = useMemo(() => summariseSavedRows(linked.data), [linked.data]);
   const resultSummary = useMemo(
     () => (result ? normaliseServerRowSummary(result) : null),
     [result],
@@ -769,11 +772,30 @@ function RowsConnection({
       ? savedSummary
       : resultSummary;
 
+  const savedBlockTotals = useMemo(() => {
+    const map = new Map<string, { vines: number | null; emitters: number | null }>();
+    for (const b of savedBlocks.data ?? []) {
+      if (b.is_active === false) continue;
+      map.set(String(b.block_id), {
+        vines: b.serviced_vine_count ?? null,
+        emitters: b.serviced_emitter_count ?? null,
+      });
+    }
+    return map;
+  }, [savedBlocks.data]);
+
   const serverBasis =
     savedSummary.weighting_basis ??
+    savedRowSnapshot.weighting_basis ??
     result?.weighting_basis ??
     (savedBlocks.data ?? []).find((b) => b.weighting_basis)?.weighting_basis ??
     null;
+
+  /** Blocks that already hold saved rows — these open expanded in the selector. */
+  const savedBlockIds = useMemo(
+    () => Array.from(savedRowSnapshot.blocks.keys()),
+    [savedRowSnapshot],
+  );
 
 
   const submit = async () => {
