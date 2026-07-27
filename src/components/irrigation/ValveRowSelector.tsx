@@ -22,10 +22,14 @@ import {
 } from "@/components/ui/tooltip";
 import {
   blockCoveragePercent,
-  normaliseAvailableRows,
+  emitterBasisLabel,
+  formatEstimate,
+  vineBasisLabel,
   type AvailableRow,
   type AvailableRowBlock,
+  normaliseAvailableRows,
 } from "@/lib/irrigationRows";
+
 
 function Unavailable({ tip, label = "Not available" }: { tip: string; label?: string }) {
   return (
@@ -40,13 +44,42 @@ function Unavailable({ tip, label = "Not available" }: { tip: string; label?: st
   );
 }
 
-/** Placeholder until the shared SQL 127 estimates land — never computed locally. */
-const PENDING_LABEL = "Calculation pending backend update";
-const VINE_TIP =
-  "Estimated vine count will be calculated from the row length and the block's Vineyard Setup information.";
-const EMITTER_TIP =
-  "Estimated emitter count will be calculated from row length and the block's configured emitter spacing.";
+const MISSING_GEOMETRY_TIP =
+  "This row does not have complete mapped start and end points, so row length and related estimates cannot be calculated.";
 
+/** Renders a SQL 127 count with its basis explanation. Never shows null as zero. */
+function CountCell({
+  value,
+  isEstimated,
+  basisText,
+  unavailableLabel,
+  noun,
+}: {
+  value: number | null;
+  isEstimated: boolean | null;
+  basisText: string | null;
+  unavailableLabel: string;
+  noun: string;
+}) {
+  const text = formatEstimate(value, isEstimated);
+  if (text == null) {
+    return (
+      <Unavailable
+        label={unavailableLabel}
+        tip={basisText ? `${noun}: ${basisText}` : MISSING_GEOMETRY_TIP}
+      />
+    );
+  }
+  const tip = basisText ?? (isEstimated ? "Estimated by the vineyard backend." : "Exact value.");
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help underline decoration-dotted underline-offset-2">{text}</span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function RowLine({
   row,
@@ -71,26 +104,28 @@ function RowLine({
         {row.row_length_m != null ? (
           `${row.row_length_m.toLocaleString()} m`
         ) : (
-          <Unavailable
-            label="Length unavailable"
-            tip="This row does not have complete mapped start and end points."
-          />
+          <Unavailable label="Length unavailable" tip={MISSING_GEOMETRY_TIP} />
         )}
       </span>
       <span className="hidden text-xs tabular-nums text-muted-foreground sm:block">
-        {row.vine_count != null ? (
-          row.vine_count.toLocaleString()
-        ) : (
-          <Unavailable label={PENDING_LABEL} tip={VINE_TIP} />
-        )}
+        <CountCell
+          value={row.vine_count}
+          isEstimated={row.vine_count_is_estimated}
+          basisText={vineBasisLabel(row.vine_count_basis)}
+          unavailableLabel="Vines unavailable"
+          noun="Vine count"
+        />
       </span>
       <span className="hidden text-xs tabular-nums text-muted-foreground sm:block">
-        {row.emitter_count != null ? (
-          row.emitter_count.toLocaleString()
-        ) : (
-          <Unavailable label={PENDING_LABEL} tip={EMITTER_TIP} />
-        )}
+        <CountCell
+          value={row.emitter_count}
+          isEstimated={row.emitter_count_is_estimated}
+          basisText={emitterBasisLabel(row.emitter_count_basis)}
+          unavailableLabel="Emitters unavailable"
+          noun="Emitter count"
+        />
       </span>
+
 
       <span className="truncate text-xs text-muted-foreground">
         {row.other_valve_names.length > 0 ? `Also on ${row.other_valve_names.join(", ")}` : ""}
@@ -188,7 +223,7 @@ export function ValveRowSelector({
           <PortalNotice
             compact
             variant="info"
-            description="Row length is currently used to divide the valve's water. Per-row vine and emitter counts are not yet available."
+            description="Row length is the allocation basis returned by the backend for this valve. Vine and emitter figures below are estimates and do not change how the water is divided."
           />
         )}
 

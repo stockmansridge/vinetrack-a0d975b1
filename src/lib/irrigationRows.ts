@@ -43,6 +43,11 @@ export interface AvailableRow {
   row_length_m: number | null;
   vine_count: number | null;
   emitter_count: number | null;
+  /** SQL 127 basis metadata — never derived in the browser. */
+  vine_count_basis: string | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_basis: string | null;
+  emitter_count_is_estimated: boolean | null;
   /** Whether the RPC payload carries usable mapped coordinates for this row. */
   has_start_point: boolean;
   has_end_point: boolean;
@@ -57,8 +62,66 @@ export interface AvailableRowBlock {
   rows: AvailableRow[];
 }
 
+
 const numOrNull = (v: unknown): number | null =>
   v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
+
+const boolOrNull = (v: unknown): boolean | null =>
+  v == null ? null : v === true || v === "true" || v === 1;
+
+// --- SQL 127 basis metadata -------------------------------------------------
+
+const VINE_BASIS_LABELS: Record<string, string> = {
+  block_total_by_row_length: "Configured block total distributed by row length",
+  block_vine_count_by_row_length: "Configured block total distributed by row length",
+  block_total: "Configured block total distributed by row length",
+  row_length_and_vine_spacing: "Estimated from row length and vine spacing",
+  vine_spacing: "Estimated from row length and vine spacing",
+  row_length: "Estimated from row length and vine spacing",
+  exact_row_count: "Exact row count",
+  row_vine_count: "Exact row count",
+  exact: "Exact row count",
+  unavailable: "Unavailable",
+  none: "Unavailable",
+};
+
+const EMITTER_BASIS_LABELS: Record<string, string> = {
+  row_length_and_emitter_spacing: "Estimated from row length and emitter spacing",
+  emitter_spacing: "Estimated from row length and emitter spacing",
+  row_length: "Estimated from row length and emitter spacing",
+  configured_exact_count: "Configured exact count",
+  exact_emitter_count: "Configured exact count",
+  exact: "Configured exact count",
+  unavailable: "Unavailable",
+  none: "Unavailable",
+};
+
+function basisLabel(map: Record<string, string>, basis: string | null | undefined): string | null {
+  if (!basis) return null;
+  return (
+    map[basis] ?? basis.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+  );
+}
+
+/** User-facing explanation of the server-returned vine-count basis. */
+export const vineBasisLabel = (b: string | null | undefined) => basisLabel(VINE_BASIS_LABELS, b);
+/** User-facing explanation of the server-returned emitter-count basis. */
+export const emitterBasisLabel = (b: string | null | undefined) =>
+  basisLabel(EMITTER_BASIS_LABELS, b);
+
+/**
+ * Formats a server-returned count. `≈` is used only when the backend marks the
+ * value as estimated; null is never rendered as zero.
+ */
+export function formatEstimate(
+  value: number | null | undefined,
+  isEstimated: boolean | null | undefined,
+): string | null {
+  if (value == null) return null;
+  const n = Math.round(Number(value)).toLocaleString();
+  return isEstimated ? `≈${n}` : n;
+}
+
 
 /** True when the payload contains a usable lat/lng pair for a row endpoint. */
 function hasPoint(...candidates: unknown[]): boolean {
@@ -133,6 +196,11 @@ function normaliseRow(
     ),
     vine_count: numOrNull(raw?.vine_count ?? raw?.vines),
     emitter_count: numOrNull(raw?.emitter_count ?? raw?.emitters),
+    vine_count_basis: raw?.vine_count_basis ?? null,
+    vine_count_is_estimated: boolOrNull(raw?.vine_count_is_estimated),
+    emitter_count_basis: raw?.emitter_count_basis ?? null,
+    emitter_count_is_estimated: boolOrNull(raw?.emitter_count_is_estimated),
+
     has_start_point: hasPoint(
       raw?.start_point,
       raw?.startPoint,
@@ -243,6 +311,14 @@ export interface SnapshotRowBlock {
   row_count: number;
   allocation_percentage: number | null;
   weighting_basis: string | null;
+  /** SQL 127 snapshot values — frozen at the time the session was recorded. */
+  selected_vine_count: number | null;
+  selected_emitter_count: number | null;
+  selected_row_length_metres: number | null;
+  vine_count_basis: string | null;
+  emitter_count_basis: string | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
 }
 
 /**
@@ -275,8 +351,18 @@ export function snapshotRowBlocks(snapshot: any): {
       row_count: numOrNull(b.row_count) ?? rows.length,
       allocation_percentage: numOrNull(b.allocation_percentage),
       weighting_basis: b.weighting_basis ?? basis,
+      selected_vine_count: numOrNull(b.selected_vine_count ?? b.vine_count),
+      selected_emitter_count: numOrNull(b.selected_emitter_count ?? b.emitter_count),
+      selected_row_length_metres: numOrNull(
+        b.selected_row_length_metres ?? b.row_length_metres,
+      ),
+      vine_count_basis: b.vine_count_basis ?? null,
+      emitter_count_basis: b.emitter_count_basis ?? null,
+      vine_count_is_estimated: boolOrNull(b.vine_count_is_estimated),
+      emitter_count_is_estimated: boolOrNull(b.emitter_count_is_estimated),
     });
   }
+
   if (blocks.length === 0) {
     if (snapshot.allocation_method !== "rows" && !snapshot.uses_rows) return null;
     return { blocks: [], weighting_basis: basis, row_count: numOrNull(snapshot.row_count) ?? 0 };
@@ -286,5 +372,97 @@ export function snapshotRowBlocks(snapshot: any): {
     weighting_basis: basis,
     row_count:
       numOrNull(snapshot.row_count) ?? blocks.reduce((s, b) => s + b.row_count, 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SQL 127 block summaries (server-authoritative — never computed locally)
+// ---------------------------------------------------------------------------
+
+export interface ServerRowBlockSummary {
+  block_id: string;
+  block_name: string | null;
+  selected_row_count: number | null;
+  total_block_row_count: number | null;
+  selected_row_length_metres: number | null;
+  total_block_row_length_metres: number | null;
+  selected_vine_count: number | null;
+  selected_emitter_count: number | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
+  vine_count_basis: string | null;
+  emitter_count_basis: string | null;
+  row_coverage_percent: number | null;
+  length_coverage_percent: number | null;
+  allocation_percentage: number | null;
+  weighting_basis: string | null;
+  warnings: string[];
+}
+
+export interface ServerRowSummary {
+  blocks: Map<string, ServerRowBlockSummary>;
+  weighting_basis: string | null;
+  selected_vine_count: number | null;
+  selected_emitter_count: number | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
+  row_count: number | null;
+  warnings: string[];
+}
+
+const stringList = (v: unknown): string[] =>
+  Array.isArray(v)
+    ? v.map((x) => (typeof x === "string" ? x : (x?.message ?? x?.warning ?? null))).filter(Boolean).map(String)
+    : v
+      ? [String(v)]
+      : [];
+
+/**
+ * Reads the SQL 127 block-summary payload returned by
+ * list_irrigation_valve_rows / set_irrigation_valve_rows. Any field the backend
+ * does not return stays null — the portal never substitutes a computed value.
+ */
+export function normaliseServerRowSummary(payload: unknown): ServerRowSummary {
+  const root: any = payload && typeof payload === "object" ? payload : {};
+  const blocksRaw: any[] = Array.isArray(root.blocks)
+    ? root.blocks
+    : Array.isArray(root.block_summaries)
+      ? root.block_summaries
+      : [];
+
+  const blocks = new Map<string, ServerRowBlockSummary>();
+  for (const b of blocksRaw) {
+    const id = String(b?.block_id ?? b?.paddock_id ?? "");
+    if (!id) continue;
+    blocks.set(id, {
+      block_id: id,
+      block_name: b?.block_name ?? b?.paddock_name ?? null,
+      selected_row_count: numOrNull(b?.selected_row_count ?? b?.row_count),
+      total_block_row_count: numOrNull(b?.total_block_row_count),
+      selected_row_length_metres: numOrNull(b?.selected_row_length_metres),
+      total_block_row_length_metres: numOrNull(b?.total_block_row_length_metres),
+      selected_vine_count: numOrNull(b?.selected_vine_count),
+      selected_emitter_count: numOrNull(b?.selected_emitter_count),
+      vine_count_is_estimated: boolOrNull(b?.vine_count_is_estimated),
+      emitter_count_is_estimated: boolOrNull(b?.emitter_count_is_estimated),
+      vine_count_basis: b?.vine_count_basis ?? null,
+      emitter_count_basis: b?.emitter_count_basis ?? null,
+      row_coverage_percent: numOrNull(b?.row_coverage_percent),
+      length_coverage_percent: numOrNull(b?.length_coverage_percent),
+      allocation_percentage: numOrNull(b?.allocation_percentage),
+      weighting_basis: b?.weighting_basis ?? root?.weighting_basis ?? null,
+      warnings: stringList(b?.warnings),
+    });
+  }
+
+  return {
+    blocks,
+    weighting_basis: root?.weighting_basis ?? null,
+    selected_vine_count: numOrNull(root?.selected_vine_count),
+    selected_emitter_count: numOrNull(root?.selected_emitter_count),
+    vine_count_is_estimated: boolOrNull(root?.vine_count_is_estimated),
+    emitter_count_is_estimated: boolOrNull(root?.emitter_count_is_estimated),
+    row_count: numOrNull(root?.row_count ?? root?.selected_row_count),
+    warnings: stringList(root?.warnings),
   };
 }

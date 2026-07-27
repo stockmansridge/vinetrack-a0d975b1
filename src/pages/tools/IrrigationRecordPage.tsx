@@ -35,7 +35,7 @@ import {
   type CalculationMethod,
   type IrrigationPreview,
 } from "@/lib/irrigationQuery";
-import { weightingBasisLabel } from "@/lib/irrigationRows";
+import { formatEstimate, weightingBasisLabel } from "@/lib/irrigationRows";
 
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -342,8 +342,25 @@ export default function IrrigationRecordPage() {
                       Rows supplied: {preview.row_count ?? "—"} · Allocation basis:{" "}
                       {weightingBasisLabel(preview.weighting_basis)} · Blocks supplied:{" "}
                       {preview.blocks.length}
+                      {formatEstimate(
+                        (preview as any).selected_vine_count ?? null,
+                        (preview as any).vine_count_is_estimated ?? true,
+                      ) &&
+                        ` · Estimated vines supplied: ${formatEstimate(
+                          (preview as any).selected_vine_count,
+                          (preview as any).vine_count_is_estimated ?? true,
+                        )}`}
+                      {formatEstimate(
+                        (preview as any).selected_emitter_count ?? null,
+                        (preview as any).emitter_count_is_estimated ?? true,
+                      ) &&
+                        ` · Estimated emitters supplied: ${formatEstimate(
+                          (preview as any).selected_emitter_count,
+                          (preview as any).emitter_count_is_estimated ?? true,
+                        )}`}
                     </div>
                   )}
+
                 </div>
 
 
