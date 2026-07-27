@@ -22,10 +22,14 @@ import {
 } from "@/components/ui/tooltip";
 import {
   blockCoveragePercent,
-  normaliseAvailableRows,
+  emitterBasisLabel,
+  formatEstimate,
+  vineBasisLabel,
   type AvailableRow,
   type AvailableRowBlock,
+  normaliseAvailableRows,
 } from "@/lib/irrigationRows";
+
 
 function Unavailable({ tip, label = "Not available" }: { tip: string; label?: string }) {
   return (
