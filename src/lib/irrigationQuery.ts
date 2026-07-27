@@ -4,7 +4,7 @@
 // SQL 125 RPC contract. The portal never recalculates volumes, allocations
 // or reporting figures locally: the server is authoritative and the UI only
 // renders what the RPCs return.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 
 const rpc = (name: string, args: Record<string, unknown>) =>
