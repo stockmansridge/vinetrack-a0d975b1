@@ -847,7 +847,7 @@ function RowsConnection({
         <div className="rounded-lg border border-border">
           <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Block</span>
-            <span className="text-right">Selected rows</span>
+            <span className="text-right">Block rows selected</span>
             <span className="text-right">Block coverage</span>
             <span className="text-right">Share of valve water</span>
           </div>
