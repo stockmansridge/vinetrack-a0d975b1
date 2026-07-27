@@ -616,6 +616,15 @@ export interface ValveConnectionSummary {
   weighting_basis: string | null;
   allocation_total: number | null;
   last_saved: string | null;
+  /** SQL 127 saved estimates — null when the backend does not return them. */
+  estimated_vine_count: number | null;
+  estimated_emitter_count: number | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_is_estimated: boolean | null;
+  /** Saved rows the backend could not estimate (incomplete geometry). */
+  rows_missing_vine_estimate: number;
+  rows_missing_emitter_estimate: number;
+  warnings: string[];
 }
 
 function summariseValveBlocks(
@@ -650,6 +659,20 @@ function summariseValveBlocks(
     rowList.find((r: any) => r?.weighting_basis)?.weighting_basis ??
     (savedRows as any)?.weighting_basis ??
     null;
+
+  // SQL 127 totals: server-returned only. Block summaries are preferred; if the
+  // payload has none, the per-block `selected_*` fields are used. Nothing is
+  // summed from per-row values, and null is never coerced to zero.
+  const summary = normaliseServerRowSummary(savedRows);
+  const blockSummaries = Array.from(summary.blocks.values());
+  const sumField = (key: "selected_vine_count" | "selected_emitter_count") => {
+    if (blockSummaries.length === 0) return null;
+    if (blockSummaries.some((b) => b[key] == null)) return null;
+    return blockSummaries.reduce((s, b) => s + Number(b[key]), 0);
+  };
+  const vineTotal = summary.selected_vine_count ?? sumField("selected_vine_count");
+  const emitterTotal = summary.selected_emitter_count ?? sumField("selected_emitter_count");
+
   return {
     valve_id: valveId,
     loading,
@@ -663,8 +686,23 @@ function summariseValveBlocks(
       active.find((b) => b.weighting_basis)?.weighting_basis ?? rowBasis ?? null,
     allocation_total: active.length > 0 ? total : null,
     last_saved: dates.length > 0 ? dates.sort().at(-1)! : null,
+    estimated_vine_count: vineTotal,
+    estimated_emitter_count: emitterTotal,
+    vine_count_is_estimated:
+      summary.vine_count_is_estimated ??
+      (blockSummaries.some((b) => b.vine_count_is_estimated) ? true : null),
+    emitter_count_is_estimated:
+      summary.emitter_count_is_estimated ??
+      (blockSummaries.some((b) => b.emitter_count_is_estimated) ? true : null),
+    rows_missing_vine_estimate: rowList.filter((r: any) => r?.vine_count == null).length,
+    rows_missing_emitter_estimate: rowList.filter((r: any) => r?.emitter_count == null).length,
+    warnings: [
+      ...summary.warnings,
+      ...blockSummaries.flatMap((b) => b.warnings),
+    ],
   };
 }
+
 
 /** Connection status for every valve, used by the Valves tab and the Connections overview. */
 export function useValveConnectionSummaries(
