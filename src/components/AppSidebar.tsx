@@ -157,6 +157,7 @@ export function AppSidebar() {
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { hasAccess: hasIrrigationRecords } = useIrrigationAccess(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -167,6 +168,7 @@ export function AppSidebar() {
     items.filter((i) => canAccessRoute(i.url, currentRole));
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+
 
   const renderItems = (items: NavItem[]) =>
     items.map((item) => (
