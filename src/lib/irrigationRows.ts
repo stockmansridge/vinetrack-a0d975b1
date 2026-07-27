@@ -57,7 +57,19 @@ export interface AvailableRowBlock {
 const numOrNull = (v: unknown): number | null =>
   v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
 
-function otherValves(raw: any): string[] {
+function otherValves(raw: any, currentValveId?: string | null): string[] {
+  // Live SQL 126 shape: connected_valve_names + connected_valve_ids.
+  const names: any[] = Array.isArray(raw?.connected_valve_names)
+    ? raw.connected_valve_names
+    : [];
+  const ids: any[] = Array.isArray(raw?.connected_valve_ids) ? raw.connected_valve_ids : [];
+  if (names.length > 0) {
+    return names
+      .map((n: any, i: number) => ({ name: String(n), id: ids[i] ? String(ids[i]) : null }))
+      .filter((v) => !currentValveId || v.id !== currentValveId)
+      .map((v) => v.name);
+  }
+
   const source =
     raw?.other_valves ?? raw?.other_valve_names ?? raw?.conflicting_valves ?? null;
   if (!source) {
@@ -71,7 +83,11 @@ function otherValves(raw: any): string[] {
     .map(String);
 }
 
-function normaliseRow(raw: any, block: { id: string; name: string; variety: string | null }): AvailableRow {
+function normaliseRow(
+  raw: any,
+  block: { id: string; name: string; variety: string | null },
+  currentValveId?: string | null,
+): AvailableRow {
   return {
     row_id: String(raw?.row_id ?? raw?.id ?? raw?.paddock_row_id),
     row_number: numOrNull(raw?.row_number ?? raw?.number),
@@ -79,18 +95,24 @@ function normaliseRow(raw: any, block: { id: string; name: string; variety: stri
     block_id: String(raw?.block_id ?? raw?.paddock_id ?? block.id),
     block_name: String(raw?.block_name ?? raw?.paddock_name ?? block.name),
     variety_name: raw?.variety_name ?? raw?.variety ?? block.variety,
-    row_length_m: numOrNull(raw?.row_length_m ?? raw?.length_m ?? raw?.row_length),
+    row_length_m: numOrNull(
+      raw?.row_length_metres ?? raw?.row_length_m ?? raw?.length_m ?? raw?.row_length,
+    ),
     vine_count: numOrNull(raw?.vine_count ?? raw?.vines),
     emitter_count: numOrNull(raw?.emitter_count ?? raw?.emitters),
-    other_valve_names: otherValves(raw),
+    other_valve_names: otherValves(raw, currentValveId),
   };
 }
 
 /**
  * Accepts either a flat row array or blocks-with-rows and returns block groups
  * keyed by the real paddock record (block_id / block_name), never by variety.
+ * `currentValveId` is excluded from the overlap ("also on") warning.
  */
-export function normaliseAvailableRows(payload: unknown): AvailableRowBlock[] {
+export function normaliseAvailableRows(
+  payload: unknown,
+  currentValveId?: string | null,
+): AvailableRowBlock[] {
   const list: any[] = Array.isArray(payload)
     ? payload
     : Array.isArray((payload as any)?.blocks)
@@ -119,9 +141,9 @@ export function normaliseAvailableRows(payload: unknown): AvailableRowBlock[] {
         name: String(entry.block_name ?? entry.paddock_name ?? entry.name ?? "Block"),
         variety: entry.variety_name ?? entry.variety ?? null,
       };
-      for (const r of entry.rows) push(normaliseRow(r, block));
+      for (const r of entry.rows) push(normaliseRow(r, block, currentValveId));
     } else if (entry) {
-      push(normaliseRow(entry, { id: "unknown", name: "Block", variety: null }));
+      push(normaliseRow(entry, { id: "unknown", name: "Block", variety: null }, currentValveId));
     }
   }
 
@@ -132,6 +154,7 @@ export function normaliseAvailableRows(payload: unknown): AvailableRowBlock[] {
   blocks.sort((a, b) => a.block_name.localeCompare(b.block_name, undefined, { numeric: true }));
   return blocks;
 }
+
 
 /** Row UUIDs from list_irrigation_valve_rows — never inferred from row_start/row_end. */
 export function extractSelectedRowIds(payload: unknown): string[] {
