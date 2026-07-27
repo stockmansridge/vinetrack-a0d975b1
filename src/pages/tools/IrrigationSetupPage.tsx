@@ -1100,38 +1100,44 @@ function ConnectionsTab({
             ) : !currentSummary.configured ? (
               <div className="text-muted-foreground">No connections configured</div>
             ) : (
-              <dl className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
-                <div>
-                  <span className="text-muted-foreground">Method: </span>
-                  {currentSummary.uses_rows
-                    ? "Rows"
-                    : ALLOCATION_METHOD_LABEL[currentSummary.method ?? "manual_percentage"]}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Rows: </span>
-                  <span className="tabular-nums">
-                    {currentSummary.uses_rows ? currentSummary.row_count : "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Blocks: </span>
-                  <span className="tabular-nums">{currentSummary.block_count}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Allocation basis: </span>
-                  {weightingBasisLabel(currentSummary.weighting_basis)}
-                </div>
-                {currentSummary.last_saved && (
+              <>
+                <dl className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
                   <div>
-                    <span className="text-muted-foreground">Last saved: </span>
-                    {new Date(currentSummary.last_saved).toLocaleDateString(undefined, {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
+                    <span className="text-muted-foreground">Method: </span>
+                    {valveMethodText(currentSummary)}
+                  </div>
+                  {currentSummary.uses_rows && (
+                    <div>
+                      <span className="text-muted-foreground">Rows: </span>
+                      <span className="tabular-nums">{currentSummary.row_count}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Blocks: </span>
+                    <span className="tabular-nums">{currentSummary.block_count}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Allocation basis: </span>
+                    {weightingBasisLabel(currentSummary.weighting_basis)}
+                  </div>
+                  {currentSummary.last_saved && (
+                    <div>
+                      <span className="text-muted-foreground">Last saved: </span>
+                      {new Date(currentSummary.last_saved).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </div>
+                  )}
+                </dl>
+                {currentSummary.uses_rows && currentSummary.row_numbers.length > 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Saved rows: {formatRowRanges(currentSummary.row_numbers)}
                   </div>
                 )}
-              </dl>
+              </>
+
             )}
           </div>
         )}
