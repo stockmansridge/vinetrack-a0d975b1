@@ -76,6 +76,7 @@ const VINE_BASIS_LABELS: Record<string, string> = {
   block_vine_count_by_row_length: "Configured block total distributed by row length",
   block_total: "Configured block total distributed by row length",
   row_length_and_vine_spacing: "Estimated from row length and vine spacing",
+  row_length_spacing: "Estimated from row length and vine spacing",
   vine_spacing: "Estimated from row length and vine spacing",
   row_length: "Estimated from row length and vine spacing",
   exact_row_count: "Exact row count",
@@ -87,6 +88,7 @@ const VINE_BASIS_LABELS: Record<string, string> = {
 
 const EMITTER_BASIS_LABELS: Record<string, string> = {
   row_length_and_emitter_spacing: "Estimated from row length and emitter spacing",
+  row_length_spacing: "Estimated from row length and emitter spacing",
   emitter_spacing: "Estimated from row length and emitter spacing",
   row_length: "Estimated from row length and emitter spacing",
   configured_exact_count: "Configured exact count",
