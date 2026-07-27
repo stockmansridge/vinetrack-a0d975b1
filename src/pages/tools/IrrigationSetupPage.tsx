@@ -704,10 +704,29 @@ function RowsConnection({
     return map;
   }, [result, savedBlocks.data]);
 
+  // SQL 127 block summaries. Saved state is reloaded from
+  // list_irrigation_valve_rows; the save response is only a fallback. A dirty
+  // draft has no server summary, so nothing authoritative is shown for it.
+  const savedSummary = useMemo(
+    () => normaliseServerRowSummary(linked.data),
+    [linked.data],
+  );
+  const resultSummary = useMemo(
+    () => (result ? normaliseServerRowSummary(result) : null),
+    [result],
+  );
+  const shownSummary: ServerRowSummary | null = dirty
+    ? null
+    : savedSummary.blocks.size > 0
+      ? savedSummary
+      : resultSummary;
+
   const serverBasis =
+    savedSummary.weighting_basis ??
     result?.weighting_basis ??
     (savedBlocks.data ?? []).find((b) => b.weighting_basis)?.weighting_basis ??
     null;
+
 
   const submit = async () => {
     try {
