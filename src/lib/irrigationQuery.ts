@@ -4,7 +4,7 @@
 // SQL 125 RPC contract. The portal never recalculates volumes, allocations
 // or reporting figures locally: the server is authoritative and the UI only
 // renders what the RPCs return.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 
 const rpc = (name: string, args: Record<string, unknown>) =>
@@ -101,6 +101,7 @@ export interface IrrigationValveBlock {
   uses_rows?: boolean | null;
   row_count?: number | null;
   weighting_basis?: string | null;
+  updated_at?: string | null;
 }
 
 
@@ -594,6 +595,77 @@ export function useSetValveRows(vineyardId: string | null) {
     onSuccess: invalidate,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Per-valve connection status (read-only summary for the setup screens)
+// ---------------------------------------------------------------------------
+
+export interface ValveConnectionSummary {
+  valve_id: string;
+  loading: boolean;
+  configured: boolean;
+  method: AllocationMethod | null;
+  uses_rows: boolean;
+  block_count: number;
+  row_count: number;
+  weighting_basis: string | null;
+  allocation_total: number | null;
+  last_saved: string | null;
+}
+
+function summariseValveBlocks(
+  valveId: string,
+  blocks: IrrigationValveBlock[] | undefined,
+  loading: boolean,
+): ValveConnectionSummary {
+  const active = (blocks ?? []).filter((b) => b.is_active !== false);
+  const usesRows = active.some((b) => !!b.uses_rows);
+  const rowCount = active.reduce((s, b) => s + (Number(b.row_count) || 0), 0);
+  const total = active.reduce(
+    (s, b) => s + (b.allocation_percentage == null ? 0 : Number(b.allocation_percentage)),
+    0,
+  );
+  const dates = active.map((b) => b.updated_at).filter(Boolean) as string[];
+  return {
+    valve_id: valveId,
+    loading,
+    configured: active.length > 0,
+    method: (active[0]?.allocation_method as AllocationMethod) ?? null,
+    uses_rows: usesRows,
+    block_count: active.length,
+    row_count: rowCount,
+    weighting_basis: active.find((b) => b.weighting_basis)?.weighting_basis ?? null,
+    allocation_total: active.length > 0 ? total : null,
+    last_saved: dates.length > 0 ? dates.sort().at(-1)! : null,
+  };
+}
+
+/** Connection status for every valve, used by the Valves tab and the Connections overview. */
+export function useValveConnectionSummaries(
+  vineyardId: string | null,
+  valveIds: string[],
+) {
+  const results = useQueries({
+    queries: valveIds.map((id) => ({
+      queryKey: ["irrigation", "valve-blocks", vineyardId, id],
+      enabled: !!vineyardId,
+      queryFn: () =>
+        call<IrrigationValveBlock[]>("list_irrigation_valve_blocks", {
+          p_vineyard_id: vineyardId,
+          p_valve_id: id,
+        }),
+    })),
+  });
+
+  const map: Record<string, ValveConnectionSummary> = {};
+  valveIds.forEach((id, i) => {
+    const r = results[i];
+    map[id] = summariseValveBlocks(id, r?.data as IrrigationValveBlock[] | undefined, !!r?.isLoading);
+  });
+  return map;
+}
+
+
 
 
 
