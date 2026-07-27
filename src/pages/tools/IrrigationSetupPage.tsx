@@ -560,6 +560,7 @@ function RowsConnection({
     <div className="space-y-4">
       <ValveRowSelector
         payload={available.data}
+        currentValveId={valveId}
         selected={selected}
         onChange={setSelected}
         loading={available.isLoading || linked.isLoading}

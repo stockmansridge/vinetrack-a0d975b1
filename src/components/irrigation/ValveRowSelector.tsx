@@ -58,12 +58,14 @@ function RowLine({
 
 export function ValveRowSelector({
   payload,
+  currentValveId,
   selected,
   onChange,
   loading,
   error,
 }: {
   payload: unknown;
+  currentValveId?: string | null;
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
   loading?: boolean;
@@ -74,8 +76,8 @@ export function ValveRowSelector({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const blocks: AvailableRowBlock[] = useMemo(
-    () => normaliseAvailableRows(payload),
-    [payload],
+    () => normaliseAvailableRows(payload, currentValveId),
+    [payload, currentValveId],
   );
 
   const filtered = useMemo(() => {
