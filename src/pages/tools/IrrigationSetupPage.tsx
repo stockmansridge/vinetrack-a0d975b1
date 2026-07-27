@@ -671,29 +671,55 @@ function RowsConnection({
   const clear = useSetValveBlocks(vineyardId);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  /** Valve whose saved rows the editor has already hydrated from. */
+  const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
+  /** Baseline = the saved UUID set the draft was hydrated from. */
+  const [baseline, setBaseline] = useState<string[]>([]);
   const [result, setResult] = useState<SetValveRowsResult | null>(null);
 
-  // Preselect exactly the linked row UUIDs (never inferred from row_start/end).
-  useEffect(() => {
-    if (!linked.data || loadedFor === valveId) return;
-    setSelected(new Set(extractSelectedRowIds(linked.data)));
-    setLoadedFor(valveId);
-    onDirtyChange(false);
-  }, [linked.data, valveId, loadedFor, onDirtyChange]);
-
-  const savedIds = useMemo(
-    () => new Set(extractSelectedRowIds(linked.data ?? [])),
+  // Saved row UUIDs exactly as returned by list_irrigation_valve_rows.
+  const savedIdList = useMemo(
+    () => normaliseIds(extractSelectedRowIds(linked.data ?? [])),
     [linked.data],
   );
-  const dirty =
-    savedIds.size !== selected.size ||
-    Array.from(selected).some((id) => !savedIds.has(id));
+  const savedIds = useMemo(() => new Set(savedIdList), [savedIdList]);
+
+  // The editor may not judge "unsaved changes" until every query backing the
+  // saved configuration has resolved — otherwise hydration looks like an edit.
+  const queriesReady =
+    linked.data !== undefined &&
+    !linked.isLoading &&
+    !available.isLoading &&
+    !savedBlocks.isLoading;
+  const editorInitialised = queriesReady && initialisedFor === valveId;
+
+  // Hydration: server → draft. Never treated as a user edit.
+  useEffect(() => {
+    if (!queriesReady) return;
+    if (initialisedFor !== valveId) {
+      setSelected(new Set(savedIdList));
+      setBaseline(savedIdList);
+      setResult(null);
+      setInitialisedFor(valveId);
+      return;
+    }
+    // A refetch while the draft is clean re-baselines silently; a refetch while
+    // the user has genuine unsaved changes leaves their draft alone.
+    if (!sameIds(baseline, savedIdList) && sameIds(baseline, Array.from(selected))) {
+      setSelected(new Set(savedIdList));
+      setBaseline(savedIdList);
+    }
+  }, [queriesReady, valveId, initialisedFor, savedIdList, baseline, selected]);
+
+  const dirty = editorInitialised && !sameIds(Array.from(selected), baseline);
+  /** Saved configuration changed on the server while a draft was in progress. */
+  const staleBaseline = editorInitialised && dirty && !sameIds(baseline, savedIdList);
 
   useEffect(() => {
     onDirtyChange(dirty);
     guardChange(dirty);
   }, [dirty, onDirtyChange, guardChange]);
+
 
   const blocks = useMemo(
     () => normaliseAvailableRows(available.data, valveId),
