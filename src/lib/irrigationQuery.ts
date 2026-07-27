@@ -607,7 +607,10 @@ export interface ValveConnectionSummary {
   method: AllocationMethod | null;
   uses_rows: boolean;
   block_count: number;
+  /** Saved row count — authoritative, from list_irrigation_valve_rows. */
   row_count: number;
+  /** Saved row numbers (for the compact "90–108" range). */
+  row_numbers: number[];
   weighting_basis: string | null;
   allocation_total: number | null;
   last_saved: string | null;
@@ -616,25 +619,46 @@ export interface ValveConnectionSummary {
 function summariseValveBlocks(
   valveId: string,
   blocks: IrrigationValveBlock[] | undefined,
+  savedRows: unknown,
   loading: boolean,
 ): ValveConnectionSummary {
   const active = (blocks ?? []).filter((b) => b.is_active !== false);
-  const usesRows = active.some((b) => !!b.uses_rows);
-  const rowCount = active.reduce((s, b) => s + (Number(b.row_count) || 0), 0);
+  const rowList: any[] = Array.isArray(savedRows)
+    ? savedRows
+    : Array.isArray((savedRows as any)?.rows)
+      ? (savedRows as any).rows
+      : Array.isArray((savedRows as any)?.blocks)
+        ? (savedRows as any).blocks.flatMap((b: any) => b?.rows ?? [])
+        : [];
+  const savedRowIds = extractSelectedRowIds(savedRows ?? []);
+  const usesRows = active.some((b) => !!b.uses_rows) || savedRowIds.length > 0;
+  const rowCount =
+    savedRowIds.length > 0
+      ? savedRowIds.length
+      : active.reduce((s, b) => s + (Number(b.row_count) || 0), 0);
+  const rowNumbers = rowList
+    .map((r: any) => Number(r?.row_number ?? r?.number))
+    .filter((n) => Number.isFinite(n));
   const total = active.reduce(
     (s, b) => s + (b.allocation_percentage == null ? 0 : Number(b.allocation_percentage)),
     0,
   );
   const dates = active.map((b) => b.updated_at).filter(Boolean) as string[];
+  const rowBasis =
+    rowList.find((r: any) => r?.weighting_basis)?.weighting_basis ??
+    (savedRows as any)?.weighting_basis ??
+    null;
   return {
     valve_id: valveId,
     loading,
-    configured: active.length > 0,
-    method: (active[0]?.allocation_method as AllocationMethod) ?? null,
+    configured: active.length > 0 || savedRowIds.length > 0,
+    method: usesRows ? "rows" : ((active[0]?.allocation_method as AllocationMethod) ?? null),
     uses_rows: usesRows,
     block_count: active.length,
     row_count: rowCount,
-    weighting_basis: active.find((b) => b.weighting_basis)?.weighting_basis ?? null,
+    row_numbers: rowNumbers,
+    weighting_basis:
+      active.find((b) => b.weighting_basis)?.weighting_basis ?? rowBasis ?? null,
     allocation_total: active.length > 0 ? total : null,
     last_saved: dates.length > 0 ? dates.sort().at(-1)! : null,
   };
@@ -645,7 +669,7 @@ export function useValveConnectionSummaries(
   vineyardId: string | null,
   valveIds: string[],
 ) {
-  const results = useQueries({
+  const blockResults = useQueries({
     queries: valveIds.map((id) => ({
       queryKey: ["irrigation", "valve-blocks", vineyardId, id],
       enabled: !!vineyardId,
@@ -657,13 +681,32 @@ export function useValveConnectionSummaries(
     })),
   });
 
+  const rowResults = useQueries({
+    queries: valveIds.map((id) => ({
+      queryKey: ["irrigation", "valve-rows", vineyardId, id],
+      enabled: !!vineyardId,
+      queryFn: () =>
+        call<unknown>("list_irrigation_valve_rows", {
+          p_vineyard_id: vineyardId,
+          p_valve_id: id,
+        }),
+    })),
+  });
+
   const map: Record<string, ValveConnectionSummary> = {};
   valveIds.forEach((id, i) => {
-    const r = results[i];
-    map[id] = summariseValveBlocks(id, r?.data as IrrigationValveBlock[] | undefined, !!r?.isLoading);
+    const b = blockResults[i];
+    const r = rowResults[i];
+    map[id] = summariseValveBlocks(
+      id,
+      b?.data as IrrigationValveBlock[] | undefined,
+      r?.data,
+      !!b?.isLoading || !!r?.isLoading,
+    );
   });
   return map;
 }
+
 
 
 
