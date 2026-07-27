@@ -709,7 +709,7 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Valve to block connections</CardTitle>
+        <CardTitle className="text-base">Valve to block or valve to row connections</CardTitle>
         <CardDescription>
           Allocations decide how each session&rsquo;s water is split between blocks. Saving
           replaces the active configuration; existing records keep their own snapshot.
@@ -722,6 +722,8 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
             <Select
               value={valveId}
               onValueChange={(v) => {
+                if (!confirmDiscard()) return;
+                setRowsDirty(false);
                 setValveId(v);
                 setLoadedFor(null);
               }}
@@ -740,7 +742,14 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
           </div>
           <div>
             <Label>Allocation method</Label>
-            <Select value={method} onValueChange={(v) => setMethod(v as AllocationMethod)}>
+            <Select
+              value={method}
+              onValueChange={(v) => {
+                if (!confirmDiscard()) return;
+                setRowsDirty(false);
+                setMethod(v as AllocationMethod);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -755,7 +764,17 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
           </div>
         </div>
 
-        {valveId && (
+        {valveId && rowsMode && (
+          <RowsConnection
+            key={valveId}
+            vineyardId={vineyardId}
+            valveId={valveId}
+            guardChange={setRowsDirty}
+            onDirtyChange={setRowsDirty}
+          />
+        )}
+
+        {valveId && !rowsMode && (
           <>
             <div className="rounded-lg border border-border">
               <div className="grid grid-cols-[auto_1fr_repeat(3,minmax(0,120px))] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -828,6 +847,7 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
               </Button>
             </div>
           </>
+
         )}
       </CardContent>
     </Card>
