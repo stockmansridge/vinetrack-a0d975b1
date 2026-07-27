@@ -1096,6 +1096,26 @@ function RowsConnection({
           </div>
           {coverageBlocks.map((b) => {
             const srv = shownSummary?.blocks.get(b.block_id) ?? null;
+            const snap = dirty ? null : savedRowSnapshot.blocks.get(b.block_id) ?? null;
+            const servicedBlock = dirty ? null : savedBlockTotals.get(b.block_id) ?? null;
+            const vineLines = snap
+              ? savedEstimate(
+                  srv?.selected_vine_count ?? servicedBlock?.vines ?? snap.vines.total,
+                  srv?.vine_count_is_estimated ?? snap.vines.is_estimated,
+                  snap.vines.rows_with_value,
+                  snap.vines.rows_missing,
+                  "vines",
+                )
+              : null;
+            const emitterLines = snap
+              ? savedEstimate(
+                  srv?.selected_emitter_count ?? servicedBlock?.emitters ?? snap.emitters.total,
+                  srv?.emitter_count_is_estimated ?? snap.emitters.is_estimated,
+                  snap.emitters.rows_with_value,
+                  snap.emitters.rows_missing,
+                  "emitters",
+                )
+              : null;
             return (
               <div
                 key={b.block_id}
@@ -1106,10 +1126,18 @@ function RowsConnection({
                   {b.selected} of {srv?.total_block_row_count ?? b.total}
                 </span>
                 <span className="text-right tabular-nums">
-                  {estimateText(srv?.selected_vine_count ?? null, srv?.vine_count_is_estimated ?? true, dirty)}
+                  {vineLines ? (
+                    <SavedEstimate lines={vineLines} />
+                  ) : (
+                    estimateText(srv?.selected_vine_count ?? null, srv?.vine_count_is_estimated ?? true, dirty)
+                  )}
                 </span>
                 <span className="text-right tabular-nums">
-                  {estimateText(srv?.selected_emitter_count ?? null, srv?.emitter_count_is_estimated ?? true, dirty)}
+                  {emitterLines ? (
+                    <SavedEstimate lines={emitterLines} />
+                  ) : (
+                    estimateText(srv?.selected_emitter_count ?? null, srv?.emitter_count_is_estimated ?? true, dirty)
+                  )}
                 </span>
                 <span className="text-right tabular-nums">
                   {pct(srv?.row_coverage_percent ?? b.coverage)}
@@ -1117,13 +1145,13 @@ function RowsConnection({
                 <span className="text-right tabular-nums">
                   {srv?.length_coverage_percent == null
                     ? dirty
-                      ? "Pending save"
+                      ? "Recalculated on save"
                       : "Not available"
                     : pct(srv.length_coverage_percent)}
                 </span>
                 <span className="text-right tabular-nums">
                   {dirty ? (
-                    <span className="text-muted-foreground">Pending save</span>
+                    <span className="text-muted-foreground">Recalculated on save</span>
                   ) : (
                     pct(srv?.allocation_percentage ?? waterShare.get(b.block_id) ?? null, 2)
                   )}
