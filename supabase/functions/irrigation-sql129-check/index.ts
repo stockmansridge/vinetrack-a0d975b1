@@ -52,12 +52,16 @@ Deno.serve(async (req) => {
   out.vineyard = vineyards?.[0];
   if (!vineyardId) return json(out);
 
-  const { data: valves } = await user
-    .from("irrigation_valves")
-    .select("id, name")
-    .eq("vineyard_id", vineyardId);
-  out.valves = valves;
-  const w1 = (valves ?? []).find((v: any) => /w1/i.test(v.name));
+  const rpc0 = async (name: string, args: Record<string, unknown>) => {
+    const { data, error } = await (user as any).rpc(name, args);
+    return error ? { error: error.message, code: (error as any).code } : data;
+  };
+  const valves: any = await rpc0("list_irrigation_valves", {
+    p_vineyard_id: vineyardId,
+    p_include_inactive: true,
+  });
+  out.valves = Array.isArray(valves) ? valves.map((v: any) => ({ id: v.id, name: v.name })) : valves;
+  const w1 = (Array.isArray(valves) ? valves : []).find((v: any) => /w1/i.test(v.name));
   out.w1 = w1;
   if (!w1) return json(out);
 
