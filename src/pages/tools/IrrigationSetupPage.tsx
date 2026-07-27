@@ -749,17 +749,25 @@ function RowsConnection({
           <div>
             <span className="text-muted-foreground">Saved:</span>{" "}
             <strong className="tabular-nums">
-              {savedIds.size} of {totalRows} rows
-            </strong>
+              {savedIds.size} row{savedIds.size === 1 ? "" : "s"}
+            </strong>{" "}
+            <span className="text-muted-foreground">
+              of {totalRows} mapped rows across the vineyard
+            </span>
           </div>
           <div>
-            <span className="text-muted-foreground">Draft:</span>{" "}
+            <span className="text-muted-foreground">Draft total:</span>{" "}
             <strong className="tabular-nums">
-              {selected.size} of {totalRows} rows selected
+              {selected.size} row{selected.size === 1 ? "" : "s"} selected across the vineyard
             </strong>
-            {dirty ? " · unsaved changes" : " · matches saved configuration"}
+            <span className="text-muted-foreground">
+              {" "}
+              (of {totalRows} mapped rows)
+              {dirty ? " · unsaved changes" : " · matches saved configuration"}
+            </span>
           </div>
         </div>
+
         <div className="flex flex-wrap items-center gap-2">
           {savedIds.size > 0 && (
             <Button variant="outline" onClick={clearSaved} disabled={clear.isPending}>
