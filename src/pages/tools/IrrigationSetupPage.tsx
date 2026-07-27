@@ -1460,23 +1460,27 @@ function ConnectionsTab({
                     <>
                       <div>
                         <span className="text-muted-foreground">Estimated vines: </span>
-                        <span className="tabular-nums">
-                          {savedEstimateText(
+                        <SavedEstimate
+                          lines={savedEstimate(
                             currentSummary.estimated_vine_count,
                             currentSummary.vine_count_is_estimated,
+                            currentSummary.rows_with_vine_estimate,
                             currentSummary.rows_missing_vine_estimate,
+                            "vines",
                           )}
-                        </span>
+                        />
                       </div>
                       <div>
                         <span className="text-muted-foreground">Estimated emitters: </span>
-                        <span className="tabular-nums">
-                          {savedEstimateText(
+                        <SavedEstimate
+                          lines={savedEstimate(
                             currentSummary.estimated_emitter_count,
                             currentSummary.emitter_count_is_estimated,
+                            currentSummary.rows_with_emitter_estimate,
                             currentSummary.rows_missing_emitter_estimate,
+                            "emitters",
                           )}
-                        </span>
+                        />
                       </div>
                     </>
                   )}
