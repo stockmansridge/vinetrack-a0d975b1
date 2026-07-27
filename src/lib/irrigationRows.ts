@@ -43,6 +43,11 @@ export interface AvailableRow {
   row_length_m: number | null;
   vine_count: number | null;
   emitter_count: number | null;
+  /** SQL 127 basis metadata — never derived in the browser. */
+  vine_count_basis: string | null;
+  vine_count_is_estimated: boolean | null;
+  emitter_count_basis: string | null;
+  emitter_count_is_estimated: boolean | null;
   /** Whether the RPC payload carries usable mapped coordinates for this row. */
   has_start_point: boolean;
   has_end_point: boolean;
@@ -56,6 +61,7 @@ export interface AvailableRowBlock {
   variety_name: string | null;
   rows: AvailableRow[];
 }
+
 
 const numOrNull = (v: unknown): number | null =>
   v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
