@@ -494,6 +494,31 @@ interface DraftRow extends ValveBlockInput {
   selected: boolean;
 }
 
+function pct(v: number | null | undefined, digits = 1) {
+  return v == null ? "—" : `${Number(v).toFixed(digits)}%`;
+}
+
+/** Short status text for a valve's saved connection configuration. */
+function valveStatusText(s: ValveConnectionSummary | undefined): string {
+  if (!s || s.loading) return "…";
+  if (!s.configured) return "Not configured";
+  if (s.uses_rows) {
+    if (!s.row_count) return "Rows · no rows assigned";
+    return `${s.row_count} row${s.row_count === 1 ? "" : "s"} · ${s.block_count} block${
+      s.block_count === 1 ? "" : "s"
+    }`;
+  }
+  return `${ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]} · ${s.block_count} block${
+    s.block_count === 1 ? "" : "s"
+  }`;
+}
+
+function valveIsReady(s: ValveConnectionSummary | undefined): boolean {
+  if (!s || !s.configured) return false;
+  if (s.uses_rows) return s.row_count > 0;
+  return s.allocation_total != null && Math.abs(s.allocation_total - 100) <= 0.05;
+}
+
 function RowsConnection({
   vineyardId,
   valveId,
@@ -507,7 +532,9 @@ function RowsConnection({
 }) {
   const available = useAvailableRows(vineyardId, valveId);
   const linked = useValveRows(vineyardId, valveId);
+  const savedBlocks = useValveBlocks(vineyardId, valveId);
   const save = useSetValveRows(vineyardId);
+  const clear = useSetValveBlocks(vineyardId);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -534,6 +561,68 @@ function RowsConnection({
     guardChange(dirty);
   }, [dirty, onDirtyChange, guardChange]);
 
+  const blocks = useMemo(
+    () => normaliseAvailableRows(available.data, valveId),
+    [available.data, valveId],
+  );
+  const allRows = useMemo(() => blocks.flatMap((b) => b.rows), [blocks]);
+  const rowById = useMemo(
+    () => new Map(allRows.map((r) => [r.row_id, r])),
+    [allRows],
+  );
+
+  const draftRows = useMemo(
+    () => Array.from(selected).map((id) => rowById.get(id)).filter(Boolean),
+    [selected, rowById],
+  );
+  const savedRows = useMemo(
+    () => Array.from(savedIds).map((id) => rowById.get(id)).filter(Boolean),
+    [savedIds, rowById],
+  );
+
+  const shownRows = dirty ? draftRows : savedRows;
+  const shownIds = dirty ? selected : savedIds;
+  const missingLength = shownRows.filter((r) => r!.row_length_m == null);
+
+  // Descriptive coverage per block for the currently shown selection.
+  const coverageBlocks = useMemo(
+    () =>
+      blocks
+        .map((b) => {
+          const sel = b.rows.filter((r) => shownIds.has(r.row_id));
+          return {
+            block_id: b.block_id,
+            block_name: b.block_name,
+            selected: sel.length,
+            total: b.rows.length,
+            coverage: blockCoveragePercent(sel.length, b.rows.length),
+            row_numbers: sel.map((r) => r.row_number),
+          };
+        })
+        .filter((b) => b.selected > 0),
+    [blocks, shownIds],
+  );
+
+  // Server-authoritative water share: the save response when previewing a fresh
+  // save, otherwise the stored valve-block allocations.
+  const waterShare = useMemo(() => {
+    const map = new Map<string, number | null>();
+    if (result?.blocks) {
+      for (const b of result.blocks) map.set(String(b.block_id), b.allocation_percentage ?? null);
+      return map;
+    }
+    for (const b of savedBlocks.data ?? []) {
+      if (b.is_active === false) continue;
+      map.set(String(b.block_id), b.allocation_percentage);
+    }
+    return map;
+  }, [result, savedBlocks.data]);
+
+  const serverBasis =
+    result?.weighting_basis ??
+    (savedBlocks.data ?? []).find((b) => b.weighting_basis)?.weighting_basis ??
+    null;
+
   const submit = async () => {
     try {
       const res = await save.mutateAsync({
@@ -542,7 +631,7 @@ function RowsConnection({
       });
       setResult(res ?? null);
       setLoadedFor(null);
-      await linked.refetch();
+      await Promise.all([linked.refetch(), savedBlocks.refetch()]);
       toast({ title: "Valve rows saved" });
     } catch (e) {
       toast({
@@ -553,8 +642,31 @@ function RowsConnection({
     }
   };
 
+  const clearSaved = async () => {
+    if (
+      !window.confirm(
+        "Remove all saved connections for this valve? It will no longer be able to record sessions until it is configured again.",
+      )
+    )
+      return;
+    try {
+      await clear.mutateAsync({ valve_id: valveId, blocks: [] });
+      setResult(null);
+      setSelected(new Set());
+      setLoadedFor(null);
+      await Promise.all([linked.refetch(), savedBlocks.refetch()]);
+      toast({ title: "Saved connections cleared" });
+    } catch (e) {
+      toast({
+        title: "Couldn't clear connections",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const warnings = (result?.warnings ?? []).filter(Boolean);
-  const resultBlocks = result?.blocks ?? [];
+  const totalRows = allRows.length;
 
   return (
     <div className="space-y-4">
@@ -565,6 +677,7 @@ function RowsConnection({
         onChange={setSelected}
         loading={available.isLoading || linked.isLoading}
         error={(available.error as Error) ?? (linked.error as Error) ?? null}
+        weightingBasis={serverBasis}
       />
 
       {linked.error && (
@@ -575,15 +688,55 @@ function RowsConnection({
         />
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground">
-          {selected.size} row{selected.size === 1 ? "" : "s"} selected
-          {dirty ? " · unsaved changes" : ""}
-        </span>
-        <Button onClick={submit} disabled={save.isPending || selected.size === 0}>
-          {save.isPending ? "Saving…" : "Save connections"}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+        <div className="text-sm">
+          <div>
+            <span className="text-muted-foreground">Saved:</span>{" "}
+            <strong className="tabular-nums">
+              {savedIds.size} of {totalRows} rows
+            </strong>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Draft:</span>{" "}
+            <strong className="tabular-nums">
+              {selected.size} of {totalRows} rows selected
+            </strong>
+            {dirty ? " · unsaved changes" : " · matches saved configuration"}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {savedIds.size > 0 && (
+            <Button variant="outline" onClick={clearSaved} disabled={clear.isPending}>
+              {clear.isPending ? "Clearing…" : "Clear saved connections"}
+            </Button>
+          )}
+          <Button onClick={submit} disabled={save.isPending || selected.size === 0 || !dirty}>
+            {save.isPending ? "Saving…" : "Save connections"}
+          </Button>
+        </div>
       </div>
+
+      {selected.size === 0 && (
+        <PortalNotice
+          compact
+          variant="warning"
+          description={
+            savedIds.size > 0
+              ? "You have removed all rows from the draft. The saved configuration remains active until you select Save Connections. Select at least one row before saving, or use Clear saved connections to remove this valve's configuration."
+              : "Select at least one row before saving."
+          }
+        />
+      )}
+
+      {missingLength.length > 0 && (
+        <PortalNotice
+          compact
+          variant="warning"
+          description={`${missingLength.length} selected row${
+            missingLength.length === 1 ? " has" : "s have"
+          } no mapped length. The allocation may use equal-row weighting unless complete row lengths are available for every selected row.`}
+        />
+      )}
 
       {warnings.length > 0 && (
         <PortalNotice
@@ -599,43 +752,128 @@ function RowsConnection({
         />
       )}
 
-      {result && (
-        <div className="space-y-2 rounded-lg border border-border p-3">
-          <div className="text-sm">
-            Rows selected: <strong className="tabular-nums">{result.row_count ?? selected.size}</strong>
-            {" · "}Blocks supplied:{" "}
-            <strong className="tabular-nums">{resultBlocks.length}</strong>
-            {" · "}Allocation basis:{" "}
-            <strong>{weightingBasisLabel(result.weighting_basis)}</strong>
-          </div>
-          <div className="rounded-lg border border-border">
-            <div className="grid grid-cols-[minmax(0,1fr)_90px_120px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>Block</span>
-              <span className="text-right">Rows</span>
-              <span className="text-right">Allocation</span>
-            </div>
-            {resultBlocks.map((b) => (
-              <div
-                key={b.block_id}
-                className="grid grid-cols-[minmax(0,1fr)_90px_120px] gap-2 border-b border-border px-3 py-1.5 text-sm last:border-0"
-              >
-                <span className="truncate">{b.block_name ?? "Block"}</span>
-                <span className="text-right tabular-nums">{b.row_count ?? "—"}</span>
-                <span className="text-right tabular-nums">
-                  {b.allocation_percentage == null
-                    ? "—"
-                    : `${Number(b.allocation_percentage).toFixed(2)}%`}
-                </span>
-              </div>
-            ))}
-          </div>
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-semibold">
+            {dirty ? "Unsaved preview" : "Current saved configuration"}
+          </span>
+          <Badge variant={dirty ? "outline" : "secondary"}>
+            {dirty ? "Draft — not saved" : "Saved"}
+          </Badge>
         </div>
-      )}
+        <div className="text-sm">
+          Rows:{" "}
+          <strong className="tabular-nums">
+            {shownIds.size} / {totalRows}
+          </strong>
+          {" · "}Blocks supplied:{" "}
+          <strong className="tabular-nums">{coverageBlocks.length}</strong>
+          {" · "}Allocation basis: <strong>{weightingBasisLabel(serverBasis)}</strong>
+        </div>
+        {shownRows.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            Rows {formatRowRanges(shownRows.map((r) => r!.row_number))}
+          </div>
+        )}
+
+        <div className="rounded-lg border border-border">
+          <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>Block</span>
+            <span className="text-right">Selected rows</span>
+            <span className="text-right">Block coverage</span>
+            <span className="text-right">Share of valve water</span>
+          </div>
+          {coverageBlocks.map((b) => (
+            <div
+              key={b.block_id}
+              className="grid grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-2 border-b border-border px-3 py-1.5 text-sm last:border-0"
+            >
+              <span className="truncate">{b.block_name}</span>
+              <span className="text-right tabular-nums">
+                {b.selected} of {b.total}
+              </span>
+              <span className="text-right tabular-nums">{pct(b.coverage)}</span>
+              <span className="text-right tabular-nums">
+                {dirty ? (
+                  <span className="text-muted-foreground">Pending save</span>
+                ) : (
+                  pct(waterShare.get(b.block_id) ?? null, 2)
+                )}
+              </span>
+            </div>
+          ))}
+          {coverageBlocks.length === 0 && (
+            <div className="px-3 py-3 text-sm text-muted-foreground">
+              No connections configured.
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Block coverage is descriptive (selected rows ÷ mapped rows in that block). Share of
+          valve water is the server-calculated hydraulic allocation from SQL 126.
+        </p>
+      </div>
     </div>
   );
 }
 
-function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
+function ConnectionsOverview({
+  valves,
+  summaries,
+  selectedValveId,
+  onSelect,
+}: {
+  valves: IrrigationValve[];
+  summaries: Record<string, ValveConnectionSummary>;
+  selectedValveId: string;
+  onSelect: (id: string) => void;
+}) {
+  if (valves.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Configured valves
+      </div>
+      {valves.map((v) => {
+        const s = summaries[v.id];
+        const ready = valveIsReady(s);
+        return (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => onSelect(v.id)}
+            className={`grid w-full grid-cols-[auto_minmax(0,1fr)_110px_minmax(0,1fr)] items-center gap-2 border-b border-border px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 ${
+              v.id === selectedValveId ? "bg-sidebar-accent" : ""
+            }`}
+          >
+            {ready ? (
+              <Check className="h-4 w-4 text-primary" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            )}
+            <span className="truncate font-medium">{v.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {s?.configured
+                ? s.uses_rows
+                  ? "Rows"
+                  : ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]
+                : "—"}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">{valveStatusText(s)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConnectionsTab({
+  vineyardId,
+  focusValveId,
+}: {
+  vineyardId: string | null;
+  focusValveId?: string | null;
+}) {
   const valves = useIrrigationValves(vineyardId);
   const blocks = useBlocks(vineyardId);
   const [valveId, setValveId] = useState<string>("");
@@ -646,9 +884,36 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [rowsDirty, setRowsDirty] = useState(false);
 
+  const valveIds = useMemo(() => (valves.data ?? []).map((v) => v.id), [valves.data]);
+  const summaries = useValveConnectionSummaries(vineyardId, valveIds);
+  const currentSummary = valveId ? summaries[valveId] : undefined;
+
   const confirmDiscard = () =>
-    !rowsDirty ||
-    window.confirm("You have unsaved row changes. Discard them?");
+    !rowsDirty || window.confirm("You have unsaved row changes. Discard them?");
+
+  const selectValve = (id: string) => {
+    if (!confirmDiscard()) return;
+    setRowsDirty(false);
+    setValveId(id);
+    setLoadedFor(null);
+  };
+
+  // Open with the valve requested from the Valves tab.
+  useEffect(() => {
+    if (focusValveId && focusValveId !== valveId) {
+      setRowsDirty(false);
+      setValveId(focusValveId);
+      setLoadedFor(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusValveId]);
+
+  // Follow the saved allocation method when a valve is selected.
+  useEffect(() => {
+    const s = valveId ? summaries[valveId] : undefined;
+    if (s && s.configured && s.method) setMethod(s.uses_rows ? "rows" : s.method);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valveId, currentSummary?.configured, currentSummary?.method, currentSummary?.uses_rows]);
 
   // Seed the draft from the saved configuration whenever the valve changes.
   if (valveId && existing.data && loadedFor !== valveId) {
@@ -665,9 +930,6 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
         serviced_vine_count: saved?.serviced_vine_count ?? null,
         serviced_emitter_count: saved?.serviced_emitter_count ?? null,
       };
-    }
-    if (existing.data[0]?.allocation_method) {
-      setMethod(existing.data[0].allocation_method as AllocationMethod);
     }
     setDraft(next);
     setLoadedFor(valveId);
@@ -706,7 +968,6 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
     }
   };
 
-
   return (
     <Card>
       <CardHeader>
@@ -717,25 +978,24 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ConnectionsOverview
+          valves={valves.data ?? []}
+          summaries={summaries}
+          selectedValveId={valveId}
+          onSelect={selectValve}
+        />
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label>Valve</Label>
-            <Select
-              value={valveId}
-              onValueChange={(v) => {
-                if (!confirmDiscard()) return;
-                setRowsDirty(false);
-                setValveId(v);
-                setLoadedFor(null);
-              }}
-            >
+            <Select value={valveId} onValueChange={selectValve}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a valve" />
               </SelectTrigger>
               <SelectContent>
                 {valves.data?.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
-                    {v.system_name} · {v.name}
+                    {v.name} · {valveStatusText(summaries[v.id])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -764,6 +1024,50 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
             </Select>
           </div>
         </div>
+
+        {valveId && (
+          <div className="rounded-lg border border-border px-3 py-2 text-sm">
+            <div className="mb-1 font-semibold">Current configuration</div>
+            {!currentSummary || currentSummary.loading ? (
+              <div className="text-muted-foreground">Loading…</div>
+            ) : !currentSummary.configured ? (
+              <div className="text-muted-foreground">No connections configured</div>
+            ) : (
+              <dl className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
+                <div>
+                  <span className="text-muted-foreground">Method: </span>
+                  {currentSummary.uses_rows
+                    ? "Rows"
+                    : ALLOCATION_METHOD_LABEL[currentSummary.method ?? "manual_percentage"]}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Rows: </span>
+                  <span className="tabular-nums">
+                    {currentSummary.uses_rows ? currentSummary.row_count : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Blocks: </span>
+                  <span className="tabular-nums">{currentSummary.block_count}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Allocation basis: </span>
+                  {weightingBasisLabel(currentSummary.weighting_basis)}
+                </div>
+                {currentSummary.last_saved && (
+                  <div>
+                    <span className="text-muted-foreground">Last saved: </span>
+                    {new Date(currentSummary.last_saved).toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </div>
+                )}
+              </dl>
+            )}
+          </div>
+        )}
 
         {valveId && rowsMode && (
           <RowsConnection
@@ -848,7 +1152,6 @@ function ConnectionsTab({ vineyardId }: { vineyardId: string | null }) {
               </Button>
             </div>
           </>
-
         )}
       </CardContent>
     </Card>
