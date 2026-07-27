@@ -38,20 +38,27 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Pencil, Plus } from "lucide-react";
 import {
   ALLOCATION_METHOD_LABEL,
+  useAvailableRows,
   useCreateSystem,
   useCreateValve,
   useIrrigationSystems,
   useIrrigationValves,
   useSetValveBlocks,
+  useSetValveRows,
   useSetupStatus,
   useUpdateSystem,
   useUpdateValve,
   useValveBlocks,
+  useValveRows,
   type AllocationMethod,
   type IrrigationSystem,
   type IrrigationValve,
+  type SetValveRowsResult,
   type ValveBlockInput,
 } from "@/lib/irrigationQuery";
+import { extractSelectedRowIds, weightingBasisLabel } from "@/lib/irrigationRows";
+import { ValveRowSelector } from "@/components/irrigation/ValveRowSelector";
+
 
 function useBlocks(vineyardId: string | null) {
   return useQuery({
