@@ -535,6 +535,32 @@ function pct(v: number | null | undefined, digits = 1) {
   return v == null ? "—" : `${Number(v).toFixed(digits)}%`;
 }
 
+/**
+ * Renders a SQL 127 estimate. Never shows a missing value as zero, and never
+ * invents a total for an unsaved draft.
+ */
+function estimateText(
+  value: number | null | undefined,
+  isEstimated: boolean | null | undefined,
+  dirty: boolean,
+): string {
+  const text = formatEstimate(value ?? null, isEstimated ?? true);
+  if (text != null) return text;
+  return dirty ? "Pending save" : "Not available";
+}
+
+/** Sums server block totals only when every block reports one. */
+function sumSummary(
+  summary: ServerRowSummary | null | undefined,
+  key: "selected_vine_count" | "selected_emitter_count",
+): number | null {
+  if (!summary) return null;
+  const blocks = Array.from(summary.blocks.values());
+  if (blocks.length === 0 || blocks.some((b) => b[key] == null)) return null;
+  return blocks.reduce((s, b) => s + Number(b[key]), 0);
+}
+
+
 /** Allocation method label for a valve's saved configuration. */
 function valveMethodText(s: ValveConnectionSummary | undefined): string {
   if (!s || s.loading) return "…";
