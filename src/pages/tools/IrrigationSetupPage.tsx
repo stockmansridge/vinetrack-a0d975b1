@@ -453,13 +453,9 @@ function ValvesTab({
                     <span className="truncate text-sm font-medium">{v.name}</span>
                     {!v.is_active && <Badge variant="outline">Inactive</Badge>}
                     <Badge variant="outline">
-                      {s?.configured
-                        ? s.uses_rows
-                          ? "Rows"
-                          : ALLOCATION_METHOD_LABEL[s.method ?? "manual_percentage"]
-                        : "No method"}
+                      Allocation method: {s?.configured ? valveMethodText(s) : "None"}
                     </Badge>
-                    <Badge variant="secondary">{valveStatusText(s)}</Badge>
+                    <Badge variant="secondary">{valveConnectionsText(s)}</Badge>
                     <Badge variant={ready ? "default" : "outline"}>
                       {s?.loading
                         ? "Checking…"
@@ -469,6 +465,7 @@ function ValvesTab({
                             ? "Needs attention"
                             : "Setup required"}
                     </Badge>
+
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {v.system_name} ·{" "}
