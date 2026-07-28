@@ -161,79 +161,10 @@ export default function IrrigationRecordsPage() {
         />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ListChecks className="h-4 w-4 text-muted-foreground" /> Setup status
-            </CardTitle>
-            <CardDescription>
-              {operational ? "Ready to record irrigation." : "Complete the required steps below."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {status.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
-            {s && (
-              <>
-                <div className="divide-y divide-border">
-                  <ChecklistRow
-                    ok={s.required.blocks_ok}
-                    label="Blocks"
-                    detail={`${s.required.active_block_count} active blocks`}
-                  />
-                  <ChecklistRow
-                    ok={s.required.systems_ok}
-                    label="Irrigation systems"
-                    detail={`${s.required.active_system_count} active`}
-                  />
-                  <ChecklistRow
-                    ok={s.required.valves_ok}
-                    label="Valves"
-                    detail={`${s.required.active_valve_count} active · ${s.required.valves_with_configured_flow} with a configured flow rate`}
-                  />
-                  <ChecklistRow
-                    ok={s.required.allocations_ok}
-                    label="Valve to block or row connections"
-                    detail={`${s.required.fully_allocated_valve_count} of ${s.required.active_valve_count} valves allocate to 100%`}
-                  />
-                </div>
-                {s.valves.some((v) => v.uses_rows && !v.row_count) && (
-                  <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                    {s.valves
-                      .filter((v) => v.uses_rows && !v.row_count)
-                      .map((v) => (
-                        <li key={v.valve_id}>
-                          {v.valve_name}: this valve has no vineyard rows assigned.
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Recommended block data
-                  </div>
-                  <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                    <div>
-                      Area: {s.recommended.blocks_with_area}/{s.recommended.total_active_blocks}
-                    </div>
-                    <div>
-                      Vine counts: {s.recommended.blocks_with_vine_count}/
-                      {s.recommended.total_active_blocks}
-                    </div>
-                    <div>
-                      Dripper output: {s.recommended.blocks_with_dripper_output}/
-                      {s.recommended.total_active_blocks}
-                    </div>
-                    <div>
-                      Efficiency: {s.recommended.blocks_with_efficiency}/
-                      {s.recommended.total_active_blocks}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      <div className={operational ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
+        {/* Setup detail belongs on the setup page once irrigation is operational. */}
+        {!operational && <SetupStatusPanel vineyardId={selectedVineyardId} />}
+
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
