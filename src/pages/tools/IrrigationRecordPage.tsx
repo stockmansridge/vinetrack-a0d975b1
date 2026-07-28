@@ -407,6 +407,12 @@ export default function IrrigationRecordPage() {
                     {preview.effective_volume_litres != null &&
                       ` · ${formatLitres(preview.effective_volume_litres)} effective`}
                   </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {times.startedAt && bothTimes
+                      ? `${formatTimeRange(times.startedAt, times.finishedAt)} · ${formatDuration(preview.duration_minutes)}`
+                      : formatDuration(preview.duration_minutes)}
+                  </div>
+
                   {(preview.uses_rows || preview.row_count != null) && (
                     <div className="mt-1 text-xs text-muted-foreground">
                       Rows supplied: {preview.row_count ?? "—"} · Allocation basis:{" "}
