@@ -850,6 +850,12 @@ export function useUpdateSession(vineyardId: string | null) {
       total_volume_litres?: number | null;
       started_at?: string | null;
       finished_at?: string | null;
+      /**
+       * SQL 130. `false` (default) + null timestamps preserves the saved times.
+       * `true` removes both saved timestamps. Supplying new timestamps replaces
+       * whatever is stored.
+       */
+      clear_times?: boolean;
       notes?: string | null;
       use_current_configuration?: boolean;
     }) =>
@@ -866,10 +872,12 @@ export function useUpdateSession(vineyardId: string | null) {
         p_finished_at: input.finished_at ?? null,
         p_notes: input.notes ?? null,
         p_use_current_configuration: input.use_current_configuration ?? false,
+        p_clear_times: input.clear_times ?? false,
       }),
     onSuccess: invalidate,
   });
 }
+
 
 export function useReverseSession(vineyardId: string | null) {
   const invalidate = useIrrigationInvalidate(vineyardId);
