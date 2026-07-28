@@ -36,6 +36,12 @@ import {
   type IrrigationPreview,
 } from "@/lib/irrigationQuery";
 import { formatEstimate, weightingBasisLabel } from "@/lib/irrigationRows";
+import { SessionTimeFields } from "@/components/irrigation/SessionTimeFields";
+import {
+  MAX_DURATION_MINUTES,
+  TIME_ERRORS,
+  resolveSessionTimes,
+} from "@/lib/irrigationTimes";
 
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -50,6 +56,8 @@ export default function IrrigationRecordPage() {
   const [valveId, setValveId] = useState("");
   const [sessionDate, setSessionDate] = useState(todayISO());
   const [duration, setDuration] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [method, setMethod] = useState<CalculationMethod>("configured_flow");
   const [flow, setFlow] = useState("");
   const [meterStart, setMeterStart] = useState("");
@@ -73,27 +81,69 @@ export default function IrrigationRecordPage() {
     }
   }, [validation.data?.requires_volume_entry]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Times are resolved against the selected session date in local time. When
+  // both are entered the derived duration is authoritative for preview + save.
+  const times = useMemo(
+    () =>
+      resolveSessionTimes({
+        sessionDate,
+        startTime,
+        endTime,
+        durationMinutes: num(duration),
+      }),
+    [sessionDate, startTime, endTime, duration],
+  );
+
+  const bothTimes = startTime.trim() !== "" && endTime.trim() !== "";
+
+  // Keep the visible duration field in sync when both times are present.
+  useEffect(() => {
+    if (bothTimes && times.durationMinutes != null) {
+      const v = String(times.durationMinutes);
+      if (v !== duration) setDuration(v);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bothTimes, times.durationMinutes]);
+
+  const effectiveMinutes =
+    bothTimes && times.durationMinutes != null ? times.durationMinutes : num(duration);
+
+  const durationError = useMemo(() => {
+    if (times.error) return times.error;
+    if (effectiveMinutes == null || !Number.isFinite(effectiveMinutes)) return null;
+    if (effectiveMinutes <= 0) return TIME_ERRORS.zero;
+    if (effectiveMinutes > MAX_DURATION_MINUTES) return TIME_ERRORS.tooLong;
+    return null;
+  }, [times.error, effectiveMinutes]);
+
+  const clearTimes = () => {
+    setStartTime("");
+    setEndTime("");
+  };
+
   const inputsReady = useMemo(() => {
     if (!valveId || !sessionDate) return false;
-    const mins = Number(duration);
-    if (!Number.isFinite(mins) || mins <= 0) return false;
+    if (durationError) return false;
+    const mins = effectiveMinutes;
+    if (mins == null || !Number.isFinite(mins) || mins <= 0) return false;
     if (method === "session_flow") return Number(flow) > 0;
     if (method === "total_volume") return Number(totalVolume) > 0;
     if (method === "meter_readings")
       return Number(meterFinish) > Number(meterStart) && meterStart.trim() !== "";
     return true;
-  }, [valveId, sessionDate, duration, method, flow, totalVolume, meterStart, meterFinish]);
+  }, [valveId, sessionDate, effectiveMinutes, durationError, method, flow, totalVolume, meterStart, meterFinish]);
 
   const payload = () => ({
     valve_id: valveId,
     session_date: sessionDate,
-    duration_minutes: Number(duration),
+    duration_minutes: Number(effectiveMinutes),
     calculation_method: method,
     flow_litres_per_hour: method === "session_flow" ? num(flow) : null,
     meter_start_litres: method === "meter_readings" ? num(meterStart) : null,
     meter_finish_litres: method === "meter_readings" ? num(meterFinish) : null,
     total_volume_litres: method === "total_volume" ? num(totalVolume) : null,
   });
+
 
   // Preview is server-authoritative — the portal never computes volumes itself.
   useEffect(() => {
