@@ -272,80 +272,99 @@ export default function AccessEntitlementsPage() {
   const total = usersQ.data?.total ?? 0;
 
   const monitor = monitorQ.data;
-  const cards: { title: string; count: number; state: HealthState; explanation: string }[] =
-    monitor
-      ? [
-          {
-            title: "Needs Review",
-            count: monitor.events_needing_review.count,
-            state: monitor.events_needing_review.count > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.events_needing_review.count > 0
-                ? "Store events are flagged for administrator review."
-                : "No store events require review.",
-          },
-          {
-            title: "Failed Events",
-            count: monitor.failed_events.count,
-            state: monitor.failed_events.count > 0 ? "critical" : "healthy",
-            explanation:
-              monitor.failed_events.count > 0
-                ? "Billing events failed processing."
-                : "No billing events have failed processing.",
-          },
-          {
-            title: "Unresolved Users",
-            count: monitor.unresolved_users.count,
-            state: monitor.unresolved_users.count > 0 ? "critical" : "healthy",
-            explanation:
-              monitor.unresolved_users.count > 0
-                ? "Purchases could not be linked to a VineTrack account."
-                : "Every purchase is linked to an account.",
-          },
-          {
-            title: "Ownership Conflicts",
-            count: monitor.ownership_conflicts.count,
-            state: monitor.ownership_conflicts.count > 0 ? "critical" : "healthy",
-            explanation:
-              monitor.ownership_conflicts.count > 0
-                ? "A subscription is claimed by more than one account."
-                : "No subscription ownership conflicts.",
-          },
-          {
-            title: "Open Alerts",
-            count: monitor.open_alerts,
-            state: monitor.open_alerts > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.open_alerts > 0
-                ? "Alerts are waiting to be acknowledged below."
-                : "No alerts are waiting for acknowledgement.",
-          },
-          {
-            title: "Stuck Deliveries",
-            count: monitor.stuck_deliveries.length,
-            state: monitor.stuck_deliveries.length > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.stuck_deliveries.length > 0
-                ? "Store webhooks were received but never finalised."
-                : "All store webhooks finalised normally.",
-          },
-          {
-            title: "Expiring in 7 Days",
-            count: monitor.expiring_within_7_days.length,
-            state: monitor.expiring_within_7_days.length > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.expiring_within_7_days.length > 0
-                ? "Access expires within the next seven days."
-                : "Nothing expires in the next seven days.",
-          },
-          {
-            title: "Recent Status Changes",
-            count: monitor.recent_status_changes.length,
-            state: "healthy",
-            explanation: "Subscription status changes recorded recently.",
-          },
-        ]
-      : [];
+  const cards: {
+    title: string;
+    count: number;
+    state: HealthState;
+    explanation: string;
+    items: Record<string, unknown>[];
+  }[] = monitor
+    ? [
+        {
+          title: "Needs Review",
+          count: monitor.events_needing_review.count,
+          state: monitor.events_needing_review.count > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.events_needing_review.count > 0
+              ? "Store events are flagged for administrator review."
+              : "No store events require review.",
+          items: monitor.events_needing_review.recent,
+        },
+        {
+          title: "Failed Events",
+          count: monitor.failed_events.count,
+          state: monitor.failed_events.count > 0 ? "critical" : "healthy",
+          explanation:
+            monitor.failed_events.count > 0
+              ? "Billing events failed processing."
+              : "No billing events have failed processing.",
+          items: monitor.failed_events.recent,
+        },
+        {
+          title: "Unresolved Users",
+          count: monitor.unresolved_users.count,
+          state: monitor.unresolved_users.count > 0 ? "critical" : "healthy",
+          explanation:
+            monitor.unresolved_users.count > 0
+              ? "Purchases could not be linked to a VineTrack account."
+              : "Every purchase is linked to an account.",
+          items: monitor.unresolved_users.recent,
+        },
+        {
+          title: "Ownership Conflicts",
+          count: monitor.ownership_conflicts.count,
+          state: monitor.ownership_conflicts.count > 0 ? "critical" : "healthy",
+          explanation:
+            monitor.ownership_conflicts.count > 0
+              ? "A subscription is claimed by more than one account."
+              : "No subscription ownership conflicts.",
+          items: monitor.ownership_conflicts.recent,
+        },
+        {
+          title: "Open Alerts",
+          count: monitor.open_alerts,
+          state: monitor.open_alerts > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.open_alerts > 0
+              ? "Alerts are waiting to be acknowledged below."
+              : "No alerts are waiting for acknowledgement.",
+          items: (alertsQ.data ?? [])
+            .filter((a) => !a.acknowledged_at)
+            .map((a) => a as unknown as Record<string, unknown>),
+        },
+        {
+          title: "Stuck Deliveries",
+          count: monitor.stuck_deliveries.length,
+          state: monitor.stuck_deliveries.length > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.stuck_deliveries.length > 0
+              ? "Store webhooks were received but never finalised."
+              : "All store webhooks finalised normally.",
+          items: monitor.stuck_deliveries,
+        },
+        {
+          title: "Expiring in 7 Days",
+          count: monitor.expiring_within_7_days.length,
+          state: monitor.expiring_within_7_days.length > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.expiring_within_7_days.length > 0
+              ? "Access expires within the next seven days."
+              : "Nothing expires in the next seven days.",
+          items: monitor.expiring_within_7_days,
+        },
+        {
+          title: "Recent Status Changes",
+          count: monitor.recent_status_changes.length,
+          state: "healthy",
+          explanation: "Subscription status changes recorded recently.",
+          items: monitor.recent_status_changes,
+        },
+      ]
+    : [];
+
+  const [detailCard, setDetailCard] = useState<string | null>(null);
+  const activeCard = cards.find((c) => c.title === detailCard) ?? null;
+
 
   const alerts = alertsQ.data ?? [];
   const alertTypes = useMemo(
