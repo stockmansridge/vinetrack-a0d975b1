@@ -509,6 +509,9 @@ export default function IrrigationHistoryPage() {
 
               <SessionTimes session={s} />
 
+              <SessionFlow session={s} />
+
+
               <RowsIrrigated session={s} />
 
 
