@@ -27,6 +27,7 @@ import { ArrowLeft, Droplet } from "lucide-react";
 import {
   CALCULATION_METHOD_LABEL,
   calculatePreview,
+  formatDuration,
   formatLitres,
   formatNumber,
   useIrrigationValves,
