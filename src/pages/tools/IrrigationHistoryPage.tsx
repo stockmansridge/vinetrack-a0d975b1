@@ -1,4 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { SessionTimeFields } from "@/components/irrigation/SessionTimeFields";
+import {
+  MAX_DURATION_MINUTES,
+  TIME_ERRORS,
+  clockValueFromISO,
+  dateValueFromISO,
+  formatClockWithDate,
+  formatTimeRange,
+  resolveSessionTimes,
+} from "@/lib/irrigationTimes";
+
 import { Link } from "react-router-dom";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
@@ -117,6 +128,26 @@ function RowsIrrigated({ session }: { session: IrrigationSession }) {
 }
 
 
+/** SQL 130 Times block — only rendered when the session has saved timestamps. */
+function SessionTimes({ session }: { session: IrrigationSession }) {
+  if (!session.started_at) return null;
+  return (
+    <div className="mt-3 rounded-lg border border-border p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Times
+      </div>
+      <div className="mt-1 grid gap-0.5 text-xs text-muted-foreground sm:grid-cols-3">
+        <div>Start: {formatClockWithDate(session.started_at)}</div>
+        <div>
+          Finish:{" "}
+          {session.finished_at ? formatClockWithDate(session.finished_at) : "Not recorded"}
+        </div>
+        <div>Duration: {formatDuration(session.duration_minutes)}</div>
+      </div>
+    </div>
+  );
+}
+
 function EditDialog({
   vineyardId,
   session,
@@ -127,17 +158,61 @@ function EditDialog({
   onClose: () => void;
 }) {
   const update = useUpdateSession(vineyardId);
-  const [date, setDate] = useState(session.session_date);
+  const [date, setDate] = useState(
+    dateValueFromISO(session.started_at) || session.session_date,
+  );
   const [duration, setDuration] = useState(String(session.duration_minutes));
+  const [startTime, setStartTime] = useState(clockValueFromISO(session.started_at));
+  const [endTime, setEndTime] = useState(clockValueFromISO(session.finished_at));
   const [notes, setNotes] = useState(session.notes ?? "");
   const [useCurrent, setUseCurrent] = useState(false);
 
+  const hadTimes = !!session.started_at || !!session.finished_at;
+
+  const times = useMemo(
+    () =>
+      resolveSessionTimes({
+        sessionDate: date,
+        startTime,
+        endTime,
+        durationMinutes: num(duration),
+      }),
+    [date, startTime, endTime, duration],
+  );
+
+  const bothTimes = startTime.trim() !== "" && endTime.trim() !== "";
+
+  useEffect(() => {
+    if (bothTimes && times.durationMinutes != null) {
+      const v = String(times.durationMinutes);
+      if (v !== duration) setDuration(v);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bothTimes, times.durationMinutes]);
+
+  const effectiveMinutes =
+    bothTimes && times.durationMinutes != null ? times.durationMinutes : num(duration);
+
+  const error = useMemo(() => {
+    if (times.error) return times.error;
+    if (effectiveMinutes == null || !Number.isFinite(effectiveMinutes)) return TIME_ERRORS.zero;
+    if (effectiveMinutes <= 0) return TIME_ERRORS.zero;
+    if (effectiveMinutes > MAX_DURATION_MINUTES) return TIME_ERRORS.tooLong;
+    return null;
+  }, [times.error, effectiveMinutes]);
+
   const save = async () => {
+    if (error) return;
+    // Times were saved but the user removed them → explicit clear.
+    const clearing = hadTimes && !startTime && !endTime;
     try {
       await update.mutateAsync({
         id: session.id,
         session_date: date,
-        duration_minutes: num(duration),
+        duration_minutes: effectiveMinutes,
+        started_at: times.startedAt,
+        finished_at: bothTimes ? times.finishedAt : null,
+        clear_times: clearing,
         notes: notes || null,
         use_current_configuration: useCurrent,
       });
@@ -163,21 +238,25 @@ function EditDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="ed-date">Date</Label>
-              <Input id="ed-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="ed-dur">Duration (minutes)</Label>
-              <Input
-                id="ed-dur"
-                inputMode="numeric"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-              />
-            </div>
+          <div>
+            <Label htmlFor="ed-date">Date</Label>
+            <Input id="ed-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
+          <SessionTimeFields
+            idPrefix="ed"
+            startTime={startTime}
+            endTime={endTime}
+            duration={duration}
+            times={times}
+            onStartTime={setStartTime}
+            onEndTime={setEndTime}
+            onDuration={setDuration}
+            onClearTimes={() => {
+              setStartTime("");
+              setEndTime("");
+            }}
+          />
+          {error && !times.error && <p className="text-xs text-destructive">{error}</p>}
           <div>
             <Label htmlFor="ed-notes">Notes</Label>
             <Textarea id="ed-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -195,7 +274,7 @@ function EditDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={update.isPending}>
+          <Button onClick={save} disabled={update.isPending || !!error}>
             {update.isPending ? "Saving…" : "Save changes"}
           </Button>
         </DialogFooter>
@@ -203,6 +282,7 @@ function EditDialog({
     </Dialog>
   );
 }
+
 
 export default function IrrigationHistoryPage() {
   const { selectedVineyardId } = useVineyard();
@@ -343,10 +423,14 @@ export default function IrrigationHistoryPage() {
                     {s.status === "corrected" && <Badge variant="secondary">Corrected</Badge>}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
+                    {s.started_at && (
+                      <>{formatTimeRange(s.started_at, s.finished_at)} · </>
+                    )}
                     {s.system_name} · {formatDuration(s.duration_minutes)} ·{" "}
                     {CALCULATION_METHOD_LABEL[s.calculation_method] ?? s.calculation_method}
                     {s.source_type === "manual_portal" ? " · Portal" : ` · ${s.source_type}`}
                   </div>
+
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className="tabular-nums">{formatLitres(s.total_volume_litres)}</Badge>
@@ -381,7 +465,10 @@ export default function IrrigationHistoryPage() {
                 ))}
               </div>
 
+              <SessionTimes session={s} />
+
               <RowsIrrigated session={s} />
+
 
               {s.notes && <p className="mt-2 text-sm text-muted-foreground">{s.notes}</p>}
 

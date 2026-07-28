@@ -27,6 +27,7 @@ import { ArrowLeft, Droplet } from "lucide-react";
 import {
   CALCULATION_METHOD_LABEL,
   calculatePreview,
+  formatDuration,
   formatLitres,
   formatNumber,
   useIrrigationValves,
@@ -36,6 +37,14 @@ import {
   type IrrigationPreview,
 } from "@/lib/irrigationQuery";
 import { formatEstimate, weightingBasisLabel } from "@/lib/irrigationRows";
+import { SessionTimeFields } from "@/components/irrigation/SessionTimeFields";
+import {
+  MAX_DURATION_MINUTES,
+  TIME_ERRORS,
+  formatTimeRange,
+  resolveSessionTimes,
+} from "@/lib/irrigationTimes";
+
 
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -50,6 +59,8 @@ export default function IrrigationRecordPage() {
   const [valveId, setValveId] = useState("");
   const [sessionDate, setSessionDate] = useState(todayISO());
   const [duration, setDuration] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [method, setMethod] = useState<CalculationMethod>("configured_flow");
   const [flow, setFlow] = useState("");
   const [meterStart, setMeterStart] = useState("");
@@ -73,27 +84,69 @@ export default function IrrigationRecordPage() {
     }
   }, [validation.data?.requires_volume_entry]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Times are resolved against the selected session date in local time. When
+  // both are entered the derived duration is authoritative for preview + save.
+  const times = useMemo(
+    () =>
+      resolveSessionTimes({
+        sessionDate,
+        startTime,
+        endTime,
+        durationMinutes: num(duration),
+      }),
+    [sessionDate, startTime, endTime, duration],
+  );
+
+  const bothTimes = startTime.trim() !== "" && endTime.trim() !== "";
+
+  // Keep the visible duration field in sync when both times are present.
+  useEffect(() => {
+    if (bothTimes && times.durationMinutes != null) {
+      const v = String(times.durationMinutes);
+      if (v !== duration) setDuration(v);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bothTimes, times.durationMinutes]);
+
+  const effectiveMinutes =
+    bothTimes && times.durationMinutes != null ? times.durationMinutes : num(duration);
+
+  const durationError = useMemo(() => {
+    if (times.error) return times.error;
+    if (effectiveMinutes == null || !Number.isFinite(effectiveMinutes)) return null;
+    if (effectiveMinutes <= 0) return TIME_ERRORS.zero;
+    if (effectiveMinutes > MAX_DURATION_MINUTES) return TIME_ERRORS.tooLong;
+    return null;
+  }, [times.error, effectiveMinutes]);
+
+  const clearTimes = () => {
+    setStartTime("");
+    setEndTime("");
+  };
+
   const inputsReady = useMemo(() => {
     if (!valveId || !sessionDate) return false;
-    const mins = Number(duration);
-    if (!Number.isFinite(mins) || mins <= 0) return false;
+    if (durationError) return false;
+    const mins = effectiveMinutes;
+    if (mins == null || !Number.isFinite(mins) || mins <= 0) return false;
     if (method === "session_flow") return Number(flow) > 0;
     if (method === "total_volume") return Number(totalVolume) > 0;
     if (method === "meter_readings")
       return Number(meterFinish) > Number(meterStart) && meterStart.trim() !== "";
     return true;
-  }, [valveId, sessionDate, duration, method, flow, totalVolume, meterStart, meterFinish]);
+  }, [valveId, sessionDate, effectiveMinutes, durationError, method, flow, totalVolume, meterStart, meterFinish]);
 
   const payload = () => ({
     valve_id: valveId,
     session_date: sessionDate,
-    duration_minutes: Number(duration),
+    duration_minutes: Number(effectiveMinutes),
     calculation_method: method,
     flow_litres_per_hour: method === "session_flow" ? num(flow) : null,
     meter_start_litres: method === "meter_readings" ? num(meterStart) : null,
     meter_finish_litres: method === "meter_readings" ? num(meterFinish) : null,
     total_volume_litres: method === "total_volume" ? num(totalVolume) : null,
   });
+
 
   // Preview is server-authoritative — the portal never computes volumes itself.
   useEffect(() => {
@@ -125,16 +178,28 @@ export default function IrrigationRecordPage() {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVineyardId, inputsReady, valveId, sessionDate, duration, method, flow, meterStart, meterFinish, totalVolume]);
+  }, [selectedVineyardId, inputsReady, valveId, sessionDate, effectiveMinutes, startTime, endTime, method, flow, meterStart, meterFinish, totalVolume]);
 
   const save = async () => {
     if (!preview || !valve) return;
+    const body = payload();
+    // Preview and save must agree on the duration — never silently retry.
+    if (preview.duration_minutes !== body.duration_minutes) {
+      toast({
+        title: "Couldn't save session",
+        description: TIME_ERRORS.mismatch,
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const saved = await record.mutateAsync({
         id: sessionIdRef.current,
         irrigation_system_id: valve.irrigation_system_id,
         notes: notes || null,
-        ...payload(),
+        started_at: times.startedAt,
+        finished_at: bothTimes ? times.finishedAt : null,
+        ...body,
       });
       toast({
         title: saved.duplicate ? "Session already recorded" : "Irrigation recorded",
@@ -149,6 +214,7 @@ export default function IrrigationRecordPage() {
       });
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -217,17 +283,24 @@ export default function IrrigationRecordPage() {
               />
             )}
 
+            <SessionTimeFields
+              idPrefix="rec"
+              startTime={startTime}
+              endTime={endTime}
+              duration={duration}
+              times={times}
+              onStartTime={setStartTime}
+              onEndTime={setEndTime}
+              onDuration={setDuration}
+              onClearTimes={clearTimes}
+            />
+            {durationError && !times.error && (
+              <p className="text-xs text-destructive">{durationError}</p>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="duration">Duration (minutes)</Label>
-                <Input
-                  id="duration"
-                  inputMode="numeric"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                />
-              </div>
-              <div>
+
                 <Label>Water measurement</Label>
                 <Select value={method} onValueChange={(v) => setMethod(v as CalculationMethod)}>
                   <SelectTrigger>
@@ -337,6 +410,12 @@ export default function IrrigationRecordPage() {
                     {preview.effective_volume_litres != null &&
                       ` · ${formatLitres(preview.effective_volume_litres)} effective`}
                   </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {times.startedAt && bothTimes
+                      ? `${formatTimeRange(times.startedAt, times.finishedAt)} · ${formatDuration(preview.duration_minutes)}`
+                      : formatDuration(preview.duration_minutes)}
+                  </div>
+
                   {(preview.uses_rows || preview.row_count != null) && (
                     <div className="mt-1 text-xs text-muted-foreground">
                       Rows supplied: {preview.row_count ?? "—"} · Allocation basis:{" "}
