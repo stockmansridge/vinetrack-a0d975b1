@@ -40,8 +40,10 @@ import { SessionTimeFields } from "@/components/irrigation/SessionTimeFields";
 import {
   MAX_DURATION_MINUTES,
   TIME_ERRORS,
+  formatTimeRange,
   resolveSessionTimes,
 } from "@/lib/irrigationTimes";
+
 
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
