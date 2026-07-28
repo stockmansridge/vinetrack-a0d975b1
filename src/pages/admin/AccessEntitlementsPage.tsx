@@ -74,25 +74,115 @@ function HealthCard({
   state,
   explanation,
   loading,
+  onClick,
 }: {
   title: string;
   count: number;
   state: HealthState;
   explanation: string;
   loading?: boolean;
+  onClick?: () => void;
 }) {
   if (loading) return <Skeleton className="h-28 w-full" />;
+  const clickable = !!onClick && count > 0;
   return (
-    <Card className={`p-4 flex flex-col justify-between min-h-[7rem] border ${HEALTH_STYLE[state]}`}>
+    <Card
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={`p-4 flex flex-col justify-between min-h-[7rem] border transition-colors ${HEALTH_STYLE[state]} ${
+        clickable
+          ? "cursor-pointer hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          : ""
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">{title}</span>
         <HealthIcon state={state} />
       </div>
       <div className="text-2xl font-semibold mt-1">{count}</div>
-      <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{explanation}</p>
+      <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+        {explanation}
+        {clickable ? " Select to view details." : ""}
+      </p>
     </Card>
   );
 }
+
+function DetailValue({ value }: { value: unknown }) {
+  if (value == null || value === "") return <span className="text-muted-foreground">—</span>;
+  if (typeof value === "boolean") return <>{value ? "Yes" : "No"}</>;
+  if (typeof value === "object") {
+    return (
+      <pre className="whitespace-pre-wrap break-words text-[11px]">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return <>{fmtDateTime(s)}</>;
+  return <>{s}</>;
+}
+
+function HealthDetailDialog({
+  open,
+  onOpenChange,
+  title,
+  explanation,
+  items,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  title: string;
+  explanation: string;
+  items: Record<string, unknown>[];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{explanation}</DialogDescription>
+        </DialogHeader>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No detail records were returned for this measure.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item, i) => (
+              <Card key={i} className="p-3">
+                <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-2">
+                  {Object.entries(item).map(([k, v]) => (
+                    <div key={k} className="text-sm min-w-0">
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {humanise(k)}
+                      </dt>
+                      <dd className="break-words">
+                        <DetailValue value={v} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Card>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 function AccessBadge({ granted }: { granted: boolean }) {
   return granted ? (
