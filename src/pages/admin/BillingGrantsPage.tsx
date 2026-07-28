@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,9 +80,14 @@ export default function BillingGrantsPage() {
         title="Billing Grants / Internal Access"
         subtitle={`${grants.length} grant${grants.length === 1 ? "" : "s"}`}
         actions={
+          <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/admin/access-entitlements">Access &amp; Entitlements</Link>
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Add grant
           </Button>
+          </div>
         }
       />
 
