@@ -57,15 +57,19 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { formatDate } from "@/lib/dateFormat";
 import {
   CALCULATION_METHOD_LABEL,
+  flowSourceLabel,
   formatDuration,
+  formatFlow,
   formatLitres,
   formatNumber,
+  snapshotFlow,
   useIrrigationValves,
   useReverseSession,
   useSessions,
   useUpdateSession,
   type IrrigationSession,
 } from "@/lib/irrigationQuery";
+
 import {
   emitterBasisLabel,
   formatEstimate,
@@ -147,6 +151,44 @@ function SessionTimes({ session }: { session: IrrigationSession }) {
     </div>
   );
 }
+
+/**
+ * SQL 131 frozen flow detail. Shows the flow rate the session was actually
+ * saved with — never the valve's current resolution.
+ */
+function SessionFlow({ session }: { session: IrrigationSession }) {
+  const flow = snapshotFlow(session.configuration_snapshot);
+  if (!flow) return null;
+  return (
+    <div className="mt-3 rounded-lg border border-border p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Water calculation (as recorded)
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        Flow used: {formatFlow(flow.flow_lph_used)}
+        {flow.flow_is_estimated != null &&
+          ` (${flow.flow_is_estimated ? "estimated" : "measured"})`}{" "}
+        · Source: {flowSourceLabel(flow.flow_source)}
+        {flow.emitter_count != null &&
+          ` · ${formatNumber(flow.emitter_count, 0)} emitters at the time`}
+      </div>
+      {flow.blocks.length > 0 && (
+        <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+          {flow.blocks.map((b) => (
+            <li key={b.block_id}>
+              {b.block_name}: {formatFlow(b.block_flow_lph)}
+              {b.emitter_count != null && ` · ${formatNumber(b.emitter_count, 0)} emitters`}
+              {b.flow_per_emitter_lph != null &&
+                ` × ${formatNumber(b.flow_per_emitter_lph, 2)} L/h each`}
+            </li>
+          ))}
+        </ul>
+      )}
+      {flow.warning && <p className="mt-1 text-xs text-muted-foreground">{flow.warning}</p>}
+    </div>
+  );
+}
+
 
 function EditDialog({
   vineyardId,
@@ -466,6 +508,9 @@ export default function IrrigationHistoryPage() {
               </div>
 
               <SessionTimes session={s} />
+
+              <SessionFlow session={s} />
+
 
               <RowsIrrigated session={s} />
 

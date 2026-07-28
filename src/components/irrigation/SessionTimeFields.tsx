@@ -82,17 +82,30 @@ export function SessionTimeFields({
           />
         </div>
         <div>
-          <Label htmlFor={`${idPrefix}-duration`}>Duration (minutes)</Label>
-          <Input
-            id={`${idPrefix}-duration`}
-            inputMode="numeric"
-            value={duration}
-            readOnly={durationLocked}
-            disabled={durationLocked}
-            onChange={(e) => onDuration(e.target.value)}
-          />
+          <Label htmlFor={`${idPrefix}-duration`}>How long it ran</Label>
+          <div className="relative">
+            <Input
+              id={`${idPrefix}-duration`}
+              inputMode="numeric"
+              placeholder="e.g. 180"
+              className="pr-16"
+              value={duration}
+              readOnly={durationLocked}
+              disabled={durationLocked}
+              onChange={(e) => onDuration(e.target.value)}
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
+              minutes
+            </span>
+          </div>
+          {duration.trim() !== "" && Number(duration) > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {formatDuration(Number(duration))}
+            </p>
+          )}
         </div>
       </div>
+
 
       {durationLocked && times.durationMinutes != null && (
         <p className="text-xs text-muted-foreground">

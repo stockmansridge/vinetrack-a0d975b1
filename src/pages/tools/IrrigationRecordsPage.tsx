@@ -17,13 +17,10 @@ import {
   Droplet,
   Gauge,
   Timer,
-  ListChecks,
   Settings2,
   Plus,
   History,
   BarChart3,
-  CheckCircle2,
-  CircleAlert,
 } from "lucide-react";
 import {
   useSetupStatus,
@@ -33,23 +30,9 @@ import {
   formatDuration,
   formatNumber,
 } from "@/lib/irrigationQuery";
+import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
 
-function ChecklistRow({ ok, label, detail }: { ok: boolean; label: string; detail?: string }) {
-  return (
-    <div className="flex items-start gap-2.5 py-1.5">
-      {ok ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-      ) : (
-        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-      )}
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        {detail && <div className="text-xs text-muted-foreground">{detail}</div>}
-      </div>
-    </div>
-  );
-}
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
@@ -72,12 +55,20 @@ export default function IrrigationRecordsPage() {
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Irrigation Records</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Irrigation Records</h1>
+            {s && (
+              <Badge variant={operational ? "default" : "secondary"}>
+                {operational ? "Ready to record" : "Setup incomplete"}
+              </Badge>
+            )}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Vintage {s?.season?.current_vintage_year ?? vintage} · water applied, runtime and
             per-block water use from recorded sessions.
           </p>
         </div>
+
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
             <Link to="/irrigation/setup">
@@ -161,79 +152,10 @@ export default function IrrigationRecordsPage() {
         />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ListChecks className="h-4 w-4 text-muted-foreground" /> Setup status
-            </CardTitle>
-            <CardDescription>
-              {operational ? "Ready to record irrigation." : "Complete the required steps below."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {status.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
-            {s && (
-              <>
-                <div className="divide-y divide-border">
-                  <ChecklistRow
-                    ok={s.required.blocks_ok}
-                    label="Blocks"
-                    detail={`${s.required.active_block_count} active blocks`}
-                  />
-                  <ChecklistRow
-                    ok={s.required.systems_ok}
-                    label="Irrigation systems"
-                    detail={`${s.required.active_system_count} active`}
-                  />
-                  <ChecklistRow
-                    ok={s.required.valves_ok}
-                    label="Valves"
-                    detail={`${s.required.active_valve_count} active · ${s.required.valves_with_configured_flow} with a configured flow rate`}
-                  />
-                  <ChecklistRow
-                    ok={s.required.allocations_ok}
-                    label="Valve to block or row connections"
-                    detail={`${s.required.fully_allocated_valve_count} of ${s.required.active_valve_count} valves allocate to 100%`}
-                  />
-                </div>
-                {s.valves.some((v) => v.uses_rows && !v.row_count) && (
-                  <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                    {s.valves
-                      .filter((v) => v.uses_rows && !v.row_count)
-                      .map((v) => (
-                        <li key={v.valve_id}>
-                          {v.valve_name}: this valve has no vineyard rows assigned.
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Recommended block data
-                  </div>
-                  <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                    <div>
-                      Area: {s.recommended.blocks_with_area}/{s.recommended.total_active_blocks}
-                    </div>
-                    <div>
-                      Vine counts: {s.recommended.blocks_with_vine_count}/
-                      {s.recommended.total_active_blocks}
-                    </div>
-                    <div>
-                      Dripper output: {s.recommended.blocks_with_dripper_output}/
-                      {s.recommended.total_active_blocks}
-                    </div>
-                    <div>
-                      Efficiency: {s.recommended.blocks_with_efficiency}/
-                      {s.recommended.total_active_blocks}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      <div className={operational ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
+        {/* Setup detail belongs on the setup page once irrigation is operational. */}
+        {!operational && <SetupStatusPanel vineyardId={selectedVineyardId} />}
+
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">

@@ -115,11 +115,46 @@ export interface IrrigationValveBlock {
 }
 
 
+/** SQL 131 — where an automatically resolved flow rate came from. */
+export type FlowSource =
+  | "valve_configured_flow"
+  | "valve_measured_flow"
+  | "block_flow"
+  | "row_emitter_flow"
+  | "emitter_flow"
+  | "unavailable"
+  | (string & {});
+
+export const FLOW_SOURCE_LABEL: Record<string, string> = {
+  valve_configured_flow: "Valve flow rate",
+  valve_measured_flow: "Measured valve flow rate",
+  block_flow: "Block flow rate",
+  row_emitter_flow: "Connected row emitters",
+  emitter_flow: "Block emitter output",
+  unavailable: "Not available",
+};
+
+export function flowSourceLabel(source: string | null | undefined): string {
+  if (!source) return "Not available";
+  return FLOW_SOURCE_LABEL[source] ?? source.replace(/_/g, " ");
+}
+
+/** SQL 131 per-block flow contribution. */
+export interface ResolvedFlowBlock {
+  block_id: string;
+  block_name: string;
+  basis: string | null;
+  emitter_count: number | null;
+  block_flow_lph: number | null;
+  flow_per_emitter_lph: number | null;
+}
+
 export interface SetupStatus {
   season: {
     season_start_month: number;
     season_start_day: number;
     current_vintage_year: number;
+    configured?: boolean | null;
   };
   required: {
     season_settings_ok: boolean;
@@ -132,6 +167,8 @@ export interface SetupStatus {
     fully_allocated_valve_count: number;
     allocations_ok: boolean;
     valves_with_configured_flow: number;
+    /** SQL 131 */
+    valves_with_automatic_flow?: number | null;
   };
   recommended: {
     total_active_blocks: number;
@@ -154,6 +191,17 @@ export interface SetupStatus {
     row_count?: number | null;
     weighting_basis?: string | null;
     is_operational?: boolean | null;
+    allocation_method?: AllocationMethod | null;
+    rows_saved_at?: string | null;
+    selected_vine_count?: number | null;
+    selected_emitter_count?: number | null;
+    /** SQL 131 automatic flow resolution */
+    automatic_flow_ready?: boolean | null;
+    resolved_flow_source?: FlowSource | null;
+    resolved_flow_litres_per_hour?: number | null;
+    resolved_flow_is_estimated?: boolean | null;
+    resolved_flow_emitter_count?: number | null;
+    resolved_flow_warning?: string | null;
   }>;
   is_operational: boolean;
 }
@@ -174,6 +222,14 @@ export interface ValveValidation {
   row_count?: number | null;
   weighting_basis?: string | null;
   warnings?: string[] | null;
+  /** SQL 131 automatic flow resolution — server authoritative, never derived. */
+  configured_flow_available?: boolean | null;
+  resolved_flow_litres_per_hour?: number | null;
+  resolved_flow_source?: FlowSource | null;
+  resolved_flow_is_estimated?: boolean | null;
+  resolved_flow_emitter_count?: number | null;
+  resolved_flow_warning?: string | null;
+  resolved_flow_blocks?: ResolvedFlowBlock[] | null;
 }
 
 export interface PreviewBlock {
@@ -216,7 +272,12 @@ export interface IrrigationPreview {
   uses_rows?: boolean | null;
   row_count?: number | null;
   weighting_basis?: string | null;
+  /** SQL 131 additions */
+  flow_source?: FlowSource | null;
+  flow_explanation?: string | null;
+  flow_is_estimated?: boolean | null;
 }
+
 
 
 export interface IrrigationSessionBlock extends PreviewBlock {
@@ -1070,4 +1131,52 @@ export function formatDuration(minutes: number | null | undefined): string {
   const m = Math.round(minutes % 60);
   if (h === 0) return `${m} min`;
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+// ---------------------------------------------------------------------------
+// SQL 131 — frozen flow detail from a session's configuration snapshot
+// ---------------------------------------------------------------------------
+
+export interface SnapshotFlow {
+  flow_lph_used: number | null;
+  flow_source: FlowSource | null;
+  flow_is_estimated: boolean | null;
+  calculation_method: CalculationMethod | null;
+  emitter_count: number | null;
+  warning: string | null;
+  blocks: ResolvedFlowBlock[];
+}
+
+/**
+ * Reads the frozen flow figures a session was saved with. Historical sessions
+ * are never recalculated from the current setup — everything here comes from
+ * the snapshot the backend stored at record time.
+ */
+export function snapshotFlow(snapshot: Record<string, any> | null | undefined): SnapshotFlow | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const resolved = (snapshot.resolved_flow ?? {}) as Record<string, any>;
+  const flow = snapshot.flow_lph_used ?? resolved.resolved_flow_litres_per_hour ?? null;
+  const source = snapshot.flow_source ?? resolved.resolved_flow_source ?? null;
+  if (flow == null && source == null) return null;
+  const warnings: string[] = Array.isArray(resolved.resolved_flow_warnings)
+    ? resolved.resolved_flow_warnings.filter(Boolean)
+    : [];
+  return {
+    flow_lph_used: flow == null ? null : Number(flow),
+    flow_source: source ?? null,
+    flow_is_estimated:
+      snapshot.flow_is_estimated ?? resolved.resolved_flow_is_estimated ?? null,
+    calculation_method: (snapshot.calculation_method as CalculationMethod) ?? null,
+    emitter_count: resolved.resolved_flow_emitter_count ?? null,
+    warning: resolved.resolved_flow_warning ?? warnings[0] ?? null,
+    blocks: Array.isArray(resolved.resolved_flow_blocks)
+      ? (resolved.resolved_flow_blocks as ResolvedFlowBlock[])
+      : [],
+  };
+}
+
+/** Compact flow-rate label, e.g. "12,689.6 L/h". */
+export function formatFlow(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} L/h`;
 }
