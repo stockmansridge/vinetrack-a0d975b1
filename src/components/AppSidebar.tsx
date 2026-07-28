@@ -284,7 +284,12 @@ export function AppSidebar() {
           false,
         )}
 
-        {renderGroup("Setup", visible(setup), false)}
+        {renderGroup(
+          "Setup",
+          visible(hasIrrigationRecords ? [...setup, ...irrigationSetup] : setup),
+          false,
+        )}
+
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
       </SidebarContent>
