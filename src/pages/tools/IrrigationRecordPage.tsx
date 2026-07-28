@@ -267,17 +267,24 @@ export default function IrrigationRecordPage() {
               />
             )}
 
+            <SessionTimeFields
+              idPrefix="rec"
+              startTime={startTime}
+              endTime={endTime}
+              duration={duration}
+              times={times}
+              onStartTime={setStartTime}
+              onEndTime={setEndTime}
+              onDuration={setDuration}
+              onClearTimes={clearTimes}
+            />
+            {durationError && !times.error && (
+              <p className="text-xs text-destructive">{durationError}</p>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="duration">Duration (minutes)</Label>
-                <Input
-                  id="duration"
-                  inputMode="numeric"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                />
-              </div>
-              <div>
+
                 <Label>Water measurement</Label>
                 <Select value={method} onValueChange={(v) => setMethod(v as CalculationMethod)}>
                   <SelectTrigger>
