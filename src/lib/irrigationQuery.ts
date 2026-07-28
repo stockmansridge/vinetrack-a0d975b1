@@ -1132,3 +1132,51 @@ export function formatDuration(minutes: number | null | undefined): string {
   if (h === 0) return `${m} min`;
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
+
+// ---------------------------------------------------------------------------
+// SQL 131 — frozen flow detail from a session's configuration snapshot
+// ---------------------------------------------------------------------------
+
+export interface SnapshotFlow {
+  flow_lph_used: number | null;
+  flow_source: FlowSource | null;
+  flow_is_estimated: boolean | null;
+  calculation_method: CalculationMethod | null;
+  emitter_count: number | null;
+  warning: string | null;
+  blocks: ResolvedFlowBlock[];
+}
+
+/**
+ * Reads the frozen flow figures a session was saved with. Historical sessions
+ * are never recalculated from the current setup — everything here comes from
+ * the snapshot the backend stored at record time.
+ */
+export function snapshotFlow(snapshot: Record<string, any> | null | undefined): SnapshotFlow | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const resolved = (snapshot.resolved_flow ?? {}) as Record<string, any>;
+  const flow = snapshot.flow_lph_used ?? resolved.resolved_flow_litres_per_hour ?? null;
+  const source = snapshot.flow_source ?? resolved.resolved_flow_source ?? null;
+  if (flow == null && source == null) return null;
+  const warnings: string[] = Array.isArray(resolved.resolved_flow_warnings)
+    ? resolved.resolved_flow_warnings.filter(Boolean)
+    : [];
+  return {
+    flow_lph_used: flow == null ? null : Number(flow),
+    flow_source: source ?? null,
+    flow_is_estimated:
+      snapshot.flow_is_estimated ?? resolved.resolved_flow_is_estimated ?? null,
+    calculation_method: (snapshot.calculation_method as CalculationMethod) ?? null,
+    emitter_count: resolved.resolved_flow_emitter_count ?? null,
+    warning: resolved.resolved_flow_warning ?? warnings[0] ?? null,
+    blocks: Array.isArray(resolved.resolved_flow_blocks)
+      ? (resolved.resolved_flow_blocks as ResolvedFlowBlock[])
+      : [],
+  };
+}
+
+/** Compact flow-rate label, e.g. "12,689.6 L/h". */
+export function formatFlow(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} L/h`;
+}
