@@ -21,6 +21,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import {
   GRANT_TYPES,
+  GRANT_TYPES_REQUIRING_EXPIRY,
   type GrantType,
   fmtDateTime,
   grantTypeLabel,
@@ -98,8 +99,9 @@ export function CreateGrantDialog({
     }
   }, [open]);
 
-  const requiresExpiry =
-    GRANT_TYPES.find((g) => g.value === grantType)?.requiresExpiry ?? false;
+  // Backend rejects these grant types without an expiry (`expiry_required_for_grant_type`).
+  const requiresExpiry = GRANT_TYPES_REQUIRING_EXPIRY.includes(grantType);
+
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
