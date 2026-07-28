@@ -1715,6 +1715,12 @@ export default function IrrigationSetupPage() {
           >
             Connections
           </TabsTrigger>
+          <TabsTrigger
+            value="status"
+            className="rounded-md px-4 py-1.5 text-sm data-[state=active]:border data-[state=active]:border-border data-[state=active]:shadow-sm"
+          >
+            Setup status
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="systems" className="mt-4">
           <SystemsTab vineyardId={selectedVineyardId} />
@@ -1725,7 +1731,11 @@ export default function IrrigationSetupPage() {
         <TabsContent value="connections" className="mt-4">
           <ConnectionsTab vineyardId={selectedVineyardId} focusValveId={focusValveId} />
         </TabsContent>
+        <TabsContent value="status" className="mt-4">
+          <SetupStatusPanel vineyardId={selectedVineyardId} />
+        </TabsContent>
       </Tabs>
+
     </div>
   );
 }
