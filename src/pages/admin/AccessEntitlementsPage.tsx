@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -74,25 +81,115 @@ function HealthCard({
   state,
   explanation,
   loading,
+  onClick,
 }: {
   title: string;
   count: number;
   state: HealthState;
   explanation: string;
   loading?: boolean;
+  onClick?: () => void;
 }) {
   if (loading) return <Skeleton className="h-28 w-full" />;
+  const clickable = !!onClick && count > 0;
   return (
-    <Card className={`p-4 flex flex-col justify-between min-h-[7rem] border ${HEALTH_STYLE[state]}`}>
+    <Card
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={`p-4 flex flex-col justify-between min-h-[7rem] border transition-colors ${HEALTH_STYLE[state]} ${
+        clickable
+          ? "cursor-pointer hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          : ""
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">{title}</span>
         <HealthIcon state={state} />
       </div>
       <div className="text-2xl font-semibold mt-1">{count}</div>
-      <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{explanation}</p>
+      <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+        {explanation}
+        {clickable ? " Select to view details." : ""}
+      </p>
     </Card>
   );
 }
+
+function DetailValue({ value }: { value: unknown }) {
+  if (value == null || value === "") return <span className="text-muted-foreground">—</span>;
+  if (typeof value === "boolean") return <>{value ? "Yes" : "No"}</>;
+  if (typeof value === "object") {
+    return (
+      <pre className="whitespace-pre-wrap break-words text-[11px]">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return <>{fmtDateTime(s)}</>;
+  return <>{s}</>;
+}
+
+function HealthDetailDialog({
+  open,
+  onOpenChange,
+  title,
+  explanation,
+  items,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  title: string;
+  explanation: string;
+  items: Record<string, unknown>[];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{explanation}</DialogDescription>
+        </DialogHeader>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No detail records were returned for this measure.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item, i) => (
+              <Card key={i} className="p-3">
+                <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-2">
+                  {Object.entries(item).map(([k, v]) => (
+                    <div key={k} className="text-sm min-w-0">
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {humanise(k)}
+                      </dt>
+                      <dd className="break-words">
+                        <DetailValue value={v} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Card>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 function AccessBadge({ granted }: { granted: boolean }) {
   return granted ? (
@@ -175,80 +272,99 @@ export default function AccessEntitlementsPage() {
   const total = usersQ.data?.total ?? 0;
 
   const monitor = monitorQ.data;
-  const cards: { title: string; count: number; state: HealthState; explanation: string }[] =
-    monitor
-      ? [
-          {
-            title: "Needs Review",
-            count: monitor.events_needing_review.count,
-            state: monitor.events_needing_review.count > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.events_needing_review.count > 0
-                ? "Store events are flagged for administrator review."
-                : "No store events require review.",
-          },
-          {
-            title: "Failed Events",
-            count: monitor.failed_events.count,
-            state: monitor.failed_events.count > 0 ? "critical" : "healthy",
-            explanation:
-              monitor.failed_events.count > 0
-                ? "Billing events failed processing."
-                : "No billing events have failed processing.",
-          },
-          {
-            title: "Unresolved Users",
-            count: monitor.unresolved_users.count,
-            state: monitor.unresolved_users.count > 0 ? "critical" : "healthy",
-            explanation:
-              monitor.unresolved_users.count > 0
-                ? "Purchases could not be linked to a VineTrack account."
-                : "Every purchase is linked to an account.",
-          },
-          {
-            title: "Ownership Conflicts",
-            count: monitor.ownership_conflicts.count,
-            state: monitor.ownership_conflicts.count > 0 ? "critical" : "healthy",
-            explanation:
-              monitor.ownership_conflicts.count > 0
-                ? "A subscription is claimed by more than one account."
-                : "No subscription ownership conflicts.",
-          },
-          {
-            title: "Open Alerts",
-            count: monitor.open_alerts,
-            state: monitor.open_alerts > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.open_alerts > 0
-                ? "Alerts are waiting to be acknowledged below."
-                : "No alerts are waiting for acknowledgement.",
-          },
-          {
-            title: "Stuck Deliveries",
-            count: monitor.stuck_deliveries.length,
-            state: monitor.stuck_deliveries.length > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.stuck_deliveries.length > 0
-                ? "Store webhooks were received but never finalised."
-                : "All store webhooks finalised normally.",
-          },
-          {
-            title: "Expiring in 7 Days",
-            count: monitor.expiring_within_7_days.length,
-            state: monitor.expiring_within_7_days.length > 0 ? "attention" : "healthy",
-            explanation:
-              monitor.expiring_within_7_days.length > 0
-                ? "Access expires within the next seven days."
-                : "Nothing expires in the next seven days.",
-          },
-          {
-            title: "Recent Status Changes",
-            count: monitor.recent_status_changes.length,
-            state: "healthy",
-            explanation: "Subscription status changes recorded recently.",
-          },
-        ]
-      : [];
+  const cards: {
+    title: string;
+    count: number;
+    state: HealthState;
+    explanation: string;
+    items: Record<string, unknown>[];
+  }[] = monitor
+    ? [
+        {
+          title: "Needs Review",
+          count: monitor.events_needing_review.count,
+          state: monitor.events_needing_review.count > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.events_needing_review.count > 0
+              ? "Store events are flagged for administrator review."
+              : "No store events require review.",
+          items: monitor.events_needing_review.recent,
+        },
+        {
+          title: "Failed Events",
+          count: monitor.failed_events.count,
+          state: monitor.failed_events.count > 0 ? "critical" : "healthy",
+          explanation:
+            monitor.failed_events.count > 0
+              ? "Billing events failed processing."
+              : "No billing events have failed processing.",
+          items: monitor.failed_events.recent,
+        },
+        {
+          title: "Unresolved Users",
+          count: monitor.unresolved_users.count,
+          state: monitor.unresolved_users.count > 0 ? "critical" : "healthy",
+          explanation:
+            monitor.unresolved_users.count > 0
+              ? "Purchases could not be linked to a VineTrack account."
+              : "Every purchase is linked to an account.",
+          items: monitor.unresolved_users.recent,
+        },
+        {
+          title: "Ownership Conflicts",
+          count: monitor.ownership_conflicts.count,
+          state: monitor.ownership_conflicts.count > 0 ? "critical" : "healthy",
+          explanation:
+            monitor.ownership_conflicts.count > 0
+              ? "A subscription is claimed by more than one account."
+              : "No subscription ownership conflicts.",
+          items: monitor.ownership_conflicts.recent,
+        },
+        {
+          title: "Open Alerts",
+          count: monitor.open_alerts,
+          state: monitor.open_alerts > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.open_alerts > 0
+              ? "Alerts are waiting to be acknowledged below."
+              : "No alerts are waiting for acknowledgement.",
+          items: (alertsQ.data ?? [])
+            .filter((a) => !a.acknowledged_at)
+            .map((a) => a as unknown as Record<string, unknown>),
+        },
+        {
+          title: "Stuck Deliveries",
+          count: monitor.stuck_deliveries.length,
+          state: monitor.stuck_deliveries.length > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.stuck_deliveries.length > 0
+              ? "Store webhooks were received but never finalised."
+              : "All store webhooks finalised normally.",
+          items: monitor.stuck_deliveries,
+        },
+        {
+          title: "Expiring in 7 Days",
+          count: monitor.expiring_within_7_days.length,
+          state: monitor.expiring_within_7_days.length > 0 ? "attention" : "healthy",
+          explanation:
+            monitor.expiring_within_7_days.length > 0
+              ? "Access expires within the next seven days."
+              : "Nothing expires in the next seven days.",
+          items: monitor.expiring_within_7_days,
+        },
+        {
+          title: "Recent Status Changes",
+          count: monitor.recent_status_changes.length,
+          state: "healthy",
+          explanation: "Subscription status changes recorded recently.",
+          items: monitor.recent_status_changes,
+        },
+      ]
+    : [];
+
+  const [detailCard, setDetailCard] = useState<string | null>(null);
+  const activeCard = cards.find((c) => c.title === detailCard) ?? null;
+
 
   const alerts = alertsQ.data ?? [];
   const alertTypes = useMemo(
@@ -321,8 +437,10 @@ export default function AccessEntitlementsPage() {
                     count={c.count}
                     state={c.state}
                     explanation={c.explanation}
+                    onClick={() => setDetailCard(c.title)}
                   />
                 ))}
+
           </div>
         )}
       </section>
@@ -677,6 +795,14 @@ export default function AccessEntitlementsPage() {
               }
             : null
         }
+      />
+
+      <HealthDetailDialog
+        open={!!activeCard}
+        onOpenChange={(o) => !o && setDetailCard(null)}
+        title={activeCard?.title ?? ""}
+        explanation={activeCard?.explanation ?? ""}
+        items={activeCard?.items ?? []}
       />
     </AdminGate>
   );
