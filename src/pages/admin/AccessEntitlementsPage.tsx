@@ -796,6 +796,14 @@ export default function AccessEntitlementsPage() {
             : null
         }
       />
+
+      <HealthDetailDialog
+        open={!!activeCard}
+        onOpenChange={(o) => !o && setDetailCard(null)}
+        title={activeCard?.title ?? ""}
+        explanation={activeCard?.explanation ?? ""}
+        items={activeCard?.items ?? []}
+      />
     </AdminGate>
   );
 }
