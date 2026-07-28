@@ -423,10 +423,14 @@ export default function IrrigationHistoryPage() {
                     {s.status === "corrected" && <Badge variant="secondary">Corrected</Badge>}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
+                    {s.started_at && (
+                      <>{formatTimeRange(s.started_at, s.finished_at)} · </>
+                    )}
                     {s.system_name} · {formatDuration(s.duration_minutes)} ·{" "}
                     {CALCULATION_METHOD_LABEL[s.calculation_method] ?? s.calculation_method}
                     {s.source_type === "manual_portal" ? " · Portal" : ` · ${s.source_type}`}
                   </div>
+
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className="tabular-nums">{formatLitres(s.total_volume_litres)}</Badge>
