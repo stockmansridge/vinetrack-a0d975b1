@@ -55,12 +55,20 @@ export default function IrrigationRecordsPage() {
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Irrigation Records</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Irrigation Records</h1>
+            {s && (
+              <Badge variant={operational ? "default" : "secondary"}>
+                {operational ? "Ready to record" : "Setup incomplete"}
+              </Badge>
+            )}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Vintage {s?.season?.current_vintage_year ?? vintage} · water applied, runtime and
             per-block water use from recorded sessions.
           </p>
         </div>
+
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
             <Link to="/irrigation/setup">
