@@ -17,13 +17,10 @@ import {
   Droplet,
   Gauge,
   Timer,
-  ListChecks,
   Settings2,
   Plus,
   History,
   BarChart3,
-  CheckCircle2,
-  CircleAlert,
 } from "lucide-react";
 import {
   useSetupStatus,
@@ -33,23 +30,9 @@ import {
   formatDuration,
   formatNumber,
 } from "@/lib/irrigationQuery";
+import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
 
-function ChecklistRow({ ok, label, detail }: { ok: boolean; label: string; detail?: string }) {
-  return (
-    <div className="flex items-start gap-2.5 py-1.5">
-      {ok ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-      ) : (
-        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-      )}
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        {detail && <div className="text-xs text-muted-foreground">{detail}</div>}
-      </div>
-    </div>
-  );
-}
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
