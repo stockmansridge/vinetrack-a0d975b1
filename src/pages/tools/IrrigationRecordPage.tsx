@@ -175,16 +175,28 @@ export default function IrrigationRecordPage() {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVineyardId, inputsReady, valveId, sessionDate, duration, method, flow, meterStart, meterFinish, totalVolume]);
+  }, [selectedVineyardId, inputsReady, valveId, sessionDate, effectiveMinutes, startTime, endTime, method, flow, meterStart, meterFinish, totalVolume]);
 
   const save = async () => {
     if (!preview || !valve) return;
+    const body = payload();
+    // Preview and save must agree on the duration — never silently retry.
+    if (preview.duration_minutes !== body.duration_minutes) {
+      toast({
+        title: "Couldn't save session",
+        description: TIME_ERRORS.mismatch,
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const saved = await record.mutateAsync({
         id: sessionIdRef.current,
         irrigation_system_id: valve.irrigation_system_id,
         notes: notes || null,
-        ...payload(),
+        started_at: times.startedAt,
+        finished_at: bothTimes ? times.finishedAt : null,
+        ...body,
       });
       toast({
         title: saved.duplicate ? "Session already recorded" : "Irrigation recorded",
@@ -199,6 +211,7 @@ export default function IrrigationRecordPage() {
       });
     }
   };
+
 
   return (
     <div className="space-y-6">
