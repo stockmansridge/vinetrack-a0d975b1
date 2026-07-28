@@ -135,6 +135,12 @@ const setup: NavItem[] = [
   { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
 ];
 
+// Setup entries that depend on the Irrigation Records module
+const irrigationSetup: NavItem[] = [
+  { title: "Irrigation Setup", url: "/irrigation/setup", icon: Droplet },
+
+];
+
 // "Tools" — calculators / helpers
 const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
