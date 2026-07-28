@@ -57,15 +57,19 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { formatDate } from "@/lib/dateFormat";
 import {
   CALCULATION_METHOD_LABEL,
+  flowSourceLabel,
   formatDuration,
+  formatFlow,
   formatLitres,
   formatNumber,
+  snapshotFlow,
   useIrrigationValves,
   useReverseSession,
   useSessions,
   useUpdateSession,
   type IrrigationSession,
 } from "@/lib/irrigationQuery";
+
 import {
   emitterBasisLabel,
   formatEstimate,
