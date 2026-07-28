@@ -437,8 +437,10 @@ export default function AccessEntitlementsPage() {
                     count={c.count}
                     state={c.state}
                     explanation={c.explanation}
+                    onClick={() => setDetailCard(c.title)}
                   />
                 ))}
+
           </div>
         )}
       </section>
