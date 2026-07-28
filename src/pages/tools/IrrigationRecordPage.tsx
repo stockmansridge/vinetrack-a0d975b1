@@ -16,6 +16,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,11 +28,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Droplet } from "lucide-react";
+import { ArrowLeft, ChevronDown, Droplet, Save, Zap } from "lucide-react";
 import {
   CALCULATION_METHOD_LABEL,
   calculatePreview,
+  flowSourceLabel,
   formatDuration,
+  formatFlow,
   formatLitres,
   formatNumber,
   useIrrigationValves,
@@ -45,10 +52,15 @@ import {
   resolveSessionTimes,
 } from "@/lib/irrigationTimes";
 
-
-
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+/** Manual fallbacks — only shown when the operator opens the advanced section. */
+const MANUAL_METHODS: CalculationMethod[] = [
+  "session_flow",
+  "total_volume",
+  "meter_readings",
+];
 
 export default function IrrigationRecordPage() {
   const { selectedVineyardId } = useVineyard();
@@ -67,6 +79,7 @@ export default function IrrigationRecordPage() {
   const [meterFinish, setMeterFinish] = useState("");
   const [totalVolume, setTotalVolume] = useState("");
   const [notes, setNotes] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const [preview, setPreview] = useState<IrrigationPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -78,11 +91,24 @@ export default function IrrigationRecordPage() {
   const validation = useValveValidation(selectedVineyardId, valveId || null);
   const valve = valves.data?.find((v) => v.id === valveId) ?? null;
 
+  // SQL 131: the backend resolves the flow rate. The portal never derives one.
+  const v = validation.data;
+  const automaticAvailable = !!v?.configured_flow_available;
+  const automaticFlow = v?.resolved_flow_litres_per_hour ?? null;
+
+  // Automatic flow is the default whenever the backend can resolve one; when it
+  // cannot, the operator must enter the water manually.
   useEffect(() => {
-    if (validation.data?.requires_volume_entry && method === "configured_flow") {
-      setMethod("session_flow");
+    if (!v) return;
+    if (automaticAvailable) {
+      setMethod("configured_flow");
+      setAdvancedOpen(false);
+    } else {
+      setMethod((m) => (m === "configured_flow" ? "session_flow" : m));
+      setAdvancedOpen(true);
     }
-  }, [validation.data?.requires_volume_entry]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v?.valve_id, automaticAvailable]);
 
   // Times are resolved against the selected session date in local time. When
   // both are entered the derived duration is authoritative for preview + save.
@@ -102,8 +128,8 @@ export default function IrrigationRecordPage() {
   // Keep the visible duration field in sync when both times are present.
   useEffect(() => {
     if (bothTimes && times.durationMinutes != null) {
-      const v = String(times.durationMinutes);
-      if (v !== duration) setDuration(v);
+      const val = String(times.durationMinutes);
+      if (val !== duration) setDuration(val);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bothTimes, times.durationMinutes]);
@@ -129,12 +155,24 @@ export default function IrrigationRecordPage() {
     if (durationError) return false;
     const mins = effectiveMinutes;
     if (mins == null || !Number.isFinite(mins) || mins <= 0) return false;
+    if (method === "configured_flow") return automaticAvailable;
     if (method === "session_flow") return Number(flow) > 0;
     if (method === "total_volume") return Number(totalVolume) > 0;
     if (method === "meter_readings")
       return Number(meterFinish) > Number(meterStart) && meterStart.trim() !== "";
     return true;
-  }, [valveId, sessionDate, effectiveMinutes, durationError, method, flow, totalVolume, meterStart, meterFinish]);
+  }, [
+    valveId,
+    sessionDate,
+    effectiveMinutes,
+    durationError,
+    method,
+    automaticAvailable,
+    flow,
+    totalVolume,
+    meterStart,
+    meterFinish,
+  ]);
 
   const payload = () => ({
     valve_id: valveId,
@@ -146,7 +184,6 @@ export default function IrrigationRecordPage() {
     meter_finish_litres: method === "meter_readings" ? num(meterFinish) : null,
     total_volume_litres: method === "total_volume" ? num(totalVolume) : null,
   });
-
 
   // Preview is server-authoritative — the portal never computes volumes itself.
   useEffect(() => {
@@ -215,7 +252,6 @@ export default function IrrigationRecordPage() {
     }
   };
 
-
   return (
     <div className="space-y-6">
       <PageHead
@@ -232,148 +268,250 @@ export default function IrrigationRecordPage() {
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight">Record irrigation</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Volumes and per-block allocations are calculated by the shared VineTrack backend.
+          Pick the valve and how long it ran — VineTrack works out the water applied to each
+          block.
         </p>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Session details</CardTitle>
-            <CardDescription>Pick the valve, the date and how the water was measured.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label>Valve</Label>
-                <Select value={valveId} onValueChange={setValveId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a valve" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {valves.data?.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.system_name} · {v.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={sessionDate}
-                  onChange={(e) => setSessionDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {validation.data && !validation.data.can_record && (
-              <PortalNotice
-                variant="warning"
-                title="This valve can't record yet"
-                description={validation.data.issues.join(" ")}
-                action={
-                  <Button asChild size="sm" variant="outline">
-                    <Link to="/irrigation/setup">Fix setup</Link>
-                  </Button>
-                }
-              />
-            )}
-
-            <SessionTimeFields
-              idPrefix="rec"
-              startTime={startTime}
-              endTime={endTime}
-              duration={duration}
-              times={times}
-              onStartTime={setStartTime}
-              onEndTime={setEndTime}
-              onDuration={setDuration}
-              onClearTimes={clearTimes}
-            />
-            {durationError && !times.error && (
-              <p className="text-xs text-destructive">{durationError}</p>
-            )}
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-
-                <Label>Water measurement</Label>
-                <Select value={method} onValueChange={(v) => setMethod(v as CalculationMethod)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(CALCULATION_METHOD_LABEL) as CalculationMethod[]).map((m) => (
-                      <SelectItem
-                        key={m}
-                        value={m}
-                        disabled={m === "configured_flow" && !validation.data?.has_configured_flow}
-                      >
-                        {CALCULATION_METHOD_LABEL[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {method === "configured_flow" && validation.data?.configured_flow_litres_per_hour != null && (
-              <PortalNotice
-                compact
-                variant="info"
-                description={`Using the valve's configured flow rate of ${validation.data.configured_flow_litres_per_hour} L/hour.`}
-              />
-            )}
-            {method === "session_flow" && (
-              <div>
-                <Label htmlFor="flow">Flow rate for this session (L/hour)</Label>
-                <Input id="flow" inputMode="decimal" value={flow} onChange={(e) => setFlow(e.target.value)} />
-              </div>
-            )}
-            {method === "total_volume" && (
-              <div>
-                <Label htmlFor="vol">Total volume used (litres)</Label>
-                <Input
-                  id="vol"
-                  inputMode="decimal"
-                  value={totalVolume}
-                  onChange={(e) => setTotalVolume(e.target.value)}
-                />
-              </div>
-            )}
-            {method === "meter_readings" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Session details</CardTitle>
+              <CardDescription>Pick the valve, the date and how long it ran.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="ms">Meter start (litres)</Label>
-                  <Input
-                    id="ms"
-                    inputMode="decimal"
-                    value={meterStart}
-                    onChange={(e) => setMeterStart(e.target.value)}
-                  />
+                  <Label>Valve</Label>
+                  <Select value={valveId} onValueChange={setValveId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a valve" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {valves.data?.map((val) => (
+                        <SelectItem key={val.id} value={val.id}>
+                          {val.system_name} · {val.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Label htmlFor="mf">Meter finish (litres)</Label>
+                  <Label htmlFor="date">Date</Label>
                   <Input
-                    id="mf"
-                    inputMode="decimal"
-                    value={meterFinish}
-                    onChange={(e) => setMeterFinish(e.target.value)}
+                    id="date"
+                    type="date"
+                    value={sessionDate}
+                    onChange={(e) => setSessionDate(e.target.value)}
                   />
                 </div>
               </div>
-            )}
 
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
+              {v && !v.can_record && (
+                <PortalNotice
+                  variant="warning"
+                  title="This valve can't record yet"
+                  description={v.issues.join(" ")}
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/irrigation/setup">Fix setup</Link>
+                    </Button>
+                  }
+                />
+              )}
+
+              <SessionTimeFields
+                idPrefix="rec"
+                startTime={startTime}
+                endTime={endTime}
+                duration={duration}
+                times={times}
+                onStartTime={setStartTime}
+                onEndTime={setEndTime}
+                onDuration={setDuration}
+                onClearTimes={clearTimes}
+              />
+              {durationError && !times.error && (
+                <p className="text-xs text-destructive">{durationError}</p>
+              )}
+
+              <div>
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Zap className="h-4 w-4 text-muted-foreground" /> Water calculation
+              </CardTitle>
+              <CardDescription>
+                VineTrack works the flow rate out from your saved irrigation setup.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!valveId && (
+                <div className="text-sm text-muted-foreground">
+                  Select a valve to see how its water will be calculated.
+                </div>
+              )}
+
+              {v && automaticAvailable && (
+                <div className="rounded-lg border border-border bg-muted/40 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Automatic flow rate
+                      </div>
+                      <div className="text-xl font-semibold tabular-nums">
+                        {formatFlow(automaticFlow)}
+                      </div>
+                    </div>
+                    <Badge variant="secondary">
+                      {v.resolved_flow_is_estimated ? "Estimated" : "Measured"}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Source: {flowSourceLabel(v.resolved_flow_source)}
+                    {v.resolved_flow_emitter_count != null &&
+                      ` · ${formatNumber(v.resolved_flow_emitter_count, 0)} connected emitters`}
+                  </div>
+                  {(v.resolved_flow_blocks?.length ?? 0) > 0 && (
+                    <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                      {v.resolved_flow_blocks!.map((b) => (
+                        <li key={b.block_id}>
+                          {b.block_name}: {formatFlow(b.block_flow_lph)}
+                          {b.emitter_count != null &&
+                            ` · ${formatNumber(b.emitter_count, 0)} emitters`}
+                          {b.flow_per_emitter_lph != null &&
+                            ` × ${formatNumber(b.flow_per_emitter_lph, 2)} L/h each`}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {v && !automaticAvailable && (
+                <PortalNotice
+                  variant="warning"
+                  title="Automatic flow isn't available for this valve"
+                  description={
+                    v.resolved_flow_warning ??
+                    "This valve has no resolvable flow rate, so the water used has to be entered manually below."
+                  }
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/irrigation/setup">Open setup</Link>
+                    </Button>
+                  }
+                />
+              )}
+
+              {v && automaticAvailable && v.resolved_flow_warning && (
+                <PortalNotice compact variant="warning" description={v.resolved_flow_warning} />
+              )}
+
+              {v?.warnings?.map((w) => (
+                <PortalNotice key={w} compact variant="warning" description={w} />
+              ))}
+
+              <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="-ml-2">
+                    <ChevronDown
+                      className={`mr-1.5 h-4 w-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
+                    />
+                    {automaticAvailable
+                      ? "Enter the water manually instead"
+                      : "Enter the water used"}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-3 pt-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>How the water was measured</Label>
+                      <Select
+                        value={method === "configured_flow" ? "" : method}
+                        onValueChange={(val) => setMethod(val as CalculationMethod)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a manual method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MANUAL_METHODS.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {CALCULATION_METHOD_LABEL[m]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {automaticAvailable && method !== "configured_flow" && (
+                      <div className="flex items-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setMethod("configured_flow")}
+                        >
+                          Use the automatic flow rate
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {method === "session_flow" && (
+                    <div>
+                      <Label htmlFor="flow">Flow rate for this session (L/hour)</Label>
+                      <Input
+                        id="flow"
+                        inputMode="decimal"
+                        value={flow}
+                        onChange={(e) => setFlow(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {method === "total_volume" && (
+                    <div>
+                      <Label htmlFor="vol">Total volume used (litres)</Label>
+                      <Input
+                        id="vol"
+                        inputMode="decimal"
+                        value={totalVolume}
+                        onChange={(e) => setTotalVolume(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {method === "meter_readings" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="ms">Meter start (litres)</Label>
+                        <Input
+                          id="ms"
+                          inputMode="decimal"
+                          value={meterStart}
+                          onChange={(e) => setMeterStart(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="mf">Meter finish (litres)</Label>
+                        <Input
+                          id="mf"
+                          inputMode="decimal"
+                          value={meterFinish}
+                          onChange={(e) => setMeterFinish(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            </CardContent>
+          </Card>
+        </div>
 
         <Card className="h-fit">
           <CardHeader>
@@ -385,7 +523,7 @@ export default function IrrigationRecordPage() {
           <CardContent className="space-y-3">
             {!inputsReady && (
               <div className="text-sm text-muted-foreground">
-                Enter a valve, date, duration and water measurement to see the calculation.
+                Enter a valve, date and how long the valve ran to see the calculation.
               </div>
             )}
             {previewError && (
@@ -405,11 +543,18 @@ export default function IrrigationRecordPage() {
                   <div className="mt-1 text-xs text-muted-foreground">
                     Vintage {preview.vintage_year} ·{" "}
                     {preview.flow_litres_per_hour_used != null
-                      ? `${formatNumber(preview.flow_litres_per_hour_used)} L/h`
+                      ? formatFlow(preview.flow_litres_per_hour_used)
                       : "entered volume"}
                     {preview.effective_volume_litres != null &&
                       ` · ${formatLitres(preview.effective_volume_litres)} effective`}
                   </div>
+                  {preview.flow_source && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Flow source: {flowSourceLabel(preview.flow_source)}
+                      {preview.flow_is_estimated ? " (estimated)" : ""}
+                      {preview.flow_explanation && ` · ${preview.flow_explanation}`}
+                    </div>
+                  )}
                   <div className="mt-1 text-xs text-muted-foreground">
                     {times.startedAt && bothTimes
                       ? `${formatTimeRange(times.startedAt, times.finishedAt)} · ${formatDuration(preview.duration_minutes)}`
@@ -439,9 +584,7 @@ export default function IrrigationRecordPage() {
                         )}`}
                     </div>
                   )}
-
                 </div>
-
 
                 <div className="divide-y divide-border rounded-lg border border-border">
                   {preview.blocks.map((b) => (
@@ -477,8 +620,9 @@ export default function IrrigationRecordPage() {
                   />
                 )}
 
-                <Button className="w-full" onClick={save} disabled={record.isPending}>
-                  {record.isPending ? "Saving…" : "Save irrigation session"}
+                <Button size="lg" className="w-full" onClick={save} disabled={record.isPending}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {record.isPending ? "Saving…" : "Save Irrigation Record"}
                 </Button>
               </>
             )}
