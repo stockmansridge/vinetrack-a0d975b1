@@ -33,7 +33,10 @@ import { Loader2, Paperclip, X } from "lucide-react";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Optional prefill applied each time the sheet opens. */
+  prefill?: { category?: string; subject?: string; message?: string };
 }
+
 
 // Match iOS support form categories exactly.
 const CATEGORY_OPTIONS = [
@@ -103,7 +106,7 @@ function StatusLine({
   );
 }
 
-export function SupportRequestSheet({ open, onOpenChange }: Props) {
+export function SupportRequestSheet({ open, onOpenChange, prefill }: Props) {
 
   const { user } = useAuth();
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
@@ -138,8 +141,13 @@ export function SupportRequestSheet({ open, onOpenChange }: Props) {
     if (open) {
       setContactName(submitterName ?? "");
       setContactEmail(submitterEmail ?? "");
+      if (prefill?.category) setCategory(prefill.category);
+      if (prefill?.subject) setSubject(prefill.subject);
+      if (prefill?.message) setMessage(prefill.message);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, submitterName, submitterEmail]);
+
 
   const reset = () => {
     setCategory("general");

@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Info, Loader2, Upload } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FileSpreadsheet,
+  Info,
+  LifeBuoy,
+  Loader2,
+  Upload,
+} from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +56,21 @@ import {
   type ParseResult,
   type VolumeComparison,
 } from "@/lib/irrigationImportQuery";
+import { resolveProviderHelp, type ProviderHelp } from "@/lib/irrigationImportProviderHelp";
+import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
+
+const SUPPORT_PREFILL = {
+  category: "feature",
+  subject: "Request an irrigation controller import",
+  message: [
+    "I would like VineTrack to support irrigation imports from:",
+    "",
+    "Controller brand:",
+    "Controller model:",
+    "Export format, if known:",
+  ].join("\n"),
+};
+
 
 type StepId = "source" | "upload" | "settings" | "valves" | "review" | "preview" | "results";
 
@@ -69,6 +94,8 @@ export default function IrrigationImportPage() {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
   const [ackOpen, setAckOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+
 
   const providersQ = useImportProviders();
   const parse = useParseImportFile();
@@ -92,6 +119,21 @@ export default function IrrigationImportPage() {
     () => (providersQ.data ?? []).find((p) => p.provider_id === provider) ?? null,
     [providersQ.data, provider],
   );
+
+  const providerHelp = useMemo(
+    () =>
+      resolveProviderHelp(
+        provider,
+        selectedProvider as unknown as {
+          display_name?: string | null;
+          import_instructions?: unknown;
+          help_steps?: unknown;
+        } | null,
+      ),
+    [provider, selectedProvider],
+  );
+
+
 
   // Reset the whole wizard when the vineyard changes — batches are per vineyard.
   const lastVineyard = useRef(selectedVineyardId);
@@ -127,6 +169,14 @@ export default function IrrigationImportPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <div>
+        <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-muted-foreground">
+          <Link to="/irrigation">
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> Irrigation Records
+          </Link>
+        </Button>
+      </div>
+
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Irrigation import</h1>
         <p className="text-sm text-muted-foreground">
@@ -144,57 +194,70 @@ export default function IrrigationImportPage() {
       )}
 
       {step === "source" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Select the import source</CardTitle>
-            <CardDescription>
-              Choose the controller platform that produced the export file. File detection is only used
-              to verify your choice.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {providersQ.isLoading && <p className="text-sm text-muted-foreground">Loading providers…</p>}
-            {providersQ.error && (
-              <PortalNotice variant="error" title="Couldn't load import providers">
-                {(providersQ.error as Error).message}
-              </PortalNotice>
-            )}
-            <div className="grid gap-3 md:grid-cols-2">
-              {(providersQ.data ?? []).map((p) => (
-                <button
-                  key={p.provider_id}
-                  type="button"
-                  onClick={() => setProvider(p.provider_id)}
-                  className={`rounded-lg border p-4 text-left transition-colors hover:bg-sidebar-accent/40 ${
-                    provider === p.provider_id ? "border-sidebar-primary bg-sidebar-accent" : "border-border"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-medium">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    {p.display_name}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {p.supported_file_types.map((t) => t.toUpperCase()).join(" / ")} ·{" "}
-                    {Math.round((p.max_file_size_bytes ?? 0) / 1048576)} MB max
-                  </p>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <Button disabled={!provider || !selectedVineyardId} onClick={() => setStep("upload")}>
-                Continue
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Irrigation controller</CardTitle>
+              <CardDescription>
+                Select the system that created the irrigation export file. VineTrack uses this to
+                interpret the file correctly.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {providersQ.isLoading && (
+                <p className="text-sm text-muted-foreground">Loading irrigation controllers…</p>
+              )}
+              {providersQ.error && (
+                <PortalNotice variant="error" title="Couldn't load irrigation controllers">
+                  {(providersQ.error as Error).message}
+                </PortalNotice>
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
+                {(providersQ.data ?? []).map((p) => (
+                  <button
+                    key={p.provider_id}
+                    type="button"
+                    onClick={() => setProvider(p.provider_id)}
+                    className={`rounded-lg border p-4 text-left transition-colors hover:bg-sidebar-accent/40 ${
+                      provider === p.provider_id ? "border-sidebar-primary bg-sidebar-accent" : "border-border"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-medium">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      {p.display_name}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {p.supported_file_types.map((t) => t.toUpperCase()).join(" / ")} ·{" "}
+                      {Math.round((p.max_file_size_bytes ?? 0) / 1048576)} MB max
+                    </p>
+                  </button>
+                ))}
+              </div>
+
+              {providerHelp && <ProviderInstructions help={providerHelp} />}
+
+              <div className="flex justify-end">
+                <Button disabled={!provider || !selectedVineyardId} onClick={() => setStep("upload")}>
+                  Continue
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <UnlistedControllerPanel onContact={() => setSupportOpen(true)} />
+        </div>
       )}
+
 
       {step === "upload" && selectedVineyardId && provider && (
         <UploadStep
           provider={provider}
           providerLabel={selectedProvider?.display_name ?? provider}
           accept={selectedProvider?.supported_file_types ?? ["xlsx", "csv"]}
+          maxBytes={selectedProvider?.max_file_size_bytes ?? null}
+          help={providerHelp}
           busy={parse.isPending}
+
           onUpload={async (file, allowRevalidation) => {
             try {
               const result = await parse.mutateAsync({
@@ -396,9 +459,53 @@ export default function IrrigationImportPage() {
           {(batchQ.error as Error).message}
         </PortalNotice>
       )}
+
+      <SupportRequestSheet
+        open={supportOpen}
+        onOpenChange={setSupportOpen}
+        prefill={SUPPORT_PREFILL}
+      />
     </div>
   );
 }
+
+function ProviderInstructions({ help }: { help: ProviderHelp }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 p-4">
+      <p className="text-sm font-medium">{help.title}</p>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+        {help.steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ol>
+      {help.formatNote && <p className="mt-3 text-xs text-muted-foreground">{help.formatNote}</p>}
+      {help.duplicateNote && (
+        <p className="mt-1 text-xs text-muted-foreground">{help.duplicateNote}</p>
+      )}
+    </div>
+  );
+}
+
+function UnlistedControllerPanel({ onContact }: { onContact: () => void }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Can't see your irrigation controller?</CardTitle>
+        <CardDescription>
+          We are continuing to add support for more irrigation systems. Contact VineTrack Support and
+          tell us which controller you use, and we will review whether its export format can be
+          added.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={onContact}>
+          <LifeBuoy className="mr-1.5 h-4 w-4" /> Contact support
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 
 function Stepper({
   current,
@@ -442,6 +549,8 @@ function UploadStep({
   provider,
   providerLabel,
   accept,
+  maxBytes,
+  help,
   busy,
   onUpload,
   result,
@@ -449,12 +558,15 @@ function UploadStep({
   provider: string;
   providerLabel: string;
   accept: string[];
+  maxBytes: number | null;
+  help: ProviderHelp | null;
   busy: boolean;
   onUpload: (file: File, allowRevalidation: boolean) => Promise<void>;
   result: ParseResult | null;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [allowRevalidation, setAllowRevalidation] = useState(false);
+  const maxMb = maxBytes ? Math.round(maxBytes / 1048576) : null;
 
   return (
     <Card>
@@ -466,11 +578,35 @@ function UploadStep({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Input
-          type="file"
-          accept={accept.map((a) => `.${a}`).join(",")}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
+        {help && <ProviderInstructions help={help} />}
+
+        <div className="space-y-2">
+          <Label htmlFor="import-file" className="flex items-center gap-1.5">
+            Controller export file
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label="About the export file">
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                Upload the original controller export without editing its columns or headings.
+              </TooltipContent>
+            </Tooltip>
+          </Label>
+          <Input
+            id="import-file"
+            type="file"
+            accept={accept.map((a) => `.${a}`).join(",")}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Upload the original controller export without editing its columns or headings. Supported
+            formats: {accept.map((a) => a.toUpperCase()).join(" and ")}
+            {maxMb ? `. Maximum file size: ${maxMb} MB.` : "."}
+          </p>
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox
             checked={allowRevalidation}
@@ -552,13 +688,16 @@ function SettingsForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="min-volume" className="flex items-center gap-1.5">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <div className="flex flex-col">
+          <Label
+            htmlFor="min-volume"
+            className="flex h-6 items-center gap-1.5 leading-none"
+          >
             Minimum water quantity (m³)
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label="About the minimum water quantity">
+                <button type="button" aria-label="About the minimum water quantity" className="leading-none">
                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               </TooltipTrigger>
@@ -574,14 +713,18 @@ function SettingsForm({
             type="number"
             step="0.1"
             min="0"
+            className="mt-2 h-11 rounded-md"
             value={cubic}
             onChange={(e) => setCubic(e.target.value)}
           />
+          <p className="mt-1 min-h-[1rem] text-xs text-muted-foreground" />
         </div>
-        <div className="space-y-2">
-          <Label>Comparison</Label>
+        <div className="flex flex-col">
+          <Label htmlFor="volume-comparison" className="flex h-6 items-center gap-1.5 leading-none">
+            Comparison
+          </Label>
           <Select value={comparison} onValueChange={(v) => setComparison(v as VolumeComparison)}>
-            <SelectTrigger>
+            <SelectTrigger id="volume-comparison" className="mt-2 h-11 rounded-md">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -589,8 +732,10 @@ function SettingsForm({
               <SelectItem value="greater_than_or_equal">At least</SelectItem>
             </SelectContent>
           </Select>
+          <p className="mt-1 min-h-[1rem] text-xs text-muted-foreground" />
         </div>
       </div>
+
 
       <label className="flex items-start gap-2 text-sm">
         <Checkbox checked={excludeTest} onCheckedChange={(v) => setExcludeTest(v === true)} />
@@ -612,16 +757,22 @@ function SettingsForm({
 
       <p className="text-xs text-muted-foreground">
         Rule: {COMPARISON_LABEL[comparison]} {litresToCubicLabel(litres)} · Test programs{" "}
-        {excludeTest ? "excluded" : "included"}. Changing these settings affects future previews only —
-        committed sessions never change.
+        {excludeTest ? "excluded" : "included"}. These settings apply to this vineyard and irrigation
+        controller. They will be used as the default for future imports from this controller.
+        Changing these settings affects future previews only — committed sessions never change.
       </p>
 
       <div className="flex justify-end">
-        <Button onClick={() => void submit()} disabled={save.isPending || validate.isPending}>
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => void submit()}
+          disabled={save.isPending || validate.isPending}
+        >
           {(save.isPending || validate.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Apply and continue
         </Button>
       </div>
+
     </div>
   );
 }

@@ -21,7 +21,9 @@ import {
   Plus,
   History,
   BarChart3,
+  Upload,
 } from "lucide-react";
+
 import {
   useSetupStatus,
   useVintageSummary,
@@ -32,11 +34,14 @@ import {
 } from "@/lib/irrigationQuery";
 import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const { vintage } = useVintage();
+
   const status = useSetupStatus(selectedVineyardId);
   const summary = useVintageSummary(selectedVineyardId, vintage);
   const recent = useSessions(selectedVineyardId, { vintage_year: vintage, limit: 5 });
@@ -67,26 +72,38 @@ export default function IrrigationRecordsPage() {
             Vintage {s?.season?.current_vintage_year ?? vintage} · water applied, runtime and
             per-block water use from recorded sessions.
           </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add an irrigation record manually or import irrigation history from a supported
+            controller.
+          </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <Button asChild variant="ghost" className="w-full sm:w-auto">
             <Link to="/irrigation/setup">
               <Settings2 className="mr-1.5 h-4 w-4" /> Setup
             </Link>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="ghost" className="w-full sm:w-auto">
             <Link to="/irrigation/history">
               <History className="mr-1.5 h-4 w-4" /> History
             </Link>
           </Button>
-          <Button asChild disabled={!operational}>
+          {isSystemAdmin && (
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link to="/irrigation/import">
+                <Upload className="mr-1.5 h-4 w-4" /> Import irrigation
+              </Link>
+            </Button>
+          )}
+          <Button asChild disabled={!operational} className="w-full sm:w-auto">
             <Link to="/irrigation/record">
               <Plus className="mr-1.5 h-4 w-4" /> Record irrigation
             </Link>
           </Button>
         </div>
       </header>
+
 
       {status.error && (
         <PortalNotice
