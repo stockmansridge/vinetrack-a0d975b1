@@ -64,7 +64,7 @@ import {
 } from "@/components/ui/sidebar";
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
-import { useIrrigationAccess } from "@/lib/irrigationQuery";
+import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
 
 
 type NavItem = { title: string; url: string; icon: any; soon?: boolean };
@@ -177,7 +177,7 @@ export function AppSidebar() {
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
   const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
-  const { hasAccess: hasIrrigationRecords } = useIrrigationAccess(selectedVineyardId);
+  const { capabilities: irrigation } = useIrrigationCapabilities(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
@@ -274,7 +274,12 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {renderGroup("Dashboard", visible(dashboard))}
-        {renderGroup("Work", visible(hasIrrigationRecords ? [...work, ...irrigationWork] : work))}
+        {renderGroup(
+          "Work",
+          visible(
+            irrigation.can_view_irrigation_records ? [...work, ...irrigationWork] : work,
+          ),
+        )}
         {renderGroup("Equipment", visible(equipment), false)}
         {renderGroup("Tools", visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin] : tools), false)}
         {renderGroup(
@@ -282,14 +287,16 @@ export function AppSidebar() {
           visible([
             ...reports,
             ...(isAdmin ? reportsAdmin : []),
-            ...(hasIrrigationRecords ? irrigationReports : []),
+            ...(irrigation.can_view_irrigation_reports ? irrigationReports : []),
           ]),
           false,
         )}
 
         {renderGroup(
           "Setup",
-          visible(hasIrrigationRecords ? [...setup, ...irrigationSetup] : setup),
+          visible(
+            irrigation.can_manage_irrigation_setup ? [...setup, ...irrigationSetup] : setup,
+          ),
           false,
         )}
 

@@ -65,6 +65,7 @@ import {
   snapshotFlow,
   useIrrigationValves,
   useReverseSession,
+  useIrrigationCapabilities,
   useSessions,
   useUpdateSession,
   type IrrigationSession,
@@ -326,11 +327,16 @@ function EditDialog({
 }
 
 
+/** Imported sessions stay read-only through the normal session-edit controls. */
+const isImported = (s: IrrigationSession) =>
+  !!s.source_type && s.source_type !== "manual_portal" && s.source_type !== "manual_ios";
+
 export default function IrrigationHistoryPage() {
   const { selectedVineyardId } = useVineyard();
   const { vintage } = useVintage();
   const valves = useIrrigationValves(selectedVineyardId, true);
   const reverse = useReverseSession(selectedVineyardId);
+  const { capabilities, loading: capsLoading } = useIrrigationCapabilities(selectedVineyardId);
 
   const [valveId, setValveId] = useState(ALL);
   const [fromDate, setFromDate] = useState("");
@@ -476,14 +482,18 @@ export default function IrrigationHistoryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className="tabular-nums">{formatLitres(s.total_volume_litres)}</Badge>
-                  {s.status !== "reversed" && (
+                  {s.status !== "reversed" && !capsLoading && (
                     <>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setReversing(s)}>
-                        Reverse
-                      </Button>
+                      {capabilities.can_edit_irrigation && !isImported(s) && (
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
+                          Edit
+                        </Button>
+                      )}
+                      {capabilities.can_reverse_irrigation && (
+                        <Button size="sm" variant="ghost" onClick={() => setReversing(s)}>
+                          Reverse
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>

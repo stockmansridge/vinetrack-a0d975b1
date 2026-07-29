@@ -69,7 +69,7 @@ import IrrigationRecordPage from "./pages/tools/IrrigationRecordPage";
 import IrrigationHistoryPage from "./pages/tools/IrrigationHistoryPage";
 import IrrigationImportPage from "./pages/tools/IrrigationImportPage";
 import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
-import { RequireIrrigationAccess } from "./components/irrigation/RequireIrrigationAccess";
+import { RequireIrrigationCapability } from "./components/irrigation/RequireIrrigationCapability";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
 
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
@@ -188,11 +188,17 @@ const App = () => (
                     <Route path="/tools/pruning-tracker" element={<PruningTrackerPage />} />
                     <Route path="/tools/fertiliser-calculator" element={<FertiliserCalculatorPage />} />
                     <Route path="/tools/spray-tank-mix" element={<ToolPlaceholder title="Spray / Tank Mix Calculator" />} />
-                    <Route element={<RequireIrrigationAccess />}>
+                    <Route element={<RequireIrrigationCapability capability="can_view_irrigation_records" />}>
                       <Route path="/irrigation" element={<IrrigationRecordsPage />} />
-                      <Route path="/irrigation/setup" element={<IrrigationSetupPage />} />
-                      <Route path="/irrigation/record" element={<IrrigationRecordPage />} />
                       <Route path="/irrigation/history" element={<IrrigationHistoryPage />} />
+                    </Route>
+                    <Route element={<RequireIrrigationCapability capability="can_record_irrigation" />}>
+                      <Route path="/irrigation/record" element={<IrrigationRecordPage />} />
+                    </Route>
+                    <Route element={<RequireIrrigationCapability capability="can_manage_irrigation_setup" />}>
+                      <Route path="/irrigation/setup" element={<IrrigationSetupPage />} />
+                    </Route>
+                    <Route element={<RequireIrrigationCapability capability="can_view_irrigation_reports" />}>
                       <Route path="/reports/irrigation" element={<IrrigationReportsPage />} />
                     </Route>
 
@@ -211,7 +217,7 @@ const App = () => (
                     <Route path="/team" element={<Team />} />
                     <Route path="/billing" element={<BillingPage />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
-                    <Route element={<RequireSystemAdmin />}>
+                    <Route element={<RequireIrrigationCapability capability="can_import_irrigation" />}>
                       <Route path="/irrigation/import" element={<IrrigationImportPage />} />
                     </Route>
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />

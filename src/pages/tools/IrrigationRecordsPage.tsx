@@ -28,18 +28,18 @@ import {
   useSetupStatus,
   useVintageSummary,
   useSessions,
+  useIrrigationCapabilities,
   formatLitres,
   formatDuration,
   formatNumber,
 } from "@/lib/irrigationQuery";
 import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
-import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
-  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { capabilities, loading: capsLoading } = useIrrigationCapabilities(selectedVineyardId);
   const { vintage } = useVintage();
 
   const status = useSetupStatus(selectedVineyardId);
@@ -48,6 +48,7 @@ export default function IrrigationRecordsPage() {
 
   const s = status.data;
   const operational = !!s?.is_operational;
+  const showSetupPanel = !operational && capabilities.can_manage_irrigation_setup;
 
   return (
     <div className="space-y-6">
@@ -69,38 +70,52 @@ export default function IrrigationRecordsPage() {
             )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Vintage {s?.season?.current_vintage_year ?? vintage} · water applied, runtime and
-            per-block water use from recorded sessions.
+            {capabilities.can_view_irrigation_reports
+              ? `Vintage ${s?.season?.current_vintage_year ?? vintage} · water applied, runtime and per-block water use from recorded sessions.`
+              : "Record and view irrigation activity."}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Add an irrigation record manually or import irrigation history from a supported
-            controller.
-          </p>
+          {capabilities.can_import_irrigation && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add an irrigation record manually or import irrigation history from a supported
+              controller.
+            </p>
+          )}
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-          <Button asChild variant="ghost" className="w-full sm:w-auto">
-            <Link to="/irrigation/setup">
-              <Settings2 className="mr-1.5 h-4 w-4" /> Setup
-            </Link>
-          </Button>
+          {!capsLoading && capabilities.can_manage_irrigation_setup && (
+            <Button asChild variant="ghost" className="w-full sm:w-auto">
+              <Link to="/irrigation/setup">
+                <Settings2 className="mr-1.5 h-4 w-4" /> Setup
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="ghost" className="w-full sm:w-auto">
             <Link to="/irrigation/history">
               <History className="mr-1.5 h-4 w-4" /> History
             </Link>
           </Button>
-          {isSystemAdmin && (
+          {!capsLoading && capabilities.can_view_irrigation_reports && (
+            <Button asChild variant="ghost" className="w-full sm:w-auto">
+              <Link to="/reports/irrigation">
+                <BarChart3 className="mr-1.5 h-4 w-4" /> Reports
+              </Link>
+            </Button>
+          )}
+          {!capsLoading && capabilities.can_import_irrigation && (
             <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link to="/irrigation/import">
                 <Upload className="mr-1.5 h-4 w-4" /> Import irrigation
               </Link>
             </Button>
           )}
-          <Button asChild disabled={!operational} className="w-full sm:w-auto">
-            <Link to="/irrigation/record">
-              <Plus className="mr-1.5 h-4 w-4" /> Record irrigation
-            </Link>
-          </Button>
+          {!capsLoading && capabilities.can_record_irrigation && (
+            <Button asChild disabled={!operational} className="w-full sm:w-auto">
+              <Link to="/irrigation/record">
+                <Plus className="mr-1.5 h-4 w-4" /> Record irrigation
+              </Link>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -116,12 +131,18 @@ export default function IrrigationRecordsPage() {
       {s && !operational && (
         <PortalNotice
           variant="warning"
-          title="Irrigation setup is incomplete"
-          description="Add an irrigation system, at least one valve, and connect each valve to blocks or vineyard rows before recording sessions."
+          title="Irrigation setup is required"
+          description={
+            capabilities.can_manage_irrigation_setup
+              ? "Add an irrigation system, at least one valve, and connect each valve to blocks or vineyard rows before recording sessions."
+              : "Ask a Vineyard Owner or Manager to complete the irrigation setup before records can be created."
+          }
           action={
-            <Button asChild size="sm" variant="outline">
-              <Link to="/irrigation/setup">Finish setup</Link>
-            </Button>
+            capabilities.can_manage_irrigation_setup ? (
+              <Button asChild size="sm" variant="outline">
+                <Link to="/irrigation/setup">Finish setup</Link>
+              </Button>
+            ) : undefined
           }
         />
       )}
@@ -169,9 +190,10 @@ export default function IrrigationRecordsPage() {
         />
       </section>
 
-      <div className={operational ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
-        {/* Setup detail belongs on the setup page once irrigation is operational. */}
-        {!operational && <SetupStatusPanel vineyardId={selectedVineyardId} />}
+      <div className={showSetupPanel ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
+        {/* Setup detail belongs on the setup page once irrigation is operational,
+            and is only meaningful to users who may change the configuration. */}
+        {showSetupPanel && <SetupStatusPanel vineyardId={selectedVineyardId} />}
 
 
         <Card>

@@ -40,6 +40,7 @@ import {
   useIrrigationValves,
   useRecordSession,
   useValveValidation,
+  useIrrigationCapabilities,
   type CalculationMethod,
   type IrrigationPreview,
 } from "@/lib/irrigationQuery";
@@ -67,6 +68,8 @@ export default function IrrigationRecordPage() {
   const navigate = useNavigate();
   const valves = useIrrigationValves(selectedVineyardId);
   const record = useRecordSession(selectedVineyardId);
+  const { capabilities } = useIrrigationCapabilities(selectedVineyardId);
+  const canManageSetup = capabilities.can_manage_irrigation_setup;
 
   const [valveId, setValveId] = useState("");
   const [sessionDate, setSessionDate] = useState(todayISO());
@@ -311,12 +314,18 @@ export default function IrrigationRecordPage() {
               {v && !v.can_record && (
                 <PortalNotice
                   variant="warning"
-                  title="This valve can't record yet"
-                  description={v.issues.join(" ")}
+                  title={canManageSetup ? "This valve can't record yet" : "Irrigation setup is required"}
+                  description={
+                    canManageSetup
+                      ? v.issues.join(" ")
+                      : "Ask a Vineyard Owner or Manager to complete the irrigation setup before records can be created."
+                  }
                   action={
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/irrigation/setup">Fix setup</Link>
-                    </Button>
+                    canManageSetup ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/irrigation/setup">Fix setup</Link>
+                      </Button>
+                    ) : undefined
                   }
                 />
               )}
@@ -404,9 +413,11 @@ export default function IrrigationRecordPage() {
                     "This valve has no resolvable flow rate, so the water used has to be entered manually below."
                   }
                   action={
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/irrigation/setup">Open setup</Link>
-                    </Button>
+                    canManageSetup ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/irrigation/setup">Open setup</Link>
+                      </Button>
+                    ) : undefined
                   }
                 />
               )}
