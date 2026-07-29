@@ -657,11 +657,14 @@ export interface Membership {
 export interface UserAccessDetail {
   identity: UserIdentity;
   effective_access: EffectiveAccess;
+  account_trial: AccountTrial | null;
   billing_sources: BillingSource[];
   licences_held: LicenceHeld[];
   memberships: { active: Membership[]; historical: Membership[] };
   open_alerts: Record<string, unknown>[];
+  generated_at: string | null;
 }
+
 
 const s = (v: unknown): string | null => (v == null ? null : String(v));
 const b = (v: unknown): boolean | null => (v == null ? null : v === true);
