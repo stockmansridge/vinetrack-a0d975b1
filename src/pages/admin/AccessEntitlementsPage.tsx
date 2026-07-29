@@ -309,6 +309,8 @@ export default function AccessEntitlementsPage() {
     state: HealthState;
     explanation: string;
     items: Record<string, unknown>[];
+    /** SQL 148 review queue this card belongs to, when it is a review category. */
+    reviewType?: ReviewItemType;
   }[] = monitor
     ? [
         {
@@ -320,6 +322,7 @@ export default function AccessEntitlementsPage() {
               ? "Store events are flagged for administrator review."
               : "No store events require review.",
           items: monitor.events_needing_review.recent,
+          reviewType: "event",
         },
         {
           title: "Failed Events",
@@ -330,6 +333,7 @@ export default function AccessEntitlementsPage() {
               ? "Billing events failed processing."
               : "No billing events have failed processing.",
           items: monitor.failed_events.recent,
+          reviewType: "event",
         },
         {
           title: "Unresolved Users",
@@ -340,6 +344,7 @@ export default function AccessEntitlementsPage() {
               ? "Purchases could not be linked to a VineTrack account."
               : "Every purchase is linked to an account.",
           items: monitor.unresolved_users.recent,
+          reviewType: "unresolved_user",
         },
         {
           title: "Ownership Conflicts",
@@ -350,6 +355,7 @@ export default function AccessEntitlementsPage() {
               ? "A subscription is claimed by more than one account."
               : "No subscription ownership conflicts.",
           items: monitor.ownership_conflicts.recent,
+          reviewType: "ownership_conflict",
         },
         {
           title: "Open Alerts",
@@ -357,11 +363,12 @@ export default function AccessEntitlementsPage() {
           state: monitor.open_alerts > 0 ? "attention" : "healthy",
           explanation:
             monitor.open_alerts > 0
-              ? "Alerts are waiting to be acknowledged below."
+              ? "Alerts are waiting to be acknowledged."
               : "No alerts are waiting for acknowledgement.",
           items: (alertsQ.data ?? [])
             .filter((a) => !a.acknowledged_at)
             .map((a) => a as unknown as Record<string, unknown>),
+          reviewType: "alert",
         },
         {
           title: "Stuck Deliveries",
@@ -372,6 +379,7 @@ export default function AccessEntitlementsPage() {
               ? "Store webhooks were received but never finalised."
               : "All store webhooks finalised normally.",
           items: monitor.stuck_deliveries,
+          reviewType: "stuck_delivery",
         },
         {
           title: "Expiring in 7 Days",
@@ -395,6 +403,9 @@ export default function AccessEntitlementsPage() {
 
   const [detailCard, setDetailCard] = useState<string | null>(null);
   const activeCard = cards.find((c) => c.title === detailCard) ?? null;
+  const [reviewType, setReviewType] = useState<ReviewItemType | null>(null);
+
+
 
 
   const alerts = alertsQ.data ?? [];
