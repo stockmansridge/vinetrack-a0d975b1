@@ -456,9 +456,53 @@ export default function IrrigationImportPage() {
           {(batchQ.error as Error).message}
         </PortalNotice>
       )}
+
+      <SupportRequestSheet
+        open={supportOpen}
+        onOpenChange={setSupportOpen}
+        prefill={SUPPORT_PREFILL}
+      />
     </div>
   );
 }
+
+function ProviderInstructions({ help }: { help: ProviderHelp }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 p-4">
+      <p className="text-sm font-medium">{help.title}</p>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+        {help.steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ol>
+      {help.formatNote && <p className="mt-3 text-xs text-muted-foreground">{help.formatNote}</p>}
+      {help.duplicateNote && (
+        <p className="mt-1 text-xs text-muted-foreground">{help.duplicateNote}</p>
+      )}
+    </div>
+  );
+}
+
+function UnlistedControllerPanel({ onContact }: { onContact: () => void }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Can't see your irrigation controller?</CardTitle>
+        <CardDescription>
+          We are continuing to add support for more irrigation systems. Contact VineTrack Support and
+          tell us which controller you use, and we will review whether its export format can be
+          added.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={onContact}>
+          <LifeBuoy className="mr-1.5 h-4 w-4" /> Contact support
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 
 function Stepper({
   current,
