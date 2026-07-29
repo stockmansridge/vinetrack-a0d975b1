@@ -34,11 +34,14 @@ import {
 } from "@/lib/irrigationQuery";
 import { SetupStatusPanel } from "@/components/irrigation/SetupStatusPanel";
 import { formatDate } from "@/lib/dateFormat";
+import { useIsSystemAdmin } from "@/lib/systemAdmin";
 
 
 export default function IrrigationRecordsPage() {
   const { selectedVineyardId } = useVineyard();
+  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
   const { vintage } = useVintage();
+
   const status = useSetupStatus(selectedVineyardId);
   const summary = useVintageSummary(selectedVineyardId, vintage);
   const recent = useSessions(selectedVineyardId, { vintage_year: vintage, limit: 5 });
