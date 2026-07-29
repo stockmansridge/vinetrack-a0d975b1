@@ -163,20 +163,28 @@ export type DuplicateStatus =
   | "possible_duplicate_changed_values";
 
 export interface ImportRow {
-  row_id: string;
+  /** Live payload uses `id`; this is the value passed to row overrides. */
+  id: string;
   source_row_number?: number | null;
-  event_date?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  run_time?: string | null;
-  program?: string | null;
-  comment?: string | null;
+  parsed_date?: string | null;
+  parsed_start_time?: string | null;
+  parsed_end_time?: string | null;
+  parsed_duration_seconds?: number | null;
+  program_name?: string | null;
+  source_comment?: string | null;
   external_valve_name?: string | null;
+  external_valve_label?: string | null;
   external_station_code?: string | null;
   external_valve_number?: number | null;
   vinetrack_valve_name?: string | null;
-  irrigation_valve_id?: string | null;
+  matched_valve_id?: string | null;
+  matched_mapping_id?: string | null;
+  created_session_id?: string | null;
+  is_reversed?: boolean | null;
+  validation_errors?: string[] | null;
+  validation_warnings?: string[] | null;
   classification: RowClassification;
+
   validation_status: RowValidationStatus;
   primary_exclusion_reason?: string | null;
   additional_reason_codes?: string[] | null;
