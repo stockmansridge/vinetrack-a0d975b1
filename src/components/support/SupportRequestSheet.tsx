@@ -141,8 +141,13 @@ export function SupportRequestSheet({ open, onOpenChange, prefill }: Props) {
     if (open) {
       setContactName(submitterName ?? "");
       setContactEmail(submitterEmail ?? "");
+      if (prefill?.category) setCategory(prefill.category);
+      if (prefill?.subject) setSubject(prefill.subject);
+      if (prefill?.message) setMessage(prefill.message);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, submitterName, submitterEmail]);
+
 
   const reset = () => {
     setCategory("general");
