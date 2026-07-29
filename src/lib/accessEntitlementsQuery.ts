@@ -99,6 +99,7 @@ export const ACCESS_REASON_LABEL: Record<string, string> = {
   play_store_subscription: "Google Play Subscription",
   active_trial: "Active Trial",
   trial: "Active Trial",
+  trial_expired: "Trial Expired",
   grace_period: "Grace Period",
   expired: "Expired",
   revoked: "Revoked",
@@ -106,7 +107,7 @@ export const ACCESS_REASON_LABEL: Record<string, string> = {
 };
 
 /** access_source / billing_provider values observed live: internal, manual,
- *  enterprise, team, none. */
+ *  enterprise, team, trial, none. */
 export const BILLING_SOURCE_LABEL: Record<string, string> = {
   internal: "Internal",
   manual: "Manual Grant",
@@ -119,8 +120,27 @@ export const BILLING_SOURCE_LABEL: Record<string, string> = {
   enterprise: "Enterprise Plan",
   team: "Team Plan",
   solo: "Solo Plan",
+  trial: "Trial",
   none: "None",
 };
+
+/** Where a paid subscription was originally purchased. Never inferred from the
+ *  device or role — the backend returns null whenever no paid purchase exists
+ *  (trial, Internal Unlimited, manual grant, support/beta access). */
+export const PURCHASE_PLATFORM_LABEL: Record<string, string> = {
+  ios: "Apple App Store",
+  apple: "Apple App Store",
+  app_store: "Apple App Store",
+  android: "Google Play",
+  google: "Google Play",
+  play_store: "Google Play",
+  portal: "Portal Billing",
+  stripe: "Portal Billing",
+  web: "Portal Billing",
+};
+
+export const NOT_APPLICABLE = "Not applicable";
+
 
 export const GRANT_TYPES = [
   { value: "internal_unlimited", label: "Internal Unlimited" },
