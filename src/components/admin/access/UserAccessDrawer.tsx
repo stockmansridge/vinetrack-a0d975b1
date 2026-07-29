@@ -400,7 +400,7 @@ export function UserAccessDrawer({
                   <ol className="relative border-l pl-4 space-y-3">
                     {(historyQ.data ?? []).map((h, i) => (
                       <li key={`${h.occurred_at}-${i}`} className="text-sm">
-                        <div className="font-medium">{humanise(h.event_type)}</div>
+                        <div className="font-medium">{historyEventLabel(h.event_type)}</div>
                         <div className="text-xs text-muted-foreground">
                           {fmtDateTime(h.occurred_at)} · {humanise(h.source)}
                           {h.platform ? ` · ${humanise(h.platform)}` : ""}
