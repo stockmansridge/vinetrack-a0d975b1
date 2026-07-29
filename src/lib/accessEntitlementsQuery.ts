@@ -690,10 +690,18 @@ export function useUserAccessDetail(userId: string | null) {
     queryFn: async (): Promise<UserAccessDetail> => {
       const rpc = "admin_user_access_detail";
       const o = requireObject(rpc, await adminRpc(rpc, { p_user_id: userId }));
-      requireKeys(rpc, o, ["identity", "effective_access", "billing_sources", "licences_held"]);
+      requireKeys(rpc, o, [
+        "identity",
+        "effective_access",
+        "account_trial",
+        "billing_sources",
+        "licences_held",
+      ]);
       const id = requireObject(`${rpc}.identity`, o.identity);
       const ea = requireObject(`${rpc}.effective_access`, o.effective_access);
       const mem = (o.memberships ?? {}) as Record<string, unknown>;
+      const trialRaw = o.account_trial == null ? null : requireObject(`${rpc}.account_trial`, o.account_trial);
+
       return {
         identity: {
           user_id: String(id.user_id ?? userId),
