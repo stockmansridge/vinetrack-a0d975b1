@@ -1059,6 +1059,8 @@ function useAfterMutation() {
     qc.invalidateQueries({ queryKey: AE_KEYS.grants });
     qc.invalidateQueries({ queryKey: AE_KEYS.monitor });
     qc.invalidateQueries({ queryKey: AE_KEYS.alertsAll });
+    qc.invalidateQueries({ queryKey: AE_KEYS.reviewItemsAll });
+    qc.invalidateQueries({ queryKey: AE_KEYS.pools });
     if (userId) {
       qc.invalidateQueries({ queryKey: AE_KEYS.detail(userId) });
       qc.invalidateQueries({ queryKey: AE_KEYS.history(userId) });
