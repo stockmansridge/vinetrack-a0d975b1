@@ -154,8 +154,21 @@ export function UserAccessDrawer({
                   )}
                 </div>
                 <dl>
-                  <Row label="Reason" value={accessReasonLabel(ea.reason_code)} />
-                  <Row label="Access source" value={billingSourceLabel(ea.access_source)} />
+                  <Row
+                    label="Reason"
+                    value={resolvedReasonLabel({
+                      reason_code: ea.reason_code,
+                      access_source: ea.access_source,
+                    })}
+                  />
+                  <Row
+                    label="Access source"
+                    value={
+                      isTrialSource(ea.access_source)
+                        ? "Account trial"
+                        : billingSourceLabel(ea.access_source)
+                    }
+                  />
                   <Row
                     label="Plan"
                     value={ea.plan_name ?? humanise(ea.plan_code)}
@@ -171,7 +184,8 @@ export function UserAccessDrawer({
                   <Row label="Portal access level" value={humanise(ea.portal_access_level)} />
                   <Row label="Subscription status" value={humanise(ea.subscription_status)} />
                   <Row label="Billing provider" value={billingSourceLabel(ea.billing_provider)} />
-                  <Row label="Purchase platform" value={humanise(ea.purchase_platform)} />
+                  <Row label="Purchase platform" value={purchasePlatformLabel(ea.purchase_platform)} />
+                  <Row label="Access expires" value={fmtDateTime(ea.expires_at)} />
                   <Row label="Trial ends" value={fmtDateTime(ea.trial_end)} />
                   <Row label="Grace period ends" value={fmtDateTime(ea.grace_period_end)} />
                   <Row label="Current period ends" value={fmtDateTime(ea.current_period_end)} />
@@ -179,6 +193,7 @@ export function UserAccessDrawer({
                   <Row label="Grant reason" value={ea.manual_grant_reason ?? "—"} />
                   <Row label="Last verified" value={fmtDateTime(ea.last_verified_at)} />
                 </dl>
+
                 <div className="flex flex-wrap gap-2 pt-3">
                   <Button size="sm" onClick={() => setCreateGrant(true)}>
                     Create billing grant
