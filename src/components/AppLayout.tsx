@@ -28,7 +28,9 @@ import { SupportAlertPill } from "@/components/support/SupportAlertPill";
 import { useCurrentProfile, displayNameFor } from "@/hooks/useCurrentProfile";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { GlobalSearch } from "@/components/GlobalSearch";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { BILLING_KEYS } from "@/lib/customerBillingQuery";
 import vineyardBg from "@/assets/vineyard-bg.webp.asset.json";
 
 export default function AppLayout() {
@@ -37,6 +39,24 @@ export default function AppLayout() {
   const { profile } = useCurrentProfile();
   const [profileOpen, setProfileOpen] = useState(false);
   const displayName = displayNameFor(profile, user?.email);
+
+  // Customer billing data is per-account: drop every cached billing query when
+  // the signed-in user changes or signs out.
+  const qc = useQueryClient();
+  const lastUserId = useRef<string | null>(user?.id ?? null);
+  useEffect(() => {
+    const id = user?.id ?? null;
+    if (lastUserId.current !== id) {
+      lastUserId.current = id;
+      qc.removeQueries({ queryKey: BILLING_KEYS.root });
+      try {
+        sessionStorage.removeItem("vinetrack.account.billing.vineyard");
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [user?.id, qc]);
+
 
 
   return (
