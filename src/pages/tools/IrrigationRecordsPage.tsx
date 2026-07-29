@@ -21,7 +21,9 @@ import {
   Plus,
   History,
   BarChart3,
+  Upload,
 } from "lucide-react";
+
 import {
   useSetupStatus,
   useVintageSummary,
