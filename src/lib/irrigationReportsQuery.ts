@@ -386,6 +386,10 @@ export interface RainfallRow {
   irrigation_percent_of_combined: number | null;
   rainfall_percent_of_combined: number | null;
   rainfall_data_complete: boolean | null;
+  rainfall_expected_days?: number | null;
+  rainfall_observed_days?: number | null;
+  rainfall_missing_days?: number | null;
+  rainfall_future_days?: number | null;
 }
 
 export interface TrendRow {
