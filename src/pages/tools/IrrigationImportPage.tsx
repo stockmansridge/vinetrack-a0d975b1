@@ -280,7 +280,12 @@ export default function IrrigationImportPage() {
               Events on those valves will not be imported until the mapping is resolved.
             </PortalNotice>
           )}
-          <ImportRowReview batchId={batchId} />
+          <ImportRowReview
+            batchId={batchId}
+            thresholdLitres={preview?.threshold_litres}
+            volumeComparison={preview?.volume_comparison}
+            thresholdExplanation={preview?.threshold_explanation}
+          />
           <div className="flex justify-between">
             <Button variant="outline" onClick={() => setStep("valves")}>
               Back

@@ -31,6 +31,8 @@ import {
   type DuplicateStatus,
   type ImportRow,
   type RowValidationStatus,
+  type VolumeComparison,
+  COMPARISON_LABEL,
 } from "@/lib/irrigationImportQuery";
 
 const STATUS_FILTERS: Array<{ value: RowValidationStatus | "all"; label: string }> = [
@@ -55,7 +57,43 @@ const humanise = (value: string) =>
 const statusVariant = (status: RowValidationStatus) =>
   status === "eligible" ? "default" : status === "error" ? "destructive" : "secondary";
 
-export function ImportRowReview({ batchId }: { batchId: string }) {
+/** Contract copy for threshold/Test exclusions — values come from the server. */
+function exclusionExplanation(
+  row: ImportRow,
+  thresholdLitres: number | null | undefined,
+  comparison: VolumeComparison | null | undefined,
+  fallback?: string | null,
+): string | null {
+  const water = row.parsed_water_litres;
+  if (row.classification === "at_volume_threshold") {
+    return `This event was not selected because the rule requires ${
+      COMPARISON_LABEL[comparison ?? "greater_than"]
+    } ${litresToCubicLabel(thresholdLitres)}.`;
+  }
+  if (row.classification === "below_volume_threshold") {
+    return `This event was not selected because its reported water quantity is ${litresToCubicLabel(
+      water,
+    )}. The Galcon import minimum is ${
+      COMPARISON_LABEL[comparison ?? "greater_than"]
+    } ${litresToCubicLabel(thresholdLitres)}, which helps exclude controller tests and very short runs.`;
+  }
+  if (row.classification === "test") {
+    return "This event belongs to a Test program. Test programs are excluded by default for this controller.";
+  }
+  return fallback ?? null;
+}
+
+export function ImportRowReview({
+  batchId,
+  thresholdLitres,
+  volumeComparison,
+  thresholdExplanation,
+}: {
+  batchId: string;
+  thresholdLitres?: number | null;
+  volumeComparison?: VolumeComparison | null;
+  thresholdExplanation?: string | null;
+}) {
   const [filter, setFilter] = useState<RowValidationStatus | "all">("all");
   const [page, setPage] = useState(0);
   const limit = 50;
@@ -64,7 +102,7 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
     limit,
     offset: page * limit,
   });
-  const [overrideRow, setOverrideRow] = useState<ImportRow | null>(null);
+  const [overrideRow, setOverrideRow] = useState<{ row: ImportRow; explanation: string | null } | null>(null);
 
   const rows = rowsQ.data ?? [];
 
@@ -119,6 +157,7 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
                 const reasons = [row.primary_exclusion_reason, ...(row.additional_reason_codes ?? [])]
                   .filter(Boolean)
                   .map((r) => humanise(String(r)));
+                const explanation = exclusionExplanation(row, thresholdLitres, volumeComparison, thresholdExplanation);
                 const canOverride =
                   row.validation_status === "excluded" &&
                   ["below_volume_threshold", "at_volume_threshold", "test"].includes(row.classification);
@@ -154,7 +193,7 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
                         <Badge variant={statusVariant(row.validation_status)} className="rounded-md">
                           {humanise(row.validation_status)}
                         </Badge>
-                        {row.threshold_explanation && (
+                        {explanation && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button type="button" aria-label="Why was this excluded?">
@@ -162,7 +201,7 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
                               </button>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
-                              {row.threshold_explanation}
+                              {explanation}
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -173,7 +212,7 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
                     </TableCell>
                     <TableCell className="text-right">
                       {canOverride && (
-                        <Button size="sm" variant="ghost" onClick={() => setOverrideRow(row)}>
+                        <Button size="sm" variant="ghost" onClick={() => setOverrideRow({ row, explanation })}>
                           Include
                         </Button>
                       )}
@@ -212,12 +251,24 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
         </div>
       </CardContent>
 
-      <OverrideDialog row={overrideRow} onClose={() => setOverrideRow(null)} />
+      <OverrideDialog
+        row={overrideRow?.row ?? null}
+        explanation={overrideRow?.explanation ?? null}
+        onClose={() => setOverrideRow(null)}
+      />
     </Card>
   );
 }
 
-function OverrideDialog({ row, onClose }: { row: ImportRow | null; onClose: () => void }) {
+function OverrideDialog({
+  row,
+  explanation,
+  onClose,
+}: {
+  row: ImportRow | null;
+  explanation: string | null;
+  onClose: () => void;
+}) {
   const [reason, setReason] = useState("");
   const override = useSetRowOverride();
   const isTest = row?.classification === "test";
@@ -250,9 +301,9 @@ function OverrideDialog({ row, onClose }: { row: ImportRow | null; onClose: () =
               : "This event is below the Galcon minimum-volume threshold and may represent a test or short diagnostic run."}
           </DialogDescription>
         </DialogHeader>
-        {row?.threshold_explanation && (
+        {explanation && (
           <PortalNotice variant="info" compact>
-            {row.threshold_explanation}
+            {explanation}
           </PortalNotice>
         )}
         <div className="space-y-2">
