@@ -339,6 +339,15 @@ export function useBillingMonitor() {
         expiring_within_7_days: requireArray(rpc, o.expiring_within_7_days),
         recent_status_changes: requireArray(rpc, o.recent_status_changes),
         rc_active_supabase_missing: requireArray(rpc, o.rc_active_supabase_missing ?? []),
+        recent_review_actions: requireArray(rpc, o.recent_review_actions ?? []).map((r) => ({
+          event_type: String(r.event_type ?? ""),
+          item_type: (r.item_type as string) ?? null,
+          item_id: (r.item_id as string) ?? null,
+          reason: (r.reason as string) ?? null,
+          outcome: (r.outcome as string) ?? null,
+          actor: (r.actor as string) ?? null,
+          created_at: (r.created_at as string) ?? null,
+        })),
       };
     },
   });
