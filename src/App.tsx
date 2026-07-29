@@ -67,6 +67,7 @@ import IrrigationRecordsPage from "./pages/tools/IrrigationRecordsPage";
 import IrrigationSetupPage from "./pages/tools/IrrigationSetupPage";
 import IrrigationRecordPage from "./pages/tools/IrrigationRecordPage";
 import IrrigationHistoryPage from "./pages/tools/IrrigationHistoryPage";
+import IrrigationImportPage from "./pages/tools/IrrigationImportPage";
 import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
 import { RequireIrrigationAccess } from "./components/irrigation/RequireIrrigationAccess";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
@@ -210,6 +211,9 @@ const App = () => (
                     <Route path="/team" element={<Team />} />
                     <Route path="/billing" element={<BillingPage />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
+                    <Route element={<RequireSystemAdmin />}>
+                      <Route path="/irrigation/import" element={<IrrigationImportPage />} />
+                    </Route>
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
