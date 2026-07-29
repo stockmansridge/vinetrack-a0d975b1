@@ -254,7 +254,10 @@ export default function IrrigationImportPage() {
           provider={provider}
           providerLabel={selectedProvider?.display_name ?? provider}
           accept={selectedProvider?.supported_file_types ?? ["xlsx", "csv"]}
+          maxBytes={selectedProvider?.max_file_size_bytes ?? null}
+          help={providerHelp}
           busy={parse.isPending}
+
           onUpload={async (file, allowRevalidation) => {
             try {
               const result = await parse.mutateAsync({
