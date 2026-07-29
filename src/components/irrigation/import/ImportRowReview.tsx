@@ -123,20 +123,20 @@ export function ImportRowReview({ batchId }: { batchId: string }) {
                   row.validation_status === "excluded" &&
                   ["below_volume_threshold", "at_volume_threshold", "test"].includes(row.classification);
                 return (
-                  <TableRow key={row.row_id}>
-                    <TableCell className="whitespace-nowrap">{row.event_date ?? "—"}</TableCell>
+                  <TableRow key={row.id}>
+                    <TableCell className="whitespace-nowrap">{row.parsed_date ?? "—"}</TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {row.start_time ?? "—"}
-                      {row.end_time ? `–${row.end_time}` : ""}
+                      {row.parsed_start_time ?? "—"}
+                      {row.parsed_end_time ? `–${row.parsed_end_time}` : ""}
                     </TableCell>
                     <TableCell className="max-w-[220px] truncate">
                       {row.vinetrack_valve_name ?? row.external_valve_name ?? "—"}
-                      {!row.irrigation_valve_id && (
+                      {!row.matched_valve_id && (
                         <span className="ml-2 text-xs text-destructive">unmapped</span>
                       )}
                     </TableCell>
                     <TableCell className="max-w-[140px] truncate text-muted-foreground">
-                      {row.program ?? "—"}
+                      {row.program_name ?? "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right">
                       {litresToCubicLabel(row.parsed_water_litres)}
@@ -226,7 +226,7 @@ function OverrideDialog({ row, onClose }: { row: ImportRow | null; onClose: () =
     if (!row) return;
     try {
       await override.mutateAsync({
-        rowId: row.row_id,
+        rowId: row.id,
         overrideThreshold: !isTest,
         overrideTest: isTest,
         reason: reason.trim() || "Included by System Administrator after review",
