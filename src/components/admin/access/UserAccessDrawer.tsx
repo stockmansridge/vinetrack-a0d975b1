@@ -90,35 +90,9 @@ export function UserAccessDrawer({
     [detail],
   );
 
-  // Assignable pools come only from subscriptions this user owns, as returned
-  // by the backend — the RPC exposes no cross-account licence pool list.
-  const pools: LicencePoolOption[] = useMemo(
-    () =>
-      (detail?.billing_sources ?? [])
-        .filter((sourceRow) => sourceRow.is_owner && !sourceRow.manual_grant_revoked_at)
-        .map((sourceRow) => {
-          const total = Math.max(sourceRow.seats_included, sourceRow.seats_purchased);
-          const available = sourceRow.unlimited_licences
-            ? null
-            : total - sourceRow.active_licences;
-          return {
-            subscriptionId: sourceRow.subscription_id,
-            label: `${sourceRow.plan_name ?? humanise(sourceRow.plan_code)} — ${seatsSummary(sourceRow)}`,
-            seatsTotal: sourceRow.unlimited_licences ? null : total,
-            seatsAssigned: sourceRow.active_licences,
-            seatsAvailable: available,
-            vineyardId: null,
-            vineyardName: null,
-            assignable:
-              sourceRow.unlimited_licences || (available !== null && available > 0),
-            blockedReason:
-              !sourceRow.unlimited_licences && available !== null && available <= 0
-                ? "All seats in this subscription are already assigned."
-                : undefined,
-          };
-        }),
-    [detail],
-  );
+  // Licence pools are queried globally inside AssignLicenceDialog (SQL 145),
+  // so assignment is no longer limited to subscriptions this user owns.
+
 
   const grantSources = (detail?.billing_sources ?? []).filter(
     (sourceRow) => sourceRow.provider === "manual" || sourceRow.manual_grant_reason,
