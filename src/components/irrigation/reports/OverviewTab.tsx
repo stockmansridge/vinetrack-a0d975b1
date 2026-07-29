@@ -243,12 +243,35 @@ export function OverviewTab({
               label="Rainfall records"
               value={
                 data.rainfall_data_complete == null
-                  ? EMPTY
+                  ? "Not yet applicable"
                   : data.rainfall_data_complete
                     ? "Complete"
                     : "Incomplete"
               }
+              hint={
+                data.rainfall_expected_days != null
+                  ? `${data.rainfall_observed_days ?? 0} of ${data.rainfall_expected_days} days`
+                  : undefined
+              }
             />
+            <Row
+              label="Missing days"
+              value={u.count(data.rainfall_missing_days)}
+              hint={
+                data.rainfall_future_days != null
+                  ? `${data.rainfall_future_days} not yet applicable`
+                  : undefined
+              }
+            />
+            <Row
+              label="Coverage window"
+              value={
+                data.rainfall_coverage_start && data.rainfall_coverage_end
+                  ? `${u.date(data.rainfall_coverage_start)} – ${u.date(data.rainfall_coverage_end)}`
+                  : EMPTY
+              }
+            />
+
             <div className="flex items-center justify-between gap-3 py-2">
               <span className="text-sm text-muted-foreground">Data quality</span>
               {quality ? (
