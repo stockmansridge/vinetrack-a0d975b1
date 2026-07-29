@@ -99,6 +99,7 @@ export const ACCESS_REASON_LABEL: Record<string, string> = {
   play_store_subscription: "Google Play Subscription",
   active_trial: "Active Trial",
   trial: "Active Trial",
+  trial_expired: "Trial Expired",
   grace_period: "Grace Period",
   expired: "Expired",
   revoked: "Revoked",
@@ -106,7 +107,7 @@ export const ACCESS_REASON_LABEL: Record<string, string> = {
 };
 
 /** access_source / billing_provider values observed live: internal, manual,
- *  enterprise, team, none. */
+ *  enterprise, team, trial, none. */
 export const BILLING_SOURCE_LABEL: Record<string, string> = {
   internal: "Internal",
   manual: "Manual Grant",
@@ -119,8 +120,27 @@ export const BILLING_SOURCE_LABEL: Record<string, string> = {
   enterprise: "Enterprise Plan",
   team: "Team Plan",
   solo: "Solo Plan",
+  trial: "Trial",
   none: "None",
 };
+
+/** Where a paid subscription was originally purchased. Never inferred from the
+ *  device or role — the backend returns null whenever no paid purchase exists
+ *  (trial, Internal Unlimited, manual grant, support/beta access). */
+export const PURCHASE_PLATFORM_LABEL: Record<string, string> = {
+  ios: "Apple App Store",
+  apple: "Apple App Store",
+  app_store: "Apple App Store",
+  android: "Google Play",
+  google: "Google Play",
+  play_store: "Google Play",
+  portal: "Portal Billing",
+  stripe: "Portal Billing",
+  web: "Portal Billing",
+};
+
+export const NOT_APPLICABLE = "Not applicable";
+
 
 export const GRANT_TYPES = [
   { value: "internal_unlimited", label: "Internal Unlimited" },
@@ -155,6 +175,24 @@ export const billingSourceLabel = (s: string | null | undefined) =>
 export const grantTypeLabel = (t: string | null | undefined) =>
   GRANT_TYPES.find((g) => g.value === t)?.label ?? labelFor({}, t);
 
+/** Purchase platform is display-only; a null value means no paid purchase. */
+export const purchasePlatformLabel = (p: string | null | undefined) =>
+  p ? (PURCHASE_PLATFORM_LABEL[p] ?? humanise(p)) : NOT_APPLICABLE;
+
+/** The resolver reports an ended account trial as reason_code `expired` with
+ *  access_source `trial`. Present that as "Trial Expired" — never as
+ *  "No Entitlement", which is reserved for reason_code = no_entitlement. */
+export function resolvedReasonLabel(a: {
+  reason_code: string | null;
+  access_source: string | null;
+}): string {
+  if (a.access_source === "trial" && (a.reason_code === "expired" || a.reason_code === "revoked"))
+    return a.reason_code === "revoked" ? "Trial Revoked" : "Trial Expired";
+  return accessReasonLabel(a.reason_code);
+}
+
+export const isTrialSource = (accessSource: string | null | undefined) => accessSource === "trial";
+
 /** Platforms come from the server-resolved entitlement booleans only. */
 export function platformsAllowed(a: {
   portal_access: boolean | null;
@@ -168,6 +206,7 @@ export function platformsAllowed(a: {
   ].filter(Boolean);
   return list.length ? list.join(", ") : "None";
 }
+
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -207,6 +246,8 @@ export const AE_KEYS = {
   grants: ["admin", "access-entitlements", "grants"] as const,
   vineyards: ["admin", "access-entitlements", "vineyards"] as const,
   plans: ["admin", "access-entitlements", "plans"] as const,
+  pools: ["admin", "access-entitlements", "licence-pools"] as const,
+
 };
 
 /* ------------------------------------------------------------------ */
@@ -365,21 +406,33 @@ export interface AccessUserVineyard {
   role: string;
 }
 
+/** Verified live against admin_access_users (SQL 144, July 2026). */
 export interface AccessUserRow {
   user_id: string;
   email: string | null;
   full_name: string | null;
+  email_confirmed: boolean;
+  is_disabled: boolean;
+  is_system_admin: boolean;
+  account_created_at: string | null;
+  last_sign_in_at: string | null;
+  vineyards: AccessUserVineyard[];
   has_access: boolean;
   reason_code: string | null;
   access_source: string | null;
   plan_code: string | null;
+  plan_name: string | null;
   billing_provider: string | null;
+  purchase_platform: string | null;
+  product_id: string | null;
   subscription_status: string | null;
-  portal_access: boolean | null;
-  can_use_ios_app: boolean | null;
-  can_use_android_app: boolean | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean | null;
+  manual_override: boolean | null;
+  unlimited_licences: boolean;
+  licence_count: number;
+  review_status: string | null;
   last_verified_at: string | null;
-  vineyards: AccessUserVineyard[];
   total_count: number;
 }
 
@@ -405,33 +458,56 @@ export function useAccessUsers(params: AccessUsersParams) {
         }),
       );
       const mapped = rows.map((r) => {
-        requireKeys(rpc, r, ["user_id", "email", "has_access", "reason_code", "total_count"]);
+        requireKeys(rpc, r, [
+          "user_id",
+          "email",
+          "has_access",
+          "reason_code",
+          "access_source",
+          "plan_code",
+          "purchase_platform",
+          "subscription_status",
+          "review_status",
+          "total_count",
+        ]);
         return {
           user_id: String(r.user_id),
-          email: (r.email as string) ?? null,
-          full_name: (r.full_name as string) ?? null,
-          has_access: r.has_access === true,
-          reason_code: (r.reason_code as string) ?? null,
-          access_source: (r.access_source as string) ?? null,
-          plan_code: (r.plan_code as string) ?? null,
-          billing_provider: (r.billing_provider as string) ?? null,
-          subscription_status: (r.subscription_status as string) ?? null,
-          portal_access: (r.portal_access as boolean) ?? null,
-          can_use_ios_app: (r.can_use_ios_app as boolean) ?? null,
-          can_use_android_app: (r.can_use_android_app as boolean) ?? null,
-          last_verified_at: (r.last_verified_at as string) ?? null,
+          email: s(r.email),
+          full_name: s(r.full_name),
+          email_confirmed: r.email_confirmed === true,
+          is_disabled: r.is_disabled === true,
+          is_system_admin: r.is_system_admin === true,
+          account_created_at: s(r.account_created_at),
+          last_sign_in_at: s(r.last_sign_in_at),
           vineyards: requireArray(rpc, r.vineyards ?? []).map((v) => ({
             vineyard_id: String(v.vineyard_id ?? ""),
             name: String(v.name ?? ""),
             role: String(v.role ?? ""),
           })),
-          total_count: Number(r.total_count ?? 0),
+          has_access: r.has_access === true,
+          reason_code: s(r.reason_code),
+          access_source: s(r.access_source),
+          plan_code: s(r.plan_code),
+          plan_name: s(r.plan_name),
+          billing_provider: s(r.billing_provider),
+          purchase_platform: s(r.purchase_platform),
+          product_id: s(r.product_id),
+          subscription_status: s(r.subscription_status),
+          current_period_end: s(r.current_period_end),
+          cancel_at_period_end: b(r.cancel_at_period_end),
+          manual_override: b(r.manual_override),
+          unlimited_licences: r.unlimited_licences === true,
+          licence_count: n(r.licence_count),
+          review_status: s(r.review_status),
+          last_verified_at: s(r.last_verified_at),
+          total_count: n(r.total_count),
         } satisfies AccessUserRow;
       });
       return { rows: mapped, total: mapped[0]?.total_count ?? 0 };
     },
   });
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Filter option sources                                               */
@@ -515,6 +591,8 @@ export interface EffectiveAccess {
   can_use_android_app: boolean | null;
   unlimited_licences: boolean | null;
   trial_end: string | null;
+  /** SQL 144 resolver field: when the current entitlement stops being valid. */
+  expires_at: string | null;
   grace_period_end: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean | null;
@@ -522,6 +600,19 @@ export interface EffectiveAccess {
   manual_grant_expires_at: string | null;
   last_verified_at: string | null;
 }
+
+/** SQL 143 account trial, returned by admin_user_access_detail.account_trial.
+ *  Read-only in the portal: no trial dates are ever written from here. */
+export interface AccountTrial {
+  status: string | null;
+  source_type: string | null;
+  created_from: string | null;
+  is_persisted: boolean;
+  is_currently_valid: boolean;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+}
+
 
 export interface BillingSource {
   subscription_id: string;
@@ -568,11 +659,14 @@ export interface Membership {
 export interface UserAccessDetail {
   identity: UserIdentity;
   effective_access: EffectiveAccess;
+  account_trial: AccountTrial | null;
   billing_sources: BillingSource[];
   licences_held: LicenceHeld[];
   memberships: { active: Membership[]; historical: Membership[] };
   open_alerts: Record<string, unknown>[];
+  generated_at: string | null;
 }
+
 
 const s = (v: unknown): string | null => (v == null ? null : String(v));
 const b = (v: unknown): boolean | null => (v == null ? null : v === true);
@@ -598,10 +692,18 @@ export function useUserAccessDetail(userId: string | null) {
     queryFn: async (): Promise<UserAccessDetail> => {
       const rpc = "admin_user_access_detail";
       const o = requireObject(rpc, await adminRpc(rpc, { p_user_id: userId }));
-      requireKeys(rpc, o, ["identity", "effective_access", "billing_sources", "licences_held"]);
+      requireKeys(rpc, o, [
+        "identity",
+        "effective_access",
+        "account_trial",
+        "billing_sources",
+        "licences_held",
+      ]);
       const id = requireObject(`${rpc}.identity`, o.identity);
       const ea = requireObject(`${rpc}.effective_access`, o.effective_access);
       const mem = (o.memberships ?? {}) as Record<string, unknown>;
+      const trialRaw = o.account_trial == null ? null : requireObject(`${rpc}.account_trial`, o.account_trial);
+
       return {
         identity: {
           user_id: String(id.user_id ?? userId),
@@ -630,6 +732,7 @@ export function useUserAccessDetail(userId: string | null) {
           can_use_android_app: b(ea.can_use_android_app),
           unlimited_licences: b(ea.unlimited_licences),
           trial_end: s(ea.trial_end),
+          expires_at: s(ea.expires_at),
           grace_period_end: s(ea.grace_period_end),
           current_period_end: s(ea.current_period_end),
           cancel_at_period_end: b(ea.cancel_at_period_end),
@@ -637,6 +740,18 @@ export function useUserAccessDetail(userId: string | null) {
           manual_grant_expires_at: s(ea.manual_grant_expires_at),
           last_verified_at: s(ea.last_verified_at),
         },
+        account_trial: trialRaw
+          ? {
+              status: s(trialRaw.status),
+              source_type: s(trialRaw.source_type),
+              created_from: s(trialRaw.created_from),
+              is_persisted: trialRaw.is_persisted === true,
+              is_currently_valid: trialRaw.is_currently_valid === true,
+              trial_started_at: s(trialRaw.trial_started_at),
+              trial_ends_at: s(trialRaw.trial_ends_at),
+            }
+          : null,
+
         billing_sources: requireArray(`${rpc}.billing_sources`, o.billing_sources).map((r) => ({
           subscription_id: String(r.subscription_id ?? ""),
           plan_code: s(r.plan_code),
@@ -675,6 +790,7 @@ export function useUserAccessDetail(userId: string | null) {
           ),
         },
         open_alerts: requireArray(`${rpc}.open_alerts`, o.open_alerts ?? []),
+        generated_at: s(o.generated_at),
       };
     },
   });
@@ -687,6 +803,25 @@ export interface AccessHistoryEvent {
   platform: string | null;
   detail: Record<string, unknown> | null;
 }
+
+/** SQL 143/144 history event vocabulary, plus the pre-existing billing events. */
+export const HISTORY_EVENT_LABEL: Record<string, string> = {
+  account_created: "Account created",
+  trial_started: "Account trial started",
+  trial_migrated: "Trial migrated to shared entitlement system",
+  trial_expired: "Account trial expired",
+  trial_revoked: "Account trial revoked",
+  trial_converted: "Access converted from trial to paid subscription",
+  licence_assigned: "Licence assigned",
+  licence_removed: "Licence removed",
+  grant_created: "Billing grant created",
+  grant_extended: "Billing grant extended",
+  grant_revoked: "Billing grant revoked",
+  entitlement_refreshed: "Entitlement recalculated",
+};
+
+export const historyEventLabel = (e: string | null | undefined) =>
+  labelFor(HISTORY_EVENT_LABEL, e);
 
 export function useUserAccessHistory(userId: string | null, limit = 50) {
   return useQuery({
@@ -710,6 +845,117 @@ export function useUserAccessHistory(userId: string | null, limit = 50) {
     },
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Global licence pools (SQL 145)                                      */
+/* ------------------------------------------------------------------ */
+
+/** Verified live against admin_available_licence_pools (July 2026). Seat maths,
+ *  assignability and the blocking reason are all server-computed. */
+export interface LicencePool {
+  subscription_id: string;
+  billing_owner_user_id: string;
+  billing_owner_name: string | null;
+  billing_owner_email: string | null;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  plan_code: string | null;
+  subscription_status: string | null;
+  billing_source: string | null;
+  provider: string | null;
+  licence_limit: number | null;
+  assigned_licences: number;
+  available_licences: number | null;
+  is_unlimited: boolean;
+  starts_at: string | null;
+  current_period_end: string | null;
+  expires_at: string | null;
+  is_assignable: boolean;
+  not_assignable_reason: string | null;
+  total_count: number;
+}
+
+export interface LicencePoolParams {
+  search?: string | null;
+  vineyardId?: string | null;
+  planCode?: string | null;
+  billingOwnerUserId?: string | null;
+  hasAvailableSeats?: boolean | null;
+  limit?: number;
+  offset?: number;
+  enabled?: boolean;
+}
+
+export function useLicencePools(params: LicencePoolParams = {}) {
+  const limit = params.limit ?? 25;
+  const offset = params.offset ?? 0;
+  const args = {
+    p_search: params.search?.trim() || null,
+    p_vineyard_id: params.vineyardId ?? null,
+    p_plan_code: params.planCode ?? null,
+    p_billing_owner_user_id: params.billingOwnerUserId ?? null,
+    p_has_available_seats: params.hasAvailableSeats ?? null,
+    p_limit: limit,
+    p_offset: offset,
+  };
+  return useQuery({
+    queryKey: [...AE_KEYS.pools, args],
+    enabled: params.enabled !== false,
+    staleTime: 15_000,
+    retry: false,
+    placeholderData: (prev) => prev,
+    queryFn: async (): Promise<{ pools: LicencePool[]; total: number }> => {
+      const rpc = "admin_available_licence_pools";
+      const rows = requireArray(rpc, await adminRpc(rpc, args));
+      const pools = rows.map((r) => {
+        requireKeys(rpc, r, [
+          "subscription_id",
+          "billing_owner_user_id",
+          "plan_code",
+          "licence_limit",
+          "assigned_licences",
+          "available_licences",
+          "is_unlimited",
+          "is_assignable",
+          "not_assignable_reason",
+          "total_count",
+        ]);
+        return {
+          subscription_id: String(r.subscription_id),
+          billing_owner_user_id: String(r.billing_owner_user_id),
+          billing_owner_name: s(r.billing_owner_name),
+          billing_owner_email: s(r.billing_owner_email),
+          vineyard_id: s(r.vineyard_id),
+          vineyard_name: s(r.vineyard_name),
+          plan_code: s(r.plan_code),
+          subscription_status: s(r.subscription_status),
+          billing_source: s(r.billing_source),
+          provider: s(r.provider),
+          licence_limit: r.licence_limit == null ? null : n(r.licence_limit),
+          assigned_licences: n(r.assigned_licences),
+          available_licences: r.available_licences == null ? null : n(r.available_licences),
+          is_unlimited: r.is_unlimited === true,
+          starts_at: s(r.starts_at),
+          current_period_end: s(r.current_period_end),
+          expires_at: s(r.expires_at),
+          is_assignable: r.is_assignable === true,
+          not_assignable_reason: s(r.not_assignable_reason),
+          total_count: n(r.total_count),
+        } satisfies LicencePool;
+      });
+      return { pools, total: pools[0]?.total_count ?? 0 };
+    },
+  });
+}
+
+/** Server-provided seat summary — never recalculated in the browser. */
+export function poolSeatSummary(p: LicencePool): string {
+  if (p.is_unlimited) return `${p.assigned_licences} assigned · Unlimited available`;
+  return `${p.assigned_licences} of ${p.licence_limit ?? 0} licences assigned · ${
+    p.available_licences ?? 0
+  } available`;
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Billing grants (SQL 141)                                            */

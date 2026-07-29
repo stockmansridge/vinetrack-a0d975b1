@@ -25,10 +25,12 @@ import {
   type GrantType,
   fmtDateTime,
   grantTypeLabel,
+  poolSeatSummary,
   useAcknowledgeAlert,
   useAssignLicence,
   useCreateBillingGrant,
   useExtendBillingGrant,
+  useLicencePools,
   useRefreshUserEntitlement,
   useRemoveLicence,
   useRevokeBillingGrant,
@@ -38,6 +40,12 @@ function errMsg(err: unknown): string {
   const e = err as { message?: string; hint?: string };
   return e?.message ?? String(err);
 }
+
+function humaniseLabel(v: string | null | undefined, fallback = "—") {
+  if (!v) return fallback;
+  return v.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 
 export function Field({
   label,
@@ -405,44 +413,43 @@ export function RevokeGrantDialog({
 /* Licence assign / remove                                             */
 /* ------------------------------------------------------------------ */
 
-export interface LicencePoolOption {
-  subscriptionId: string;
-  label: string;
-  seatsTotal: number | null;
-  seatsAssigned: number | null;
-  seatsAvailable: number | null;
-  vineyardId: string | null;
-  vineyardName: string | null;
-  assignable: boolean;
-  blockedReason?: string;
-}
-
+/** Assigns a seat from ANY licence pool in the system (SQL 145), not only pools
+ *  owned by the user being edited. Seat maths and assignability are supplied by
+ *  admin_available_licence_pools and never recomputed here. */
 export function AssignLicenceDialog({
   open,
   onOpenChange,
   userId,
   userLabel,
-  pools,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   userId: string | null;
   userLabel: string;
-  pools: LicencePoolOption[];
 }) {
   const [poolId, setPoolId] = useState("");
   const [reason, setReason] = useState("");
+  const [search, setSearch] = useState("");
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
   const mut = useAssignLicence();
-  const pool = pools.find((p) => p.subscriptionId === poolId) ?? null;
+
+  const poolsQ = useLicencePools({
+    search: search.trim() || null,
+    hasAvailableSeats: onlyAvailable ? true : null,
+    limit: 50,
+    enabled: open,
+  });
+  const pools = poolsQ.data?.pools ?? [];
+  const pool = pools.find((p) => p.subscription_id === poolId) ?? null;
 
   useEffect(() => {
     if (!open) {
       setPoolId("");
       setReason("");
+      setSearch("");
+      setOnlyAvailable(true);
     }
   }, [open]);
-
-  const noSeats = !!pool && pool.seatsAvailable !== null && pool.seatsAvailable <= 0;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -450,20 +457,20 @@ export function AssignLicenceDialog({
       toast({ title: "Licence pool and reason are required", variant: "destructive" });
       return;
     }
-    if (noSeats || !pool.assignable) {
+    if (!pool.is_assignable) {
       toast({
         title: "Cannot assign",
-        description: pool.blockedReason ?? "No seats remain in this licence pool.",
+        description: pool.not_assignable_reason ?? "This licence pool cannot be assigned.",
         variant: "destructive",
       });
       return;
     }
     try {
       await mut.mutateAsync({
-        subscriptionId: pool.subscriptionId,
+        subscriptionId: pool.subscription_id,
         userId,
         reason: reason.trim(),
-        vineyardId: pool.vineyardId,
+        vineyardId: pool.vineyard_id,
       });
       toast({ title: "Licence assigned", description: userLabel });
       onOpenChange(false);
@@ -477,35 +484,69 @@ export function AssignLicenceDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Assign Licence</DialogTitle>
-          <DialogDescription>Assign a seat to {userLabel}.</DialogDescription>
+          <DialogDescription>
+            Assign a seat from any Team or Enterprise licence pool to {userLabel}.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
+          <Field label="Search pools">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Owner name, email, vineyard or plan"
+            />
+          </Field>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={onlyAvailable}
+              onChange={(e) => {
+                setOnlyAvailable(e.target.checked);
+                setPoolId("");
+              }}
+            />
+            Only show pools with available seats
+          </label>
           <Field label="Licence pool">
             <Select value={poolId} onValueChange={setPoolId}>
               <SelectTrigger>
                 <SelectValue
                   placeholder={
-                    pools.length ? "Select licence pool" : "No assignable licence pools"
+                    poolsQ.isLoading
+                      ? "Loading licence pools…"
+                      : pools.length
+                        ? "Select licence pool"
+                        : "No licence pools match"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 {pools.map((p) => (
-                  <SelectItem key={p.subscriptionId} value={p.subscriptionId} disabled={!p.assignable}>
-                    {p.label}
+                  <SelectItem
+                    key={p.subscription_id}
+                    value={p.subscription_id}
+                    disabled={!p.is_assignable}
+                  >
+                    {`${humaniseLabel(p.plan_code)} — ${
+                      p.billing_owner_name ?? p.billing_owner_email ?? "Unknown owner"
+                    }${p.vineyard_name ? ` · ${p.vineyard_name}` : ""}`}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
+          {poolsQ.error && (
+            <p className="text-xs text-destructive">{errMsg(poolsQ.error)}</p>
+          )}
           {pool && (
             <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
-              <div>Vineyard: {pool.vineyardName ?? "—"}</div>
-              <div>Total seats: {pool.seatsTotal ?? "—"}</div>
-              <div>Assigned seats: {pool.seatsAssigned ?? "—"}</div>
-              <div>Available seats: {pool.seatsAvailable ?? "—"}</div>
-              {!pool.assignable && (
-                <div className="text-destructive">{pool.blockedReason}</div>
+              <div>Billing owner: {pool.billing_owner_email ?? pool.billing_owner_name ?? "—"}</div>
+              <div>Vineyard: {pool.vineyard_name ?? "Not vineyard-scoped"}</div>
+              <div>Subscription status: {humaniseLabel(pool.subscription_status)}</div>
+              <div>{poolSeatSummary(pool)}</div>
+              <div>Renews / expires: {fmtDateTime(pool.expires_at ?? pool.current_period_end)}</div>
+              {!pool.is_assignable && (
+                <div className="text-destructive">{pool.not_assignable_reason}</div>
               )}
             </div>
           )}
@@ -516,7 +557,7 @@ export function AssignLicenceDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mut.isPending || !pool || noSeats || !pool?.assignable}>
+            <Button type="submit" disabled={mut.isPending || !pool || !pool.is_assignable}>
               {mut.isPending ? "Assigning…" : "Assign licence"}
             </Button>
           </DialogFooter>
@@ -525,6 +566,7 @@ export function AssignLicenceDialog({
     </Dialog>
   );
 }
+
 
 export function RemoveLicenceDialog({
   open,

@@ -19,21 +19,25 @@ import {
   RefreshEntitlementDialog,
   RemoveLicenceDialog,
   RevokeGrantDialog,
-  type LicencePoolOption,
+
 } from "./accessDialogs";
 import {
-  accessReasonLabel,
   billingSourceLabel,
   fmtDateTime,
   friendlyError,
   grantTypeLabel,
+  historyEventLabel,
+  isTrialSource,
   platformsAllowed,
+  purchasePlatformLabel,
+  resolvedReasonLabel,
   useUserAccessDetail,
   useUserAccessHistory,
   type BillingSource,
   type LicenceHeld,
   type Membership,
 } from "@/lib/accessEntitlementsQuery";
+
 
 function humanise(v: string | null | undefined, fallback = "—") {
   if (!v) return fallback;
@@ -86,35 +90,9 @@ export function UserAccessDrawer({
     [detail],
   );
 
-  // Assignable pools come only from subscriptions this user owns, as returned
-  // by the backend — the RPC exposes no cross-account licence pool list.
-  const pools: LicencePoolOption[] = useMemo(
-    () =>
-      (detail?.billing_sources ?? [])
-        .filter((sourceRow) => sourceRow.is_owner && !sourceRow.manual_grant_revoked_at)
-        .map((sourceRow) => {
-          const total = Math.max(sourceRow.seats_included, sourceRow.seats_purchased);
-          const available = sourceRow.unlimited_licences
-            ? null
-            : total - sourceRow.active_licences;
-          return {
-            subscriptionId: sourceRow.subscription_id,
-            label: `${sourceRow.plan_name ?? humanise(sourceRow.plan_code)} — ${seatsSummary(sourceRow)}`,
-            seatsTotal: sourceRow.unlimited_licences ? null : total,
-            seatsAssigned: sourceRow.active_licences,
-            seatsAvailable: available,
-            vineyardId: null,
-            vineyardName: null,
-            assignable:
-              sourceRow.unlimited_licences || (available !== null && available > 0),
-            blockedReason:
-              !sourceRow.unlimited_licences && available !== null && available <= 0
-                ? "All seats in this subscription are already assigned."
-                : undefined,
-          };
-        }),
-    [detail],
-  );
+  // Licence pools are queried globally inside AssignLicenceDialog (SQL 145),
+  // so assignment is no longer limited to subscriptions this user owns.
+
 
   const grantSources = (detail?.billing_sources ?? []).filter(
     (sourceRow) => sourceRow.provider === "manual" || sourceRow.manual_grant_reason,
@@ -150,8 +128,21 @@ export function UserAccessDrawer({
                   )}
                 </div>
                 <dl>
-                  <Row label="Reason" value={accessReasonLabel(ea.reason_code)} />
-                  <Row label="Access source" value={billingSourceLabel(ea.access_source)} />
+                  <Row
+                    label="Reason"
+                    value={resolvedReasonLabel({
+                      reason_code: ea.reason_code,
+                      access_source: ea.access_source,
+                    })}
+                  />
+                  <Row
+                    label="Access source"
+                    value={
+                      isTrialSource(ea.access_source)
+                        ? "Account trial"
+                        : billingSourceLabel(ea.access_source)
+                    }
+                  />
                   <Row
                     label="Plan"
                     value={ea.plan_name ?? humanise(ea.plan_code)}
@@ -167,7 +158,8 @@ export function UserAccessDrawer({
                   <Row label="Portal access level" value={humanise(ea.portal_access_level)} />
                   <Row label="Subscription status" value={humanise(ea.subscription_status)} />
                   <Row label="Billing provider" value={billingSourceLabel(ea.billing_provider)} />
-                  <Row label="Purchase platform" value={humanise(ea.purchase_platform)} />
+                  <Row label="Purchase platform" value={purchasePlatformLabel(ea.purchase_platform)} />
+                  <Row label="Access expires" value={fmtDateTime(ea.expires_at)} />
                   <Row label="Trial ends" value={fmtDateTime(ea.trial_end)} />
                   <Row label="Grace period ends" value={fmtDateTime(ea.grace_period_end)} />
                   <Row label="Current period ends" value={fmtDateTime(ea.current_period_end)} />
@@ -175,6 +167,7 @@ export function UserAccessDrawer({
                   <Row label="Grant reason" value={ea.manual_grant_reason ?? "—"} />
                   <Row label="Last verified" value={fmtDateTime(ea.last_verified_at)} />
                 </dl>
+
                 <div className="flex flex-wrap gap-2 pt-3">
                   <Button size="sm" onClick={() => setCreateGrant(true)}>
                     Create billing grant
@@ -187,6 +180,40 @@ export function UserAccessDrawer({
                   </Button>
                 </div>
               </Card>
+
+              {detail.account_trial && (
+                <Card className="p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="text-sm font-semibold">Account trial</h3>
+                    <Badge
+                      variant="outline"
+                      className={
+                        detail.account_trial.is_currently_valid
+                          ? "border-emerald-500/40 text-emerald-600"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {detail.account_trial.is_currently_valid ? "Active" : "Expired"}
+                    </Badge>
+                  </div>
+                  <dl>
+                    <Row label="Status" value={humanise(detail.account_trial.status)} />
+                    <Row label="Started" value={fmtDateTime(detail.account_trial.trial_started_at)} />
+                    <Row label="Ends" value={fmtDateTime(detail.account_trial.trial_ends_at)} />
+                    <Row label="Trial type" value={humanise(detail.account_trial.source_type)} />
+                    <Row label="Created from" value={humanise(detail.account_trial.created_from)} />
+                    <Row
+                      label="Stored on account"
+                      value={
+                        detail.account_trial.is_persisted
+                          ? "Yes — migrated to the shared entitlement system"
+                          : "No — derived from account creation date"
+                      }
+                    />
+                  </dl>
+                </Card>
+              )}
+
 
               <Tabs defaultValue="billing">
                 <TabsList>
@@ -347,7 +374,7 @@ export function UserAccessDrawer({
                   <ol className="relative border-l pl-4 space-y-3">
                     {(historyQ.data ?? []).map((h, i) => (
                       <li key={`${h.occurred_at}-${i}`} className="text-sm">
-                        <div className="font-medium">{humanise(h.event_type)}</div>
+                        <div className="font-medium">{historyEventLabel(h.event_type)}</div>
                         <div className="text-xs text-muted-foreground">
                           {fmtDateTime(h.occurred_at)} · {humanise(h.source)}
                           {h.platform ? ` · ${humanise(h.platform)}` : ""}
@@ -385,7 +412,6 @@ export function UserAccessDrawer({
         onOpenChange={setAssignOpen}
         userId={userId}
         userLabel={userLabel}
-        pools={pools}
       />
       <ExtendGrantDialog
         open={!!extendTarget}
