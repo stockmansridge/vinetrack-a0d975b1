@@ -38,6 +38,7 @@ import {
   FlaskConical,
   Mail,
   Upload,
+  CreditCard,
 } from "lucide-react";
 import {
   Collapsible,
@@ -65,6 +66,7 @@ import {
 import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
 import { useUnresolvedSupportCount } from "@/lib/supportRequestsCount";
 import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
+import { useBillingVineyards } from "@/lib/customerBillingQuery";
 
 
 type NavItem = { title: string; url: string; icon: any; soon?: boolean };
@@ -157,6 +159,11 @@ const toolsSystemAdmin: NavItem[] = [
 
 
 
+// "Account" — customer-facing, Owner-only billing (Phase 2E).
+const account: NavItem[] = [
+  { title: "Billing", url: "/account/billing", icon: CreditCard },
+];
+
 const systemAdmin: NavItem[] = [
   { title: "Admin Dashboard", url: "/admin/dashboard", icon: AdminDashIcon },
   { title: "User Activity", url: "/admin/user-activity", icon: Activity },
@@ -183,6 +190,8 @@ export function AppSidebar() {
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const isAdmin = currentRole === "owner" || currentRole === "manager";
   const { data: unresolvedSupport = 0 } = useUnresolvedSupportCount();
+  const { data: billingVineyards = [] } = useBillingVineyards();
+  const showAccountBilling = billingVineyards.length > 0;
   const isActive = (p: string) => pathname === p;
   const visible = (items: NavItem[]) =>
     items.filter((i) => canAccessRoute(i.url, currentRole));
@@ -300,6 +309,8 @@ export function AppSidebar() {
           false,
         )}
 
+
+        {showAccountBilling && renderGroup("Account", account, false)}
 
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
