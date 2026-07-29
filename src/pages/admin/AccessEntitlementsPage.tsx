@@ -69,6 +69,24 @@ import {
 const PAGE_SIZES = [25, 50, 100];
 const ALL = "__all__";
 
+/** Column header with an explanatory tooltip. */
+function HeadInfo({ label, hint }: { label: string; hint: string }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1 cursor-help">
+            {label}
+            <Info className="h-3 w-3 text-muted-foreground" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{hint}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+
 type HealthState = "healthy" | "attention" | "critical";
 
 const HEALTH_STYLE: Record<HealthState, string> = {
