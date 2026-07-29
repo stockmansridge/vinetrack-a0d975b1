@@ -29,7 +29,14 @@ async function call<T>(name: string, args: Record<string, unknown>): Promise<T> 
 
 /** SQL 125 raises `code: message` style errors — surface the readable part. */
 export function friendlyError(message: string): string {
-  const m = /^([a-z_]+):\s*(.+)$/i.exec(message.trim());
+  const raw = message.trim();
+  if (/irrigation_permission_denied/i.test(raw)) {
+    return "You do not have permission to perform this irrigation action.";
+  }
+  if (/irrigation_access_denied/i.test(raw)) {
+    return "You do not have access to Irrigation Records for this vineyard.";
+  }
+  const m = /^([a-z_]+):\s*(.+)$/i.exec(raw);
   if (m) return m[2].charAt(0).toUpperCase() + m[2].slice(1);
   return message;
 }
@@ -378,24 +385,75 @@ export interface MonthlySummaryRow {
 }
 
 // ---------------------------------------------------------------------------
-// Access gate
+// Capabilities (SQL 151) — the single shared gate for the whole feature.
+// The portal never derives irrigation permissions from role names or from
+// system-admin status: `get_irrigation_capabilities` is authoritative and the
+// backend re-checks every mutation.
 // ---------------------------------------------------------------------------
 
-export function useIrrigationAccess(vineyardId: string | null) {
+export interface IrrigationCapabilities {
+  can_view_irrigation_records: boolean;
+  can_record_irrigation: boolean;
+  can_edit_irrigation: boolean;
+  can_reverse_irrigation: boolean;
+  can_manage_irrigation_setup: boolean;
+  can_view_irrigation_reports: boolean;
+  can_import_irrigation: boolean;
+  can_reverse_irrigation_import: boolean;
+}
+
+export type IrrigationCapability = keyof IrrigationCapabilities;
+
+export const NO_IRRIGATION_CAPABILITIES: IrrigationCapabilities = {
+  can_view_irrigation_records: false,
+  can_record_irrigation: false,
+  can_edit_irrigation: false,
+  can_reverse_irrigation: false,
+  can_manage_irrigation_setup: false,
+  can_view_irrigation_reports: false,
+  can_import_irrigation: false,
+  can_reverse_irrigation_import: false,
+};
+
+/** Unknown / missing capability keys always deny. */
+function normaliseCapabilities(raw: unknown): IrrigationCapabilities {
+  const row = Array.isArray(raw) ? raw[0] : raw;
+  if (!row || typeof row !== "object") return { ...NO_IRRIGATION_CAPABILITIES };
+  const src = row as Record<string, unknown>;
+  const out = { ...NO_IRRIGATION_CAPABILITIES };
+  (Object.keys(out) as IrrigationCapability[]).forEach((key) => {
+    out[key] = src[key] === true;
+  });
+  return out;
+}
+
+export function useIrrigationCapabilities(vineyardId: string | null) {
   const q = useQuery({
-    queryKey: ["irrigation", "access", vineyardId],
+    queryKey: ["irrigation", "capabilities", vineyardId],
     enabled: !!vineyardId,
     staleTime: 60_000,
+    retry: 1,
     queryFn: async () => {
-      const { data, error } = await rpc("has_irrigation_records_access", {
+      const { data, error } = await rpc("get_irrigation_capabilities", {
         p_vineyard_id: vineyardId,
       });
-      if (error) return false;
-      return Boolean(data);
+      if (error) throw new Error(friendlyError(error.message ?? String(error)));
+      return normaliseCapabilities(data);
     },
   });
-  return { hasAccess: !!q.data, loading: !!vineyardId && q.isLoading };
+
+  const capabilities = q.data ?? NO_IRRIGATION_CAPABILITIES;
+  return {
+    capabilities,
+    can: (cap: IrrigationCapability) => capabilities[cap] === true,
+    /** True until we have an authoritative answer — gated UI must stay hidden. */
+    loading: !!vineyardId && (q.isLoading || q.isFetching) && !q.data,
+    error: (q.error as Error) ?? null,
+    ready: !!q.data,
+    refetch: q.refetch,
+  };
 }
+
 
 // ---------------------------------------------------------------------------
 // Setup — systems, valves, connections

@@ -22,6 +22,7 @@ import {
   type ImportBatch,
   type ReversalImpact,
 } from "@/lib/irrigationImportQuery";
+import { useIrrigationCapabilities } from "@/lib/irrigationQuery";
 
 export function ImportBatchHistory({
   vineyardId,
@@ -32,6 +33,9 @@ export function ImportBatchHistory({
 }) {
   const batchesQ = useImportBatches(vineyardId, provider);
   const reverse = useReverseImportBatch();
+  // Import reversal is its own capability — never inferred from import access.
+  const { capabilities, loading: capsLoading } = useIrrigationCapabilities(vineyardId);
+  const canReverseBatch = !capsLoading && capabilities.can_reverse_irrigation_import;
   const [target, setTarget] = useState<ImportBatch | null>(null);
   const [impact, setImpact] = useState<ReversalImpact | null>(null);
 
@@ -111,7 +115,7 @@ export function ImportBatchHistory({
                     </TableCell>
                     <TableCell className="text-right">{batch.imported_sessions ?? "—"}</TableCell>
                     <TableCell className="text-right">
-                      {committed && !reversed && (
+                      {committed && !reversed && canReverseBatch && (
                         <Button size="sm" variant="ghost" onClick={() => void openReversal(batch)}>
                           <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Reverse
                         </Button>
