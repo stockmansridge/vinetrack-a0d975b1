@@ -40,6 +40,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import { UserAccessDrawer } from "@/components/admin/access/UserAccessDrawer";
 import { AcknowledgeAlertDialog } from "@/components/admin/access/accessDialogs";
@@ -406,7 +407,37 @@ export default function AccessEntitlementsPage() {
 
   const [ackTarget, setAckTarget] = useState<BillingAlert | null>(null);
 
-  const refreshAll = () => qc.invalidateQueries({ queryKey: AE_KEYS.root });
+  const [refreshState, setRefreshState] = useState<"idle" | "busy" | "done">("idle");
+
+  const refreshAll = async () => {
+    if (refreshState === "busy") return;
+    setRefreshState("busy");
+    try {
+      // Mark every Access & Entitlements query stale (prefix match on the root
+      // key covers monitor, alerts, users, detail, history, grants, pools…)
+      qc.invalidateQueries({ queryKey: AE_KEYS.root });
+      // …then actively refetch the mounted ones and await them all so the
+      // spinner reflects real network completion.
+      const results = await Promise.allSettled([
+        qc.refetchQueries({ queryKey: AE_KEYS.root, type: "active" }),
+        monitorQ.refetch(),
+        alertsQ.refetch(),
+        usersQ.refetch(),
+      ]);
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length > 0 || monitorQ.error || usersQ.error) {
+        toast.error("Some data could not be refreshed. Check the error messages on the page.");
+        setRefreshState("idle");
+        return;
+      }
+      toast.success("Access & entitlements data refreshed");
+      setRefreshState("done");
+      window.setTimeout(() => setRefreshState("idle"), 2000);
+    } catch (e) {
+      toast.error(friendlyError(e));
+      setRefreshState("idle");
+    }
+  };
 
   const clearFilters = () => {
     setSearchInput("");
@@ -437,8 +468,11 @@ export default function AccessEntitlementsPage() {
         title="Access & Entitlements"
         subtitle="Review user access, subscriptions, licence assignments, billing grants and billing issues across VineTrack."
         actions={
-          <Button variant="outline" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+          <Button variant="outline" onClick={refreshAll} disabled={refreshState === "busy"}>
+            <RefreshCw
+              className={`h-4 w-4 mr-1 ${refreshState === "busy" ? "animate-spin" : ""}`}
+            />
+            {refreshState === "busy" ? "Refreshing…" : refreshState === "done" ? "Refreshed" : "Refresh"}
           </Button>
         }
       />
