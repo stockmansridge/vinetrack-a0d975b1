@@ -589,6 +589,8 @@ export interface EffectiveAccess {
   can_use_android_app: boolean | null;
   unlimited_licences: boolean | null;
   trial_end: string | null;
+  /** SQL 144 resolver field: when the current entitlement stops being valid. */
+  expires_at: string | null;
   grace_period_end: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean | null;
@@ -596,6 +598,19 @@ export interface EffectiveAccess {
   manual_grant_expires_at: string | null;
   last_verified_at: string | null;
 }
+
+/** SQL 143 account trial, returned by admin_user_access_detail.account_trial.
+ *  Read-only in the portal: no trial dates are ever written from here. */
+export interface AccountTrial {
+  status: string | null;
+  source_type: string | null;
+  created_from: string | null;
+  is_persisted: boolean;
+  is_currently_valid: boolean;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+}
+
 
 export interface BillingSource {
   subscription_id: string;
