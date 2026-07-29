@@ -688,13 +688,16 @@ function SettingsForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="min-volume" className="flex items-center gap-1.5">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <div className="flex flex-col">
+          <Label
+            htmlFor="min-volume"
+            className="flex h-6 items-center gap-1.5 leading-none"
+          >
             Minimum water quantity (m³)
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label="About the minimum water quantity">
+                <button type="button" aria-label="About the minimum water quantity" className="leading-none">
                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               </TooltipTrigger>
@@ -710,14 +713,18 @@ function SettingsForm({
             type="number"
             step="0.1"
             min="0"
+            className="mt-2 h-11 rounded-md"
             value={cubic}
             onChange={(e) => setCubic(e.target.value)}
           />
+          <p className="mt-1 min-h-[1rem] text-xs text-muted-foreground" />
         </div>
-        <div className="space-y-2">
-          <Label>Comparison</Label>
+        <div className="flex flex-col">
+          <Label htmlFor="volume-comparison" className="flex h-6 items-center gap-1.5 leading-none">
+            Comparison
+          </Label>
           <Select value={comparison} onValueChange={(v) => setComparison(v as VolumeComparison)}>
-            <SelectTrigger>
+            <SelectTrigger id="volume-comparison" className="mt-2 h-11 rounded-md">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -725,8 +732,10 @@ function SettingsForm({
               <SelectItem value="greater_than_or_equal">At least</SelectItem>
             </SelectContent>
           </Select>
+          <p className="mt-1 min-h-[1rem] text-xs text-muted-foreground" />
         </div>
       </div>
+
 
       <label className="flex items-start gap-2 text-sm">
         <Checkbox checked={excludeTest} onCheckedChange={(v) => setExcludeTest(v === true)} />
