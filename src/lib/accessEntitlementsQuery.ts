@@ -253,6 +253,18 @@ export const AE_KEYS = {
   vineyards: ["admin", "access-entitlements", "vineyards"] as const,
   plans: ["admin", "access-entitlements", "plans"] as const,
   pools: ["admin", "access-entitlements", "licence-pools"] as const,
+  /** SQL 148 billing review queues. */
+  reviewItemsAll: ["admin", "access-entitlements", "review-items"] as const,
+  reviewItems: (p: ReviewItemsParams) =>
+    [
+      "admin",
+      "access-entitlements",
+      "review-items",
+      p.itemType,
+      p.status,
+      p.limit,
+      p.offset,
+    ] as const,
 
 };
 
@@ -263,6 +275,17 @@ export const AE_KEYS = {
 export interface MonitorSection {
   count: number;
   recent: Record<string, unknown>[];
+}
+
+/** SQL 148: last 10 administrator review actions (no payload data). */
+export interface RecentReviewAction {
+  event_type: string;
+  item_type: string | null;
+  item_id: string | null;
+  reason: string | null;
+  outcome: string | null;
+  actor: string | null;
+  created_at: string | null;
 }
 
 export interface BillingMonitor {
@@ -277,6 +300,7 @@ export interface BillingMonitor {
   expiring_within_7_days: Record<string, unknown>[];
   recent_status_changes: Record<string, unknown>[];
   rc_active_supabase_missing: Record<string, unknown>[];
+  recent_review_actions: RecentReviewAction[];
 }
 
 function section(rpc: string, obj: Record<string, unknown>, key: string): MonitorSection {
@@ -315,6 +339,15 @@ export function useBillingMonitor() {
         expiring_within_7_days: requireArray(rpc, o.expiring_within_7_days),
         recent_status_changes: requireArray(rpc, o.recent_status_changes),
         rc_active_supabase_missing: requireArray(rpc, o.rc_active_supabase_missing ?? []),
+        recent_review_actions: requireArray(rpc, o.recent_review_actions ?? []).map((r) => ({
+          event_type: String(r.event_type ?? ""),
+          item_type: (r.item_type as string) ?? null,
+          item_id: (r.item_id as string) ?? null,
+          reason: (r.reason as string) ?? null,
+          outcome: (r.outcome as string) ?? null,
+          actor: (r.actor as string) ?? null,
+          created_at: (r.created_at as string) ?? null,
+        })),
       };
     },
   });
@@ -1059,6 +1092,8 @@ function useAfterMutation() {
     qc.invalidateQueries({ queryKey: AE_KEYS.grants });
     qc.invalidateQueries({ queryKey: AE_KEYS.monitor });
     qc.invalidateQueries({ queryKey: AE_KEYS.alertsAll });
+    qc.invalidateQueries({ queryKey: AE_KEYS.reviewItemsAll });
+    qc.invalidateQueries({ queryKey: AE_KEYS.pools });
     if (userId) {
       qc.invalidateQueries({ queryKey: AE_KEYS.detail(userId) });
       qc.invalidateQueries({ queryKey: AE_KEYS.history(userId) });
@@ -1184,5 +1219,280 @@ export function useRefreshUserEntitlement() {
       };
     },
     onSuccess: (_d, v) => after(v.userId),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Billing review queues + resolution actions (SQL 148)                */
+/* ------------------------------------------------------------------ */
+//
+// Contract: docs/billing-review-resolution-lovable-contract.md
+//
+//   admin_billing_review_items(p_item_type, p_status, p_limit, p_offset)
+//        -> setof review-item rows (18 columns + total_count)
+//   admin_update_billing_review_item(p_item_type, p_item_id, p_action,
+//                                    p_reason, p_target_user_id) -> jsonb
+//   admin_resolve_billing_review_item(p_item_type, p_item_id, p_reason)
+//   admin_dismiss_billing_review_item(p_item_type, p_item_id, p_reason)
+//   admin_retry_billing_delivery(p_item_id, p_reason)
+//   admin_acknowledge_billing_alert(p_alert_id)          (SQL 139, unchanged)
+//
+// Nothing here deletes anything: resolve / dismiss / acknowledge stamp state
+// onto existing rows and the raw events stay queryable under the Resolved and
+// Dismissed filters forever. The portal never reads raw provider payloads.
+
+export const REVIEW_ITEM_TYPES = [
+  "event",
+  "unresolved_user",
+  "ownership_conflict",
+  "stuck_delivery",
+  "alert",
+] as const;
+export type ReviewItemType = (typeof REVIEW_ITEM_TYPES)[number];
+
+export const REVIEW_ITEM_TYPE_LABEL: Record<ReviewItemType, string> = {
+  event: "Events needing review",
+  unresolved_user: "Unresolved users",
+  ownership_conflict: "Ownership conflicts",
+  stuck_delivery: "Stuck deliveries",
+  alert: "Open alerts",
+};
+
+/** Exact p_status values accepted by admin_billing_review_items. */
+export const REVIEW_STATUS_FILTERS = ["open", "resolved", "dismissed", "all"] as const;
+export type ReviewStatusFilter = (typeof REVIEW_STATUS_FILTERS)[number];
+
+/** Row-level status returned by the backend. Acknowledged alerts report
+ *  `resolved`; the UI labels that "Acknowledged" for the alert item type. */
+export type ReviewItemStatus = "open" | "resolved" | "dismissed";
+
+export const REVIEW_ACTIONS = [
+  "acknowledge",
+  "resolve",
+  "dismiss",
+  "retry",
+  "link_user",
+] as const;
+export type ReviewAction = (typeof REVIEW_ACTIONS)[number];
+
+export const REVIEW_ACTION_LABEL: Record<ReviewAction, string> = {
+  acknowledge: "Acknowledge",
+  resolve: "Resolve",
+  dismiss: "Dismiss",
+  retry: "Retry",
+  link_user: "Link user",
+};
+
+export interface ReviewItem {
+  item_id: string;
+  item_type: ReviewItemType;
+  severity: string;
+  status: ReviewItemStatus;
+  user_id: string | null;
+  user_email: string | null;
+  provider: string | null;
+  platform: string | null;
+  product: string | null;
+  reason: string | null;
+  created_at: string;
+  last_attempt_at: string | null;
+  retry_count: number;
+  is_retryable: boolean;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  dismissed_at: string | null;
+  dismissed_by: string | null;
+  total_count: number;
+}
+
+export interface ReviewItemsParams {
+  itemType: ReviewItemType;
+  status: ReviewStatusFilter;
+  limit: number;
+  offset: number;
+}
+
+function reviewStatus(rpc: string, v: unknown): ReviewItemStatus {
+  const s = String(v ?? "");
+  if (s === "open" || s === "resolved" || s === "dismissed") return s;
+  throw new ContractError(rpc, `unexpected status "${s}"`);
+}
+
+export function useReviewItems(params: ReviewItemsParams, enabled = true) {
+  return useQuery({
+    queryKey: AE_KEYS.reviewItems(params),
+    enabled,
+    staleTime: 15_000,
+    retry: false,
+    placeholderData: (prev) => prev,
+    queryFn: async (): Promise<{ rows: ReviewItem[]; total: number }> => {
+      const rpc = "admin_billing_review_items";
+      const raw = requireArray(
+        rpc,
+        await adminRpc(rpc, {
+          p_item_type: params.itemType,
+          p_status: params.status,
+          p_limit: params.limit,
+          p_offset: params.offset,
+        }),
+      );
+      const rows = raw.map((r) => {
+        requireKeys(rpc, r, [
+          "item_id",
+          "item_type",
+          "severity",
+          "status",
+          "user_id",
+          "user_email",
+          "provider",
+          "platform",
+          "product",
+          "reason",
+          "created_at",
+          "last_attempt_at",
+          "retry_count",
+          "is_retryable",
+          "resolved_at",
+          "resolved_by",
+          "dismissed_at",
+          "dismissed_by",
+          "total_count",
+        ]);
+        return {
+          item_id: String(r.item_id),
+          item_type: String(r.item_type) as ReviewItemType,
+          severity: String(r.severity ?? "warning"),
+          status: reviewStatus(rpc, r.status),
+          user_id: s(r.user_id),
+          user_email: s(r.user_email),
+          provider: s(r.provider),
+          platform: s(r.platform),
+          product: s(r.product),
+          reason: s(r.reason),
+          created_at: String(r.created_at),
+          last_attempt_at: s(r.last_attempt_at),
+          retry_count: Number(r.retry_count ?? 0),
+          is_retryable: requireBoolean(rpc, r, "is_retryable"),
+          resolved_at: s(r.resolved_at),
+          resolved_by: s(r.resolved_by),
+          dismissed_at: s(r.dismissed_at),
+          dismissed_by: s(r.dismissed_by),
+          total_count: Number(r.total_count ?? 0),
+        } satisfies ReviewItem;
+      });
+      return { rows, total: rows.length ? rows[0].total_count : 0 };
+    },
+  });
+}
+
+/** Server-defined action matrix (contract §3). Retryability is never guessed
+ *  client-side — it comes from the row's `is_retryable` flag. */
+export function allowedReviewActions(item: ReviewItem): ReviewAction[] {
+  if (item.status !== "open") return [];
+  if (item.item_type === "alert") return ["acknowledge"];
+  const actions: ReviewAction[] = [];
+  if (item.item_type === "unresolved_user" || item.item_type === "ownership_conflict")
+    actions.push("link_user");
+  if (item.is_retryable) actions.push("retry");
+  actions.push("resolve", "dismiss");
+  return actions;
+}
+
+export interface RetryResult {
+  outcome: string;
+  code: string | null;
+  message: string | null;
+  subscription_id: string | null;
+  resolved_user_id: string | null;
+}
+
+export interface ReviewActionResult {
+  item_type: string;
+  item_id: string;
+  action: string;
+  status: string;
+  linked_user_id: string | null;
+  result: RetryResult | null;
+}
+
+/** Exact SQL 148 error codes → administrator-readable messages. */
+const REVIEW_ERROR_MESSAGE: Record<string, string> = {
+  reason_required: "Enter a reason before continuing.",
+  item_id_required: "This review item could not be identified. Reload and try again.",
+  invalid_item_type: "This billing item category is not supported.",
+  invalid_action: "This action is not supported.",
+  invalid_action_for_item_type: "This action is not available for this billing item.",
+  item_type_mismatch: "This action is not available for this billing item.",
+  already_closed: "This review item has already been resolved or dismissed.",
+  not_retryable: "This billing event cannot be retried safely.",
+  target_user_required: "Select a valid VineTrack account.",
+  item_not_found: "This review item no longer exists or has already changed.",
+  user_not_found: "Select a valid VineTrack account.",
+  invalid_status: "This status filter is not supported.",
+};
+
+export function reviewActionError(err: unknown): string {
+  const e = err as { code?: string; message?: string };
+  if (e?.code === "42501" || /system admin/i.test(e?.message ?? ""))
+    return "You do not have permission to manage billing review items.";
+  const raw = (e?.message ?? "").trim();
+  for (const [code, message] of Object.entries(REVIEW_ERROR_MESSAGE)) {
+    if (raw === code || raw.includes(code)) return message;
+  }
+  return "This billing action could not be completed. Reload the review queue and try again.";
+}
+
+export interface ReviewActionArgs {
+  itemType: ReviewItemType;
+  itemId: string;
+  action: ReviewAction;
+  reason: string;
+  targetUserId?: string | null;
+  /** Used for targeted invalidation of the affected account. */
+  affectedUserId?: string | null;
+}
+
+/** Single unified mutation — SQL 148 routes every action, including alert
+ *  acknowledgement, through admin_update_billing_review_item. The legacy
+ *  admin_acknowledge_billing_alert RPC is never called alongside it. */
+export function useReviewItemAction() {
+  const after = useAfterMutation();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: ReviewActionArgs): Promise<ReviewActionResult> => {
+      const rpc = "admin_update_billing_review_item";
+      const o = requireObject(
+        rpc,
+        await adminRpc(rpc, {
+          p_item_type: args.itemType,
+          p_item_id: args.itemId,
+          p_action: args.action,
+          p_reason: args.reason,
+          p_target_user_id: args.targetUserId ?? null,
+        }),
+      );
+      requireKeys(rpc, o, ["item_type", "item_id", "action", "status"]);
+      const r = o.result ? requireObject(`${rpc}.result`, o.result) : null;
+      return {
+        item_type: String(o.item_type),
+        item_id: String(o.item_id),
+        action: String(o.action),
+        status: String(o.status),
+        linked_user_id: s(o.linked_user_id),
+        result: r
+          ? {
+              outcome: String(r.outcome ?? "unknown"),
+              code: s(r.code),
+              message: s(r.message),
+              subscription_id: s(r.subscription_id),
+              resolved_user_id: s(r.resolved_user_id),
+            }
+          : null,
+      };
+    },
+    onSuccess: (data, vars) => {
+      after(vars.affectedUserId ?? vars.targetUserId ?? data.result?.resolved_user_id ?? null);
+      qc.invalidateQueries({ queryKey: AE_KEYS.reviewItemsAll });
+    },
   });
 }

@@ -64,8 +64,10 @@ import {
   useBillingMonitor,
   usePlanOptions,
   type BillingAlert,
+  type ReviewItemType,
   platformsAllowed,
 } from "@/lib/accessEntitlementsQuery";
+import { BillingReviewPanel } from "@/components/admin/access/BillingReviewPanel";
 
 
 const PAGE_SIZES = [25, 50, 100];
@@ -110,6 +112,7 @@ function HealthCard({
   explanation,
   loading,
   onClick,
+  alwaysClickable,
 }: {
   title: string;
   count: number;
@@ -117,9 +120,11 @@ function HealthCard({
   explanation: string;
   loading?: boolean;
   onClick?: () => void;
+  /** Review-queue cards stay clickable at zero so the empty queue is reachable. */
+  alwaysClickable?: boolean;
 }) {
   if (loading) return <Skeleton className="h-28 w-full" />;
-  const clickable = !!onClick && count > 0;
+  const clickable = !!onClick && (count > 0 || !!alwaysClickable);
   return (
     <Card
       role={clickable ? "button" : undefined}
@@ -306,6 +311,8 @@ export default function AccessEntitlementsPage() {
     state: HealthState;
     explanation: string;
     items: Record<string, unknown>[];
+    /** SQL 148 review queue this card belongs to, when it is a review category. */
+    reviewType?: ReviewItemType;
   }[] = monitor
     ? [
         {
@@ -317,6 +324,7 @@ export default function AccessEntitlementsPage() {
               ? "Store events are flagged for administrator review."
               : "No store events require review.",
           items: monitor.events_needing_review.recent,
+          reviewType: "event",
         },
         {
           title: "Failed Events",
@@ -327,6 +335,7 @@ export default function AccessEntitlementsPage() {
               ? "Billing events failed processing."
               : "No billing events have failed processing.",
           items: monitor.failed_events.recent,
+          reviewType: "event",
         },
         {
           title: "Unresolved Users",
@@ -337,6 +346,7 @@ export default function AccessEntitlementsPage() {
               ? "Purchases could not be linked to a VineTrack account."
               : "Every purchase is linked to an account.",
           items: monitor.unresolved_users.recent,
+          reviewType: "unresolved_user",
         },
         {
           title: "Ownership Conflicts",
@@ -347,6 +357,7 @@ export default function AccessEntitlementsPage() {
               ? "A subscription is claimed by more than one account."
               : "No subscription ownership conflicts.",
           items: monitor.ownership_conflicts.recent,
+          reviewType: "ownership_conflict",
         },
         {
           title: "Open Alerts",
@@ -354,11 +365,12 @@ export default function AccessEntitlementsPage() {
           state: monitor.open_alerts > 0 ? "attention" : "healthy",
           explanation:
             monitor.open_alerts > 0
-              ? "Alerts are waiting to be acknowledged below."
+              ? "Alerts are waiting to be acknowledged."
               : "No alerts are waiting for acknowledgement.",
           items: (alertsQ.data ?? [])
             .filter((a) => !a.acknowledged_at)
             .map((a) => a as unknown as Record<string, unknown>),
+          reviewType: "alert",
         },
         {
           title: "Stuck Deliveries",
@@ -369,6 +381,7 @@ export default function AccessEntitlementsPage() {
               ? "Store webhooks were received but never finalised."
               : "All store webhooks finalised normally.",
           items: monitor.stuck_deliveries,
+          reviewType: "stuck_delivery",
         },
         {
           title: "Expiring in 7 Days",
@@ -392,6 +405,9 @@ export default function AccessEntitlementsPage() {
 
   const [detailCard, setDetailCard] = useState<string | null>(null);
   const activeCard = cards.find((c) => c.title === detailCard) ?? null;
+  const [reviewType, setReviewType] = useState<ReviewItemType | null>(null);
+
+
 
 
   const alerts = alertsQ.data ?? [];
@@ -498,13 +514,45 @@ export default function AccessEntitlementsPage() {
                     count={c.count}
                     state={c.state}
                     explanation={c.explanation}
-                    onClick={() => setDetailCard(c.title)}
+                    alwaysClickable={!!c.reviewType}
+                    onClick={() =>
+                      c.reviewType
+                        ? setReviewType(c.reviewType)
+                        : setDetailCard(c.title)
+                    }
                   />
                 ))}
 
           </div>
         )}
+        {(monitor?.recent_review_actions?.length ?? 0) > 0 && (
+          <Card className="mt-3 p-3">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h3 className="text-xs font-semibold">Recent review actions</h3>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={() => setReviewType("event")}
+              >
+                Open Billing Review
+              </Button>
+            </div>
+            <ul className="space-y-1">
+              {(monitor?.recent_review_actions ?? []).slice(0, 5).map((a, i) => (
+                <li key={`${a.item_id}-${i}`} className="text-xs text-muted-foreground">
+                  <span className="text-foreground">{humanise(a.event_type)}</span>
+                  {a.item_type ? ` · ${humanise(a.item_type)}` : ""}
+                  {a.outcome ? ` · ${humanise(a.outcome)}` : ""}
+                  {a.reason ? ` · ${a.reason}` : ""}
+                  {a.created_at ? ` · ${fmtDateTime(a.created_at)}` : ""}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </section>
+
 
       {/* Alert inbox */}
       <section className="mb-6">
@@ -893,6 +941,15 @@ export default function AccessEntitlementsPage() {
         title={activeCard?.title ?? ""}
         explanation={activeCard?.explanation ?? ""}
         items={activeCard?.items ?? []}
+      />
+
+      <BillingReviewPanel
+        itemType={reviewType}
+        onOpenChange={(o) => !o && setReviewType(null)}
+        onViewUser={(id) => {
+          setReviewType(null);
+          setSelectedUser(id);
+        }}
       />
     </AdminGate>
   );
