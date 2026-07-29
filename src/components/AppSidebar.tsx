@@ -142,10 +142,6 @@ const irrigationSetup: NavItem[] = [
 
 ];
 
-// System-admin-only: Galcon / controller history import wizard.
-const irrigationImport: NavItem[] = [
-  { title: "Irrigation Import", url: "/irrigation/import", icon: Upload },
-];
 
 // "Tools" — calculators / helpers
 const tools: NavItem[] = [
