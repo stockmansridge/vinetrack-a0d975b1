@@ -56,6 +56,21 @@ import {
   type ParseResult,
   type VolumeComparison,
 } from "@/lib/irrigationImportQuery";
+import { resolveProviderHelp, type ProviderHelp } from "@/lib/irrigationImportProviderHelp";
+import { SupportRequestSheet } from "@/components/support/SupportRequestSheet";
+
+const SUPPORT_PREFILL = {
+  category: "feature",
+  subject: "Request an irrigation controller import",
+  message: [
+    "I would like VineTrack to support irrigation imports from:",
+    "",
+    "Controller brand:",
+    "Controller model:",
+    "Export format, if known:",
+  ].join("\n"),
+};
+
 
 type StepId = "source" | "upload" | "settings" | "valves" | "review" | "preview" | "results";
 
