@@ -504,6 +504,9 @@ export function useAccessUsers(params: AccessUsersParams) {
           licence_count: n(r.licence_count),
           review_status: s(r.review_status),
           last_verified_at: s(r.last_verified_at),
+          portal_access: requireBoolean(rpc, r, "portal_access"),
+          can_use_ios_app: requireBoolean(rpc, r, "can_use_ios_app"),
+          can_use_android_app: requireBoolean(rpc, r, "can_use_android_app"),
           total_count: n(r.total_count),
         } satisfies AccessUserRow;
       });
