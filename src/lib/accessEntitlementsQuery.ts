@@ -175,6 +175,24 @@ export const billingSourceLabel = (s: string | null | undefined) =>
 export const grantTypeLabel = (t: string | null | undefined) =>
   GRANT_TYPES.find((g) => g.value === t)?.label ?? labelFor({}, t);
 
+/** Purchase platform is display-only; a null value means no paid purchase. */
+export const purchasePlatformLabel = (p: string | null | undefined) =>
+  p ? (PURCHASE_PLATFORM_LABEL[p] ?? humanise(p)) : NOT_APPLICABLE;
+
+/** The resolver reports an ended account trial as reason_code `expired` with
+ *  access_source `trial`. Present that as "Trial Expired" — never as
+ *  "No Entitlement", which is reserved for reason_code = no_entitlement. */
+export function resolvedReasonLabel(a: {
+  reason_code: string | null;
+  access_source: string | null;
+}): string {
+  if (a.access_source === "trial" && (a.reason_code === "expired" || a.reason_code === "revoked"))
+    return a.reason_code === "revoked" ? "Trial Revoked" : "Trial Expired";
+  return accessReasonLabel(a.reason_code);
+}
+
+export const isTrialSource = (accessSource: string | null | undefined) => accessSource === "trial";
+
 /** Platforms come from the server-resolved entitlement booleans only. */
 export function platformsAllowed(a: {
   portal_access: boolean | null;
@@ -188,6 +206,7 @@ export function platformsAllowed(a: {
   ].filter(Boolean);
   return list.length ? list.join(", ") : "None";
 }
+
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
