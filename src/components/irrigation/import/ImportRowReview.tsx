@@ -63,6 +63,7 @@ function exclusionExplanation(
   thresholdLitres: number | null | undefined,
   comparison: VolumeComparison | null | undefined,
   fallback?: string | null,
+  providerLabel?: string,
 ): string | null {
   const water = row.parsed_water_litres;
   if (row.classification === "at_volume_threshold") {
@@ -73,7 +74,7 @@ function exclusionExplanation(
   if (row.classification === "below_volume_threshold") {
     return `This event was not selected because its reported water quantity is ${litresToCubicLabel(
       water,
-    )}. The Galcon import minimum is ${
+    )}. The ${providerLabel ?? "import"} minimum is ${
       COMPARISON_LABEL[comparison ?? "greater_than"]
     } ${litresToCubicLabel(thresholdLitres)}, which helps exclude controller tests and very short runs.`;
   }
@@ -88,8 +89,10 @@ export function ImportRowReview({
   thresholdLitres,
   volumeComparison,
   thresholdExplanation,
+  providerLabel,
 }: {
   batchId: string;
+  providerLabel?: string;
   thresholdLitres?: number | null;
   volumeComparison?: VolumeComparison | null;
   thresholdExplanation?: string | null;
@@ -157,7 +160,7 @@ export function ImportRowReview({
                 const reasons = [row.primary_exclusion_reason, ...(row.additional_reason_codes ?? [])]
                   .filter(Boolean)
                   .map((r) => humanise(String(r)));
-                const explanation = exclusionExplanation(row, thresholdLitres, volumeComparison, thresholdExplanation);
+                const explanation = exclusionExplanation(row, thresholdLitres, volumeComparison, thresholdExplanation, providerLabel);
                 const canOverride =
                   row.validation_status === "excluded" &&
                   ["below_volume_threshold", "at_volume_threshold", "test"].includes(row.classification);
@@ -254,6 +257,7 @@ export function ImportRowReview({
       <OverrideDialog
         row={overrideRow?.row ?? null}
         explanation={overrideRow?.explanation ?? null}
+        providerLabel={providerLabel}
         onClose={() => setOverrideRow(null)}
       />
     </Card>
@@ -263,10 +267,12 @@ export function ImportRowReview({
 function OverrideDialog({
   row,
   explanation,
+  providerLabel,
   onClose,
 }: {
   row: ImportRow | null;
   explanation: string | null;
+  providerLabel?: string;
   onClose: () => void;
 }) {
   const [reason, setReason] = useState("");
@@ -298,7 +304,7 @@ function OverrideDialog({
           <DialogDescription>
             {isTest
               ? "This event belongs to a Test program and is excluded by default."
-              : "This event is below the Galcon minimum-volume threshold and may represent a test or short diagnostic run."}
+              : `This event is below the ${providerLabel ?? "import"} minimum-volume threshold and may represent a test or short diagnostic run.`}
           </DialogDescription>
         </DialogHeader>
         {explanation && (

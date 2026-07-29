@@ -285,12 +285,12 @@ export function useImportProviders() {
 
 export function useImportProviderSettings(
   vineyardId: string | null,
-  provider: string,
+  provider: string | null,
   controllerKey: string | null,
 ) {
   return useQuery({
-    queryKey: ["irrigation-import", "settings", vineyardId, provider, controllerKey ?? ""],
-    enabled: !!vineyardId,
+    queryKey: ["irrigation-import", "settings", vineyardId, provider ?? "", controllerKey ?? ""],
+    enabled: !!vineyardId && !!provider,
     queryFn: async () =>
       (await call<ImportProviderSettings>("get_irrigation_import_provider_settings", {
         p_vineyard_id: vineyardId,
@@ -333,12 +333,14 @@ export function useParseImportFile() {
     mutationFn: async (args: {
       vineyardId: string;
       provider: string;
+      /** Edge Function name from the provider registry (`parser_edge_function`). */
+      parserEdgeFunction: string;
       file: File;
       timezone?: string;
       allowRevalidation?: boolean;
     }): Promise<ParseResult> => {
       const file_base64 = await fileToBase64(args.file);
-      const { data, error } = await supabase.functions.invoke("parse-galcon-irrigation-import", {
+      const { data, error } = await supabase.functions.invoke(args.parserEdgeFunction, {
         body: {
           vineyard_id: args.vineyardId,
           provider: args.provider,
