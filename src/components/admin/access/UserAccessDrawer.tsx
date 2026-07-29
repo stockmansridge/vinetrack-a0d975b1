@@ -207,6 +207,40 @@ export function UserAccessDrawer({
                 </div>
               </Card>
 
+              {detail.account_trial && (
+                <Card className="p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="text-sm font-semibold">Account trial</h3>
+                    <Badge
+                      variant="outline"
+                      className={
+                        detail.account_trial.is_currently_valid
+                          ? "border-emerald-500/40 text-emerald-600"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {detail.account_trial.is_currently_valid ? "Active" : "Expired"}
+                    </Badge>
+                  </div>
+                  <dl>
+                    <Row label="Status" value={humanise(detail.account_trial.status)} />
+                    <Row label="Started" value={fmtDateTime(detail.account_trial.trial_started_at)} />
+                    <Row label="Ends" value={fmtDateTime(detail.account_trial.trial_ends_at)} />
+                    <Row label="Trial type" value={humanise(detail.account_trial.source_type)} />
+                    <Row label="Created from" value={humanise(detail.account_trial.created_from)} />
+                    <Row
+                      label="Stored on account"
+                      value={
+                        detail.account_trial.is_persisted
+                          ? "Yes — migrated to the shared entitlement system"
+                          : "No — derived from account creation date"
+                      }
+                    />
+                  </dl>
+                </Card>
+              )}
+
+
               <Tabs defaultValue="billing">
                 <TabsList>
                   <TabsTrigger value="billing">Billing sources</TabsTrigger>
