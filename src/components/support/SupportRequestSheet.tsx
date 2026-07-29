@@ -33,7 +33,10 @@ import { Loader2, Paperclip, X } from "lucide-react";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Optional prefill applied each time the sheet opens. */
+  prefill?: { category?: string; subject?: string; message?: string };
 }
+
 
 // Match iOS support form categories exactly.
 const CATEGORY_OPTIONS = [
