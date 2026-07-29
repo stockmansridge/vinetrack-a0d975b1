@@ -37,6 +37,7 @@ import {
   Scissors,
   FlaskConical,
   Mail,
+  Upload,
 } from "lucide-react";
 import {
   Collapsible,
@@ -139,6 +140,11 @@ const setup: NavItem[] = [
 const irrigationSetup: NavItem[] = [
   { title: "Irrigation Setup", url: "/irrigation/setup", icon: Droplet },
 
+];
+
+// System-admin-only: Galcon / controller history import wizard.
+const irrigationImport: NavItem[] = [
+  { title: "Irrigation Import", url: "/irrigation/import", icon: Upload },
 ];
 
 // "Tools" — calculators / helpers
@@ -287,7 +293,11 @@ export function AppSidebar() {
 
         {renderGroup(
           "Setup",
-          visible(hasIrrigationRecords ? [...setup, ...irrigationSetup] : setup),
+          visible(
+            hasIrrigationRecords
+              ? [...setup, ...irrigationSetup, ...(isSystemAdmin ? irrigationImport : [])]
+              : setup,
+          ),
           false,
         )}
 
