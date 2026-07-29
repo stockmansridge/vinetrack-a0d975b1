@@ -44,12 +44,19 @@ import { AdminGate, AdminPageHeader } from "./_shared";
 import { UserAccessDrawer } from "@/components/admin/access/UserAccessDrawer";
 import { AcknowledgeAlertDialog } from "@/components/admin/access/accessDialogs";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AE_KEYS,
-  accessReasonLabel,
   billingSourceLabel,
   fmtDateTime,
   friendlyError,
-  platformsAllowed,
+  isTrialSource,
+  purchasePlatformLabel,
+  resolvedReasonLabel,
   useAccessUsers,
   useAdminVineyardOptions,
   useBillingAlerts,
@@ -57,6 +64,7 @@ import {
   usePlanOptions,
   type BillingAlert,
 } from "@/lib/accessEntitlementsQuery";
+
 
 const PAGE_SIZES = [25, 50, 100];
 const ALL = "__all__";
