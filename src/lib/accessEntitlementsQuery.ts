@@ -67,6 +67,12 @@ function requireKeys(rpc: string, obj: Record<string, unknown>, keys: string[]) 
   if (missing.length) throw new ContractError(rpc, `missing ${missing.join(", ")}`);
 }
 
+function requireBoolean(rpc: string, obj: Record<string, unknown>, key: string): boolean {
+  const v = obj[key];
+  if (typeof v !== "boolean") throw new ContractError(rpc, `${key} must be a boolean`);
+  return v;
+}
+
 export function isPermissionError(err: unknown): boolean {
   const e = err as { code?: string; message?: string };
   const msg = (e?.message ?? "").toLowerCase();
