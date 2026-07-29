@@ -110,6 +110,7 @@ function HealthCard({
   explanation,
   loading,
   onClick,
+  alwaysClickable,
 }: {
   title: string;
   count: number;
@@ -117,9 +118,11 @@ function HealthCard({
   explanation: string;
   loading?: boolean;
   onClick?: () => void;
+  /** Review-queue cards stay clickable at zero so the empty queue is reachable. */
+  alwaysClickable?: boolean;
 }) {
   if (loading) return <Skeleton className="h-28 w-full" />;
-  const clickable = !!onClick && count > 0;
+  const clickable = !!onClick && (count > 0 || !!alwaysClickable);
   return (
     <Card
       role={clickable ? "button" : undefined}
