@@ -757,16 +757,22 @@ function SettingsForm({
 
       <p className="text-xs text-muted-foreground">
         Rule: {COMPARISON_LABEL[comparison]} {litresToCubicLabel(litres)} · Test programs{" "}
-        {excludeTest ? "excluded" : "included"}. Changing these settings affects future previews only —
-        committed sessions never change.
+        {excludeTest ? "excluded" : "included"}. These settings apply to this vineyard and irrigation
+        controller. They will be used as the default for future imports from this controller.
+        Changing these settings affects future previews only — committed sessions never change.
       </p>
 
       <div className="flex justify-end">
-        <Button onClick={() => void submit()} disabled={save.isPending || validate.isPending}>
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => void submit()}
+          disabled={save.isPending || validate.isPending}
+        >
           {(save.isPending || validate.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Apply and continue
         </Button>
       </div>
+
     </div>
   );
 }
