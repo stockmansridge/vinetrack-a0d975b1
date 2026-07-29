@@ -208,6 +208,13 @@ export interface VintageOverview extends ReportEnvelopeBase {
 
   rainfall_mm: number | null;
   rainfall_data_complete: boolean | null;
+  // SQL 149 rainfall coverage (elapsed-days aware; server-calculated).
+  rainfall_expected_days: number | null;
+  rainfall_observed_days: number | null;
+  rainfall_missing_days: number | null;
+  rainfall_future_days: number | null;
+  rainfall_coverage_start: string | null;
+  rainfall_coverage_end: string | null;
   data_quality: DataQuality | null;
 }
 
