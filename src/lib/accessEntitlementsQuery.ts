@@ -67,6 +67,12 @@ function requireKeys(rpc: string, obj: Record<string, unknown>, keys: string[]) 
   if (missing.length) throw new ContractError(rpc, `missing ${missing.join(", ")}`);
 }
 
+function requireBoolean(rpc: string, obj: Record<string, unknown>, key: string): boolean {
+  const v = obj[key];
+  if (typeof v !== "boolean") throw new ContractError(rpc, `${key} must be a boolean`);
+  return v;
+}
+
 export function isPermissionError(err: unknown): boolean {
   const e = err as { code?: string; message?: string };
   const msg = (e?.message ?? "").toLowerCase();
@@ -204,7 +210,7 @@ export function platformsAllowed(a: {
     a.can_use_ios_app ? "iOS" : null,
     a.can_use_android_app ? "Android" : null,
   ].filter(Boolean);
-  return list.length ? list.join(", ") : "None";
+  return list.length ? list.join(", ") : "No platforms";
 }
 
 
@@ -433,6 +439,10 @@ export interface AccessUserRow {
   licence_count: number;
   review_status: string | null;
   last_verified_at: string | null;
+  /** SQL 146: non-null booleans on every row. */
+  portal_access: boolean;
+  can_use_ios_app: boolean;
+  can_use_android_app: boolean;
   total_count: number;
 }
 
@@ -500,6 +510,9 @@ export function useAccessUsers(params: AccessUsersParams) {
           licence_count: n(r.licence_count),
           review_status: s(r.review_status),
           last_verified_at: s(r.last_verified_at),
+          portal_access: requireBoolean(rpc, r, "portal_access"),
+          can_use_ios_app: requireBoolean(rpc, r, "can_use_ios_app"),
+          can_use_android_app: requireBoolean(rpc, r, "can_use_android_app"),
           total_count: n(r.total_count),
         } satisfies AccessUserRow;
       });
