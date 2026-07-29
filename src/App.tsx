@@ -97,6 +97,7 @@ import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
 import EmailDiagnosticsPage from "./pages/admin/EmailDiagnosticsPage";
 import BillingPage from "./pages/BillingPage";
+import AccountBillingPage from "./pages/account/BillingPage";
 
 const queryClient = new QueryClient();
 
@@ -216,6 +217,7 @@ const App = () => (
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/billing" element={<BillingPage />} />
+                    <Route path="/account/billing" element={<AccountBillingPage />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
                     <Route element={<RequireIrrigationCapability capability="can_import_irrigation" />}>
                       <Route path="/irrigation/import" element={<IrrigationImportPage />} />
