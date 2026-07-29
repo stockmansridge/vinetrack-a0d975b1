@@ -433,6 +433,10 @@ export interface AccessUserRow {
   licence_count: number;
   review_status: string | null;
   last_verified_at: string | null;
+  /** SQL 146: non-null booleans on every row. */
+  portal_access: boolean;
+  can_use_ios_app: boolean;
+  can_use_android_app: boolean;
   total_count: number;
 }
 
