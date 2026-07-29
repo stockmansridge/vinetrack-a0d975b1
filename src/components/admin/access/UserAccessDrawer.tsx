@@ -22,18 +22,22 @@ import {
   type LicencePoolOption,
 } from "./accessDialogs";
 import {
-  accessReasonLabel,
   billingSourceLabel,
   fmtDateTime,
   friendlyError,
   grantTypeLabel,
+  historyEventLabel,
+  isTrialSource,
   platformsAllowed,
+  purchasePlatformLabel,
+  resolvedReasonLabel,
   useUserAccessDetail,
   useUserAccessHistory,
   type BillingSource,
   type LicenceHeld,
   type Membership,
 } from "@/lib/accessEntitlementsQuery";
+
 
 function humanise(v: string | null | undefined, fallback = "—") {
   if (!v) return fallback;
