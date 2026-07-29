@@ -407,7 +407,7 @@ export default function IrrigationReportsPage() {
           <ReportSection<PeriodRow>
             {...shared}
             title="Monthly water use"
-            description="每 month of the vintage window, including rainfall comparison."
+            description="Each month of the vintage window, including rainfall comparison."
             fileSlug="irrigation-monthly"
             envelope={monthly.data}
             rows={monthly.data?.rows}
@@ -968,7 +968,12 @@ export default function IrrigationReportsPage() {
                     : r.rainfall_data_complete
                       ? "Complete"
                       : "Incomplete",
-                exportValue: (r) => r.rainfall_data_complete,
+                exportValue: (r) =>
+                  r.rainfall_data_complete == null
+                    ? null
+                    : r.rainfall_data_complete
+                      ? "Complete"
+                      : "Incomplete",
               },
             ]}
           />
