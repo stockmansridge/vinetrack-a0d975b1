@@ -210,7 +210,7 @@ export function platformsAllowed(a: {
     a.can_use_ios_app ? "iOS" : null,
     a.can_use_android_app ? "Android" : null,
   ].filter(Boolean);
-  return list.length ? list.join(", ") : "None";
+  return list.length ? list.join(", ") : "No platforms";
 }
 
 

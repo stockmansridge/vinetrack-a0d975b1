@@ -63,6 +63,7 @@ import {
   useBillingMonitor,
   usePlanOptions,
   type BillingAlert,
+  platformsAllowed,
 } from "@/lib/accessEntitlementsQuery";
 
 
