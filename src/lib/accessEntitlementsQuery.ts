@@ -246,6 +246,8 @@ export const AE_KEYS = {
   grants: ["admin", "access-entitlements", "grants"] as const,
   vineyards: ["admin", "access-entitlements", "vineyards"] as const,
   plans: ["admin", "access-entitlements", "plans"] as const,
+  pools: ["admin", "access-entitlements", "licence-pools"] as const,
+
 };
 
 /* ------------------------------------------------------------------ */
