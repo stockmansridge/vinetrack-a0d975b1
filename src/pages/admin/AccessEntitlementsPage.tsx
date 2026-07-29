@@ -717,10 +717,28 @@ export default function AccessEntitlementsPage() {
                   <TableHead>User</TableHead>
                   <TableHead>Vineyards</TableHead>
                   <TableHead>Access</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead>
+                    <HeadInfo label="Reason" hint="Why the backend granted or withheld access, including trial states." />
+                  </TableHead>
                   <TableHead>Plan</TableHead>
-                  <TableHead>Billing source</TableHead>
-                  <TableHead>Platforms</TableHead>
+                  <TableHead>
+                    <HeadInfo
+                      label="Source"
+                      hint="Where the entitlement comes from: an account trial, a licence, a subscription or a manual grant."
+                    />
+                  </TableHead>
+                  <TableHead>
+                    <HeadInfo
+                      label="Purchase platform"
+                      hint="Where the paid subscription was bought. Trials and manual grants have no purchase platform."
+                    />
+                  </TableHead>
+                  <TableHead>
+                    <HeadInfo
+                      label="Available platforms"
+                      hint="Portal, iOS and Android entitlements are resolved per user. Open a user to see them."
+                    />
+                  </TableHead>
                   <TableHead>Last verified</TableHead>
                 </TableRow>
               </TableHeader>
@@ -743,21 +761,28 @@ export default function AccessEntitlementsPage() {
                     <TableCell>
                       <AccessBadge granted={r.has_access} />
                     </TableCell>
-                    <TableCell className="text-sm">{accessReasonLabel(r.reason_code)}</TableCell>
+                    <TableCell className="text-sm">
+                      {resolvedReasonLabel({
+                        reason_code: r.reason_code,
+                        access_source: r.access_source,
+                      })}
+                    </TableCell>
                     <TableCell className="text-sm">{humanise(r.plan_code)}</TableCell>
                     <TableCell className="text-sm">
-                      {billingSourceLabel(r.access_source ?? r.billing_provider)}
+                      {isTrialSource(r.access_source)
+                        ? "Account trial"
+                        : billingSourceLabel(r.access_source ?? r.billing_provider)}
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {platformsAllowed({
-                        portal_access: r.portal_access,
-                        can_use_ios_app: r.can_use_ios_app,
-                        can_use_android_app: r.can_use_android_app,
-                      })}
+                    <TableCell className="text-sm">
+                      {purchasePlatformLabel(r.purchase_platform)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      Open user
                     </TableCell>
                     <TableCell className="text-xs">{fmtDateTime(r.last_verified_at)}</TableCell>
                   </TableRow>
                 ))}
+
               </TableBody>
             </Table>
           )}
