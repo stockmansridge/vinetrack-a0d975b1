@@ -19,7 +19,7 @@ import {
   RefreshEntitlementDialog,
   RemoveLicenceDialog,
   RevokeGrantDialog,
-  type LicencePoolOption,
+
 } from "./accessDialogs";
 import {
   billingSourceLabel,
@@ -412,7 +412,6 @@ export function UserAccessDrawer({
         onOpenChange={setAssignOpen}
         userId={userId}
         userLabel={userLabel}
-        pools={pools}
       />
       <ExtendGrantDialog
         open={!!extendTarget}
