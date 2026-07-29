@@ -129,6 +129,10 @@ export interface ImportValve {
   mapping_id?: string | null;
   irrigation_valve_id?: string | null;
   vinetrack_valve_name?: string | null;
+  is_ignored?: boolean | null;
+  mapping_source?: string | null;
+  valve_is_active?: boolean | null;
+
   name_changed?: boolean;
   previous_external_name?: string | null;
   suggested_valve_id?: string | null;
