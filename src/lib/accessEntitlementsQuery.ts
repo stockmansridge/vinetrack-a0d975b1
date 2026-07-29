@@ -788,6 +788,7 @@ export function useUserAccessDetail(userId: string | null) {
           ),
         },
         open_alerts: requireArray(`${rpc}.open_alerts`, o.open_alerts ?? []),
+        generated_at: s(o.generated_at),
       };
     },
   });
@@ -800,6 +801,25 @@ export interface AccessHistoryEvent {
   platform: string | null;
   detail: Record<string, unknown> | null;
 }
+
+/** SQL 143/144 history event vocabulary, plus the pre-existing billing events. */
+export const HISTORY_EVENT_LABEL: Record<string, string> = {
+  account_created: "Account created",
+  trial_started: "Account trial started",
+  trial_migrated: "Trial migrated to shared entitlement system",
+  trial_expired: "Account trial expired",
+  trial_revoked: "Account trial revoked",
+  trial_converted: "Access converted from trial to paid subscription",
+  licence_assigned: "Licence assigned",
+  licence_removed: "Licence removed",
+  grant_created: "Billing grant created",
+  grant_extended: "Billing grant extended",
+  grant_revoked: "Billing grant revoked",
+  entitlement_refreshed: "Entitlement recalculated",
+};
+
+export const historyEventLabel = (e: string | null | undefined) =>
+  labelFor(HISTORY_EVENT_LABEL, e);
 
 export function useUserAccessHistory(userId: string | null, limit = 50) {
   return useQuery({
@@ -823,6 +843,117 @@ export function useUserAccessHistory(userId: string | null, limit = 50) {
     },
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Global licence pools (SQL 145)                                      */
+/* ------------------------------------------------------------------ */
+
+/** Verified live against admin_available_licence_pools (July 2026). Seat maths,
+ *  assignability and the blocking reason are all server-computed. */
+export interface LicencePool {
+  subscription_id: string;
+  billing_owner_user_id: string;
+  billing_owner_name: string | null;
+  billing_owner_email: string | null;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  plan_code: string | null;
+  subscription_status: string | null;
+  billing_source: string | null;
+  provider: string | null;
+  licence_limit: number | null;
+  assigned_licences: number;
+  available_licences: number | null;
+  is_unlimited: boolean;
+  starts_at: string | null;
+  current_period_end: string | null;
+  expires_at: string | null;
+  is_assignable: boolean;
+  not_assignable_reason: string | null;
+  total_count: number;
+}
+
+export interface LicencePoolParams {
+  search?: string | null;
+  vineyardId?: string | null;
+  planCode?: string | null;
+  billingOwnerUserId?: string | null;
+  hasAvailableSeats?: boolean | null;
+  limit?: number;
+  offset?: number;
+  enabled?: boolean;
+}
+
+export function useLicencePools(params: LicencePoolParams = {}) {
+  const limit = params.limit ?? 25;
+  const offset = params.offset ?? 0;
+  const args = {
+    p_search: params.search?.trim() || null,
+    p_vineyard_id: params.vineyardId ?? null,
+    p_plan_code: params.planCode ?? null,
+    p_billing_owner_user_id: params.billingOwnerUserId ?? null,
+    p_has_available_seats: params.hasAvailableSeats ?? null,
+    p_limit: limit,
+    p_offset: offset,
+  };
+  return useQuery({
+    queryKey: [...AE_KEYS.pools, args],
+    enabled: params.enabled !== false,
+    staleTime: 15_000,
+    retry: false,
+    placeholderData: (prev) => prev,
+    queryFn: async (): Promise<{ pools: LicencePool[]; total: number }> => {
+      const rpc = "admin_available_licence_pools";
+      const rows = requireArray(rpc, await adminRpc(rpc, args));
+      const pools = rows.map((r) => {
+        requireKeys(rpc, r, [
+          "subscription_id",
+          "billing_owner_user_id",
+          "plan_code",
+          "licence_limit",
+          "assigned_licences",
+          "available_licences",
+          "is_unlimited",
+          "is_assignable",
+          "not_assignable_reason",
+          "total_count",
+        ]);
+        return {
+          subscription_id: String(r.subscription_id),
+          billing_owner_user_id: String(r.billing_owner_user_id),
+          billing_owner_name: s(r.billing_owner_name),
+          billing_owner_email: s(r.billing_owner_email),
+          vineyard_id: s(r.vineyard_id),
+          vineyard_name: s(r.vineyard_name),
+          plan_code: s(r.plan_code),
+          subscription_status: s(r.subscription_status),
+          billing_source: s(r.billing_source),
+          provider: s(r.provider),
+          licence_limit: r.licence_limit == null ? null : n(r.licence_limit),
+          assigned_licences: n(r.assigned_licences),
+          available_licences: r.available_licences == null ? null : n(r.available_licences),
+          is_unlimited: r.is_unlimited === true,
+          starts_at: s(r.starts_at),
+          current_period_end: s(r.current_period_end),
+          expires_at: s(r.expires_at),
+          is_assignable: r.is_assignable === true,
+          not_assignable_reason: s(r.not_assignable_reason),
+          total_count: n(r.total_count),
+        } satisfies LicencePool;
+      });
+      return { pools, total: pools[0]?.total_count ?? 0 };
+    },
+  });
+}
+
+/** Server-provided seat summary — never recalculated in the browser. */
+export function poolSeatSummary(p: LicencePool): string {
+  if (p.is_unlimited) return `${p.assigned_licences} assigned · Unlimited available`;
+  return `${p.assigned_licences} of ${p.licence_limit ?? 0} licences assigned · ${
+    p.available_licences ?? 0
+  } available`;
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Billing grants (SQL 141)                                            */
