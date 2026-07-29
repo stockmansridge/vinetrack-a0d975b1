@@ -730,6 +730,7 @@ export function useUserAccessDetail(userId: string | null) {
           can_use_android_app: b(ea.can_use_android_app),
           unlimited_licences: b(ea.unlimited_licences),
           trial_end: s(ea.trial_end),
+          expires_at: s(ea.expires_at),
           grace_period_end: s(ea.grace_period_end),
           current_period_end: s(ea.current_period_end),
           cancel_at_period_end: b(ea.cancel_at_period_end),
@@ -737,6 +738,18 @@ export function useUserAccessDetail(userId: string | null) {
           manual_grant_expires_at: s(ea.manual_grant_expires_at),
           last_verified_at: s(ea.last_verified_at),
         },
+        account_trial: trialRaw
+          ? {
+              status: s(trialRaw.status),
+              source_type: s(trialRaw.source_type),
+              created_from: s(trialRaw.created_from),
+              is_persisted: trialRaw.is_persisted === true,
+              is_currently_valid: trialRaw.is_currently_valid === true,
+              trial_started_at: s(trialRaw.trial_started_at),
+              trial_ends_at: s(trialRaw.trial_ends_at),
+            }
+          : null,
+
         billing_sources: requireArray(`${rpc}.billing_sources`, o.billing_sources).map((r) => ({
           subscription_id: String(r.subscription_id ?? ""),
           plan_code: s(r.plan_code),
