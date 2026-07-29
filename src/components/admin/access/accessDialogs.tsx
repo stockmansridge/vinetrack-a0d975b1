@@ -25,10 +25,12 @@ import {
   type GrantType,
   fmtDateTime,
   grantTypeLabel,
+  poolSeatSummary,
   useAcknowledgeAlert,
   useAssignLicence,
   useCreateBillingGrant,
   useExtendBillingGrant,
+  useLicencePools,
   useRefreshUserEntitlement,
   useRemoveLicence,
   useRevokeBillingGrant,
@@ -38,6 +40,12 @@ function errMsg(err: unknown): string {
   const e = err as { message?: string; hint?: string };
   return e?.message ?? String(err);
 }
+
+function humaniseLabel(v: string | null | undefined, fallback = "—") {
+  if (!v) return fallback;
+  return v.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 
 export function Field({
   label,
