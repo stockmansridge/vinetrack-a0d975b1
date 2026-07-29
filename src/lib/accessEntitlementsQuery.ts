@@ -365,21 +365,33 @@ export interface AccessUserVineyard {
   role: string;
 }
 
+/** Verified live against admin_access_users (SQL 144, July 2026). */
 export interface AccessUserRow {
   user_id: string;
   email: string | null;
   full_name: string | null;
+  email_confirmed: boolean;
+  is_disabled: boolean;
+  is_system_admin: boolean;
+  account_created_at: string | null;
+  last_sign_in_at: string | null;
+  vineyards: AccessUserVineyard[];
   has_access: boolean;
   reason_code: string | null;
   access_source: string | null;
   plan_code: string | null;
+  plan_name: string | null;
   billing_provider: string | null;
+  purchase_platform: string | null;
+  product_id: string | null;
   subscription_status: string | null;
-  portal_access: boolean | null;
-  can_use_ios_app: boolean | null;
-  can_use_android_app: boolean | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean | null;
+  manual_override: boolean | null;
+  unlimited_licences: boolean;
+  licence_count: number;
+  review_status: string | null;
   last_verified_at: string | null;
-  vineyards: AccessUserVineyard[];
   total_count: number;
 }
 
@@ -405,33 +417,56 @@ export function useAccessUsers(params: AccessUsersParams) {
         }),
       );
       const mapped = rows.map((r) => {
-        requireKeys(rpc, r, ["user_id", "email", "has_access", "reason_code", "total_count"]);
+        requireKeys(rpc, r, [
+          "user_id",
+          "email",
+          "has_access",
+          "reason_code",
+          "access_source",
+          "plan_code",
+          "purchase_platform",
+          "subscription_status",
+          "review_status",
+          "total_count",
+        ]);
         return {
           user_id: String(r.user_id),
-          email: (r.email as string) ?? null,
-          full_name: (r.full_name as string) ?? null,
-          has_access: r.has_access === true,
-          reason_code: (r.reason_code as string) ?? null,
-          access_source: (r.access_source as string) ?? null,
-          plan_code: (r.plan_code as string) ?? null,
-          billing_provider: (r.billing_provider as string) ?? null,
-          subscription_status: (r.subscription_status as string) ?? null,
-          portal_access: (r.portal_access as boolean) ?? null,
-          can_use_ios_app: (r.can_use_ios_app as boolean) ?? null,
-          can_use_android_app: (r.can_use_android_app as boolean) ?? null,
-          last_verified_at: (r.last_verified_at as string) ?? null,
+          email: s(r.email),
+          full_name: s(r.full_name),
+          email_confirmed: r.email_confirmed === true,
+          is_disabled: r.is_disabled === true,
+          is_system_admin: r.is_system_admin === true,
+          account_created_at: s(r.account_created_at),
+          last_sign_in_at: s(r.last_sign_in_at),
           vineyards: requireArray(rpc, r.vineyards ?? []).map((v) => ({
             vineyard_id: String(v.vineyard_id ?? ""),
             name: String(v.name ?? ""),
             role: String(v.role ?? ""),
           })),
-          total_count: Number(r.total_count ?? 0),
+          has_access: r.has_access === true,
+          reason_code: s(r.reason_code),
+          access_source: s(r.access_source),
+          plan_code: s(r.plan_code),
+          plan_name: s(r.plan_name),
+          billing_provider: s(r.billing_provider),
+          purchase_platform: s(r.purchase_platform),
+          product_id: s(r.product_id),
+          subscription_status: s(r.subscription_status),
+          current_period_end: s(r.current_period_end),
+          cancel_at_period_end: b(r.cancel_at_period_end),
+          manual_override: b(r.manual_override),
+          unlimited_licences: r.unlimited_licences === true,
+          licence_count: n(r.licence_count),
+          review_status: s(r.review_status),
+          last_verified_at: s(r.last_verified_at),
+          total_count: n(r.total_count),
         } satisfies AccessUserRow;
       });
       return { rows: mapped, total: mapped[0]?.total_count ?? 0 };
     },
   });
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Filter option sources                                               */
