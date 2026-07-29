@@ -99,9 +99,18 @@ Deno.serve(async (req: Request) => {
   const localServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const iosUrl = Deno.env.get("VINETRACK_SUPABASE_URL");
   const iosServiceKey = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY");
-  if (!localUrl || !localServiceKey || !iosUrl || !iosServiceKey) {
-    return jsonResponse({ error: "Support email sync is not configured" }, 503);
+  const missing = [
+    ["SUPABASE_URL", localUrl],
+    ["SUPABASE_SERVICE_ROLE_KEY", localServiceKey],
+    ["VINETRACK_SUPABASE_URL", iosUrl],
+    ["VINETRACK_SERVICE_ROLE_KEY", iosServiceKey],
+  ].filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length) {
+    // Names only — never log secret values.
+    console.error("Support email sync missing configuration", { missing });
+    return jsonResponse({ error: "Support email sync is not configured", missing }, 503);
   }
+
 
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.toLowerCase().startsWith("bearer ")) {
