@@ -79,6 +79,8 @@ export default function IrrigationImportPage() {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
   const [ackOpen, setAckOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+
 
   const providersQ = useImportProviders();
   const parse = useParseImportFile();
