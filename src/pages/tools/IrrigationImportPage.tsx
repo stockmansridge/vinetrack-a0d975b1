@@ -80,7 +80,7 @@ export default function IrrigationImportPage() {
   const controllerName = parseResult?.file?.unit_name ?? parseResult?.batch?.external_controller_name ?? null;
   const revalidationOnly = !!parseResult?.duplicate_file;
 
-  const settingsQ = useImportProviderSettings(selectedVineyardId, provider ?? "galcon_gsi", controllerKey);
+  const settingsQ = useImportProviderSettings(selectedVineyardId, provider, controllerKey);
   const previewQ = useImportPreview(batchId);
   const batchQ = useImportBatch(batchId);
   const valvesQ = useImportValves(batchId);
@@ -241,13 +241,17 @@ export default function IrrigationImportPage() {
                   settingsQ.data?.minimum_volume_litres ??
                   preview?.threshold_litres ??
                   selectedProvider?.default_import_thresholds?.minimum_import_volume_litres ??
-                  1000,
+                  null,
                 volume_comparison:
                   settingsQ.data?.volume_comparison ??
                   preview?.volume_comparison ??
+                  selectedProvider?.default_import_thresholds?.comparison ??
                   "greater_than",
                 exclude_test_programs:
-                  settingsQ.data?.exclude_test_programs ?? preview?.exclude_test_programs ?? true,
+                  settingsQ.data?.exclude_test_programs ??
+                  preview?.exclude_test_programs ??
+                  selectedProvider?.default_import_thresholds?.exclude_test_programs ??
+                  true,
               }}
               onDone={() => setStep("valves")}
             />
@@ -282,6 +286,7 @@ export default function IrrigationImportPage() {
           )}
           <ImportRowReview
             batchId={batchId}
+            providerLabel={selectedProvider?.display_name ?? provider ?? ""}
             thresholdLitres={preview?.threshold_litres}
             volumeComparison={preview?.volume_comparison}
             thresholdExplanation={preview?.threshold_explanation}
@@ -505,10 +510,12 @@ function SettingsForm({
   controllerKey: string;
   controllerName: string | null;
   batchId: string;
-  initial: { minimum_volume_litres: number; volume_comparison: VolumeComparison; exclude_test_programs: boolean };
+  initial: { minimum_volume_litres: number | null; volume_comparison: VolumeComparison; exclude_test_programs: boolean };
   onDone: () => void;
 }) {
-  const [cubic, setCubic] = useState(String((initial.minimum_volume_litres ?? 1000) / 1000));
+  const [cubic, setCubic] = useState(
+    initial.minimum_volume_litres == null ? "" : String(initial.minimum_volume_litres / 1000),
+  );
   const [comparison, setComparison] = useState<VolumeComparison>(initial.volume_comparison);
   const [excludeTest, setExcludeTest] = useState(initial.exclude_test_programs);
   const save = useSaveImportProviderSettings();

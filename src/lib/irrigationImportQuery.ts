@@ -333,12 +333,14 @@ export function useParseImportFile() {
     mutationFn: async (args: {
       vineyardId: string;
       provider: string;
+      /** Edge Function name from the provider registry (`parser_edge_function`). */
+      parserEdgeFunction: string;
       file: File;
       timezone?: string;
       allowRevalidation?: boolean;
     }): Promise<ParseResult> => {
       const file_base64 = await fileToBase64(args.file);
-      const { data, error } = await supabase.functions.invoke("parse-galcon-irrigation-import", {
+      const { data, error } = await supabase.functions.invoke(args.parserEdgeFunction, {
         body: {
           vineyard_id: args.vineyardId,
           provider: args.provider,
