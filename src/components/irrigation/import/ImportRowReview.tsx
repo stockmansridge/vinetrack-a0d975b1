@@ -286,7 +286,7 @@ function OverrideDialog({
         rowId: row.id,
         overrideThreshold: !isTest,
         overrideTest: isTest,
-        reason: reason.trim() || "Included by System Administrator after review",
+        reason: reason.trim() || "Included after review",
       });
       toast.success("Event included in this import.");
       setReason("");

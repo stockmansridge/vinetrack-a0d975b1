@@ -181,7 +181,7 @@ export default function IrrigationImportPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Irrigation import</h1>
         <p className="text-sm text-muted-foreground">
           Import controller irrigation history into VineTrack
-          {vineyardName ? ` for ${vineyardName}` : ""}. System Administrators only.
+          {vineyardName ? ` for ${vineyardName}` : ""}.
         </p>
       </header>
 
