@@ -285,12 +285,12 @@ export function useImportProviders() {
 
 export function useImportProviderSettings(
   vineyardId: string | null,
-  provider: string,
+  provider: string | null,
   controllerKey: string | null,
 ) {
   return useQuery({
-    queryKey: ["irrigation-import", "settings", vineyardId, provider, controllerKey ?? ""],
-    enabled: !!vineyardId,
+    queryKey: ["irrigation-import", "settings", vineyardId, provider ?? "", controllerKey ?? ""],
+    enabled: !!vineyardId && !!provider,
     queryFn: async () =>
       (await call<ImportProviderSettings>("get_irrigation_import_provider_settings", {
         p_vineyard_id: vineyardId,

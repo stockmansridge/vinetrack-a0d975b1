@@ -200,6 +200,8 @@ export default function IrrigationImportPage() {
               const result = await parse.mutateAsync({
                 vineyardId: selectedVineyardId,
                 provider,
+                parserEdgeFunction:
+                  selectedProvider?.parser_edge_function ?? `parse-${provider.replace(/_/g, "-")}-import`,
                 file,
                 timezone: browserTimezone(),
                 allowRevalidation,
@@ -562,7 +564,8 @@ function SettingsForm({
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
                 Events below this quantity are excluded, which helps exclude controller tests and very
-                short runs. The default is more than 1.0 m³ — exactly 1.0 m³ does not pass.
+                short runs. The saved value for this vineyard, provider and controller is used; the
+                provider default applies until you change it.
               </TooltipContent>
             </Tooltip>
           </Label>

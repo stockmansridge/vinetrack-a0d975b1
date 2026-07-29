@@ -63,6 +63,7 @@ function exclusionExplanation(
   thresholdLitres: number | null | undefined,
   comparison: VolumeComparison | null | undefined,
   fallback?: string | null,
+  providerLabel?: string,
 ): string | null {
   const water = row.parsed_water_litres;
   if (row.classification === "at_volume_threshold") {
@@ -73,7 +74,7 @@ function exclusionExplanation(
   if (row.classification === "below_volume_threshold") {
     return `This event was not selected because its reported water quantity is ${litresToCubicLabel(
       water,
-    )}. The Galcon import minimum is ${
+    )}. The ${providerLabel ?? "import"} minimum is ${
       COMPARISON_LABEL[comparison ?? "greater_than"]
     } ${litresToCubicLabel(thresholdLitres)}, which helps exclude controller tests and very short runs.`;
   }
@@ -298,7 +299,7 @@ function OverrideDialog({
           <DialogDescription>
             {isTest
               ? "This event belongs to a Test program and is excluded by default."
-              : "This event is below the Galcon minimum-volume threshold and may represent a test or short diagnostic run."}
+              : `This event is below the ${providerLabel ?? "import"} minimum-volume threshold and may represent a test or short diagnostic run.`}
           </DialogDescription>
         </DialogHeader>
         {explanation && (
