@@ -89,8 +89,10 @@ export function ImportRowReview({
   thresholdLitres,
   volumeComparison,
   thresholdExplanation,
+  providerLabel,
 }: {
   batchId: string;
+  providerLabel?: string;
   thresholdLitres?: number | null;
   volumeComparison?: VolumeComparison | null;
   thresholdExplanation?: string | null;
@@ -158,7 +160,7 @@ export function ImportRowReview({
                 const reasons = [row.primary_exclusion_reason, ...(row.additional_reason_codes ?? [])]
                   .filter(Boolean)
                   .map((r) => humanise(String(r)));
-                const explanation = exclusionExplanation(row, thresholdLitres, volumeComparison, thresholdExplanation);
+                const explanation = exclusionExplanation(row, thresholdLitres, volumeComparison, thresholdExplanation, providerLabel);
                 const canOverride =
                   row.validation_status === "excluded" &&
                   ["below_volume_threshold", "at_volume_threshold", "test"].includes(row.classification);
@@ -255,6 +257,7 @@ export function ImportRowReview({
       <OverrideDialog
         row={overrideRow?.row ?? null}
         explanation={overrideRow?.explanation ?? null}
+        providerLabel={providerLabel}
         onClose={() => setOverrideRow(null)}
       />
     </Card>
@@ -264,10 +267,12 @@ export function ImportRowReview({
 function OverrideDialog({
   row,
   explanation,
+  providerLabel,
   onClose,
 }: {
   row: ImportRow | null;
   explanation: string | null;
+  providerLabel?: string;
   onClose: () => void;
 }) {
   const [reason, setReason] = useState("");
