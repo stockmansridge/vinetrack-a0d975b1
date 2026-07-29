@@ -525,7 +525,34 @@ export default function AccessEntitlementsPage() {
 
           </div>
         )}
+        {(monitor?.recent_review_actions?.length ?? 0) > 0 && (
+          <Card className="mt-3 p-3">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h3 className="text-xs font-semibold">Recent review actions</h3>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={() => setReviewType("event")}
+              >
+                Open Billing Review
+              </Button>
+            </div>
+            <ul className="space-y-1">
+              {(monitor?.recent_review_actions ?? []).slice(0, 5).map((a, i) => (
+                <li key={`${a.item_id}-${i}`} className="text-xs text-muted-foreground">
+                  <span className="text-foreground">{humanise(a.event_type)}</span>
+                  {a.item_type ? ` · ${humanise(a.item_type)}` : ""}
+                  {a.outcome ? ` · ${humanise(a.outcome)}` : ""}
+                  {a.reason ? ` · ${a.reason}` : ""}
+                  {a.created_at ? ` · ${fmtDateTime(a.created_at)}` : ""}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </section>
+
 
       {/* Alert inbox */}
       <section className="mb-6">
