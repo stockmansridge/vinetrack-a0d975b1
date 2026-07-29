@@ -915,6 +915,15 @@ export default function AccessEntitlementsPage() {
         explanation={activeCard?.explanation ?? ""}
         items={activeCard?.items ?? []}
       />
+
+      <BillingReviewPanel
+        itemType={reviewType}
+        onOpenChange={(o) => !o && setReviewType(null)}
+        onViewUser={(id) => {
+          setReviewType(null);
+          setSelectedUser(id);
+        }}
+      />
     </AdminGate>
   );
 }
