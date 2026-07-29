@@ -106,7 +106,7 @@ function StatusLine({
   );
 }
 
-export function SupportRequestSheet({ open, onOpenChange }: Props) {
+export function SupportRequestSheet({ open, onOpenChange, prefill }: Props) {
 
   const { user } = useAuth();
   const { selectedVineyardId, memberships, currentRole } = useVineyard();
