@@ -105,6 +105,21 @@ export default function IrrigationImportPage() {
     [providersQ.data, provider],
   );
 
+  const providerHelp = useMemo(
+    () =>
+      resolveProviderHelp(
+        provider,
+        selectedProvider as unknown as {
+          display_name?: string | null;
+          import_instructions?: unknown;
+          help_steps?: unknown;
+        } | null,
+      ),
+    [provider, selectedProvider],
+  );
+
+
+
   // Reset the whole wizard when the vineyard changes — batches are per vineyard.
   const lastVineyard = useRef(selectedVineyardId);
   useEffect(() => {
