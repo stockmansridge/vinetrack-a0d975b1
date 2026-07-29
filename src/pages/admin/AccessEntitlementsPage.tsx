@@ -754,7 +754,7 @@ export default function AccessEntitlementsPage() {
                   <TableHead>
                     <HeadInfo
                       label="Available platforms"
-                      hint="Portal, iOS and Android entitlements are resolved per user. Open a user to see them."
+                      hint="The VineTrack platforms this account may currently use according to the shared entitlement resolver."
                     />
                   </TableHead>
                   <TableHead>Last verified</TableHead>
@@ -794,8 +794,12 @@ export default function AccessEntitlementsPage() {
                     <TableCell className="text-sm">
                       {purchasePlatformLabel(r.purchase_platform)}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      Open user
+                    <TableCell className="text-sm">
+                      {platformsAllowed({
+                        portal_access: r.portal_access,
+                        can_use_ios_app: r.can_use_ios_app,
+                        can_use_android_app: r.can_use_android_app,
+                      })}
                     </TableCell>
                     <TableCell className="text-xs">{fmtDateTime(r.last_verified_at)}</TableCell>
                   </TableRow>
