@@ -468,8 +468,11 @@ export default function AccessEntitlementsPage() {
         title="Access & Entitlements"
         subtitle="Review user access, subscriptions, licence assignments, billing grants and billing issues across VineTrack."
         actions={
-          <Button variant="outline" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+          <Button variant="outline" onClick={refreshAll} disabled={refreshState === "busy"}>
+            <RefreshCw
+              className={`h-4 w-4 mr-1 ${refreshState === "busy" ? "animate-spin" : ""}`}
+            />
+            {refreshState === "busy" ? "Refreshing…" : refreshState === "done" ? "Refreshed" : "Refresh"}
           </Button>
         }
       />
