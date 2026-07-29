@@ -549,6 +549,8 @@ function UploadStep({
   provider,
   providerLabel,
   accept,
+  maxBytes,
+  help,
   busy,
   onUpload,
   result,
@@ -556,12 +558,15 @@ function UploadStep({
   provider: string;
   providerLabel: string;
   accept: string[];
+  maxBytes: number | null;
+  help: ProviderHelp | null;
   busy: boolean;
   onUpload: (file: File, allowRevalidation: boolean) => Promise<void>;
   result: ParseResult | null;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [allowRevalidation, setAllowRevalidation] = useState(false);
+  const maxMb = maxBytes ? Math.round(maxBytes / 1048576) : null;
 
   return (
     <Card>
@@ -573,11 +578,35 @@ function UploadStep({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Input
-          type="file"
-          accept={accept.map((a) => `.${a}`).join(",")}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
+        {help && <ProviderInstructions help={help} />}
+
+        <div className="space-y-2">
+          <Label htmlFor="import-file" className="flex items-center gap-1.5">
+            Controller export file
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label="About the export file">
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                Upload the original controller export without editing its columns or headings.
+              </TooltipContent>
+            </Tooltip>
+          </Label>
+          <Input
+            id="import-file"
+            type="file"
+            accept={accept.map((a) => `.${a}`).join(",")}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Upload the original controller export without editing its columns or headings. Supported
+            formats: {accept.map((a) => a.toUpperCase()).join(" and ")}
+            {maxMb ? `. Maximum file size: ${maxMb} MB.` : "."}
+          </p>
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox
             checked={allowRevalidation}
