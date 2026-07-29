@@ -253,6 +253,18 @@ export const AE_KEYS = {
   vineyards: ["admin", "access-entitlements", "vineyards"] as const,
   plans: ["admin", "access-entitlements", "plans"] as const,
   pools: ["admin", "access-entitlements", "licence-pools"] as const,
+  /** SQL 148 billing review queues. */
+  reviewItemsAll: ["admin", "access-entitlements", "review-items"] as const,
+  reviewItems: (p: ReviewItemsParams) =>
+    [
+      "admin",
+      "access-entitlements",
+      "review-items",
+      p.itemType,
+      p.status,
+      p.limit,
+      p.offset,
+    ] as const,
 
 };
 
