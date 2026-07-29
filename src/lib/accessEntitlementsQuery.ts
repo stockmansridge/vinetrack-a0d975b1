@@ -277,6 +277,17 @@ export interface MonitorSection {
   recent: Record<string, unknown>[];
 }
 
+/** SQL 148: last 10 administrator review actions (no payload data). */
+export interface RecentReviewAction {
+  event_type: string;
+  item_type: string | null;
+  item_id: string | null;
+  reason: string | null;
+  outcome: string | null;
+  actor: string | null;
+  created_at: string | null;
+}
+
 export interface BillingMonitor {
   generated_at: string | null;
   open_alerts: number;
@@ -289,6 +300,7 @@ export interface BillingMonitor {
   expiring_within_7_days: Record<string, unknown>[];
   recent_status_changes: Record<string, unknown>[];
   rc_active_supabase_missing: Record<string, unknown>[];
+  recent_review_actions: RecentReviewAction[];
 }
 
 function section(rpc: string, obj: Record<string, unknown>, key: string): MonitorSection {
