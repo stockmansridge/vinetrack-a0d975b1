@@ -198,8 +198,40 @@ export function CreateGrantDialog({
               />
             </Field>
           </div>
+          <Field
+            label="Grant applies to"
+            hint={GRANT_SCOPES.find((s) => s.value === grantScope)?.help}
+          >
+            <div className="space-y-2 pt-1">
+              {GRANT_SCOPES.map((s) => (
+                <label key={s.value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="grant-scope"
+                    className="accent-primary"
+                    checked={grantScope === s.value}
+                    onChange={() => setGrantScope(s.value)}
+                  />
+                  <span>{s.label}</span>
+                </label>
+              ))}
+            </div>
+          </Field>
+          {!scopeCombinationValid && (
+            <p className="text-xs text-destructive">
+              {grantTypeLabel(grantType)} grants cannot be applied to an entire vineyard. Choose a
+              different grant type or scope.
+            </p>
+          )}
           {vineyards.length > 0 && (
-            <Field label="Vineyard (optional)">
+            <Field
+              label={grantScope === "vineyard" ? "Vineyard (required)" : "Vineyard (optional)"}
+              hint={
+                grantScope === "vineyard"
+                  ? "All active members of this vineyard inherit access while the grant is valid."
+                  : "Informational only — other members do not inherit access."
+              }
+            >
               <Select value={vineyardId} onValueChange={setVineyardId}>
                 <SelectTrigger>
                   <SelectValue placeholder="No specific vineyard" />
@@ -214,6 +246,7 @@ export function CreateGrantDialog({
               </Select>
             </Field>
           )}
+
           <label className="flex items-start gap-2 text-sm pt-1">
             <Checkbox
               checked={confirmed}
