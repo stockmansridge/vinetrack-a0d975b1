@@ -133,30 +133,33 @@ const ROW_KEYS = [
 
 function readRow(fn: string, raw: unknown): VineyardAccessRow {
   const r = obj(fn, raw);
-  need(fn, r, ROW_KEYS);
   const id = str(r.vineyard_id);
   if (!id) throw new VineyardAccessContractError(fn, "vineyard_id must be a uuid string");
+  const flag = (key: string, fallback = false): boolean =>
+    typeof r[key] === "boolean" ? (r[key] as boolean) : fallback;
+  const hasAccess = flag("has_vineyard_access", true);
   return {
     vineyard_id: id,
     vineyard_name: str(r.vineyard_name),
     membership_role: str(r.membership_role),
-    has_vineyard_access: bool(fn, r, "has_vineyard_access"),
-    can_enter_vineyard: bool(fn, r, "can_enter_vineyard"),
+    has_vineyard_access: hasAccess,
+    can_enter_vineyard: flag("can_enter_vineyard", hasAccess),
     vineyard_access_reason: str(r.vineyard_access_reason),
     vineyard_access_source: str(r.vineyard_access_source),
     plan_code: str(r.plan_code),
     subscription_status: str(r.subscription_status),
     starts_at: str(r.starts_at),
     expires_at: str(r.expires_at),
-    is_trial: bool(fn, r, "is_trial"),
-    is_vineyard_wide: bool(fn, r, "is_vineyard_wide"),
-    is_billing_owner: bool(fn, r, "is_billing_owner"),
-    can_manage_billing: bool(fn, r, "can_manage_billing"),
-    is_billing_authority: bool(fn, r, "is_billing_authority"),
-    requires_billing_attention: bool(fn, r, "requires_billing_attention"),
+    is_trial: flag("is_trial"),
+    is_vineyard_wide: flag("is_vineyard_wide"),
+    is_billing_owner: flag("is_billing_owner"),
+    can_manage_billing: flag("can_manage_billing"),
+    is_billing_authority: flag("is_billing_authority"),
+    requires_billing_attention: flag("requires_billing_attention"),
     last_verified_at: str(r.last_verified_at),
   };
 }
+
 
 function optBool(v: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
