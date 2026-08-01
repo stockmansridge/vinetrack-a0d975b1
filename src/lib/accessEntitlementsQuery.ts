@@ -1130,7 +1130,7 @@ export function useBillingGrants() {
 
 function useAfterMutation() {
   const qc = useQueryClient();
-  return (userId?: string | null) => {
+  return (userId?: string | null, vineyardId?: string | null) => {
     qc.invalidateQueries({ queryKey: AE_KEYS.usersAll });
     qc.invalidateQueries({ queryKey: AE_KEYS.grants });
     qc.invalidateQueries({ queryKey: AE_KEYS.monitor });
@@ -1141,6 +1141,8 @@ function useAfterMutation() {
       qc.invalidateQueries({ queryKey: AE_KEYS.detail(userId) });
       qc.invalidateQueries({ queryKey: AE_KEYS.history(userId) });
     }
+    // Phase 2F: vineyard-scoped access must refresh without a manual reload.
+    invalidateVineyardAccessCaches(qc, { userId, vineyardId });
   };
 }
 
@@ -1150,6 +1152,7 @@ export function useCreateBillingGrant() {
     mutationFn: (args: {
       userId: string;
       grantType: GrantType;
+      grantScope: GrantScope;
       reason: string;
       vineyardId?: string | null;
       startsAt?: string | null;
@@ -1158,14 +1161,16 @@ export function useCreateBillingGrant() {
       adminRpc<string>("admin_create_billing_grant", {
         p_owner_user_id: args.userId,
         p_grant_type: args.grantType,
+        p_grant_scope: args.grantScope,
         p_reason: args.reason,
         p_vineyard_id: args.vineyardId ?? null,
         p_starts_at: args.startsAt ?? null,
         p_expires_at: args.expiresAt ?? null,
       }),
-    onSuccess: (_d, v) => after(v.userId),
+    onSuccess: (_d, v) => after(v.userId, v.vineyardId ?? null),
   });
 }
+
 
 export function useExtendBillingGrant() {
   const after = useAfterMutation();
