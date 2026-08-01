@@ -158,31 +158,47 @@ function readRow(fn: string, raw: unknown): VineyardAccessRow {
   };
 }
 
-const SUMMARY_KEYS = [
-  "has_any_accessible_vineyard",
-  "accessible_vineyard_count",
-  "pending_invitation_count",
-  "can_create_vineyard",
-  "account_access_state",
-];
+function optBool(v: unknown): boolean | null {
+  return typeof v === "boolean" ? v : null;
+}
+
+function optNum(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
 
 function readMatrix(fn: string, raw: unknown): VineyardAccessMatrix {
   const root = obj(fn, raw);
-  const summarySource = root.summary && typeof root.summary === "object" ? obj(fn, root.summary) : root;
-  need(fn, summarySource, SUMMARY_KEYS);
-  const list = root.vineyards ?? root.rows ?? root.items;
+
+  // The account summary may arrive inline on the root object or nested under
+  // one of several wrapper keys depending on the backend revision. Rows are
+  // always authoritative, so anything the summary omits is derived from them
+  // rather than failing the whole page.
+  const nested = ["summary", "account", "account_summary"]
+    .map((k) => root[k])
+    .find((v) => v && typeof v === "object" && !Array.isArray(v)) as
+    | Record<string, unknown>
+    | undefined;
+  const s: Record<string, unknown> = { ...root, ...(nested ?? {}) };
+
+  const list = root.vineyards ?? root.rows ?? root.items ?? nested?.vineyards ?? [];
   if (!Array.isArray(list)) throw new VineyardAccessContractError(fn, "expected a vineyards array");
+  const vineyards = list.map((r) => readRow(fn, r));
+  const accessible = vineyards.filter((v) => v.can_enter_vineyard).length;
+
   return {
     summary: {
-      has_any_accessible_vineyard: bool(fn, summarySource, "has_any_accessible_vineyard"),
-      accessible_vineyard_count: num(summarySource.accessible_vineyard_count),
-      pending_invitation_count: num(summarySource.pending_invitation_count),
-      can_create_vineyard: bool(fn, summarySource, "can_create_vineyard"),
-      account_access_state: str(summarySource.account_access_state),
+      has_any_accessible_vineyard:
+        optBool(s.has_any_accessible_vineyard) ?? accessible > 0,
+      accessible_vineyard_count: optNum(s.accessible_vineyard_count) ?? accessible,
+      pending_invitation_count: optNum(s.pending_invitation_count) ?? 0,
+      can_create_vineyard: optBool(s.can_create_vineyard) ?? false,
+      account_access_state:
+        str(s.account_access_state) ?? (accessible > 0 ? "active" : "no_access"),
     },
-    vineyards: list.map((r) => readRow(fn, r)),
+    vineyards,
   };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Query keys                                                          */
