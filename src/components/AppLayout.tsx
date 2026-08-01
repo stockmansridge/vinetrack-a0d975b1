@@ -76,17 +76,34 @@ export default function AppLayout() {
             <SidebarTrigger />
             <div className="flex items-center gap-2">
               <Select value={selectedVineyardId ?? undefined} onValueChange={selectVineyard}>
-                <SelectTrigger className="w-[220px] rounded-lg">
+                <SelectTrigger className="w-[260px] rounded-lg">
                   <SelectValue placeholder="Select vineyard" />
                 </SelectTrigger>
                 <SelectContent>
-                  {memberships.map((m) => (
-                    <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
-                      {m.vineyard_name ?? m.vineyard_id}
-                    </SelectItem>
-                  ))}
+                  {memberships.map((m) => {
+                    const row = accessById.get(m.vineyard_id);
+                    const state = row ? vineyardAccessState(row) : null;
+                    return (
+                      <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
+                        <span className="flex items-center gap-2">
+                          <span>{m.vineyard_name ?? m.vineyard_id}</span>
+                          {state && state !== "accessible" && (
+                            <Badge
+                              variant={
+                                state === "trial" ? "secondary" : "outline"
+                              }
+                              className="text-[10px] font-medium"
+                            >
+                              {VINEYARD_ACCESS_STATE_LABEL[state]}
+                            </Badge>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+
               {currentRole && (
                 <Badge
                   variant="secondary"
