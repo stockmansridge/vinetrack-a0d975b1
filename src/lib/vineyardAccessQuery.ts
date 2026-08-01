@@ -42,17 +42,6 @@ function obj(fn: string, v: unknown): Record<string, unknown> {
   return v as Record<string, unknown>;
 }
 
-function need(fn: string, o: Record<string, unknown>, keys: string[]) {
-  const missing = keys.filter((k) => !(k in o));
-  if (missing.length) throw new VineyardAccessContractError(fn, `missing ${missing.join(", ")}`);
-}
-
-function bool(fn: string, o: Record<string, unknown>, key: string): boolean {
-  const v = o[key];
-  if (typeof v !== "boolean") throw new VineyardAccessContractError(fn, `${key} must be a boolean`);
-  return v;
-}
-
 function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
@@ -109,27 +98,6 @@ export interface VineyardAccessMatrix {
   summary: VineyardAccountAccessSummary;
   vineyards: VineyardAccessRow[];
 }
-
-const ROW_KEYS = [
-  "vineyard_id",
-  "vineyard_name",
-  "membership_role",
-  "has_vineyard_access",
-  "can_enter_vineyard",
-  "vineyard_access_reason",
-  "vineyard_access_source",
-  "plan_code",
-  "subscription_status",
-  "starts_at",
-  "expires_at",
-  "is_trial",
-  "is_vineyard_wide",
-  "is_billing_owner",
-  "can_manage_billing",
-  "is_billing_authority",
-  "requires_billing_attention",
-  "last_verified_at",
-];
 
 function readRow(fn: string, raw: unknown): VineyardAccessRow {
   const r = obj(fn, raw);
