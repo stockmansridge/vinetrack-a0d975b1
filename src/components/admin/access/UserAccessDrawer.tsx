@@ -37,11 +37,64 @@ import {
   type LicenceHeld,
   type Membership,
 } from "@/lib/accessEntitlementsQuery";
+import {
+  useAdminExplainVineyardAccess,
+  vineyardAccessReasonLabel,
+} from "@/lib/vineyardAccessQuery";
 
 
 function humanise(v: string | null | undefined, fallback = "—") {
   if (!v) return fallback;
   return v.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Phase 2F: access is resolved per vineyard on the server. This shows the
+ * authoritative explanation for one membership — never recomputed here.
+ */
+function VineyardAccessExplain({
+  userId,
+  vineyardId,
+}: {
+  userId: string;
+  vineyardId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, error } = useAdminExplainVineyardAccess(userId, vineyardId, open);
+
+  if (!open) {
+    return (
+      <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setOpen(true)}>
+        Explain access
+      </Button>
+    );
+  }
+
+  const canEnter = data?.can_enter_vineyard === true;
+  const reason = typeof data?.vineyard_access_reason === "string" ? data.vineyard_access_reason : null;
+
+  return (
+    <div className="mt-1 rounded-md border bg-muted/40 p-2 text-xs space-y-1">
+      {isLoading && <div className="text-muted-foreground">Checking…</div>}
+      {error && <div className="text-destructive">{friendlyError(error)}</div>}
+      {data && (
+        <>
+          <div className="flex items-center gap-1.5">
+            {canEnter ? (
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+            ) : (
+              <ShieldX className="h-3.5 w-3.5 text-destructive" />
+            )}
+            <span className="font-medium">{canEnter ? "Can enter" : "Blocked"}</span>
+            <span className="text-muted-foreground">· {vineyardAccessReasonLabel(reason)}</span>
+          </div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        </>
+      )}
+    </div>
+  );
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -324,9 +377,14 @@ export function UserAccessDrawer({
                       <p className="text-sm text-muted-foreground">No active vineyard memberships.</p>
                     ) : (
                       detail.memberships.active.map((m: Membership) => (
-                        <div key={m.vineyard_id} className="text-sm py-0.5">
-                          {m.vineyard_name ?? m.vineyard_id} —{" "}
-                          <span className="text-muted-foreground">{humanise(m.role)}</span>
+                        <div key={m.vineyard_id} className="text-sm py-1">
+                          <div>
+                            {m.vineyard_name ?? m.vineyard_id} —{" "}
+                            <span className="text-muted-foreground">{humanise(m.role)}</span>
+                          </div>
+                          {userId && (
+                            <VineyardAccessExplain userId={userId} vineyardId={m.vineyard_id} />
+                          )}
                         </div>
                       ))
                     )}
