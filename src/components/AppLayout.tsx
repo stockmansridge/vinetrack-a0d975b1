@@ -171,8 +171,11 @@ export default function AppLayout() {
               <div className="absolute inset-0 bg-gradient-to-r from-background/20 via-background/5 to-transparent" />
             </div>
             <div className="relative z-10 p-4 md:p-6 lg:p-8">
-              <Outlet />
+              <VineyardAccessGate>
+                <Outlet />
+              </VineyardAccessGate>
             </div>
+
           </main>
         </div>
       </div>
