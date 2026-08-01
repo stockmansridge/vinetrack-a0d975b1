@@ -20,8 +20,11 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
+  GRANT_SCOPES,
   GRANT_TYPES,
   GRANT_TYPES_REQUIRING_EXPIRY,
+  isGrantScopeCombinationValid,
+  type GrantScope,
   type GrantType,
   fmtDateTime,
   grantTypeLabel,
@@ -89,6 +92,7 @@ export function CreateGrantDialog({
   vineyards: { id: string; name: string }[];
 }) {
   const [grantType, setGrantType] = useState<GrantType>("internal_unlimited");
+  const [grantScope, setGrantScope] = useState<GrantScope>("user");
   const [reason, setReason] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -99,6 +103,7 @@ export function CreateGrantDialog({
   useEffect(() => {
     if (!open) {
       setGrantType("internal_unlimited");
+      setGrantScope("user");
       setReason("");
       setStartsAt("");
       setExpiresAt("");
@@ -109,6 +114,9 @@ export function CreateGrantDialog({
 
   // Backend rejects these grant types without an expiry (`expiry_required_for_grant_type`).
   const requiresExpiry = GRANT_TYPES_REQUIRING_EXPIRY.includes(grantType);
+  // Reject obviously invalid combinations up front; the backend is still the
+  // final authority on the grant-type / scope matrix.
+  const scopeCombinationValid = isGrantScopeCombinationValid(grantType, grantScope);
 
 
   const submit = async (e: React.FormEvent) => {
@@ -126,6 +134,22 @@ export function CreateGrantDialog({
       toast({ title: "Reason is required", variant: "destructive" });
       return;
     }
+    if (grantScope === "vineyard" && !vineyardId) {
+      toast({
+        title: "Vineyard required",
+        description: "Vineyard-scoped grants must target a vineyard.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!scopeCombinationValid) {
+      toast({
+        title: "Unsupported scope",
+        description: `${grantTypeLabel(grantType)} grants cannot be applied to an entire vineyard.`,
+        variant: "destructive",
+      });
+      return;
+    }
     if (requiresExpiry && !expiresAt) {
       toast({
         title: "Expiry required",
@@ -138,6 +162,7 @@ export function CreateGrantDialog({
       await mut.mutateAsync({
         userId,
         grantType,
+        grantScope,
         reason: reason.trim(),
         vineyardId: vineyardId || null,
         startsAt: toIsoOrNull(startsAt),
@@ -261,7 +286,10 @@ export function CreateGrantDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!confirmed || mut.isPending}>
+            <Button
+              type="submit"
+              disabled={!confirmed || mut.isPending || !scopeCombinationValid}
+            >
               {mut.isPending ? "Creating…" : "Create grant"}
             </Button>
           </DialogFooter>
