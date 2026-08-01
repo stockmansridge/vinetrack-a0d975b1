@@ -27,6 +27,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
+import { invalidateVineyardAccessCaches } from "@/lib/vineyardAccessQuery";
 
 /* ------------------------------------------------------------------ */
 /* Transport + strict payload guards                                   */
@@ -162,6 +163,39 @@ export type GrantType = (typeof GRANT_TYPES)[number]["value"];
 
 /** Grant types the backend rejects without an expiry date. */
 export const GRANT_TYPES_REQUIRING_EXPIRY: GrantType[] = ["temporary_access", "support_access"];
+
+/* SQL 155 — every billing grant carries an explicit scope. */
+export type GrantScope = "user" | "vineyard";
+
+export const GRANT_SCOPES: { value: GrantScope; label: string; help: string }[] = [
+  {
+    value: "user",
+    label: "This user only",
+    help: "Applies to the selected user only. Other vineyard members do not inherit access.",
+  },
+  {
+    value: "vineyard",
+    label: "An entire vineyard",
+    help: "All active members of the chosen vineyard inherit access while the grant is valid.",
+  },
+];
+
+/** Grant types the backend supports at vineyard scope (server re-validates). */
+export const VINEYARD_SCOPED_GRANT_TYPES: GrantType[] = [
+  "internal_unlimited",
+  "complimentary_team",
+  "enterprise_contract",
+  "temporary_access",
+  "support_access",
+];
+
+export function isGrantScopeCombinationValid(type: GrantType, scope: GrantScope): boolean {
+  return scope === "user" || VINEYARD_SCOPED_GRANT_TYPES.includes(type);
+}
+
+export const grantScopeLabel = (s: string | null | undefined): string =>
+  s === "vineyard" ? "Vineyard" : "User";
+
 
 function humanise(code: string): string {
   return code
@@ -1026,11 +1060,16 @@ export interface BillingGrantRow {
   revoked_reason: string | null;
   vineyard_id: string | null;
   vineyard_name: string | null;
+  /** SQL 155. Grants created before SQL 155 are user-scoped. */
+  grant_scope: GrantScope;
+  members_inherit_access: boolean;
+  revoked_by_email: string | null;
   seats_total: number;
   active_licences: number;
   unlimited_licences: boolean;
   licences_display: string | null;
   platforms_display: string | null;
+
 }
 
 export type GrantState = "active" | "revoked" | "inactive";
@@ -1070,6 +1109,11 @@ export function useBillingGrants() {
           revoked_reason: s(r.revoked_reason ?? r.manual_grant_revoked_reason),
           vineyard_id: s(r.vineyard_id),
           vineyard_name: s(r.vineyard_name),
+          grant_scope: r.grant_scope === "vineyard" ? "vineyard" : "user",
+          members_inherit_access:
+            r.members_inherit_access === true || r.grant_scope === "vineyard",
+          revoked_by_email: s(r.revoked_by_email ?? r.manual_grant_revoked_by_email),
+
           seats_total: n(r.seats_total),
           active_licences: n(r.active_licences),
           unlimited_licences: r.unlimited_licences === true,
@@ -1087,7 +1131,7 @@ export function useBillingGrants() {
 
 function useAfterMutation() {
   const qc = useQueryClient();
-  return (userId?: string | null) => {
+  return (userId?: string | null, vineyardId?: string | null) => {
     qc.invalidateQueries({ queryKey: AE_KEYS.usersAll });
     qc.invalidateQueries({ queryKey: AE_KEYS.grants });
     qc.invalidateQueries({ queryKey: AE_KEYS.monitor });
@@ -1098,6 +1142,8 @@ function useAfterMutation() {
       qc.invalidateQueries({ queryKey: AE_KEYS.detail(userId) });
       qc.invalidateQueries({ queryKey: AE_KEYS.history(userId) });
     }
+    // Phase 2F: vineyard-scoped access must refresh without a manual reload.
+    invalidateVineyardAccessCaches(qc, { userId, vineyardId });
   };
 }
 
@@ -1107,6 +1153,7 @@ export function useCreateBillingGrant() {
     mutationFn: (args: {
       userId: string;
       grantType: GrantType;
+      grantScope: GrantScope;
       reason: string;
       vineyardId?: string | null;
       startsAt?: string | null;
@@ -1115,14 +1162,16 @@ export function useCreateBillingGrant() {
       adminRpc<string>("admin_create_billing_grant", {
         p_owner_user_id: args.userId,
         p_grant_type: args.grantType,
+        p_grant_scope: args.grantScope,
         p_reason: args.reason,
         p_vineyard_id: args.vineyardId ?? null,
         p_starts_at: args.startsAt ?? null,
         p_expires_at: args.expiresAt ?? null,
       }),
-    onSuccess: (_d, v) => after(v.userId),
+    onSuccess: (_d, v) => after(v.userId, v.vineyardId ?? null),
   });
 }
+
 
 export function useExtendBillingGrant() {
   const after = useAfterMutation();

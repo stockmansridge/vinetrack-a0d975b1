@@ -43,7 +43,9 @@ import {
   RevokeGrantDialog,
 } from "@/components/admin/access/accessDialogs";
 import {
+  grantScopeLabel,
   grantState,
+
   grantTypeLabel,
   useBillingGrants,
   type BillingGrantRow,
@@ -194,12 +196,16 @@ export default function BillingGrantsPage() {
                 <TableRow>
                   <TableHead>Owner</TableHead>
                   <TableHead>Grant type</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Applies to</TableHead>
                   <TableHead>State</TableHead>
                   <TableHead>Licences</TableHead>
                   <TableHead>Platforms</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Starts</TableHead>
                   <TableHead>Expires</TableHead>
+                  <TableHead>Created by</TableHead>
+                  <TableHead>Revoked by</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -220,6 +226,19 @@ export default function BillingGrantsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">{grantTypeLabel(g.grant_type)}</TableCell>
+                      <TableCell className="text-sm">{grantScopeLabel(g.grant_scope)}</TableCell>
+                      <TableCell className="text-sm">
+                        <div>
+                          {g.grant_scope === "vineyard"
+                            ? (g.vineyard_name ?? "—")
+                            : (g.owner_name ?? g.owner_email ?? "—")}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {g.grant_scope === "vineyard"
+                            ? `Members inherit access: ${g.members_inherit_access ? "Yes" : "No"}`
+                            : "Members inherit access: No"}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <StatusPill status={state} />
                       </TableCell>
@@ -230,6 +249,8 @@ export default function BillingGrantsPage() {
                       </TableCell>
                       <TableCell>{formatDate(g.starts_at)}</TableCell>
                       <TableCell>{formatDate(g.expires_at)}</TableCell>
+                      <TableCell className="text-xs">{g.granted_by_email ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{g.revoked_by_email ?? "—"}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button
                           size="sm"
@@ -252,6 +273,7 @@ export default function BillingGrantsPage() {
                     </TableRow>
                   );
                 })}
+
               </TableBody>
             </Table>
           </div>

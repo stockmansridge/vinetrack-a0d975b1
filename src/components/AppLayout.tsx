@@ -32,6 +32,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BILLING_KEYS } from "@/lib/customerBillingQuery";
 import vineyardBg from "@/assets/vineyard-bg.webp.asset.json";
+import {
+  useVineyardAccessMatrix,
+  vineyardAccessState,
+  VINEYARD_ACCESS_STATE_LABEL,
+} from "@/lib/vineyardAccessQuery";
+import { VineyardAccessGate } from "@/components/access/VineyardAccessGate";
+
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
@@ -39,6 +46,14 @@ export default function AppLayout() {
   const { profile } = useCurrentProfile();
   const [profileOpen, setProfileOpen] = useState(false);
   const displayName = displayNameFor(profile, user?.email);
+
+  // Per-vineyard access state (Phase 2F) — display only; the gate below
+  // decides what may mount.
+  const { data: accessMatrix } = useVineyardAccessMatrix();
+  const accessById = new Map(
+    (accessMatrix?.vineyards ?? []).map((v) => [v.vineyard_id, v] as const),
+  );
+
 
   // Customer billing data is per-account: drop every cached billing query when
   // the signed-in user changes or signs out.
@@ -76,17 +91,34 @@ export default function AppLayout() {
             <SidebarTrigger />
             <div className="flex items-center gap-2">
               <Select value={selectedVineyardId ?? undefined} onValueChange={selectVineyard}>
-                <SelectTrigger className="w-[220px] rounded-lg">
+                <SelectTrigger className="w-[260px] rounded-lg">
                   <SelectValue placeholder="Select vineyard" />
                 </SelectTrigger>
                 <SelectContent>
-                  {memberships.map((m) => (
-                    <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
-                      {m.vineyard_name ?? m.vineyard_id}
-                    </SelectItem>
-                  ))}
+                  {memberships.map((m) => {
+                    const row = accessById.get(m.vineyard_id);
+                    const state = row ? vineyardAccessState(row) : null;
+                    return (
+                      <SelectItem key={m.vineyard_id} value={m.vineyard_id}>
+                        <span className="flex items-center gap-2">
+                          <span>{m.vineyard_name ?? m.vineyard_id}</span>
+                          {state && state !== "accessible" && (
+                            <Badge
+                              variant={
+                                state === "trial" ? "secondary" : "outline"
+                              }
+                              className="text-[10px] font-medium"
+                            >
+                              {VINEYARD_ACCESS_STATE_LABEL[state]}
+                            </Badge>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+
               {currentRole && (
                 <Badge
                   variant="secondary"
@@ -139,8 +171,11 @@ export default function AppLayout() {
               <div className="absolute inset-0 bg-gradient-to-r from-background/20 via-background/5 to-transparent" />
             </div>
             <div className="relative z-10 p-4 md:p-6 lg:p-8">
-              <Outlet />
+              <VineyardAccessGate>
+                <Outlet />
+              </VineyardAccessGate>
             </div>
+
           </main>
         </div>
       </div>

@@ -20,8 +20,11 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
+  GRANT_SCOPES,
   GRANT_TYPES,
   GRANT_TYPES_REQUIRING_EXPIRY,
+  isGrantScopeCombinationValid,
+  type GrantScope,
   type GrantType,
   fmtDateTime,
   grantTypeLabel,
@@ -89,6 +92,7 @@ export function CreateGrantDialog({
   vineyards: { id: string; name: string }[];
 }) {
   const [grantType, setGrantType] = useState<GrantType>("internal_unlimited");
+  const [grantScope, setGrantScope] = useState<GrantScope>("user");
   const [reason, setReason] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -99,6 +103,7 @@ export function CreateGrantDialog({
   useEffect(() => {
     if (!open) {
       setGrantType("internal_unlimited");
+      setGrantScope("user");
       setReason("");
       setStartsAt("");
       setExpiresAt("");
@@ -109,6 +114,9 @@ export function CreateGrantDialog({
 
   // Backend rejects these grant types without an expiry (`expiry_required_for_grant_type`).
   const requiresExpiry = GRANT_TYPES_REQUIRING_EXPIRY.includes(grantType);
+  // Reject obviously invalid combinations up front; the backend is still the
+  // final authority on the grant-type / scope matrix.
+  const scopeCombinationValid = isGrantScopeCombinationValid(grantType, grantScope);
 
 
   const submit = async (e: React.FormEvent) => {
@@ -126,6 +134,22 @@ export function CreateGrantDialog({
       toast({ title: "Reason is required", variant: "destructive" });
       return;
     }
+    if (grantScope === "vineyard" && !vineyardId) {
+      toast({
+        title: "Vineyard required",
+        description: "Vineyard-scoped grants must target a vineyard.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!scopeCombinationValid) {
+      toast({
+        title: "Unsupported scope",
+        description: `${grantTypeLabel(grantType)} grants cannot be applied to an entire vineyard.`,
+        variant: "destructive",
+      });
+      return;
+    }
     if (requiresExpiry && !expiresAt) {
       toast({
         title: "Expiry required",
@@ -138,6 +162,7 @@ export function CreateGrantDialog({
       await mut.mutateAsync({
         userId,
         grantType,
+        grantScope,
         reason: reason.trim(),
         vineyardId: vineyardId || null,
         startsAt: toIsoOrNull(startsAt),
@@ -198,8 +223,40 @@ export function CreateGrantDialog({
               />
             </Field>
           </div>
+          <Field
+            label="Grant applies to"
+            hint={GRANT_SCOPES.find((s) => s.value === grantScope)?.help}
+          >
+            <div className="space-y-2 pt-1">
+              {GRANT_SCOPES.map((s) => (
+                <label key={s.value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="grant-scope"
+                    className="accent-primary"
+                    checked={grantScope === s.value}
+                    onChange={() => setGrantScope(s.value)}
+                  />
+                  <span>{s.label}</span>
+                </label>
+              ))}
+            </div>
+          </Field>
+          {!scopeCombinationValid && (
+            <p className="text-xs text-destructive">
+              {grantTypeLabel(grantType)} grants cannot be applied to an entire vineyard. Choose a
+              different grant type or scope.
+            </p>
+          )}
           {vineyards.length > 0 && (
-            <Field label="Vineyard (optional)">
+            <Field
+              label={grantScope === "vineyard" ? "Vineyard (required)" : "Vineyard (optional)"}
+              hint={
+                grantScope === "vineyard"
+                  ? "All active members of this vineyard inherit access while the grant is valid."
+                  : "Informational only — other members do not inherit access."
+              }
+            >
               <Select value={vineyardId} onValueChange={setVineyardId}>
                 <SelectTrigger>
                   <SelectValue placeholder="No specific vineyard" />
@@ -214,6 +271,7 @@ export function CreateGrantDialog({
               </Select>
             </Field>
           )}
+
           <label className="flex items-start gap-2 text-sm pt-1">
             <Checkbox
               checked={confirmed}
@@ -228,7 +286,10 @@ export function CreateGrantDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!confirmed || mut.isPending}>
+            <Button
+              type="submit"
+              disabled={!confirmed || mut.isPending || !scopeCombinationValid}
+            >
               {mut.isPending ? "Creating…" : "Create grant"}
             </Button>
           </DialogFooter>
