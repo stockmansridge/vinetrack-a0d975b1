@@ -43,7 +43,9 @@ import {
   RevokeGrantDialog,
 } from "@/components/admin/access/accessDialogs";
 import {
+  grantScopeLabel,
   grantState,
+
   grantTypeLabel,
   useBillingGrants,
   type BillingGrantRow,
