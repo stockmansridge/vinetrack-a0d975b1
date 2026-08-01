@@ -32,6 +32,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BILLING_KEYS } from "@/lib/customerBillingQuery";
 import vineyardBg from "@/assets/vineyard-bg.webp.asset.json";
+import {
+  useVineyardAccessMatrix,
+  vineyardAccessState,
+  VINEYARD_ACCESS_STATE_LABEL,
+} from "@/lib/vineyardAccessQuery";
+import { VineyardAccessGate } from "@/components/access/VineyardAccessGate";
+
 
 export default function AppLayout() {
   const { memberships, selectedVineyardId, selectVineyard, currentRole } = useVineyard();
