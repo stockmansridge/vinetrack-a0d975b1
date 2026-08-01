@@ -1059,11 +1059,16 @@ export interface BillingGrantRow {
   revoked_reason: string | null;
   vineyard_id: string | null;
   vineyard_name: string | null;
+  /** SQL 155. Grants created before SQL 155 are user-scoped. */
+  grant_scope: GrantScope;
+  members_inherit_access: boolean;
+  revoked_by_email: string | null;
   seats_total: number;
   active_licences: number;
   unlimited_licences: boolean;
   licences_display: string | null;
   platforms_display: string | null;
+
 }
 
 export type GrantState = "active" | "revoked" | "inactive";
