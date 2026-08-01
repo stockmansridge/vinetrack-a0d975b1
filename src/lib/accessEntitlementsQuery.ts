@@ -163,6 +163,39 @@ export type GrantType = (typeof GRANT_TYPES)[number]["value"];
 /** Grant types the backend rejects without an expiry date. */
 export const GRANT_TYPES_REQUIRING_EXPIRY: GrantType[] = ["temporary_access", "support_access"];
 
+/* SQL 155 — every billing grant carries an explicit scope. */
+export type GrantScope = "user" | "vineyard";
+
+export const GRANT_SCOPES: { value: GrantScope; label: string; help: string }[] = [
+  {
+    value: "user",
+    label: "This user only",
+    help: "Applies to the selected user only. Other vineyard members do not inherit access.",
+  },
+  {
+    value: "vineyard",
+    label: "An entire vineyard",
+    help: "All active members of the chosen vineyard inherit access while the grant is valid.",
+  },
+];
+
+/** Grant types the backend supports at vineyard scope (server re-validates). */
+export const VINEYARD_SCOPED_GRANT_TYPES: GrantType[] = [
+  "internal_unlimited",
+  "complimentary_team",
+  "enterprise_contract",
+  "temporary_access",
+  "support_access",
+];
+
+export function isGrantScopeCombinationValid(type: GrantType, scope: GrantScope): boolean {
+  return scope === "user" || VINEYARD_SCOPED_GRANT_TYPES.includes(type);
+}
+
+export const grantScopeLabel = (s: string | null | undefined): string =>
+  s === "vineyard" ? "Vineyard" : "User";
+
+
 function humanise(code: string): string {
   return code
     .replace(/[_-]+/g, " ")
