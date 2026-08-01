@@ -1108,6 +1108,11 @@ export function useBillingGrants() {
           revoked_reason: s(r.revoked_reason ?? r.manual_grant_revoked_reason),
           vineyard_id: s(r.vineyard_id),
           vineyard_name: s(r.vineyard_name),
+          grant_scope: r.grant_scope === "vineyard" ? "vineyard" : "user",
+          members_inherit_access:
+            r.members_inherit_access === true || r.grant_scope === "vineyard",
+          revoked_by_email: s(r.revoked_by_email ?? r.manual_grant_revoked_by_email),
+
           seats_total: n(r.seats_total),
           active_licences: n(r.active_licences),
           unlimited_licences: r.unlimited_licences === true,
