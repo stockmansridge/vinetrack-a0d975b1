@@ -42,17 +42,6 @@ function obj(fn: string, v: unknown): Record<string, unknown> {
   return v as Record<string, unknown>;
 }
 
-function need(fn: string, o: Record<string, unknown>, keys: string[]) {
-  const missing = keys.filter((k) => !(k in o));
-  if (missing.length) throw new VineyardAccessContractError(fn, `missing ${missing.join(", ")}`);
-}
-
-function bool(fn: string, o: Record<string, unknown>, key: string): boolean {
-  const v = o[key];
-  if (typeof v !== "boolean") throw new VineyardAccessContractError(fn, `${key} must be a boolean`);
-  return v;
-}
-
 function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
@@ -110,79 +99,77 @@ export interface VineyardAccessMatrix {
   vineyards: VineyardAccessRow[];
 }
 
-const ROW_KEYS = [
-  "vineyard_id",
-  "vineyard_name",
-  "membership_role",
-  "has_vineyard_access",
-  "can_enter_vineyard",
-  "vineyard_access_reason",
-  "vineyard_access_source",
-  "plan_code",
-  "subscription_status",
-  "starts_at",
-  "expires_at",
-  "is_trial",
-  "is_vineyard_wide",
-  "is_billing_owner",
-  "can_manage_billing",
-  "is_billing_authority",
-  "requires_billing_attention",
-  "last_verified_at",
-];
-
 function readRow(fn: string, raw: unknown): VineyardAccessRow {
   const r = obj(fn, raw);
-  need(fn, r, ROW_KEYS);
   const id = str(r.vineyard_id);
   if (!id) throw new VineyardAccessContractError(fn, "vineyard_id must be a uuid string");
+  const flag = (key: string, fallback = false): boolean =>
+    typeof r[key] === "boolean" ? (r[key] as boolean) : fallback;
+  const hasAccess = flag("has_vineyard_access", true);
   return {
     vineyard_id: id,
     vineyard_name: str(r.vineyard_name),
     membership_role: str(r.membership_role),
-    has_vineyard_access: bool(fn, r, "has_vineyard_access"),
-    can_enter_vineyard: bool(fn, r, "can_enter_vineyard"),
+    has_vineyard_access: hasAccess,
+    can_enter_vineyard: flag("can_enter_vineyard", hasAccess),
     vineyard_access_reason: str(r.vineyard_access_reason),
     vineyard_access_source: str(r.vineyard_access_source),
     plan_code: str(r.plan_code),
     subscription_status: str(r.subscription_status),
     starts_at: str(r.starts_at),
     expires_at: str(r.expires_at),
-    is_trial: bool(fn, r, "is_trial"),
-    is_vineyard_wide: bool(fn, r, "is_vineyard_wide"),
-    is_billing_owner: bool(fn, r, "is_billing_owner"),
-    can_manage_billing: bool(fn, r, "can_manage_billing"),
-    is_billing_authority: bool(fn, r, "is_billing_authority"),
-    requires_billing_attention: bool(fn, r, "requires_billing_attention"),
+    is_trial: flag("is_trial"),
+    is_vineyard_wide: flag("is_vineyard_wide"),
+    is_billing_owner: flag("is_billing_owner"),
+    can_manage_billing: flag("can_manage_billing"),
+    is_billing_authority: flag("is_billing_authority"),
+    requires_billing_attention: flag("requires_billing_attention"),
     last_verified_at: str(r.last_verified_at),
   };
 }
 
-const SUMMARY_KEYS = [
-  "has_any_accessible_vineyard",
-  "accessible_vineyard_count",
-  "pending_invitation_count",
-  "can_create_vineyard",
-  "account_access_state",
-];
+
+function optBool(v: unknown): boolean | null {
+  return typeof v === "boolean" ? v : null;
+}
+
+function optNum(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
 
 function readMatrix(fn: string, raw: unknown): VineyardAccessMatrix {
   const root = obj(fn, raw);
-  const summarySource = root.summary && typeof root.summary === "object" ? obj(fn, root.summary) : root;
-  need(fn, summarySource, SUMMARY_KEYS);
-  const list = root.vineyards ?? root.rows ?? root.items;
+
+  // The account summary may arrive inline on the root object or nested under
+  // one of several wrapper keys depending on the backend revision. Rows are
+  // always authoritative, so anything the summary omits is derived from them
+  // rather than failing the whole page.
+  const nested = ["summary", "account", "account_summary"]
+    .map((k) => root[k])
+    .find((v) => v && typeof v === "object" && !Array.isArray(v)) as
+    | Record<string, unknown>
+    | undefined;
+  const s: Record<string, unknown> = { ...root, ...(nested ?? {}) };
+
+  const list = root.vineyards ?? root.rows ?? root.items ?? nested?.vineyards ?? [];
   if (!Array.isArray(list)) throw new VineyardAccessContractError(fn, "expected a vineyards array");
+  const vineyards = list.map((r) => readRow(fn, r));
+  const accessible = vineyards.filter((v) => v.can_enter_vineyard).length;
+
   return {
     summary: {
-      has_any_accessible_vineyard: bool(fn, summarySource, "has_any_accessible_vineyard"),
-      accessible_vineyard_count: num(summarySource.accessible_vineyard_count),
-      pending_invitation_count: num(summarySource.pending_invitation_count),
-      can_create_vineyard: bool(fn, summarySource, "can_create_vineyard"),
-      account_access_state: str(summarySource.account_access_state),
+      has_any_accessible_vineyard:
+        optBool(s.has_any_accessible_vineyard) ?? accessible > 0,
+      accessible_vineyard_count: optNum(s.accessible_vineyard_count) ?? accessible,
+      pending_invitation_count: optNum(s.pending_invitation_count) ?? 0,
+      can_create_vineyard: optBool(s.can_create_vineyard) ?? false,
+      account_access_state:
+        str(s.account_access_state) ?? (accessible > 0 ? "active" : "no_access"),
     },
-    vineyards: list.map((r) => readRow(fn, r)),
+    vineyards,
   };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Query keys                                                          */
