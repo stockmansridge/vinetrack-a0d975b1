@@ -47,6 +47,14 @@ export default function AppLayout() {
   const [profileOpen, setProfileOpen] = useState(false);
   const displayName = displayNameFor(profile, user?.email);
 
+  // Per-vineyard access state (Phase 2F) — display only; the gate below
+  // decides what may mount.
+  const { data: accessMatrix } = useVineyardAccessMatrix();
+  const accessById = new Map(
+    (accessMatrix?.vineyards ?? []).map((v) => [v.vineyard_id, v] as const),
+  );
+
+
   // Customer billing data is per-account: drop every cached billing query when
   // the signed-in user changes or signs out.
   const qc = useQueryClient();
