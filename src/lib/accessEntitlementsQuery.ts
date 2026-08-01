@@ -27,6 +27,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { iosSupabase } from "@/integrations/ios-supabase/client";
+import { invalidateVineyardAccessCaches } from "@/lib/vineyardAccessQuery";
 
 /* ------------------------------------------------------------------ */
 /* Transport + strict payload guards                                   */
