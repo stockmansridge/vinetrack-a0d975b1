@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, CloudRain, FolderOpen, ArrowRight, Route, ClipboardList } from "lucide-react";
+import { FileText, CloudRain, FolderOpen, ArrowRight, Route, ClipboardList, Scissors } from "lucide-react";
 
 const sections = [
   {
