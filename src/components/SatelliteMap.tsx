@@ -198,6 +198,14 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgLayerRef = useRef<HTMLDivElement | null>(null);
   const imgRefs = useRef<Map<string, HTMLImageElement>>(new Map());
+  // Nearest-neighbour audit mode, applied to existing and future overlay <img>.
+  const rawPixelsRef = useRef(rawPixels);
+  useEffect(() => {
+    rawPixelsRef.current = rawPixels;
+    const mode = rawPixels ? "pixelated" : "auto";
+    imgRefs.current.forEach((img) => { img.style.imageRendering = mode; });
+  }, [rawPixels]);
+
   const cellRectRef = useRef<HTMLDivElement | null>(null);
   const cellRectValueRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null);
   const mapRef = useRef<any>(null);
