@@ -432,7 +432,9 @@ interface DBAsset {
   row_orientation?: string | null;
   processing_version?: string | null;
   acquisition_date?: string | null;
+  colour_scale?: Record<string, any> | null;
 }
+
 interface DBSummary {
   satellite_scene_id: string;
   index_type: SatelliteIndexType;
