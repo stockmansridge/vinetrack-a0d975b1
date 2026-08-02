@@ -344,7 +344,10 @@ Deno.serve(async (req) => {
         // Analytical raster is rendered at the index's NATIVE resolution
         // (10 m NDVI/MSAVI, 20 m NDRE/RECI/NDMI) so one cell = one satellite
         // cell, snapped to the same global EPSG:3857 grid as the display PNG.
-        const analyticalSize = alignBboxToGrid(bbox, nativeRes, QC.processImageMaxSize);
+        const analyticalSize = alignBboxToGrid(
+          bbox, nativeRes, QC.processImageMaxSize, 1, /* allowCoarsen */ false,
+        );
+
 
         if (!existingAnalytical) {
           const analytical = await processAnalyticalRaster({
