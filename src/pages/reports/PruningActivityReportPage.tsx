@@ -158,7 +158,12 @@ export default function PruningActivityReportPage() {
         if (fromTs != null && ts < fromTs) return false;
         if (toTs != null && ts > toTs) return false;
       }
-      if (season !== ANY && String(r.seasonYear ?? "") !== season) return false;
+      if (season === UNASSIGNED) {
+        if (r.hasSeasonLink) return false;
+      } else if (season !== ANY) {
+        if (!r.hasSeasonLink || String(r.seasonYear ?? "") !== season) return false;
+      }
+
       if (blockId !== ANY && r.paddockId !== blockId) return false;
       if (worker !== ANY && r.worker !== worker) return false;
       if (method !== ANY && r.method !== method) return false;
