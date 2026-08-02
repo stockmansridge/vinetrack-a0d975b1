@@ -107,11 +107,25 @@ export default function PruningActivityReportPage() {
   const [linked, setLinked] = useState<string>(ANY);
   const [includeReversed, setIncludeReversed] = useState(false);
 
+  // Season options come from the canonical linked pruning season only.
   const seasonOptions = useMemo(() => {
     const s = new Set<number>();
-    rows.forEach((r) => { if (r.seasonYear != null) s.add(r.seasonYear); });
+    rows.forEach((r) => { if (r.hasSeasonLink && r.seasonYear != null) s.add(r.seasonYear); });
     return Array.from(s).sort((a, b) => b - a);
   }, [rows]);
+
+  const hasUnassigned = useMemo(() => rows.some((r) => !r.hasSeasonLink), [rows]);
+
+  // Default to the current pruning season (calendar year of the work) when it
+  // exists, matching the other season-scoped reports. Applied once per load.
+  const seasonDefaulted = useRef(false);
+  useEffect(() => {
+    if (seasonDefaulted.current || !rows.length) return;
+    seasonDefaulted.current = true;
+    const currentYear = new Date().getFullYear();
+    if (seasonOptions.includes(currentYear)) setSeason(String(currentYear));
+  }, [rows, seasonOptions]);
+
 
   const blockOptions = useMemo(() => {
     const map = new Map<string, string>();
