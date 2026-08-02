@@ -88,10 +88,6 @@ Deno.serve(async (req) => {
 
     try {
       // Resolve the provider scene for that exact date + paddock.
-      const { data: pad } = await supa.from("satellite_scenes")
-        .select("bbox_west").limit(0); // no-op keeps type inference simple
-      void pad;
-
       const vtUrl = Deno.env.get("VINETRACK_SUPABASE_URL")!;
       const vtSrk = Deno.env.get("VINETRACK_SERVICE_ROLE_KEY")!;
       const padRes = await fetch(
