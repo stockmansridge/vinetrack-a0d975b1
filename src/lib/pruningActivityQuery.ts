@@ -108,6 +108,23 @@ export function formatRowRanges(rows: number[]): string {
 }
 
 interface SeasonLite { id: string; paddock_id: string; season_year: number }
+
+/** Calendar year the pruning work was performed — the canonical season year
+ *  rule shared with iOS/Android. Used only to DETECT integrity problems. */
+export function expectedSeasonYearForDate(isoDate: string | null): number | null {
+  if (!isoDate) return null;
+  const y = Number(String(isoDate).slice(0, 4));
+  return Number.isFinite(y) ? y : null;
+}
+
+/** Best-effort platform metadata; the backend may not record it yet. */
+function readPlatform(row: any): string | null {
+  const v =
+    row?.source_platform ?? row?.created_platform ?? row?.platform ??
+    row?.created_via ?? row?.device_platform ?? null;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
 interface PaddockLite { id: string; name: string | null; variety_allocations: any }
 interface SegmentLite { pruning_entry_id: string | null; row_number: number; segment_number: number }
 interface TaskLite { id: string; task_type: string | null; description: string | null; status: string | null }
