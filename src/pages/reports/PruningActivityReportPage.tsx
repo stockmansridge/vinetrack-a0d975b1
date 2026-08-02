@@ -238,6 +238,27 @@ export default function PruningActivityReportPage() {
 
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
 
+  // -------------------- Season integrity diagnostic (read-only) --------------------
+  // Audits every entry for this vineyard, ignoring the current filters, so a
+  // data problem can never be hidden by a filter selection.
+  const integrityRows = useMemo(
+    () => rows.filter((r) => r.seasonMismatch || !r.hasSeasonLink),
+    [rows],
+  );
+
+  const integrityGroups = useMemo(() => {
+    const map = new Map<string, PruningActivityRow[]>();
+    integrityRows.forEach((r) => {
+      const key = r.sourcePlatform ?? "Unknown platform (no metadata recorded)";
+      const list = map.get(key);
+      if (list) list.push(r);
+      else map.set(key, [r]);
+    });
+    return Array.from(map, ([platform, items]) => ({ platform, items }))
+      .sort((a, b) => a.platform.localeCompare(b.platform));
+  }, [integrityRows]);
+
+
   // -------------------- Exports --------------------
   const csvSafe = (v: unknown) => {
     const s = v == null ? "" : String(v);
