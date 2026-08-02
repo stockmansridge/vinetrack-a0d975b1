@@ -195,13 +195,15 @@ export async function archiveDamageRecord(id: string, userId: string | null = nu
 }
 
 // ---------------------------------------------------------------------------
-// Manager-authorised delete (SQL 160)
+// Manager-authorised delete (SQL 160 — applied to the shared backend)
 //
 // Soft delete only, performed by the server-side RPC
 // `delete_damage_record(p_vineyard_id, p_damage_record_id)` which re-checks
-// owner / co-owner / manager / system-admin authority. The browser never
-// deletes or soft-deletes the row directly.
-// ---------------------------------------------------------------------------
+// owner / co-owner / manager / system-admin authority via
+// `can_manage_vineyard_damage()` and returns a jsonb receipt
+// ({ damage_record_id, vineyard_id, deleted_at, deleted_by }). The browser
+// never deletes or soft-deletes the row directly.
+
 export type DamageDeleteErrorCode =
   | "damage_delete_permission_denied"
   | "damage_record_not_found"
