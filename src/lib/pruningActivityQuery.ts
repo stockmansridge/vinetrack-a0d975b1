@@ -39,15 +39,41 @@ export interface PruningActivityRow {
   labourHours: number | null;
   startTime: string | null;
   finishTime: string | null;
+  /** Elapsed minutes between start and finish (overnight-aware). Null when unknown. */
+  durationMinutes: number | null;
   vinesPerHour: number | null;
   rowEqPerHour: number | null;
   workTaskId: string | null;
   workTaskLabel: string | null;
+  workTaskStatus: string | null;
   labourCost: number | null;    // null when there is no linked Work Task
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
+  createdAt: string | null;
+  updatedAt: string | null;
   isReversed: boolean;
 }
+
+/** Minutes between two time/timestamp values; rolls over midnight. */
+export function durationMinutesBetween(start: string | null, finish: string | null): number | null {
+  const toMinutes = (v: string | null): number | null => {
+    if (!v) return null;
+    const raw = v.trim();
+    if (raw.includes("T") || (raw.includes(" ") && raw.length > 10)) {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+    }
+    const hm = /^(\d{1,2}):(\d{2})/.exec(raw);
+    if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+    return null;
+  };
+  const a = toMinutes(start);
+  const b = toMinutes(finish);
+  if (a == null || b == null) return null;
+  const diff = b - a;
+  return diff >= 0 ? diff : diff + 24 * 60;
+}
+
 
 /** Compact a sorted list of row numbers into "1–4, 7, 10–12". */
 export function formatRowRanges(rows: number[]): string {
