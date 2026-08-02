@@ -4,10 +4,10 @@
 // usePruningActivity(); nothing is recalculated or written back. Cost
 // columns are gated by useCanSeeCosts() (owner/manager only) and are
 // sourced from the linked Work Task's labour lines.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { Download, Scissors, Search, ExternalLink } from "lucide-react";
+import { AlertTriangle, Download, Scissors, Search, ExternalLink } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
@@ -30,8 +30,16 @@ import {
   Table, TableBody, TableCell, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const ANY = "__any__";
+const UNASSIGNED = "__unassigned__";
+
 
 type SortKey =
   | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
