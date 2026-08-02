@@ -547,7 +547,114 @@ export default function PruningActivityReportPage() {
         </div>
       </Card>
 
+      {/* -------------- Season integrity diagnostic (temporary) -------------- */}
+      {integrityRows.length > 0 && (
+        <Collapsible>
+          <Card className="p-3 border-amber-500/40 bg-amber-500/5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-start gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <div className="font-medium">
+                    {integrityRows.length} entr{integrityRows.length === 1 ? "y has" : "ies have"} inconsistent pruning-season data
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Displayed seasons still come from the linked pruning season record —
+                    nothing is corrected or guessed here. Read-only diagnostic pending the
+                    historical data fix.
+                  </div>
+                </div>
+              </div>
+              <CollapsibleTrigger asChild>
+                <Button size="sm" variant="outline">View diagnostic</Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent className="mt-3 space-y-4">
+              {integrityGroups.map((g) => (
+                <div key={g.platform} className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {g.platform} — {g.items.length} entr{g.items.length === 1 ? "y" : "ies"}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead className="text-muted-foreground">
+                        <tr className="text-left">
+                          <th className="p-1">Entry ID</th>
+                          <th className="p-1">Entry date</th>
+                          <th className="p-1">Vineyard</th>
+                          <th className="p-1">{fmt.blockLabel}</th>
+                          <th className="p-1">Stored season ID</th>
+                          <th className="p-1">Linked season year</th>
+                          <th className="p-1">Expected season year</th>
+                          <th className="p-1">Stored vintage</th>
+                          <th className="p-1">Created</th>
+                          <th className="p-1">Updated</th>
+                          <th className="p-1">Reversed</th>
+                          <th className="p-1">Issue</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono">
+                        {g.items.map((r) => (
+                          <tr key={r.id} className="border-t border-border/50 align-top">
+                            <td className="p-1">{r.id}</td>
+                            <td className="p-1">{r.date}</td>
+                            <td className="p-1 font-sans">{vineyardName ?? "—"}</td>
+                            <td className="p-1 font-sans">{r.blockName}</td>
+                            <td className="p-1">{r.pruningSeasonId ?? "—"}</td>
+                            <td className="p-1">{r.hasSeasonLink ? r.seasonYear ?? "—" : "not found"}</td>
+                            <td className="p-1">{r.expectedSeasonYear ?? "—"}</td>
+                            <td className="p-1">{r.vintageYear ?? "—"}</td>
+                            <td className="p-1">{r.createdAt ?? "—"}</td>
+                            <td className="p-1">{r.updatedAt ?? "—"}</td>
+                            <td className="p-1">{r.isReversed ? "yes" : "no"}</td>
+                            <td className="p-1 font-sans">
+                              {r.hasSeasonLink ? r.seasonIssues.join(" ") : "No linked pruning season record."}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const header = [
+                    "entry_id", "entry_date", "vineyard", "block", "source_platform",
+                    "stored_pruning_season_id", "linked_season_year", "expected_season_year",
+                    "stored_vintage_year", "created_at", "updated_at", "reversed", "issue",
+                  ];
+                  const lines = [header.join(",")];
+                  integrityRows.forEach((r) => lines.push([
+                    r.id, r.date, vineyardName ?? "", r.blockName, r.sourcePlatform ?? "",
+                    r.pruningSeasonId ?? "", r.hasSeasonLink ? r.seasonYear ?? "" : "not_found",
+                    r.expectedSeasonYear ?? "", r.vintageYear ?? "", r.createdAt ?? "",
+                    r.updatedAt ?? "", r.isReversed ? "yes" : "no",
+                    r.hasSeasonLink ? r.seasonIssues.join(" ") : "No linked pruning season record.",
+                  ].map(csvSafe).join(","));
+                  );
+                  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `pruning-season-integrity-${format(new Date(), "yyyy-MM-dd")}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="h-3.5 w-3.5 mr-1" /> Export diagnostic CSV
+              </Button>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
+
       <div className="flex items-center justify-end gap-2">
+
         <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!sorted.length}>
           <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
         </Button>
