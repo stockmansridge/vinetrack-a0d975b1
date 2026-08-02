@@ -35,8 +35,9 @@ const ANY = "__any__";
 
 type SortKey =
   | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
-  | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "vinesPerHour"
-  | "rate" | "cost" | "task" | "status";
+  | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "start" | "finish"
+  | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
+  | "created" | "updated" | "status";
 
 /** Render "8:30 am" from a time or timestamp column, tolerating both shapes. */
 function formatTime(value: string | null): string {
@@ -54,6 +55,26 @@ function formatTime(value: string | null): string {
   }
   if (!d) return raw;
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).toLowerCase();
+}
+
+/** "3h 15m" from minutes. */
+function formatDuration(mins: number | null): string {
+  if (mins == null) return "—";
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** Minutes-from-midnight for sorting time-of-day values. */
+function timeSortValue(value: string | null): number | null {
+  if (!value) return null;
+  const raw = value.trim();
+  if (raw.includes("T") || (raw.includes(" ") && raw.length > 10)) {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+  }
+  const hm = /^(\d{1,2}):(\d{2})/.exec(raw);
+  return hm ? Number(hm[1]) * 60 + Number(hm[2]) : null;
 }
 
 export default function PruningActivityReportPage() {
@@ -127,7 +148,13 @@ export default function PruningActivityReportPage() {
         if (!hay.includes(q)) return false;
       }
       return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => {
+      const d = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (d !== 0) return d;
+      const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return cb - ca;
+    });
   }, [rows, search, from, to, season, blockId, worker, method, linked, includeReversed]);
 
   // -------------------- Sorting --------------------
@@ -145,10 +172,16 @@ export default function PruningActivityReportPage() {
       rowEq: (r: PruningActivityRow) => r.rowEquivalents,
       vines: (r: PruningActivityRow) => r.vines,
       hours: (r: PruningActivityRow) => r.labourHours,
+      start: (r: PruningActivityRow) => timeSortValue(r.startTime),
+      finish: (r: PruningActivityRow) => timeSortValue(r.finishTime),
+      duration: (r: PruningActivityRow) => r.durationMinutes,
       vinesPerHour: (r: PruningActivityRow) => r.vinesPerHour,
       rate: (r: PruningActivityRow) => r.hourlyRate,
       cost: (r: PruningActivityRow) => r.labourCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
+      taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
+      created: (r: PruningActivityRow) => (r.createdAt ? new Date(r.createdAt).getTime() : null),
+      updated: (r: PruningActivityRow) => (r.updatedAt ? new Date(r.updatedAt).getTime() : null),
       status: (r: PruningActivityRow) => (r.isReversed ? 1 : 0),
     }),
     [],
@@ -158,9 +191,12 @@ export default function PruningActivityReportPage() {
     useSortableTable<PruningActivityRow, SortKey>(filtered, { accessors });
 
   // -------------------- Totals --------------------
+  const activeRows = useMemo(() => filtered.filter((r) => !r.isReversed), [filtered]);
+  const reversedCount = filtered.length - activeRows.length;
+
   const totals = useMemo(
     () =>
-      filtered.reduce(
+      activeRows.reduce(
         (acc, r) => ({
           quarters: acc.quarters + r.quarters,
           rowEq: acc.rowEq + r.rowEquivalents,
@@ -170,7 +206,7 @@ export default function PruningActivityReportPage() {
         }),
         { quarters: 0, rowEq: 0, vines: 0, hours: 0, cost: 0 },
       ),
-    [filtered],
+    [activeRows],
   );
 
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
@@ -184,7 +220,8 @@ export default function PruningActivityReportPage() {
   const baseHeader = [
     "Date", "Pruning season", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
-    "Labour hours", "Start", "Finish", "Vines / hour", "Work task", "Status", "Notes",
+    "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
+    "Work task", "Work task status", "Created at", "Updated at", "Status", "Notes",
   ];
   const costHeader = ["Labour cost", "Effective rate / hour", "currency"];
 
@@ -205,8 +242,12 @@ export default function PruningActivityReportPage() {
       r.labourHours == null ? "" : r.labourHours.toFixed(2),
       formatTime(r.startTime),
       formatTime(r.finishTime),
+      r.durationMinutes ?? "",
       r.vinesPerHour == null ? "" : r.vinesPerHour.toFixed(1),
       r.workTaskLabel ?? "",
+      r.workTaskStatus ?? "",
+      r.createdAt ?? "",
+      r.updatedAt ?? "",
       r.isReversed ? "Reversed" : "Recorded",
       r.notes,
     ];
@@ -264,7 +305,10 @@ export default function PruningActivityReportPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(90);
-    doc.text(`Vineyard: ${vineyardName ?? "—"}`, margin, 58);
+    doc.text(
+      `Vineyard: ${vineyardName ?? "—"}  •  Pruning season: ${season === ANY ? "All" : season}`,
+      margin, 58,
+    );
     doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 58, { align: "right" });
     doc.setDrawColor(200);
     doc.line(margin, 66, pageWidth - margin, 66);
@@ -276,7 +320,7 @@ export default function PruningActivityReportPage() {
 
     const head = [
       "Date", fmt.blockLabel, "Variety", "Worker", "Method", "Rows",
-      "Qtrs", "Row eq.", "Vines", "Hours", "Vines/hr", "Work task", "Status",
+      "Qtrs", "Row eq.", "Vines", "Hours", "Duration", "Vines/hr", "Work task", "Status",
     ];
     if (canSeeCosts) head.push("Labour cost", "Rate/hr");
 
@@ -292,6 +336,7 @@ export default function PruningActivityReportPage() {
         r.rowEquivalents.toFixed(2),
         r.vines.toLocaleString(),
         r.labourHours == null ? "—" : r.labourHours.toFixed(2),
+        formatDuration(r.durationMinutes),
         r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0),
         r.workTaskLabel ?? "—",
         r.isReversed ? "Reversed" : "Recorded",
@@ -301,11 +346,12 @@ export default function PruningActivityReportPage() {
     });
 
     const totalsRow = [
-      "Totals (filtered)", "", "", "", "", "",
+      "Totals (active only)", "", "", "", "", "",
       String(totals.quarters),
       totals.rowEq.toFixed(2),
       totals.vines.toLocaleString(),
       totals.hours.toFixed(2),
+      "",
       avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
       "", "",
     ];
@@ -324,7 +370,7 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = canSeeCosts ? 17 : 15;
+  const colSpan = canSeeCosts ? 23 : 21;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-[1600px]">
@@ -358,18 +404,14 @@ export default function PruningActivityReportPage() {
       )}
 
       {/* -------------------- Summary -------------------- */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
         {[
-          { label: "Entries", value: filtered.length.toLocaleString() },
-          { label: "Row equivalents", value: totals.rowEq.toFixed(2) },
+          { label: "Matching entries", value: filtered.length.toLocaleString() },
+          { label: "Active / reversed", value: `${activeRows.length.toLocaleString()} / ${reversedCount.toLocaleString()}` },
           { label: "Vines pruned", value: totals.vines.toLocaleString() },
           { label: "Labour hours", value: totals.hours.toFixed(2) },
-          {
-            label: canSeeCosts ? "Labour cost" : "Avg vines / hour",
-            value: canSeeCosts
-              ? money(totals.cost)
-              : avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
-          },
+          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0) },
+          ...(canSeeCosts ? [{ label: "Labour cost", value: money(totals.cost) }] : []),
         ].map((s) => (
           <Card key={s.label} className="p-3">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
@@ -478,6 +520,9 @@ export default function PruningActivityReportPage() {
               <SortableTableHead align="right" active={getSortDirection("rowEq")} onSort={() => toggleSort("rowEq")}>Row eq.</SortableTableHead>
               <SortableTableHead align="right" active={getSortDirection("vines")} onSort={() => toggleSort("vines")}>Vines</SortableTableHead>
               <SortableTableHead align="right" active={getSortDirection("hours")} onSort={() => toggleSort("hours")}>Hours</SortableTableHead>
+              <SortableTableHead active={getSortDirection("start")} onSort={() => toggleSort("start")}>Start</SortableTableHead>
+              <SortableTableHead active={getSortDirection("finish")} onSort={() => toggleSort("finish")}>Finish</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("duration")} onSort={() => toggleSort("duration")}>Duration</SortableTableHead>
               <SortableTableHead align="right" active={getSortDirection("vinesPerHour")} onSort={() => toggleSort("vinesPerHour")}>Vines / hr</SortableTableHead>
               {canSeeCosts && (
                 <>
@@ -486,6 +531,9 @@ export default function PruningActivityReportPage() {
                 </>
               )}
               <SortableTableHead active={getSortDirection("task")} onSort={() => toggleSort("task")}>Work task</SortableTableHead>
+              <SortableTableHead active={getSortDirection("taskStatus")} onSort={() => toggleSort("taskStatus")}>Task status</SortableTableHead>
+              <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
+              <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
             </TableRow>
           </TableHeader>
@@ -524,6 +572,9 @@ export default function PruningActivityReportPage() {
                 <TableCell className="text-right tabular-nums">
                   {r.labourHours == null ? "—" : r.labourHours.toFixed(2)}
                 </TableCell>
+                <TableCell className="whitespace-nowrap">{formatTime(r.startTime)}</TableCell>
+                <TableCell className="whitespace-nowrap">{formatTime(r.finishTime)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatDuration(r.durationMinutes)}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0)}
                 </TableCell>
@@ -545,6 +596,11 @@ export default function PruningActivityReportPage() {
                     <span className="text-muted-foreground text-xs">—</span>
                   )}
                 </TableCell>
+                <TableCell className="text-xs">
+                  {r.workTaskStatus ? <span className="capitalize">{r.workTaskStatus}</span> : <span className="text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—"}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—"}</TableCell>
                 <TableCell>
                   {r.isReversed
                     ? <Badge variant="destructive">Reversed</Badge>
@@ -556,12 +612,15 @@ export default function PruningActivityReportPage() {
           {sorted.length > 0 && (
             <TableBody>
               <TableRow className="bg-muted/30">
-                <TableCell className="font-medium">Totals (filtered)</TableCell>
+                <TableCell className="font-medium">Totals (active only)</TableCell>
                 <TableCell colSpan={7} />
                 <TableCell className="text-right tabular-nums font-medium">{totals.quarters}</TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.rowEq.toFixed(2)}</TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.vines.toLocaleString()}</TableCell>
                 <TableCell className="text-right tabular-nums font-medium">{totals.hours.toFixed(2)}</TableCell>
+                <TableCell />
+                <TableCell />
+                <TableCell />
                 <TableCell className="text-right tabular-nums font-medium">
                   {avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}
                 </TableCell>
@@ -573,6 +632,9 @@ export default function PruningActivityReportPage() {
                 )}
                 <TableCell />
                 <TableCell />
+                <TableCell />
+                <TableCell />
+                <TableCell />
               </TableRow>
             </TableBody>
           )}
@@ -581,7 +643,9 @@ export default function PruningActivityReportPage() {
 
       <p className="text-[11px] text-muted-foreground">
         Labour cost and effective rate come from the labour lines of the linked Work
-        Task. Entries without a linked Work Task show no cost.
+        Task. Entries without a linked Work Task show no cost. Reversed entries stay
+        visible for audit but are excluded from all totals and averages
+        (average vines / hour = total active vines ÷ total active labour hours).
       </p>
     </div>
   );
