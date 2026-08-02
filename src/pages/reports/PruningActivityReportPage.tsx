@@ -16,6 +16,7 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { formatDate } from "@/lib/dateFormat";
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
+import { useDiagnosticPanel } from "@/lib/systemAdmin";
 
 import { PageHead } from "@/components/PageHead";
 import { Card } from "@/components/ui/card";
@@ -239,6 +240,9 @@ export default function PruningActivityReportPage() {
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
 
   // -------------------- Season integrity diagnostic (read-only) --------------------
+  // System admins only, and only when the shared feature flag is switched on in
+  // Feature Flags & Diagnostics. Customers never see this panel.
+  const showSeasonDiagnostics = useDiagnosticPanel("show_pruning_season_diagnostics");
   // Audits every entry for this vineyard, ignoring the current filters, so a
   // data problem can never be hidden by a filter selection.
   const integrityRows = useMemo(
@@ -548,7 +552,7 @@ export default function PruningActivityReportPage() {
       </Card>
 
       {/* -------------- Season integrity diagnostic (temporary) -------------- */}
-      {integrityRows.length > 0 && (
+      {showSeasonDiagnostics && integrityRows.length > 0 && (
         <Collapsible>
           <Card className="p-3 border-amber-500/40 bg-amber-500/5">
             <div className="flex flex-wrap items-center justify-between gap-2">
