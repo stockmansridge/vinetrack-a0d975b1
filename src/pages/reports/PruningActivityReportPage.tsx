@@ -774,7 +774,7 @@ export default function PruningActivityReportPage() {
                 <TableCell>
                   {r.workTaskId ? (
                     <Link
-                      to={`/setup/work-tasks?highlight=${r.workTaskId}`}
+                      to={`/work-tasks?highlight=${r.workTaskId}`}
                       className="text-primary inline-flex items-center gap-1 hover:underline"
                     >
                       {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
