@@ -212,14 +212,43 @@ export function usePruningActivity(vineyardId: string | null) {
           ? labourHours
           : taskLabour && taskLabour.hours > 0 ? taskLabour.hours : null;
 
+        const seasonYear = season?.season_year ?? null;
+        const expectedSeasonYear = expectedSeasonYearForDate(e.entry_date);
+        const seasonIssues: string[] = [];
+        if (season) {
+          if (season.paddock_id && season.paddock_id !== e.paddock_id) {
+            seasonIssues.push("Linked pruning season belongs to a different block.");
+          }
+          if (seasonYear != null && expectedSeasonYear != null && seasonYear !== expectedSeasonYear) {
+            seasonIssues.push(
+              `Linked season year ${seasonYear} does not match the year the work was recorded (${expectedSeasonYear}).`,
+            );
+          }
+          if (
+            seasonYear != null && e.vintage_year != null &&
+            e.vintage_year !== seasonYear && e.vintage_year !== seasonYear + 1
+          ) {
+            seasonIssues.push(
+              `Stored vintage ${e.vintage_year} is not consistent with season ${seasonYear}.`,
+            );
+          }
+        }
+
         return {
           id: e.id,
           entry: e,
           date: e.entry_date,
-          seasonYear: season?.season_year ?? null,
+          seasonYear,
+          pruningSeasonId: e.pruning_season_id ?? null,
+          hasSeasonLink: !!season,
+          expectedSeasonYear,
+          seasonIssues,
+          seasonMismatch: seasonIssues.length > 0,
+          sourcePlatform: readPlatform(e),
           vintageYear: e.vintage_year ?? null,
           paddockId: e.paddock_id,
           blockName: paddock?.name ?? "—",
+
           variety,
           worker: e.worker_or_crew?.trim() || "—",
           method: e.pruning_method || "—",
