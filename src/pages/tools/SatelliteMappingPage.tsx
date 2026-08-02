@@ -591,6 +591,10 @@ export default function SatelliteMappingPage() {
   const [interacting, setInteracting] = useState(false); // slider drag / key in progress
   const [isPlaying, setIsPlaying] = useState(false); // timeline playback
   const [disableCropOverlays, setDisableCropOverlays] = useState(false);
+  // Administrator audit mode: render one stored raster pixel per screen sample
+  // with nearest-neighbour, bypassing browser smoothing.
+  const [rawPixels, setRawPixels] = useState(false);
+
   const [mapDiagnostics, setMapDiagnostics] = useState<SatelliteMapDiagnostics | null>(null);
   const [assetDiagnostics, setAssetDiagnostics] = useState<Record<string, AssetPipelineDiagnostic>>({});
   const [processingFailures, setProcessingFailures] = useState<ProcessingFailureDiagnostic[]>([]);
