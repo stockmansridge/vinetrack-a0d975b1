@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, CloudRain, FolderOpen, ArrowRight, Route, ClipboardList } from "lucide-react";
+import { FileText, CloudRain, FolderOpen, ArrowRight, Route, ClipboardList, Scissors } from "lucide-react";
 
 const sections = [
   {
@@ -18,6 +18,14 @@ const sections = [
     description:
       "Task-level roll-up of manual labour, manual machine work and linked GPS trips. Read-only — does not affect Cost Reports.",
     icon: ClipboardList,
+    status: "Available",
+  },
+  {
+    to: "/reports/pruning-activity",
+    title: "Pruning Activity",
+    description:
+      "Every recorded pruning entry — rows worked, quarters, vines, labour hours, productivity and linked work tasks, with CSV/PDF export.",
+    icon: Scissors,
     status: "Available",
   },
   {

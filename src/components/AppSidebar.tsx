@@ -111,6 +111,7 @@ const reports: NavItem[] = [
   { title: "Cost Reports", url: "/reports/costs", icon: DollarSign },
   { title: "Trip Reports", url: "/reports/trips", icon: Route },
   { title: "Work Task Reports", url: "/reports/work-tasks", icon: ClipboardList },
+  { title: "Pruning Activity", url: "/reports/pruning-activity", icon: Scissors },
   { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
   { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
   { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },

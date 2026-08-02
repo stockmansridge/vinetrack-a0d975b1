@@ -61,6 +61,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import { useSortableTable } from "@/lib/useSortableTable";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -559,6 +561,43 @@ export default function WorkTaskReportsPage() {
       { labourHours: 0, machineHours: 0, totalAreaHa: 0, anyArea: false, manualLabourCost: 0, machineCharge: 0, machineFuel: 0, linkedTripTotal: 0, totalCost: 0 },
     );
   }, [filtered]);
+
+  // -------------------- Task Summary sorting --------------------
+  // Column sorting is display-only: it re-orders `filtered` without touching
+  // any totals, exports or underlying data. Default (no key) keeps the
+  // existing date-descending order.
+  type TaskSortKey =
+    | "date" | "taskType" | "blocks" | "area" | "labourHours" | "machineHours"
+    | "linkedTrips" | "manualLabour" | "machineCharge" | "machineFuel"
+    | "linkedTripCost" | "totalCost" | "costPerArea" | "machineEntries" | "status";
+
+  const taskAccessors = useMemo(
+    () => ({
+      date: (r: TaskRow) => (r.date ? new Date(r.date).getTime() : null),
+      taskType: (r: TaskRow) => r.taskType,
+      blocks: (r: TaskRow) => r.blocksLabel,
+      area: (r: TaskRow) => r.totalAreaHa ?? null,
+      labourHours: (r: TaskRow) => r.labourHours,
+      machineHours: (r: TaskRow) => r.machineHours,
+      linkedTrips: (r: TaskRow) => r.linkedTripCount,
+      manualLabour: (r: TaskRow) => r.manualLabourCost,
+      machineCharge: (r: TaskRow) => r.machineCharge,
+      machineFuel: (r: TaskRow) => r.machineFuel,
+      linkedTripCost: (r: TaskRow) => r.linkedTripTotal,
+      totalCost: (r: TaskRow) => r.totalCost,
+      costPerArea: (r: TaskRow) =>
+        r.totalAreaHa && r.totalAreaHa > 0 ? r.totalCost / r.totalAreaHa : null,
+      machineEntries: (r: TaskRow) => r.machineEntries,
+      status: (r: TaskRow) => (r.hasWarning ? 1 : 0),
+    }),
+    [],
+  );
+
+  const {
+    sorted: sortedTasks,
+    toggleSort: toggleTaskSort,
+    getSortDirection: taskSortDir,
+  } = useSortableTable<TaskRow, TaskSortKey>(filtered, { accessors: taskAccessors });
 
   const csvSafe = (v: unknown) => {
     const s = v == null ? "" : String(v);
@@ -1124,6 +1163,43 @@ export default function WorkTaskReportsPage() {
     return parts.length ? parts.join(" • ") : "OK";
   };
 
+  // -------------------- Block Allocation sorting --------------------
+  // Display-only ordering of the allocation rows. Exports keep using the
+  // unsorted `allocationRows` so their content is unaffected.
+  type AllocSortKey =
+    | "name" | "tasks" | "area" | "labourHours" | "machineHours" | "linkedTrips"
+    | "manualLabour" | "machineCharge" | "machineFuel" | "linkedTripCost"
+    | "totalCost" | "costPerArea" | "status";
+
+  const allocAccessors = useMemo(
+    () => ({
+      name: (r: AllocRow) => r.name,
+      tasks: (r: AllocRow) => r.taskIds.size,
+      area: (r: AllocRow) => (r.hasAnyArea ? r.areaHa : null),
+      labourHours: (r: AllocRow) => r.labourHours,
+      machineHours: (r: AllocRow) => r.machineHours,
+      linkedTrips: (r: AllocRow) => r.linkedTripCount,
+      manualLabour: (r: AllocRow) => r.manualLabourCost,
+      machineCharge: (r: AllocRow) => r.machineCharge,
+      machineFuel: (r: AllocRow) => r.machineFuel,
+      linkedTripCost: (r: AllocRow) => r.linkedTripTotal,
+      totalCost: (r: AllocRow) => r.totalCost,
+      costPerArea: (r: AllocRow) =>
+        r.hasAnyArea && r.areaHa > 0 ? r.totalCost / r.areaHa : null,
+      // "OK" first when ascending, rows needing review last.
+      status: (r: AllocRow) => (allocationStatus(r) === "OK" ? 0 : 1),
+    }),
+    [],
+  );
+
+  const {
+    sorted: sortedAllocationRows,
+    toggleSort: toggleAllocSort,
+    getSortDirection: allocSortDir,
+  } = useSortableTable<AllocRow, AllocSortKey>(allocationRows, { accessors: allocAccessors });
+
+
+
   const downloadAllocationCsv = () => {
     const baseCols = [
       "Block", "Task count", "area_display", "area_unit",
@@ -1591,26 +1667,26 @@ export default function WorkTaskReportsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>Date</TableHead>
-                  <TableHead>Task type</TableHead>
-                  <TableHead>{fmt.blocksLabel}</TableHead>
-                  <TableHead className="text-right">Area</TableHead>
-                  <TableHead className="text-right">Labour hrs</TableHead>
-                  <TableHead className="text-right">Machine hrs</TableHead>
-                  <TableHead className="text-right">Linked trips</TableHead>
+                  <SortableTableHead active={taskSortDir("date")} onSort={() => toggleTaskSort("date")}>Date</SortableTableHead>
+                  <SortableTableHead active={taskSortDir("taskType")} onSort={() => toggleTaskSort("taskType")}>Task type</SortableTableHead>
+                  <SortableTableHead active={taskSortDir("blocks")} onSort={() => toggleTaskSort("blocks")}>{fmt.blocksLabel}</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("area")} onSort={() => toggleTaskSort("area")}>Area</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("labourHours")} onSort={() => toggleTaskSort("labourHours")}>Labour hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("machineHours")} onSort={() => toggleTaskSort("machineHours")}>Machine hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("linkedTrips")} onSort={() => toggleTaskSort("linkedTrips")}>Linked trips</SortableTableHead>
                   {canSeeCosts ? (
                     <>
-                      <TableHead className="text-right">Manual labour</TableHead>
-                      <TableHead className="text-right">Machine charge</TableHead>
-                      <TableHead className="text-right">Machine fuel</TableHead>
-                      <TableHead className="text-right">Linked GPS trips</TableHead>
-                      <TableHead className="text-right">Total cost</TableHead>
-                      <TableHead className="text-right">{costPerAreaLabel}</TableHead>
+                      <SortableTableHead align="right" active={taskSortDir("manualLabour")} onSort={() => toggleTaskSort("manualLabour")}>Manual labour</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("machineCharge")} onSort={() => toggleTaskSort("machineCharge")}>Machine charge</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("machineFuel")} onSort={() => toggleTaskSort("machineFuel")}>Machine fuel</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("linkedTripCost")} onSort={() => toggleTaskSort("linkedTripCost")}>Linked GPS trips</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("totalCost")} onSort={() => toggleTaskSort("totalCost")}>Total cost</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("costPerArea")} onSort={() => toggleTaskSort("costPerArea")}>{costPerAreaLabel}</SortableTableHead>
                     </>
                   ) : (
-                    <TableHead className="text-right">Machine entries</TableHead>
+                    <SortableTableHead align="right" active={taskSortDir("machineEntries")} onSort={() => toggleTaskSort("machineEntries")}>Machine entries</SortableTableHead>
                   )}
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead active={taskSortDir("status")} onSort={() => toggleTaskSort("status")}>Status</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1620,7 +1696,7 @@ export default function WorkTaskReportsPage() {
                       {loading ? "Loading…" : "No work tasks match the current filters."}
                     </TableCell>
                   </TableRow>
-                ) : filtered.map((r) => {
+                ) : sortedTasks.map((r) => {
                   const isOpen = expanded.has(r.task.id);
                   return (
                     <Fragment key={r.task.id}>
@@ -1769,23 +1845,23 @@ export default function WorkTaskReportsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>{fmt.blockLabel}</TableHead>
-                  <TableHead className="text-right">Tasks</TableHead>
-                  <TableHead className="text-right">Area</TableHead>
-                  <TableHead className="text-right">Labour hrs</TableHead>
-                  <TableHead className="text-right">Machine hrs</TableHead>
-                  <TableHead className="text-right">Linked trips</TableHead>
+                  <SortableTableHead active={allocSortDir("name")} onSort={() => toggleAllocSort("name")}>{fmt.blockLabel}</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("tasks")} onSort={() => toggleAllocSort("tasks")}>Tasks</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("area")} onSort={() => toggleAllocSort("area")}>Area</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("labourHours")} onSort={() => toggleAllocSort("labourHours")}>Labour hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("machineHours")} onSort={() => toggleAllocSort("machineHours")}>Machine hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("linkedTrips")} onSort={() => toggleAllocSort("linkedTrips")}>Linked trips</SortableTableHead>
                   {canSeeCosts && (
                     <>
-                      <TableHead className="text-right">Manual labour</TableHead>
-                      <TableHead className="text-right">Machine charge</TableHead>
-                      <TableHead className="text-right">Machine fuel</TableHead>
-                      <TableHead className="text-right">Linked GPS trips</TableHead>
-                      <TableHead className="text-right">Total allocated cost</TableHead>
-                      <TableHead className="text-right">{costPerAreaLabel}</TableHead>
+                      <SortableTableHead align="right" active={allocSortDir("manualLabour")} onSort={() => toggleAllocSort("manualLabour")}>Manual labour</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("machineCharge")} onSort={() => toggleAllocSort("machineCharge")}>Machine charge</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("machineFuel")} onSort={() => toggleAllocSort("machineFuel")}>Machine fuel</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("linkedTripCost")} onSort={() => toggleAllocSort("linkedTripCost")}>Linked GPS trips</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("totalCost")} onSort={() => toggleAllocSort("totalCost")}>Total allocated cost</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("costPerArea")} onSort={() => toggleAllocSort("costPerArea")}>{costPerAreaLabel}</SortableTableHead>
                     </>
                   )}
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead active={allocSortDir("status")} onSort={() => toggleAllocSort("status")}>Status</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1795,7 +1871,7 @@ export default function WorkTaskReportsPage() {
                       {loading ? "Loading…" : `No ${fmt.blockLabel.toLowerCase()} rows for the current filters.`}
                     </TableCell>
                   </TableRow>
-                ) : allocationRows.map((r) => {
+                ) : sortedAllocationRows.map((r) => {
                   const status = allocationStatus(r);
                   const isReview = status !== "OK";
                   const isOpen = allocExpanded.has(r.key);

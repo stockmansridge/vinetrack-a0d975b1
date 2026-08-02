@@ -53,6 +53,7 @@ import ReportsIndexPage from "./pages/reports/ReportsIndexPage";
 import SprayReportsPage from "./pages/reports/SprayReportsPage";
 import TripReportsPage from "./pages/reports/TripReportsPage";
 import WorkTaskReportsPage from "./pages/reports/WorkTaskReportsPage";
+import PruningActivityReportPage from "./pages/reports/PruningActivityReportPage";
 import DataCoveragePage from "./pages/reports/DataCoveragePage";
 import CostReportsPage from "./pages/reports/CostReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
@@ -178,6 +179,7 @@ const App = () => (
                     <Route path="/reports" element={<ReportsIndexPage />} />
                     <Route path="/reports/trips" element={<TripReportsPage />} />
                     <Route path="/reports/work-tasks" element={<WorkTaskReportsPage />} />
+                    <Route path="/reports/pruning-activity" element={<PruningActivityReportPage />} />
                     <Route path="/reports/costs" element={<CostReportsPage />} />
                     <Route path="/reports/data-coverage" element={<DataCoveragePage />} />
                     <Route path="/reports/spray" element={<SprayReportsPage />} />

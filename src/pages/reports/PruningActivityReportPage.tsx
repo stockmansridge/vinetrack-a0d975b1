@@ -1,0 +1,588 @@
+// Pruning Activity Report — one row per recorded pruning entry.
+//
+// Read-only. All figures come from the canonical pruning tables via
+// usePruningActivity(); nothing is recalculated or written back. Cost
+// columns are gated by useCanSeeCosts() (owner/manager only) and are
+// sourced from the linked Work Task's labour lines.
+import { useMemo, useState } from "react";
+import { format } from "date-fns";
+import { Link } from "react-router-dom";
+import { Download, Scissors, Search, ExternalLink } from "lucide-react";
+
+import { useVineyard } from "@/context/VineyardContext";
+import { useToast } from "@/hooks/use-toast";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { formatDate } from "@/lib/dateFormat";
+import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
+import { useSortableTable } from "@/lib/useSortableTable";
+
+import { PageHead } from "@/components/PageHead";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
+
+const ANY = "__any__";
+
+type SortKey =
+  | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
+  | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "vinesPerHour"
+  | "rate" | "cost" | "task" | "status";
+
+/** Render "8:30 am" from a time or timestamp column, tolerating both shapes. */
+function formatTime(value: string | null): string {
+  if (!value) return "—";
+  const raw = value.trim();
+  const hm = /^(\d{1,2}):(\d{2})/.exec(raw);
+  let d: Date | null = null;
+  if (raw.includes("T") || raw.includes(" ") && raw.length > 10) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) d = parsed;
+  }
+  if (!d && hm) {
+    d = new Date();
+    d.setHours(Number(hm[1]), Number(hm[2]), 0, 0);
+  }
+  if (!d) return raw;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).toLowerCase();
+}
+
+export default function PruningActivityReportPage() {
+  const { selectedVineyardId, memberships } = useVineyard();
+  const vineyardName =
+    memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
+  const { toast } = useToast();
+  const canSeeCosts = useCanSeeCosts();
+  const fmt = useRegionFormatters();
+  const money = (n: number | null) => (n == null ? "—" : fmt.currency(n));
+
+  const { data: rows = [], isLoading, error } = usePruningActivity(selectedVineyardId);
+
+  // -------------------- Filters --------------------
+  const [search, setSearch] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [season, setSeason] = useState<string>(ANY);
+  const [blockId, setBlockId] = useState<string>(ANY);
+  const [worker, setWorker] = useState<string>(ANY);
+  const [method, setMethod] = useState<string>(ANY);
+  const [linked, setLinked] = useState<string>(ANY);
+  const [includeReversed, setIncludeReversed] = useState(false);
+
+  const seasonOptions = useMemo(() => {
+    const s = new Set<number>();
+    rows.forEach((r) => { if (r.seasonYear != null) s.add(r.seasonYear); });
+    return Array.from(s).sort((a, b) => b - a);
+  }, [rows]);
+
+  const blockOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((r) => map.set(r.paddockId, r.blockName));
+    return Array.from(map, ([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows]);
+
+  const workerOptions = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => { if (r.worker && r.worker !== "—") s.add(r.worker); });
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  const methodOptions = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => { if (r.method && r.method !== "—") s.add(r.method); });
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  const filtered = useMemo(() => {
+    const fromTs = from ? new Date(from).getTime() : null;
+    const toTs = to ? new Date(to).getTime() + 86_399_999 : null;
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (!includeReversed && r.isReversed) return false;
+      if (fromTs != null || toTs != null) {
+        const ts = r.date ? new Date(r.date).getTime() : NaN;
+        if (Number.isNaN(ts)) return false;
+        if (fromTs != null && ts < fromTs) return false;
+        if (toTs != null && ts > toTs) return false;
+      }
+      if (season !== ANY && String(r.seasonYear ?? "") !== season) return false;
+      if (blockId !== ANY && r.paddockId !== blockId) return false;
+      if (worker !== ANY && r.worker !== worker) return false;
+      if (method !== ANY && r.method !== method) return false;
+      if (linked === "yes" && !r.workTaskId) return false;
+      if (linked === "no" && r.workTaskId) return false;
+      if (q) {
+        const hay = [r.blockName, r.variety, r.worker, r.method, r.rowsLabel, r.notes]
+          .join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [rows, search, from, to, season, blockId, worker, method, linked, includeReversed]);
+
+  // -------------------- Sorting --------------------
+  const accessors = useMemo(
+    () => ({
+      date: (r: PruningActivityRow) => (r.date ? new Date(r.date).getTime() : null),
+      season: (r: PruningActivityRow) => r.seasonYear,
+      vintage: (r: PruningActivityRow) => r.vintageYear,
+      block: (r: PruningActivityRow) => r.blockName,
+      variety: (r: PruningActivityRow) => r.variety,
+      worker: (r: PruningActivityRow) => r.worker,
+      method: (r: PruningActivityRow) => r.method,
+      rows: (r: PruningActivityRow) => (r.rowNumbers.length ? r.rowNumbers[0] : null),
+      quarters: (r: PruningActivityRow) => r.quarters,
+      rowEq: (r: PruningActivityRow) => r.rowEquivalents,
+      vines: (r: PruningActivityRow) => r.vines,
+      hours: (r: PruningActivityRow) => r.labourHours,
+      vinesPerHour: (r: PruningActivityRow) => r.vinesPerHour,
+      rate: (r: PruningActivityRow) => r.hourlyRate,
+      cost: (r: PruningActivityRow) => r.labourCost,
+      task: (r: PruningActivityRow) => r.workTaskLabel,
+      status: (r: PruningActivityRow) => (r.isReversed ? 1 : 0),
+    }),
+    [],
+  );
+
+  const { sorted, toggleSort, getSortDirection } =
+    useSortableTable<PruningActivityRow, SortKey>(filtered, { accessors });
+
+  // -------------------- Totals --------------------
+  const totals = useMemo(
+    () =>
+      filtered.reduce(
+        (acc, r) => ({
+          quarters: acc.quarters + r.quarters,
+          rowEq: acc.rowEq + r.rowEquivalents,
+          vines: acc.vines + r.vines,
+          hours: acc.hours + (r.labourHours ?? 0),
+          cost: acc.cost + (r.labourCost ?? 0),
+        }),
+        { quarters: 0, rowEq: 0, vines: 0, hours: 0, cost: 0 },
+      ),
+    [filtered],
+  );
+
+  const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
+
+  // -------------------- Exports --------------------
+  const csvSafe = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const baseHeader = [
+    "Date", "Pruning season", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
+    "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
+    "Labour hours", "Start", "Finish", "Vines / hour", "Work task", "Status", "Notes",
+  ];
+  const costHeader = ["Labour cost", "Effective rate / hour", "currency"];
+
+  const rowToCells = (r: PruningActivityRow) => {
+    const base: (string | number)[] = [
+      r.date,
+      r.seasonYear ?? "",
+      r.vintageYear ?? "",
+      r.blockName,
+      r.variety,
+      r.worker,
+      r.method,
+      r.rowsLabel,
+      r.rowCount,
+      r.quarters,
+      r.rowEquivalents.toFixed(2),
+      r.vines,
+      r.labourHours == null ? "" : r.labourHours.toFixed(2),
+      formatTime(r.startTime),
+      formatTime(r.finishTime),
+      r.vinesPerHour == null ? "" : r.vinesPerHour.toFixed(1),
+      r.workTaskLabel ?? "",
+      r.isReversed ? "Reversed" : "Recorded",
+      r.notes,
+    ];
+    if (!canSeeCosts) return base;
+    return [
+      ...base,
+      r.labourCost == null ? "" : r.labourCost.toFixed(2),
+      r.hourlyRate == null ? "" : r.hourlyRate.toFixed(2),
+      fmt.settings.currency_code,
+    ];
+  };
+
+  const downloadCsv = () => {
+    const header = canSeeCosts ? [...baseHeader, ...costHeader] : baseHeader;
+    const lines = [header.map(csvSafe).join(",")];
+    sorted.forEach((r) => lines.push(rowToCells(r).map(csvSafe).join(",")));
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pruning-activity-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "CSV exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} exported.` });
+  };
+
+  const filterSummary = () => {
+    const parts: string[] = [];
+    if (from || to) parts.push(`Date: ${from || "…"} → ${to || "…"}`);
+    if (season !== ANY) parts.push(`Pruning season: ${season}`);
+    if (blockId !== ANY) {
+      parts.push(`${fmt.blockLabel}: ${blockOptions.find((b) => b.id === blockId)?.name ?? blockId}`);
+    }
+    if (worker !== ANY) parts.push(`Worker: ${worker}`);
+    if (method !== ANY) parts.push(`Method: ${method}`);
+    if (linked !== ANY) parts.push(`Work Task: ${linked === "yes" ? "linked" : "not linked"}`);
+    if (includeReversed) parts.push("Includes reversed entries");
+    return parts.length ? parts.join("  •  ") : "No filters applied";
+  };
+
+  const downloadPdf = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+    const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 32;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("Pruning Activity Report", margin, 42);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(`Vineyard: ${vineyardName ?? "—"}`, margin, 58);
+    doc.text(`Generated: ${fmt.dateTime(new Date())}`, pageWidth - margin, 58, { align: "right" });
+    doc.setDrawColor(200);
+    doc.line(margin, 66, pageWidth - margin, 66);
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    const wrapped = doc.splitTextToSize(`Filters: ${filterSummary()}`, pageWidth - margin * 2);
+    doc.text(wrapped, margin, 80);
+    doc.setTextColor(0);
+
+    const head = [
+      "Date", fmt.blockLabel, "Variety", "Worker", "Method", "Rows",
+      "Qtrs", "Row eq.", "Vines", "Hours", "Vines/hr", "Work task", "Status",
+    ];
+    if (canSeeCosts) head.push("Labour cost", "Rate/hr");
+
+    const body = sorted.map((r) => {
+      const base = [
+        formatDate(r.date),
+        r.blockName,
+        r.variety,
+        r.worker,
+        r.method,
+        r.rowsLabel,
+        String(r.quarters),
+        r.rowEquivalents.toFixed(2),
+        r.vines.toLocaleString(),
+        r.labourHours == null ? "—" : r.labourHours.toFixed(2),
+        r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0),
+        r.workTaskLabel ?? "—",
+        r.isReversed ? "Reversed" : "Recorded",
+      ];
+      if (canSeeCosts) base.push(money(r.labourCost), money(r.hourlyRate));
+      return base;
+    });
+
+    const totalsRow = [
+      "Totals (filtered)", "", "", "", "", "",
+      String(totals.quarters),
+      totals.rowEq.toFixed(2),
+      totals.vines.toLocaleString(),
+      totals.hours.toFixed(2),
+      avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
+      "", "",
+    ];
+    if (canSeeCosts) totalsRow.push(money(totals.cost), "");
+
+    autoTable(doc, {
+      head: [head],
+      body: [...body, totalsRow],
+      startY: 80 + wrapped.length * 10 + 8,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 7.5, cellPadding: 3 },
+      headStyles: { fillColor: [40, 62, 44], textColor: 255 },
+    });
+
+    doc.save(`pruning-activity-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
+  };
+
+  const colSpan = canSeeCosts ? 17 : 15;
+
+  return (
+    <div className="p-4 sm:p-6 space-y-4 max-w-[1600px]">
+      <PageHead
+        title="Pruning Activity Report | VineTrack"
+        description="Per-entry pruning activity report with rows worked, vines, labour hours, productivity and linked work tasks."
+        path="/reports/pruning-activity"
+      />
+
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <Scissors className="h-5 w-5" /> Pruning Activity Report
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Every recorded pruning entry, with rows worked, vines, labour hours and
+            productivity. Read-only — figures come straight from the pruning records.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/tools/pruning-tracker">
+            Open Pruning Tracker <ExternalLink className="h-3.5 w-3.5 ml-1" />
+          </Link>
+        </Button>
+      </div>
+
+      {error && (
+        <Card className="p-4 text-sm text-destructive">
+          Couldn't load pruning activity: {(error as any)?.message ?? String(error)}
+        </Card>
+      )}
+
+      {/* -------------------- Summary -------------------- */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+        {[
+          { label: "Entries", value: filtered.length.toLocaleString() },
+          { label: "Row equivalents", value: totals.rowEq.toFixed(2) },
+          { label: "Vines pruned", value: totals.vines.toLocaleString() },
+          { label: "Labour hours", value: totals.hours.toFixed(2) },
+          {
+            label: canSeeCosts ? "Labour cost" : "Avg vines / hour",
+            value: canSeeCosts
+              ? money(totals.cost)
+              : avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
+          },
+        ].map((s) => (
+          <Card key={s.label} className="p-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
+            <div className="text-xl font-semibold tabular-nums mt-1">{s.value}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* -------------------- Filters -------------------- */}
+      <Card className="p-3 space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search block, worker, rows, notes…"
+              className="pl-8"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
+            <span className="text-xs text-muted-foreground">→</span>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+          </div>
+          <Select value={season} onValueChange={setSeason}>
+            <SelectTrigger><SelectValue placeholder="Pruning season" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All pruning seasons</SelectItem>
+              {seasonOptions.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y} pruning season</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={blockId} onValueChange={setBlockId}>
+            <SelectTrigger><SelectValue placeholder={fmt.blockLabel} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All {fmt.blocksLabel.toLowerCase()}</SelectItem>
+              {blockOptions.map((b) => (
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={worker} onValueChange={setWorker}>
+            <SelectTrigger><SelectValue placeholder="Worker / crew" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All workers / crews</SelectItem>
+              {workerOptions.map((w) => (
+                <SelectItem key={w} value={w}>{w}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={method} onValueChange={setMethod}>
+            <SelectTrigger><SelectValue placeholder="Method" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>All methods</SelectItem>
+              {methodOptions.map((m) => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={linked} onValueChange={setLinked}>
+            <SelectTrigger><SelectValue placeholder="Work Task link" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>Linked and unlinked</SelectItem>
+              <SelectItem value="yes">With linked Work Task</SelectItem>
+              <SelectItem value="no">Without linked Work Task</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={includeReversed}
+              onCheckedChange={(v) => setIncludeReversed(v === true)}
+            />
+            Include reversed entries
+          </label>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {isLoading ? "Loading…" : `${filtered.length} of ${rows.length} entr${rows.length === 1 ? "y" : "ies"}`}
+        </div>
+      </Card>
+
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!sorted.length}>
+          <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
+        </Button>
+        <Button size="sm" onClick={downloadCsv} disabled={!sorted.length}>
+          <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+        </Button>
+      </div>
+
+      {/* -------------------- Table -------------------- */}
+      <Card className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("season")} onSort={() => toggleSort("season")}>Season</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("vintage")} onSort={() => toggleSort("vintage")}>Vintage</SortableTableHead>
+              <SortableTableHead active={getSortDirection("block")} onSort={() => toggleSort("block")}>{fmt.blockLabel}</SortableTableHead>
+              <SortableTableHead active={getSortDirection("variety")} onSort={() => toggleSort("variety")}>Variety</SortableTableHead>
+              <SortableTableHead active={getSortDirection("worker")} onSort={() => toggleSort("worker")}>Worker / crew</SortableTableHead>
+              <SortableTableHead active={getSortDirection("method")} onSort={() => toggleSort("method")}>Method</SortableTableHead>
+              <SortableTableHead active={getSortDirection("rows")} onSort={() => toggleSort("rows")}>Rows</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("quarters")} onSort={() => toggleSort("quarters")}>Qtrs</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("rowEq")} onSort={() => toggleSort("rowEq")}>Row eq.</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("vines")} onSort={() => toggleSort("vines")}>Vines</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("hours")} onSort={() => toggleSort("hours")}>Hours</SortableTableHead>
+              <SortableTableHead align="right" active={getSortDirection("vinesPerHour")} onSort={() => toggleSort("vinesPerHour")}>Vines / hr</SortableTableHead>
+              {canSeeCosts && (
+                <>
+                  <SortableTableHead align="right" active={getSortDirection("rate")} onSort={() => toggleSort("rate")}>Rate / hr</SortableTableHead>
+                  <SortableTableHead align="right" active={getSortDirection("cost")} onSort={() => toggleSort("cost")}>Labour cost</SortableTableHead>
+                </>
+              )}
+              <SortableTableHead active={getSortDirection("task")} onSort={() => toggleSort("task")}>Work task</SortableTableHead>
+              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorted.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={colSpan} className="text-center text-sm text-muted-foreground py-8">
+                  {isLoading ? "Loading…" : "No pruning entries match the current filters."}
+                </TableCell>
+              </TableRow>
+            ) : sorted.map((r) => (
+              <TableRow key={r.id} className={r.isReversed ? "bg-muted/20" : undefined}>
+                <TableCell className="whitespace-nowrap">
+                  <div>{formatDate(r.date)}</div>
+                  {(r.startTime || r.finishTime) && (
+                    <div className="text-[11px] text-muted-foreground">
+                      {formatTime(r.startTime)}–{formatTime(r.finishTime)}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{r.seasonYear ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.vintageYear ?? "—"}</TableCell>
+                <TableCell className="font-medium">{r.blockName}</TableCell>
+                <TableCell className="max-w-[180px] truncate" title={r.variety}>{r.variety}</TableCell>
+                <TableCell>{r.worker}</TableCell>
+                <TableCell className="capitalize">{r.method}</TableCell>
+                <TableCell className="max-w-[180px] truncate" title={r.rowsLabel}>
+                  {r.rowsLabel}
+                  {r.rowCount > 0 && (
+                    <span className="text-[11px] text-muted-foreground"> ({r.rowCount})</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{r.quarters}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.rowEquivalents.toFixed(2)}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.vines.toLocaleString()}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.labourHours == null ? "—" : r.labourHours.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0)}
+                </TableCell>
+                {canSeeCosts && (
+                  <>
+                    <TableCell className="text-right tabular-nums">{money(r.hourlyRate)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{money(r.labourCost)}</TableCell>
+                  </>
+                )}
+                <TableCell>
+                  {r.workTaskId ? (
+                    <Link
+                      to={`/setup/work-tasks?highlight=${r.workTaskId}`}
+                      className="text-primary inline-flex items-center gap-1 hover:underline"
+                    >
+                      {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {r.isReversed
+                    ? <Badge variant="destructive">Reversed</Badge>
+                    : <span className="text-xs text-muted-foreground">Recorded</span>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          {sorted.length > 0 && (
+            <TableBody>
+              <TableRow className="bg-muted/30">
+                <TableCell className="font-medium">Totals (filtered)</TableCell>
+                <TableCell colSpan={7} />
+                <TableCell className="text-right tabular-nums font-medium">{totals.quarters}</TableCell>
+                <TableCell className="text-right tabular-nums font-medium">{totals.rowEq.toFixed(2)}</TableCell>
+                <TableCell className="text-right tabular-nums font-medium">{totals.vines.toLocaleString()}</TableCell>
+                <TableCell className="text-right tabular-nums font-medium">{totals.hours.toFixed(2)}</TableCell>
+                <TableCell className="text-right tabular-nums font-medium">
+                  {avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}
+                </TableCell>
+                {canSeeCosts && (
+                  <>
+                    <TableCell />
+                    <TableCell className="text-right tabular-nums font-semibold">{money(totals.cost)}</TableCell>
+                  </>
+                )}
+                <TableCell />
+                <TableCell />
+              </TableRow>
+            </TableBody>
+          )}
+        </Table>
+      </Card>
+
+      <p className="text-[11px] text-muted-foreground">
+        Labour cost and effective rate come from the labour lines of the linked Work
+        Task. Entries without a linked Work Task show no cost.
+      </p>
+    </div>
+  );
+}
