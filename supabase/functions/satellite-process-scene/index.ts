@@ -24,8 +24,8 @@ import {
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
 import {
-  alignBboxToGrid, rasterisePolygonMask, rasterisePolygonCoverage,
-  maskPngToPolygon, maskPngToPolygonSoft, GRID_CRS, GRID_CRS_URI,
+  alignBboxToGrid, rasterisePolygonCoverage, maskPngToPolygonSoft,
+  GRID_CRS, GRID_CRS_URI,
 } from "../_shared/satellite-grid.ts";
 
 
