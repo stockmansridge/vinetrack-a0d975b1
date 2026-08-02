@@ -468,6 +468,8 @@ export default function PruningActivityReportPage() {
             <SelectTrigger><SelectValue placeholder="Pruning season" /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>All pruning seasons</SelectItem>
+              {hasUnassigned && <SelectItem value={UNASSIGNED}>Unassigned season</SelectItem>}
+
               {seasonOptions.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y} pruning season</SelectItem>
               ))}
