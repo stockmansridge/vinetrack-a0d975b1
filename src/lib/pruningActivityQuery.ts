@@ -39,15 +39,41 @@ export interface PruningActivityRow {
   labourHours: number | null;
   startTime: string | null;
   finishTime: string | null;
+  /** Elapsed minutes between start and finish (overnight-aware). Null when unknown. */
+  durationMinutes: number | null;
   vinesPerHour: number | null;
   rowEqPerHour: number | null;
   workTaskId: string | null;
   workTaskLabel: string | null;
+  workTaskStatus: string | null;
   labourCost: number | null;    // null when there is no linked Work Task
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
+  createdAt: string | null;
+  updatedAt: string | null;
   isReversed: boolean;
 }
+
+/** Minutes between two time/timestamp values; rolls over midnight. */
+export function durationMinutesBetween(start: string | null, finish: string | null): number | null {
+  const toMinutes = (v: string | null): number | null => {
+    if (!v) return null;
+    const raw = v.trim();
+    if (raw.includes("T") || (raw.includes(" ") && raw.length > 10)) {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+    }
+    const hm = /^(\d{1,2}):(\d{2})/.exec(raw);
+    if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+    return null;
+  };
+  const a = toMinutes(start);
+  const b = toMinutes(finish);
+  if (a == null || b == null) return null;
+  const diff = b - a;
+  return diff >= 0 ? diff : diff + 24 * 60;
+}
+
 
 /** Compact a sorted list of row numbers into "1–4, 7, 10–12". */
 export function formatRowRanges(rows: number[]): string {
@@ -69,7 +95,7 @@ export function formatRowRanges(rows: number[]): string {
 interface SeasonLite { id: string; paddock_id: string; season_year: number }
 interface PaddockLite { id: string; name: string | null; variety_allocations: any }
 interface SegmentLite { pruning_entry_id: string | null; row_number: number; segment_number: number }
-interface TaskLite { id: string; task_type: string | null; description: string | null }
+interface TaskLite { id: string; task_type: string | null; description: string | null; status: string | null }
 interface LabourLite { work_task_id: string; total_hours: number | null; total_cost: number | null }
 
 export function usePruningActivity(vineyardId: string | null) {
@@ -89,7 +115,7 @@ export function usePruningActivity(vineyardId: string | null) {
             .eq("vineyard_id", vid),
           supabase.from("paddocks").select("id, name, variety_allocations")
             .eq("vineyard_id", vid).is("deleted_at", null),
-          supabase.from("work_tasks").select("id, task_type, description")
+          supabase.from("work_tasks").select("id, task_type, description, status")
             .eq("vineyard_id", vid).is("deleted_at", null),
           supabase.from("work_task_labour_lines")
             .select("work_task_id, total_hours, total_cost")
@@ -174,15 +200,19 @@ export function usePruningActivity(vineyardId: string | null) {
           labourHours,
           startTime: e.start_time,
           finishTime: e.finish_time,
+          durationMinutes: durationMinutesBetween(e.start_time, e.finish_time),
           vinesPerHour: labourHours && labourHours > 0 ? vines / labourHours : null,
           rowEqPerHour: labourHours && labourHours > 0 ? rowEq / labourHours : null,
           workTaskId: e.work_task_id,
           workTaskLabel: task
             ? (task.task_type?.trim() || task.description?.trim() || "Work Task")
             : e.work_task_id ? "Work Task" : null,
+          workTaskStatus: task?.status ?? null,
           labourCost,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",
+          createdAt: e.created_at ?? null,
+          updatedAt: e.updated_at ?? null,
           isReversed: !!e.deleted_at,
         } satisfies PruningActivityRow;
       });
