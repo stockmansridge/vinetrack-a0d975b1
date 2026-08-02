@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench, Maximize2, Minimize2, PanelRight, CalendarDays, ShieldAlert } from "lucide-react";
 import BackfillPanel from "@/components/satellite/BackfillPanel";
 import MapWorkspaceDrawer, { type DrawerTab } from "@/components/satellite/MapWorkspaceDrawer";
+import { fetchBackfillStatus } from "@/lib/satelliteBackfill";
 import CropHealthDateTimeline, { type TimelineDateEntry, type TimelineStatus } from "@/components/satellite/CropHealthDateTimeline";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
@@ -3281,19 +3282,8 @@ export default function SatelliteMappingPage() {
               : false;
             return (
               <div className="rounded-md bg-background/90 backdrop-blur shadow-md border">
-                <SatelliteDateSlider
-                  entries={dateOptions.map((d) => {
-                    const group = dateCoverage.find((g) => g.date === d.date);
-                    const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
-                    return {
-                      date: d.date,
-                      coveragePercent: d.coveragePercent,
-                      paddockCount: singlePaddock
-                        ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
-                        : d.paddockCount,
-                      activeCount: singlePaddock ? 1 : d.activeCount,
-                    };
-                  })}
+                <CropHealthDateTimeline
+                  entries={timelineEntries}
                   committedDate={selectedSceneKey}
                   previewDate={previewDate}
                   onPreviewChange={(d) => setPreviewDate(d)}
