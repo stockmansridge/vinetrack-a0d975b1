@@ -64,13 +64,17 @@ Deno.serve(async (req) => {
   // One shared, globally-snapped display grid for this paddock. Every layer for
   // this paddock uses it, and every paddock in the vineyard snaps to the same
   // global origin/resolution, so touching paddocks share exact pixel edges.
-  // The display grid is supersampled (finer metres/pixel than the 10 m source)
-  // while remaining snapped to the same global EPSG:3857 origin, so the surface
-  // renders smoothly without breaking alignment with neighbouring paddocks.
-  const displayGrid = alignBboxToGrid(bbox, QC.displayTargetResolutionM, QC.displayMaxSize);
+  // The display grid now sits on the SAME native 10 m cell size as the
+  // analytical raster — no supersampling and no provider-side resampling, so
+  // no interpolation stage can introduce banding or repeated columns. Visual
+  // smoothing is applied by the browser at render time.
+  const displayGrid = alignBboxToGrid(
+    bbox, QC.displayTargetResolutionM, QC.displayMaxSize, 1, /* allowCoarsen */ false,
+  );
   // Anti-aliased raster coverage of the saved polygon on that grid (0..255),
   // giving clean paddock edges with no bleed past the boundary.
   const displayCoverage = rasterisePolygonCoverage(polys, displayGrid);
+
 
 
 
