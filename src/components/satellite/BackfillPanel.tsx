@@ -46,7 +46,8 @@ export default function BackfillPanel({
   // Drive the batch runner while a job is active. Each batch is a separate
   // server call, so a refresh simply picks the job back up.
   useEffect(() => {
-    if (!vineyardId || !active || running) return;
+    // Only one instance drives the batch runner, so batches never overlap.
+    if (!canManage || !vineyardId || !active || running) return;
     let cancelled = false;
     setRunning(true);
     (async () => {
@@ -71,7 +72,7 @@ export default function BackfillPanel({
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vineyardId, active]);
+  }, [vineyardId, active, canManage]);
 
   const discover = useMutation({
     mutationFn: () => discoverBackfill({
