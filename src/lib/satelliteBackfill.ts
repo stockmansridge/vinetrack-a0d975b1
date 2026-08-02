@@ -42,6 +42,21 @@ export interface BackfillJob {
   last_error: string | null;
 }
 
+export type ExpectedDateOutcome =
+  | "pending" | "available" | "downloaded" | "processing"
+  | "no_provider_capture" | "cloud_obscured" | "invalid_coverage"
+  | "failed" | "retry_pending";
+
+/** Per-date rollup across paddocks — drives the bottom imagery timeline. */
+export interface ExpectedDateEntry {
+  date: string;              // YYYY-MM-DD
+  status: ExpectedDateOutcome | string;
+  outcomes: Record<string, number>;
+  paddocks_total: number;
+  paddocks_downloaded: number;
+  last_error: string | null;
+}
+
 export interface BackfillStatus {
   active_job: BackfillJob | null;
   last_job: BackfillJob | null;
@@ -53,6 +68,7 @@ export interface BackfillStatus {
     last_auto_check_at: string | null;
   } | null;
   outcome_counts: Record<string, number>;
+  expected_dates?: ExpectedDateEntry[];
   expected_date_total: number;
   missing_dates: number;
   downloaded_dates: number;
