@@ -1845,23 +1845,23 @@ export default function WorkTaskReportsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>{fmt.blockLabel}</TableHead>
-                  <TableHead className="text-right">Tasks</TableHead>
-                  <TableHead className="text-right">Area</TableHead>
-                  <TableHead className="text-right">Labour hrs</TableHead>
-                  <TableHead className="text-right">Machine hrs</TableHead>
-                  <TableHead className="text-right">Linked trips</TableHead>
+                  <SortableTableHead active={allocSortDir("name")} onSort={() => toggleAllocSort("name")}>{fmt.blockLabel}</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("tasks")} onSort={() => toggleAllocSort("tasks")}>Tasks</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("area")} onSort={() => toggleAllocSort("area")}>Area</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("labourHours")} onSort={() => toggleAllocSort("labourHours")}>Labour hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("machineHours")} onSort={() => toggleAllocSort("machineHours")}>Machine hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={allocSortDir("linkedTrips")} onSort={() => toggleAllocSort("linkedTrips")}>Linked trips</SortableTableHead>
                   {canSeeCosts && (
                     <>
-                      <TableHead className="text-right">Manual labour</TableHead>
-                      <TableHead className="text-right">Machine charge</TableHead>
-                      <TableHead className="text-right">Machine fuel</TableHead>
-                      <TableHead className="text-right">Linked GPS trips</TableHead>
-                      <TableHead className="text-right">Total allocated cost</TableHead>
-                      <TableHead className="text-right">{costPerAreaLabel}</TableHead>
+                      <SortableTableHead align="right" active={allocSortDir("manualLabour")} onSort={() => toggleAllocSort("manualLabour")}>Manual labour</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("machineCharge")} onSort={() => toggleAllocSort("machineCharge")}>Machine charge</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("machineFuel")} onSort={() => toggleAllocSort("machineFuel")}>Machine fuel</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("linkedTripCost")} onSort={() => toggleAllocSort("linkedTripCost")}>Linked GPS trips</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("totalCost")} onSort={() => toggleAllocSort("totalCost")}>Total allocated cost</SortableTableHead>
+                      <SortableTableHead align="right" active={allocSortDir("costPerArea")} onSort={() => toggleAllocSort("costPerArea")}>{costPerAreaLabel}</SortableTableHead>
                     </>
                   )}
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead active={allocSortDir("status")} onSort={() => toggleAllocSort("status")}>Status</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1871,7 +1871,7 @@ export default function WorkTaskReportsPage() {
                       {loading ? "Loading…" : `No ${fmt.blockLabel.toLowerCase()} rows for the current filters.`}
                     </TableCell>
                   </TableRow>
-                ) : allocationRows.map((r) => {
+                ) : sortedAllocationRows.map((r) => {
                   const status = allocationStatus(r);
                   const isReview = status !== "OK";
                   const isOpen = allocExpanded.has(r.key);
