@@ -194,6 +194,73 @@ export async function archiveDamageRecord(id: string, userId: string | null = nu
   if (res.error) throw res.error;
 }
 
+// ---------------------------------------------------------------------------
+// Manager-authorised delete (SQL 160)
+//
+// Soft delete only, performed by the server-side RPC
+// `delete_damage_record(p_vineyard_id, p_damage_record_id)` which re-checks
+// owner / co-owner / manager / system-admin authority. The browser never
+// deletes or soft-deletes the row directly.
+// ---------------------------------------------------------------------------
+export type DamageDeleteErrorCode =
+  | "damage_delete_permission_denied"
+  | "damage_record_not_found"
+  | "damage_record_already_deleted"
+  | "damage_delete_unavailable"
+  | "damage_delete_failed";
+
+const DAMAGE_DELETE_MESSAGES: Record<DamageDeleteErrorCode, string> = {
+  damage_delete_permission_denied:
+    "You do not have permission to delete this damage record.",
+  damage_record_not_found: "This damage record could not be found.",
+  damage_record_already_deleted: "This damage record has already been deleted.",
+  damage_delete_unavailable:
+    "Damage record deletion is not available yet. Please try again later.",
+  damage_delete_failed: "Could not delete this damage record. Please try again.",
+};
+
+export class DamageDeleteError extends Error {
+  code: DamageDeleteErrorCode;
+  constructor(code: DamageDeleteErrorCode) {
+    super(DAMAGE_DELETE_MESSAGES[code]);
+    this.name = "DamageDeleteError";
+    this.code = code;
+  }
+}
+
+function mapDamageDeleteError(error: any): DamageDeleteError {
+  const raw = `${error?.message ?? ""} ${error?.details ?? ""} ${error?.hint ?? ""}`.toLowerCase();
+  const code = String(error?.code ?? "");
+  if (raw.includes("damage_delete_permission_denied")) {
+    return new DamageDeleteError("damage_delete_permission_denied");
+  }
+  if (raw.includes("damage_record_already_deleted")) {
+    return new DamageDeleteError("damage_record_already_deleted");
+  }
+  if (raw.includes("damage_record_not_found")) {
+    return new DamageDeleteError("damage_record_not_found");
+  }
+  if (code === "PGRST202" || raw.includes("could not find the function")) {
+    return new DamageDeleteError("damage_delete_unavailable");
+  }
+  if (code === "42501" || raw.includes("permission denied")) {
+    return new DamageDeleteError("damage_delete_permission_denied");
+  }
+  return new DamageDeleteError("damage_delete_failed");
+}
+
+export async function deleteDamageRecord(
+  vineyardId: string,
+  damageRecordId: string,
+): Promise<void> {
+  const { error } = await (supabase as any).rpc("delete_damage_record", {
+    p_vineyard_id: vineyardId,
+    p_damage_record_id: damageRecordId,
+  });
+  if (error) throw mapDamageDeleteError(error);
+}
+
+
 const PHOTO_BUCKET = "damage-photos";
 const PHOTO_TTL = 60 * 60;
 
