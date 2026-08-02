@@ -1,17 +1,20 @@
 // Historical imagery timeline for Crop Health Maps.
 //
-// Replaces the old date slider. Shows EVERY known capture date on one
-// horizontal rail — dates with saved imagery, dates still downloading or
-// processing, and dates the provider could not deliver (cloud, no capture,
-// failed) — so growers can see the whole imagery history and jump straight to
-// any usable date.
+// Bottom-docked, full-width bar (no floating card). Shows EVERY known capture
+// date on one horizontal rail — dates with saved imagery, dates still
+// downloading or processing, and dates the provider could not deliver (cloud,
+// no capture, failed) — so growers can see the whole imagery history and jump
+// straight to any usable date.
+//
+// Heights: ~84 px expanded, ~44 px collapsed. Secondary counts live in the
+// compact details line and in per-node tooltips.
 //
 // Presentation only: statuses are supplied by the page (saved manifest dates
 // merged with backfill expected-date outcomes).
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, ChevronLeft, ChevronRight, CircleDashed, CloudOff,
-  Loader2, Minus, Pause, Play, SkipBack, SkipForward,
+  AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  CircleDashed, CloudOff, Loader2, Minus, Pause, Play, SkipBack, SkipForward,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -48,6 +51,8 @@ interface Props {
   singlePaddockScope?: boolean;
   scopedPaddockMissing?: boolean;
   layerShortLabel?: string;
+  /** e.g. "Sentinel-2" — shown in the compact details line. */
+  sourceLabel?: string;
 }
 
 const STATUS_META: Record<TimelineStatus, {
@@ -73,6 +78,13 @@ function formatLong(iso: string): string {
     });
   } catch { return iso; }
 }
+function formatMedium(iso: string): string {
+  try {
+    return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, {
+      day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+    });
+  } catch { return iso; }
+}
 function formatShort(iso: string): string {
   try {
     return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, {
@@ -81,6 +93,8 @@ function formatShort(iso: string): string {
   } catch { return iso; }
 }
 function yearOf(iso: string): string { return iso.slice(0, 4); }
+
+const STORAGE_KEY = "crop-health:timeline-collapsed";
 
 export default function CropHealthDateTimeline({
   entries,
@@ -96,8 +110,19 @@ export default function CropHealthDateTimeline({
   singlePaddockScope = false,
   scopedPaddockMissing = false,
   layerShortLabel,
+  sourceLabel = "Sentinel-2",
 }: Props) {
   const railRef = useRef<HTMLDivElement>(null);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(STORAGE_KEY) === "1"; } catch { return false; }
+  });
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      const next = !v;
+      try { localStorage.setItem(STORAGE_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   // Oldest → newest, left → right.
   const sorted = useMemo(
@@ -138,10 +163,10 @@ export default function CropHealthDateTimeline({
 
   // Keep the active date visible as the selection moves (playback, arrows).
   useEffect(() => {
-    if (!displayDate) return;
+    if (!displayDate || collapsed) return;
     const el = railRef.current?.querySelector<HTMLElement>(`[data-date="${displayDate}"]`);
     el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, [displayDate]);
+  }, [displayDate, collapsed]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (selectable.length === 0) return;
@@ -159,12 +184,12 @@ export default function CropHealthDateTimeline({
   if (sorted.length === 0) {
     return (
       <div
-        className="rounded-md border bg-muted/20 px-3 py-4 text-xs text-muted-foreground space-y-1"
+        className="flex h-11 w-full items-center gap-2 border-t bg-background/95 px-3 text-xs text-muted-foreground backdrop-blur"
         role="status"
         aria-live="polite"
       >
-        <div className="text-sm font-medium text-foreground">No crop-health imagery history yet.</div>
-        <div>Check for new imagery to look for a suitable Copernicus capture.</div>
+        <span className="font-medium text-foreground">No crop-health imagery history yet.</span>
+        <span className="hidden sm:inline">Check for new imagery to look for a suitable Copernicus capture.</span>
       </div>
     );
   }
@@ -174,63 +199,181 @@ export default function CropHealthDateTimeline({
   const busy = sorted.filter((e) => e.status === "processing" || e.status === "queued").length;
   const isPreviewing = previewDate != null && previewDate !== committedDate;
 
-  const coverageMessage = (() => {
+  const coverageSummary = (() => {
     if (!selected) return "Select a date with imagery";
     if (singlePaddockScope) {
       if (scopedPaddockMissing) {
         const layerName = layerShortLabel ? `${layerShortLabel} ` : "";
-        return `No saved ${layerName}imagery for this paddock on ${formatLong(selected.date)}`;
+        return `No saved ${layerName}imagery for this paddock`;
       }
-      return "Imagery available for this paddock";
+      return "1/1 paddock";
     }
     const total = selected.activeCount || totalPaddocks;
     const meta = STATUS_META[selected.status];
     if (!meta?.selectable) return meta?.label ?? "";
-    if (selected.paddockCount >= total && total > 0) {
-      return `Imagery available for all ${total} paddock${total === 1 ? "" : "s"}`;
-    }
-    return `Imagery available for ${selected.paddockCount} of ${total} paddock${total === 1 ? "" : "s"}`;
+    return `${selected.paddockCount}/${total} paddock${total === 1 ? "" : "s"}`;
   })();
+
+  const atOldest = selectable.length < 2 || selectableIndex <= 0;
+  const atNewest = selectable.length < 2 || selectableIndex >= selectable.length - 1;
+
+  const collapseButton = (
+    <Button
+      variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+      onClick={toggleCollapsed}
+      aria-label={collapsed ? "Expand imagery timeline" : "Collapse imagery timeline"}
+      aria-expanded={!collapsed}
+    >
+      {collapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+    </Button>
+  );
+
+  if (collapsed) {
+    return (
+      <div
+        className="flex h-11 w-full items-center gap-1 border-t bg-background/95 px-2 backdrop-blur"
+        role="group"
+        aria-label="Crop health imagery timeline (collapsed)"
+      >
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={atOldest} onClick={() => go(selectableIndex - 1)}
+          aria-label="Previous available date"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0 flex-1 truncate text-xs">
+          <span className="font-semibold text-foreground">{selected ? formatMedium(selected.date) : "—"}</span>
+          <span className="text-muted-foreground">
+            {" · "}{coverageSummary}
+            {layerShortLabel ? ` · ${layerShortLabel}` : ""}
+          </span>
+        </div>
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={atNewest} onClick={() => go(selectableIndex + 1)}
+          aria-label="Next available date"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={atNewest} onClick={() => go(selectable.length - 1)}
+          aria-label="Jump to newest available imagery"
+        >
+          <SkipForward className="h-4 w-4" />
+        </Button>
+        {collapseButton}
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider delayDuration={150}>
       <div
-        className="rounded-md border bg-background px-2 py-2 md:px-3"
+        className="w-full border-t bg-background/95 backdrop-blur"
         role="group"
         aria-label="Crop health imagery timeline"
       >
-        {/* Header: current date + transport controls */}
-        <div className="flex items-center gap-1">
+        {/* Rail row */}
+        <div className="flex h-[52px] items-center gap-0.5 px-1">
           <Button
-            variant="ghost" size="icon" className="h-9 w-9"
-            disabled={selectable.length < 2 || selectableIndex <= 0}
-            onClick={() => go(0)}
+            variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+            disabled={atOldest} onClick={() => go(0)}
             aria-label="Jump to oldest available imagery"
           >
             <SkipBack className="h-4 w-4" />
           </Button>
           <Button
-            variant="ghost" size="icon" className="h-9 w-9"
-            disabled={selectable.length < 2 || selectableIndex <= 0}
-            onClick={() => go(selectableIndex - 1)}
+            variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+            disabled={atOldest} onClick={() => go(selectableIndex - 1)}
             aria-label="Previous available date"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <div className="min-w-0 flex-1 text-center">
-            <div className="text-sm font-semibold text-foreground truncate">
-              {selected ? formatLong(selected.date) : "—"}
-              {isPreviewing && (
-                <span className="ml-2 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Preview</span>
-              )}
+          <div
+            ref={railRef}
+            className="relative min-w-0 flex-1 overflow-x-auto overscroll-x-contain"
+            tabIndex={0}
+            onKeyDown={onKeyDown}
+            role="listbox"
+            aria-label="Imagery capture dates"
+            aria-activedescendant={displayDate ? `timeline-${displayDate}` : undefined}
+          >
+            <div className="relative flex min-w-full items-center gap-0.5 px-1">
+              {/* Continuous rail line behind the nodes */}
+              <div className="pointer-events-none absolute left-0 right-0 top-[15px] h-px bg-border" aria-hidden="true" />
+              {sorted.map((entry, i) => {
+                const meta = STATUS_META[entry.status] ?? STATUS_META.queued;
+                const Icon = meta.icon;
+                const isSel = entry.date === displayDate;
+                const isCommitted = entry.date === committedDate;
+                const showYear = i === 0 || yearOf(sorted[i - 1].date) !== yearOf(entry.date);
+                const total = entry.activeCount || totalPaddocks;
+                const detail = meta.selectable
+                  ? `${entry.paddockCount} of ${total} paddocks`
+                  : meta.label;
+                return (
+                  <Tooltip key={entry.date}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        id={`timeline-${entry.date}`}
+                        data-date={entry.date}
+                        role="option"
+                        aria-selected={isSel}
+                        disabled={!meta.selectable}
+                        onClick={() => pick(entry)}
+                        className={`relative z-10 flex w-10 shrink-0 flex-col items-center gap-0.5 rounded py-0.5 transition-colors ${
+                          meta.selectable ? "cursor-pointer hover:bg-accent" : "cursor-default"
+                        } ${isSel ? "bg-accent" : ""}`}
+                      >
+                        <span
+                          className={`flex items-center justify-center rounded-full border ${meta.dot} ${
+                            isSel ? "h-5 w-5 ring-2 ring-ring ring-offset-1 ring-offset-background"
+                                  : isCommitted ? "h-4 w-4" : "h-3.5 w-3.5"
+                          }`}
+                        >
+                          <Icon className={`${isSel ? "h-3 w-3" : "h-2 w-2"} ${entry.status === "processing" ? "animate-spin" : ""}`} />
+                        </span>
+                        <span className={`whitespace-nowrap text-[10px] leading-tight ${isSel ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                          {formatShort(entry.date)}
+                        </span>
+                        {showYear && (
+                          <span className="text-[9px] leading-none text-muted-foreground/70">{yearOf(entry.date)}</span>
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="font-medium">{formatLong(entry.date)}</div>
+                      <div className={meta.text}>{meta.label}</div>
+                      <div className="text-muted-foreground">{detail}</div>
+                      {entry.note && <div className="text-muted-foreground">{entry.note}</div>}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
             </div>
-            <div className="text-[11px] text-muted-foreground" aria-live="polite">{coverageMessage}</div>
           </div>
 
+          <Button
+            variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+            disabled={atNewest} onClick={() => go(selectableIndex + 1)}
+            aria-label="Next available date"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+            disabled={atNewest} onClick={() => go(selectable.length - 1)}
+            aria-label="Jump to newest available imagery"
+          >
+            <SkipForward className="h-4 w-4" />
+          </Button>
           {onTogglePlay && (
             <Button
-              variant="ghost" size="icon" className="h-9 w-9"
+              variant="ghost" size="icon" className="h-8 w-8 shrink-0"
               disabled={selectable.length < 2}
               onClick={onTogglePlay}
               aria-label={isPlaying ? "Pause timeline playback" : "Play timeline"}
@@ -239,108 +382,50 @@ export default function CropHealthDateTimeline({
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
           )}
-          <Button
-            variant="ghost" size="icon" className="h-9 w-9"
-            disabled={selectable.length < 2 || selectableIndex >= selectable.length - 1}
-            onClick={() => go(selectableIndex + 1)}
-            aria-label="Next available date"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost" size="icon" className="h-9 w-9"
-            disabled={selectable.length < 2 || selectableIndex >= selectable.length - 1}
-            onClick={() => go(selectable.length - 1)}
-            aria-label="Jump to newest available imagery"
-          >
-            <SkipForward className="h-4 w-4" />
-          </Button>
+          {collapseButton}
         </div>
 
-        {/* Rail */}
-        <div
-          ref={railRef}
-          className="relative mt-1 overflow-x-auto overscroll-x-contain pb-1"
-          tabIndex={0}
-          onKeyDown={onKeyDown}
-          role="listbox"
-          aria-label="Imagery capture dates"
-          aria-activedescendant={displayDate ? `timeline-${displayDate}` : undefined}
-        >
-          <div className="relative flex min-w-full items-end gap-1 px-1">
-            {/* Continuous rail line */}
-            <div className="pointer-events-none absolute left-0 right-0 top-[13px] h-px bg-border" aria-hidden="true" />
-            {sorted.map((entry, i) => {
-              const meta = STATUS_META[entry.status] ?? STATUS_META.queued;
-              const Icon = meta.icon;
-              const isSel = entry.date === displayDate;
-              const isCommitted = entry.date === committedDate;
-              const showYear = i === 0 || yearOf(sorted[i - 1].date) !== yearOf(entry.date);
-              const total = entry.activeCount || totalPaddocks;
-              const detail = meta.selectable
-                ? `${entry.paddockCount} of ${total} paddocks`
-                : meta.label;
-              return (
-                <Tooltip key={entry.date}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      id={`timeline-${entry.date}`}
-                      data-date={entry.date}
-                      role="option"
-                      aria-selected={isSel}
-                      disabled={!meta.selectable}
-                      onClick={() => pick(entry)}
-                      className={`relative z-10 flex w-11 shrink-0 flex-col items-center gap-1 rounded-md py-1 transition-colors ${
-                        meta.selectable ? "cursor-pointer hover:bg-accent" : "cursor-default"
-                      } ${isSel ? "bg-accent" : ""}`}
-                    >
-                      <span
-                        className={`flex items-center justify-center rounded-full border ${meta.dot} ${
-                          isSel ? "h-6 w-6 ring-2 ring-ring ring-offset-1 ring-offset-background"
-                                : isCommitted ? "h-5 w-5" : "h-4 w-4"
-                        }`}
-                      >
-                        <Icon className={`${isSel ? "h-3.5 w-3.5" : "h-2.5 w-2.5"} ${entry.status === "processing" ? "animate-spin" : ""}`} />
-                      </span>
-                      <span className={`text-[10px] leading-tight ${isSel ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-                        {formatShort(entry.date)}
-                      </span>
-                      <span className="text-[9px] leading-none text-muted-foreground/70">
-                        {showYear ? yearOf(entry.date) : "\u00a0"}
-                      </span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    <div className="font-medium">{formatLong(entry.date)}</div>
-                    <div className={meta.text}>{meta.label}</div>
-                    <div className="text-muted-foreground">{detail}</div>
-                    {entry.note && <div className="text-muted-foreground">{entry.note}</div>}
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
+        {/* Compact details line */}
+        <div className="flex h-7 items-center justify-between gap-3 border-t px-3 text-[11px] text-muted-foreground">
+          <div className="min-w-0 truncate" aria-live="polite">
+            <span className="text-muted-foreground">Selected: </span>
+            <span className="font-medium text-foreground">{selected ? formatLong(selected.date) : "—"}</span>
+            <span>
+              {" · "}{coverageSummary}
+              {layerShortLabel ? ` · ${layerShortLabel}` : ""}
+              {sourceLabel ? ` · ${sourceLabel}` : ""}
+            </span>
+            {isPreviewing && (
+              <span className="ml-2 uppercase tracking-wide">Preview</span>
+            )}
           </div>
-        </div>
-
-        {/* Legend / summary */}
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
-            {savedCount} date{savedCount === 1 ? "" : "s"} with imagery
-          </span>
-          {busy > 0 && (
-            <span className="inline-flex items-center gap-1 text-warning">
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-              {busy} in progress
-            </span>
-          )}
-          {unusable > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <CloudOff className="h-3 w-3" aria-hidden="true" />
-              {unusable} unavailable (cloud or no capture)
-            </span>
-          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="hidden shrink-0 items-center gap-3 sm:flex">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+                  {savedCount}
+                </span>
+                {busy > 0 && (
+                  <span className="inline-flex items-center gap-1 text-warning">
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    {busy}
+                  </span>
+                )}
+                {unusable > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <CloudOff className="h-3 w-3" aria-hidden="true" />
+                    {unusable}
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              <div>{savedCount} date{savedCount === 1 ? "" : "s"} with imagery</div>
+              {busy > 0 && <div>{busy} in progress</div>}
+              {unusable > 0 && <div>{unusable} unavailable (cloud or no capture)</div>}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </TooltipProvider>

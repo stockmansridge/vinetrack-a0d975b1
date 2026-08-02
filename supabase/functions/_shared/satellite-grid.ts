@@ -44,21 +44,33 @@ export interface AlignedGrid {
   bounds: { north: number; south: number; east: number; west: number };
   width: number;
   height: number;
-  /** Metres per pixel actually used (always a power-of-two multiple of base). */
+  /** Metres per pixel actually used. */
   resolutionM: number;
+  /** Metres per pixel that were REQUESTED (the product's native size). */
+  baseResolutionM: number;
+  /**
+   * True when the requested resolution had to be coarsened to fit `maxPx`.
+   * Analytical rasters pass `allowCoarsen: false` so this can never happen for
+   * measurement data — the request fails loudly instead of silently losing
+   * spatial resolution.
+   */
+  coarsened: boolean;
 }
 
 /**
  * Snap a WGS84 bbox onto the global EPSG:3857 grid.
- * `baseResM` is the desired metres/pixel; if the resulting raster would exceed
- * `maxPx` on a side the resolution is doubled (keeping grid alignment) until it
- * fits — never scaled by an arbitrary factor, which would break alignment.
+ * `baseResM` is the desired metres/pixel. When `allowCoarsen` is true and the
+ * raster would exceed `maxPx` on a side the resolution is doubled (keeping grid
+ * alignment) until it fits. When false (analytical rasters) the exact native
+ * pixel size is always preserved and the caller gets `coarsened: false` with
+ * the true pixel dimensions — never a rounded-up cell size.
  */
 export function alignBboxToGrid(
   bboxWgs84: [number, number, number, number],
   baseResM: number,
   maxPx: number,
   padPixels = 1,
+  allowCoarsen = true,
 ): AlignedGrid {
   const [w, s, e, n] = bboxWgs84;
   const xMin = lngToMercX(w);
@@ -74,7 +86,7 @@ export function alignBboxToGrid(
     const north = Math.ceil(yMax / res) * res + padPixels * res;
     const width = Math.max(16, Math.round((east - west) / res));
     const height = Math.max(16, Math.round((north - south) / res));
-    if ((width <= maxPx && height <= maxPx) || i === 7) {
+    if (!allowCoarsen || (width <= maxPx && height <= maxPx) || i === 7) {
       return {
         bbox3857: [west, south, east, north],
         bboxWgs84: [mercXToLng(west), mercYToLat(south), mercXToLng(east), mercYToLat(north)],
@@ -87,6 +99,8 @@ export function alignBboxToGrid(
         width,
         height,
         resolutionM: res,
+        baseResolutionM: baseResM,
+        coarsened: res !== baseResM,
       };
     }
     res *= 2;
@@ -94,6 +108,7 @@ export function alignBboxToGrid(
   // Unreachable — the loop always returns.
   throw new Error("grid_alignment_failed");
 }
+
 
 /**
  * Rasterise polygon rings into a per-pixel inside/outside mask using the

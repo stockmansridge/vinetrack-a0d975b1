@@ -92,6 +92,13 @@ export interface SatelliteMapProps {
   onOverlayUnmounted?: (info: OverlayCallbackInfo) => void;
   onDiagnosticsChange?: (diagnostics: SatelliteMapDiagnostics) => void;
   showDiagnostics?: boolean;
+  /**
+   * Administrator audit mode. When true, overlays render with
+   * nearest-neighbour scaling (one stored raster pixel per cell, no browser
+   * interpolation) so the true analytical pixel structure is visible.
+   */
+  rawPixels?: boolean;
+
   className?: string;
 }
 
@@ -151,6 +158,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     onOverlayUnmounted,
     onDiagnosticsChange,
     showDiagnostics = false,
+    rawPixels = false,
     className,
   } = props;
 
@@ -190,6 +198,14 @@ export default function SatelliteMap(props: SatelliteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgLayerRef = useRef<HTMLDivElement | null>(null);
   const imgRefs = useRef<Map<string, HTMLImageElement>>(new Map());
+  // Nearest-neighbour audit mode, applied to existing and future overlay <img>.
+  const rawPixelsRef = useRef(rawPixels);
+  useEffect(() => {
+    rawPixelsRef.current = rawPixels;
+    const mode = rawPixels ? "pixelated" : "auto";
+    imgRefs.current.forEach((img) => { img.style.imageRendering = mode; });
+  }, [rawPixels]);
+
   const cellRectRef = useRef<HTMLDivElement | null>(null);
   const cellRectValueRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null);
   const mapRef = useRef<any>(null);
@@ -486,10 +502,11 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.className = "pointer-events-none absolute top-0 left-0";
         img.style.transform = "translate(-9999px,-9999px)";
         img.style.transformOrigin = "top left";
-        // Smooth (bilinear) browser scaling — the stored display raster is
-        // supersampled and polygon-masked, so smoothing removes residual
-        // stair-stepping without altering values.
-        img.style.imageRendering = "auto";
+        // Smooth (bilinear) browser scaling of the native-resolution display
+        // raster — values are unchanged, only the on-screen interpolation.
+        // Admin "Raw pixels" mode switches this to nearest-neighbour.
+        img.style.imageRendering = rawPixelsRef.current ? "pixelated" : "auto";
+
         img.style.willChange = "opacity, transform";
         img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
         // Lifecycle callbacks — invoked once per <img> instance.

@@ -20,6 +20,7 @@ import {
   evalscriptFor, statsEvalscript, analyticalEvalscript, processImage, processAnalyticalRaster, statisticsQuery,
   INDEX_TYPES, INDEX_NATIVE_RES_M, INDEX_BANDS, QC, PROCESSING_VERSION, PROVIDER, SENTINEL2_COLLECTION,
   DISPLAY_ASSET_TYPE, ANALYTICAL_ASSET_TYPE, ANALYTICAL_NO_DATA_SENTINEL, ANALYTICAL_ROW_ORIENTATION,
+  SOURCE_PRODUCT_LEVEL, SOURCE_CRS, OUTPUT_CRS, SOURCE_INPUT_KIND,
   CdseConfigError, CdseAuthError, ProviderError,
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
@@ -64,13 +65,17 @@ Deno.serve(async (req) => {
   // One shared, globally-snapped display grid for this paddock. Every layer for
   // this paddock uses it, and every paddock in the vineyard snaps to the same
   // global origin/resolution, so touching paddocks share exact pixel edges.
-  // The display grid is supersampled (finer metres/pixel than the 10 m source)
-  // while remaining snapped to the same global EPSG:3857 origin, so the surface
-  // renders smoothly without breaking alignment with neighbouring paddocks.
-  const displayGrid = alignBboxToGrid(bbox, QC.displayTargetResolutionM, QC.displayMaxSize);
+  // The display grid now sits on the SAME native 10 m cell size as the
+  // analytical raster — no supersampling and no provider-side resampling, so
+  // no interpolation stage can introduce banding or repeated columns. Visual
+  // smoothing is applied by the browser at render time.
+  const displayGrid = alignBboxToGrid(
+    bbox, QC.displayTargetResolutionM, QC.displayMaxSize, 1, /* allowCoarsen */ false,
+  );
   // Anti-aliased raster coverage of the saved polygon on that grid (0..255),
   // giving clean paddock edges with no bleed past the boundary.
   const displayCoverage = rasterisePolygonCoverage(polys, displayGrid);
+
 
 
 
@@ -298,11 +303,34 @@ Deno.serve(async (req) => {
           polygon_masked: true,
           mosaicking_order: "leastCC",
           scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
-          resampling: nativeRes > displayResolutionM ? "bicubic" : "none",
-          display_supersample_factor: Math.round((nativeRes / displayResolutionM) * 100) / 100,
+          resampling: "none",
+          display_supersample_factor: 1,
           edge_masking: "antialiased_coverage",
           percentiles,
+          // ---- Resolution audit (administrator diagnostics) ----
+          audit: {
+            source_product_id: provider_scene_id,
+            source_collection: SENTINEL2_COLLECTION,
+            source_product_level: SOURCE_PRODUCT_LEVEL,
+            source_bands: bandsFor(idx),
+            source_crs: SOURCE_CRS,
+            source_pixel_width_m: nativeRes,
+            source_pixel_height_m: nativeRes,
+            output_crs: OUTPUT_CRS,
+            output_pixel_width_m: displayResolutionM,
+            output_pixel_height_m: displayResolutionM,
+            resampling_method: "nearest (provider) + bilinear (browser display only)",
+            reprojection_operations: 1,
+            native_raster_width: width,
+            native_raster_height: height,
+            final_raster_width: width,
+            final_raster_height: height,
+            input_kind: SOURCE_INPUT_KIND,
+            grid_coarsened: grid.coarsened,
+            requested_pixel_size_m: grid.baseResolutionM,
+          },
         },
+
 
         processing_version: PROCESSING_VERSION,
       }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
@@ -317,7 +345,10 @@ Deno.serve(async (req) => {
         // Analytical raster is rendered at the index's NATIVE resolution
         // (10 m NDVI/MSAVI, 20 m NDRE/RECI/NDMI) so one cell = one satellite
         // cell, snapped to the same global EPSG:3857 grid as the display PNG.
-        const analyticalSize = alignBboxToGrid(bbox, nativeRes, QC.processImageMaxSize);
+        const analyticalSize = alignBboxToGrid(
+          bbox, nativeRes, QC.processImageMaxSize, 1, /* allowCoarsen */ false,
+        );
+
 
         if (!existingAnalytical) {
           const analytical = await processAnalyticalRaster({
@@ -358,9 +389,33 @@ Deno.serve(async (req) => {
             scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
             matched_display_asset_type: DISPLAY_ASSET_TYPE,
             matched_display_storage_path: displayPath,
+            // ---- Resolution audit (administrator diagnostics) ----
+            audit: {
+              source_product_id: provider_scene_id,
+              source_collection: SENTINEL2_COLLECTION,
+              source_product_level: SOURCE_PRODUCT_LEVEL,
+              source_bands: bandsFor(idx),
+              source_crs: SOURCE_CRS,
+              source_pixel_width_m: nativeRes,
+              source_pixel_height_m: nativeRes,
+              output_crs: OUTPUT_CRS,
+              output_pixel_width_m: analyticalSize.resolutionM,
+              output_pixel_height_m: analyticalSize.resolutionM,
+              resampling_method: "nearest (value-exact, no interpolation)",
+              reprojection_operations: 1,
+              native_raster_width: analyticalSize.width,
+              native_raster_height: analyticalSize.height,
+              final_raster_width: analyticalSize.width,
+              final_raster_height: analyticalSize.height,
+              input_kind: SOURCE_INPUT_KIND,
+              grid_coarsened: analyticalSize.coarsened,
+              requested_pixel_size_m: analyticalSize.baseResolutionM,
+              data_type: "Float32",
+            },
           },
           processing_version: PROCESSING_VERSION,
         }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
+
       }
 
       generated.push(idx);

@@ -432,7 +432,9 @@ interface DBAsset {
   row_orientation?: string | null;
   processing_version?: string | null;
   acquisition_date?: string | null;
+  colour_scale?: Record<string, any> | null;
 }
+
 interface DBSummary {
   satellite_scene_id: string;
   index_type: SatelliteIndexType;
@@ -591,6 +593,10 @@ export default function SatelliteMappingPage() {
   const [interacting, setInteracting] = useState(false); // slider drag / key in progress
   const [isPlaying, setIsPlaying] = useState(false); // timeline playback
   const [disableCropOverlays, setDisableCropOverlays] = useState(false);
+  // Administrator audit mode: render one stored raster pixel per screen sample
+  // with nearest-neighbour, bypassing browser smoothing.
+  const [rawPixels, setRawPixels] = useState(false);
+
   const [mapDiagnostics, setMapDiagnostics] = useState<SatelliteMapDiagnostics | null>(null);
   const [assetDiagnostics, setAssetDiagnostics] = useState<Record<string, AssetPipelineDiagnostic>>({});
   const [processingFailures, setProcessingFailures] = useState<ProcessingFailureDiagnostic[]>([]);
@@ -787,6 +793,7 @@ export default function SatelliteMappingPage() {
               no_data_sentinel: layer.display.no_data_sentinel,
               row_orientation: layer.display.row_orientation,
               processing_version: layer.display.processing_version,
+              colour_scale: (layer.display as any).colour_scale ?? null,
             });
           }
           if (layer.analytical && !seenAssets.has(layer.analytical.asset_id)) {
@@ -807,6 +814,7 @@ export default function SatelliteMappingPage() {
               no_data_sentinel: layer.analytical.no_data_sentinel,
               row_orientation: layer.analytical.row_orientation,
               processing_version: layer.analytical.processing_version,
+              colour_scale: (layer.analytical as any).colour_scale ?? null,
             });
           }
           if (layer.summary) {
@@ -2743,6 +2751,15 @@ export default function SatelliteMappingPage() {
         </Button>
         <Button
           size="sm"
+          variant={rawPixels ? "secondary" : "outline"}
+          onClick={() => setRawPixels((v) => !v)}
+          title="Render one stored raster pixel per cell with nearest-neighbour scaling — reveals whether blockiness is in the stored raster or only in the display renderer."
+        >
+          Raw pixels: {rawPixels ? "On" : "Off"}
+        </Button>
+
+        <Button
+          size="sm"
           variant="outline"
           disabled={busy || backfillLayers.isPending || !activeVineyardId}
           onClick={() => backfillLayers.mutate()}
@@ -2793,6 +2810,72 @@ export default function SatelliteMappingPage() {
           );
         })()}
       </div>
+
+      {/* ---- Temporary resolution audit (administrators) ---- */}
+      <div className="rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
+        <div className="text-xs font-semibold text-foreground">
+          Resolution audit — {activeLayer.short} · {selectedSceneKey ?? "no date"}
+        </div>
+        <div className="leading-snug">
+          Acceptance for Sentinel-2 NDVI: bands B04 + B08, Level-2A surface reflectance,
+          analytical output 10 m × 10 m, Float32.
+        </div>
+        {activeAssetPairs.length === 0 ? (
+          <div>No processed rasters for the selected date and layer.</div>
+        ) : (
+          activeAssetPairs.slice(0, 4).map(({ displayAsset, analyticalAsset, scene }) => {
+            const rows = (a: DBAsset | undefined, kind: string) => {
+              if (!a) return null;
+              const audit = (a.colour_scale?.audit ?? {}) as Record<string, any>;
+              const cs = a.colour_scale ?? {};
+              const val = (v: any, fallback: any = "—") =>
+                v === undefined || v === null || v === "" ? fallback : String(v);
+              const items: Array<[string, string]> = [
+                ["Asset", kind],
+                ["Source product ID", val(audit.source_product_id ?? scene.provider_scene_id)],
+                ["Source bands", val(Array.isArray(audit.source_bands ?? cs.bands) ? (audit.source_bands ?? cs.bands).join(" + ") : null)],
+                ["Source level", val(audit.source_product_level, "Level-2A surface reflectance")],
+                ["Source CRS", val(audit.source_crs)],
+                ["Source pixel size", `${val(audit.source_pixel_width_m ?? a.native_resolution_m)} × ${val(audit.source_pixel_height_m ?? a.native_resolution_m)} m`],
+                ["Output CRS", val(audit.output_crs ?? cs.crs)],
+                ["Output pixel size", `${val(audit.output_pixel_width_m ?? a.display_resolution_m)} × ${val(audit.output_pixel_height_m ?? a.display_resolution_m)} m`],
+                ["Resampling", val(audit.resampling_method ?? cs.resampling)],
+                ["Reprojection ops", val(audit.reprojection_operations)],
+                ["Native raster", `${val(audit.native_raster_width ?? a.raster_width)} × ${val(audit.native_raster_height ?? a.raster_height)} px`],
+                ["Final raster", `${val(audit.final_raster_width ?? a.raster_width)} × ${val(audit.final_raster_height ?? a.raster_height)} px`],
+                ["Input kind", val(audit.input_kind)],
+                ["Data type", val(a.data_type)],
+                ["Grid coarsened", audit.grid_coarsened === undefined ? "—" : audit.grid_coarsened ? "Yes" : "No"],
+                ["Processing version", val(a.processing_version)],
+              ];
+              return (
+                <div key={`${a.id}-${kind}`} className="grid grid-cols-2 gap-x-3 gap-y-0.5 border-t pt-1">
+                  {items.map(([k, v]) => (
+                    <div key={k} className="col-span-2 flex justify-between gap-3">
+                      <span>{k}</span>
+                      <span className="text-foreground text-right break-all">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            };
+            return (
+              <div key={scene.id} className="space-y-1">
+                <div className="text-foreground font-medium">
+                  {paddocks.find((p) => p.id === scene.paddock_id)?.name ?? scene.paddock_id}
+                </div>
+                {rows(displayAsset, "Display raster")}
+                {rows(analyticalAsset, "Analytical raster")}
+              </div>
+            );
+          })
+        )}
+        {activeAssetPairs.length > 4 && (
+          <div>Showing 4 of {activeAssetPairs.length} paddocks — select a single paddock for its own audit.</div>
+        )}
+      </div>
+
+
 
       <div className="rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
         <div className="text-xs font-semibold text-foreground inline-flex items-center gap-1.5">
@@ -3020,6 +3103,8 @@ export default function SatelliteMappingPage() {
             onOverlayUnmounted={handleOverlayUnmounted}
             onDiagnosticsChange={setMapDiagnostics}
             showDiagnostics={isSystemAdmin}
+            rawPixels={isSystemAdmin && rawPixels}
+
           />
         )}
 
@@ -3224,8 +3309,9 @@ export default function SatelliteMappingPage() {
           );
         })()}
 
-        {/* Legend bottom-right */}
-        <div className="absolute bottom-24 right-3 z-[500] w-72 max-w-[92%] md:bottom-3">
+        {/* Legend bottom-right — sits just above the docked timeline bar */}
+        <div className="absolute bottom-[96px] right-3 z-[500] w-72 max-w-[92%]">
+
           <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
             <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
               <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
@@ -3305,7 +3391,10 @@ export default function SatelliteMappingPage() {
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[10px] text-muted-foreground border-t">
                     <div>Date</div><div className="text-right">{selectedSceneKey ?? "—"}</div>
                     <div>Provider</div><div className="text-right">Sentinel-2 L2A (CDSE)</div>
-                    <div>Native resolution</div><div className="text-right">{activeLayer.nativeResM} m</div>
+                    <div>Native measurement resolution</div><div className="text-right">{activeLayer.nativeResM} m</div>
+                    <div>Display interpolation</div><div className="text-right">{rawPixels ? "Raw pixels (nearest)" : "Smoothed"}</div>
+                    <div className="col-span-2 leading-snug">Click or hover a location to read the underlying unsmoothed value and capture date.</div>
+
                   </div>
                 </div>
               </CollapsibleContent>
@@ -3313,16 +3402,8 @@ export default function SatelliteMappingPage() {
           </Collapsible>
         </div>
 
-        {/* Acquisition date slider — bottom-centre, on top of the map */}
-        <div
-          className="absolute left-1/2 z-[540] -translate-x-1/2"
-          style={{
-            bottom: "96px",
-            width: legendOpen ? "min(760px, calc(100% - 420px))" : "min(900px, calc(100% - 2rem))",
-            minWidth: "min(520px, calc(100% - 2rem))",
-          }}
-        >
-
+        {/* Historical imagery timeline — bottom-docked, full width, flush */}
+        <div className="absolute inset-x-0 bottom-0 z-[540]">
           {(() => {
             const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
             const singlePaddock = paddockId !== "all";
@@ -3331,26 +3412,26 @@ export default function SatelliteMappingPage() {
               ? (layerAvailIds ? !layerAvailIds.includes(paddockId) : !scopedGroup.sceneByPaddock.has(paddockId))
               : false;
             return (
-              <div className="rounded-md bg-background/90 backdrop-blur shadow-md border">
-                <CropHealthDateTimeline
-                  entries={timelineEntries}
-                  committedDate={selectedSceneKey}
-                  previewDate={previewDate}
-                  onPreviewChange={(d) => setPreviewDate(d)}
-                  onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
-                  onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
-                  onInteractionEnd={() => setInteracting(false)}
-                  isPlaying={isPlaying}
-                  onTogglePlay={togglePlay}
-                  totalPaddocks={singlePaddock ? 1 : totalPaddocks}
-                  singlePaddockScope={singlePaddock}
-                  scopedPaddockMissing={scopedMissing}
-                  layerShortLabel={activeLayer.short}
-                />
-              </div>
+              <CropHealthDateTimeline
+                entries={timelineEntries}
+                committedDate={selectedSceneKey}
+                previewDate={previewDate}
+                onPreviewChange={(d) => setPreviewDate(d)}
+                onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
+                onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
+                onInteractionEnd={() => setInteracting(false)}
+                isPlaying={isPlaying}
+                onTogglePlay={togglePlay}
+                totalPaddocks={singlePaddock ? 1 : totalPaddocks}
+                singlePaddockScope={singlePaddock}
+                scopedPaddockMissing={scopedMissing}
+                layerShortLabel={activeLayer.short}
+                sourceLabel="Sentinel-2"
+              />
             );
           })()}
         </div>
+
 
         {/* Right-side workspace drawer */}
         <MapWorkspaceDrawer
