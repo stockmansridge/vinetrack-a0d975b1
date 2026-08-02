@@ -48,6 +48,41 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Per-date rollup so the portal timeline can show every KNOWN date with a
+  // status, not just the dates that already have saved imagery.
+  const RANK: Record<string, number> = {
+    processing: 6, pending: 5, retry_pending: 5, failed: 4,
+    downloaded: 3, available: 3, cloud_obscured: 2, invalid_coverage: 2,
+    no_provider_capture: 1,
+  };
+  const byDate = new Map<string, { date: string; outcomes: Record<string, number>; paddocks: number; last_error: string | null }>();
+  for (const row of dates ?? []) {
+    const d = String(row.expected_date);
+    let e = byDate.get(d);
+    if (!e) { e = { date: d, outcomes: {}, paddocks: 0, last_error: null }; byDate.set(d, e); }
+    const o = String(row.outcome);
+    e.outcomes[o] = (e.outcomes[o] ?? 0) + 1;
+    e.paddocks += 1;
+    if (row.last_error && !e.last_error) e.last_error = String(row.last_error);
+  }
+  const expectedDates = Array.from(byDate.values()).map((e) => {
+    let dominant = "pending";
+    let best = -1;
+    for (const [o, n] of Object.entries(e.outcomes)) {
+      const r = (RANK[o] ?? 0) * 1000 + n;
+      if (r > best) { best = r; dominant = o; }
+    }
+    const downloaded = (e.outcomes.downloaded ?? 0) + (e.outcomes.available ?? 0);
+    return {
+      date: e.date,
+      status: dominant,
+      outcomes: e.outcomes,
+      paddocks_total: e.paddocks,
+      paddocks_downloaded: downloaded,
+      last_error: e.last_error,
+    };
+  }).sort((a, b) => (a.date < b.date ? 1 : -1));
+
   const missing = (counts.pending ?? 0) + (counts.retry_pending ?? 0) + (counts.processing ?? 0);
   const done = counts.downloaded ?? 0;
   const total = (dates ?? []).length;
@@ -57,6 +92,7 @@ Deno.serve(async (req) => {
     last_job: lastJob ?? null,
     settings: settings ?? null,
     outcome_counts: counts,
+    expected_dates: expectedDates,
     expected_date_total: total,
     missing_dates: missing,
     downloaded_dates: done,

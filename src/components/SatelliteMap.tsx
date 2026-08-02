@@ -486,7 +486,10 @@ export default function SatelliteMap(props: SatelliteMapProps) {
         img.className = "pointer-events-none absolute top-0 left-0";
         img.style.transform = "translate(-9999px,-9999px)";
         img.style.transformOrigin = "top left";
-        img.style.imageRendering = "pixelated";
+        // Smooth (bilinear) browser scaling — the stored display raster is
+        // supersampled and polygon-masked, so smoothing removes residual
+        // stair-stepping without altering values.
+        img.style.imageRendering = "auto";
         img.style.willChange = "opacity, transform";
         img.style.opacity = fadeMs > 0 ? "0" : targetOpacity;
         // Lifecycle callbacks — invoked once per <img> instance.

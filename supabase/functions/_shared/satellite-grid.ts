@@ -153,6 +153,106 @@ export function rasterisePolygonMask(
   return mask;
 }
 
+/**
+ * Anti-aliased version of `rasterisePolygonMask`: returns per-pixel polygon
+ * COVERAGE in 0..255 instead of a hard 0/1 mask. Each raster row is sampled at
+ * `subRows` sub-scanlines and horizontal spans contribute fractional coverage
+ * to the partially-covered end pixels, so paddock edges render as a clean line
+ * rather than a staircase. Interior pixels are still exactly 255 and pixels
+ * fully outside are exactly 0 — boundaries stay precise and adjacent paddocks
+ * never overlap because both sides use the identical shared grid.
+ */
+export function rasterisePolygonCoverage(
+  polys: LatLng[][][],
+  grid: AlignedGrid,
+  subRows = 4,
+): Uint8Array {
+  const { width, height, bbox3857, resolutionM } = grid;
+  const [west, , , north] = bbox3857;
+  const acc = new Float32Array(width * height);
+  const out = new Uint8Array(width * height);
+
+  type Edge = { x0: number; y0: number; x1: number; y1: number };
+  const edges: Edge[] = [];
+  for (const poly of polys) {
+    for (const ring of poly) {
+      const pts = ring.map((p) => ({ x: lngToMercX(p.lng), y: latToMercY(p.lat) }));
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        if (a.y === b.y) continue;
+        edges.push({ x0: a.x, y0: a.y, x1: b.x, y1: b.y });
+      }
+    }
+  }
+  if (edges.length === 0) return out;
+
+  const weight = 1 / subRows;
+  const xs: number[] = [];
+  for (let row = 0; row < height; row++) {
+    for (let sr = 0; sr < subRows; sr++) {
+      const yc = north - (row + (sr + 0.5) / subRows) * resolutionM;
+      xs.length = 0;
+      for (const ed of edges) {
+        const yLo = Math.min(ed.y0, ed.y1);
+        const yHi = Math.max(ed.y0, ed.y1);
+        if (yc < yLo || yc >= yHi) continue;
+        const t = (yc - ed.y0) / (ed.y1 - ed.y0);
+        xs.push(ed.x0 + t * (ed.x1 - ed.x0));
+      }
+      if (xs.length < 2) continue;
+      xs.sort((a, b) => a - b);
+      const base = row * width;
+      for (let i = 0; i + 1 < xs.length; i += 2) {
+        // Span in fractional pixel columns.
+        let sx = (xs[i] - west) / resolutionM;
+        let ex = (xs[i + 1] - west) / resolutionM;
+        if (ex <= 0 || sx >= width) continue;
+        if (sx < 0) sx = 0;
+        if (ex > width) ex = width;
+        const first = Math.floor(sx);
+        const last = Math.min(width - 1, Math.ceil(ex) - 1);
+        for (let c = first; c <= last; c++) {
+          const covered = Math.min(ex, c + 1) - Math.max(sx, c);
+          if (covered > 0) acc[base + c] += covered * weight;
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < acc.length; i++) {
+    const v = acc[i];
+    out[i] = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
+  }
+  return out;
+}
+
+/**
+ * Apply an anti-aliased coverage mask (0..255) to an RGBA PNG by multiplying
+ * the existing alpha channel. Pixels fully outside the polygon become fully
+ * transparent; edge pixels fade proportionally to their true coverage.
+ */
+export function maskPngToPolygonSoft(
+  pngBytes: Uint8Array,
+  coverage: Uint8Array,
+  grid: AlignedGrid,
+): Uint8Array {
+  const img = decodePng(pngBytes);
+  const { width, height } = img;
+  const out = new Uint8Array(img.image);
+  const sameSize = width === grid.width && height === grid.height;
+  for (let y = 0; y < height; y++) {
+    const my = sameSize ? y : Math.min(grid.height - 1, Math.floor((y / height) * grid.height));
+    for (let x = 0; x < width; x++) {
+      const mx = sameSize ? x : Math.min(grid.width - 1, Math.floor((x / width) * grid.width));
+      const cov = coverage[my * grid.width + mx];
+      const o = (y * width + x) * 4 + 3;
+      out[o] = cov === 255 ? out[o] : Math.round((out[o] * cov) / 255);
+    }
+  }
+  return encodePng(out, width, height);
+}
+
 /** Fraction of grid pixels that fall inside the polygon (0..1). */
 export function maskCoverage(mask: Uint8Array): number {
   let inside = 0;

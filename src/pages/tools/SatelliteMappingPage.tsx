@@ -4,7 +4,8 @@ import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench, Maximize2, Minimize2, PanelRight, CalendarDays, ShieldAlert } from "lucide-react";
 import BackfillPanel from "@/components/satellite/BackfillPanel";
 import MapWorkspaceDrawer, { type DrawerTab } from "@/components/satellite/MapWorkspaceDrawer";
-import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
+import { fetchBackfillStatus } from "@/lib/satelliteBackfill";
+import CropHealthDateTimeline, { type TimelineDateEntry, type TimelineStatus } from "@/components/satellite/CropHealthDateTimeline";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
 import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo, type SatelliteMapDiagnostics } from "@/components/SatelliteMap";
@@ -858,6 +859,15 @@ export default function SatelliteMappingPage() {
 
   // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
 
+  // Known-but-not-saved capture dates (downloading, cloudy, no capture, failed)
+  // so the timeline can show the FULL imagery history, not only saved dates.
+  const backfillStatusQuery = useQuery({
+    queryKey: ["satellite-backfill-status", activeVineyardId],
+    queryFn: () => fetchBackfillStatus(activeVineyardId!),
+    enabled: Boolean(activeVineyardId),
+    staleTime: 30_000,
+  });
+
   // ---- Date-coverage index ----------------------------------------------
   // Group all completed scenes by acquisition day (YYYY-MM-DD) and, for each
   // (date, paddock), keep the SINGLE best scene using:
@@ -965,6 +975,56 @@ export default function SatelliteMappingPage() {
     };
   }), [dateCoverage, totalPaddocks, layer, activeLayer.short]);
 
+
+  // Merge saved imagery dates with backfill expected-date outcomes so the
+  // timeline shows the complete capture history: available / partial dates are
+  // selectable, everything else is shown with its reason but not clickable.
+  const singlePaddockScope = paddockId !== "all";
+  const timelineEntries = useMemo<TimelineDateEntry[]>(() => {
+    const byDate = new Map<string, TimelineDateEntry>();
+    for (const d of dateOptions) {
+      const group = dateCoverage.find((g) => g.date === d.date);
+      const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
+      const paddockCount = singlePaddockScope
+        ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
+        : d.paddockCount;
+      const activeCount = singlePaddockScope ? 1 : (d.activeCount || totalPaddocks);
+      const status: TimelineStatus = paddockCount === 0
+        ? "no_capture"
+        : paddockCount >= activeCount ? "available" : "partial";
+      byDate.set(d.date, {
+        date: d.date,
+        status,
+        paddockCount,
+        activeCount,
+        coveragePercent: d.coveragePercent,
+      });
+    }
+    const OUTCOME_STATUS: Record<string, TimelineStatus> = {
+      pending: "queued",
+      retry_pending: "queued",
+      processing: "processing",
+      downloaded: "processing",
+      available: "processing",
+      cloud_obscured: "cloud",
+      invalid_coverage: "cloud",
+      no_provider_capture: "no_capture",
+      failed: "failed",
+    };
+    for (const e of backfillStatusQuery.data?.expected_dates ?? []) {
+      if (byDate.has(e.date)) continue; // saved imagery always wins
+      const status = OUTCOME_STATUS[e.status] ?? "queued";
+      byDate.set(e.date, {
+        date: e.date,
+        status,
+        paddockCount: 0,
+        activeCount: singlePaddockScope ? 1 : (e.paddocks_total || totalPaddocks),
+        coveragePercent: 0,
+        note: status === "failed" ? e.last_error : null,
+      });
+    }
+    return Array.from(byDate.values());
+  }, [dateOptions, dateCoverage, layer, paddockId, singlePaddockScope, totalPaddocks, backfillStatusQuery.data]);
 
   const providerFreshness = manifestQuery.data?.provider_freshness ?? null;
   const recommendedDefaultDate = manifestQuery.data?.recommended_default_date ?? null;
@@ -3272,19 +3332,8 @@ export default function SatelliteMappingPage() {
               : false;
             return (
               <div className="rounded-md bg-background/90 backdrop-blur shadow-md border">
-                <SatelliteDateSlider
-                  entries={dateOptions.map((d) => {
-                    const group = dateCoverage.find((g) => g.date === d.date);
-                    const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
-                    return {
-                      date: d.date,
-                      coveragePercent: d.coveragePercent,
-                      paddockCount: singlePaddock
-                        ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
-                        : d.paddockCount,
-                      activeCount: singlePaddock ? 1 : d.activeCount,
-                    };
-                  })}
+                <CropHealthDateTimeline
+                  entries={timelineEntries}
                   committedDate={selectedSceneKey}
                   previewDate={previewDate}
                   onPreviewChange={(d) => setPreviewDate(d)}

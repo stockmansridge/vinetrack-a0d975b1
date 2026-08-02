@@ -24,7 +24,8 @@ import {
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
 import {
-  alignBboxToGrid, rasterisePolygonMask, maskPngToPolygon, GRID_CRS, GRID_CRS_URI,
+  alignBboxToGrid, rasterisePolygonCoverage, maskPngToPolygonSoft,
+  GRID_CRS, GRID_CRS_URI,
 } from "../_shared/satellite-grid.ts";
 
 
@@ -63,9 +64,13 @@ Deno.serve(async (req) => {
   // One shared, globally-snapped display grid for this paddock. Every layer for
   // this paddock uses it, and every paddock in the vineyard snaps to the same
   // global origin/resolution, so touching paddocks share exact pixel edges.
-  const displayGrid = alignBboxToGrid(bbox, QC.processImageTargetResolutionM, QC.processImageMaxSize);
-  // True raster mask of the saved polygon on that grid.
-  const displayMask = rasterisePolygonMask(polys, displayGrid);
+  // The display grid is supersampled (finer metres/pixel than the 10 m source)
+  // while remaining snapped to the same global EPSG:3857 origin, so the surface
+  // renders smoothly without breaking alignment with neighbouring paddocks.
+  const displayGrid = alignBboxToGrid(bbox, QC.displayTargetResolutionM, QC.displayMaxSize);
+  // Anti-aliased raster coverage of the saved polygon on that grid (0..255),
+  // giving clean paddock edges with no bleed past the boundary.
+  const displayCoverage = rasterisePolygonCoverage(polys, displayGrid);
 
 
 
@@ -258,7 +263,7 @@ Deno.serve(async (req) => {
         });
         let png = rawPng;
         try {
-          png = maskPngToPolygon(rawPng, displayMask, grid);
+          png = maskPngToPolygonSoft(rawPng, displayCoverage, grid);
         } catch (maskErr) {
           console.error("[satellite-process-scene] polygon mask failed:", (maskErr as Error)?.message);
         }
@@ -293,7 +298,9 @@ Deno.serve(async (req) => {
           polygon_masked: true,
           mosaicking_order: "leastCC",
           scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
-          resampling: nativeRes > displayResolutionM ? "bilinear" : "none",
+          resampling: nativeRes > displayResolutionM ? "bicubic" : "none",
+          display_supersample_factor: Math.round((nativeRes / displayResolutionM) * 100) / 100,
+          edge_masking: "antialiased_coverage",
           percentiles,
         },
 
