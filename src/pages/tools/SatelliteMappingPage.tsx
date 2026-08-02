@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench, Maximize2, Minimize2, PanelRight, CalendarDays, ShieldAlert } from "lucide-react";
 import BackfillPanel from "@/components/satellite/BackfillPanel";
 import MapWorkspaceDrawer, { type DrawerTab } from "@/components/satellite/MapWorkspaceDrawer";
-import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
+import CropHealthDateTimeline, { type TimelineDateEntry, type TimelineStatus } from "@/components/satellite/CropHealthDateTimeline";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
 import { fromArrayBuffer } from "geotiff";
 import SatelliteMap, { type SatelliteRasterOverlay, type OverlayCallbackInfo, type SatelliteMapDiagnostics } from "@/components/SatelliteMap";
@@ -857,6 +857,15 @@ export default function SatelliteMappingPage() {
   }, [geoms, paddockId]);
 
   // Bounds no longer needed — SatelliteMap fits the visible paddocks itself.
+
+  // Known-but-not-saved capture dates (downloading, cloudy, no capture, failed)
+  // so the timeline can show the FULL imagery history, not only saved dates.
+  const backfillStatusQuery = useQuery({
+    queryKey: ["satellite-backfill-status", activeVineyardId],
+    queryFn: () => fetchBackfillStatus(activeVineyardId!),
+    enabled: Boolean(activeVineyardId),
+    staleTime: 30_000,
+  });
 
   // ---- Date-coverage index ----------------------------------------------
   // Group all completed scenes by acquisition day (YYYY-MM-DD) and, for each
