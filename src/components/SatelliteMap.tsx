@@ -158,6 +158,7 @@ export default function SatelliteMap(props: SatelliteMapProps) {
     onOverlayUnmounted,
     onDiagnosticsChange,
     showDiagnostics = false,
+    rawPixels = false,
     className,
   } = props;
 
