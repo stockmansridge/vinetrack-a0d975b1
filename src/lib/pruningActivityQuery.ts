@@ -22,7 +22,21 @@ export interface PruningActivityRow {
   id: string;
   entry: PruningEntry;
   date: string;                 // ISO yyyy-mm-dd
+  /** Canonical season year: ALWAYS the linked pruning_seasons row. Null when
+   *  the entry has no resolvable season link — never derived from the date. */
   seasonYear: number | null;
+  /** Season id stored on the entry (may point at a missing/foreign season). */
+  pruningSeasonId: string | null;
+  /** True when a pruning_seasons row was found for pruningSeasonId. */
+  hasSeasonLink: boolean;
+  /** Season year we would expect for this entry (calendar year of the work).
+   *  Used ONLY to flag integrity problems, never to display the season. */
+  expectedSeasonYear: number | null;
+  /** Human-readable reasons the stored season data looks inconsistent. */
+  seasonIssues: string[];
+  seasonMismatch: boolean;
+  /** Best-effort platform metadata if the backend records it. */
+  sourcePlatform: string | null;
   vintageYear: number | null;
   paddockId: string;
   blockName: string;
@@ -53,6 +67,7 @@ export interface PruningActivityRow {
   updatedAt: string | null;
   isReversed: boolean;
 }
+
 
 /** Minutes between two time/timestamp values; rolls over midnight. */
 export function durationMinutesBetween(start: string | null, finish: string | null): number | null {
