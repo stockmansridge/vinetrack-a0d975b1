@@ -1630,26 +1630,26 @@ export default function WorkTaskReportsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>Date</TableHead>
-                  <TableHead>Task type</TableHead>
-                  <TableHead>{fmt.blocksLabel}</TableHead>
-                  <TableHead className="text-right">Area</TableHead>
-                  <TableHead className="text-right">Labour hrs</TableHead>
-                  <TableHead className="text-right">Machine hrs</TableHead>
-                  <TableHead className="text-right">Linked trips</TableHead>
+                  <SortableTableHead active={taskSortDir("date")} onSort={() => toggleTaskSort("date")}>Date</SortableTableHead>
+                  <SortableTableHead active={taskSortDir("taskType")} onSort={() => toggleTaskSort("taskType")}>Task type</SortableTableHead>
+                  <SortableTableHead active={taskSortDir("blocks")} onSort={() => toggleTaskSort("blocks")}>{fmt.blocksLabel}</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("area")} onSort={() => toggleTaskSort("area")}>Area</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("labourHours")} onSort={() => toggleTaskSort("labourHours")}>Labour hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("machineHours")} onSort={() => toggleTaskSort("machineHours")}>Machine hrs</SortableTableHead>
+                  <SortableTableHead align="right" active={taskSortDir("linkedTrips")} onSort={() => toggleTaskSort("linkedTrips")}>Linked trips</SortableTableHead>
                   {canSeeCosts ? (
                     <>
-                      <TableHead className="text-right">Manual labour</TableHead>
-                      <TableHead className="text-right">Machine charge</TableHead>
-                      <TableHead className="text-right">Machine fuel</TableHead>
-                      <TableHead className="text-right">Linked GPS trips</TableHead>
-                      <TableHead className="text-right">Total cost</TableHead>
-                      <TableHead className="text-right">{costPerAreaLabel}</TableHead>
+                      <SortableTableHead align="right" active={taskSortDir("manualLabour")} onSort={() => toggleTaskSort("manualLabour")}>Manual labour</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("machineCharge")} onSort={() => toggleTaskSort("machineCharge")}>Machine charge</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("machineFuel")} onSort={() => toggleTaskSort("machineFuel")}>Machine fuel</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("linkedTripCost")} onSort={() => toggleTaskSort("linkedTripCost")}>Linked GPS trips</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("totalCost")} onSort={() => toggleTaskSort("totalCost")}>Total cost</SortableTableHead>
+                      <SortableTableHead align="right" active={taskSortDir("costPerArea")} onSort={() => toggleTaskSort("costPerArea")}>{costPerAreaLabel}</SortableTableHead>
                     </>
                   ) : (
-                    <TableHead className="text-right">Machine entries</TableHead>
+                    <SortableTableHead align="right" active={taskSortDir("machineEntries")} onSort={() => toggleTaskSort("machineEntries")}>Machine entries</SortableTableHead>
                   )}
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead active={taskSortDir("status")} onSort={() => toggleTaskSort("status")}>Status</SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1659,7 +1659,7 @@ export default function WorkTaskReportsPage() {
                       {loading ? "Loading…" : "No work tasks match the current filters."}
                     </TableCell>
                   </TableRow>
-                ) : filtered.map((r) => {
+                ) : sortedTasks.map((r) => {
                   const isOpen = expanded.has(r.task.id);
                   return (
                     <Fragment key={r.task.id}>
