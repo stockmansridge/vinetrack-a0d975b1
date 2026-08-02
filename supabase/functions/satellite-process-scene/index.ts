@@ -180,7 +180,11 @@ Deno.serve(async (req) => {
   const runIndex = async (idx: IndexType) => {
     try {
       const nativeRes = INDEX_NATIVE_RES_M[idx];
-      const { width, height, displayResolutionM } = computeImageSize(bbox, QC.processImageTargetResolutionM, QC.processImageMaxSize);
+      // Display raster: snapped to the shared global EPSG:3857 pixel grid so
+      // adjacent paddocks align exactly and can never overlap.
+      const grid = displayGrid;
+      const { width, height, resolutionM: displayResolutionM } = grid;
+
 
       // Colour ramp descriptor for the DB (client mirrors this).
       let minValue: number | null = null;
