@@ -2811,6 +2811,72 @@ export default function SatelliteMappingPage() {
         })()}
       </div>
 
+      {/* ---- Temporary resolution audit (administrators) ---- */}
+      <div className="rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-2">
+        <div className="text-xs font-semibold text-foreground">
+          Resolution audit — {activeLayer.short} · {selectedSceneKey ?? "no date"}
+        </div>
+        <div className="leading-snug">
+          Acceptance for Sentinel-2 NDVI: bands B04 + B08, Level-2A surface reflectance,
+          analytical output 10 m × 10 m, Float32.
+        </div>
+        {activeAssetPairs.length === 0 ? (
+          <div>No processed rasters for the selected date and layer.</div>
+        ) : (
+          activeAssetPairs.slice(0, 4).map(({ displayAsset, analyticalAsset, scene }) => {
+            const rows = (a: DBAsset | undefined, kind: string) => {
+              if (!a) return null;
+              const audit = (a.colour_scale?.audit ?? {}) as Record<string, any>;
+              const cs = a.colour_scale ?? {};
+              const val = (v: any, fallback: any = "—") =>
+                v === undefined || v === null || v === "" ? fallback : String(v);
+              const items: Array<[string, string]> = [
+                ["Asset", kind],
+                ["Source product ID", val(audit.source_product_id ?? scene.provider_scene_id)],
+                ["Source bands", val(Array.isArray(audit.source_bands ?? cs.bands) ? (audit.source_bands ?? cs.bands).join(" + ") : null)],
+                ["Source level", val(audit.source_product_level, "Level-2A surface reflectance")],
+                ["Source CRS", val(audit.source_crs)],
+                ["Source pixel size", `${val(audit.source_pixel_width_m ?? a.native_resolution_m)} × ${val(audit.source_pixel_height_m ?? a.native_resolution_m)} m`],
+                ["Output CRS", val(audit.output_crs ?? cs.crs)],
+                ["Output pixel size", `${val(audit.output_pixel_width_m ?? a.display_resolution_m)} × ${val(audit.output_pixel_height_m ?? a.display_resolution_m)} m`],
+                ["Resampling", val(audit.resampling_method ?? cs.resampling)],
+                ["Reprojection ops", val(audit.reprojection_operations)],
+                ["Native raster", `${val(audit.native_raster_width ?? a.raster_width)} × ${val(audit.native_raster_height ?? a.raster_height)} px`],
+                ["Final raster", `${val(audit.final_raster_width ?? a.raster_width)} × ${val(audit.final_raster_height ?? a.raster_height)} px`],
+                ["Input kind", val(audit.input_kind)],
+                ["Data type", val(a.data_type)],
+                ["Grid coarsened", audit.grid_coarsened === undefined ? "—" : audit.grid_coarsened ? "Yes" : "No"],
+                ["Processing version", val(a.processing_version)],
+              ];
+              return (
+                <div key={`${a.id}-${kind}`} className="grid grid-cols-2 gap-x-3 gap-y-0.5 border-t pt-1">
+                  {items.map(([k, v]) => (
+                    <div key={k} className="col-span-2 flex justify-between gap-3">
+                      <span>{k}</span>
+                      <span className="text-foreground text-right break-all">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            };
+            return (
+              <div key={scene.id} className="space-y-1">
+                <div className="text-foreground font-medium">
+                  {paddocks.find((p) => p.id === scene.paddock_id)?.name ?? scene.paddock_id}
+                </div>
+                {rows(displayAsset, "Display raster")}
+                {rows(analyticalAsset, "Analytical raster")}
+              </div>
+            );
+          })
+        )}
+        {activeAssetPairs.length > 4 && (
+          <div>Showing 4 of {activeAssetPairs.length} paddocks — select a single paddock for its own audit.</div>
+        )}
+      </div>
+
+
+
       <div className="rounded-md border border-dashed bg-muted/20 p-3 text-[11px] text-muted-foreground space-y-3">
         <div className="text-xs font-semibold text-foreground inline-flex items-center gap-1.5">
           <Wrench className="h-3.5 w-3.5" />
