@@ -295,12 +295,13 @@ Deno.serve(async (req) => {
         const analyticalStoragePath = existingAnalytical?.storage_path ?? analyticalPath;
 
         // Analytical raster is rendered at the index's NATIVE resolution
-        // (10 m NDVI/MSAVI, 20 m NDRE/RECI/NDMI) so one cell = one satellite cell.
-        const analyticalSize = computeImageSize(bbox, nativeRes, QC.processImageMaxSize);
+        // (10 m NDVI/MSAVI, 20 m NDRE/RECI/NDMI) so one cell = one satellite
+        // cell, snapped to the same global EPSG:3857 grid as the display PNG.
+        const analyticalSize = alignBboxToGrid(bbox, nativeRes, QC.processImageMaxSize);
 
         if (!existingAnalytical) {
           const analytical = await processAnalyticalRaster({
-            geometry, bbox, dateStart, dateEnd,
+            geometry, bbox: analyticalSize.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
             evalscript: analyticalEvalscript(idx),
             width: analyticalSize.width, height: analyticalSize.height,
           });
@@ -314,11 +315,12 @@ Deno.serve(async (req) => {
           satellite_scene_id: sceneId, index_type: idx,
           asset_type: ANALYTICAL_ASSET_TYPE,
           storage_path: analyticalStoragePath, mime_type: "image/tiff",
-          bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+          bounds: analyticalSize.bounds,
           raster_width: analyticalSize.width,
           raster_height: analyticalSize.height,
           native_resolution_m: nativeRes,
-          display_resolution_m: analyticalSize.displayResolutionM,
+          display_resolution_m: analyticalSize.resolutionM,
+
           data_type: "Float32",
           scale_factor: 1,
           no_data_sentinel: ANALYTICAL_NO_DATA_SENTINEL,
