@@ -324,7 +324,7 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = canSeeCosts ? 16 : 14;
+  const colSpan = canSeeCosts ? 17 : 15;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-[1600px]">
