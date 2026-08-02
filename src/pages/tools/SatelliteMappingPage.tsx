@@ -2634,8 +2634,19 @@ export default function SatelliteMappingPage() {
     </div>
   );
 
+  const backfillProgress = (
+    <BackfillPanel
+      vineyardId={activeVineyardId ?? null}
+      paddockIds={geoms.map((g) => g.id)}
+      canManage={false}
+      onImageryChanged={() => manifestQuery.refetch()}
+    />
+  );
+
   const historyPanel = (
-    (manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 ? (
+    <div className="space-y-3">
+      {backfillProgress}
+      {(manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 ? (
       <SavedImageryHistory
         entries={dateOptions}
         committedDate={selectedSceneKey}
@@ -2648,7 +2659,8 @@ export default function SatelliteMappingPage() {
       />
     ) : (
       <div className="text-xs text-muted-foreground p-3">No saved imagery yet. Use "Check for New Imagery" to look for a Copernicus capture.</div>
-    )
+    )}
+    </div>
   );
 
   const adminPanel = (
