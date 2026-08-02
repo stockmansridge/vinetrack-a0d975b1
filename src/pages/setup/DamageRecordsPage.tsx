@@ -518,7 +518,60 @@ export default function DamageRecordsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o && !deleteMut.isPending) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this damage record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && (
+                <>
+                  This will remove the {damageTypeLabel(deleteTarget.damage_type).toLowerCase()} damage
+                  entry for{" "}
+                  <span className="font-medium">
+                    {[
+                      deleteTarget.paddock_id
+                        ? paddockNameById.get(deleteTarget.paddock_id) ?? "Unknown block"
+                        : "Unknown block",
+                      deleteTarget.paddock_id
+                        ? ((paddockGeoById.get(deleteTarget.paddock_id) as any)?.variety ?? null)
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>{" "}
+                  recorded on{" "}
+                  <span className="font-medium">{dt(observed(deleteTarget))}</span>.
+                  <br />
+                  <br />
+                  The record will no longer be included in damage totals, yield calculations or
+                  standard reports.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) deleteMut.mutate(deleteTarget);
+              }}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? "Deleting…" : "Delete record"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 }
 
