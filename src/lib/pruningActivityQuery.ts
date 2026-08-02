@@ -95,7 +95,7 @@ export function formatRowRanges(rows: number[]): string {
 interface SeasonLite { id: string; paddock_id: string; season_year: number }
 interface PaddockLite { id: string; name: string | null; variety_allocations: any }
 interface SegmentLite { pruning_entry_id: string | null; row_number: number; segment_number: number }
-interface TaskLite { id: string; task_type: string | null; description: string | null }
+interface TaskLite { id: string; task_type: string | null; description: string | null; status: string | null }
 interface LabourLite { work_task_id: string; total_hours: number | null; total_cost: number | null }
 
 export function usePruningActivity(vineyardId: string | null) {
@@ -115,7 +115,7 @@ export function usePruningActivity(vineyardId: string | null) {
             .eq("vineyard_id", vid),
           supabase.from("paddocks").select("id, name, variety_allocations")
             .eq("vineyard_id", vid).is("deleted_at", null),
-          supabase.from("work_tasks").select("id, task_type, description")
+          supabase.from("work_tasks").select("id, task_type, description, status")
             .eq("vineyard_id", vid).is("deleted_at", null),
           supabase.from("work_task_labour_lines")
             .select("work_task_id, total_hours, total_cost")
@@ -200,15 +200,19 @@ export function usePruningActivity(vineyardId: string | null) {
           labourHours,
           startTime: e.start_time,
           finishTime: e.finish_time,
+          durationMinutes: durationMinutesBetween(e.start_time, e.finish_time),
           vinesPerHour: labourHours && labourHours > 0 ? vines / labourHours : null,
           rowEqPerHour: labourHours && labourHours > 0 ? rowEq / labourHours : null,
           workTaskId: e.work_task_id,
           workTaskLabel: task
             ? (task.task_type?.trim() || task.description?.trim() || "Work Task")
             : e.work_task_id ? "Work Task" : null,
+          workTaskStatus: task?.status ?? null,
           labourCost,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",
+          createdAt: e.created_at ?? null,
+          updatedAt: e.updated_at ?? null,
           isReversed: !!e.deleted_at,
         } satisfies PruningActivityRow;
       });
