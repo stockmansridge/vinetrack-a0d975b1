@@ -388,9 +388,33 @@ Deno.serve(async (req) => {
             scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
             matched_display_asset_type: DISPLAY_ASSET_TYPE,
             matched_display_storage_path: displayPath,
+            // ---- Resolution audit (administrator diagnostics) ----
+            audit: {
+              source_product_id: provider_scene_id,
+              source_collection: SENTINEL2_COLLECTION,
+              source_product_level: SOURCE_PRODUCT_LEVEL,
+              source_bands: bandsFor(idx),
+              source_crs: SOURCE_CRS,
+              source_pixel_width_m: nativeRes,
+              source_pixel_height_m: nativeRes,
+              output_crs: OUTPUT_CRS,
+              output_pixel_width_m: analyticalSize.resolutionM,
+              output_pixel_height_m: analyticalSize.resolutionM,
+              resampling_method: "nearest (value-exact, no interpolation)",
+              reprojection_operations: 1,
+              native_raster_width: analyticalSize.width,
+              native_raster_height: analyticalSize.height,
+              final_raster_width: analyticalSize.width,
+              final_raster_height: analyticalSize.height,
+              input_kind: SOURCE_INPUT_KIND,
+              grid_coarsened: analyticalSize.coarsened,
+              requested_pixel_size_m: analyticalSize.baseResolutionM,
+              data_type: "Float32",
+            },
           },
           processing_version: PROCESSING_VERSION,
         }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
+
       }
 
       generated.push(idx);
