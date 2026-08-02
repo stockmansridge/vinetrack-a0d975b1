@@ -21,28 +21,36 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v5-smooth-display";
+export const PROCESSING_VERSION = "sentinel2-v6-native-10m";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
 export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
 export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
 export const ANALYTICAL_NO_DATA_SENTINEL = -9999;
 export const ANALYTICAL_ROW_ORIENTATION = "north_to_south";
 
+// Source provenance (used for the administrator resolution audit).
+export const SOURCE_PRODUCT_LEVEL = "Level-2A surface reflectance";
+export const SOURCE_CRS = "EPSG:326xx/327xx (native UTM, provider-side)";
+export const OUTPUT_CRS = "EPSG:3857";
+export const SOURCE_INPUT_KIND = "original_spectral_bands";
+
 // -------- Quality controls (server-side config) --------
 export const QC = {
   maxCatalogueCloudCoverPct: 60,
   preferredCloudCoverPct: 20,
   minValidPaddockCoveragePct: 80,
-  processImageMaxSize: 1024, // px per side cap (analytical rasters)
+  // Analytical rasters NEVER coarsen: the cap is large enough for any real
+  // paddock at 10 m and `alignBboxToGrid` is called with allowCoarsen = false.
+  processImageMaxSize: 2500, // px per side cap (analytical rasters)
   processImageTargetResolutionM: 10, // analytical / native grid
-  // Display rasters are supersampled onto a finer, still grid-aligned raster
-  // and the provider resamples with bicubic interpolation, so the on-screen
-  // surface is smooth instead of showing 10 m block stepping. 2.5 m is a whole
-  // power-of-two step down from 10 m, so alignment with the analytical grid is
-  // preserved exactly.
-  displayTargetResolutionM: 2.5,
-  displayMaxSize: 2048,
+  // Display rasters are generated on the SAME native grid as the analytical
+  // raster (no supersampling, no provider-side interpolation). Smoothing is
+  // applied at render time by the browser (bilinear texture filtering), so no
+  // resampling step can invent structure or produce banding.
+  displayTargetResolutionM: 10,
+  displayMaxSize: 2500,
 };
+
 
 // Eleven supported layers. Order matters for the Map Layer control.
 export const INDEX_TYPES = [
