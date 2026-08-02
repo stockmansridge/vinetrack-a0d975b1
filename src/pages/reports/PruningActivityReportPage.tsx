@@ -552,7 +552,7 @@ export default function PruningActivityReportPage() {
       </Card>
 
       {/* -------------- Season integrity diagnostic (temporary) -------------- */}
-      {integrityRows.length > 0 && (
+      {showSeasonDiagnostics && integrityRows.length > 0 && (
         <Collapsible>
           <Card className="p-3 border-amber-500/40 bg-amber-500/5">
             <div className="flex flex-wrap items-center justify-between gap-2">
