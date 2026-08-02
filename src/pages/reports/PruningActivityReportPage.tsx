@@ -581,7 +581,30 @@ export default function PruningActivityReportPage() {
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{r.seasonYear ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {!r.hasSeasonLink ? (
+                    <span className="text-muted-foreground">Unassigned</span>
+                  ) : r.seasonMismatch ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-help">
+                            {r.seasonYear} <AlertTriangle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[280px]">
+                          This entry's season information does not match the linked pruning season.
+                          <ul className="mt-1 list-disc pl-4 text-xs">
+                            {r.seasonIssues.map((i) => <li key={i}>{i}</li>)}
+                          </ul>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    r.seasonYear
+                  )}
+                </TableCell>
+
                 <TableCell className="text-right tabular-nums">{r.vintageYear ?? "—"}</TableCell>
                 <TableCell className="font-medium">{r.blockName}</TableCell>
                 <TableCell className="max-w-[180px] truncate" title={r.variety}>{r.variety}</TableCell>
