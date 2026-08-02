@@ -33,6 +33,7 @@ const ROUTE_ALLOW: Record<string, Role[]> = {
   "/spray-jobs": FIELD_ROLES,
   "/spray-records": FIELD_ROLES,
   "/reports/spray": FIELD_ROLES,
+  "/reports/pruning-activity": FIELD_ROLES,
   "/reports/documents": FIELD_ROLES,
   "/yield": FIELD_ROLES,
   "/setup/operator-categories": FIELD_ROLES,
