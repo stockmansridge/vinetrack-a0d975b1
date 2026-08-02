@@ -92,6 +92,13 @@ export interface SatelliteMapProps {
   onOverlayUnmounted?: (info: OverlayCallbackInfo) => void;
   onDiagnosticsChange?: (diagnostics: SatelliteMapDiagnostics) => void;
   showDiagnostics?: boolean;
+  /**
+   * Administrator audit mode. When true, overlays render with
+   * nearest-neighbour scaling (one stored raster pixel per cell, no browser
+   * interpolation) so the true analytical pixel structure is visible.
+   */
+  rawPixels?: boolean;
+
   className?: string;
 }
 
