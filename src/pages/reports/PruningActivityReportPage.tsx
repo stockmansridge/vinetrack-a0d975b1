@@ -255,7 +255,10 @@ export default function PruningActivityReportPage() {
   const rowToCells = (r: PruningActivityRow) => {
     const base: (string | number)[] = [
       r.date,
-      r.seasonYear ?? "",
+      r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
+      r.pruningSeasonId ?? "",
+      r.seasonMismatch ? r.seasonIssues.join(" ") : "OK",
+
       r.vintageYear ?? "",
       r.blockName,
       r.variety,
