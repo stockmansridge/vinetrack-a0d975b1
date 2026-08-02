@@ -4,10 +4,10 @@
 // usePruningActivity(); nothing is recalculated or written back. Cost
 // columns are gated by useCanSeeCosts() (owner/manager only) and are
 // sourced from the linked Work Task's labour lines.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { Download, Scissors, Search, ExternalLink } from "lucide-react";
+import { AlertTriangle, Download, Scissors, Search, ExternalLink } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
@@ -30,8 +30,16 @@ import {
   Table, TableBody, TableCell, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const ANY = "__any__";
+const UNASSIGNED = "__unassigned__";
+
 
 type SortKey =
   | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
@@ -99,11 +107,25 @@ export default function PruningActivityReportPage() {
   const [linked, setLinked] = useState<string>(ANY);
   const [includeReversed, setIncludeReversed] = useState(false);
 
+  // Season options come from the canonical linked pruning season only.
   const seasonOptions = useMemo(() => {
     const s = new Set<number>();
-    rows.forEach((r) => { if (r.seasonYear != null) s.add(r.seasonYear); });
+    rows.forEach((r) => { if (r.hasSeasonLink && r.seasonYear != null) s.add(r.seasonYear); });
     return Array.from(s).sort((a, b) => b - a);
   }, [rows]);
+
+  const hasUnassigned = useMemo(() => rows.some((r) => !r.hasSeasonLink), [rows]);
+
+  // Default to the current pruning season (calendar year of the work) when it
+  // exists, matching the other season-scoped reports. Applied once per load.
+  const seasonDefaulted = useRef(false);
+  useEffect(() => {
+    if (seasonDefaulted.current || !rows.length) return;
+    seasonDefaulted.current = true;
+    const currentYear = new Date().getFullYear();
+    if (seasonOptions.includes(currentYear)) setSeason(String(currentYear));
+  }, [rows, seasonOptions]);
+
 
   const blockOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -136,7 +158,12 @@ export default function PruningActivityReportPage() {
         if (fromTs != null && ts < fromTs) return false;
         if (toTs != null && ts > toTs) return false;
       }
-      if (season !== ANY && String(r.seasonYear ?? "") !== season) return false;
+      if (season === UNASSIGNED) {
+        if (r.hasSeasonLink) return false;
+      } else if (season !== ANY) {
+        if (!r.hasSeasonLink || String(r.seasonYear ?? "") !== season) return false;
+      }
+
       if (blockId !== ANY && r.paddockId !== blockId) return false;
       if (worker !== ANY && r.worker !== worker) return false;
       if (method !== ANY && r.method !== method) return false;
@@ -211,6 +238,27 @@ export default function PruningActivityReportPage() {
 
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
 
+  // -------------------- Season integrity diagnostic (read-only) --------------------
+  // Audits every entry for this vineyard, ignoring the current filters, so a
+  // data problem can never be hidden by a filter selection.
+  const integrityRows = useMemo(
+    () => rows.filter((r) => r.seasonMismatch || !r.hasSeasonLink),
+    [rows],
+  );
+
+  const integrityGroups = useMemo(() => {
+    const map = new Map<string, PruningActivityRow[]>();
+    integrityRows.forEach((r) => {
+      const key = r.sourcePlatform ?? "Unknown platform (no metadata recorded)";
+      const list = map.get(key);
+      if (list) list.push(r);
+      else map.set(key, [r]);
+    });
+    return Array.from(map, ([platform, items]) => ({ platform, items }))
+      .sort((a, b) => a.platform.localeCompare(b.platform));
+  }, [integrityRows]);
+
+
   // -------------------- Exports --------------------
   const csvSafe = (v: unknown) => {
     const s = v == null ? "" : String(v);
@@ -218,7 +266,7 @@ export default function PruningActivityReportPage() {
   };
 
   const baseHeader = [
-    "Date", "Pruning season", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
+    "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
     "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
     "Work task", "Work task status", "Created at", "Updated at", "Status", "Notes",
@@ -228,7 +276,10 @@ export default function PruningActivityReportPage() {
   const rowToCells = (r: PruningActivityRow) => {
     const base: (string | number)[] = [
       r.date,
-      r.seasonYear ?? "",
+      r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
+      r.pruningSeasonId ?? "",
+      r.seasonMismatch ? r.seasonIssues.join(" ") : "OK",
+
       r.vintageYear ?? "",
       r.blockName,
       r.variety,
@@ -441,6 +492,8 @@ export default function PruningActivityReportPage() {
             <SelectTrigger><SelectValue placeholder="Pruning season" /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>All pruning seasons</SelectItem>
+              {hasUnassigned && <SelectItem value={UNASSIGNED}>Unassigned season</SelectItem>}
+
               {seasonOptions.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y} pruning season</SelectItem>
               ))}
@@ -494,7 +547,114 @@ export default function PruningActivityReportPage() {
         </div>
       </Card>
 
+      {/* -------------- Season integrity diagnostic (temporary) -------------- */}
+      {integrityRows.length > 0 && (
+        <Collapsible>
+          <Card className="p-3 border-amber-500/40 bg-amber-500/5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-start gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <div className="font-medium">
+                    {integrityRows.length} entr{integrityRows.length === 1 ? "y has" : "ies have"} inconsistent pruning-season data
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Displayed seasons still come from the linked pruning season record —
+                    nothing is corrected or guessed here. Read-only diagnostic pending the
+                    historical data fix.
+                  </div>
+                </div>
+              </div>
+              <CollapsibleTrigger asChild>
+                <Button size="sm" variant="outline">View diagnostic</Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent className="mt-3 space-y-4">
+              {integrityGroups.map((g) => (
+                <div key={g.platform} className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {g.platform} — {g.items.length} entr{g.items.length === 1 ? "y" : "ies"}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead className="text-muted-foreground">
+                        <tr className="text-left">
+                          <th className="p-1">Entry ID</th>
+                          <th className="p-1">Entry date</th>
+                          <th className="p-1">Vineyard</th>
+                          <th className="p-1">{fmt.blockLabel}</th>
+                          <th className="p-1">Stored season ID</th>
+                          <th className="p-1">Linked season year</th>
+                          <th className="p-1">Expected season year</th>
+                          <th className="p-1">Stored vintage</th>
+                          <th className="p-1">Created</th>
+                          <th className="p-1">Updated</th>
+                          <th className="p-1">Reversed</th>
+                          <th className="p-1">Issue</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono">
+                        {g.items.map((r) => (
+                          <tr key={r.id} className="border-t border-border/50 align-top">
+                            <td className="p-1">{r.id}</td>
+                            <td className="p-1">{r.date}</td>
+                            <td className="p-1 font-sans">{vineyardName ?? "—"}</td>
+                            <td className="p-1 font-sans">{r.blockName}</td>
+                            <td className="p-1">{r.pruningSeasonId ?? "—"}</td>
+                            <td className="p-1">{r.hasSeasonLink ? r.seasonYear ?? "—" : "not found"}</td>
+                            <td className="p-1">{r.expectedSeasonYear ?? "—"}</td>
+                            <td className="p-1">{r.vintageYear ?? "—"}</td>
+                            <td className="p-1">{r.createdAt ?? "—"}</td>
+                            <td className="p-1">{r.updatedAt ?? "—"}</td>
+                            <td className="p-1">{r.isReversed ? "yes" : "no"}</td>
+                            <td className="p-1 font-sans">
+                              {r.hasSeasonLink ? r.seasonIssues.join(" ") : "No linked pruning season record."}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const header = [
+                    "entry_id", "entry_date", "vineyard", "block", "source_platform",
+                    "stored_pruning_season_id", "linked_season_year", "expected_season_year",
+                    "stored_vintage_year", "created_at", "updated_at", "reversed", "issue",
+                  ];
+                  const lines = [header.join(",")];
+                  integrityRows.forEach((r) => lines.push([
+                    r.id, r.date, vineyardName ?? "", r.blockName, r.sourcePlatform ?? "",
+                    r.pruningSeasonId ?? "", r.hasSeasonLink ? r.seasonYear ?? "" : "not_found",
+                    r.expectedSeasonYear ?? "", r.vintageYear ?? "", r.createdAt ?? "",
+                    r.updatedAt ?? "", r.isReversed ? "yes" : "no",
+                    r.hasSeasonLink ? r.seasonIssues.join(" ") : "No linked pruning season record.",
+                  ].map(csvSafe).join(",")));
+
+                  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `pruning-season-integrity-${format(new Date(), "yyyy-MM-dd")}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="h-3.5 w-3.5 mr-1" /> Export diagnostic CSV
+              </Button>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
+
       <div className="flex items-center justify-end gap-2">
+
         <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!sorted.length}>
           <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
         </Button>
@@ -554,7 +714,30 @@ export default function PruningActivityReportPage() {
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{r.seasonYear ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {!r.hasSeasonLink ? (
+                    <span className="text-muted-foreground">Unassigned</span>
+                  ) : r.seasonMismatch ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-help">
+                            {r.seasonYear} <AlertTriangle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[280px]">
+                          This entry's season information does not match the linked pruning season.
+                          <ul className="mt-1 list-disc pl-4 text-xs">
+                            {r.seasonIssues.map((i) => <li key={i}>{i}</li>)}
+                          </ul>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    r.seasonYear
+                  )}
+                </TableCell>
+
                 <TableCell className="text-right tabular-nums">{r.vintageYear ?? "—"}</TableCell>
                 <TableCell className="font-medium">{r.blockName}</TableCell>
                 <TableCell className="max-w-[180px] truncate" title={r.variety}>{r.variety}</TableCell>

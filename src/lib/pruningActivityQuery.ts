@@ -22,7 +22,21 @@ export interface PruningActivityRow {
   id: string;
   entry: PruningEntry;
   date: string;                 // ISO yyyy-mm-dd
+  /** Canonical season year: ALWAYS the linked pruning_seasons row. Null when
+   *  the entry has no resolvable season link — never derived from the date. */
   seasonYear: number | null;
+  /** Season id stored on the entry (may point at a missing/foreign season). */
+  pruningSeasonId: string | null;
+  /** True when a pruning_seasons row was found for pruningSeasonId. */
+  hasSeasonLink: boolean;
+  /** Season year we would expect for this entry (calendar year of the work).
+   *  Used ONLY to flag integrity problems, never to display the season. */
+  expectedSeasonYear: number | null;
+  /** Human-readable reasons the stored season data looks inconsistent. */
+  seasonIssues: string[];
+  seasonMismatch: boolean;
+  /** Best-effort platform metadata if the backend records it. */
+  sourcePlatform: string | null;
   vintageYear: number | null;
   paddockId: string;
   blockName: string;
@@ -53,6 +67,7 @@ export interface PruningActivityRow {
   updatedAt: string | null;
   isReversed: boolean;
 }
+
 
 /** Minutes between two time/timestamp values; rolls over midnight. */
 export function durationMinutesBetween(start: string | null, finish: string | null): number | null {
@@ -93,6 +108,23 @@ export function formatRowRanges(rows: number[]): string {
 }
 
 interface SeasonLite { id: string; paddock_id: string; season_year: number }
+
+/** Calendar year the pruning work was performed — the canonical season year
+ *  rule shared with iOS/Android. Used only to DETECT integrity problems. */
+export function expectedSeasonYearForDate(isoDate: string | null): number | null {
+  if (!isoDate) return null;
+  const y = Number(String(isoDate).slice(0, 4));
+  return Number.isFinite(y) ? y : null;
+}
+
+/** Best-effort platform metadata; the backend may not record it yet. */
+function readPlatform(row: any): string | null {
+  const v =
+    row?.source_platform ?? row?.created_platform ?? row?.platform ??
+    row?.created_via ?? row?.device_platform ?? null;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
 interface PaddockLite { id: string; name: string | null; variety_allocations: any }
 interface SegmentLite { pruning_entry_id: string | null; row_number: number; segment_number: number }
 interface TaskLite { id: string; task_type: string | null; description: string | null; status: string | null }
@@ -180,14 +212,43 @@ export function usePruningActivity(vineyardId: string | null) {
           ? labourHours
           : taskLabour && taskLabour.hours > 0 ? taskLabour.hours : null;
 
+        const seasonYear = season?.season_year ?? null;
+        const expectedSeasonYear = expectedSeasonYearForDate(e.entry_date);
+        const seasonIssues: string[] = [];
+        if (season) {
+          if (season.paddock_id && season.paddock_id !== e.paddock_id) {
+            seasonIssues.push("Linked pruning season belongs to a different block.");
+          }
+          if (seasonYear != null && expectedSeasonYear != null && seasonYear !== expectedSeasonYear) {
+            seasonIssues.push(
+              `Linked season year ${seasonYear} does not match the year the work was recorded (${expectedSeasonYear}).`,
+            );
+          }
+          if (
+            seasonYear != null && e.vintage_year != null &&
+            e.vintage_year !== seasonYear && e.vintage_year !== seasonYear + 1
+          ) {
+            seasonIssues.push(
+              `Stored vintage ${e.vintage_year} is not consistent with season ${seasonYear}.`,
+            );
+          }
+        }
+
         return {
           id: e.id,
           entry: e,
           date: e.entry_date,
-          seasonYear: season?.season_year ?? null,
+          seasonYear,
+          pruningSeasonId: e.pruning_season_id ?? null,
+          hasSeasonLink: !!season,
+          expectedSeasonYear,
+          seasonIssues,
+          seasonMismatch: seasonIssues.length > 0,
+          sourcePlatform: readPlatform(e),
           vintageYear: e.vintage_year ?? null,
           paddockId: e.paddock_id,
           blockName: paddock?.name ?? "—",
+
           variety,
           worker: e.worker_or_crew?.trim() || "—",
           method: e.pruning_method || "—",
