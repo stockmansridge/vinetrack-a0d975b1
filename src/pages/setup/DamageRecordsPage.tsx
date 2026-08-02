@@ -546,7 +546,7 @@ export default function DamageRecordsPage() {
                       .join(" · ")}
                   </span>{" "}
                   recorded on{" "}
-                  <span className="font-medium">{dt(observed(deleteTarget))}</span>.
+                  <span className="font-medium">{fmtDate(observed(deleteTarget))}</span>.
                   <br />
                   <br />
                   The record will no longer be included in damage totals, yield calculations or
