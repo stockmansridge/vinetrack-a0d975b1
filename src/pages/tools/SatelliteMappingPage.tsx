@@ -2751,6 +2751,15 @@ export default function SatelliteMappingPage() {
         </Button>
         <Button
           size="sm"
+          variant={rawPixels ? "secondary" : "outline"}
+          onClick={() => setRawPixels((v) => !v)}
+          title="Render one stored raster pixel per cell with nearest-neighbour scaling — reveals whether blockiness is in the stored raster or only in the display renderer."
+        >
+          Raw pixels: {rawPixels ? "On" : "Off"}
+        </Button>
+
+        <Button
+          size="sm"
           variant="outline"
           disabled={busy || backfillLayers.isPending || !activeVineyardId}
           onClick={() => backfillLayers.mutate()}
