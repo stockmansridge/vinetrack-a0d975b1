@@ -562,6 +562,43 @@ export default function WorkTaskReportsPage() {
     );
   }, [filtered]);
 
+  // -------------------- Task Summary sorting --------------------
+  // Column sorting is display-only: it re-orders `filtered` without touching
+  // any totals, exports or underlying data. Default (no key) keeps the
+  // existing date-descending order.
+  type TaskSortKey =
+    | "date" | "taskType" | "blocks" | "area" | "labourHours" | "machineHours"
+    | "linkedTrips" | "manualLabour" | "machineCharge" | "machineFuel"
+    | "linkedTripCost" | "totalCost" | "costPerArea" | "machineEntries" | "status";
+
+  const taskAccessors = useMemo(
+    () => ({
+      date: (r: TaskRow) => (r.date ? new Date(r.date).getTime() : null),
+      taskType: (r: TaskRow) => r.taskType,
+      blocks: (r: TaskRow) => r.blocksLabel,
+      area: (r: TaskRow) => r.totalAreaHa ?? null,
+      labourHours: (r: TaskRow) => r.labourHours,
+      machineHours: (r: TaskRow) => r.machineHours,
+      linkedTrips: (r: TaskRow) => r.linkedTripCount,
+      manualLabour: (r: TaskRow) => r.manualLabourCost,
+      machineCharge: (r: TaskRow) => r.machineCharge,
+      machineFuel: (r: TaskRow) => r.machineFuel,
+      linkedTripCost: (r: TaskRow) => r.linkedTripTotal,
+      totalCost: (r: TaskRow) => r.totalCost,
+      costPerArea: (r: TaskRow) =>
+        r.totalAreaHa && r.totalAreaHa > 0 ? r.totalCost / r.totalAreaHa : null,
+      machineEntries: (r: TaskRow) => r.machineEntries,
+      status: (r: TaskRow) => (r.hasWarning ? 1 : 0),
+    }),
+    [],
+  );
+
+  const {
+    sorted: sortedTasks,
+    toggleSort: toggleTaskSort,
+    getSortDirection: taskSortDir,
+  } = useSortableTable<TaskRow, TaskSortKey>(filtered, { accessors: taskAccessors });
+
   const csvSafe = (v: unknown) => {
     const s = v == null ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
