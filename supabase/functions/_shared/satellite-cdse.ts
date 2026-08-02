@@ -671,11 +671,12 @@ export async function processImage(params: {
             timeRange: { from: params.dateStart, to: params.dateEnd },
             mosaickingOrder: "leastCC",
           },
-          // Display rasters only: smooth provider-side resampling removes the
-          // hard 10 m stair-stepping and tile-seam banding. Values are still
-          // derived from the same source pixels — only the interpolation of the
-          // rendered surface changes.
-          processing: { upsampling: "BICUBIC", downsampling: "BILINEAR" },
+          // The display raster is requested on the SAME native 10 m grid as the
+          // analytical raster, so no provider-side resampling is wanted here —
+          // NEAREST guarantees one output pixel per source pixel. Visual
+          // smoothing happens in the browser (bilinear texture filtering).
+          processing: { upsampling: "NEAREST", downsampling: "NEAREST" },
+
         },
       ],
     },
