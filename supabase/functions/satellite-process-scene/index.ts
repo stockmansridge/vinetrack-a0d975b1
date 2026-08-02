@@ -236,12 +236,19 @@ Deno.serve(async (req) => {
       const displayPath = existingDisplay?.storage_path ?? path;
 
       if (!existingDisplay) {
-        // Process API — coloured PNG clipped to paddock geometry.
-        const png = await processImage({
-          geometry, bbox, dateStart, dateEnd,
+        // Process API — rendered on the aligned EPSG:3857 grid, then masked to
+        // the exact paddock polygon so the rectangular bounds are never shown.
+        const rawPng = await processImage({
+          geometry, bbox: grid.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
           evalscript: evalscriptFor(idx),
           width, height,
         });
+        let png = rawPng;
+        try {
+          png = maskPngToPolygon(rawPng, displayMask, grid);
+        } catch (maskErr) {
+          console.error("[satellite-process-scene] polygon mask failed:", (maskErr as Error)?.message);
+        }
 
         const up = await supa.storage.from("satellite-assets").upload(displayPath, png, {
           contentType: "image/png", upsert: true,
@@ -253,7 +260,7 @@ Deno.serve(async (req) => {
         satellite_scene_id: sceneId, index_type: idx,
         asset_type: DISPLAY_ASSET_TYPE,
         storage_path: displayPath, mime_type: "image/png",
-        bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+        bounds: grid.bounds,
         raster_width: width,
         raster_height: height,
         native_resolution_m: nativeRes, display_resolution_m: displayResolutionM,
@@ -267,12 +274,16 @@ Deno.serve(async (req) => {
           formula: idx,
           bands: bandsFor(idx),
           time_interval: { from: dateStart, to: dateEnd },
-          crs: "EPSG:4326",
+          crs: GRID_CRS,
+          grid_origin: "EPSG:3857 (0,0)",
+          grid_resolution_m: displayResolutionM,
+          polygon_masked: true,
           mosaicking_order: "leastCC",
           scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
-          resampling: nativeRes > QC.processImageTargetResolutionM ? "bilinear" : "none",
+          resampling: nativeRes > displayResolutionM ? "bilinear" : "none",
           percentiles,
         },
+
         processing_version: PROCESSING_VERSION,
       }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
 
