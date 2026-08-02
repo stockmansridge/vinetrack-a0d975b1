@@ -976,6 +976,56 @@ export default function SatelliteMappingPage() {
   }), [dateCoverage, totalPaddocks, layer, activeLayer.short]);
 
 
+  // Merge saved imagery dates with backfill expected-date outcomes so the
+  // timeline shows the complete capture history: available / partial dates are
+  // selectable, everything else is shown with its reason but not clickable.
+  const singlePaddockScope = paddockId !== "all";
+  const timelineEntries = useMemo<TimelineDateEntry[]>(() => {
+    const byDate = new Map<string, TimelineDateEntry>();
+    for (const d of dateOptions) {
+      const group = dateCoverage.find((g) => g.date === d.date);
+      const availIds = group?.layerCoverage?.[layer]?.available_paddock_ids;
+      const paddockCount = singlePaddockScope
+        ? ((availIds ? availIds.includes(paddockId) : group?.sceneByPaddock.has(paddockId)) ? 1 : 0)
+        : d.paddockCount;
+      const activeCount = singlePaddockScope ? 1 : (d.activeCount || totalPaddocks);
+      const status: TimelineStatus = paddockCount === 0
+        ? "no_capture"
+        : paddockCount >= activeCount ? "available" : "partial";
+      byDate.set(d.date, {
+        date: d.date,
+        status,
+        paddockCount,
+        activeCount,
+        coveragePercent: d.coveragePercent,
+      });
+    }
+    const OUTCOME_STATUS: Record<string, TimelineStatus> = {
+      pending: "queued",
+      retry_pending: "queued",
+      processing: "processing",
+      downloaded: "processing",
+      available: "processing",
+      cloud_obscured: "cloud",
+      invalid_coverage: "cloud",
+      no_provider_capture: "no_capture",
+      failed: "failed",
+    };
+    for (const e of backfillStatusQuery.data?.expected_dates ?? []) {
+      if (byDate.has(e.date)) continue; // saved imagery always wins
+      const status = OUTCOME_STATUS[e.status] ?? "queued";
+      byDate.set(e.date, {
+        date: e.date,
+        status,
+        paddockCount: 0,
+        activeCount: singlePaddockScope ? 1 : (e.paddocks_total || totalPaddocks),
+        coveragePercent: 0,
+        note: status === "failed" ? e.last_error : null,
+      });
+    }
+    return Array.from(byDate.values());
+  }, [dateOptions, dateCoverage, layer, paddockId, singlePaddockScope, totalPaddocks, backfillStatusQuery.data]);
+
   const providerFreshness = manifestQuery.data?.provider_freshness ?? null;
   const recommendedDefaultDate = manifestQuery.data?.recommended_default_date ?? null;
 
