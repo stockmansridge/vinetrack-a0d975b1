@@ -3306,7 +3306,10 @@ export default function SatelliteMappingPage() {
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[10px] text-muted-foreground border-t">
                     <div>Date</div><div className="text-right">{selectedSceneKey ?? "—"}</div>
                     <div>Provider</div><div className="text-right">Sentinel-2 L2A (CDSE)</div>
-                    <div>Native resolution</div><div className="text-right">{activeLayer.nativeResM} m</div>
+                    <div>Native measurement resolution</div><div className="text-right">{activeLayer.nativeResM} m</div>
+                    <div>Display interpolation</div><div className="text-right">{rawPixels ? "Raw pixels (nearest)" : "Smoothed"}</div>
+                    <div className="col-span-2 leading-snug">Click or hover a location to read the underlying unsmoothed value and capture date.</div>
+
                   </div>
                 </div>
               </CollapsibleContent>
