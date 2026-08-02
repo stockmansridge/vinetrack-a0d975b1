@@ -1,102 +1,87 @@
-# Slice 2 — Map-First Crop Health Maps
+# Crop Health Maps — aligned imagery + automatic date backfill
 
-Convert `SatelliteMappingPage` from a stacked layout with a tall right-side toolbar into a map-first workspace where controls live over the map and secondary information moves into a right-hand drawer.
+This is a large change spanning imagery processing, a new backfill job engine, a scheduled
+job, and Crop Health Maps UI. It is planned in four phases so each one is testable on its own.
 
-No changes to the view model, manifest v3, Copernicus/asset endpoints, IndexedDB cache identity, playback timing, crossfade, analytical raster format, or overlay lifecycle identity.
+## Phase 1 — Aligned, polygon-clipped imagery (fixes the overlapping dark rectangles)
 
-## New components
+Goal: every paddock renders as a clean shape, no rectangles, no stacked darkening.
 
-Create four small components under `src/components/satellite/`:
+- Snap every raster to one shared grid: fixed CRS (EPSG:3857), fixed resolution per index
+  (10 m native, fixed display metres/pixel), and a bbox snapped to whole-pixel multiples of
+  that resolution from a global origin. Two touching paddocks then share exact pixel edges.
+- Bake a true alpha mask into the display raster: the provider evalscript already returns
+  `dataMask`; extend it so pixels outside the saved paddock polygon return alpha 0, and
+  clip the request geometry to the polygon itself rather than the bbox.
+- Client rendering: draw each paddock overlay with its baked alpha only, never the
+  rectangular bounds; remove any translucent polygon fill drawn on top of imagery, and give
+  overlays a single deterministic z-order (sorted by paddock id) so stacking is stable.
+- Mosaic first, clip second: when a capture date has more than one provider tile touching a
+  vineyard, request the date as one mosaicked composite (`mosaickingOrder`) so seams do not
+  appear inside a paddock.
+- Duplicate protection: unique index on
+  `(vineyard_id, paddock_id, provider, acquisition_date, index_type, asset_type,
+  processing_version)` for raster assets, with processing upserting on that key.
+- Bump `PROCESSING_VERSION` so old, unaligned assets are superseded rather than mixed in.
 
-1. **`MapWorkspaceDrawer.tsx`** — right-side drawer overlaid on the map container. Tabs: `Details`, `History`, `Admin` (Admin tab hidden unless `isSystemAdmin`). Uses shadcn `Sheet` with `side="right"` on desktop (width 380–440 px) and bottom sheet on mobile. Escape closes; returns focus to the trigger. Body is scrollable.
-2. **`MapControlsBar.tsx`** — top-left overlay: `Vineyard`, `Paddock`, `Map Layer` compact selects; collapses to a "Map controls" popover under 900 px.
-3. **`MapActionsBar.tsx`** — top-right overlay: `Details`, `History`, `Full Screen`, and (admin only) `Admin` buttons plus the primary `Check for New Imagery` action.
-4. **`MapLegend.tsx`** — extract existing legend markup, add an opacity slider in the expanded state.
+## Phase 2 — Expected-date discovery and outcome recording
 
-## Layout restructure — `SatelliteMappingPage.tsx`
+- New table `satellite_expected_dates` keyed by
+  `(vineyard_id, paddock_id, index_type, expected_date)` with an `outcome` column:
+  `pending, available, downloaded, processing, no_provider_capture, cloud_obscured,
+  invalid_coverage, failed, retry_pending`, plus `attempts`, `next_retry_at`, `last_error`.
+- Discovery derives expected dates from the existing configured provider cadence and the
+  configured historical limit — no hard-coded dates in the UI. It compares expected dates to
+  saved imagery and records gaps *between* saved dates, not only dates newer than the latest.
+- Terminal outcomes (`no_provider_capture`, `cloud_obscured`, `invalid_coverage`) are never
+  re-requested; `failed` becomes `retry_pending` with exponential backoff.
+- Cloudy/unavailable dates stay visible in history as unavailable.
 
-Replace the outer `flex-col lg:flex-row` (map + right toolbar + stacked timeline + saved history) with:
+## Phase 3 — Persistent backfill job engine (runs without the browser)
 
-```text
-<div class="flex flex-col h-[calc(100dvh-var(--vt-header-h,4rem))]">
-  <header row (compact title + admin/beta badge + short description)>
-  <div ref=workspace class="relative flex-1 min-h-0">
-      <SatelliteMap fills 100%/100%>
-      <MapControlsBar   absolute top-3 left-3 />
-      <MapActionsBar    absolute top-3 right-3 />
-      <RefreshProgressPanel absolute top-3 right-3 (offset when actions bar present) />
-      <SatelliteDateSlider absolute bottom-3 left-1/2 -translate-x-1/2 w-[min(900px,calc(100%-32px))] />
-      <MapLegend        absolute bottom-3 right-3 />
-      <MapWorkspaceDrawer opens as absolute right-0 top-0 bottom-0 width 400 />
-  </div>
-</div>
-```
+- New table `satellite_backfill_jobs`: vineyard, requested paddocks, index type, newest and
+  oldest date checked, missing dates found, completed/skipped/failed counts, status
+  (`queued, discovering, downloading, processing, completed, completed_with_warnings,
+  failed, cancelled`), started/completed times, last error, heartbeat.
+- New edge function `satellite-backfill-run` processes one small batch per invocation and
+  re-enqueues itself: newest missing date first, all paddocks for that date before moving
+  backwards. Idempotent, resumable, and guarded by a per-vineyard advisory lock so two runs
+  cannot process the same vineyard/date.
+- Priority order: latest imagery, then recent gaps, then older gaps, then retry-eligible
+  failures.
+- Scheduled per-vineyard check (pg_cron) runs the same engine on the configured cadence, so
+  the page never needs to be open.
 
-Remove the permanent right sidebar `Card` and the below-map `SavedImageryHistory` card — their contents move into the drawer.
+## Phase 4 — Crop Health Maps UI
 
-## Drawer content mapping
+- "Check for New Imagery" now runs discovery and, when historical gaps exist, shows the
+  confirmation dialog:
+  "Fill missing imagery dates? VineTrack will check the latest available imagery first, then
+  work backwards to fill gaps… You can leave this page while the work continues."
+  with Cancel / Start Backfill and an "Automatically check for and fill missing dates in
+  future" checkbox (default on for system admins during beta).
+- Refresh panel reports dates *and* paddocks: current capture date, dates completed x of y,
+  paddocks completed x of y, per-paddock status rows, totals for downloaded / unavailable /
+  failed, and estimated remaining. Closing the panel does not cancel the job.
+- Timeline states: available, processing, cloud/shadow unavailable, no provider capture,
+  failed, not yet checked. A date only reads "available" once every selected paddock has a
+  processed image or a recorded unavailable outcome; partial dates read
+  "Imagery available for 6 of 8 paddocks" and render only the completed paddocks — never
+  stretched or substituted from another date.
 
-- **Details** — selected date, layer name, mounted coverage, paddocks displayed/unavailable, per-paddock status list, selected paddock info, cell/package warnings. Sourced only from `useCropHealthViewModel`.
-- **History** — existing `SavedImageryHistory` component with monthly grouping and filters. Selecting a date stops playback, clears preview, commits date.
-- **Admin** — Repair Missing Assets, Build 12-Month History, Package Health, Overlay Health, Copernicus status, processing jobs, browser-cache/manifest diagnostics.
+## Technical notes
 
-## Map-focus mode
+- New tables live on the Crop Health backend project alongside `satellite_scenes` and
+  `satellite_raster_assets`, with RLS + GRANTs (service_role write, system-admin read via
+  the existing edge-function gate).
+- Reprocessing at the new alignment version is done by the backfill engine itself, so no
+  separate migration job is needed; current imagery stays usable while it runs.
+- Existing functions touched: `satellite-process-scene` (grid snapping, polygon mask,
+  mosaicking, upsert key), `satellite-get-manifest` (per-date outcome states),
+  `satellite-refresh-job` (job-type reuse). New: `satellite-discover-dates`,
+  `satellite-backfill-run`.
 
-Add local `mapFocus` boolean. When on, the workspace div becomes `fixed inset-0 top-[var(--vt-header-h)] left-[var(--vt-sidebar-w,0)]` with `z-40`. All overlays keep working. `Esc` exits focus (only if no drawer open). "Exit Full Screen" button appears in the actions bar.
+## Suggested build order
 
-Do **not** call MapKit `fitBounds` on focus toggle or drawer open/close — only call `map.mapkit?.map?.invalidateSize?.()` (or the local resize helper `SatelliteMap` already exposes via `ResizeObserver`; verify it does — otherwise add a `mapRef.current?.resize()` hook). Preserve region.
-
-## Timeline / legend / refresh placement
-
-- `SatelliteDateSlider` — bottom-centre, translucent panel `bg-background/90 backdrop-blur border shadow-md`; keep all existing props.
-- `MapLegend` — bottom-right, collapsed by default under 1024 px width.
-- `RefreshProgressPanel` — already absolute top-3 right-3; shift to `top-16` when actions bar is present so they don't overlap.
-
-## Opacity control
-
-Move opacity slider into the expanded `MapLegend`. Delete from the toolbar. Behaviour unchanged (`setOpacity` on the same state).
-
-## Header offset
-
-Read `var(--vt-header-h)` if defined; fall back to `4rem`. Do not hard-code totals.
-
-## Accessibility
-
-- All icon buttons get `aria-label`.
-- Drawer tabs use `Tabs` from shadcn.
-- Escape closes drawer first, then exits map focus.
-- `useEffect` to trap Escape at page level.
-- Focus returns to the button that opened the drawer (Sheet handles this).
-
-## Files
-
-**New:**
-- `src/components/satellite/MapWorkspaceDrawer.tsx`
-- `src/components/satellite/MapControlsBar.tsx`
-- `src/components/satellite/MapActionsBar.tsx`
-- `src/components/satellite/MapLegend.tsx`
-
-**Edited:**
-- `src/pages/tools/SatelliteMappingPage.tsx` — swap layout, hoist state, delete replaced markup.
-
-**Untouched:**
-- `src/components/SatelliteMap.tsx`
-- `src/components/satellite/SatelliteDateSlider.tsx`
-- `src/components/satellite/RefreshProgressPanel.tsx`
-- `src/components/satellite/OverlayHealthPanel.tsx`
-- `src/lib/cropHealthViewModel.ts`, `src/hooks/useCropHealthViewModel.ts`
-
-## Validation
-
-- `bunx tsgo --noEmit` passes.
-- Vitest suite passes (9/9 view model + others).
-- Playwright screenshots at 1366×768 normal + focus, Details/History drawers open, tablet 768.
-- Manual: MapKit centre/zoom preserved across drawer open, focus toggle, layer change.
-
-## Deliberately deferred
-
-- Compare Dates (next phase).
-- Wording overhaul beyond the primary action label and copy strings listed in §12.
-- Refactoring `SatelliteMap.tsx` internals — Slice 1 already stabilised overlay identity.
-
-Awaiting approval — this is a heavy restructure of a 3245-line file and I want to confirm the approach before ripping the old layout apart.
+Phase 1 first — it fixes the visible defect on the screenshot and is independently
+shippable. Then 2, 3, 4.
