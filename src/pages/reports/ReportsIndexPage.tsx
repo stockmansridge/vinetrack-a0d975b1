@@ -21,6 +21,14 @@ const sections = [
     status: "Available",
   },
   {
+    to: "/reports/pruning-activity",
+    title: "Pruning Activity",
+    description:
+      "Every recorded pruning entry — rows worked, quarters, vines, labour hours, productivity and linked work tasks, with CSV/PDF export.",
+    icon: Scissors,
+    status: "Available",
+  },
+  {
     to: "/reports/spray",
     title: "Spray Records & Compliance",
     description:
