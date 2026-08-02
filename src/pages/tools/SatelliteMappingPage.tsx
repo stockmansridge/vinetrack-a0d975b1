@@ -3024,6 +3024,8 @@ export default function SatelliteMappingPage() {
             onOverlayUnmounted={handleOverlayUnmounted}
             onDiagnosticsChange={setMapDiagnostics}
             showDiagnostics={isSystemAdmin}
+            rawPixels={isSystemAdmin && rawPixels}
+
           />
         )}
 
