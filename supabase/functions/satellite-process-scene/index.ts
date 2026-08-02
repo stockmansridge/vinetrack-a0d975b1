@@ -23,6 +23,10 @@ import {
   CdseConfigError, CdseAuthError, ProviderError,
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
+import {
+  alignBboxToGrid, rasterisePolygonMask, maskPngToPolygon, GRID_CRS, GRID_CRS_URI,
+} from "../_shared/satellite-grid.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
