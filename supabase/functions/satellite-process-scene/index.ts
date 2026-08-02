@@ -23,6 +23,10 @@ import {
   CdseConfigError, CdseAuthError, ProviderError,
   type IndexType,
 } from "../_shared/satellite-cdse.ts";
+import {
+  alignBboxToGrid, rasterisePolygonMask, maskPngToPolygon, GRID_CRS, GRID_CRS_URI,
+} from "../_shared/satellite-grid.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -55,6 +59,15 @@ Deno.serve(async (req) => {
   if (polys.length === 0) return jsonError(422, "geometry_invalid", "Paddock geometry is missing or invalid.");
   const geometry = toGeoJson(polys);
   const bbox = computeBbox(polys)!;
+
+  // One shared, globally-snapped display grid for this paddock. Every layer for
+  // this paddock uses it, and every paddock in the vineyard snaps to the same
+  // global origin/resolution, so touching paddocks share exact pixel edges.
+  const displayGrid = alignBboxToGrid(bbox, QC.processImageTargetResolutionM, QC.processImageMaxSize);
+  // True raster mask of the saved polygon on that grid.
+  const displayMask = rasterisePolygonMask(polys, displayGrid);
+
+
 
   // Create job row
   const { data: job } = await supa.from("satellite_processing_jobs").insert({
@@ -180,7 +193,11 @@ Deno.serve(async (req) => {
   const runIndex = async (idx: IndexType) => {
     try {
       const nativeRes = INDEX_NATIVE_RES_M[idx];
-      const { width, height, displayResolutionM } = computeImageSize(bbox, QC.processImageTargetResolutionM, QC.processImageMaxSize);
+      // Display raster: snapped to the shared global EPSG:3857 pixel grid so
+      // adjacent paddocks align exactly and can never overlap.
+      const grid = displayGrid;
+      const { width, height, resolutionM: displayResolutionM } = grid;
+
 
       // Colour ramp descriptor for the DB (client mirrors this).
       let minValue: number | null = null;
@@ -232,12 +249,19 @@ Deno.serve(async (req) => {
       const displayPath = existingDisplay?.storage_path ?? path;
 
       if (!existingDisplay) {
-        // Process API — coloured PNG clipped to paddock geometry.
-        const png = await processImage({
-          geometry, bbox, dateStart, dateEnd,
+        // Process API — rendered on the aligned EPSG:3857 grid, then masked to
+        // the exact paddock polygon so the rectangular bounds are never shown.
+        const rawPng = await processImage({
+          geometry, bbox: grid.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
           evalscript: evalscriptFor(idx),
           width, height,
         });
+        let png = rawPng;
+        try {
+          png = maskPngToPolygon(rawPng, displayMask, grid);
+        } catch (maskErr) {
+          console.error("[satellite-process-scene] polygon mask failed:", (maskErr as Error)?.message);
+        }
 
         const up = await supa.storage.from("satellite-assets").upload(displayPath, png, {
           contentType: "image/png", upsert: true,
@@ -249,7 +273,7 @@ Deno.serve(async (req) => {
         satellite_scene_id: sceneId, index_type: idx,
         asset_type: DISPLAY_ASSET_TYPE,
         storage_path: displayPath, mime_type: "image/png",
-        bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+        bounds: grid.bounds,
         raster_width: width,
         raster_height: height,
         native_resolution_m: nativeRes, display_resolution_m: displayResolutionM,
@@ -263,12 +287,16 @@ Deno.serve(async (req) => {
           formula: idx,
           bands: bandsFor(idx),
           time_interval: { from: dateStart, to: dateEnd },
-          crs: "EPSG:4326",
+          crs: GRID_CRS,
+          grid_origin: "EPSG:3857 (0,0)",
+          grid_resolution_m: displayResolutionM,
+          polygon_masked: true,
           mosaicking_order: "leastCC",
           scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
-          resampling: nativeRes > QC.processImageTargetResolutionM ? "bilinear" : "none",
+          resampling: nativeRes > displayResolutionM ? "bilinear" : "none",
           percentiles,
         },
+
         processing_version: PROCESSING_VERSION,
       }, { onConflict: "satellite_scene_id,index_type,asset_type,processing_version" });
 
@@ -280,12 +308,13 @@ Deno.serve(async (req) => {
         const analyticalStoragePath = existingAnalytical?.storage_path ?? analyticalPath;
 
         // Analytical raster is rendered at the index's NATIVE resolution
-        // (10 m NDVI/MSAVI, 20 m NDRE/RECI/NDMI) so one cell = one satellite cell.
-        const analyticalSize = computeImageSize(bbox, nativeRes, QC.processImageMaxSize);
+        // (10 m NDVI/MSAVI, 20 m NDRE/RECI/NDMI) so one cell = one satellite
+        // cell, snapped to the same global EPSG:3857 grid as the display PNG.
+        const analyticalSize = alignBboxToGrid(bbox, nativeRes, QC.processImageMaxSize);
 
         if (!existingAnalytical) {
           const analytical = await processAnalyticalRaster({
-            geometry, bbox, dateStart, dateEnd,
+            geometry, bbox: analyticalSize.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
             evalscript: analyticalEvalscript(idx),
             width: analyticalSize.width, height: analyticalSize.height,
           });
@@ -299,11 +328,12 @@ Deno.serve(async (req) => {
           satellite_scene_id: sceneId, index_type: idx,
           asset_type: ANALYTICAL_ASSET_TYPE,
           storage_path: analyticalStoragePath, mime_type: "image/tiff",
-          bounds: { north: bbox[3], south: bbox[1], east: bbox[2], west: bbox[0] },
+          bounds: analyticalSize.bounds,
           raster_width: analyticalSize.width,
           raster_height: analyticalSize.height,
           native_resolution_m: nativeRes,
-          display_resolution_m: analyticalSize.displayResolutionM,
+          display_resolution_m: analyticalSize.resolutionM,
+
           data_type: "Float32",
           scale_factor: 1,
           no_data_sentinel: ANALYTICAL_NO_DATA_SENTINEL,
@@ -315,7 +345,8 @@ Deno.serve(async (req) => {
             formula: idx,
             bands: bandsFor(idx),
             time_interval: { from: dateStart, to: dateEnd },
-            crs: "EPSG:4326",
+            crs: GRID_CRS,
+            grid_origin: "EPSG:3857 (0,0)",
             mosaicking_order: "leastCC",
             scl_mask_excluded_classes: [0, 1, 3, 8, 9, 10, 11],
             matched_display_asset_type: DISPLAY_ASSET_TYPE,

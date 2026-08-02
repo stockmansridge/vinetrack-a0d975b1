@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { Info, RefreshCw, Satellite as SatelliteIcon, ChevronDown, Loader2, Wrench, Maximize2, Minimize2, PanelRight, CalendarDays, ShieldAlert } from "lucide-react";
+import BackfillPanel from "@/components/satellite/BackfillPanel";
 import MapWorkspaceDrawer, { type DrawerTab } from "@/components/satellite/MapWorkspaceDrawer";
 import SatelliteDateSlider from "@/components/satellite/SatelliteDateSlider";
 import RefreshProgressPanel from "@/components/satellite/RefreshProgressPanel";
@@ -2633,8 +2634,19 @@ export default function SatelliteMappingPage() {
     </div>
   );
 
+  const backfillProgress = (
+    <BackfillPanel
+      vineyardId={activeVineyardId ?? null}
+      paddockIds={geoms.map((g) => g.id)}
+      canManage={false}
+      onImageryChanged={() => manifestQuery.refetch()}
+    />
+  );
+
   const historyPanel = (
-    (manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 ? (
+    <div className="space-y-3">
+      {backfillProgress}
+      {(manifestQuery.data?.total_saved_dates ?? dateOptions.length) > 0 ? (
       <SavedImageryHistory
         entries={dateOptions}
         committedDate={selectedSceneKey}
@@ -2647,11 +2659,19 @@ export default function SatelliteMappingPage() {
       />
     ) : (
       <div className="text-xs text-muted-foreground p-3">No saved imagery yet. Use "Check for New Imagery" to look for a Copernicus capture.</div>
-    )
+    )}
+    </div>
   );
 
   const adminPanel = (
     <div className="space-y-3 text-xs">
+      <BackfillPanel
+        vineyardId={activeVineyardId ?? null}
+        paddockIds={geoms.map((g) => g.id)}
+        canManage={isSystemAdmin}
+        onImageryChanged={() => manifestQuery.refetch()}
+      />
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"

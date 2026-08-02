@@ -71,3 +71,13 @@ verify_jwt = false
 
 [functions.satellite-get-asset]
 verify_jwt = false
+
+[functions.satellite-backfill-discover]
+verify_jwt = false
+
+[functions.satellite-backfill-run]
+verify_jwt = false
+
+[functions.satellite-backfill-status]
+verify_jwt = false
+

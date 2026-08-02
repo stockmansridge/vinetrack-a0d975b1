@@ -221,6 +221,162 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_backfill_jobs: {
+        Row: {
+          auto_scheduled: boolean
+          completed_at: string | null
+          created_at: string
+          current_paddock_id: string | null
+          current_processing_date: string | null
+          dates_completed: number
+          dates_failed: number
+          dates_skipped: number
+          heartbeat_at: string | null
+          id: string
+          index_types: string[]
+          last_error: string | null
+          missing_dates_found: number
+          newest_date_checked: string | null
+          oldest_date_checked: string | null
+          paddocks_completed: number
+          paddocks_total: number
+          requested_by: string | null
+          requested_paddock_ids: string[]
+          started_at: string | null
+          status: string
+          updated_at: string
+          vineyard_id: string
+        }
+        Insert: {
+          auto_scheduled?: boolean
+          completed_at?: string | null
+          created_at?: string
+          current_paddock_id?: string | null
+          current_processing_date?: string | null
+          dates_completed?: number
+          dates_failed?: number
+          dates_skipped?: number
+          heartbeat_at?: string | null
+          id?: string
+          index_types?: string[]
+          last_error?: string | null
+          missing_dates_found?: number
+          newest_date_checked?: string | null
+          oldest_date_checked?: string | null
+          paddocks_completed?: number
+          paddocks_total?: number
+          requested_by?: string | null
+          requested_paddock_ids?: string[]
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          vineyard_id: string
+        }
+        Update: {
+          auto_scheduled?: boolean
+          completed_at?: string | null
+          created_at?: string
+          current_paddock_id?: string | null
+          current_processing_date?: string | null
+          dates_completed?: number
+          dates_failed?: number
+          dates_skipped?: number
+          heartbeat_at?: string | null
+          id?: string
+          index_types?: string[]
+          last_error?: string | null
+          missing_dates_found?: number
+          newest_date_checked?: string | null
+          oldest_date_checked?: string | null
+          paddocks_completed?: number
+          paddocks_total?: number
+          requested_by?: string | null
+          requested_paddock_ids?: string[]
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
+      satellite_backfill_settings: {
+        Row: {
+          auto_backfill: boolean
+          cadence_days: number
+          history_days: number
+          last_auto_check_at: string | null
+          updated_at: string
+          vineyard_id: string
+        }
+        Insert: {
+          auto_backfill?: boolean
+          cadence_days?: number
+          history_days?: number
+          last_auto_check_at?: string | null
+          updated_at?: string
+          vineyard_id: string
+        }
+        Update: {
+          auto_backfill?: boolean
+          cadence_days?: number
+          history_days?: number
+          last_auto_check_at?: string | null
+          updated_at?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
+      satellite_expected_dates: {
+        Row: {
+          attempts: number
+          created_at: string
+          expected_date: string
+          id: string
+          index_type: string
+          last_error: string | null
+          next_retry_at: string | null
+          outcome: string
+          paddock_id: string
+          provider: string
+          resolved_at: string | null
+          satellite_scene_id: string | null
+          updated_at: string
+          vineyard_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          expected_date: string
+          id?: string
+          index_type: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          outcome?: string
+          paddock_id: string
+          provider?: string
+          resolved_at?: string | null
+          satellite_scene_id?: string | null
+          updated_at?: string
+          vineyard_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          expected_date?: string
+          id?: string
+          index_type?: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          outcome?: string
+          paddock_id?: string
+          provider?: string
+          resolved_at?: string | null
+          satellite_scene_id?: string | null
+          updated_at?: string
+          vineyard_id?: string
+        }
+        Relationships: []
+      }
       satellite_index_summaries: {
         Row: {
           created_at: string
