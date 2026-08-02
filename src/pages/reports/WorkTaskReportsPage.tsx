@@ -1163,6 +1163,43 @@ export default function WorkTaskReportsPage() {
     return parts.length ? parts.join(" • ") : "OK";
   };
 
+  // -------------------- Block Allocation sorting --------------------
+  // Display-only ordering of the allocation rows. Exports keep using the
+  // unsorted `allocationRows` so their content is unaffected.
+  type AllocSortKey =
+    | "name" | "tasks" | "area" | "labourHours" | "machineHours" | "linkedTrips"
+    | "manualLabour" | "machineCharge" | "machineFuel" | "linkedTripCost"
+    | "totalCost" | "costPerArea" | "status";
+
+  const allocAccessors = useMemo(
+    () => ({
+      name: (r: AllocRow) => r.name,
+      tasks: (r: AllocRow) => r.taskIds.size,
+      area: (r: AllocRow) => (r.hasAnyArea ? r.areaHa : null),
+      labourHours: (r: AllocRow) => r.labourHours,
+      machineHours: (r: AllocRow) => r.machineHours,
+      linkedTrips: (r: AllocRow) => r.linkedTripCount,
+      manualLabour: (r: AllocRow) => r.manualLabourCost,
+      machineCharge: (r: AllocRow) => r.machineCharge,
+      machineFuel: (r: AllocRow) => r.machineFuel,
+      linkedTripCost: (r: AllocRow) => r.linkedTripTotal,
+      totalCost: (r: AllocRow) => r.totalCost,
+      costPerArea: (r: AllocRow) =>
+        r.hasAnyArea && r.areaHa > 0 ? r.totalCost / r.areaHa : null,
+      // "OK" first when ascending, rows needing review last.
+      status: (r: AllocRow) => (allocationStatus(r) === "OK" ? 0 : 1),
+    }),
+    [],
+  );
+
+  const {
+    sorted: sortedAllocationRows,
+    toggleSort: toggleAllocSort,
+    getSortDirection: allocSortDir,
+  } = useSortableTable<AllocRow, AllocSortKey>(allocationRows, { accessors: allocAccessors });
+
+
+
   const downloadAllocationCsv = () => {
     const baseCols = [
       "Block", "Task count", "area_display", "area_unit",
