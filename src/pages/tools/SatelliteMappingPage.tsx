@@ -3313,16 +3313,8 @@ export default function SatelliteMappingPage() {
           </Collapsible>
         </div>
 
-        {/* Acquisition date slider — bottom-centre, on top of the map */}
-        <div
-          className="absolute left-1/2 z-[540] -translate-x-1/2"
-          style={{
-            bottom: "96px",
-            width: legendOpen ? "min(760px, calc(100% - 420px))" : "min(900px, calc(100% - 2rem))",
-            minWidth: "min(520px, calc(100% - 2rem))",
-          }}
-        >
-
+        {/* Historical imagery timeline — bottom-docked, full width, flush */}
+        <div className="absolute inset-x-0 bottom-0 z-[540]">
           {(() => {
             const scopedGroup = dateCoverage.find((g) => g.date === selectedSceneKey);
             const singlePaddock = paddockId !== "all";
@@ -3331,26 +3323,26 @@ export default function SatelliteMappingPage() {
               ? (layerAvailIds ? !layerAvailIds.includes(paddockId) : !scopedGroup.sceneByPaddock.has(paddockId))
               : false;
             return (
-              <div className="rounded-md bg-background/90 backdrop-blur shadow-md border">
-                <CropHealthDateTimeline
-                  entries={timelineEntries}
-                  committedDate={selectedSceneKey}
-                  previewDate={previewDate}
-                  onPreviewChange={(d) => setPreviewDate(d)}
-                  onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
-                  onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
-                  onInteractionEnd={() => setInteracting(false)}
-                  isPlaying={isPlaying}
-                  onTogglePlay={togglePlay}
-                  totalPaddocks={singlePaddock ? 1 : totalPaddocks}
-                  singlePaddockScope={singlePaddock}
-                  scopedPaddockMissing={scopedMissing}
-                  layerShortLabel={activeLayer.short}
-                />
-              </div>
+              <CropHealthDateTimeline
+                entries={timelineEntries}
+                committedDate={selectedSceneKey}
+                previewDate={previewDate}
+                onPreviewChange={(d) => setPreviewDate(d)}
+                onCommit={(d) => { setPreviewDate(null); setSelectedSceneKey(d); }}
+                onInteractionStart={() => { setInteracting(true); setIsPlaying(false); }}
+                onInteractionEnd={() => setInteracting(false)}
+                isPlaying={isPlaying}
+                onTogglePlay={togglePlay}
+                totalPaddocks={singlePaddock ? 1 : totalPaddocks}
+                singlePaddockScope={singlePaddock}
+                scopedPaddockMissing={scopedMissing}
+                layerShortLabel={activeLayer.short}
+                sourceLabel="Sentinel-2"
+              />
             );
           })()}
         </div>
+
 
         {/* Right-side workspace drawer */}
         <MapWorkspaceDrawer
