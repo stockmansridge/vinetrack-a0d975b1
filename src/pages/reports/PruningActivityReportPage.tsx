@@ -245,7 +245,7 @@ export default function PruningActivityReportPage() {
   };
 
   const baseHeader = [
-    "Date", "Pruning season", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
+    "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
     "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
     "Work task", "Work task status", "Created at", "Updated at", "Status", "Notes",
