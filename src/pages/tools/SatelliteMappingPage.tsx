@@ -793,6 +793,7 @@ export default function SatelliteMappingPage() {
               no_data_sentinel: layer.display.no_data_sentinel,
               row_orientation: layer.display.row_orientation,
               processing_version: layer.display.processing_version,
+              colour_scale: (layer.display as any).colour_scale ?? null,
             });
           }
           if (layer.analytical && !seenAssets.has(layer.analytical.asset_id)) {
@@ -813,6 +814,7 @@ export default function SatelliteMappingPage() {
               no_data_sentinel: layer.analytical.no_data_sentinel,
               row_orientation: layer.analytical.row_orientation,
               processing_version: layer.analytical.processing_version,
+              colour_scale: (layer.analytical as any).colour_scale ?? null,
             });
           }
           if (layer.summary) {
