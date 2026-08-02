@@ -21,7 +21,7 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v4-aligned-grid";
+export const PROCESSING_VERSION = "sentinel2-v5-smooth-display";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
 export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
 export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
@@ -33,8 +33,15 @@ export const QC = {
   maxCatalogueCloudCoverPct: 60,
   preferredCloudCoverPct: 20,
   minValidPaddockCoveragePct: 80,
-  processImageMaxSize: 1024, // px per side cap
-  processImageTargetResolutionM: 10, // display grid
+  processImageMaxSize: 1024, // px per side cap (analytical rasters)
+  processImageTargetResolutionM: 10, // analytical / native grid
+  // Display rasters are supersampled onto a finer, still grid-aligned raster
+  // and the provider resamples with bicubic interpolation, so the on-screen
+  // surface is smooth instead of showing 10 m block stepping. 2.5 m is a whole
+  // power-of-two step down from 10 m, so alignment with the analytical grid is
+  // preserved exactly.
+  displayTargetResolutionM: 2.5,
+  displayMaxSize: 2048,
 };
 
 // Eleven supported layers. Order matters for the Map Layer control.
@@ -656,6 +663,11 @@ export async function processImage(params: {
             timeRange: { from: params.dateStart, to: params.dateEnd },
             mosaickingOrder: "leastCC",
           },
+          // Display rasters only: smooth provider-side resampling removes the
+          // hard 10 m stair-stepping and tile-seam banding. Values are still
+          // derived from the same source pixels — only the interpolation of the
+          // rendered surface changes.
+          processing: { upsampling: "BICUBIC", downsampling: "BILINEAR" },
         },
       ],
     },
@@ -710,6 +722,8 @@ export async function processAnalyticalRaster(params: {
             timeRange: { from: params.dateStart, to: params.dateEnd },
             mosaickingOrder: "leastCC",
           },
+          // Analytical rasters must stay value-exact — never interpolate.
+          processing: { upsampling: "NEAREST", downsampling: "NEAREST" },
         },
       ],
     },
