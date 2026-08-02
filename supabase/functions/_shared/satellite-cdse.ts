@@ -21,7 +21,7 @@ export const CDSE_CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/s
 export const CDSE_STATISTICS_URL = `${CDSE_BASE}/statistics`;
 
 export const SENTINEL2_COLLECTION = "sentinel-2-l2a";
-export const PROCESSING_VERSION = "sentinel2-v3-eleven-layers";
+export const PROCESSING_VERSION = "sentinel2-v4-aligned-grid";
 export const PROVIDER = "CDSE_SENTINEL_HUB";
 export const DISPLAY_ASSET_TYPE = "DISPLAY_RASTER";
 export const ANALYTICAL_ASSET_TYPE = "ANALYTICAL_RASTER";
@@ -633,6 +633,7 @@ async function fetchWithRetry(
 
 export async function processImage(params: {
   geometry: any; // GeoJSON
+  crs?: string;
   bbox: [number, number, number, number];
   dateStart: string;
   dateEnd: string;
@@ -645,7 +646,7 @@ export async function processImage(params: {
     input: {
       bounds: {
         bbox: params.bbox,
-        properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+        properties: { crs: params.crs ?? "http://www.opengis.net/def/crs/EPSG/0/4326" },
         geometry: params.geometry,
       },
       data: [
@@ -686,6 +687,7 @@ export async function processImage(params: {
 
 export async function processAnalyticalRaster(params: {
   geometry: any; // GeoJSON
+  crs?: string;
   bbox: [number, number, number, number];
   dateStart: string;
   dateEnd: string;
@@ -698,7 +700,7 @@ export async function processAnalyticalRaster(params: {
     input: {
       bounds: {
         bbox: params.bbox,
-        properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+        properties: { crs: params.crs ?? "http://www.opengis.net/def/crs/EPSG/0/4326" },
         geometry: params.geometry,
       },
       data: [
@@ -738,6 +740,7 @@ export async function processAnalyticalRaster(params: {
 
 export async function statisticsQuery(params: {
   geometry: any;
+  crs?: string;
   bbox: [number, number, number, number];
   dateStart: string;
   dateEnd: string;
@@ -749,7 +752,7 @@ export async function statisticsQuery(params: {
     input: {
       bounds: {
         bbox: params.bbox,
-        properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+        properties: { crs: params.crs ?? "http://www.opengis.net/def/crs/EPSG/0/4326" },
         geometry: params.geometry,
       },
       data: [
