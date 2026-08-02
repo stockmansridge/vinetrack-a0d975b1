@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Archive, MapPin as MapPinIcon, Loader2, ShieldAlert } from "lucide-react";
+import { Plus, Pencil, Archive, Trash2, MapPin as MapPinIcon, Loader2, ShieldAlert } from "lucide-react";
 import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -58,6 +58,7 @@ import {
   STATUSES,
   SIDES,
   archiveDamageRecord,
+  deleteDamageRecord,
   createDamageRecord,
   fetchDamageRecordsForVineyard,
   resolveDamagePhotoUrl,
@@ -65,6 +66,7 @@ import {
   type DamageRecord,
   type DamageRecordWriteInput,
 } from "@/lib/damageRecordsQuery";
+import { useCanDeleteDamageRecords } from "@/lib/damagePermissions";
 import {
   parsePolygonPoints,
   polygonAreaHectares,
@@ -121,6 +123,7 @@ export default function DamageRecordsPage() {
   const { toast } = useToast();
   const { resolve } = useTeamLookup(selectedVineyardId);
   const canEdit = currentRole === "owner" || currentRole === "manager";
+  const { allowed: canDelete } = useCanDeleteDamageRecords();
   const rf = useRegionFormatters();
 
   const [from, setFrom] = useState("");
@@ -135,6 +138,7 @@ export default function DamageRecordsPage() {
   const [editingOpen, setEditingOpen] = useState(false);
   const [editing, setEditing] = useState<DamageRecord | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<DamageRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DamageRecord | null>(null);
   const { data: paddocks = [] } = useQuery({
     queryKey: ["paddocks-geo", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -219,6 +223,32 @@ export default function DamageRecordsPage() {
     },
     onError: (e: any) =>
       toast({ title: "Could not archive", description: e?.message ?? String(e), variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (r: DamageRecord) => deleteDamageRecord(r.vineyard_id, r.id),
+    onSuccess: () => {
+      toast({ title: "Damage record deleted." });
+      // Damage feeds the record list, yield adjustments, block/vineyard
+      // summaries and vintage reports — refresh them all.
+      for (const key of [
+        ["damage_records", selectedVineyardId],
+        ["damage_records_for_yield", selectedVineyardId],
+        ["yield_reports", selectedVineyardId],
+        ["paddocks", selectedVineyardId],
+        ["paddocks-geo", selectedVineyardId],
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key as any });
+      }
+      setSelected(null);
+      setDeleteTarget(null);
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Could not delete damage record",
+        description: e?.message ?? String(e),
+        variant: "destructive",
+      }),
   });
 
   const openCreate = () => {
@@ -412,6 +442,17 @@ export default function DamageRecordsPage() {
                         <Button size="icon" variant="ghost" onClick={() => setArchiveTarget(r)} title="Archive">
                           <Archive className="h-3.5 w-3.5" />
                         </Button>
+                        {canDelete && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteTarget(r)}
+                            title="Delete damage record"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   )}
@@ -432,6 +473,8 @@ export default function DamageRecordsPage() {
         onOpenChange={(o) => !o && setSelected(null)}
         onEdit={(r) => { setSelected(null); openEdit(r); }}
         onArchive={(r) => setArchiveTarget(r)}
+        canDelete={canDelete}
+        onDelete={(r) => setDeleteTarget(r)}
       />
 
       <DamageEditSheet
@@ -482,7 +525,7 @@ export default function DamageRecordsPage() {
 // ---------- Detail / read drawer ----------
 
 function DamageDetailSheet({
-  record, paddock, createdByName, open, canEdit, rf, onOpenChange, onEdit, onArchive,
+  record, paddock, createdByName, open, canEdit, rf, onOpenChange, onEdit, onArchive, canDelete, onDelete,
 }: {
   record: DamageRecord | null;
   paddock: PaddockGeo | null;
@@ -493,6 +536,8 @@ function DamageDetailSheet({
   onOpenChange: (o: boolean) => void;
   onEdit: (r: DamageRecord) => void;
   onArchive: (r: DamageRecord) => void;
+  canDelete: boolean;
+  onDelete: (r: DamageRecord) => void;
 }) {
   const paddockName = paddock?.name ?? null;
   const paddockPolygon = useMemo<LatLng[]>(
@@ -611,6 +656,11 @@ function DamageDetailSheet({
             <Button variant="outline" onClick={() => onArchive(record)}>
               <Archive className="h-4 w-4 mr-1.5" /> Archive
             </Button>
+            {canDelete && (
+              <Button variant="destructive" onClick={() => onDelete(record)}>
+                <Trash2 className="h-4 w-4 mr-1.5" /> Delete record
+              </Button>
+            )}
             <Button onClick={() => onEdit(record)}>
               <Pencil className="h-4 w-4 mr-1.5" /> Edit
             </Button>
