@@ -60,6 +60,15 @@ Deno.serve(async (req) => {
   const geometry = toGeoJson(polys);
   const bbox = computeBbox(polys)!;
 
+  // One shared, globally-snapped display grid for this paddock. Every layer for
+  // this paddock uses it, and every paddock in the vineyard snaps to the same
+  // global origin/resolution, so touching paddocks share exact pixel edges.
+  const displayGrid = alignBboxToGrid(bbox, QC.processImageTargetResolutionM, QC.processImageMaxSize);
+  // True raster mask of the saved polygon on that grid.
+  const displayMask = rasterisePolygonMask(polys, displayGrid);
+
+
+
   // Create job row
   const { data: job } = await supa.from("satellite_processing_jobs").insert({
     vineyard_id, paddock_id, requested_by: admin.userId, provider: PROVIDER,
