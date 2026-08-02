@@ -115,7 +115,7 @@ export default function ActivityHistory({
                         )}
                         {e.work_task_id && (
                           <DropdownMenuItem asChild>
-                            <Link to={`/setup/work-tasks?highlight=${e.work_task_id}`}>
+                            <Link to={`/work-tasks?highlight=${e.work_task_id}`}>
                               <ExternalLink className="h-4 w-4 mr-2" /> Open Work Task
                             </Link>
                           </DropdownMenuItem>
