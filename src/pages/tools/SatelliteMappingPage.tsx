@@ -3224,8 +3224,9 @@ export default function SatelliteMappingPage() {
           );
         })()}
 
-        {/* Legend bottom-right */}
-        <div className="absolute bottom-24 right-3 z-[500] w-72 max-w-[92%] md:bottom-3">
+        {/* Legend bottom-right — sits just above the docked timeline bar */}
+        <div className="absolute bottom-[96px] right-3 z-[500] w-72 max-w-[92%]">
+
           <Collapsible open={legendOpen} onOpenChange={setLegendOpen}>
             <div className="rounded-md border bg-background/95 backdrop-blur shadow-md">
               <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold">
