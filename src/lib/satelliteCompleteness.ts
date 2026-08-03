@@ -164,7 +164,8 @@ export function inspectCompleteness({
   const versionBySceneIndex = new Map<string, Set<string>>();
   for (const a of assets) {
     const kind = normaliseKind(a);
-    const versionOk = (a.processing_version ?? "") === processingVersion;
+    const versionOk = (a.processing_version ?? "") === processingVersion
+      || SUPPORTED_PROCESSING_VERSIONS.includes(a.processing_version ?? "");
     if (!versionOk) {
       const set = versionBySceneIndex.get(a.satellite_scene_id) ?? new Set<string>();
       set.add(String(a.processing_version ?? "unknown"));
