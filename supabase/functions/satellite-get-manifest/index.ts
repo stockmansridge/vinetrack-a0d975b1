@@ -7,7 +7,19 @@ import {
 } from "../_shared/satellite-cdse.ts";
 
 // Keep in sync with src/lib/satelliteCompleteness.ts and satellite-cdse.ts.
-const CURRENT_PROCESSING_VERSION = "sentinel2-v3-eleven-layers";
+// Newer processing versions must be added here (newest first) so freshly
+// processed rasters are surfaced immediately instead of being hidden as
+// "older version" — that mismatch is what makes a date show in the timeline
+// while the map has no overlay to draw.
+const SUPPORTED_PROCESSING_VERSIONS = [
+  "sentinel2-v6-native-10m",
+  "sentinel2-v5-supersampled",
+  "sentinel2-v4-aligned-grid",
+  "sentinel2-v3-eleven-layers",
+];
+const CURRENT_PROCESSING_VERSION = SUPPORTED_PROCESSING_VERSIONS[0];
+const isSupportedVersion = (v: string | null | undefined) =>
+  SUPPORTED_PROCESSING_VERSIONS.includes(String(v ?? ""));
 
 type SceneRow = {
   id: string;
@@ -237,7 +249,7 @@ Deno.serve(async (req) => {
       s.add(a.index_type);
       anyDisplayByScene.set(a.satellite_scene_id, s);
     }
-    if ((a.processing_version ?? "") === CURRENT_PROCESSING_VERSION) {
+    if (isSupportedVersion(a.processing_version)) {
       const target = kind === "DISPLAY_RASTER" ? displayByScene : analyticalByScene;
       const s = target.get(a.satellite_scene_id) ?? new Set<string>();
       s.add(a.index_type);
@@ -255,7 +267,7 @@ Deno.serve(async (req) => {
   // Per-scene, per-index summaries at the current version.
   const summaryByKey = new Map<string, SummaryRow>();
   for (const s of summaryRows) {
-    if ((s.processing_version ?? "") !== CURRENT_PROCESSING_VERSION) continue;
+    if (!isSupportedVersion(s.processing_version)) continue;
     summaryByKey.set(`${s.satellite_scene_id}:${s.index_type}`, s);
   }
 
@@ -418,7 +430,7 @@ Deno.serve(async (req) => {
         const bundle = p?.layers.find((l) => l.index_type === idx);
         const disp = bundle?.display;
         const usable = !!disp
-          && (disp.processing_version ?? "") === CURRENT_PROCESSING_VERSION
+          && isSupportedVersion(disp.processing_version)
           && boundsValid(disp.bounds);
         if (usable) availIds.push(pid); else missIds.push(pid);
       }

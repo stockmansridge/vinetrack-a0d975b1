@@ -9,8 +9,16 @@
 
 import type { SatelliteIndexType } from "@/types/satellite";
 
-// Must match `PROCESSING_VERSION` in supabase/functions/_shared/satellite-cdse.ts.
-export const CURRENT_PROCESSING_VERSION = "sentinel2-v3-eleven-layers";
+// Must match `PROCESSING_VERSION` in supabase/functions/_shared/satellite-cdse.ts
+// and SUPPORTED_PROCESSING_VERSIONS in satellite-get-manifest. Rasters written by
+// any supported version are usable — only unknown/older versions need rework.
+export const SUPPORTED_PROCESSING_VERSIONS = [
+  "sentinel2-v6-native-10m",
+  "sentinel2-v5-supersampled",
+  "sentinel2-v4-aligned-grid",
+  "sentinel2-v3-eleven-layers",
+];
+export const CURRENT_PROCESSING_VERSION = SUPPORTED_PROCESSING_VERSIONS[0];
 
 // Consider imagery current when the newest completed scene is within this many
 // days of "now". Older-only imagery is treated as a missing latest scene.
@@ -156,7 +164,8 @@ export function inspectCompleteness({
   const versionBySceneIndex = new Map<string, Set<string>>();
   for (const a of assets) {
     const kind = normaliseKind(a);
-    const versionOk = (a.processing_version ?? "") === processingVersion;
+    const versionOk = (a.processing_version ?? "") === processingVersion
+      || SUPPORTED_PROCESSING_VERSIONS.includes(a.processing_version ?? "");
     if (!versionOk) {
       const set = versionBySceneIndex.get(a.satellite_scene_id) ?? new Set<string>();
       set.add(String(a.processing_version ?? "unknown"));
