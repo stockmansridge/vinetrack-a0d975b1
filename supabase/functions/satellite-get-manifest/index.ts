@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
       s.add(a.index_type);
       anyDisplayByScene.set(a.satellite_scene_id, s);
     }
-    if ((a.processing_version ?? "") === CURRENT_PROCESSING_VERSION) {
+    if (isSupportedVersion(a.processing_version)) {
       const target = kind === "DISPLAY_RASTER" ? displayByScene : analyticalByScene;
       const s = target.get(a.satellite_scene_id) ?? new Set<string>();
       s.add(a.index_type);
@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
   // Per-scene, per-index summaries at the current version.
   const summaryByKey = new Map<string, SummaryRow>();
   for (const s of summaryRows) {
-    if ((s.processing_version ?? "") !== CURRENT_PROCESSING_VERSION) continue;
+    if (!isSupportedVersion(s.processing_version)) continue;
     summaryByKey.set(`${s.satellite_scene_id}:${s.index_type}`, s);
   }
 
@@ -430,7 +430,7 @@ Deno.serve(async (req) => {
         const bundle = p?.layers.find((l) => l.index_type === idx);
         const disp = bundle?.display;
         const usable = !!disp
-          && (disp.processing_version ?? "") === CURRENT_PROCESSING_VERSION
+          && isSupportedVersion(disp.processing_version)
           && boundsValid(disp.bounds);
         if (usable) availIds.push(pid); else missIds.push(pid);
       }
