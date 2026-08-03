@@ -2177,18 +2177,29 @@ export default function SatelliteMappingPage() {
         let acquiredAt = p.latestAcquiredAt;
         let sceneCloudCoverPct = p.latestSceneCloudCoverPct;
         // Manifest-derived completeness does not carry provider_scene_id (see
-        // reportFromManifest). Fetch it from satellite_scenes by latestSceneId
-        // so repair can hit satellite-process-scene without falling through.
+        // reportFromManifest). The satellite tables are backend-only, so resolve
+        // it from the manifest snapshot we already hold, then fall back to the
+        // admin scene-list function — never a direct table read (that 401s).
         if ((!providerSceneId || !acquiredAt) && p.latestSceneId) {
-          const { data: sceneRow, error: sceneErr } = await supabase
-            .from("satellite_scenes")
-            .select("provider_scene_id, acquired_at, scene_cloud_cover_pct")
-            .eq("id", p.latestSceneId)
-            .maybeSingle();
-          if (!sceneErr && sceneRow) {
-            providerSceneId = providerSceneId ?? (sceneRow as any).provider_scene_id ?? null;
-            acquiredAt = acquiredAt ?? (sceneRow as any).acquired_at ?? null;
-            sceneCloudCoverPct = sceneCloudCoverPct ?? (sceneRow as any).scene_cloud_cover_pct ?? null;
+          const fromManifest = derivedFromManifest.scenes.find((s) => s.id === p.latestSceneId);
+          if (fromManifest) {
+            providerSceneId = providerSceneId ?? (fromManifest.provider_scene_id || null);
+            acquiredAt = acquiredAt ?? (fromManifest.acquired_at || null);
+            sceneCloudCoverPct = sceneCloudCoverPct ?? fromManifest.scene_cloud_cover_pct ?? null;
+          }
+          if (!providerSceneId || !acquiredAt) {
+            const listed = await invokeSatelliteFn("satellite-list-scenes", {
+              vineyard_id: activeVineyardId,
+              paddock_id: pid,
+            });
+            const row = ((listed.data as any)?.scenes ?? []).find(
+              (s: any) => s.id === p.latestSceneId,
+            );
+            if (row) {
+              providerSceneId = providerSceneId ?? row.provider_scene_id ?? null;
+              acquiredAt = acquiredAt ?? row.acquired_at ?? null;
+              sceneCloudCoverPct = sceneCloudCoverPct ?? row.scene_cloud_cover_pct ?? null;
+            }
           }
         }
         if (!providerSceneId || !acquiredAt) {
