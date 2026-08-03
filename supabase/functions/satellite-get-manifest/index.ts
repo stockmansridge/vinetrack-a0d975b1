@@ -22,6 +22,10 @@ const SUPPORTED_PROCESSING_VERSIONS = [
 const CURRENT_PROCESSING_VERSION = SUPPORTED_PROCESSING_VERSIONS[0];
 const isSupportedVersion = (v: string | null | undefined) =>
   SUPPORTED_PROCESSING_VERSIONS.includes(String(v ?? ""));
+const versionRank = (v: string | null | undefined): number => {
+  const index = SUPPORTED_PROCESSING_VERSIONS.indexOf(String(v ?? ""));
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+};
 
 type SceneRow = {
   id: string;
@@ -259,7 +263,15 @@ Deno.serve(async (req) => {
       const cv = currentVersionByScene.get(a.satellite_scene_id) ?? new Set<string>();
       cv.add(a.index_type);
       currentVersionByScene.set(a.satellite_scene_id, cv);
-      assetByKey.set(`${a.satellite_scene_id}:${a.index_type}:${kind}`, a);
+      const key = `${a.satellite_scene_id}:${a.index_type}:${kind}`;
+      const existing = assetByKey.get(key);
+      // A scene can contain several generations of the same layer. PostgREST
+      // does not guarantee row order, so "last row wins" made the selected
+      // asset nondeterministic and could pair a v3 display with a v5 analysis.
+      // Always retain the newest supported processing version.
+      if (!existing || versionRank(a.processing_version) < versionRank(existing.processing_version)) {
+        assetByKey.set(key, a);
+      }
     } else {
       const s = olderVersionByScene.get(a.satellite_scene_id) ?? new Set<string>();
       s.add(String(a.processing_version ?? "unknown"));
@@ -270,7 +282,11 @@ Deno.serve(async (req) => {
   const summaryByKey = new Map<string, SummaryRow>();
   for (const s of summaryRows) {
     if (!isSupportedVersion(s.processing_version)) continue;
-    summaryByKey.set(`${s.satellite_scene_id}:${s.index_type}`, s);
+    const key = `${s.satellite_scene_id}:${s.index_type}`;
+    const existing = summaryByKey.get(key);
+    if (!existing || versionRank(s.processing_version) < versionRank(existing.processing_version)) {
+      summaryByKey.set(key, s);
+    }
   }
 
   const toLayerAsset = (a: AssetRow): LayerAsset => ({
@@ -399,7 +415,7 @@ Deno.serve(async (req) => {
         provider: "sentinel-2-l2a",
         acquired_at: bucket.best.acquired_at,
         acquisition_date: date,
-        processing_version: hasCurrentDisplay ? CURRENT_PROCESSING_VERSION : null,
+        processing_version: layers.find((l) => l.display)?.display?.processing_version ?? null,
         paddock_valid_coverage_pct: bucket.best.paddock_valid_coverage_pct,
         paddock_cloud_cover_pct: bucket.best.paddock_cloud_cover_pct,
         scene_cloud_cover_pct: bucket.best.scene_cloud_cover_pct,
