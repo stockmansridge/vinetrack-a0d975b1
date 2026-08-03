@@ -202,8 +202,9 @@ export function deriveCropHealthViewModel(
     refreshPhaseByPaddock,
   } = input;
 
-  const dateEntry: ManifestDateEntry | undefined = selectedDate
-    ? manifest?.date_coverage?.find((d) => d.acquisition_date === selectedDate)
+  const selectedDay = selectedDate?.trim().slice(0, 10) ?? null;
+  const dateEntry: ManifestDateEntry | undefined = selectedDay
+    ? manifest?.date_coverage?.find((d) => d.acquisition_date.trim().slice(0, 10) === selectedDay)
     : undefined;
 
   const packageByPaddock = new Map<string, ManifestPaddock>();
