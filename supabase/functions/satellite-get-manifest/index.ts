@@ -13,9 +13,11 @@ import {
 // while the map has no overlay to draw.
 const SUPPORTED_PROCESSING_VERSIONS = [
   "sentinel2-v6-native-10m",
+  "sentinel2-v5-smooth-display",
   "sentinel2-v5-supersampled",
   "sentinel2-v4-aligned-grid",
   "sentinel2-v3-eleven-layers",
+  "sentinel2-v1",
 ];
 const CURRENT_PROCESSING_VERSION = SUPPORTED_PROCESSING_VERSIONS[0];
 const isSupportedVersion = (v: string | null | undefined) =>
