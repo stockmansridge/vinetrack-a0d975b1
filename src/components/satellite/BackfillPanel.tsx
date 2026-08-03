@@ -32,6 +32,7 @@ export default function BackfillPanel({
   const qc = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [runnerCycle, setRunnerCycle] = useState(0);
 
   const statusQuery = useQuery({
     queryKey: ["satellite-backfill-status", vineyardId],
@@ -49,6 +50,7 @@ export default function BackfillPanel({
     // Only one instance drives the batch runner, so batches never overlap.
     if (!canManage || !vineyardId || !active || running) return;
     let cancelled = false;
+    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
     setRunning(true);
     (async () => {
       try {
@@ -58,6 +60,11 @@ export default function BackfillPanel({
           await statusQuery.refetch();
           onImageryChanged?.();
           if (res.finished || res.remaining === 0) break;
+          if (res.paused_until) {
+            const delay = Math.max(1_000, new Date(res.paused_until).getTime() - Date.now());
+            resumeTimer = setTimeout(() => setRunnerCycle((cycle) => cycle + 1), delay);
+            break;
+          }
         }
       } catch (e: any) {
         toast({
@@ -65,14 +72,18 @@ export default function BackfillPanel({
           description: e?.message ?? "Could not process the next imagery date.",
           variant: "destructive",
         });
+        resumeTimer = setTimeout(() => setRunnerCycle((cycle) => cycle + 1), 30_000);
       } finally {
         if (!cancelled) setRunning(false);
         qc.invalidateQueries({ queryKey: ["satellite-backfill-status", vineyardId] });
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (resumeTimer) clearTimeout(resumeTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vineyardId, active, canManage]);
+  }, [vineyardId, active, canManage, runnerCycle]);
 
   const discover = useMutation({
     mutationFn: () => discoverBackfill({

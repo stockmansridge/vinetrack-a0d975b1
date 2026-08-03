@@ -73,6 +73,12 @@ Deno.serve(async (req) => {
       if (r > best) { best = r; dominant = o; }
     }
     const downloaded = (e.outcomes.downloaded ?? 0) + (e.outcomes.available ?? 0);
+    // A date is only "downloaded" at vineyard level when every paddock has a
+    // completed package. Mixed dates remain pending/partial rather than showing
+    // a misleading green success state in the historical timeline.
+    if (downloaded > 0 && downloaded < e.paddocks && dominant === "downloaded") {
+      dominant = "pending";
+    }
     return {
       date: e.date,
       status: dominant,

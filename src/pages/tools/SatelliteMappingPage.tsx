@@ -1521,14 +1521,40 @@ export default function SatelliteMappingPage() {
           setSignedUrls((prev) => ({ ...prev, [asset.id]: url }));
           bumpStats();
         } catch (e: any) {
-          updateAssetDiag({ finalStatus: "failed", error: String(e?.message ?? e) });
+          const errorMessage = String(e?.message ?? e);
+          updateAssetDiag({ finalStatus: "failed", error: errorMessage });
+          if (isDisplay && sceneForAsset) {
+            const displayKey = displayKeyFor(
+              sceneForAsset.paddock_id,
+              effectiveDisplayDate,
+              asset.index_type,
+              asset.id,
+            );
+            setDisplayLoadState((prev) => {
+              const next = new Map(prev);
+              next.set(displayKey, { phase: "failed", errorMessage });
+              return next;
+            });
+          } else if (!isDisplay && sceneForAsset) {
+            const analyticalKey = analyticalKeyFor(
+              sceneForAsset.paddock_id,
+              sceneForAsset.id,
+              asset.index_type,
+              asset.id,
+            );
+            setAnalyticalLoadState((prev) => {
+              const next = new Map(prev);
+              next.set(analyticalKey, { phase: "failed", errorMessage });
+              return next;
+            });
+          }
           console.error("asset load failed", e);
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs, activeAssetPairs]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs, activeAssetPairs, effectiveDisplayDate]);
 
   // Revoke stale object URLs when the visible asset set changes. Keeps memory
   // bounded across date/layer switches. Adjacent-preload and preview-display
