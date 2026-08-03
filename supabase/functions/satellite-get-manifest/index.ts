@@ -7,7 +7,19 @@ import {
 } from "../_shared/satellite-cdse.ts";
 
 // Keep in sync with src/lib/satelliteCompleteness.ts and satellite-cdse.ts.
-const CURRENT_PROCESSING_VERSION = "sentinel2-v3-eleven-layers";
+// Newer processing versions must be added here (newest first) so freshly
+// processed rasters are surfaced immediately instead of being hidden as
+// "older version" — that mismatch is what makes a date show in the timeline
+// while the map has no overlay to draw.
+const SUPPORTED_PROCESSING_VERSIONS = [
+  "sentinel2-v6-native-10m",
+  "sentinel2-v5-supersampled",
+  "sentinel2-v4-aligned-grid",
+  "sentinel2-v3-eleven-layers",
+];
+const CURRENT_PROCESSING_VERSION = SUPPORTED_PROCESSING_VERSIONS[0];
+const isSupportedVersion = (v: string | null | undefined) =>
+  SUPPORTED_PROCESSING_VERSIONS.includes(String(v ?? ""));
 
 type SceneRow = {
   id: string;
