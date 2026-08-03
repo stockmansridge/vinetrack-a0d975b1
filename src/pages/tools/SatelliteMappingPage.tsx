@@ -1563,6 +1563,7 @@ export default function SatelliteMappingPage() {
     const alive = new Set([
       ...activeAssets,
       ...activeAnalyticalAssets,
+      ...preloadDisplayAssets,
       ...displayAssetPairs.map(({ displayAsset, scene }) => ({ asset: displayAsset, scene })),
     ].map((x) => x.asset.id));
     for (const [assetId, url] of objectUrlsRef.current.entries()) {
@@ -1576,7 +1577,7 @@ export default function SatelliteMappingPage() {
         });
       }
     }
-  }, [activeAssets, activeAnalyticalAssets, displayAssetPairs, selectedSceneKey, layer]);
+  }, [activeAssets, activeAnalyticalAssets, preloadDisplayAssets, displayAssetPairs, selectedSceneKey, layer]);
 
   // Clear decoded analytical rasters when the user changes the data context.
   useEffect(() => {

@@ -235,7 +235,9 @@ Deno.serve(async (req) => {
   const inferKind = (a: AssetRow): "DISPLAY_RASTER" | "ANALYTICAL_RASTER" =>
     a.asset_type === "DISPLAY_RASTER" || a.asset_type === "ANALYTICAL_RASTER"
       ? a.asset_type as "DISPLAY_RASTER" | "ANALYTICAL_RASTER"
-      : (a.storage_path?.endsWith(".png") ? "DISPLAY_RASTER" : "ANALYTICAL_RASTER");
+      : (a.mime_type === "image/png" || a.storage_path?.toLowerCase().endsWith(".png")
+        ? "DISPLAY_RASTER"
+        : "ANALYTICAL_RASTER");
 
   // Index assets by scene, split by DISPLAY_RASTER / ANALYTICAL_RASTER at the
   // current processing version. Track whether an older-version asset was seen
@@ -380,8 +382,11 @@ Deno.serve(async (req) => {
       const analSet = analyticalByScene.get(sceneId) ?? new Set<string>();
       const hasCurrentDisplay = dispSet.size > 0;
       const versionMismatch = !hasCurrentDisplay && (anyDisplayByScene.get(sceneId)?.size ?? 0) > 0;
-      if (!hasCurrentDisplay && versionMismatch) {
-        missing.push({ paddock_id: pid, reason: "package_version_mismatch" });
+      if (!hasCurrentDisplay) {
+        missing.push({
+          paddock_id: pid,
+          reason: versionMismatch ? "package_version_mismatch" : "scene_not_complete",
+        });
         continue;
       }
       // Assemble per-layer bundles for the winning scene.
