@@ -82,6 +82,7 @@ export interface BackfillRunResult {
   processed: { paddock_id: string; date: string; outcome: string; error?: string }[];
   remaining: number;
   finished: boolean;
+  paused_until?: string | null;
 }
 
 export function discoverBackfill(params: {

@@ -40,6 +40,19 @@ Deno.serve(async (req) => {
 
   const nowIso = () => new Date().toISOString();
 
+  // A browser tab can close while an invocation is processing. Recover rows
+  // left in the transient `processing` state so the next runner can resume the
+  // job instead of displaying an endless spinner.
+  await supa.from("satellite_expected_dates").update({
+    outcome: "retry_pending",
+    next_retry_at: nowIso(),
+    last_error: "Previous processing attempt was interrupted; retrying.",
+    updated_at: nowIso(),
+  })
+    .eq("vineyard_id", job.vineyard_id)
+    .eq("outcome", "processing")
+    .lt("updated_at", new Date(Date.now() - 10 * 60_000).toISOString());
+
   // Claim the next batch — newest missing date first.
   const { data: pending } = await supa.from("satellite_expected_dates")
     .select("*")
@@ -47,6 +60,7 @@ Deno.serve(async (req) => {
     .in("outcome", ["pending", "retry_pending"])
     .in("paddock_id", job.requested_paddock_ids ?? [])
     .lt("attempts", MAX_ATTEMPTS)
+    .or(`next_retry_at.is.null,next_retry_at.lte.${nowIso()}`)
     .order("expected_date", { ascending: false })
     .limit(batchSize);
 
@@ -165,6 +179,8 @@ Deno.serve(async (req) => {
           last_error: "Provider rate limit reached.", updated_at: nowIso(),
         }).eq("id", item.id);
         processed.push({ paddock_id: item.paddock_id, date: item.expected_date, outcome: "rate_limited" });
+        // Tell the client runner to pause rather than immediately invoking the
+        // next batch and repeatedly hitting the provider during its cooldown.
         break;
       } else {
         const attempts = (item.attempts ?? 0) + 1;
@@ -195,6 +211,8 @@ Deno.serve(async (req) => {
     .in("outcome", ["pending", "retry_pending", "processing"])
     .lt("attempts", MAX_ATTEMPTS);
 
+  const rateLimited = processed.some((item) => item.outcome === "rate_limited");
+
   const finished = (remaining ?? 0) === 0;
   const { data: updatedJob } = await supa.from("satellite_backfill_jobs").update({
     status: finished ? (failedCount > 0 ? "completed_with_warnings" : "completed") : "processing",
@@ -207,5 +225,11 @@ Deno.serve(async (req) => {
     heartbeat_at: nowIso(), updated_at: nowIso(),
   }).eq("id", job.id).select("*").single();
 
-  return jsonOk({ job: updatedJob, processed, remaining: remaining ?? 0, finished });
+  return jsonOk({
+    job: updatedJob,
+    processed,
+    remaining: remaining ?? 0,
+    finished,
+    paused_until: rateLimited ? new Date(Date.now() + 5 * 60_000).toISOString() : null,
+  });
 });

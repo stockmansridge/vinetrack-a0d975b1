@@ -58,6 +58,7 @@ export default function BackfillPanel({
           await statusQuery.refetch();
           onImageryChanged?.();
           if (res.finished || res.remaining === 0) break;
+          if (res.paused_until) break;
         }
       } catch (e: any) {
         toast({
