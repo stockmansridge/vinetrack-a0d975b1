@@ -30,22 +30,20 @@ export async function fetchAssetBytes(
   assetId: string,
   ifNoneMatch?: string | null,
 ): Promise<AssetFetchResult> {
-  const { data: { session } } = await iosSupabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Not signed in to VineTrack");
-  const base = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-  const anon = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-  if (!base) throw new Error("Supabase URL not configured");
-  const url = `${base}/functions/v1/satellite-get-asset?asset_id=${encodeURIComponent(assetId)}`;
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${session.access_token}`,
-  };
-  if (anon) headers.apikey = anon;
-  if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
-  const res = await fetch(url, { method: "GET", headers });
-  const etag = res.headers.get("ETag");
-  if (res.status === 304) return { status: 304, blob: null, etag, contentType: null };
-  if (!res.ok) throw new Error(`asset fetch failed (${res.status})`);
+  // Use the same authenticated function-invocation path as the manifest.
+  // The former direct GET mixed a VineTrack JWT with this project's raw
+  // function gateway and could fail before the asset function ran, leaving
+  // every overlay without a blob even though its manifest row was present.
+  const signed = await invoke<{ signed_url: string; expires_in: number }>(
+    "satellite-get-asset-url",
+    { asset_id: assetId },
+  );
+  if (!signed?.signed_url) throw new Error("asset URL was not returned");
+
+  const res = await fetch(signed.signed_url, { method: "GET" });
+  if (!res.ok) throw new Error(`asset download failed (${res.status})`);
   const blob = await res.blob();
+  const etag = res.headers.get("ETag") ?? ifNoneMatch ?? null;
   return { status: 200, blob, etag, contentType: res.headers.get("Content-Type") };
 }
 
