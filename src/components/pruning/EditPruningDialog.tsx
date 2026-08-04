@@ -456,7 +456,7 @@ export default function EditPruningDialog({
             <div className="min-w-0">
               <DialogTitle>Edit Pruning Record — {paddockName}</DialogTitle>
               <DialogDescription>
-                Toggle quarters to add or remove them from this entry. Green quarters belong to another entry and are locked.
+                Toggle quarters to add or remove them from this entry. Bright green quarters belong to this entry; greyed quarters belong to another entry and are locked.
               </DialogDescription>
             </div>
             {(onPrev || onNext) && (
@@ -547,10 +547,10 @@ export default function EditPruningDialog({
                               "h-11 w-full rounded-md border text-sm font-medium transition",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               lockedOther
-                                ? "bg-emerald-500 border-emerald-600 text-white cursor-not-allowed"
+                                ? "bg-muted border-border text-muted-foreground cursor-not-allowed opacity-70"
                                 : isSel
-                                ? "bg-primary border-primary text-primary-foreground shadow-sm"
-                                : "bg-muted/40 border-input text-foreground/70 hover:bg-muted",
+                                ? "bg-emerald-500 border-emerald-600 text-white shadow-sm"
+                                : "bg-background border-input text-foreground/70 hover:bg-muted",
                             )}
                           >
                             Q{q}
@@ -567,9 +567,9 @@ export default function EditPruningDialog({
             </div>
 
             <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-500" /> Owned by another entry (locked)</span>
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-primary" /> Owned by this entry / selected</span>
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-muted" /> Available</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-500" /> Owned by this entry / selected</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-muted border border-border" /> Owned by another entry (locked)</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-background border border-input" /> Available</span>
             </div>
 
             {postSaveWarning?.conflicts && postSaveWarning.conflicts.length > 0 && (
