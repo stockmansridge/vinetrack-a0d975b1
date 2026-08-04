@@ -259,7 +259,11 @@ export default function PruningActivityReportPage() {
       if (linked === "yes" && !r.workTaskId) return false;
       if (linked === "no" && r.workTaskId) return false;
       if (q) {
-        const hay = [r.blockName, r.variety, r.worker, r.method, r.rowsLabel, r.notes]
+        const hay = [
+          r.blockName, r.variety, r.worker, r.method, r.rowsLabel, r.notes,
+          r.activityLabel, r.workTaskLabel ?? "",
+        ]
+
           .join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
