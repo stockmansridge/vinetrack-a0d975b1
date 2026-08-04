@@ -52,6 +52,9 @@ export interface PruningEntry {
    *  vineyard's season settings + entry_date. Authoritative for cost
    *  reports — do NOT derive from entry_date on the client. */
   vintage_year: number | null;
+  /** auth.users id of the user who created the entry. Resolved to a display
+   *  name via the vineyard team lookup. May be null on legacy records. */
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/dateFormat";
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
+import { useTeamLookup } from "@/hooks/useTeamLookup";
 
 import { PageHead } from "@/components/PageHead";
 import { Card } from "@/components/ui/card";
@@ -48,7 +49,7 @@ type SortKey =
   | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
   | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "start" | "finish"
   | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
-  | "created" | "updated" | "status";
+  | "createdBy" | "created" | "updated" | "status";
 
 /** Render "8:30 am" from a time or timestamp column, tolerating both shapes. */
 function formatTime(value: string | null): string {
@@ -96,6 +97,7 @@ export default function PruningActivityReportPage() {
   const canSeeCosts = useCanSeeCosts();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const fmt = useRegionFormatters();
+  const { resolve: resolveUser } = useTeamLookup(selectedVineyardId);
   const money = (n: number | null) => (n == null ? "—" : fmt.currency(n));
 
   const [editRow, setEditRow] = useState<PruningActivityRow | null>(null);
@@ -214,11 +216,12 @@ export default function PruningActivityReportPage() {
       cost: (r: PruningActivityRow) => r.labourCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
       taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
+      createdBy: (r: PruningActivityRow) => resolveUser(r.createdById) ?? "",
       created: (r: PruningActivityRow) => (r.createdAt ? new Date(r.createdAt).getTime() : null),
       updated: (r: PruningActivityRow) => (r.updatedAt ? new Date(r.updatedAt).getTime() : null),
       status: (r: PruningActivityRow) => (r.isReversed ? 1 : 0),
     }),
-    [],
+    [resolveUser],
   );
 
   const { sorted, toggleSort, getSortDirection } =
@@ -279,7 +282,7 @@ export default function PruningActivityReportPage() {
     "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
     "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
-    "Work task", "Work task status", "Created at", "Updated at", "Status", "Notes",
+    "Work task", "Work task status", "Created by", "Created at", "Updated at", "Status", "Notes",
   ];
   const costHeader = ["Labour cost", "Effective rate / hour", "currency"];
 
@@ -307,6 +310,7 @@ export default function PruningActivityReportPage() {
       r.vinesPerHour == null ? "" : r.vinesPerHour.toFixed(1),
       r.workTaskLabel ?? "",
       r.workTaskStatus ?? "",
+      resolveUser(r.createdById) ?? "",
       r.createdAt ?? "",
       r.updatedAt ?? "",
       r.isReversed ? "Reversed" : "Recorded",
@@ -381,7 +385,7 @@ export default function PruningActivityReportPage() {
 
     const head = [
       "Date", fmt.blockLabel, "Variety", "Worker", "Method", "Rows",
-      "Qtrs", "Row eq.", "Vines", "Hours", "Duration", "Vines/hr", "Work task", "Status",
+      "Qtrs", "Row eq.", "Vines", "Hours", "Duration", "Vines/hr", "Work task", "Created by", "Status",
     ];
     if (canSeeCosts) head.push("Labour cost", "Rate/hr");
 
@@ -400,6 +404,7 @@ export default function PruningActivityReportPage() {
         formatDuration(r.durationMinutes),
         r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0),
         r.workTaskLabel ?? "—",
+        resolveUser(r.createdById) ?? "—",
         r.isReversed ? "Reversed" : "Recorded",
       ];
       if (canSeeCosts) base.push(money(r.labourCost), money(r.hourlyRate));
@@ -414,7 +419,7 @@ export default function PruningActivityReportPage() {
       totals.hours.toFixed(2),
       "",
       avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
-      "", "",
+      "", "", "",
     ];
     if (canSeeCosts) totalsRow.push(money(totals.cost), "");
 
@@ -431,7 +436,7 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = (canSeeCosts ? 23 : 21) + (canEdit ? 1 : 0);
+  const colSpan = (canSeeCosts ? 24 : 22) + (canEdit ? 1 : 0);
 
   return (
     <div className="p-4 sm:p-6 space-y-4 w-full">
@@ -703,6 +708,7 @@ export default function PruningActivityReportPage() {
               )}
               <SortableTableHead active={getSortDirection("task")} onSort={() => toggleSort("task")}>Work task</SortableTableHead>
               <SortableTableHead active={getSortDirection("taskStatus")} onSort={() => toggleSort("taskStatus")}>Task status</SortableTableHead>
+              <SortableTableHead active={getSortDirection("createdBy")} onSort={() => toggleSort("createdBy")}>Created by</SortableTableHead>
               <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
               <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
@@ -795,6 +801,7 @@ export default function PruningActivityReportPage() {
                 <TableCell className="text-xs">
                   {r.workTaskStatus ? <span className="capitalize">{r.workTaskStatus}</span> : <span className="text-muted-foreground">—</span>}
                 </TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{resolveUser(r.createdById) ?? "—"}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap">{r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—"}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap">{r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—"}</TableCell>
                 <TableCell>
@@ -842,6 +849,7 @@ export default function PruningActivityReportPage() {
                     <TableCell className="text-right tabular-nums font-semibold">{money(totals.cost)}</TableCell>
                   </>
                 )}
+                <TableCell />
                 <TableCell />
                 <TableCell />
                 <TableCell />
