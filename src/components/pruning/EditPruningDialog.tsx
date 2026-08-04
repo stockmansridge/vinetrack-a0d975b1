@@ -96,7 +96,7 @@ function timeOnly(ts: string | null): string {
 }
 
 export default function EditPruningDialog({
-  open, onOpenChange, entry, identities, allSegments, vineyardId, paddockName,
+  open, onOpenChange, entry, identities, allSegments, vineyardId, paddockName, onPrev, onNext, navLabel,
 }: Props) {
   const { user } = useAuth();
   const canSeeCosts = useCanSeeCosts();
