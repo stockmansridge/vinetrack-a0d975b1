@@ -96,8 +96,13 @@ export interface PruningActivityRow {
   activityHours: number | null;
   /** Parent activity labour cost (same on every allocation of the activity). */
   activityCost: number | null;
+  /** Meaningful, user-facing label for the activity — never an identifier. */
+  activityLabel: string;
+  /** Where activityLabel came from, so the UI can badge it. */
+  activityLabelKind: "task" | "activity" | "generated" | "none" | "unavailable";
 
 }
+
 
 
 /** Minutes between two time/timestamp values; rolls over midnight. */
