@@ -579,9 +579,16 @@ export default function PruningActivityReportPage() {
 
   const colSpan = visibleColumns.length + (canEdit ? 1 : 0);
 
-  /** Short, stable badge text so allocations of one activity read as a group. */
-  const activityCode = (r: PruningActivityRow) =>
-    r.activityId ? r.activityId.replace(/-/g, "").slice(0, 5).toUpperCase() : "—";
+  /** Secondary type line under the activity label. */
+  const activityKindLabel = (r: PruningActivityRow): string | null => {
+    switch (r.activityLabelKind) {
+      case "task": return "Work Task";
+      case "activity":
+      case "generated": return "Activity";
+      default: return null;
+    }
+  };
+
 
 
 
