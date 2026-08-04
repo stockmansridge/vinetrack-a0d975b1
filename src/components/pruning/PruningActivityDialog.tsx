@@ -124,7 +124,7 @@ interface Props {
 }
 
 export default function PruningActivityDialog({
-  open, onOpenChange, vineyardId, seasonYear, activityId = null,
+  open, onOpenChange, vineyardId, seasonYear, activityId = null, paddockId = null,
   onPrev, onNext, navLabel, onSaved,
 }: Props) {
   const isEdit = !!activityId;
