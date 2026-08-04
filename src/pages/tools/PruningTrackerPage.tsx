@@ -594,8 +594,7 @@ export default function PruningTrackerPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Blocks</h2>
-              <div className="flex items-center gap-2">
-                <NewPruningActivityButton seasonYear={pruningSeasonYear} />
+            <div className="flex items-center gap-2">
                 <Button asChild variant="outline" size="sm">
                   <Link to="/reports/pruning-activity">
                     View full activity report <ExternalLink className="h-3.5 w-3.5 ml-1" />
