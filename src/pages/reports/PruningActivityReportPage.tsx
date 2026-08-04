@@ -277,6 +277,7 @@ export default function PruningActivityReportPage() {
   const accessors = useMemo(
     () => ({
       date: (r: PruningActivityRow) => (r.date ? new Date(r.date).getTime() : null),
+      activity: (r: PruningActivityRow) => r.groupKey,
       season: (r: PruningActivityRow) => r.seasonYear,
       vintage: (r: PruningActivityRow) => r.vintageYear,
       block: (r: PruningActivityRow) => r.blockName,
@@ -287,13 +288,16 @@ export default function PruningActivityReportPage() {
       quarters: (r: PruningActivityRow) => r.quarters,
       rowEq: (r: PruningActivityRow) => r.rowEquivalents,
       vines: (r: PruningActivityRow) => r.vines,
-      hours: (r: PruningActivityRow) => r.labourHours,
+      share: (r: PruningActivityRow) => r.allocationShare,
+      hours: (r: PruningActivityRow) => r.allocatedHours,
       start: (r: PruningActivityRow) => timeSortValue(r.startTime),
       finish: (r: PruningActivityRow) => timeSortValue(r.finishTime),
       duration: (r: PruningActivityRow) => r.durationMinutes,
       vinesPerHour: (r: PruningActivityRow) => r.vinesPerHour,
       rate: (r: PruningActivityRow) => r.hourlyRate,
-      cost: (r: PruningActivityRow) => r.labourCost,
+      cost: (r: PruningActivityRow) => r.allocatedCost,
+      activityHours: (r: PruningActivityRow) => r.activityHours,
+      activityCost: (r: PruningActivityRow) => r.activityCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
       taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
       createdBy: (r: PruningActivityRow) => resolveUser(r.createdById) ?? "",
@@ -311,22 +315,32 @@ export default function PruningActivityReportPage() {
   const activeRows = useMemo(() => filtered.filter((r) => !r.isReversed), [filtered]);
   const reversedCount = filtered.length - activeRows.length;
 
-  const totals = useMemo(
-    () =>
-      activeRows.reduce(
-        (acc, r) => ({
+  // Allocated figures sum per block (safe to add up — they are a split of the
+  // parent activity). Activity totals are counted once per parent activity so
+  // a two-block activity never double-counts its labour or cost.
+  const totals = useMemo(() => {
+    const seen = new Set<string>();
+    return activeRows.reduce(
+      (acc, r) => {
+        const first = !seen.has(r.groupKey);
+        if (first) seen.add(r.groupKey);
+        return {
           quarters: acc.quarters + r.quarters,
           rowEq: acc.rowEq + r.rowEquivalents,
           vines: acc.vines + r.vines,
-          hours: acc.hours + (r.labourHours ?? 0),
-          cost: acc.cost + (r.labourCost ?? 0),
-        }),
-        { quarters: 0, rowEq: 0, vines: 0, hours: 0, cost: 0 },
-      ),
-    [activeRows],
-  );
+          hours: acc.hours + r.allocatedHours,
+          cost: acc.cost + (r.allocatedCost ?? 0),
+          activityHours: acc.activityHours + (first ? r.activityHours ?? 0 : 0),
+          activityCost: acc.activityCost + (first ? r.activityCost ?? 0 : 0),
+          activities: acc.activities + (first ? 1 : 0),
+        };
+      },
+      { quarters: 0, rowEq: 0, vines: 0, hours: 0, cost: 0, activityHours: 0, activityCost: 0, activities: 0 },
+    );
+  }, [activeRows]);
 
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
+
 
   // -------------------- Season integrity diagnostic (read-only) --------------------
   // System admins only, and only when the shared feature flag is switched on in
