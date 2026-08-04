@@ -31,7 +31,13 @@ export default function ActivityHistory({
   seasonId, entries, canReverse, canEdit, vineyardId, identities, allSegments, paddockName,
 }: Props) {
   const reverse = useReversePruningEntry(seasonId);
-  const [editEntry, setEditEntry] = useState<PruningEntry | null>(null);
+  const [editEntryId, setEditEntryId] = useState<string | null>(null);
+
+  // Only non-reversed entries can be opened/edited; navigation walks this list.
+  const editableEntries = entries.filter((e) => !e.deleted_at);
+  const editIndex = editEntryId ? editableEntries.findIndex((e) => e.id === editEntryId) : -1;
+  const editEntry = editIndex >= 0 ? editableEntries[editIndex] : null;
+  const rowsClickable = canEdit && !!vineyardId;
 
   const handleReverse = async (entry: PruningEntry) => {
     if (!confirm("Reverse this entry? Its row quarters will become available again.")) return;
@@ -77,7 +83,23 @@ export default function ActivityHistory({
               // Reversed/deleted entries: `deleted_at` is set. Skip Edit.
               const isReversed = !!e.deleted_at;
               return (
-                <li key={e.id} className="p-4 flex items-start justify-between gap-4">
+                <li
+                  key={e.id}
+                  className={
+                    "p-4 flex items-start justify-between gap-4" +
+                    (rowsClickable && !isReversed ? " cursor-pointer hover:bg-muted/50 transition-colors" : "")
+                  }
+                  role={rowsClickable && !isReversed ? "button" : undefined}
+                  tabIndex={rowsClickable && !isReversed ? 0 : undefined}
+                  onClick={rowsClickable && !isReversed ? () => setEditEntryId(e.id) : undefined}
+                  onKeyDown={
+                    rowsClickable && !isReversed
+                      ? (ev) => {
+                          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setEditEntryId(e.id); }
+                        }
+                      : undefined
+                  }
+                >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{formatDate(e.entry_date)}</span>
@@ -102,14 +124,14 @@ export default function ActivityHistory({
 
                   {(canEdit || canReverse || e.work_task_id) && !isReversed && (
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger asChild onClick={(ev) => ev.stopPropagation()}>
                         <Button variant="ghost" size="icon" aria-label="Entry actions">
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {canEdit && vineyardId && (
-                          <DropdownMenuItem onSelect={() => setEditEntry(e)}>
+                          <DropdownMenuItem onSelect={() => setEditEntryId(e.id)}>
                             <Pencil className="h-4 w-4 mr-2" /> Edit
                           </DropdownMenuItem>
                         )}
@@ -144,9 +166,13 @@ export default function ActivityHistory({
 
       {editEntry && vineyardId && (
         <EditPruningDialog
+          key={editEntry.id}
           open={!!editEntry}
-          onOpenChange={(o) => { if (!o) setEditEntry(null); }}
+          onOpenChange={(o) => { if (!o) setEditEntryId(null); }}
           entry={editEntry}
+          onPrev={editIndex > 0 ? () => setEditEntryId(editableEntries[editIndex - 1].id) : undefined}
+          onNext={editIndex < editableEntries.length - 1 ? () => setEditEntryId(editableEntries[editIndex + 1].id) : undefined}
+          navLabel={`${editIndex + 1} / ${editableEntries.length}`}
           identities={identities}
           allSegments={allSegments}
           vineyardId={vineyardId}
