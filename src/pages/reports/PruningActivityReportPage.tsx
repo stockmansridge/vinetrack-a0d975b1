@@ -87,15 +87,19 @@ function timeSortValue(value: string | null): number | null {
 }
 
 export default function PruningActivityReportPage() {
-  const { selectedVineyardId, memberships } = useVineyard();
+  const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const { toast } = useToast();
   const canSeeCosts = useCanSeeCosts();
+  const canEdit = currentRole === "owner" || currentRole === "manager";
   const fmt = useRegionFormatters();
   const money = (n: number | null) => (n == null ? "—" : fmt.currency(n));
 
+  const [editRow, setEditRow] = useState<PruningActivityRow | null>(null);
+
   const { data: rows = [], isLoading, error } = usePruningActivity(selectedVineyardId);
+
 
   // -------------------- Filters --------------------
   const [search, setSearch] = useState("");
