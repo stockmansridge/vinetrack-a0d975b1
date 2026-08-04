@@ -54,14 +54,16 @@ const UNASSIGNED = "__unassigned__";
 
 
 type SortKey =
-  | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
-  | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "start" | "finish"
-  | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
+  | "date" | "activity" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
+  | "rows" | "quarters" | "rowEq" | "vines" | "share" | "hours" | "start" | "finish"
+  | "duration" | "vinesPerHour" | "rate" | "cost" | "activityHours" | "activityCost"
+  | "task" | "taskStatus"
   | "createdBy" | "created" | "updated" | "status";
 
 /** Column registry — order here is the display order of the table. */
 const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolean }[] = [
   { key: "date", label: "Date" },
+  { key: "activity", label: "Activity" },
   { key: "season", label: "Season", align: "right" },
   { key: "vintage", label: "Vintage", align: "right" },
   { key: "block", label: "Block" },
@@ -72,13 +74,16 @@ const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolea
   { key: "quarters", label: "Qtrs", align: "right" },
   { key: "rowEq", label: "Row eq.", align: "right" },
   { key: "vines", label: "Vines", align: "right" },
-  { key: "hours", label: "Hours", align: "right" },
+  { key: "share", label: "Share", align: "right" },
+  { key: "hours", label: "Allocated hrs", align: "right" },
   { key: "start", label: "Start" },
   { key: "finish", label: "Finish" },
   { key: "duration", label: "Duration", align: "right" },
   { key: "vinesPerHour", label: "Vines / hr", align: "right" },
   { key: "rate", label: "Rate / hr", align: "right", cost: true },
-  { key: "cost", label: "Labour cost", align: "right", cost: true },
+  { key: "cost", label: "Allocated labour cost", align: "right", cost: true },
+  { key: "activityHours", label: "Activity total hrs", align: "right" },
+  { key: "activityCost", label: "Activity total cost", align: "right", cost: true },
   { key: "task", label: "Work task" },
   { key: "taskStatus", label: "Task status" },
   { key: "createdBy", label: "Created by" },
@@ -92,7 +97,8 @@ const DEFAULT_HIDDEN: SortKey[] = [
   "created", "updated", "status", "start", "finish", "duration", "task", "taskStatus",
 ];
 
-const COLUMN_PREFS_KEY = "vinetrack.pruningActivity.columns.v1";
+const COLUMN_PREFS_KEY = "vinetrack.pruningActivity.columns.v2";
+
 
 
 
@@ -271,6 +277,7 @@ export default function PruningActivityReportPage() {
   const accessors = useMemo(
     () => ({
       date: (r: PruningActivityRow) => (r.date ? new Date(r.date).getTime() : null),
+      activity: (r: PruningActivityRow) => r.groupKey,
       season: (r: PruningActivityRow) => r.seasonYear,
       vintage: (r: PruningActivityRow) => r.vintageYear,
       block: (r: PruningActivityRow) => r.blockName,
@@ -281,13 +288,16 @@ export default function PruningActivityReportPage() {
       quarters: (r: PruningActivityRow) => r.quarters,
       rowEq: (r: PruningActivityRow) => r.rowEquivalents,
       vines: (r: PruningActivityRow) => r.vines,
-      hours: (r: PruningActivityRow) => r.labourHours,
+      share: (r: PruningActivityRow) => r.allocationShare,
+      hours: (r: PruningActivityRow) => r.allocatedHours,
       start: (r: PruningActivityRow) => timeSortValue(r.startTime),
       finish: (r: PruningActivityRow) => timeSortValue(r.finishTime),
       duration: (r: PruningActivityRow) => r.durationMinutes,
       vinesPerHour: (r: PruningActivityRow) => r.vinesPerHour,
       rate: (r: PruningActivityRow) => r.hourlyRate,
-      cost: (r: PruningActivityRow) => r.labourCost,
+      cost: (r: PruningActivityRow) => r.allocatedCost,
+      activityHours: (r: PruningActivityRow) => r.activityHours,
+      activityCost: (r: PruningActivityRow) => r.activityCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
       taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
       createdBy: (r: PruningActivityRow) => resolveUser(r.createdById) ?? "",
@@ -305,22 +315,32 @@ export default function PruningActivityReportPage() {
   const activeRows = useMemo(() => filtered.filter((r) => !r.isReversed), [filtered]);
   const reversedCount = filtered.length - activeRows.length;
 
-  const totals = useMemo(
-    () =>
-      activeRows.reduce(
-        (acc, r) => ({
+  // Allocated figures sum per block (safe to add up — they are a split of the
+  // parent activity). Activity totals are counted once per parent activity so
+  // a two-block activity never double-counts its labour or cost.
+  const totals = useMemo(() => {
+    const seen = new Set<string>();
+    return activeRows.reduce(
+      (acc, r) => {
+        const first = !seen.has(r.groupKey);
+        if (first) seen.add(r.groupKey);
+        return {
           quarters: acc.quarters + r.quarters,
           rowEq: acc.rowEq + r.rowEquivalents,
           vines: acc.vines + r.vines,
-          hours: acc.hours + (r.labourHours ?? 0),
-          cost: acc.cost + (r.labourCost ?? 0),
-        }),
-        { quarters: 0, rowEq: 0, vines: 0, hours: 0, cost: 0 },
-      ),
-    [activeRows],
-  );
+          hours: acc.hours + r.allocatedHours,
+          cost: acc.cost + (r.allocatedCost ?? 0),
+          activityHours: acc.activityHours + (first ? r.activityHours ?? 0 : 0),
+          activityCost: acc.activityCost + (first ? r.activityCost ?? 0 : 0),
+          activities: acc.activities + (first ? 1 : 0),
+        };
+      },
+      { quarters: 0, rowEq: 0, vines: 0, hours: 0, cost: 0, activityHours: 0, activityCost: 0, activities: 0 },
+    );
+  }, [activeRows]);
 
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
+
 
   // -------------------- Season integrity diagnostic (read-only) --------------------
   // System admins only, and only when the shared feature flag is switched on in
@@ -353,15 +373,23 @@ export default function PruningActivityReportPage() {
   };
 
   const baseHeader = [
+    "Activity ID", "Allocation ID", "Allocation index", "Blocks in activity",
     "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
-    "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
+    "Allocation share", "Allocated labour hours", "Activity labour hours",
+    "Start", "Finish", "Duration (minutes)", "Vines / hour",
     "Work task", "Work task status", "Created by", "Created at", "Updated at", "Status", "Notes",
   ];
-  const costHeader = ["Labour cost", "Effective rate / hour", "currency"];
+  const costHeader = [
+    "Allocated labour cost", "Activity labour cost", "Effective rate / hour", "currency",
+  ];
 
   const rowToCells = (r: PruningActivityRow) => {
     const base: (string | number)[] = [
+      r.activityId ?? "",
+      r.id,
+      `${r.allocationIndex} of ${r.activityBlockCount}`,
+      r.activityBlockCount,
       r.date,
       r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
       r.pruningSeasonId ?? "",
@@ -377,7 +405,11 @@ export default function PruningActivityReportPage() {
       r.quarters,
       r.rowEquivalents.toFixed(2),
       r.vines,
-      r.labourHours == null ? "" : r.labourHours.toFixed(2),
+      (r.allocationShare * 100).toFixed(1) + "%",
+      r.allocatedHours.toFixed(2),
+      // Parent totals appear on the primary allocation only, so a sum of the
+      // export never double-counts a multi-block activity.
+      r.isPrimaryAllocation && r.activityHours != null ? r.activityHours.toFixed(2) : "",
       formatTime(r.startTime),
       formatTime(r.finishTime),
       r.durationMinutes ?? "",
@@ -393,11 +425,13 @@ export default function PruningActivityReportPage() {
     if (!canSeeCosts) return base;
     return [
       ...base,
-      r.labourCost == null ? "" : r.labourCost.toFixed(2),
+      r.allocatedCost == null ? "" : r.allocatedCost.toFixed(2),
+      r.isPrimaryAllocation && r.activityCost != null ? r.activityCost.toFixed(2) : "",
       r.hourlyRate == null ? "" : r.hourlyRate.toFixed(2),
       fmt.settings.currency_code,
     ];
   };
+
 
   const downloadCsv = () => {
     const header = canSeeCosts ? [...baseHeader, ...costHeader] : baseHeader;
@@ -463,6 +497,10 @@ export default function PruningActivityReportPage() {
     const pdfCell = (k: SortKey, r: PruningActivityRow): string => {
       switch (k) {
         case "date": return formatDate(r.date);
+        case "activity":
+          return r.activityId
+            ? `${activityCode(r)} (${r.allocationIndex}/${r.activityBlockCount})`
+            : "Single entry";
         case "season": return r.hasSeasonLink ? String(r.seasonYear ?? "—") : "Unassigned";
         case "vintage": return r.vintageYear == null ? "—" : String(r.vintageYear);
         case "block": return r.blockName;
@@ -473,13 +511,20 @@ export default function PruningActivityReportPage() {
         case "quarters": return String(r.quarters);
         case "rowEq": return r.rowEquivalents.toFixed(2);
         case "vines": return r.vines.toLocaleString();
-        case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+        case "share": return `${(r.allocationShare * 100).toFixed(1)}%`;
+        case "hours": return r.allocatedHours.toFixed(2);
         case "start": return formatTime(r.startTime);
         case "finish": return formatTime(r.finishTime);
         case "duration": return formatDuration(r.durationMinutes);
         case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
         case "rate": return money(r.hourlyRate);
-        case "cost": return money(r.labourCost);
+        case "cost": return money(r.allocatedCost);
+        case "activityHours":
+          return r.isPrimaryAllocation && r.activityHours != null
+            ? `${r.activityHours.toFixed(2)} (activity total)` : "";
+        case "activityCost":
+          return r.isPrimaryAllocation && r.activityCost != null
+            ? `${money(r.activityCost)} (activity total)` : "";
         case "task": return r.workTaskLabel ?? "—";
         case "taskStatus": return r.workTaskStatus ?? "—";
         case "createdBy": return resolveUser(r.createdById) ?? "—";
@@ -500,9 +545,12 @@ export default function PruningActivityReportPage() {
         case "hours": return totals.hours.toFixed(2);
         case "vinesPerHour": return avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0);
         case "cost": return money(totals.cost);
+        case "activityHours": return totals.activityHours.toFixed(2);
+        case "activityCost": return money(totals.activityCost);
         default: return "";
       }
     };
+
     const totalsRow = visibleColumns.map((c, i) =>
       i === 0 ? "Totals (active only)" : pdfTotal(c.key),
     );
@@ -522,6 +570,12 @@ export default function PruningActivityReportPage() {
   };
 
   const colSpan = visibleColumns.length + (canEdit ? 1 : 0);
+
+  /** Short, stable badge text so allocations of one activity read as a group. */
+  const activityCode = (r: PruningActivityRow) =>
+    r.activityId ? r.activityId.replace(/-/g, "").slice(0, 5).toUpperCase() : "—";
+
+
 
   const cellClass = (k: SortKey): string => {
     const def = availableColumns.find((c) => c.key === k);
@@ -563,6 +617,19 @@ export default function PruningActivityReportPage() {
             )}
           </>
         );
+      case "activity":
+        return r.activityId ? (
+          <div className="flex flex-col gap-0.5">
+            <Badge variant="outline" className="font-mono text-[10px] w-fit">{activityCode(r)}</Badge>
+            {r.activityBlockCount > 1 && (
+              <span className="text-[11px] text-muted-foreground">
+                {fmt.blockLabel.toLowerCase()} {r.allocationIndex} of {r.activityBlockCount}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-xs">Single entry</span>
+        );
       case "season":
         if (!r.hasSeasonLink) return <span className="text-muted-foreground">Unassigned</span>;
         if (!r.seasonMismatch) return r.seasonYear;
@@ -598,13 +665,38 @@ export default function PruningActivityReportPage() {
       case "quarters": return r.quarters;
       case "rowEq": return r.rowEquivalents.toFixed(2);
       case "vines": return r.vines.toLocaleString();
-      case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+      case "share":
+        return (
+          <span title="Share of this activity's total row equivalents">
+            {(r.allocationShare * 100).toFixed(1)}%
+          </span>
+        );
+      case "hours": return r.allocatedHours.toFixed(2);
       case "start": return formatTime(r.startTime);
       case "finish": return formatTime(r.finishTime);
       case "duration": return formatDuration(r.durationMinutes);
       case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
       case "rate": return money(r.hourlyRate);
-      case "cost": return money(r.labourCost);
+      case "cost": return money(r.allocatedCost);
+      case "activityHours":
+        return r.isPrimaryAllocation && r.activityHours != null ? (
+          <span>
+            {r.activityHours.toFixed(2)}
+            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+              Activity total
+            </span>
+          </span>
+        ) : <span className="text-muted-foreground text-xs">—</span>;
+      case "activityCost":
+        return r.isPrimaryAllocation && r.activityCost != null ? (
+          <span className="font-medium">
+            {money(r.activityCost)}
+            <span className="block text-[10px] uppercase tracking-wide font-normal text-muted-foreground">
+              Activity total
+            </span>
+          </span>
+        ) : <span className="text-muted-foreground text-xs">—</span>;
+
       case "task":
         return r.workTaskId ? (
           <Link
@@ -640,6 +732,8 @@ export default function PruningActivityReportPage() {
       case "vinesPerHour":
         return <span className="font-medium">{avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}</span>;
       case "cost": return <span className="font-semibold">{money(totals.cost)}</span>;
+      case "activityHours": return <span className="font-medium">{totals.activityHours.toFixed(2)}</span>;
+      case "activityCost": return <span className="font-semibold">{money(totals.activityCost)}</span>;
       default: return null;
     }
   };
@@ -682,21 +776,46 @@ export default function PruningActivityReportPage() {
       )}
 
       {/* -------------------- Summary -------------------- */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Matching entries", value: filtered.length.toLocaleString() },
-          { label: "Active / reversed", value: `${activeRows.length.toLocaleString()} / ${reversedCount.toLocaleString()}` },
-          { label: "Vines pruned", value: totals.vines.toLocaleString() },
-          { label: "Labour hours", value: totals.hours.toFixed(2) },
-          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0) },
-          ...(canSeeCosts ? [{ label: "Labour cost", value: money(totals.cost) }] : []),
+          {
+            label: "Matching allocations",
+            value: filtered.length.toLocaleString(),
+            hint: `${totals.activities.toLocaleString()} activit${totals.activities === 1 ? "y" : "ies"} • ${reversedCount.toLocaleString()} reversed`,
+          },
+          { label: "Vines pruned", value: totals.vines.toLocaleString(), hint: "Across the filtered blocks" },
+          {
+            label: blockId === ANY ? "Allocated labour hours" : "Allocated labour hours (filtered blocks)",
+            value: totals.hours.toFixed(2),
+            hint: "Share of activity hours by row equivalents",
+          },
+          {
+            label: "Total activity labour hours",
+            value: totals.activityHours.toFixed(2),
+            hint: "Each activity counted once",
+          },
+          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0), hint: "Vines ÷ allocated hours" },
+          ...(canSeeCosts ? [
+            {
+              label: blockId === ANY ? "Allocated labour cost" : "Allocated labour cost (filtered blocks)",
+              value: money(totals.cost),
+              hint: "Activity cost split by row equivalents",
+            },
+            {
+              label: "Total activity labour cost",
+              value: money(totals.activityCost),
+              hint: "Each activity counted once",
+            },
+          ] : []),
         ].map((s) => (
           <Card key={s.label} className="p-3">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
             <div className="text-xl font-semibold tabular-nums mt-1">{s.value}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{s.hint}</div>
           </Card>
         ))}
       </div>
+
 
       {/* -------------------- Filters -------------------- */}
       <Card className="p-3 space-y-3">
@@ -942,7 +1061,15 @@ export default function PruningActivityReportPage() {
                 </TableCell>
               </TableRow>
             ) : sorted.map((r) => (
-              <TableRow key={r.id} className={r.isReversed ? "bg-muted/20" : undefined}>
+              <TableRow
+                key={r.id}
+                className={[
+                  r.isReversed ? "bg-muted/20" : "",
+                  // Grouping treatment: allocations of one activity share a left rule.
+                  r.activityBlockCount > 1 ? "border-l-2 border-l-primary/50" : "",
+                  r.activityBlockCount > 1 && !r.isPrimaryAllocation ? "bg-muted/10" : "",
+                ].filter(Boolean).join(" ") || undefined}
+              >
                 {visibleColumns.map((c) => (
                   <TableCell key={c.key} className={cellClass(c.key)}>{renderCell(c.key, r)}</TableCell>
                 ))}
@@ -979,11 +1106,17 @@ export default function PruningActivityReportPage() {
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        Labour cost and effective rate come from the labour lines of the linked Work
-        Task. Entries without a linked Work Task show no cost. Reversed entries stay
-        visible for audit but are excluded from all totals and averages
-        (average vines / hour = total active vines ÷ total active labour hours).
+        Rows sharing an activity code belong to one pruning activity. Labour hours and
+        labour cost are recorded once on the activity; the <em>allocated</em> columns split
+        them across blocks by each block's share of the activity's row equivalents
+        (rounding differences are applied to the largest allocation so the allocated
+        figures always add back to the activity total). Activity totals are shown once,
+        on the first allocation, and are counted once in the report totals. Labour cost
+        and effective rate come from the labour lines of the linked Work Task; activities
+        without one show no cost. Reversed entries stay visible for audit but are excluded
+        from all totals and averages (average vines / hour = active vines ÷ allocated hours).
       </p>
+
 
       {editRow && selectedVineyardId && (() => {
         const editable = sorted.filter((r) => !r.isReversed);

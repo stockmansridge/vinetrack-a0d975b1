@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { parseVarietyAllocations } from "@/lib/paddockGeometry";
 import type { PruningEntry } from "@/lib/pruningQuery";
+import { allocateActivityShares } from "@/lib/pruningActivityAllocation";
 
 export interface PruningActivityRow {
   id: string;
@@ -70,6 +71,27 @@ export interface PruningActivityRow {
   createdAt: string | null;
   updatedAt: string | null;
   isReversed: boolean;
+
+  // ---- Parent-activity grouping (SQL 166) ----
+  /** Stable grouping key: the parent activity id, or the entry id for legacy rows. */
+  groupKey: string;
+  /** How many allocations (blocks) the parent activity has. */
+  activityBlockCount: number;
+  /** 1-based index of this allocation inside its parent activity. */
+  allocationIndex: number;
+  /** True for the allocation that carries the activity-total display. */
+  isPrimaryAllocation: boolean;
+  /** Share of the activity's total row equivalents (0–1). */
+  allocationShare: number;
+  /** Informational labour hours allocated to this block. */
+  allocatedHours: number;
+  /** Informational labour cost allocated to this block. */
+  allocatedCost: number | null;
+  /** Parent activity labour hours (same on every allocation of the activity). */
+  activityHours: number | null;
+  /** Parent activity labour cost (same on every allocation of the activity). */
+  activityCost: number | null;
+
 }
 
 
@@ -134,6 +156,90 @@ interface SegmentLite { pruning_entry_id: string | null; row_number: number; seg
 interface TaskLite { id: string; task_type: string | null; description: string | null; status: string | null }
 interface LabourLite { work_task_id: string; total_hours: number | null; total_cost: number | null }
 
+/** A report row before the parent-activity allocation pass runs. */
+export type BaseActivityRow = Omit<
+  PruningActivityRow,
+  | "groupKey" | "activityBlockCount" | "allocationIndex" | "isPrimaryAllocation"
+  | "allocationShare" | "allocatedHours" | "allocatedCost"
+  | "activityHours" | "activityCost"
+>;
+
+/**
+ * Groups allocations by parent activity and splits the parent's labour hours
+ * and labour cost across the blocks by share of row equivalents. The parent
+ * totals are attached to every allocation but flagged so the report renders
+ * them once only (on the primary allocation).
+ */
+export function applyActivityAllocations(baseRows: BaseActivityRow[]): PruningActivityRow[] {
+  const groups = new Map<string, BaseActivityRow[]>();
+  baseRows.forEach((r) => {
+    const key = r.activityId ?? `entry:${r.id}`;
+    const list = groups.get(key);
+    if (list) list.push(r);
+    else groups.set(key, [r]);
+  });
+
+  const byId = new Map<string, PruningActivityRow>();
+
+  groups.forEach((members, groupKey) => {
+    // Order allocations deterministically so "primary" is stable.
+    const ordered = [...members].sort(
+      (a, b) =>
+        (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.id.localeCompare(b.id),
+    );
+
+    // The parent activity carries the labour; on SQL 166 activities only one
+    // allocation row stores it, so summing recovers the parent total and stays
+    // correct for legacy single-entry rows.
+    const activityHours = ordered.some((r) => r.labourHours != null)
+      ? ordered.reduce((s, r) => s + (r.labourHours ?? 0), 0)
+      : null;
+    const costRows = ordered.filter((r) => r.labourCost != null);
+    // A single Work Task shared by every allocation must not be counted twice.
+    const seenTasks = new Set<string>();
+    let activityCost: number | null = null;
+    costRows.forEach((r) => {
+      const key = r.workTaskId ?? `row:${r.id}`;
+      if (seenTasks.has(key)) return;
+      seenTasks.add(key);
+      activityCost = (activityCost ?? 0) + (r.labourCost ?? 0);
+    });
+
+    const split = allocateActivityShares(
+      ordered.map((r) => ({
+        id: r.id,
+        rowEquivalents: r.rowEquivalents,
+        serverShare: (r.entry as any)?.allocation_share_of_row_equivalents ?? null,
+        serverHours: (r.entry as any)?.allocation_share_labour_hours_informational ?? null,
+      })),
+      activityHours,
+      activityCost,
+    );
+    const splitById = new Map(split.map((s) => [s.id, s]));
+
+    ordered.forEach((r, i) => {
+      const s = splitById.get(r.id);
+      byId.set(r.id, {
+        ...r,
+        groupKey,
+        activityBlockCount: ordered.length,
+        allocationIndex: i + 1,
+        isPrimaryAllocation: i === 0,
+        allocationShare: s?.share ?? 1,
+        allocatedHours: s?.hours ?? 0,
+        allocatedCost: activityCost == null ? null : s?.cost ?? 0,
+        activityHours,
+        activityCost,
+      });
+    });
+  });
+
+  // Preserve the original ordering of the query result.
+  return baseRows.map((r) => byId.get(r.id)!).filter(Boolean);
+}
+
+
+
 export function usePruningActivity(vineyardId: string | null) {
   return useQuery({
     queryKey: ["pruning", "activity-report", vineyardId],
@@ -190,7 +296,7 @@ export function usePruningActivity(vineyardId: string | null) {
         else segsByEntry.set(s.pruning_entry_id, [s]);
       });
 
-      return entries.map((e) => {
+      const baseRows = entries.map((e) => {
         const season = seasonById.get(e.pruning_season_id) ?? null;
         const paddock = paddockById.get(e.paddock_id) ?? null;
         const allocations = parseVarietyAllocations(paddock?.variety_allocations);
@@ -281,8 +387,11 @@ export function usePruningActivity(vineyardId: string | null) {
           createdAt: e.created_at ?? null,
           updatedAt: e.updated_at ?? null,
           isReversed: !!e.deleted_at,
-        } satisfies PruningActivityRow;
+        } satisfies BaseActivityRow;
       });
+
+      return applyActivityAllocations(baseRows);
     },
+
   });
 }
