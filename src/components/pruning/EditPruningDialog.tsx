@@ -739,73 +739,7 @@ export default function EditPruningDialog({
                       <Switch id="sync-task" checked={syncLinkedTask} onCheckedChange={setSyncLinkedTask} />
                     </div>
 
-                    {syncLinkedTask && (
-                      <div className="space-y-2 pt-1 border-t">
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Labour lines</div>
-                        {labourDrafts.map((line, i) => {
-                          const wc = Number(line.workerCount) || 0;
-                          const h = Number(line.hoursPerWorker) || 0;
-                          const rate = Number(line.hourlyRate) || 0;
-                          return (
-                            <div key={line.id} className="rounded border bg-background p-2 space-y-2">
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1.5 col-span-2">
-                                  <Label>Worker / crew type</Label>
-                                  <Select value={line.workerTypeId} onValueChange={(v) => updateDraft(line.id, { workerTypeId: v })}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value={NONE}>Manual entry</SelectItem>
-                                      {categories.map((c) => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                          {(c.name ?? c.id.slice(0, 8)) + (canSeeCosts && c.cost_per_hour != null ? ` — ${money(Number(c.cost_per_hour))}/h` : "")}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                {line.workerTypeId === NONE && (
-                                  <div className="space-y-1.5 col-span-2">
-                                    <Label>Name</Label>
-                                    <Input value={line.workerType} onChange={(e) => updateDraft(line.id, { workerType: e.target.value })} />
-                                  </div>
-                                )}
-                                <div className="space-y-1.5">
-                                  <Label>Workers</Label>
-                                  <Input type="number" step="1" value={line.workerCount} onChange={(e) => updateDraft(line.id, { workerCount: e.target.value })} />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <Label>Hours each</Label>
-                                  <Input type="number" step="0.25" value={line.hoursPerWorker} onChange={(e) => updateDraft(line.id, { hoursPerWorker: e.target.value })} />
-                                </div>
-                                {canSeeCosts && (
-                                  <div className="space-y-1.5">
-                                    <Label>Cost / hour</Label>
-                                    <Input type="number" step="0.01" value={line.hourlyRate} onChange={(e) => updateDraft(line.id, { hourlyRate: e.target.value })} />
-                                  </div>
-                                )}
-                                <div className="space-y-1.5">
-                                  <Label>{canSeeCosts ? "Line total" : "Total hours"}</Label>
-                                  <Input readOnly disabled value={canSeeCosts ? money(wc * h * rate) : `${(wc * h).toFixed(2)} h`} />
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <Input placeholder="Notes" value={line.notes} onChange={(e) => updateDraft(line.id, { notes: e.target.value })} />
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeDraft(line.id)} aria-label={`Remove labour line ${i + 1}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <Button type="button" variant="outline" size="sm" onClick={addDraft}>
-                          <Plus className="h-4 w-4 mr-1" /> Add labour line
-                        </Button>
-                        <div className="rounded border bg-background px-3 py-2 text-sm space-y-1">
-                          <div className="flex justify-between"><span className="text-muted-foreground">Total person-hours</span><b>{labourTotals.hours.toFixed(2)}</b></div>
-                          {canSeeCosts && <div className="flex justify-between"><span className="text-muted-foreground">Total labour cost</span><b>{money(labourTotals.cost)}</b></div>}
-                        </div>
-                      </div>
-                    )}
+                    {syncLinkedTask && labourEditor}
                   </>
                 )}
               </div>
