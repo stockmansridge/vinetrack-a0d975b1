@@ -129,12 +129,36 @@ export function activityObject(draft: PruningActivityDraft, vineyardId: string, 
 }
 
 export function allocationObjects(draft: PruningActivityDraft) {
-  return Object.values(draft.allocations).map((a) => ({
-    paddock_id: a.paddockId,
-    segments: allocationSegments(a),
-    estimated_vines: allocationVines(a),
-  }));
+  // One object per block, deduped by paddock_id and never empty — the backend
+  // enforces a unique (activity_id, block) constraint, so a repeated or empty
+  // allocation would blow up the save.
+  const byPaddock = new Map<string, ReturnType<typeof allocationSegments>>();
+  Object.values(draft.allocations).forEach((a) => {
+    const segments = allocationSegments(a);
+    if (!segments.length) return;
+    const existing = byPaddock.get(a.paddockId) ?? [];
+    const merged = [...existing, ...segments];
+    const seen = new Set<string>();
+    byPaddock.set(
+      a.paddockId,
+      merged.filter((s) => {
+        const k = `${s.row}:${s.segment}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }),
+    );
+  });
+  return Array.from(byPaddock.entries()).map(([paddock_id, segments]) => {
+    const alloc = draft.allocations[paddock_id];
+    return {
+      paddock_id,
+      segments,
+      estimated_vines: alloc ? allocationVines(alloc) : 0,
+    };
+  });
 }
+
 
 /** Nested payload for `record_pruning_activity(p_payload jsonb)`. */
 export function buildActivityPayload(draft: PruningActivityDraft, vineyardId: string, id: string) {
