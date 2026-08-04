@@ -571,6 +571,12 @@ export default function PruningActivityReportPage() {
 
   const colSpan = visibleColumns.length + (canEdit ? 1 : 0);
 
+  /** Short, stable badge text so allocations of one activity read as a group. */
+  const activityCode = (r: PruningActivityRow) =>
+    r.activityId ? r.activityId.replace(/-/g, "").slice(0, 5).toUpperCase() : "—";
+
+
+
   const cellClass = (k: SortKey): string => {
     const def = availableColumns.find((c) => c.key === k);
     const right = def?.align === "right" ? "text-right tabular-nums" : "";
