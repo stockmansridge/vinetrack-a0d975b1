@@ -717,6 +717,72 @@ export default function WorkTaskReportsPage() {
     toast({ title: "CSV exported", description: `${filtered.length} task${filtered.length === 1 ? "" : "s"} exported.` });
   };
 
+  // -------------------- Column text helpers (screen + PDF) --------------------
+  const taskCellClass = (k: TaskColKey): string => {
+    const def = taskColumns.find((c) => c.key === k);
+    const right = def?.align === "right" ? "text-right tabular-nums" : "";
+    if (k === "date") return `whitespace-nowrap ${right}`.trim();
+    if (k === "blocks") return "max-w-[280px] truncate";
+    if (k === "totalCost") return `${right} font-medium`.trim();
+    return right;
+  };
+
+  const taskCellText = (k: TaskColKey, r: TaskRow): string => {
+    switch (k) {
+      case "date": return r.date ? fmt.date(r.date) : "—";
+      case "taskType": return r.taskType;
+      case "blocks": return r.blocksLabel;
+      case "area": return areaDisplay(r.totalAreaHa);
+      case "labourHours": return r.labourHours.toFixed(2);
+      case "machineHours": return r.machineHours.toFixed(2);
+      case "linkedTrips": return String(r.linkedTripCount);
+      case "machineEntries": return String(r.machineEntries);
+      case "manualLabour": return money(r.manualLabourCost);
+      case "machineCharge": return money(r.machineCharge);
+      case "machineFuel": return money(r.machineFuel);
+      case "linkedTripCost": return money(r.linkedTripTotal);
+      case "totalCost": return money(r.totalCost);
+      case "costPerArea": return costPerAreaDisplay(r.totalCost, r.totalAreaHa);
+      case "status": return r.hasWarning ? "Review" : "—";
+      default: return "";
+    }
+  };
+
+  const taskTotalsText = (k: TaskColKey): string => {
+    switch (k) {
+      case "area": return totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—";
+      case "labourHours": return totals.labourHours.toFixed(2);
+      case "machineHours": return totals.machineHours.toFixed(2);
+      case "manualLabour": return money(totals.manualLabourCost);
+      case "machineCharge": return money(totals.machineCharge);
+      case "machineFuel": return money(totals.machineFuel);
+      case "linkedTripCost": return money(totals.linkedTripTotal);
+      case "totalCost": return money(totals.totalCost);
+      case "costPerArea": return totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—";
+      default: return "";
+    }
+  };
+
+  const renderTaskCell = (k: TaskColKey, r: TaskRow): React.ReactNode => {
+    switch (k) {
+      case "blocks": return <span title={r.blocksLabel}>{r.blocksLabel}</span>;
+      case "status":
+        return r.hasWarning ? (
+          <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+            <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+              <AlertTriangle className="h-3 w-3" /> Review
+            </Badge>
+          </span>
+        ) : <span className="text-xs text-muted-foreground">—</span>;
+      default: return taskCellText(k, r);
+    }
+  };
+
+  const taskTotalsCell = (k: TaskColKey): React.ReactNode => {
+    if (k === "totalCost") return <span className="font-semibold">{money(totals.totalCost)}</span>;
+    return taskTotalsText(k);
+  };
+
   // -------------------- PDF export --------------------
   // Renders the currently filtered task rows. Uses jsPDF + autoTable to match
   // the convention established in sprayJobsExport.ts. Display-only — does not
