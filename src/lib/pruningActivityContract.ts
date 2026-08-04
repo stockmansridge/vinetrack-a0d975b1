@@ -124,9 +124,13 @@ export function activityObject(draft: PruningActivityDraft, vineyardId: string, 
     hourly_rate: draft.hourlyRate,
     notes: draft.notes ?? "",
     work_task_id: draft.workTaskId,
+    // Explicit unlink instruction — never rely on a null/omitted work_task_id
+    // being read as "remove the link".
+    clear_work_task: !draft.workTaskId,
     client_updated_at: new Date().toISOString(),
   };
 }
+
 
 export function allocationObjects(draft: PruningActivityDraft) {
   // One object per block, deduped by paddock_id and never empty — the backend
