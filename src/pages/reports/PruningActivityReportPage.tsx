@@ -835,6 +835,16 @@ export default function PruningActivityReportPage() {
               value: money(totals.activityCost),
               hint: "Each activity counted once",
             },
+            {
+              label: "Cost / vine (costed)",
+              value: costPerVineCosted == null ? "—" : money(costPerVineCosted),
+              hint: `${money(totals.cost)} ÷ ${costedVines.toLocaleString()} vines with a cost`,
+            },
+            {
+              label: "Cost / vine (all)",
+              value: costPerVineAll == null ? "—" : money(costPerVineAll),
+              hint: `${money(totals.activityCost)} ÷ ${totals.vines.toLocaleString()} vines pruned`,
+            },
           ] : []),
         ].map((s) => (
           <Card key={s.label} className="p-3">
