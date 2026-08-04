@@ -501,11 +501,12 @@ export default function PruningActivityReportPage() {
 
     const pdfCell = (k: SortKey, r: PruningActivityRow): string => {
       switch (k) {
-        case "date": return formatDate(r.date);
+        case "date": return reportDateText(r.date);
         case "activity":
-          return r.activityId
-            ? `${activityCode(r)} (${r.allocationIndex}/${r.activityBlockCount})`
-            : "Single entry";
+          return r.activityBlockCount > 1
+            ? `${r.activityLabel} (${fmt.blockLabel.toLowerCase()} ${r.allocationIndex} of ${r.activityBlockCount})`
+            : r.activityLabel;
+
         case "season": return r.hasSeasonLink ? String(r.seasonYear ?? "—") : "Unassigned";
         case "vintage": return r.vintageYear == null ? "—" : String(r.vintageYear);
         case "block": return r.blockName;
