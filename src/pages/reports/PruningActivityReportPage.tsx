@@ -732,8 +732,9 @@ export default function PruningActivityReportPage() {
           ? <span className="capitalize">{r.workTaskStatus}</span>
           : <span className="text-muted-foreground">—</span>;
       case "createdBy": return resolveUser(r.createdById) ?? "—";
-      case "created": return r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—";
-      case "updated": return r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—";
+      case "created": return <ReportDateCell value={r.createdAt} />;
+      case "updated": return <ReportDateCell value={r.updatedAt} />;
+
       case "status":
         return r.isReversed
           ? <Badge variant="destructive">Reversed</Badge>
