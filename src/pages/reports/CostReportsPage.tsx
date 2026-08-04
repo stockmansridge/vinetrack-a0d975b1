@@ -358,10 +358,11 @@ export default function CostReportsPage() {
     });
   }, [prefiltered, varietyMap, paddockAllocsById]);
 
-  const seasons = useMemo(
-    () => Array.from(new Set(grouped.map((g) => g.season_year).filter((v): v is number => v != null))).sort((a, b) => b - a),
-    [grouped],
-  );
+  // Vintage list is discovered dynamically from every included cost source
+  // (trips, pruning activities, …) — never hard-coded.
+  const seasons = unified.vintageYears;
+  const opYears = unified.operationYears;
+
   const paddocks = useMemo(
     () => Array.from(new Set(grouped.map((g) => g.paddock_name).filter((v): v is string => !!v))).sort(),
     [grouped],
