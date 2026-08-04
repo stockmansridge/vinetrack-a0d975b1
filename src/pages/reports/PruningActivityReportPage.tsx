@@ -373,15 +373,23 @@ export default function PruningActivityReportPage() {
   };
 
   const baseHeader = [
+    "Activity ID", "Allocation ID", "Allocation index", "Blocks in activity",
     "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
-    "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
+    "Allocation share", "Allocated labour hours", "Activity labour hours",
+    "Start", "Finish", "Duration (minutes)", "Vines / hour",
     "Work task", "Work task status", "Created by", "Created at", "Updated at", "Status", "Notes",
   ];
-  const costHeader = ["Labour cost", "Effective rate / hour", "currency"];
+  const costHeader = [
+    "Allocated labour cost", "Activity labour cost", "Effective rate / hour", "currency",
+  ];
 
   const rowToCells = (r: PruningActivityRow) => {
     const base: (string | number)[] = [
+      r.activityId ?? "",
+      r.id,
+      `${r.allocationIndex} of ${r.activityBlockCount}`,
+      r.activityBlockCount,
       r.date,
       r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
       r.pruningSeasonId ?? "",
@@ -397,7 +405,11 @@ export default function PruningActivityReportPage() {
       r.quarters,
       r.rowEquivalents.toFixed(2),
       r.vines,
-      r.labourHours == null ? "" : r.labourHours.toFixed(2),
+      (r.allocationShare * 100).toFixed(1) + "%",
+      r.allocatedHours.toFixed(2),
+      // Parent totals appear on the primary allocation only, so a sum of the
+      // export never double-counts a multi-block activity.
+      r.isPrimaryAllocation && r.activityHours != null ? r.activityHours.toFixed(2) : "",
       formatTime(r.startTime),
       formatTime(r.finishTime),
       r.durationMinutes ?? "",
@@ -413,11 +425,13 @@ export default function PruningActivityReportPage() {
     if (!canSeeCosts) return base;
     return [
       ...base,
-      r.labourCost == null ? "" : r.labourCost.toFixed(2),
+      r.allocatedCost == null ? "" : r.allocatedCost.toFixed(2),
+      r.isPrimaryAllocation && r.activityCost != null ? r.activityCost.toFixed(2) : "",
       r.hourlyRate == null ? "" : r.hourlyRate.toFixed(2),
       fmt.settings.currency_code,
     ];
   };
+
 
   const downloadCsv = () => {
     const header = canSeeCosts ? [...baseHeader, ...costHeader] : baseHeader;
