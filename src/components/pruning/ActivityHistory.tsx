@@ -13,6 +13,7 @@ import { useReversePruningEntry } from "@/lib/pruningQuery";
 import { hardDeleteWorkTask } from "@/lib/workTasksQuery";
 import { formatDate } from "@/lib/dateFormat";
 import EditPruningDialog from "@/components/pruning/EditPruningDialog";
+import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
 import type { RowIdentity } from "@/lib/pruningCalc";
 import { Link } from "react-router-dom";
 
