@@ -456,7 +456,7 @@ export default function EditPruningDialog({
             <div className="min-w-0">
               <DialogTitle>Edit Pruning Record — {paddockName}</DialogTitle>
               <DialogDescription>
-                Toggle quarters to add or remove them from this entry. Green quarters belong to another entry and are locked.
+                Toggle quarters to add or remove them from this entry. Bright green quarters belong to this entry; greyed quarters belong to another entry and are locked.
               </DialogDescription>
             </div>
             {(onPrev || onNext) && (
