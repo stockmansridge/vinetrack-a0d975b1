@@ -1,23 +1,27 @@
-// Parent pruning activity contract (multi-block allocations).
+// Parent pruning activity contract (multi-block allocations) — SQL 166.
 //
-// AGREED MODEL (awaiting the shared backend RPC):
+// MODEL
 //   Parent activity  -> date, worker/crew, method, start/finish, labour
-//                       hours, notes, linked Work Task, cost.
+//                       hours, hourly rate, notes, linked Work Task.
 //   Allocation (n)   -> block (paddock), season, vintage, rows/quarters,
 //                       row equivalents, vines.
 //
-// The legacy RPCs (`record_pruning_entry` / `update_pruning_entry`) are
-// strictly ONE block per entry. We deliberately do NOT emulate a parent
-// activity by fanning out multiple legacy calls — labour and duration would
-// be duplicated or arbitrarily split. Everything below is the portal-side
-// shape and the readiness gate; flip `PRUNING_ACTIVITY_CONTRACT_READY` (and
-// implement `saveActivity`) when the shared endpoint lands.
+// The multi-block editor NEVER writes one legacy pruning entry per block.
+// Everything goes through the parent-activity RPCs in
+// `src/lib/pruningActivityApi.ts`:
+//   record_pruning_activity(p_payload jsonb)
+//   update_pruning_activity(p_activity_id, p_activity, p_allocations)
+//   get_pruning_activity(p_activity_id)
+//   list_pruning_activities(p_vineyard_id, p_include_reversed)
+//   reverse_pruning_activity(p_activity_id, p_reason)
 
 export interface AllocationQuarter {
   rowNumber: number;
-  segmentNumber: number; // 1..4
+  segmentNumber: number; // 1..4 — the exact numbering used by the quarter grid
   paddockRowId: string | null;
   rowLabel: string;
+  /** Vines represented by this single quarter (row vines / 4). */
+  vines?: number;
 }
 
 export interface BlockAllocationDraft {
@@ -28,6 +32,10 @@ export interface BlockAllocationDraft {
   quarters: Record<string, AllocationQuarter>;
   /** Server-resolved once saved; null for a brand-new allocation. */
   seasonId: string | null;
+  /** Server-resolved allocation id (edit mode). */
+  allocationId?: string | null;
+  seasonYear?: number | null;
+  vintageYear?: number | null;
 }
 
 export interface PruningActivityDraft {
@@ -36,6 +44,7 @@ export interface PruningActivityDraft {
   worker: string;
   method: string;
   labourHours: number | null;
+  hourlyRate: number | null;
   startTime: string | null;
   finishTime: string | null;
   notes: string;
@@ -52,6 +61,14 @@ export function allocationQuarterCount(a: BlockAllocationDraft): number {
 
 export function allocationRowEquivalents(a: BlockAllocationDraft): number {
   return allocationQuarterCount(a) / 4;
+}
+
+/** Estimated vines for an allocation — Σ per-quarter vine estimates. */
+export function allocationVines(a: BlockAllocationDraft): number {
+  return Math.max(
+    0,
+    Math.round(Object.values(a.quarters).reduce((s, q) => s + (q.vines ?? 0), 0)),
+  );
 }
 
 /** Compact "rows 38–39" style summary for an allocation. */
@@ -77,13 +94,58 @@ export function activityTotals(draft: PruningActivityDraft) {
     blocks: allocations.length,
     quarters,
     rowEquivalents: quarters / 4,
+    vines: allocations.reduce((s, a) => s + allocationVines(a), 0),
+  };
+}
+
+/** Segment payload in the exact shape the RPCs expect. */
+export function allocationSegments(a: BlockAllocationDraft) {
+  return Object.values(a.quarters)
+    .sort((x, y) => x.rowNumber - y.rowNumber || x.segmentNumber - y.segmentNumber)
+    .map((q) => ({
+      row: q.rowNumber,
+      segment: q.segmentNumber,
+      row_id: q.paddockRowId ?? null,
+      label: q.rowLabel,
+    }));
+}
+
+/** Activity-level object shared by the create payload and the update RPC. */
+export function activityObject(draft: PruningActivityDraft, vineyardId: string, id: string) {
+  return {
+    id,
+    vineyard_id: vineyardId,
+    entry_date: draft.entryDate,
+    worker_or_crew: draft.worker,
+    method: draft.method,
+    start_time: draft.startTime,
+    finish_time: draft.finishTime,
+    labour_hours: draft.labourHours,
+    hourly_rate: draft.hourlyRate,
+    notes: draft.notes ?? "",
+    work_task_id: draft.workTaskId,
+    client_updated_at: new Date().toISOString(),
+  };
+}
+
+export function allocationObjects(draft: PruningActivityDraft) {
+  return Object.values(draft.allocations).map((a) => ({
+    paddock_id: a.paddockId,
+    segments: allocationSegments(a),
+    estimated_vines: allocationVines(a),
+  }));
+}
+
+/** Nested payload for `record_pruning_activity(p_payload jsonb)`. */
+export function buildActivityPayload(draft: PruningActivityDraft, vineyardId: string, id: string) {
+  return {
+    activity: activityObject(draft, vineyardId, id),
+    allocations: allocationObjects(draft),
   };
 }
 
 /**
- * Readiness gate. Stays false until the shared parent-activity endpoint is
- * deployed on the VineTrack backend. While false the portal keeps using the
- * existing single-block Record Pruning dialog; the multi-block editor is
- * reachable only for preview/testing.
+ * SQL 166 is live: the multi-block parent-activity contract is the default
+ * path for every visible "New Pruning Activity" action and for editing.
  */
-export const PRUNING_ACTIVITY_CONTRACT_READY = false;
+export const PRUNING_ACTIVITY_CONTRACT_READY = true;

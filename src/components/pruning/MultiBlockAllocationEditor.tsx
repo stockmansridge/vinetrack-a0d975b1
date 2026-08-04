@@ -9,7 +9,7 @@
 // discards work already done in another block. This component is pure UI +
 // state: persistence happens through the parent activity endpoint (see
 // src/lib/pruningActivityContract.ts).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, Plus, Search, Square, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -21,7 +21,7 @@ import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { buildRowIdentities, buildRowCompletion, type RowIdentity } from "@/lib/pruningCalc";
 import { usePruningSeasons, usePruningSegments } from "@/lib/pruningQuery";
 import {
-  allocationKey, allocationQuarterCount, allocationRowEquivalents, allocationRowSummary,
+  allocationKey, allocationQuarterCount, allocationRowEquivalents, allocationRowSummary, allocationVines,
   type BlockAllocationDraft,
 } from "@/lib/pruningActivityContract";
 
@@ -68,11 +68,13 @@ interface Props {
   onChange: (next: Record<string, BlockAllocationDraft>) => void;
   /** Quarters already owned by THIS activity (edit mode), keyed blockId -> "row:q". */
   ownedByActivity?: Record<string, Set<string>>;
+  /** Optionally open on a specific block (e.g. from a block detail page). */
+  initialPaddockId?: string | null;
   disabled?: boolean;
 }
 
 export default function MultiBlockAllocationEditor({
-  vineyardId, seasonYear, value, onChange, ownedByActivity, disabled,
+  vineyardId, seasonYear, value, onChange, ownedByActivity, initialPaddockId = null, disabled,
 }: Props) {
   const paddocksQ = useEditorPaddocks(vineyardId);
   const seasonsQ = usePruningSeasons(vineyardId);
@@ -81,6 +83,16 @@ export default function MultiBlockAllocationEditor({
 
   const paddocks = paddocksQ.data ?? [];
   const active = paddocks.find((p) => p.id === activeId) ?? null;
+
+  // Open on the requested block once (and on the first allocation in edit mode).
+  const [autoOpened, setAutoOpened] = useState(false);
+  useEffect(() => {
+    if (autoOpened || !paddocks.length) return;
+    const target = initialPaddockId ?? Object.keys(value)[0] ?? null;
+    if (!target) return;
+    setAutoOpened(true);
+    setActiveId(target);
+  }, [autoOpened, paddocks.length, initialPaddockId, value]);
 
   const activeSeason = useMemo(
     () => (seasonsQ.data ?? []).find((s) => s.paddock_id === activeId && s.season_year === seasonYear) ?? null,
@@ -147,6 +159,7 @@ export default function MultiBlockAllocationEditor({
       segmentNumber: quarter,
       paddockRowId: identity.paddockRowId,
       rowLabel: identity.rowLabel,
+        vines: (identity.estimatedVines ?? 0) / 4,
     };
     setAllocation({ ...a, quarters });
   };
@@ -164,6 +177,7 @@ export default function MultiBlockAllocationEditor({
         segmentNumber: q,
         paddockRowId: identity.paddockRowId,
         rowLabel: identity.rowLabel,
+        vines: (identity.estimatedVines ?? 0) / 4,
       };
     }
     setAllocation({ ...a, quarters });
@@ -171,6 +185,7 @@ export default function MultiBlockAllocationEditor({
 
   const allocations = Object.values(value);
   const totalQuarters = allocations.reduce((s, a) => s + allocationQuarterCount(a), 0);
+  const totalVines = allocations.reduce((s, a) => s + allocationVines(a), 0);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
@@ -352,6 +367,7 @@ export default function MultiBlockAllocationEditor({
           <div className="flex justify-between"><span className="text-muted-foreground">Blocks</span><span className="tabular-nums font-medium">{allocations.length}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Quarters</span><span className="tabular-nums font-medium">{totalQuarters}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Row equivalents</span><span className="tabular-nums font-medium">{(totalQuarters / 4).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Vines</span><span className="tabular-nums font-medium">~{totalVines.toLocaleString()}</span></div>
         </div>
         <p className="text-[11px] text-muted-foreground">
           Labour, times, worker, method, notes and the linked Work Task belong to the
