@@ -318,7 +318,9 @@ export default function EditPruningDialog({
   const newCount = selected.size;
   const originalHours = entry.labour_hours ?? 0;
   const willUpdateTask = !!linkedTask && syncLinkedTask && !clearWorkTask;
-  const nextHours = willUpdateTask ? labourTotals.hours : (labourHours ? Number(labourHours) : null);
+  const willCreateTask = !entry.work_task_id && createTask;
+  const labourDrivesHours = willUpdateTask || willCreateTask;
+  const nextHours = labourDrivesHours ? labourTotals.hours : (labourHours ? Number(labourHours) : null);
 
   // ---------- Labour line editing ----------
   const updateDraft = (id: string, patch: Partial<LabourDraft>) => {
