@@ -425,10 +425,11 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = canSeeCosts ? 23 : 21;
+  const colSpan = (canSeeCosts ? 23 : 21) + (canEdit ? 1 : 0);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-[1600px]">
+    <div className="p-4 sm:p-6 space-y-4 w-full">
+
       <PageHead
         title="Pruning Activity Report | VineTrack"
         description="Per-entry pruning activity report with rows worked, vines, labour hours, productivity and linked work tasks."
