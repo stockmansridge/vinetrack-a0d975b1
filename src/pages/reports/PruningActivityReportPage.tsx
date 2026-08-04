@@ -622,29 +622,27 @@ export default function PruningActivityReportPage() {
   const renderCell = (k: SortKey, r: PruningActivityRow): React.ReactNode => {
     switch (k) {
       case "date":
-        return (
-          <>
-            <div>{formatDate(r.date)}</div>
-            {(r.startTime || r.finishTime) && (
-              <div className="text-[11px] text-muted-foreground">
-                {formatTime(r.startTime)}–{formatTime(r.finishTime)}
-              </div>
-            )}
-          </>
-        );
+        return <ReportDateCell value={r.date} startTime={r.startTime} endTime={r.finishTime} />;
       case "activity":
-        return r.activityId ? (
-          <div className="flex flex-col gap-0.5">
-            <Badge variant="outline" className="font-mono text-[10px] w-fit">{activityCode(r)}</Badge>
+        return (
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span
+              className={`truncate ${r.activityLabelKind === "none" || r.activityLabelKind === "unavailable" ? "text-muted-foreground text-xs" : "font-medium"}`}
+              title={r.activityLabel}
+            >
+              {r.activityLabel}
+            </span>
+            {activityKindLabel(r) && (
+              <span className="text-[11px] text-muted-foreground">{activityKindLabel(r)}</span>
+            )}
             {r.activityBlockCount > 1 && (
               <span className="text-[11px] text-muted-foreground">
                 {fmt.blockLabel.toLowerCase()} {r.allocationIndex} of {r.activityBlockCount}
               </span>
             )}
           </div>
-        ) : (
-          <span className="text-muted-foreground text-xs">Single entry</span>
         );
+
       case "season":
         if (!r.hasSeasonLink) return <span className="text-muted-foreground">Unassigned</span>;
         if (!r.seasonMismatch) return r.seasonYear;
