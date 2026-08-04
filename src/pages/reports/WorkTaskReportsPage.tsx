@@ -50,6 +50,7 @@ import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -111,6 +112,18 @@ interface AllocRow {
 
 const ANY = "__any__";
 const OVERLAP_SOURCES = new Set(["missed_trip", "trip_failed", "correction"]);
+
+/** Column registry keys for the Task Summary table. */
+type TaskColKey =
+  | "date" | "taskType" | "blocks" | "area" | "labourHours" | "machineHours"
+  | "linkedTrips" | "manualLabour" | "machineCharge" | "machineFuel"
+  | "linkedTripCost" | "totalCost" | "costPerArea" | "machineEntries" | "status";
+
+/** Column registry keys for the Block Allocation table. */
+type AllocColKey =
+  | "name" | "tasks" | "area" | "labourHours" | "machineHours" | "linkedTrips"
+  | "manualLabour" | "machineCharge" | "machineFuel" | "linkedTripCost"
+  | "totalCost" | "costPerArea" | "status";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -211,8 +224,55 @@ export default function WorkTaskReportsPage() {
     if (haValue == null) return null;
     return areaImperial ? haValue / HA_PER_AC : haValue;
   };
-  // Toggle column + 7 base + (cost ? 6 : 1) + status.
-  const totalColSpan = 1 + 7 + (canSeeCosts ? 6 : 1) + 1;
+  const taskColumns = useMemo<ColumnDef<TaskColKey>[]>(() => [
+    { key: "date", label: "Date", always: true },
+    { key: "taskType", label: "Task type" },
+    { key: "blocks", label: fmt.blocksLabel },
+    { key: "area", label: "Area", align: "right" },
+    { key: "labourHours", label: "Labour hrs", align: "right" },
+    { key: "machineHours", label: "Machine hrs", align: "right" },
+    { key: "linkedTrips", label: "Linked trips", align: "right" },
+    { key: "machineEntries", label: "Machine entries", align: "right" },
+    { key: "manualLabour", label: "Manual labour", align: "right", cost: true },
+    { key: "machineCharge", label: "Machine charge", align: "right", cost: true },
+    { key: "machineFuel", label: "Machine fuel", align: "right", cost: true },
+    { key: "linkedTripCost", label: "Linked GPS trips", align: "right", cost: true },
+    { key: "totalCost", label: "Total cost", align: "right", cost: true },
+    { key: "costPerArea", label: "Cost / area", align: "right", cost: true },
+    { key: "status", label: "Status" },
+  ], [fmt.blocksLabel]);
+
+  const taskPrefs = useColumnPrefs<TaskColKey>({
+    storageKey: "workTaskReport.summary",
+    columns: taskColumns,
+    canSeeCosts,
+  });
+
+  const allocColumns = useMemo<ColumnDef<AllocColKey>[]>(() => [
+    { key: "name", label: fmt.blockLabel, always: true },
+    { key: "tasks", label: "Tasks", align: "right" },
+    { key: "area", label: "Area", align: "right" },
+    { key: "labourHours", label: "Labour hrs", align: "right" },
+    { key: "machineHours", label: "Machine hrs", align: "right" },
+    { key: "linkedTrips", label: "Linked trips", align: "right" },
+    { key: "manualLabour", label: "Manual labour", align: "right", cost: true },
+    { key: "machineCharge", label: "Machine charge", align: "right", cost: true },
+    { key: "machineFuel", label: "Machine fuel", align: "right", cost: true },
+    { key: "linkedTripCost", label: "Linked GPS trips", align: "right", cost: true },
+    { key: "totalCost", label: "Total allocated cost", align: "right", cost: true },
+    { key: "costPerArea", label: "Cost / area", align: "right", cost: true },
+    { key: "status", label: "Status" },
+  ], [fmt.blockLabel]);
+
+  const allocPrefs = useColumnPrefs<AllocColKey>({
+    storageKey: "workTaskReport.blockAllocation",
+    columns: allocColumns,
+    canSeeCosts,
+  });
+
+  // Toggle column + visible columns.
+  const totalColSpan = 1 + taskPrefs.visibleColumns.length;
+  const allocColSpan = 1 + allocPrefs.visibleColumns.length;
 
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");

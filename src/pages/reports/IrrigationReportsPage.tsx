@@ -34,6 +34,7 @@ import {
   type ReportColumn,
 } from "@/components/irrigation/reports/ReportShell";
 import { SessionDrillDownDialog } from "@/components/irrigation/reports/SessionDrillDownDialog";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { useIrrigationUnits, EMPTY } from "@/lib/irrigationUnits";
 import {
   DATA_QUALITY_LABEL,
@@ -113,6 +114,28 @@ export default function IrrigationReportsPage() {
   const recordSources = useRecordSourceReport(vy, filters, tab === "sources");
 
   const shared = { vineyardName, filters };
+
+  // -- column visibility for the block-level detail table (main export table) --
+  type BlockCol =
+    | "block" | "variety" | "volume" | "effective" | "area" | "pervine"
+    | "perha" | "depth" | "combined" | "diff" | "last";
+  const blockColumnDefs: ColumnDef<BlockCol>[] = [
+    { key: "block", label: "Block" },
+    { key: "variety", label: "Variety" },
+    { key: "volume", label: "Water", align: "right" },
+    { key: "effective", label: "Effective", align: "right" },
+    { key: "area", label: "Serviced area", align: "right" },
+    { key: "pervine", label: "Per vine", align: "right" },
+    { key: "perha", label: `Per ${u.areaUnit}`, align: "right" },
+    { key: "depth", label: "Depth", align: "right" },
+    { key: "combined", label: "With rainfall", align: "right" },
+    { key: "diff", label: "vs previous", align: "right" },
+    { key: "last", label: "Last irrigation" },
+  ];
+  const blockColumnPrefs = useColumnPrefs<BlockCol>({
+    storageKey: "irrigationReports.blocks",
+    columns: blockColumnDefs,
+  });
 
   // -- period columns shared by daily / weekly / monthly ---------------------
   const periodColumns = (label: string): ReportColumn<PeriodRow>[] => [
@@ -604,7 +627,8 @@ export default function IrrigationReportsPage() {
                 overrides: { block_id: r.block_id },
               })
             }
-            columns={[
+            actions={<ColumnSelector prefs={blockColumnPrefs} />}
+            columns={([
               {
                 key: "block",
                 header: "Block",
@@ -679,7 +703,7 @@ export default function IrrigationReportsPage() {
                 cell: (r) => u.date(r.last_irrigation_date),
                 exportValue: (r) => r.last_irrigation_date,
               },
-            ]}
+            ] as ReportColumn<BlockReportRow>[]).filter((c) => blockColumnPrefs.isVisible(c.key as BlockCol))}
           />
         </TabsContent>
 
