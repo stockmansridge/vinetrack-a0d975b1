@@ -19,6 +19,18 @@ import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import { usePruningActivity } from "@/lib/pruningActivityQuery";
+import {
+  buildUnifiedCostDataset,
+  type UnifiedCostRow,
+} from "@/lib/unifiedCostDataset";
+
+/** Allocation-shaped adapter over a unified cost row. */
+type CostRecord = TripCostAllocation & {
+  operation_year: number | null;
+  unified: UnifiedCostRow;
+};
+
 import {
   useGrapeVarieties,
   buildVarietyMap,
