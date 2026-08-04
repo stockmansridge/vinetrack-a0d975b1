@@ -776,21 +776,46 @@ export default function PruningActivityReportPage() {
       )}
 
       {/* -------------------- Summary -------------------- */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Matching entries", value: filtered.length.toLocaleString() },
-          { label: "Active / reversed", value: `${activeRows.length.toLocaleString()} / ${reversedCount.toLocaleString()}` },
-          { label: "Vines pruned", value: totals.vines.toLocaleString() },
-          { label: "Labour hours", value: totals.hours.toFixed(2) },
-          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0) },
-          ...(canSeeCosts ? [{ label: "Labour cost", value: money(totals.cost) }] : []),
+          {
+            label: "Matching allocations",
+            value: filtered.length.toLocaleString(),
+            hint: `${totals.activities.toLocaleString()} activit${totals.activities === 1 ? "y" : "ies"} • ${reversedCount.toLocaleString()} reversed`,
+          },
+          { label: "Vines pruned", value: totals.vines.toLocaleString(), hint: "Across the filtered blocks" },
+          {
+            label: blockId === ANY ? "Allocated labour hours" : "Allocated labour hours (filtered blocks)",
+            value: totals.hours.toFixed(2),
+            hint: "Share of activity hours by row equivalents",
+          },
+          {
+            label: "Total activity labour hours",
+            value: totals.activityHours.toFixed(2),
+            hint: "Each activity counted once",
+          },
+          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0), hint: "Vines ÷ allocated hours" },
+          ...(canSeeCosts ? [
+            {
+              label: blockId === ANY ? "Allocated labour cost" : "Allocated labour cost (filtered blocks)",
+              value: money(totals.cost),
+              hint: "Activity cost split by row equivalents",
+            },
+            {
+              label: "Total activity labour cost",
+              value: money(totals.activityCost),
+              hint: "Each activity counted once",
+            },
+          ] : []),
         ].map((s) => (
           <Card key={s.label} className="p-3">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
             <div className="text-xl font-semibold tabular-nums mt-1">{s.value}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{s.hint}</div>
           </Card>
         ))}
       </div>
+
 
       {/* -------------------- Filters -------------------- */}
       <Card className="p-3 space-y-3">
