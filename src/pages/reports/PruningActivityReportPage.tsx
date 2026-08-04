@@ -1106,11 +1106,17 @@ export default function PruningActivityReportPage() {
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        Labour cost and effective rate come from the labour lines of the linked Work
-        Task. Entries without a linked Work Task show no cost. Reversed entries stay
-        visible for audit but are excluded from all totals and averages
-        (average vines / hour = total active vines ÷ total active labour hours).
+        Rows sharing an activity code belong to one pruning activity. Labour hours and
+        labour cost are recorded once on the activity; the <em>allocated</em> columns split
+        them across blocks by each block's share of the activity's row equivalents
+        (rounding differences are applied to the largest allocation so the allocated
+        figures always add back to the activity total). Activity totals are shown once,
+        on the first allocation, and are counted once in the report totals. Labour cost
+        and effective rate come from the labour lines of the linked Work Task; activities
+        without one show no cost. Reversed entries stay visible for audit but are excluded
+        from all totals and averages (average vines / hour = active vines ÷ allocated hours).
       </p>
+
 
       {editRow && selectedVineyardId && (() => {
         const editable = sorted.filter((r) => !r.isReversed);
