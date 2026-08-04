@@ -70,6 +70,27 @@ export interface PruningActivityRow {
   createdAt: string | null;
   updatedAt: string | null;
   isReversed: boolean;
+
+  // ---- Parent-activity grouping (SQL 166) ----
+  /** Stable grouping key: the parent activity id, or the entry id for legacy rows. */
+  groupKey: string;
+  /** How many allocations (blocks) the parent activity has. */
+  activityBlockCount: number;
+  /** 1-based index of this allocation inside its parent activity. */
+  allocationIndex: number;
+  /** True for the allocation that carries the activity-total display. */
+  isPrimaryAllocation: boolean;
+  /** Share of the activity's total row equivalents (0–1). */
+  allocationShare: number;
+  /** Informational labour hours allocated to this block. */
+  allocatedHours: number;
+  /** Informational labour cost allocated to this block. */
+  allocatedCost: number | null;
+  /** Parent activity labour hours (same on every allocation of the activity). */
+  activityHours: number | null;
+  /** Parent activity labour cost (same on every allocation of the activity). */
+  activityCost: number | null;
+
 }
 
 
