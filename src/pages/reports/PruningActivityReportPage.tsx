@@ -7,7 +7,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Download, Scissors, Search, ExternalLink } from "lucide-react";
+import { AlertTriangle, Download, Scissors, Search, ExternalLink, Pencil } from "lucide-react";
+import ReportEditPruningDialog from "@/components/pruning/ReportEditPruningDialog";
+
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
