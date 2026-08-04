@@ -816,6 +816,46 @@ export default function EditPruningDialog({
               </div>
             )}
 
+            {/* No Work Task yet — offer to create one for cost tracking */}
+            {!entry.work_task_id && (
+              <div className="rounded-md border p-3 space-y-3 bg-muted/20">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="create-task" className="text-sm">Add a Work Task</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Track labour hours and costs for this pruning entry.
+                    </p>
+                  </div>
+                  <Switch id="create-task" checked={createTask} onCheckedChange={setCreateTask} />
+                </div>
+
+                {createTask && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1.5 col-span-2">
+                        <Label>Task title</Label>
+                        <Input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5 col-span-2">
+                        <Label>Status</Label>
+                        <Select value={newTaskStatus} onValueChange={setNewTaskStatus}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="in_progress">In progress</SelectItem>
+                            <SelectItem value="planned">Planned</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {labourEditor}
+                  </>
+                )}
+              </div>
+            )}
+
+
+
             {/* Preview */}
             <div className="rounded border bg-background/60 p-3 text-xs space-y-0.5 tabular-nums">
               <div className="font-medium text-sm text-foreground mb-1">Change preview</div>
