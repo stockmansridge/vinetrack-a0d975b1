@@ -612,7 +612,12 @@ function TripReportsTable({
               const isOpen = expanded.has(t.id);
               const summary = summariseRows(t);
               const cellMap: Record<TrCol, React.ReactNode> = {
-                date: <TableCell>{fmtDay(t.start_time)}</TableCell>,
+                date: (
+                  <TableCell>
+                    <ReportDateCell value={t.start_time} startTime={t.start_time} endTime={t.end_time} />
+                  </TableCell>
+                ),
+
                 type: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 name: (
                   <TableCell className="font-medium">
