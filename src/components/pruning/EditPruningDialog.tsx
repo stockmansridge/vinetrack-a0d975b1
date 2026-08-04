@@ -454,6 +454,45 @@ export default function EditPruningDialog({
       }
     }
 
+    // 3b. No Work Task yet and the user asked to add one — create it, attach
+    //     the labour lines and link it to this pruning entry.
+    if (willCreateTask) {
+      try {
+        const task = await createWorkTask({
+          vineyard_id: vineyardId,
+          paddock_id: entry.paddock_id,
+          paddock_name: paddockName,
+          task_type: "Pruning",
+          status: newTaskStatus,
+          description: newTaskTitle.trim() || `Pruning — ${paddockName}`,
+          notes: notes,
+          date: entryDate,
+          start_date: entryDate,
+          end_date: entryDate,
+          duration_hours: labourTotals.hours,
+          is_finalized: newTaskStatus === "completed",
+          user_id: user?.id ?? null,
+        });
+        const existingTaskPaddocks = (await fetchWorkTaskPaddocksForVineyard(vineyardId))
+          .filter((row) => row.work_task_id === task.id);
+        await syncWorkTaskPaddocks({
+          workTaskId: task.id,
+          vineyardId,
+          selections: [{ paddock_id: entry.paddock_id, area_ha: null }],
+          existing: existingTaskPaddocks,
+          userId: user?.id ?? null,
+        });
+        for (const draft of labourDrafts) {
+          await createLabourLine(toLabourInput(draft, task.id));
+        }
+        const { setPruningEntryWorkTask } = await import("@/lib/pruningQuery");
+        await setPruningEntryWorkTask(entry.id, task.id);
+      } catch (e: any) {
+        toast.error(`Pruning saved, but the Work Task could not be created: ${e?.message ?? e}`);
+        return;
+      }
+    }
+
     toast.success("Pruning record updated.");
     onOpenChange(false);
   };
