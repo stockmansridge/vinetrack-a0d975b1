@@ -572,7 +572,7 @@ export default function EditPruningDialog({
 
             <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-emerald-500" /> Owned by this entry / selected</span>
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-muted border border-border" /> Owned by another entry (locked)</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700" /> Owned by another entry (locked)</span>
               <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-background border border-input" /> Available</span>
             </div>
 
