@@ -281,7 +281,7 @@ export default function PruningActivityReportPage() {
   const accessors = useMemo(
     () => ({
       date: (r: PruningActivityRow) => (r.date ? new Date(r.date).getTime() : null),
-      activity: (r: PruningActivityRow) => r.groupKey,
+      activity: (r: PruningActivityRow) => r.activityLabel,
       season: (r: PruningActivityRow) => r.seasonYear,
       vintage: (r: PruningActivityRow) => r.vintageYear,
       block: (r: PruningActivityRow) => r.blockName,
