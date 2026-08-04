@@ -829,72 +829,18 @@ export default function WorkTaskReportsPage() {
     const headerBottom = 80 + wrapped.length * 10;
     doc.setTextColor(0);
 
-    // Build columns and rows mirroring the on-screen report.
-    const head: string[] = [
-      "Date", "Task type", `${fmt.blocksLabel}`, `Area (${fmt.areaUnitLabel})`,
-      "Labour hrs", "Machine hrs", "Linked trips",
-    ];
-    if (canSeeCosts) {
-      head.push(
-        "Manual labour", "Machine charge", "Machine fuel",
-        "Linked GPS trips", "Total cost", `Cost / ${fmt.areaUnitLabel}`,
-      );
-    } else {
-      head.push("Machine entries");
-    }
-    head.push("Status");
+    // Build columns and rows mirroring the currently visible on-screen columns.
+    const head: string[] = taskPrefs.visibleColumns.map((c) => c.label);
+    const body: string[][] = filtered.map((r) =>
+      taskPrefs.visibleColumns.map((c) => taskCellText(c.key, r)));
+    const totalsRow: string[] = taskPrefs.visibleColumns.map((c, i) =>
+      (i === 0 ? "Totals (filtered)" : taskTotalsText(c.key)));
 
-    const body: string[][] = filtered.map((r) => {
-      const base = [
-        r.date ? fmt.date(r.date) : "—",
-        r.taskType,
-        r.blocksLabel,
-        areaDisplay(r.totalAreaHa),
-        r.labourHours.toFixed(2),
-        r.machineHours.toFixed(2),
-        String(r.linkedTripCount),
-      ];
-      if (canSeeCosts) {
-        base.push(
-          money(r.manualLabourCost),
-          money(r.machineCharge),
-          money(r.machineFuel),
-          money(r.linkedTripTotal),
-          money(r.totalCost),
-          costPerAreaDisplay(r.totalCost, r.totalAreaHa),
-        );
-      } else {
-        base.push(String(r.machineEntries));
-      }
-      base.push(r.hasWarning ? "Review" : "—");
-      return base;
-    });
-
-    // Totals row.
-    const totalsRow: string[] = [
-      "Totals (filtered)", "", "",
-      totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—",
-      totals.labourHours.toFixed(2),
-      totals.machineHours.toFixed(2),
-      "",
-    ];
-    if (canSeeCosts) {
-      totalsRow.push(
-        money(totals.manualLabourCost),
-        money(totals.machineCharge),
-        money(totals.machineFuel),
-        money(totals.linkedTripTotal),
-        money(totals.totalCost),
-        totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—",
-      );
-    } else {
-      totalsRow.push("");
-    }
-    totalsRow.push("");
-
-    const numericColsCost = canSeeCosts
-      ? new Set([3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-      : new Set([3, 4, 5, 6, 7]);
+    const numericColsCost = new Set(
+      taskPrefs.visibleColumns
+        .map((c, i) => (c.align === "right" ? i : -1))
+        .filter((i) => i >= 0),
+    );
 
     autoTable(doc, {
       startY: headerBottom + 8,
@@ -1392,6 +1338,69 @@ export default function WorkTaskReportsPage() {
   const allocationExplanation = `${fmt.blockLabel} allocation is estimated by area share of each Work Task. Values are calculated for reporting and are not written back to the database.`;
   const allocationWarningNote = "Review: linked GPS trips and manual correction/missed machine entries may overlap.";
 
+  const allocCellClass = (k: AllocColKey): string => {
+    const def = allocColumns.find((c) => c.key === k);
+    const right = def?.align === "right" ? "text-right tabular-nums" : "";
+    if (k === "totalCost") return `${right} font-medium`.trim();
+    return right;
+  };
+
+  const allocCellText = (k: AllocColKey, r: AllocRow): string => {
+    switch (k) {
+      case "name": return r.name;
+      case "tasks": return String(r.taskIds.size);
+      case "area": return r.hasAnyArea ? areaDisplay(r.areaHa) : "—";
+      case "labourHours": return r.labourHours.toFixed(2);
+      case "machineHours": return r.machineHours.toFixed(2);
+      case "linkedTrips": return String(r.linkedTripCount);
+      case "manualLabour": return money(r.manualLabourCost);
+      case "machineCharge": return money(r.machineCharge);
+      case "machineFuel": return money(r.machineFuel);
+      case "linkedTripCost": return money(r.linkedTripTotal);
+      case "totalCost": return money(r.totalCost);
+      case "costPerArea": return r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—";
+      case "status": return allocationStatus(r);
+      default: return "";
+    }
+  };
+
+  const allocTotalsText = (k: AllocColKey): string => {
+    switch (k) {
+      case "area": return allocationTotals.hasAnyArea ? areaDisplay(allocationTotals.areaHa) : "—";
+      case "labourHours": return allocationTotals.labourHours.toFixed(2);
+      case "machineHours": return allocationTotals.machineHours.toFixed(2);
+      case "manualLabour": return money(allocationTotals.manualLabourCost);
+      case "machineCharge": return money(allocationTotals.machineCharge);
+      case "machineFuel": return money(allocationTotals.machineFuel);
+      case "linkedTripCost": return money(allocationTotals.linkedTripTotal);
+      case "totalCost": return money(allocationTotals.totalCost);
+      case "costPerArea": return allocationTotals.hasAnyArea
+        ? costPerAreaDisplay(allocationTotals.totalCost, allocationTotals.areaHa) : "—";
+      default: return "";
+    }
+  };
+
+  const renderAllocCell = (k: AllocColKey, r: AllocRow): React.ReactNode => {
+    if (k === "name") return <span className="font-medium">{r.name}</span>;
+    if (k === "status") {
+      const status = allocationStatus(r);
+      const isReview = status !== "OK";
+      return isReview ? (
+        <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
+          <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
+            <AlertTriangle className="h-3 w-3" /> {status}
+          </Badge>
+        </span>
+      ) : <span className="text-xs text-muted-foreground">OK</span>;
+    }
+    return allocCellText(k, r);
+  };
+
+  const allocTotalsCell = (k: AllocColKey): React.ReactNode => {
+    if (k === "totalCost") return <span className="font-semibold">{money(allocationTotals.totalCost)}</span>;
+    return allocTotalsText(k);
+  };
+
   // -------------------- Allocation PDF export --------------------
   const downloadAllocationPdf = async () => {
     const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
@@ -1424,64 +1433,17 @@ export default function WorkTaskReportsPage() {
     cursorY = cursorY + 4 + explanationWrapped.length * 10;
     doc.setTextColor(0);
 
-    const head: string[] = [
-      fmt.blockLabel, "Tasks", `Area (${fmt.areaUnitLabel})`,
-      "Labour hrs", "Machine hrs", "Linked trips",
-    ];
-    if (canSeeCosts) {
-      head.push(
-        "Manual labour", "Machine charge", "Machine fuel",
-        "Linked GPS trips", "Total cost", `Cost / ${fmt.areaUnitLabel}`,
-      );
-    }
-    head.push("Status");
+    const head: string[] = allocPrefs.visibleColumns.map((c) => c.label);
+    const body: string[][] = allocationRows.map((r) =>
+      allocPrefs.visibleColumns.map((c) => allocCellText(c.key, r)));
+    const totalsRow: string[] = allocPrefs.visibleColumns.map((c, i) =>
+      (i === 0 ? "Totals (filtered)" : allocTotalsText(c.key)));
 
-    const body: string[][] = allocationRows.map((r) => {
-      const base: string[] = [
-        r.name,
-        String(r.taskIds.size),
-        r.hasAnyArea ? areaDisplay(r.areaHa) : "—",
-        r.labourHours.toFixed(2),
-        r.machineHours.toFixed(2),
-        String(r.linkedTripCount),
-      ];
-      if (canSeeCosts) {
-        base.push(
-          money(r.manualLabourCost),
-          money(r.machineCharge),
-          money(r.machineFuel),
-          money(r.linkedTripTotal),
-          money(r.totalCost),
-          r.hasAnyArea ? costPerAreaDisplay(r.totalCost, r.areaHa) : "—",
-        );
-      }
-      base.push(allocationStatus(r));
-      return base;
-    });
-
-    const totalsRow: string[] = [
-      "Totals (filtered)", "",
-      allocationTotals.hasAnyArea ? areaDisplay(allocationTotals.areaHa) : "—",
-      allocationTotals.labourHours.toFixed(2),
-      allocationTotals.machineHours.toFixed(2),
-      "",
-    ];
-    if (canSeeCosts) {
-      totalsRow.push(
-        money(allocationTotals.manualLabourCost),
-        money(allocationTotals.machineCharge),
-        money(allocationTotals.machineFuel),
-        money(allocationTotals.linkedTripTotal),
-        money(allocationTotals.totalCost),
-        allocationTotals.hasAnyArea ? costPerAreaDisplay(allocationTotals.totalCost, allocationTotals.areaHa) : "—",
-      );
-    }
-    totalsRow.push("");
-
-    // Numeric columns (right-align). Base numeric: 1 (Tasks) .. 5 (Linked trips).
-    const numericCols = canSeeCosts
-      ? new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-      : new Set([1, 2, 3, 4, 5]);
+    const numericCols = new Set(
+      allocPrefs.visibleColumns
+        .map((c, i) => (c.align === "right" ? i : -1))
+        .filter((i) => i >= 0),
+    );
 
     autoTable(doc, {
       startY: cursorY + 8,
@@ -1774,6 +1736,7 @@ export default function WorkTaskReportsPage() {
         {/* -------------------- Task Summary tab (existing view) -------------------- */}
         <TabsContent value="task-summary" className="space-y-3 mt-0">
           <div className="flex items-center justify-end gap-2">
+            <ColumnSelector prefs={taskPrefs} />
             <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!filtered.length}>
               <Download className="h-3.5 w-3.5 mr-1" />
               Export PDF
@@ -1793,26 +1756,16 @@ export default function WorkTaskReportsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
-                  <SortableTableHead active={taskSortDir("date")} onSort={() => toggleTaskSort("date")}>Date</SortableTableHead>
-                  <SortableTableHead active={taskSortDir("taskType")} onSort={() => toggleTaskSort("taskType")}>Task type</SortableTableHead>
-                  <SortableTableHead active={taskSortDir("blocks")} onSort={() => toggleTaskSort("blocks")}>{fmt.blocksLabel}</SortableTableHead>
-                  <SortableTableHead align="right" active={taskSortDir("area")} onSort={() => toggleTaskSort("area")}>Area</SortableTableHead>
-                  <SortableTableHead align="right" active={taskSortDir("labourHours")} onSort={() => toggleTaskSort("labourHours")}>Labour hrs</SortableTableHead>
-                  <SortableTableHead align="right" active={taskSortDir("machineHours")} onSort={() => toggleTaskSort("machineHours")}>Machine hrs</SortableTableHead>
-                  <SortableTableHead align="right" active={taskSortDir("linkedTrips")} onSort={() => toggleTaskSort("linkedTrips")}>Linked trips</SortableTableHead>
-                  {canSeeCosts ? (
-                    <>
-                      <SortableTableHead align="right" active={taskSortDir("manualLabour")} onSort={() => toggleTaskSort("manualLabour")}>Manual labour</SortableTableHead>
-                      <SortableTableHead align="right" active={taskSortDir("machineCharge")} onSort={() => toggleTaskSort("machineCharge")}>Machine charge</SortableTableHead>
-                      <SortableTableHead align="right" active={taskSortDir("machineFuel")} onSort={() => toggleTaskSort("machineFuel")}>Machine fuel</SortableTableHead>
-                      <SortableTableHead align="right" active={taskSortDir("linkedTripCost")} onSort={() => toggleTaskSort("linkedTripCost")}>Linked GPS trips</SortableTableHead>
-                      <SortableTableHead align="right" active={taskSortDir("totalCost")} onSort={() => toggleTaskSort("totalCost")}>Total cost</SortableTableHead>
-                      <SortableTableHead align="right" active={taskSortDir("costPerArea")} onSort={() => toggleTaskSort("costPerArea")}>{costPerAreaLabel}</SortableTableHead>
-                    </>
-                  ) : (
-                    <SortableTableHead align="right" active={taskSortDir("machineEntries")} onSort={() => toggleTaskSort("machineEntries")}>Machine entries</SortableTableHead>
-                  )}
-                  <SortableTableHead active={taskSortDir("status")} onSort={() => toggleTaskSort("status")}>Status</SortableTableHead>
+                  {taskPrefs.visibleColumns.map((c) => (
+                    <SortableTableHead
+                      key={c.key}
+                      align={c.align}
+                      active={taskSortDir(c.key)}
+                      onSort={() => toggleTaskSort(c.key)}
+                    >
+                      {c.label}
+                    </SortableTableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1841,36 +1794,11 @@ export default function WorkTaskReportsPage() {
                               : <ChevronRight className="h-4 w-4" />}
                           </Button>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">{fmtDay(r.date)}</TableCell>
-                        <TableCell>{r.taskType}</TableCell>
-                        <TableCell className="max-w-[280px] truncate" title={r.blocksLabel}>{r.blocksLabel}</TableCell>
-                        <TableCell className="text-right tabular-nums">{areaDisplay(r.totalAreaHa)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.labourHours.toFixed(2)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.machineHours.toFixed(2)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.linkedTripCount}</TableCell>
-                        {canSeeCosts ? (
-                          <>
-                            <TableCell className="text-right tabular-nums">{money(r.manualLabourCost)}</TableCell>
-                            <TableCell className="text-right tabular-nums">{money(r.machineCharge)}</TableCell>
-                            <TableCell className="text-right tabular-nums">{money(r.machineFuel)}</TableCell>
-                            <TableCell className="text-right tabular-nums">{money(r.linkedTripTotal)}</TableCell>
-                            <TableCell className="text-right tabular-nums font-medium">{money(r.totalCost)}</TableCell>
-                            <TableCell className="text-right tabular-nums">{costPerAreaDisplay(r.totalCost, r.totalAreaHa)}</TableCell>
-                          </>
-                        ) : (
-                          <TableCell className="text-right tabular-nums">{r.machineEntries}</TableCell>
-                        )}
-                        <TableCell>
-                          {r.hasWarning ? (
-                            <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
-                              <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 gap-1">
-                                <AlertTriangle className="h-3 w-3" /> Review
-                              </Badge>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                        {taskPrefs.visibleColumns.map((c) => (
+                          <TableCell key={c.key} className={taskCellClass(c.key)}>
+                            {renderTaskCell(c.key, r)}
+                          </TableCell>
+                        ))}
                       </TableRow>
                       {isOpen && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20">
@@ -1896,28 +1824,11 @@ export default function WorkTaskReportsPage() {
                 <TableBody>
                   <TableRow className="bg-muted/30">
                     <TableCell />
-                    <TableCell colSpan={3} className="font-medium">Totals (filtered)</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">
-                      {totals.anyArea ? areaDisplay(totals.totalAreaHa) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{totals.labourHours.toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{totals.machineHours.toFixed(2)}</TableCell>
-                    <TableCell />
-                    {canSeeCosts ? (
-                      <>
-                        <TableCell className="text-right tabular-nums font-medium">{money(totals.manualLabourCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{money(totals.machineCharge)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{money(totals.machineFuel)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{money(totals.linkedTripTotal)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-semibold">{money(totals.totalCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">
-                          {totals.anyArea ? costPerAreaDisplay(totals.totalCost, totals.totalAreaHa) : "—"}
-                        </TableCell>
-                      </>
-                    ) : (
-                      <TableCell />
-                    )}
-                    <TableCell />
+                    {taskPrefs.visibleColumns.map((c, i) => (
+                      <TableCell key={c.key} className={taskCellClass(c.key)}>
+                        {i === 0 ? <span className="font-medium">Totals (filtered)</span> : taskTotalsCell(c.key)}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 </TableBody>
               )}
