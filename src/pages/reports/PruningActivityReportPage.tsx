@@ -17,6 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { formatDate } from "@/lib/dateFormat";
+import { ReportDateCell, reportDateText } from "@/components/reports/ReportDateCell";
+
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
