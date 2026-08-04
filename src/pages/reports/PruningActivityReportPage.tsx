@@ -853,6 +853,7 @@ export default function PruningActivityReportPage() {
                 <TableCell />
                 <TableCell />
                 <TableCell />
+                <TableCell />
                 {canEdit && <TableCell />}
               </TableRow>
 
