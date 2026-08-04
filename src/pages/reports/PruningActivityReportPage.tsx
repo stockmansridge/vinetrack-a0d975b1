@@ -800,6 +800,20 @@ export default function PruningActivityReportPage() {
                     ? <Badge variant="destructive">Reversed</Badge>
                     : <span className="text-xs text-muted-foreground">Recorded</span>}
                 </TableCell>
+                {canEdit && (
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={r.isReversed}
+                      onClick={() => setEditRow(r)}
+                      aria-label={`Edit pruning entry from ${formatDate(r.date)}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                    </Button>
+                  </TableCell>
+                )}
+
               </TableRow>
             ))}
           </TableBody>
