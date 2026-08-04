@@ -5,6 +5,8 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
+
 import { Download, FileSpreadsheet, FileText, Info, Search, ChevronDown, ChevronRight, Check, X, StickyNote } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -612,7 +614,12 @@ function TripReportsTable({
               const isOpen = expanded.has(t.id);
               const summary = summariseRows(t);
               const cellMap: Record<TrCol, React.ReactNode> = {
-                date: <TableCell>{fmtDay(t.start_time)}</TableCell>,
+                date: (
+                  <TableCell>
+                    <ReportDateCell value={t.start_time} startTime={t.start_time} endTime={t.end_time} />
+                  </TableCell>
+                ),
+
                 type: <TableCell>{fnLabel ? <Badge variant="outline">{fnLabel}</Badge> : "—"}</TableCell>,
                 name: (
                   <TableCell className="font-medium">

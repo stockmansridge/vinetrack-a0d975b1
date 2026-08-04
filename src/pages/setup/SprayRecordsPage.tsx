@@ -46,6 +46,7 @@ import {
 import { fetchList } from "@/lib/queries";
 import { formatDate } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
@@ -257,7 +258,7 @@ export default function SprayRecordsPage() {
                 className="cursor-pointer"
                 onClick={() => setSelected(r)}
               >
-                <TableCell>{fmtDate(r.date)}</TableCell>
+                <TableCell><ReportDateCell value={r.date} /></TableCell>
                 <TableCell>{fmtTime(r.start_time)}</TableCell>
                 <TableCell>{fmtTime(r.end_time)}</TableCell>
                 <TableCell>
@@ -273,7 +274,7 @@ export default function SprayRecordsPage() {
                     : "—"}
                 </TableCell>
                 <TableCell>{fmt(r.humidity)}</TableCell>
-                <TableCell>{fmtDate(r.updated_at)}</TableCell>
+                <TableCell><ReportDateCell value={r.updated_at} /></TableCell>
               </TableRow>
             ))}
           </TableBody>

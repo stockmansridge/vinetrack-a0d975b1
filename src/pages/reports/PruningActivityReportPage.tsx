@@ -17,6 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { formatDate } from "@/lib/dateFormat";
+import { ReportDateCell, reportDateText } from "@/components/reports/ReportDateCell";
+
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
@@ -259,7 +261,11 @@ export default function PruningActivityReportPage() {
       if (linked === "yes" && !r.workTaskId) return false;
       if (linked === "no" && r.workTaskId) return false;
       if (q) {
-        const hay = [r.blockName, r.variety, r.worker, r.method, r.rowsLabel, r.notes]
+        const hay = [
+          r.blockName, r.variety, r.worker, r.method, r.rowsLabel, r.notes,
+          r.activityLabel, r.workTaskLabel ?? "",
+        ]
+
           .join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
@@ -277,7 +283,7 @@ export default function PruningActivityReportPage() {
   const accessors = useMemo(
     () => ({
       date: (r: PruningActivityRow) => (r.date ? new Date(r.date).getTime() : null),
-      activity: (r: PruningActivityRow) => r.groupKey,
+      activity: (r: PruningActivityRow) => r.activityLabel,
       season: (r: PruningActivityRow) => r.seasonYear,
       vintage: (r: PruningActivityRow) => r.vintageYear,
       block: (r: PruningActivityRow) => r.blockName,
@@ -373,7 +379,7 @@ export default function PruningActivityReportPage() {
   };
 
   const baseHeader = [
-    "Activity ID", "Allocation ID", "Allocation index", "Blocks in activity",
+    "Activity", "Allocation index", "Blocks in activity",
     "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
     "Allocation share", "Allocated labour hours", "Activity labour hours",
@@ -386,13 +392,14 @@ export default function PruningActivityReportPage() {
 
   const rowToCells = (r: PruningActivityRow) => {
     const base: (string | number)[] = [
-      r.activityId ?? "",
-      r.id,
+      r.activityLabel,
       `${r.allocationIndex} of ${r.activityBlockCount}`,
       r.activityBlockCount,
+
       r.date,
       r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
-      r.pruningSeasonId ?? "",
+      r.hasSeasonLink ? "Linked" : "Unassigned",
+
       r.seasonMismatch ? r.seasonIssues.join(" ") : "OK",
 
       r.vintageYear ?? "",
@@ -496,11 +503,12 @@ export default function PruningActivityReportPage() {
 
     const pdfCell = (k: SortKey, r: PruningActivityRow): string => {
       switch (k) {
-        case "date": return formatDate(r.date);
+        case "date": return reportDateText(r.date);
         case "activity":
-          return r.activityId
-            ? `${activityCode(r)} (${r.allocationIndex}/${r.activityBlockCount})`
-            : "Single entry";
+          return r.activityBlockCount > 1
+            ? `${r.activityLabel} (${fmt.blockLabel.toLowerCase()} ${r.allocationIndex} of ${r.activityBlockCount})`
+            : r.activityLabel;
+
         case "season": return r.hasSeasonLink ? String(r.seasonYear ?? "—") : "Unassigned";
         case "vintage": return r.vintageYear == null ? "—" : String(r.vintageYear);
         case "block": return r.blockName;
@@ -571,9 +579,16 @@ export default function PruningActivityReportPage() {
 
   const colSpan = visibleColumns.length + (canEdit ? 1 : 0);
 
-  /** Short, stable badge text so allocations of one activity read as a group. */
-  const activityCode = (r: PruningActivityRow) =>
-    r.activityId ? r.activityId.replace(/-/g, "").slice(0, 5).toUpperCase() : "—";
+  /** Secondary type line under the activity label. */
+  const activityKindLabel = (r: PruningActivityRow): string | null => {
+    switch (r.activityLabelKind) {
+      case "task": return "Work Task";
+      case "activity":
+      case "generated": return "Activity";
+      default: return null;
+    }
+  };
+
 
 
 
@@ -607,29 +622,27 @@ export default function PruningActivityReportPage() {
   const renderCell = (k: SortKey, r: PruningActivityRow): React.ReactNode => {
     switch (k) {
       case "date":
-        return (
-          <>
-            <div>{formatDate(r.date)}</div>
-            {(r.startTime || r.finishTime) && (
-              <div className="text-[11px] text-muted-foreground">
-                {formatTime(r.startTime)}–{formatTime(r.finishTime)}
-              </div>
-            )}
-          </>
-        );
+        return <ReportDateCell value={r.date} startTime={r.startTime} endTime={r.finishTime} />;
       case "activity":
-        return r.activityId ? (
-          <div className="flex flex-col gap-0.5">
-            <Badge variant="outline" className="font-mono text-[10px] w-fit">{activityCode(r)}</Badge>
+        return (
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span
+              className={`truncate ${r.activityLabelKind === "none" || r.activityLabelKind === "unavailable" ? "text-muted-foreground text-xs" : "font-medium"}`}
+              title={r.activityLabel}
+            >
+              {r.activityLabel}
+            </span>
+            {activityKindLabel(r) && (
+              <span className="text-[11px] text-muted-foreground">{activityKindLabel(r)}</span>
+            )}
             {r.activityBlockCount > 1 && (
               <span className="text-[11px] text-muted-foreground">
                 {fmt.blockLabel.toLowerCase()} {r.allocationIndex} of {r.activityBlockCount}
               </span>
             )}
           </div>
-        ) : (
-          <span className="text-muted-foreground text-xs">Single entry</span>
         );
+
       case "season":
         if (!r.hasSeasonLink) return <span className="text-muted-foreground">Unassigned</span>;
         if (!r.seasonMismatch) return r.seasonYear;
@@ -698,23 +711,30 @@ export default function PruningActivityReportPage() {
         ) : <span className="text-muted-foreground text-xs">—</span>;
 
       case "task":
-        return r.workTaskId ? (
-          <Link
-            to={`/work-tasks?highlight=${r.workTaskId}`}
-            className="text-primary inline-flex items-center gap-1 hover:underline"
-          >
-            {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
-          </Link>
-        ) : (
-          <span className="text-muted-foreground text-xs">—</span>
+        if (r.workTaskId && !r.workTaskMissing) {
+          return (
+            <Link
+              to={`/work-tasks?highlight=${r.workTaskId}`}
+              className="text-primary inline-flex items-center gap-1 hover:underline"
+            >
+              {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
+            </Link>
+          );
+        }
+        return (
+          <span className="text-muted-foreground text-xs">
+            {r.workTaskMissing ? "Deleted work task" : "Not linked"}
+          </span>
         );
+
       case "taskStatus":
         return r.workTaskStatus
           ? <span className="capitalize">{r.workTaskStatus}</span>
           : <span className="text-muted-foreground">—</span>;
       case "createdBy": return resolveUser(r.createdById) ?? "—";
-      case "created": return r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—";
-      case "updated": return r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—";
+      case "created": return <ReportDateCell value={r.createdAt} />;
+      case "updated": return <ReportDateCell value={r.updatedAt} />;
+
       case "status":
         return r.isReversed
           ? <Badge variant="destructive">Reversed</Badge>

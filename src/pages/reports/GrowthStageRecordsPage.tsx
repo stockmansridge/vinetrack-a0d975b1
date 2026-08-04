@@ -37,7 +37,9 @@ import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
 import {
+
   fetchGrowthStageRecords,
   summariseLatestByBlock,
   toCsv,
@@ -325,7 +327,7 @@ export default function GrowthStageRecordsPage() {
             )}
             {gsSorted.map((r) => {
               const cellMap: Record<GsCol, React.ReactNode> = {
-                date: <TableCell>{r.date ? rf.date(r.date) : "—"}</TableCell>,
+                date: <TableCell><ReportDateCell value={r.date} /></TableCell>,
                 block: <TableCell>{fmt(r.paddock_name)}</TableCell>,
                 variety: <TableCell>{fmt(r.variety)}</TableCell>,
                 stage: <TableCell>{r.growth_stage_code ? <Badge variant="secondary">E-L {r.growth_stage_code}</Badge> : "—"}</TableCell>,

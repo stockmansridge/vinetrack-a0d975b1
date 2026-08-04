@@ -63,9 +63,14 @@ export interface PruningActivityRow {
   workTaskId: string | null;
   workTaskLabel: string | null;
   workTaskStatus: string | null;
+  /** True when work_task_id points at a task that no longer exists. */
+  workTaskMissing: boolean;
+  /** Title/description stored on the parent pruning activity, when present. */
+  activityTitle: string | null;
   labourCost: number | null;    // null when there is no linked Work Task
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
+
   /** auth.users id of the user who recorded the entry (pruning_entries.created_by). */
   createdById: string | null;
   createdAt: string | null;
@@ -91,8 +96,13 @@ export interface PruningActivityRow {
   activityHours: number | null;
   /** Parent activity labour cost (same on every allocation of the activity). */
   activityCost: number | null;
+  /** Meaningful, user-facing label for the activity — never an identifier. */
+  activityLabel: string;
+  /** Where activityLabel came from, so the UI can badge it. */
+  activityLabelKind: "task" | "activity" | "generated" | "none" | "unavailable";
 
 }
+
 
 
 /** Minutes between two time/timestamp values; rolls over midnight. */
@@ -161,8 +171,54 @@ export type BaseActivityRow = Omit<
   PruningActivityRow,
   | "groupKey" | "activityBlockCount" | "allocationIndex" | "isPrimaryAllocation"
   | "allocationShare" | "allocatedHours" | "allocatedCost"
-  | "activityHours" | "activityCost"
+  | "activityHours" | "activityCost" | "activityLabel" | "activityLabelKind"
 >;
+
+/** Readable date used inside generated activity labels ("2 August 2026"). */
+function longDate(iso: string | null | undefined): string {
+  if (!iso) return "undated";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  const d = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)
+    : new Date(String(iso));
+  if (Number.isNaN(d.getTime())) return "undated";
+  return d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/**
+ * Resolves the user-facing activity label for one parent activity's rows.
+ * Never returns an identifier — priority is linked Work Task title, then the
+ * stored activity title, then a generated readable label.
+ */
+export function resolveActivityLabel(members: BaseActivityRow[]): {
+  activityLabel: string;
+  activityLabelKind: PruningActivityRow["activityLabelKind"];
+} {
+  const first = members[0];
+  if (!first) return { activityLabel: "Not linked", activityLabelKind: "none" };
+
+  const taskRow = members.find((r) => r.workTaskId && !r.workTaskMissing && r.workTaskLabel);
+  if (taskRow) return { activityLabel: taskRow.workTaskLabel!, activityLabelKind: "task" };
+
+  const titled = members.find((r) => r.activityTitle && r.activityTitle.trim());
+  if (titled) return { activityLabel: titled.activityTitle!.trim(), activityLabelKind: "activity" };
+
+  const deleted = members.find((r) => r.workTaskMissing);
+  if (deleted && !first.activityId) {
+    return { activityLabel: "Deleted work task", activityLabelKind: "unavailable" };
+  }
+
+  if (first.activityId) {
+    return {
+      activityLabel: `Pruning activity — ${longDate(first.date)}`,
+      activityLabelKind: "generated",
+    };
+  }
+  if (deleted) return { activityLabel: "Deleted work task", activityLabelKind: "unavailable" };
+  return { activityLabel: "Not linked", activityLabelKind: "none" };
+}
+
+
 
 /**
  * Groups allocations by parent activity and splits the parent's labour hours
@@ -216,14 +272,18 @@ export function applyActivityAllocations(baseRows: BaseActivityRow[]): PruningAc
       activityCost,
     );
     const splitById = new Map(split.map((s) => [s.id, s]));
+    const { activityLabel, activityLabelKind } = resolveActivityLabel(ordered);
 
     ordered.forEach((r, i) => {
       const s = splitById.get(r.id);
       byId.set(r.id, {
         ...r,
+        activityLabel,
+        activityLabelKind,
         groupKey,
         activityBlockCount: ordered.length,
         allocationIndex: i + 1,
+
         isPrimaryAllocation: i === 0,
         allocationShare: s?.share ?? 1,
         allocatedHours: s?.hours ?? 0,
@@ -378,8 +438,13 @@ export function usePruningActivity(vineyardId: string | null) {
           workTaskId: e.work_task_id,
           workTaskLabel: task
             ? (task.task_type?.trim() || task.description?.trim() || "Work Task")
-            : e.work_task_id ? "Work Task" : null,
+            : e.work_task_id ? "Deleted work task" : null,
           workTaskStatus: task?.status ?? null,
+          workTaskMissing: !!e.work_task_id && !task,
+          activityTitle:
+            (e as any).activity_title ?? (e as any).activity_name ??
+            (e as any).activity_description ?? (e as any).title ?? null,
+
           labourCost,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",

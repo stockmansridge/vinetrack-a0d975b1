@@ -43,6 +43,7 @@ import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
 
 const PRESETS: { value: RangePreset; label: string }[] = [
   { value: "last7", label: "Last 7 days" },
@@ -303,7 +304,7 @@ function RainfallTable({ rows }: { rows: any[] }) {
   const renderCell = (r: any, id: Col): React.ReactNode => {
     switch (id) {
       case "date":
-        return <TableCell>{r.date ? rf.date(new Date(r.date)) : "—"}</TableCell>;
+        return <TableCell><ReportDateCell value={r.date} /></TableCell>;
       case "rainfall":
         return (
           <TableCell className="text-right tabular-nums">

@@ -79,6 +79,7 @@ import OpenExternalMapButton from "@/components/OpenExternalMapButton";
 import { formatDate, formatDateTime } from "@/lib/dateFormat";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
 
 const ANY = "__any__";
 
@@ -404,7 +405,7 @@ export default function DamageRecordsPage() {
             {rowsSorted.map((r) => {
               const photoCount = (r.photo_urls ?? []).length;
               const cellMap: Record<DmgCol, React.ReactNode> = {
-                date: <TableCell>{fmtDate(observed(r))}</TableCell>,
+                date: <TableCell><ReportDateCell value={observed(r)} /></TableCell>,
                 paddock: <TableCell>{r.paddock_id ? (paddockNameById.get(r.paddock_id) ?? "—") : "—"}</TableCell>,
                 row: <TableCell>{fmt(r.row_number)}</TableCell>,
                 side: <TableCell className="capitalize">{fmt(r.side)}</TableCell>,
