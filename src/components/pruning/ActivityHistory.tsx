@@ -79,23 +79,8 @@ export default function ActivityHistory({
               // Reversed/deleted entries: `deleted_at` is set. Skip Edit.
               const isReversed = !!e.deleted_at;
               return (
-                <li
-                  key={e.id}
-                  className={
-                    "p-4 flex items-start justify-between gap-4" +
-                    (rowsClickable && !isReversed ? " cursor-pointer hover:bg-muted/50 transition-colors" : "")
-                  }
-                  role={rowsClickable && !isReversed ? "button" : undefined}
-                  tabIndex={rowsClickable && !isReversed ? 0 : undefined}
-                  onClick={rowsClickable && !isReversed ? () => setEditEntryId(e.id) : undefined}
-                  onKeyDown={
-                    rowsClickable && !isReversed
-                      ? (ev) => {
-                          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setEditEntryId(e.id); }
-                        }
-                      : undefined
-                  }
-                >
+                <li key={e.id} className="p-4 flex items-start justify-between gap-4">
+
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{formatDate(e.entry_date)}</span>
