@@ -859,6 +859,17 @@ export default function PruningActivityReportPage() {
         visible for audit but are excluded from all totals and averages
         (average vines / hour = total active vines ÷ total active labour hours).
       </p>
+
+      {editRow && selectedVineyardId && (
+        <ReportEditPruningDialog
+          open={!!editRow}
+          onOpenChange={(o) => { if (!o) setEditRow(null); }}
+          entry={editRow.entry}
+          vineyardId={selectedVineyardId}
+          paddockName={editRow.blockName}
+        />
+      )}
+
     </div>
   );
 }
