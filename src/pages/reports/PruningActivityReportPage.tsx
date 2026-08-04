@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/dateFormat";
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
+import { useTeamLookup } from "@/hooks/useTeamLookup";
 
 import { PageHead } from "@/components/PageHead";
 import { Card } from "@/components/ui/card";
