@@ -800,6 +800,7 @@ export default function PruningActivityReportPage() {
                 <TableCell className="text-xs">
                   {r.workTaskStatus ? <span className="capitalize">{r.workTaskStatus}</span> : <span className="text-muted-foreground">—</span>}
                 </TableCell>
+                <TableCell className="text-xs whitespace-nowrap">{resolveUser(r.createdById) ?? "—"}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap">{r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—"}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap">{r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—"}</TableCell>
                 <TableCell>
