@@ -765,7 +765,9 @@ export default function WorkTaskReportsPage() {
 
   const renderTaskCell = (k: TaskColKey, r: TaskRow): React.ReactNode => {
     switch (k) {
+      case "date": return <ReportDateCell value={r.date} />;
       case "blocks": return <span title={r.blocksLabel}>{r.blocksLabel}</span>;
+
       case "status":
         return r.hasWarning ? (
           <span title="Review: linked GPS trips and manual correction/missed machine entries may overlap.">
