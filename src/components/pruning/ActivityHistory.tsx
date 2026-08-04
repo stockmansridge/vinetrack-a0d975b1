@@ -33,11 +33,7 @@ export default function ActivityHistory({
   const reverse = useReversePruningEntry(seasonId);
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
 
-  // Only non-reversed entries can be opened/edited; navigation walks this list.
-  const editableEntries = entries.filter((e) => !e.deleted_at);
-  const editIndex = editEntryId ? editableEntries.findIndex((e) => e.id === editEntryId) : -1;
-  const editEntry = editIndex >= 0 ? editableEntries[editIndex] : null;
-  const rowsClickable = canEdit && !!vineyardId;
+  const editEntry = editEntryId ? entries.find((e) => e.id === editEntryId) ?? null : null;
 
   const handleReverse = async (entry: PruningEntry) => {
     if (!confirm("Reverse this entry? Its row quarters will become available again.")) return;
@@ -83,23 +79,8 @@ export default function ActivityHistory({
               // Reversed/deleted entries: `deleted_at` is set. Skip Edit.
               const isReversed = !!e.deleted_at;
               return (
-                <li
-                  key={e.id}
-                  className={
-                    "p-4 flex items-start justify-between gap-4" +
-                    (rowsClickable && !isReversed ? " cursor-pointer hover:bg-muted/50 transition-colors" : "")
-                  }
-                  role={rowsClickable && !isReversed ? "button" : undefined}
-                  tabIndex={rowsClickable && !isReversed ? 0 : undefined}
-                  onClick={rowsClickable && !isReversed ? () => setEditEntryId(e.id) : undefined}
-                  onKeyDown={
-                    rowsClickable && !isReversed
-                      ? (ev) => {
-                          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setEditEntryId(e.id); }
-                        }
-                      : undefined
-                  }
-                >
+                <li key={e.id} className="p-4 flex items-start justify-between gap-4">
+
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{formatDate(e.entry_date)}</span>
@@ -170,9 +151,6 @@ export default function ActivityHistory({
           open={!!editEntry}
           onOpenChange={(o) => { if (!o) setEditEntryId(null); }}
           entry={editEntry}
-          onPrev={editIndex > 0 ? () => setEditEntryId(editableEntries[editIndex - 1].id) : undefined}
-          onNext={editIndex < editableEntries.length - 1 ? () => setEditEntryId(editableEntries[editIndex + 1].id) : undefined}
-          navLabel={`${editIndex + 1} / ${editableEntries.length}`}
           identities={identities}
           allSegments={allSegments}
           vineyardId={vineyardId}
