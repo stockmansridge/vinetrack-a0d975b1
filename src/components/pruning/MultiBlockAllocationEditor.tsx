@@ -21,7 +21,7 @@ import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { buildRowIdentities, buildRowCompletion, type RowIdentity } from "@/lib/pruningCalc";
 import { usePruningSeasons, usePruningSegments } from "@/lib/pruningQuery";
 import {
-  allocationKey, allocationQuarterCount, allocationRowEquivalents, allocationRowSummary,
+  allocationKey, allocationQuarterCount, allocationRowEquivalents, allocationRowSummary, allocationVines,
   type BlockAllocationDraft,
 } from "@/lib/pruningActivityContract";
 
@@ -173,6 +173,7 @@ export default function MultiBlockAllocationEditor({
 
   const allocations = Object.values(value);
   const totalQuarters = allocations.reduce((s, a) => s + allocationQuarterCount(a), 0);
+  const totalVines = allocations.reduce((s, a) => s + allocationVines(a), 0);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
@@ -354,6 +355,7 @@ export default function MultiBlockAllocationEditor({
           <div className="flex justify-between"><span className="text-muted-foreground">Blocks</span><span className="tabular-nums font-medium">{allocations.length}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Quarters</span><span className="tabular-nums font-medium">{totalQuarters}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Row equivalents</span><span className="tabular-nums font-medium">{(totalQuarters / 4).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Vines</span><span className="tabular-nums font-medium">~{totalVines.toLocaleString()}</span></div>
         </div>
         <p className="text-[11px] text-muted-foreground">
           Labour, times, worker, method, notes and the linked Work Task belong to the
