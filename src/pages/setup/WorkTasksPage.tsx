@@ -5,6 +5,8 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
+import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
+
 import { useCanSeeCosts, canSeeCosts as canSeeCostsFn } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
