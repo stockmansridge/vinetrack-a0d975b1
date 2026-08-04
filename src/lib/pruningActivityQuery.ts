@@ -272,14 +272,18 @@ export function applyActivityAllocations(baseRows: BaseActivityRow[]): PruningAc
       activityCost,
     );
     const splitById = new Map(split.map((s) => [s.id, s]));
+    const { activityLabel, activityLabelKind } = resolveActivityLabel(ordered);
 
     ordered.forEach((r, i) => {
       const s = splitById.get(r.id);
       byId.set(r.id, {
         ...r,
+        activityLabel,
+        activityLabelKind,
         groupKey,
         activityBlockCount: ordered.length,
         allocationIndex: i + 1,
+
         isPrimaryAllocation: i === 0,
         allocationShare: s?.share ?? 1,
         allocatedHours: s?.hours ?? 0,
