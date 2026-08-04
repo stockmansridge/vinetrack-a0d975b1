@@ -169,11 +169,61 @@ export default function CostReportsPage() {
   const fmtArea = useMemo(() => makeFmtArea(rf), [rf]);
   const fmtMoneyPerArea = useMemo(() => makeFmtCostPerArea(rf), [rf]);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: tripRows = [], isLoading } = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
     queryFn: () => fetchTripCostAllocationsForVineyard(selectedVineyardId!),
     enabled: !!selectedVineyardId && canSeeCosts,
   });
+
+  // Pruning activity labour is an operational cost recorded outside field
+  // trips. It is included through its reconciled per-block allocations.
+  const { data: pruningRows = [] } = usePruningActivity(
+    canSeeCosts ? selectedVineyardId : null,
+  );
+
+  const unified = useMemo(
+    () =>
+      buildUnifiedCostDataset({
+        vineyardId: selectedVineyardId ?? "",
+        tripAllocations: tripRows,
+        pruningRows,
+      }),
+    [selectedVineyardId, tripRows, pruningRows],
+  );
+
+  // Adapter: the tab/aggregation pipeline below consumes the allocation shape.
+  // `season_year` carries the VINTAGE year (primary crop-cost grouping);
+  // `operation_year` is exposed separately as a secondary filter.
+  const rows: CostRecord[] = useMemo(
+    () =>
+      unified.rows.map((u) => ({
+        id: u.allocation_id,
+        vineyard_id: u.vineyard_id,
+        trip_id: u.source_type === "trip" ? u.source_id : null,
+        paddock_id: u.block_id,
+        paddock_name: u.block_name,
+        variety: u.variety,
+        season_year: u.vintage_year,
+        allocation_area_ha: u.allocation_area_ha,
+        yield_tonnes: u.yield_tonnes,
+        labour_cost: u.labour_cost,
+        fuel_cost: u.fuel_cost,
+        chemical_cost: u.chemical_cost,
+        input_cost: u.input_cost,
+        total_cost: u.total_cost,
+        cost_per_ha: null,
+        cost_per_tonne: null,
+        trip_function: u.function,
+        costing_status: u.status,
+        warnings: u.warnings,
+        calculated_at: u.activity_date,
+        created_at: u.activity_date,
+        operation_year: u.operation_year,
+        unified: u,
+      })),
+    [unified],
+  );
+
 
   const { data: grapeVarieties } = useGrapeVarieties(canSeeCosts ? selectedVineyardId : null);
   const { data: paddockRows = [] } = useQuery({
