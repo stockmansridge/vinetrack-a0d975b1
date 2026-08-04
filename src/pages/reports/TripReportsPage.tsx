@@ -572,9 +572,11 @@ function TripReportsTable({
     operator: "Operator", duration: "Duration", distance: "Distance",
     rows: "Rows", status: "Status",
   };
+  const totalColSpan = visibleOrder.length + 2;
   return (
     <>
-      <div className="flex justify-end mb-2">
+      <div className="flex justify-end mb-2 gap-2">
+        <ColumnSelector prefs={colPrefs} />
         <ColumnSettingsMenu onReset={reset} />
       </div>
       <Card>
@@ -582,7 +584,7 @@ function TripReportsTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-8" />
-              {(order as TrCol[]).map((id) => (
+              {visibleOrder.map((id) => (
                 <ReorderableHead key={id} columnId={id} onDropColumn={moveColumn} sort={{ active: getSortDirection(id), onSort: () => toggleSort(id) }}>
                   {labels[id]}
                 </ReorderableHead>
@@ -592,14 +594,14 @@ function TripReportsTable({
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={totalColSpan} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
             )}
             {error ? (
-              <TableRow><TableCell colSpan={11} className="text-center text-destructive py-8">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={totalColSpan} className="text-center text-destructive py-8">{(error as Error).message}</TableCell></TableRow>
             ) : null}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={totalColSpan} className="text-center text-muted-foreground py-8">
                   No trips match the current filters.
                 </TableCell>
               </TableRow>
@@ -663,7 +665,7 @@ function TripReportsTable({
                         {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </Button>
                     </TableCell>
-                    {(order as TrCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                    {visibleOrder.map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                     <TableCell className="text-right">
                       <Button
                         size="sm"
@@ -679,7 +681,7 @@ function TripReportsTable({
                   {isOpen && (
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell />
-                      <TableCell colSpan={10} className="py-3">
+                      <TableCell colSpan={visibleOrder.length + 1} className="py-3">
                         <RowCompletionDetail trip={t} />
                       </TableCell>
                     </TableRow>
