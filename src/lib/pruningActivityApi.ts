@@ -390,7 +390,7 @@ export interface SaveActivityInput {
 export async function recordPruningActivity(input: SaveActivityInput): Promise<ActivitySaveResult> {
   const payload = buildActivityPayload(input.draft, input.vineyardId, input.activityId);
   const { data, error } = await rpc("record_pruning_activity", { p_payload: payload });
-  if (error) throw error;
+  if (error) throw new Error(friendlySaveError(error));
   return normaliseSaveResult(data);
 }
 
