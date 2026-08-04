@@ -507,7 +507,129 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = (canSeeCosts ? 24 : 22) + (canEdit ? 1 : 0);
+  const colSpan = visibleColumns.length + (canEdit ? 1 : 0);
+
+  const cellClass = (k: SortKey): string => {
+    const def = availableColumns.find((c) => c.key === k);
+    const right = def?.align === "right" ? "text-right tabular-nums" : "";
+    switch (k) {
+      case "date":
+      case "start":
+      case "finish":
+        return `whitespace-nowrap ${right}`.trim();
+      case "block":
+        return "font-medium";
+      case "variety":
+      case "rows":
+        return "max-w-[180px] truncate";
+      case "method":
+        return "capitalize";
+      case "cost":
+        return "text-right tabular-nums font-medium";
+      case "taskStatus":
+      case "createdBy":
+      case "created":
+      case "updated":
+        return "text-xs whitespace-nowrap";
+      default:
+        return right;
+    }
+  };
+
+  const renderCell = (k: SortKey, r: PruningActivityRow): React.ReactNode => {
+    switch (k) {
+      case "date":
+        return (
+          <>
+            <div>{formatDate(r.date)}</div>
+            {(r.startTime || r.finishTime) && (
+              <div className="text-[11px] text-muted-foreground">
+                {formatTime(r.startTime)}–{formatTime(r.finishTime)}
+              </div>
+            )}
+          </>
+        );
+      case "season":
+        if (!r.hasSeasonLink) return <span className="text-muted-foreground">Unassigned</span>;
+        if (!r.seasonMismatch) return r.seasonYear;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-help">
+                  {r.seasonYear} <AlertTriangle className="h-3.5 w-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[280px]">
+                This entry's season information does not match the linked pruning season.
+                <ul className="mt-1 list-disc pl-4 text-xs">
+                  {r.seasonIssues.map((i) => <li key={i}>{i}</li>)}
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      case "vintage": return r.vintageYear ?? "—";
+      case "block": return r.blockName;
+      case "variety": return <span title={r.variety}>{r.variety}</span>;
+      case "worker": return r.worker;
+      case "method": return r.method;
+      case "rows":
+        return (
+          <span title={r.rowsLabel}>
+            {r.rowsLabel}
+            {r.rowCount > 0 && <span className="text-[11px] text-muted-foreground"> ({r.rowCount})</span>}
+          </span>
+        );
+      case "quarters": return r.quarters;
+      case "rowEq": return r.rowEquivalents.toFixed(2);
+      case "vines": return r.vines.toLocaleString();
+      case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+      case "start": return formatTime(r.startTime);
+      case "finish": return formatTime(r.finishTime);
+      case "duration": return formatDuration(r.durationMinutes);
+      case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
+      case "rate": return money(r.hourlyRate);
+      case "cost": return money(r.labourCost);
+      case "task":
+        return r.workTaskId ? (
+          <Link
+            to={`/work-tasks?highlight=${r.workTaskId}`}
+            className="text-primary inline-flex items-center gap-1 hover:underline"
+          >
+            {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
+          </Link>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        );
+      case "taskStatus":
+        return r.workTaskStatus
+          ? <span className="capitalize">{r.workTaskStatus}</span>
+          : <span className="text-muted-foreground">—</span>;
+      case "createdBy": return resolveUser(r.createdById) ?? "—";
+      case "created": return r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—";
+      case "updated": return r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—";
+      case "status":
+        return r.isReversed
+          ? <Badge variant="destructive">Reversed</Badge>
+          : <span className="text-xs text-muted-foreground">Recorded</span>;
+      default: return null;
+    }
+  };
+
+  const totalsCell = (k: SortKey): React.ReactNode => {
+    switch (k) {
+      case "quarters": return <span className="font-medium">{totals.quarters}</span>;
+      case "rowEq": return <span className="font-medium">{totals.rowEq.toFixed(2)}</span>;
+      case "vines": return <span className="font-medium">{totals.vines.toLocaleString()}</span>;
+      case "hours": return <span className="font-medium">{totals.hours.toFixed(2)}</span>;
+      case "vinesPerHour":
+        return <span className="font-medium">{avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}</span>;
+      case "cost": return <span className="font-semibold">{money(totals.cost)}</span>;
+      default: return null;
+    }
+  };
+
 
   return (
     <div className="p-4 sm:p-6 space-y-4 w-full">
