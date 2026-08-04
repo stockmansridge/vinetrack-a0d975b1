@@ -33,7 +33,8 @@ import type { PruningEntry, PruningRowSegment, RecordSegmentInput, UpdateEntryRe
 import { useUpdatePruningEntry } from "@/lib/pruningQuery";
 import type { RowIdentity } from "@/lib/pruningCalc";
 import {
-  createLabourLine, fetchLabourLinesForTask, fetchWorkTaskById,
+  createLabourLine, createWorkTask, fetchLabourLinesForTask, fetchWorkTaskById,
+  fetchWorkTaskPaddocksForVineyard, syncWorkTaskPaddocks,
   softDeleteLabourLine, updateLabourLine, updateWorkTask, type WorkTaskLabourLine, type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
