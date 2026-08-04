@@ -147,6 +147,7 @@ export default function MultiBlockAllocationEditor({
       segmentNumber: quarter,
       paddockRowId: identity.paddockRowId,
       rowLabel: identity.rowLabel,
+        vines: (identity.estimatedVines ?? 0) / 4,
     };
     setAllocation({ ...a, quarters });
   };
@@ -164,6 +165,7 @@ export default function MultiBlockAllocationEditor({
         segmentNumber: q,
         paddockRowId: identity.paddockRowId,
         rowLabel: identity.rowLabel,
+        vines: (identity.estimatedVines ?? 0) / 4,
       };
     }
     setAllocation({ ...a, quarters });
