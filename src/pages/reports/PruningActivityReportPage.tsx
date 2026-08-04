@@ -435,7 +435,7 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = (canSeeCosts ? 23 : 21) + (canEdit ? 1 : 0);
+  const colSpan = (canSeeCosts ? 24 : 22) + (canEdit ? 1 : 0);
 
   return (
     <div className="p-4 sm:p-6 space-y-4 w-full">
@@ -707,6 +707,7 @@ export default function PruningActivityReportPage() {
               )}
               <SortableTableHead active={getSortDirection("task")} onSort={() => toggleSort("task")}>Work task</SortableTableHead>
               <SortableTableHead active={getSortDirection("taskStatus")} onSort={() => toggleSort("taskStatus")}>Task status</SortableTableHead>
+              <SortableTableHead active={getSortDirection("createdBy")} onSort={() => toggleSort("createdBy")}>Created by</SortableTableHead>
               <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
               <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
