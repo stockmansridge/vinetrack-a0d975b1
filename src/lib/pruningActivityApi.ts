@@ -390,7 +390,7 @@ export interface SaveActivityInput {
 export async function recordPruningActivity(input: SaveActivityInput): Promise<ActivitySaveResult> {
   const payload = buildActivityPayload(input.draft, input.vineyardId, input.activityId);
   const { data, error } = await rpc("record_pruning_activity", { p_payload: payload });
-  if (error) throw error;
+  if (error) throw new Error(friendlySaveError(error));
   return normaliseSaveResult(data);
 }
 
@@ -401,9 +401,23 @@ export async function updatePruningActivity(input: SaveActivityInput): Promise<A
     // FULL desired allocation array — never only the changed allocations.
     p_allocations: allocationObjects(input.draft),
   });
-  if (error) throw error;
+  if (error) throw new Error(friendlySaveError(error));
   return normaliseSaveResult(data);
 }
+
+/** Turn raw Postgres constraint noise into something a grower can act on. */
+export function friendlySaveError(error: any): string {
+  const msg = String(error?.message ?? error ?? "");
+  if (msg.includes("pruning_entries_activity_block_unique")) {
+    return (
+      "This activity already has a record for one of these blocks. " +
+      "Close and reopen the activity so it reloads the latest allocations, then apply your change again. " +
+      "If it keeps happening, the block is recorded twice on the server and needs to be cleaned up."
+    );
+  }
+  return msg;
+}
+
 
 export function useSavePruningActivity(mode: "create" | "edit") {
   const invalidate = useActivityInvalidation();
