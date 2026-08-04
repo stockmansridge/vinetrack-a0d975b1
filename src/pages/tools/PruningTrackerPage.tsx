@@ -46,6 +46,8 @@ import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
 import CompleteTodayDialog from "@/components/pruning/CompleteTodayDialog";
+import NewPruningActivityButton from "@/components/pruning/NewPruningActivityButton";
+
 import ActivityHistory from "@/components/pruning/ActivityHistory";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
