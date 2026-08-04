@@ -711,16 +711,22 @@ export default function PruningActivityReportPage() {
         ) : <span className="text-muted-foreground text-xs">—</span>;
 
       case "task":
-        return r.workTaskId ? (
-          <Link
-            to={`/work-tasks?highlight=${r.workTaskId}`}
-            className="text-primary inline-flex items-center gap-1 hover:underline"
-          >
-            {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
-          </Link>
-        ) : (
-          <span className="text-muted-foreground text-xs">—</span>
+        if (r.workTaskId && !r.workTaskMissing) {
+          return (
+            <Link
+              to={`/work-tasks?highlight=${r.workTaskId}`}
+              className="text-primary inline-flex items-center gap-1 hover:underline"
+            >
+              {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
+            </Link>
+          );
+        }
+        return (
+          <span className="text-muted-foreground text-xs">
+            {r.workTaskMissing ? "Deleted work task" : "Not linked"}
+          </span>
         );
+
       case "taskStatus":
         return r.workTaskStatus
           ? <span className="capitalize">{r.workTaskStatus}</span>
