@@ -7,7 +7,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Download, Scissors, Search, ExternalLink } from "lucide-react";
+import { AlertTriangle, Download, Scissors, Search, ExternalLink, Pencil } from "lucide-react";
+import ReportEditPruningDialog from "@/components/pruning/ReportEditPruningDialog";
+
 
 import { useVineyard } from "@/context/VineyardContext";
 import { useToast } from "@/hooks/use-toast";
@@ -87,15 +89,19 @@ function timeSortValue(value: string | null): number | null {
 }
 
 export default function PruningActivityReportPage() {
-  const { selectedVineyardId, memberships } = useVineyard();
+  const { selectedVineyardId, memberships, currentRole } = useVineyard();
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const { toast } = useToast();
   const canSeeCosts = useCanSeeCosts();
+  const canEdit = currentRole === "owner" || currentRole === "manager";
   const fmt = useRegionFormatters();
   const money = (n: number | null) => (n == null ? "—" : fmt.currency(n));
 
+  const [editRow, setEditRow] = useState<PruningActivityRow | null>(null);
+
   const { data: rows = [], isLoading, error } = usePruningActivity(selectedVineyardId);
+
 
   // -------------------- Filters --------------------
   const [search, setSearch] = useState("");
@@ -425,10 +431,11 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = canSeeCosts ? 23 : 21;
+  const colSpan = (canSeeCosts ? 23 : 21) + (canEdit ? 1 : 0);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-[1600px]">
+    <div className="p-4 sm:p-6 space-y-4 w-full">
+
       <PageHead
         title="Pruning Activity Report | VineTrack"
         description="Per-entry pruning activity report with rows worked, vines, labour hours, productivity and linked work tasks."
@@ -699,6 +706,8 @@ export default function PruningActivityReportPage() {
               <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
               <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+              {canEdit && <th className="h-10 px-2 text-right align-middle text-xs font-medium text-muted-foreground">Edit</th>}
+
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -793,6 +802,20 @@ export default function PruningActivityReportPage() {
                     ? <Badge variant="destructive">Reversed</Badge>
                     : <span className="text-xs text-muted-foreground">Recorded</span>}
                 </TableCell>
+                {canEdit && (
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={r.isReversed}
+                      onClick={() => setEditRow(r)}
+                      aria-label={`Edit pruning entry from ${formatDate(r.date)}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                    </Button>
+                  </TableCell>
+                )}
+
               </TableRow>
             ))}
           </TableBody>
@@ -822,7 +845,9 @@ export default function PruningActivityReportPage() {
                 <TableCell />
                 <TableCell />
                 <TableCell />
+                {canEdit && <TableCell />}
               </TableRow>
+
             </TableBody>
           )}
         </Table>
@@ -834,6 +859,17 @@ export default function PruningActivityReportPage() {
         visible for audit but are excluded from all totals and averages
         (average vines / hour = total active vines ÷ total active labour hours).
       </p>
+
+      {editRow && selectedVineyardId && (
+        <ReportEditPruningDialog
+          open={!!editRow}
+          onOpenChange={(o) => { if (!o) setEditRow(null); }}
+          entry={editRow.entry}
+          vineyardId={selectedVineyardId}
+          paddockName={editRow.blockName}
+        />
+      )}
+
     </div>
   );
 }
