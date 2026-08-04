@@ -706,7 +706,7 @@ export default function PruningActivityReportPage() {
               <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
               <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
-              {canEdit && <th className="h-10 px-2 text-right align-middle text-xs font-medium text-muted-foreground">Edit</th>}
+              {canEdit && <th className="h-10 px-2 text-right align-middle text-xs font-medium text-muted-foreground sticky right-0 bg-background border-l shadow-[-6px_0_8px_-8px_hsl(var(--foreground)/0.3)]">Edit</th>}
 
             </TableRow>
           </TableHeader>
@@ -803,7 +803,7 @@ export default function PruningActivityReportPage() {
                     : <span className="text-xs text-muted-foreground">Recorded</span>}
                 </TableCell>
                 {canEdit && (
-                  <TableCell className="text-right">
+                  <TableCell className="text-right sticky right-0 bg-background border-l shadow-[-6px_0_8px_-8px_hsl(var(--foreground)/0.3)]">
                     <Button
                       size="sm"
                       variant="ghost"
@@ -815,6 +815,7 @@ export default function PruningActivityReportPage() {
                     </Button>
                   </TableCell>
                 )}
+
 
               </TableRow>
             ))}
