@@ -512,17 +512,21 @@ export default function PruningTrackerPage() {
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." path="/tools/pruning-tracker" />
 
-      <div className="flex items-center gap-3">
-        <div className="rounded-full bg-primary/10 p-2 text-primary">
-          <Scissors className="h-6 w-6" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-full bg-primary/10 p-2 text-primary">
+            <Scissors className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
+            <p className="text-sm text-muted-foreground">
+              {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · ${pruningSeasonYear} Winter Pruning · Vintage ${vintage}` : "No vineyard selected"}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
-          <p className="text-sm text-muted-foreground">
-            {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · ${pruningSeasonYear} Winter Pruning · Vintage ${vintage}` : "No vineyard selected"}
-          </p>
-        </div>
+        <NewPruningActivityButton seasonYear={pruningSeasonYear} />
       </div>
+
 
       {!selectedVineyardId && (
         <Card><CardContent className="p-8 text-center text-muted-foreground">Select a vineyard to view pruning progress.</CardContent></Card>
