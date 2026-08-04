@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 
 import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocationEditor";
+import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
+
 import {
   activityTotals, allocationKey, allocationQuarterCount,
   type BlockAllocationDraft, type PruningActivityDraft,
