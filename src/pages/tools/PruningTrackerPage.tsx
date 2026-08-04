@@ -595,11 +595,13 @@ export default function PruningTrackerPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Blocks</h2>
               <div className="flex items-center gap-2">
+                <NewPruningActivityButton seasonYear={pruningSeasonYear} />
                 <Button asChild variant="outline" size="sm">
                   <Link to="/reports/pruning-activity">
                     View full activity report <ExternalLink className="h-3.5 w-3.5 ml-1" />
                   </Link>
                 </Button>
+
                 <span className="text-xs text-muted-foreground">Sort by</span>
                 <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
                   <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
