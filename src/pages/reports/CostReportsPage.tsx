@@ -805,6 +805,35 @@ export default function CostReportsPage() {
             </ChartCard>
 
             <ChartCard
+              title="Cost by grape variety"
+              subtitle={`Total cost · cost / ${rf.areaUnitLabel} and cost / t in the tooltip — click to drill in`}
+              empty={topVarietyByTotal.length === 0 ? "No variety-mapped costs in this filter." : null}
+            >
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={topVarietyByTotal} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => rf.currency(v, 0)} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+                  <RTooltip
+                    contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    formatter={(v: any, _n, p: any) => [
+                      fmtMoney(Number(v)),
+                      [
+                        p?.payload?.costPerHa != null ? fmtMoneyPerArea(p.payload.costPerHa) : null,
+                        p?.payload?.costPerT != null ? `${fmtMoney(p.payload.costPerT)} / t` : null,
+                      ].filter(Boolean).join(" · ") || "total cost",
+                    ]}
+                  />
+                  <Bar dataKey="value" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]}
+                    onClick={(d: any) => { if (d?.name && !d?.other) drillToTable({ variety: d.name }); }}
+                    style={{ cursor: "pointer" }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+
+
+            <ChartCard
               title="Cost by function"
               subtitle="Click a bar to drill into those records"
               empty={functionChartData.length === 0 ? "No function-tagged allocations in this filter." : null}
