@@ -63,9 +63,14 @@ export interface PruningActivityRow {
   workTaskId: string | null;
   workTaskLabel: string | null;
   workTaskStatus: string | null;
+  /** True when work_task_id points at a task that no longer exists. */
+  workTaskMissing: boolean;
+  /** Title/description stored on the parent pruning activity, when present. */
+  activityTitle: string | null;
   labourCost: number | null;    // null when there is no linked Work Task
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
+
   /** auth.users id of the user who recorded the entry (pruning_entries.created_by). */
   createdById: string | null;
   createdAt: string | null;
