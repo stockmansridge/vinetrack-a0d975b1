@@ -377,7 +377,7 @@ export default function PruningActivityReportPage() {
   };
 
   const baseHeader = [
-    "Activity ID", "Allocation ID", "Allocation index", "Blocks in activity",
+    "Activity", "Allocation index", "Blocks in activity",
     "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
     "Allocation share", "Allocated labour hours", "Activity labour hours",
@@ -390,10 +390,10 @@ export default function PruningActivityReportPage() {
 
   const rowToCells = (r: PruningActivityRow) => {
     const base: (string | number)[] = [
-      r.activityId ?? "",
-      r.id,
+      r.activityLabel,
       `${r.allocationIndex} of ${r.activityBlockCount}`,
       r.activityBlockCount,
+
       r.date,
       r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
       r.pruningSeasonId ?? "",
