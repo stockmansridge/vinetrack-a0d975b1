@@ -37,6 +37,9 @@ const baseRow = (over: Partial<BaseActivityRow>): BaseActivityRow => ({
   rowEqPerHour: null,
   workTaskId: "task-1",
   workTaskLabel: "Pruning",
+  workTaskMissing: false,
+  activityTitle: null,
+
   workTaskStatus: "open",
   labourCost: null,
   hourlyRate: null,
