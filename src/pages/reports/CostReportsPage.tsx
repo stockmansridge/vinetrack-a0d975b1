@@ -19,6 +19,18 @@ import {
   fetchTripCostAllocationsForVineyard,
   type TripCostAllocation,
 } from "@/lib/tripCostAllocationsQuery";
+import { usePruningActivity } from "@/lib/pruningActivityQuery";
+import {
+  buildUnifiedCostDataset,
+  type UnifiedCostRow,
+} from "@/lib/unifiedCostDataset";
+
+/** Allocation-shaped adapter over a unified cost row. */
+type CostRecord = TripCostAllocation & {
+  operation_year: number | null;
+  unified: UnifiedCostRow;
+};
+
 import {
   useGrapeVarieties,
   buildVarietyMap,
@@ -169,11 +181,61 @@ export default function CostReportsPage() {
   const fmtArea = useMemo(() => makeFmtArea(rf), [rf]);
   const fmtMoneyPerArea = useMemo(() => makeFmtCostPerArea(rf), [rf]);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: tripRows = [], isLoading } = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
     queryFn: () => fetchTripCostAllocationsForVineyard(selectedVineyardId!),
     enabled: !!selectedVineyardId && canSeeCosts,
   });
+
+  // Pruning activity labour is an operational cost recorded outside field
+  // trips. It is included through its reconciled per-block allocations.
+  const { data: pruningRows = [] } = usePruningActivity(
+    canSeeCosts ? selectedVineyardId : null,
+  );
+
+  const unified = useMemo(
+    () =>
+      buildUnifiedCostDataset({
+        vineyardId: selectedVineyardId ?? "",
+        tripAllocations: tripRows,
+        pruningRows,
+      }),
+    [selectedVineyardId, tripRows, pruningRows],
+  );
+
+  // Adapter: the tab/aggregation pipeline below consumes the allocation shape.
+  // `season_year` carries the VINTAGE year (primary crop-cost grouping);
+  // `operation_year` is exposed separately as a secondary filter.
+  const rows: CostRecord[] = useMemo(
+    () =>
+      unified.rows.map((u) => ({
+        id: u.allocation_id,
+        vineyard_id: u.vineyard_id,
+        trip_id: u.source_type === "trip" ? u.source_id : null,
+        paddock_id: u.block_id,
+        paddock_name: u.block_name,
+        variety: u.variety,
+        season_year: u.vintage_year,
+        allocation_area_ha: u.allocation_area_ha,
+        yield_tonnes: u.yield_tonnes,
+        labour_cost: u.labour_cost,
+        fuel_cost: u.fuel_cost,
+        chemical_cost: u.chemical_cost,
+        input_cost: u.input_cost,
+        total_cost: u.total_cost,
+        cost_per_ha: null,
+        cost_per_tonne: null,
+        trip_function: u.function,
+        costing_status: u.status,
+        warnings: u.warnings,
+        calculated_at: u.activity_date,
+        created_at: u.activity_date,
+        operation_year: u.operation_year,
+        unified: u,
+      })),
+    [unified],
+  );
+
 
   const { data: grapeVarieties } = useGrapeVarieties(canSeeCosts ? selectedVineyardId : null);
   const { data: paddockRows = [] } = useQuery({
@@ -216,6 +278,7 @@ export default function CostReportsPage() {
 
   const [tab, setTab] = useState<string>("overview");
   const [season, setSeason] = useState<string>(ANY);
+  const [opYear, setOpYear] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
   const [variety, setVariety] = useState<string>(ANY);
   const [tripFn, setTripFn] = useState<string>(ANY);
@@ -229,9 +292,11 @@ export default function CostReportsPage() {
     return rows.filter((r) => {
       if (tripFn !== ANY && (r.trip_function ?? "") !== tripFn) return false;
       if (status !== ANY && (r.costing_status ?? "") !== status) return false;
+      if (opYear !== ANY && String(r.operation_year ?? "") !== opYear) return false;
       return true;
     });
-  }, [rows, tripFn, status]);
+  }, [rows, tripFn, status, opYear]);
+
 
   const grouped: GroupedRow[] = useMemo(() => {
     const map = new Map<string, GroupedRow>();
@@ -293,10 +358,11 @@ export default function CostReportsPage() {
     });
   }, [prefiltered, varietyMap, paddockAllocsById]);
 
-  const seasons = useMemo(
-    () => Array.from(new Set(grouped.map((g) => g.season_year).filter((v): v is number => v != null))).sort((a, b) => b - a),
-    [grouped],
-  );
+  // Vintage list is discovered dynamically from every included cost source
+  // (trips, pruning activities, …) — never hard-coded.
+  const seasons = unified.vintageYears;
+  const opYears = unified.operationYears;
+
   const paddocks = useMemo(
     () => Array.from(new Set(grouped.map((g) => g.paddock_name).filter((v): v is string => !!v))).sort(),
     [grouped],
@@ -470,7 +536,7 @@ export default function CostReportsPage() {
   );
 
   const COST_COLUMN_LABELS: Record<CostCol, string> = {
-    season: "Season", block: rf.blockLabel, variety: "Variety",
+    season: "Vintage", block: rf.blockLabel, variety: "Variety",
     area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
     labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
     total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
@@ -511,7 +577,7 @@ export default function CostReportsPage() {
 
   function exportCsv() {
     const headers = [
-      "season","block","variety","treated_area_ha","yield_tonnes",
+      "vintage_year","block","variety","treated_area_ha","yield_tonnes",
       "labour_cost","fuel_cost","chemical_cost","input_cost","total_cost",
       "cost_per_ha","cost_per_tonne","contributing_trips","warnings_count","status",
     ];
@@ -597,7 +663,14 @@ export default function CostReportsPage() {
     byBlock.map((b) => ({ name: b.name, value: b.total, costPerHa: b.costPerHa, trips: b.trips, warnings: b.warnings })),
     10,
   );
+  const topVarietyByTotal = topNWithOther(
+    byVariety.map((v) => ({
+      name: v.name, value: v.total, costPerHa: v.costPerHa, costPerT: v.costPerT, yieldT: v.yieldT,
+    })),
+    10,
+  );
   const topVarietyByCostPerHa = topNWithOther(
+
     byVariety
       .filter((v) => v.costPerHa != null)
       .map((v) => ({ name: v.name, value: v.costPerHa as number, total: v.total, trips: v.trips })),
@@ -621,8 +694,8 @@ export default function CostReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Decision-support view of trip cost allocations. Filters apply
-            across every tab.
+            Unified operational costs — field trips and pruning activity labour —
+            grouped by vintage. Filters apply across every tab.
           </p>
         </div>
       </div>
@@ -656,19 +729,21 @@ export default function CostReportsPage() {
 
       {/* Global filter bar — applies to every tab */}
       <Card className="p-3 flex flex-wrap gap-2 items-center">
-        <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
+        <FilterSelect label="Vintage" value={season} onChange={setSeason} options={seasons.map(String)} />
+        <FilterSelect label="Operation year" value={opYear} onChange={setOpYear} options={opYears.map(String)} />
         <FilterSelect label={rf.blockLabel} value={paddock} onChange={setPaddock} options={paddocks} />
         <FilterSelect label="Variety" value={variety} onChange={setVariety} options={varieties} />
         <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} renderLabel={(v) => tripFunctionLabel(v) ?? v} />
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
-        {(season !== ANY || paddock !== ANY || variety !== ANY || tripFn !== ANY || status !== ANY) && (
+        {(season !== ANY || opYear !== ANY || paddock !== ANY || variety !== ANY || tripFn !== ANY || status !== ANY) && (
           <Button
             variant="ghost" size="sm"
-            onClick={() => { setSeason(ANY); setPaddock(ANY); setVariety(ANY); setTripFn(ANY); setStatus(ANY); }}
+            onClick={() => { setSeason(ANY); setOpYear(ANY); setPaddock(ANY); setVariety(ANY); setTripFn(ANY); setStatus(ANY); }}
           >
             Clear filters
           </Button>
         )}
+
       </Card>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
@@ -728,6 +803,35 @@ export default function CostReportsPage() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
+
+            <ChartCard
+              title="Cost by grape variety"
+              subtitle={`Total cost · cost / ${rf.areaUnitLabel} and cost / t in the tooltip — click to drill in`}
+              empty={topVarietyByTotal.length === 0 ? "No variety-mapped costs in this filter." : null}
+            >
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={topVarietyByTotal} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => rf.currency(v, 0)} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+                  <RTooltip
+                    contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    formatter={(v: any, _n, p: any) => [
+                      fmtMoney(Number(v)),
+                      [
+                        p?.payload?.costPerHa != null ? fmtMoneyPerArea(p.payload.costPerHa) : null,
+                        p?.payload?.costPerT != null ? `${fmtMoney(p.payload.costPerT)} / t` : null,
+                      ].filter(Boolean).join(" · ") || "total cost",
+                    ]}
+                  />
+                  <Bar dataKey="value" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]}
+                    onClick={(d: any) => { if (d?.name && !d?.other) drillToTable({ variety: d.name }); }}
+                    style={{ cursor: "pointer" }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+
 
             <ChartCard
               title="Cost by function"
@@ -1112,7 +1216,7 @@ export default function CostReportsPage() {
                   {drill.variety ? ` · ${drill.variety}` : ""}
                 </SheetTitle>
                 <SheetDescription>
-                  Season {drill.season_year ?? "—"} · {drill.trip_count} contributing trip{drill.trip_count === 1 ? "" : "s"}
+                  Vintage {drill.season_year ?? "—"} · {drill.trip_count} contributing trip{drill.trip_count === 1 ? "" : "s"}
                 </SheetDescription>
               </SheetHeader>
 
@@ -1192,7 +1296,7 @@ export default function CostReportsPage() {
                         <Badge variant="outline">{tripFunctionLabel(r.trip_function ?? "") ?? "—"}</Badge>
                       </div>
                       <div className="text-muted-foreground">
-                        Season {r.season_year ?? "—"} · total {fmtMoney(Number(r.total_cost ?? 0))}
+                        Vintage {r.season_year ?? "—"} · total {fmtMoney(Number(r.total_cost ?? 0))}
                       </div>
                       {warns.length > 0 && (
                         <ul className="text-[11px] mt-1 space-y-0.5 list-disc list-inside text-amber-700">
