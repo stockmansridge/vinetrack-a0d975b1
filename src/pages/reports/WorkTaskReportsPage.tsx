@@ -66,6 +66,7 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
 
 interface PaddockLite { id: string; name: string | null; area_ha?: number | null }
 
@@ -2354,7 +2355,7 @@ function AllocationContributions({
               const isReview = status !== "OK";
               return (
                 <TableRow key={c.taskId}>
-                  <TableCell className="text-xs whitespace-nowrap">{fmtDate(c.date)}</TableCell>
+                  <TableCell className="text-xs whitespace-nowrap"><ReportDateCell value={c.date} /></TableCell>
                   <TableCell className="text-xs">{c.taskType}</TableCell>
                   <TableCell className="text-xs max-w-[240px] truncate" title={c.description ?? ""}>
                     {c.description ?? "—"}
@@ -2407,7 +2408,7 @@ function AllocationContributions({
             <div key={c.taskId} className="rounded-md border bg-background/50 p-2 text-xs space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">{c.taskType}</span>
-                <span className="text-muted-foreground">{fmtDate(c.date)}</span>
+                <span className="text-muted-foreground"><ReportDateCell value={c.date} /></span>
               </div>
               {c.description && (
                 <div className="text-foreground/80 line-clamp-2">{c.description}</div>

@@ -89,6 +89,7 @@ const TYPE_LABELS: Record<ReportType, string> = {
 };
 
 import { TRIP_FUNCTION_LABELS, tripFunctionLabel as tripFn } from "@/lib/tripFunctionLabels";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
 
 const tripDisplay = (t: Trip): string => {
   if (t.trip_title?.trim()) return t.trip_title.trim();
@@ -583,7 +584,7 @@ function DocumentsLibraryTable({
                 vineyard: <TableCell>{it.vineyardName}</TableCell>,
                 block: <TableCell>{it.paddockName ?? "—"}</TableCell>,
                 related: <TableCell className="text-muted-foreground">{it.related ?? "—"}</TableCell>,
-                date: <TableCell className="text-muted-foreground">{formatDate(it.createdAt)}</TableCell>,
+                date: <TableCell className="text-muted-foreground"><ReportDateCell value={it.createdAt} /></TableCell>,
                 source: <TableCell><Badge variant={it.source === "portal" ? "outline" : "default"}>{it.source === "portal" ? "Portal" : "iOS"}</Badge></TableCell>,
               };
               return (
