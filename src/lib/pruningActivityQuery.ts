@@ -302,8 +302,11 @@ export function usePruningActivity(vineyardId: string | null) {
           createdAt: e.created_at ?? null,
           updatedAt: e.updated_at ?? null,
           isReversed: !!e.deleted_at,
-        } satisfies PruningActivityRow;
+        } satisfies BaseActivityRow;
       });
+
+      return applyActivityAllocations(baseRows);
     },
+
   });
 }
