@@ -5,6 +5,8 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { ReportDateCell } from "@/components/reports/ReportDateCell";
+
 import { Download, FileSpreadsheet, FileText, Info, Search, ChevronDown, ChevronRight, Check, X, StickyNote } from "lucide-react";
 
 import { useVineyard } from "@/context/VineyardContext";
