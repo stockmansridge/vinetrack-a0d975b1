@@ -63,6 +63,8 @@ export interface PruningActivityRow {
   labourCost: number | null;    // null when there is no linked Work Task
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
+  /** auth.users id of the user who recorded the entry (pruning_entries.created_by). */
+  createdById: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   isReversed: boolean;
@@ -272,6 +274,7 @@ export function usePruningActivity(vineyardId: string | null) {
           labourCost,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",
+          createdById: e.created_by ?? null,
           createdAt: e.created_at ?? null,
           updatedAt: e.updated_at ?? null,
           isReversed: !!e.deleted_at,
