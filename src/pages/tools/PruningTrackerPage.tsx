@@ -46,6 +46,8 @@ import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
 import CompleteTodayDialog from "@/components/pruning/CompleteTodayDialog";
+import NewPruningActivityButton from "@/components/pruning/NewPruningActivityButton";
+
 import ActivityHistory from "@/components/pruning/ActivityHistory";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -512,17 +514,21 @@ export default function PruningTrackerPage() {
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." path="/tools/pruning-tracker" />
 
-      <div className="flex items-center gap-3">
-        <div className="rounded-full bg-primary/10 p-2 text-primary">
-          <Scissors className="h-6 w-6" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-full bg-primary/10 p-2 text-primary">
+            <Scissors className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
+            <p className="text-sm text-muted-foreground">
+              {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · ${pruningSeasonYear} Winter Pruning · Vintage ${vintage}` : "No vineyard selected"}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
-          <p className="text-sm text-muted-foreground">
-            {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · ${pruningSeasonYear} Winter Pruning · Vintage ${vintage}` : "No vineyard selected"}
-          </p>
-        </div>
+        <NewPruningActivityButton seasonYear={pruningSeasonYear} />
       </div>
+
 
       {!selectedVineyardId && (
         <Card><CardContent className="p-8 text-center text-muted-foreground">Select a vineyard to view pruning progress.</CardContent></Card>
@@ -589,11 +595,13 @@ export default function PruningTrackerPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Blocks</h2>
               <div className="flex items-center gap-2">
+                <NewPruningActivityButton seasonYear={pruningSeasonYear} />
                 <Button asChild variant="outline" size="sm">
                   <Link to="/reports/pruning-activity">
                     View full activity report <ExternalLink className="h-3.5 w-3.5 ml-1" />
                   </Link>
                 </Button>
+
                 <span className="text-xs text-muted-foreground">Sort by</span>
                 <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
                   <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
@@ -848,16 +856,17 @@ function BlockDetail({
         </Button>
         <div className="flex gap-2">
           {canEdit && (
-            <>
-              <Button variant="outline" size="sm" onClick={onOpenSettings}>
-                <Settings2 className="h-4 w-4 mr-1" /> Settings
-              </Button>
-              <Button size="sm" onClick={onOpenComplete} disabled={block.identities.length === 0}>
-                Record Pruning
-              </Button>
-            </>
+            <Button variant="outline" size="sm" onClick={onOpenSettings}>
+              <Settings2 className="h-4 w-4 mr-1" /> Settings
+            </Button>
           )}
+          <NewPruningActivityButton
+            seasonYear={seasonYear}
+            paddockId={block.paddock.id}
+            label="Record Pruning"
+          />
         </div>
+
       </div>
 
       <Card>
