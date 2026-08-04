@@ -547,11 +547,15 @@ export default function EditPruningDialog({
                               "h-11 w-full rounded-md border text-sm font-medium transition",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               lockedOther
-                                ? "bg-muted border-border text-muted-foreground cursor-not-allowed opacity-70"
+                                ? "bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed shadow-inner"
                                 : isSel
                                 ? "bg-emerald-500 border-emerald-600 text-white shadow-sm"
                                 : "bg-background border-input text-foreground/70 hover:bg-muted",
                             )}
+                            style={lockedOther ? {
+                              backgroundImage:
+                                "repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(0,0,0,0.06) 4px, rgba(0,0,0,0.06) 8px)",
+                            } : undefined}
                           >
                             Q{q}
                           </button>
