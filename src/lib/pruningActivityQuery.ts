@@ -21,6 +21,8 @@ import type { PruningEntry } from "@/lib/pruningQuery";
 export interface PruningActivityRow {
   id: string;
   entry: PruningEntry;
+  /** SQL 166 parent activity id, when this entry belongs to one. */
+  activityId: string | null;
   date: string;                 // ISO yyyy-mm-dd
   /** Canonical season year: ALWAYS the linked pruning_seasons row. Null when
    *  the entry has no resolvable season link — never derived from the date. */
@@ -239,6 +241,7 @@ export function usePruningActivity(vineyardId: string | null) {
         return {
           id: e.id,
           entry: e,
+          activityId: (e as any).pruning_activity_id ?? null,
           date: e.entry_date,
           seasonYear,
           pruningSeasonId: e.pruning_season_id ?? null,

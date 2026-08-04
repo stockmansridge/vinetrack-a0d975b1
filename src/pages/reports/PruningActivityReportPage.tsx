@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Columns3, Download, Scissors, Search, ExternalLink, Pencil } from "lucide-react";
 import ReportEditPruningDialog from "@/components/pruning/ReportEditPruningDialog";
+import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
 
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -987,6 +988,30 @@ export default function PruningActivityReportPage() {
       {editRow && selectedVineyardId && (() => {
         const editable = sorted.filter((r) => !r.isReversed);
         const idx = editable.findIndex((r) => r.id === editRow.id);
+        const onPrev = idx > 0 ? () => setEditRow(editable[idx - 1]) : undefined;
+        const onNext = idx >= 0 && idx < editable.length - 1
+          ? () => setEditRow(editable[idx + 1]) : undefined;
+        const navLabel = idx >= 0 ? `${idx + 1} / ${editable.length}` : undefined;
+
+        // SQL 166: entries that belong to a parent activity open in the
+        // multi-block editor. Legacy entries without a parent keep the
+        // single-block editor.
+        if (editRow.activityId) {
+          return (
+            <PruningActivityDialog
+              key={editRow.activityId}
+              open={!!editRow}
+              onOpenChange={(o) => { if (!o) setEditRow(null); }}
+              vineyardId={selectedVineyardId}
+              seasonYear={editRow.seasonYear ?? new Date().getFullYear()}
+              activityId={editRow.activityId}
+              onPrev={onPrev}
+              onNext={onNext}
+              navLabel={navLabel}
+            />
+          );
+        }
+
         return (
           <ReportEditPruningDialog
             key={editRow.id}
@@ -995,9 +1020,9 @@ export default function PruningActivityReportPage() {
             entry={editRow.entry}
             vineyardId={selectedVineyardId}
             paddockName={editRow.blockName}
-            onPrev={idx > 0 ? () => setEditRow(editable[idx - 1]) : undefined}
-            onNext={idx >= 0 && idx < editable.length - 1 ? () => setEditRow(editable[idx + 1]) : undefined}
-            navLabel={idx >= 0 ? `${idx + 1} / ${editable.length}` : undefined}
+            onPrev={onPrev}
+            onNext={onNext}
+            navLabel={navLabel}
           />
         );
       })()}

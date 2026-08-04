@@ -48,6 +48,9 @@ export interface PruningEntry {
   row_equivalents_completed: number;
   estimated_vines_completed: number;
   work_task_id: string | null;
+  /** SQL 166: parent pruning activity this entry belongs to (null on legacy
+   *  single-block entries recorded before the parent-activity contract). */
+  pruning_activity_id?: string | null;
   /** SQL 119: production/costing vintage resolved server-side from the
    *  vineyard's season settings + entry_date. Authoritative for cost
    *  reports — do NOT derive from entry_date on the client. */
