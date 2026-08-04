@@ -617,6 +617,19 @@ export default function PruningActivityReportPage() {
             )}
           </>
         );
+      case "activity":
+        return r.activityId ? (
+          <div className="flex flex-col gap-0.5">
+            <Badge variant="outline" className="font-mono text-[10px] w-fit">{activityCode(r)}</Badge>
+            {r.activityBlockCount > 1 && (
+              <span className="text-[11px] text-muted-foreground">
+                {fmt.blockLabel.toLowerCase()} {r.allocationIndex} of {r.activityBlockCount}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-xs">Single entry</span>
+        );
       case "season":
         if (!r.hasSeasonLink) return <span className="text-muted-foreground">Unassigned</span>;
         if (!r.seasonMismatch) return r.seasonYear;
