@@ -658,7 +658,7 @@ export default function PruningActivityReportPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Every recorded pruning entry, with rows worked, vines, labour hours and
-            productivity. Read-only — figures come straight from the pruning records.
+            productivity.
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
