@@ -347,6 +347,16 @@ export default function PruningActivityReportPage() {
 
   const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
 
+  // Cost per vine — two denominators.
+  // 1) Only vines in activities that carry a labour cost.
+  // 2) All pruned vines, spread against the total activity labour cost.
+  const costedVines = useMemo(
+    () => activeRows.reduce((sum, r) => sum + ((r.allocatedCost ?? 0) > 0 ? r.vines : 0), 0),
+    [activeRows],
+  );
+  const costPerVineCosted = costedVines > 0 ? totals.cost / costedVines : null;
+  const costPerVineAll = totals.vines > 0 ? totals.activityCost / totals.vines : null;
+
 
   // -------------------- Season integrity diagnostic (read-only) --------------------
   // System admins only, and only when the shared feature flag is switched on in
