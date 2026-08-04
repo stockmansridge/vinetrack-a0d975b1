@@ -221,7 +221,7 @@ export default function PruningActivityReportPage() {
       updated: (r: PruningActivityRow) => (r.updatedAt ? new Date(r.updatedAt).getTime() : null),
       status: (r: PruningActivityRow) => (r.isReversed ? 1 : 0),
     }),
-    [],
+    [resolveUser],
   );
 
   const { sorted, toggleSort, getSortDirection } =
