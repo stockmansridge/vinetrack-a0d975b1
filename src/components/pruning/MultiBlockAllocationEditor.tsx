@@ -9,7 +9,7 @@
 // discards work already done in another block. This component is pure UI +
 // state: persistence happens through the parent activity endpoint (see
 // src/lib/pruningActivityContract.ts).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, Plus, Search, Square, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -68,11 +68,13 @@ interface Props {
   onChange: (next: Record<string, BlockAllocationDraft>) => void;
   /** Quarters already owned by THIS activity (edit mode), keyed blockId -> "row:q". */
   ownedByActivity?: Record<string, Set<string>>;
+  /** Optionally open on a specific block (e.g. from a block detail page). */
+  initialPaddockId?: string | null;
   disabled?: boolean;
 }
 
 export default function MultiBlockAllocationEditor({
-  vineyardId, seasonYear, value, onChange, ownedByActivity, disabled,
+  vineyardId, seasonYear, value, onChange, ownedByActivity, initialPaddockId = null, disabled,
 }: Props) {
   const paddocksQ = useEditorPaddocks(vineyardId);
   const seasonsQ = usePruningSeasons(vineyardId);
@@ -81,6 +83,16 @@ export default function MultiBlockAllocationEditor({
 
   const paddocks = paddocksQ.data ?? [];
   const active = paddocks.find((p) => p.id === activeId) ?? null;
+
+  // Open on the requested block once (and on the first allocation in edit mode).
+  const [autoOpened, setAutoOpened] = useState(false);
+  useEffect(() => {
+    if (autoOpened || !paddocks.length) return;
+    const target = initialPaddockId ?? Object.keys(value)[0] ?? null;
+    if (!target) return;
+    setAutoOpened(true);
+    setActiveId(target);
+  }, [autoOpened, paddocks.length, initialPaddockId, value]);
 
   const activeSeason = useMemo(
     () => (seasonsQ.data ?? []).find((s) => s.paddock_id === activeId && s.season_year === seasonYear) ?? null,
