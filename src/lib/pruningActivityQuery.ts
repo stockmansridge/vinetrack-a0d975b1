@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { parseVarietyAllocations } from "@/lib/paddockGeometry";
 import type { PruningEntry } from "@/lib/pruningQuery";
+import { allocateActivityShares } from "@/lib/pruningActivityAllocation";
 
 export interface PruningActivityRow {
   id: string;
