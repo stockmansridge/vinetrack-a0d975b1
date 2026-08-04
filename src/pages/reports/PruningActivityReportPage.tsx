@@ -706,6 +706,8 @@ export default function PruningActivityReportPage() {
               <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
               <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
               <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+              {canEdit && <th className="h-10 px-2 text-right align-middle text-xs font-medium text-muted-foreground">Edit</th>}
+
             </TableRow>
           </TableHeader>
           <TableBody>
