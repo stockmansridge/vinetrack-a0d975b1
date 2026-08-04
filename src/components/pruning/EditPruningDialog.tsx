@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CheckSquare, Plus, Square, Trash2, AlertCircle, Link2, Link2Off, ExternalLink } from "lucide-react";
+import { CheckSquare, Plus, Square, Trash2, AlertCircle, Link2, Link2Off, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { PruningEntry, PruningRowSegment, RecordSegmentInput, UpdateEntryResult } from "@/lib/pruningQuery";
@@ -50,6 +50,10 @@ interface Props {
   allSegments: PruningRowSegment[];
   vineyardId: string;
   paddockName: string;
+  /** Optional navigation between records (prev/next). Omit to hide arrows. */
+  onPrev?: () => void;
+  onNext?: () => void;
+  navLabel?: string;
 }
 
 const QUARTERS = [1, 2, 3, 4] as const;
