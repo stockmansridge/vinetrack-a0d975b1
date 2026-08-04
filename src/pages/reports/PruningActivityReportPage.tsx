@@ -139,6 +139,35 @@ export default function PruningActivityReportPage() {
 
   const [editRow, setEditRow] = useState<PruningActivityRow | null>(null);
 
+  // -------------------- Column visibility --------------------
+  const [hidden, setHidden] = useState<Set<SortKey>>(() => {
+    try {
+      const raw = localStorage.getItem(COLUMN_PREFS_KEY);
+      if (raw) return new Set(JSON.parse(raw) as SortKey[]);
+    } catch { /* ignore */ }
+    return new Set(DEFAULT_HIDDEN);
+  });
+  useEffect(() => {
+    try { localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(Array.from(hidden))); } catch { /* ignore */ }
+  }, [hidden]);
+  const toggleColumn = (k: SortKey) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  const availableColumns = useMemo(
+    () => COLUMN_DEFS.filter((c) => !c.cost || canSeeCosts)
+      .map((c) => (c.key === "block" ? { ...c, label: fmt.blockLabel } : c)),
+    [canSeeCosts, fmt.blockLabel],
+  );
+  const visibleColumns = useMemo(
+    () => availableColumns.filter((c) => !hidden.has(c.key)),
+    [availableColumns, hidden],
+  );
+  const isVisible = (k: SortKey) => !hidden.has(k);
+
+
   const { data: rows = [], isLoading, error } = usePruningActivity(selectedVineyardId);
 
 
