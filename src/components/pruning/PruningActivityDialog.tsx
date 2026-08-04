@@ -365,6 +365,7 @@ export default function PruningActivityDialog({
               value={draft.allocations}
               onChange={handleAllocationsChange}
               ownedByActivity={ownedByActivity}
+              initialPaddockId={paddockId}
               disabled={save.isPending}
             />
 
