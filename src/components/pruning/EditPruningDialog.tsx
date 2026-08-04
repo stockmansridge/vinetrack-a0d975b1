@@ -547,10 +547,10 @@ export default function EditPruningDialog({
                               "h-11 w-full rounded-md border text-sm font-medium transition",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               lockedOther
-                                ? "bg-emerald-500 border-emerald-600 text-white cursor-not-allowed"
+                                ? "bg-muted border-border text-muted-foreground cursor-not-allowed opacity-70"
                                 : isSel
-                                ? "bg-primary border-primary text-primary-foreground shadow-sm"
-                                : "bg-muted/40 border-input text-foreground/70 hover:bg-muted",
+                                ? "bg-emerald-500 border-emerald-600 text-white shadow-sm"
+                                : "bg-background border-input text-foreground/70 hover:bg-muted",
                             )}
                           >
                             Q{q}
