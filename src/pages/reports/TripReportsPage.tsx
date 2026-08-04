@@ -45,6 +45,7 @@ import {
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { useSortableTable } from "@/lib/useSortableTable";
 
 interface PaddockLite { id: string; name: string | null; polygon_points?: any }
@@ -509,6 +510,19 @@ export default function TripReportsPage() {
 const TR_COLS = ["date","type","name","block","operator","duration","distance","rows","status"] as const;
 type TrCol = (typeof TR_COLS)[number];
 
+const TRIP_REPORTS_COLUMN_PREFS_KEY = "tripReports";
+const TRIP_COLUMN_DEFS: ColumnDef<TrCol>[] = [
+  { key: "date", label: "Date" },
+  { key: "type", label: "Trip type" },
+  { key: "name", label: "Name", always: true },
+  { key: "block", label: "Block" },
+  { key: "operator", label: "Operator" },
+  { key: "duration", label: "Duration" },
+  { key: "distance", label: "Distance" },
+  { key: "rows", label: "Rows" },
+  { key: "status", label: "Status" },
+];
+
 function TripReportsTable({
   rows, isLoading, error, expanded, toggleExpand,
   handleExportPdf, exportingId, padNameFor, selectedVineyardId, workTaskLabelById,
@@ -528,6 +542,14 @@ function TripReportsTable({
     "trip_reports_table",
     TR_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
+  );
+  const colPrefs = useColumnPrefs<TrCol>({
+    storageKey: TRIP_REPORTS_COLUMN_PREFS_KEY,
+    columns: TRIP_COLUMN_DEFS,
+  });
+  const visibleOrder = useMemo(
+    () => (order as TrCol[]).filter((id) => colPrefs.isVisible(id)),
+    [order, colPrefs],
   );
   const { sorted, getSortDirection, toggleSort } = useSortableTable<Trip, TrCol>(rows, {
     accessors: {
