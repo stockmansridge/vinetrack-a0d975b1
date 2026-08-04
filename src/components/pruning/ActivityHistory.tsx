@@ -151,9 +151,7 @@ export default function ActivityHistory({
           open={!!editEntry}
           onOpenChange={(o) => { if (!o) setEditEntryId(null); }}
           entry={editEntry}
-          onPrev={editIndex > 0 ? () => setEditEntryId(editableEntries[editIndex - 1].id) : undefined}
-          onNext={editIndex < editableEntries.length - 1 ? () => setEditEntryId(editableEntries[editIndex + 1].id) : undefined}
-          navLabel={`${editIndex + 1} / ${editableEntries.length}`}
+          identities={identities}
           identities={identities}
           allSegments={allSegments}
           vineyardId={vineyardId}
