@@ -690,12 +690,12 @@ export default function EditPruningDialog({
               <Label>Labour hours</Label>
               <Input
                 type="number" step="0.1"
-                value={willUpdateTask ? labourTotals.hours.toFixed(2) : labourHours}
-                disabled={willUpdateTask}
+                value={labourDrivesHours ? labourTotals.hours.toFixed(2) : labourHours}
+                disabled={labourDrivesHours}
                 onChange={(e) => setLabourHours(e.target.value)}
               />
-              {willUpdateTask && (
-                <p className="text-xs text-muted-foreground">Derived from linked Work Task labour lines.</p>
+              {labourDrivesHours && (
+                <p className="text-xs text-muted-foreground">Derived from Work Task labour lines.</p>
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">
