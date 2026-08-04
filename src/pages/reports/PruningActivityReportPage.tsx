@@ -216,6 +216,7 @@ export default function PruningActivityReportPage() {
       cost: (r: PruningActivityRow) => r.labourCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
       taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
+      createdBy: (r: PruningActivityRow) => resolveUser(r.createdById) ?? "",
       created: (r: PruningActivityRow) => (r.createdAt ? new Date(r.createdAt).getTime() : null),
       updated: (r: PruningActivityRow) => (r.updatedAt ? new Date(r.updatedAt).getTime() : null),
       status: (r: PruningActivityRow) => (r.isReversed ? 1 : 0),
