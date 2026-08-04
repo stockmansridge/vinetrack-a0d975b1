@@ -396,7 +396,8 @@ export default function PruningActivityReportPage() {
 
       r.date,
       r.hasSeasonLink ? r.seasonYear ?? "" : "Unassigned",
-      r.pruningSeasonId ?? "",
+      r.hasSeasonLink ? "Linked" : "Unassigned",
+
       r.seasonMismatch ? r.seasonIssues.join(" ") : "OK",
 
       r.vintageYear ?? "",
