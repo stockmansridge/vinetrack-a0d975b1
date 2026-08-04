@@ -862,15 +862,23 @@ export default function PruningActivityReportPage() {
         (average vines / hour = total active vines ÷ total active labour hours).
       </p>
 
-      {editRow && selectedVineyardId && (
-        <ReportEditPruningDialog
-          open={!!editRow}
-          onOpenChange={(o) => { if (!o) setEditRow(null); }}
-          entry={editRow.entry}
-          vineyardId={selectedVineyardId}
-          paddockName={editRow.blockName}
-        />
-      )}
+      {editRow && selectedVineyardId && (() => {
+        const editable = sorted.filter((r) => !r.isReversed);
+        const idx = editable.findIndex((r) => r.id === editRow.id);
+        return (
+          <ReportEditPruningDialog
+            key={editRow.id}
+            open={!!editRow}
+            onOpenChange={(o) => { if (!o) setEditRow(null); }}
+            entry={editRow.entry}
+            vineyardId={selectedVineyardId}
+            paddockName={editRow.blockName}
+            onPrev={idx > 0 ? () => setEditRow(editable[idx - 1]) : undefined}
+            onNext={idx >= 0 && idx < editable.length - 1 ? () => setEditRow(editable[idx + 1]) : undefined}
+            navLabel={idx >= 0 ? `${idx + 1} / ${editable.length}` : undefined}
+          />
+        );
+      })()}
 
     </div>
   );
