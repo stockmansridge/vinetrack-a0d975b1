@@ -40,6 +40,8 @@ import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib
 import { useAuth } from "@/context/AuthContext";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { useTeamLookup } from "@/hooks/useTeamLookup";
+
 
 interface Props {
   open: boolean;
@@ -103,6 +105,9 @@ export default function EditPruningDialog({
   const rf = useRegionFormatters();
   const money = (v: number) => rf.currency(v);
   const update = useUpdatePruningEntry(entry.pruning_season_id, vineyardId);
+  const { resolve: resolveUser } = useTeamLookup(vineyardId);
+  const createdByName = resolveUser(entry.created_by) ?? "—";
+
 
   // ---------- Ownership split ----------
   const { ownedByThis, ownedByOthers } = useMemo(() => {
