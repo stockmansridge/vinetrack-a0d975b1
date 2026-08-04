@@ -661,11 +661,15 @@ export default function PruningActivityReportPage() {
             productivity.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/tools/pruning-tracker">
-            Open Pruning Tracker <ExternalLink className="h-3.5 w-3.5 ml-1" />
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <NewPruningActivityButton seasonYear={new Date().getFullYear()} />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/tools/pruning-tracker">
+              Open Pruning Tracker <ExternalLink className="h-3.5 w-3.5 ml-1" />
+            </Link>
+          </Button>
+        </div>
+
       </div>
 
       {error && (
