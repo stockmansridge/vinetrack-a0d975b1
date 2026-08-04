@@ -51,6 +51,43 @@ type SortKey =
   | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
   | "createdBy" | "created" | "updated" | "status";
 
+/** Column registry — order here is the display order of the table. */
+const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolean }[] = [
+  { key: "date", label: "Date" },
+  { key: "season", label: "Season", align: "right" },
+  { key: "vintage", label: "Vintage", align: "right" },
+  { key: "block", label: "Block" },
+  { key: "variety", label: "Variety" },
+  { key: "worker", label: "Worker / crew" },
+  { key: "method", label: "Method" },
+  { key: "rows", label: "Rows" },
+  { key: "quarters", label: "Qtrs", align: "right" },
+  { key: "rowEq", label: "Row eq.", align: "right" },
+  { key: "vines", label: "Vines", align: "right" },
+  { key: "hours", label: "Hours", align: "right" },
+  { key: "start", label: "Start" },
+  { key: "finish", label: "Finish" },
+  { key: "duration", label: "Duration", align: "right" },
+  { key: "vinesPerHour", label: "Vines / hr", align: "right" },
+  { key: "rate", label: "Rate / hr", align: "right", cost: true },
+  { key: "cost", label: "Labour cost", align: "right", cost: true },
+  { key: "task", label: "Work task" },
+  { key: "taskStatus", label: "Task status" },
+  { key: "createdBy", label: "Created by" },
+  { key: "created", label: "Created" },
+  { key: "updated", label: "Updated" },
+  { key: "status", label: "Status" },
+];
+
+/** Columns hidden until the user turns them on. */
+const DEFAULT_HIDDEN: SortKey[] = [
+  "created", "updated", "status", "start", "finish", "duration", "task", "taskStatus",
+];
+
+const COLUMN_PREFS_KEY = "vinetrack.pruningActivity.columns.v1";
+
+
+
 /** Render "8:30 am" from a time or timestamp column, tolerating both shapes. */
 function formatTime(value: string | null): string {
   if (!value) return "—";
