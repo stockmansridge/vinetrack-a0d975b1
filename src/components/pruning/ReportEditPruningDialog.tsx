@@ -80,6 +80,9 @@ export default function ReportEditPruningDialog({
       allSegments={ctx.data.segments}
       vineyardId={vineyardId}
       paddockName={paddockName}
+      onPrev={onPrev}
+      onNext={onNext}
+      navLabel={navLabel}
     />
   );
 }
