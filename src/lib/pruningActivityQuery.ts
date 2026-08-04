@@ -211,7 +211,7 @@ export function usePruningActivity(vineyardId: string | null) {
         else segsByEntry.set(s.pruning_entry_id, [s]);
       });
 
-      return entries.map((e) => {
+      const baseRows = entries.map((e) => {
         const season = seasonById.get(e.pruning_season_id) ?? null;
         const paddock = paddockById.get(e.paddock_id) ?? null;
         const allocations = parseVarietyAllocations(paddock?.variety_allocations);
