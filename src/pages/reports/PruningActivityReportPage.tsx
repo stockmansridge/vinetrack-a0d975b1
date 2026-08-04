@@ -736,6 +736,31 @@ export default function PruningActivityReportPage() {
       )}
 
       <div className="flex items-center justify-end gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Columns3 className="h-3.5 w-3.5 mr-1" />
+              Columns ({visibleColumns.length}/{availableColumns.length})
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 max-h-[70vh] overflow-y-auto">
+            <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {availableColumns.map((c) => (
+              <DropdownMenuCheckboxItem
+                key={c.key}
+                checked={isVisible(c.key)}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={() => toggleColumn(c.key)}
+              >
+                {c.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setHidden(new Set())}>Show all</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHidden(new Set(DEFAULT_HIDDEN))}>Reset to default</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!sorted.length}>
           <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
@@ -744,6 +769,7 @@ export default function PruningActivityReportPage() {
           <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
         </Button>
       </div>
+
 
       {/* -------------------- Table -------------------- */}
       <Card className="overflow-x-auto">
