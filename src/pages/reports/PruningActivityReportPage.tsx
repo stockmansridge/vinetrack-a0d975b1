@@ -454,45 +454,56 @@ export default function PruningActivityReportPage() {
     doc.text(wrapped, margin, 80);
     doc.setTextColor(0);
 
-    const head = [
-      "Date", fmt.blockLabel, "Variety", "Worker", "Method", "Rows",
-      "Qtrs", "Row eq.", "Vines", "Hours", "Duration", "Vines/hr", "Work task", "Created by", "Status",
-    ];
-    if (canSeeCosts) head.push("Labour cost", "Rate/hr");
+    // PDF mirrors exactly what is on screen — only the visible columns.
+    const head = visibleColumns.map((c) => c.label);
 
-    const body = sorted.map((r) => {
-      const base = [
-        formatDate(r.date),
-        r.blockName,
-        r.variety,
-        r.worker,
-        r.method,
-        r.rowsLabel,
-        String(r.quarters),
-        r.rowEquivalents.toFixed(2),
-        r.vines.toLocaleString(),
-        r.labourHours == null ? "—" : r.labourHours.toFixed(2),
-        formatDuration(r.durationMinutes),
-        r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0),
-        r.workTaskLabel ?? "—",
-        resolveUser(r.createdById) ?? "—",
-        r.isReversed ? "Reversed" : "Recorded",
-      ];
-      if (canSeeCosts) base.push(money(r.labourCost), money(r.hourlyRate));
-      return base;
-    });
+    const pdfCell = (k: SortKey, r: PruningActivityRow): string => {
+      switch (k) {
+        case "date": return formatDate(r.date);
+        case "season": return r.hasSeasonLink ? String(r.seasonYear ?? "—") : "Unassigned";
+        case "vintage": return r.vintageYear == null ? "—" : String(r.vintageYear);
+        case "block": return r.blockName;
+        case "variety": return r.variety;
+        case "worker": return r.worker;
+        case "method": return r.method;
+        case "rows": return r.rowsLabel;
+        case "quarters": return String(r.quarters);
+        case "rowEq": return r.rowEquivalents.toFixed(2);
+        case "vines": return r.vines.toLocaleString();
+        case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+        case "start": return formatTime(r.startTime);
+        case "finish": return formatTime(r.finishTime);
+        case "duration": return formatDuration(r.durationMinutes);
+        case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
+        case "rate": return money(r.hourlyRate);
+        case "cost": return money(r.labourCost);
+        case "task": return r.workTaskLabel ?? "—";
+        case "taskStatus": return r.workTaskStatus ?? "—";
+        case "createdBy": return resolveUser(r.createdById) ?? "—";
+        case "created": return r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—";
+        case "updated": return r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—";
+        case "status": return r.isReversed ? "Reversed" : "Recorded";
+        default: return "";
+      }
+    };
 
-    const totalsRow = [
-      "Totals (active only)", "", "", "", "", "",
-      String(totals.quarters),
-      totals.rowEq.toFixed(2),
-      totals.vines.toLocaleString(),
-      totals.hours.toFixed(2),
-      "",
-      avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
-      "", "", "",
-    ];
-    if (canSeeCosts) totalsRow.push(money(totals.cost), "");
+    const body = sorted.map((r) => visibleColumns.map((c) => pdfCell(c.key, r)));
+
+    const pdfTotal = (k: SortKey): string => {
+      switch (k) {
+        case "quarters": return String(totals.quarters);
+        case "rowEq": return totals.rowEq.toFixed(2);
+        case "vines": return totals.vines.toLocaleString();
+        case "hours": return totals.hours.toFixed(2);
+        case "vinesPerHour": return avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0);
+        case "cost": return money(totals.cost);
+        default: return "";
+      }
+    };
+    const totalsRow = visibleColumns.map((c, i) =>
+      i === 0 ? "Totals (active only)" : pdfTotal(c.key),
+    );
+
 
     autoTable(doc, {
       head: [head],

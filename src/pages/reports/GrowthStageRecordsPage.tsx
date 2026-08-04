@@ -34,6 +34,7 @@ import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import {
@@ -129,11 +130,25 @@ export default function GrowthStageRecordsPage() {
 
   const GS_COLS = ["date","block","variety","stage","notes","photo","operator"] as const;
   type GsCol = (typeof GS_COLS)[number];
-  const { order: gsOrder, moveColumn: gsMove, reset: gsReset } = useColumnOrder(
+  const GS_COLUMN_DEFS: ColumnDef<GsCol>[] = [
+    { key: "date", label: "Date" },
+    { key: "block", label: rf.blockLabel },
+    { key: "variety", label: "Variety" },
+    { key: "stage", label: "E-L stage" },
+    { key: "notes", label: "Notes" },
+    { key: "photo", label: "Photo" },
+    { key: "operator", label: "Operator" },
+  ];
+  const gsColumnPrefs = useColumnPrefs<GsCol>({
+    storageKey: "growthStageRecords.columns",
+    columns: GS_COLUMN_DEFS,
+  });
+  const { order: gsOrderRaw, moveColumn: gsMove, reset: gsReset } = useColumnOrder(
     "growth_stage_records_table",
     GS_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+  const gsOrder = (gsOrderRaw as GsCol[]).filter(gsColumnPrefs.isVisible);
   const { sorted: gsSorted, getSortDirection: gsDir, toggleSort: gsToggle } = useSortableTable<GrowthStageRecord, GsCol>(rows, {
     accessors: {
       date: (r) => r.date ?? null,
@@ -271,14 +286,15 @@ export default function GrowthStageRecordsPage() {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <ColumnSelector prefs={gsColumnPrefs} />
         <ColumnSettingsMenu onReset={gsReset} />
       </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              {(gsOrder as GsCol[]).map((id) => {
+              {gsOrder.map((id) => {
                 const labels: Record<GsCol, string> = {
                   date: "Date", block: rf.blockLabel, variety: "Variety",
                   stage: "E-L stage", notes: "Notes", photo: "Photo", operator: "Operator",
@@ -295,14 +311,14 @@ export default function GrowthStageRecordsPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={gsOrder.length} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
             )}
             {error && (
-              <TableRow><TableCell colSpan={7} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={gsOrder.length} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
             )}
             {!isLoading && !error && gsSorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={gsOrder.length} className="text-center text-muted-foreground py-8">
                   No growth stage records found for this vineyard.
                 </TableCell>
               </TableRow>
@@ -319,7 +335,7 @@ export default function GrowthStageRecordsPage() {
               };
               return (
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                  {(gsOrder as GsCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                  {gsOrder.map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                 </TableRow>
               );
             })}

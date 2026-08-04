@@ -40,6 +40,7 @@ import { RainCalendar } from "@/components/rainfall/RainCalendar";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
 
@@ -272,10 +273,23 @@ function RainfallTable({ rows }: { rows: any[] }) {
 
   const COLS = ["date", "rainfall", "source", "station", "notes", "updated"] as const;
   type Col = (typeof COLS)[number];
-  const { order, moveColumn, reset } = useColumnOrder(
+  const COLUMN_DEFS: ColumnDef<Col>[] = [
+    { key: "date", label: "Date" },
+    { key: "rainfall", label: "Rainfall (mm)", align: "right" },
+    { key: "source", label: "Source" },
+    { key: "station", label: "Station" },
+    { key: "notes", label: "Notes" },
+    { key: "updated", label: "Updated" },
+  ];
+  const columnPrefs = useColumnPrefs<Col>({
+    storageKey: "rainfallReports.columns",
+    columns: COLUMN_DEFS,
+  });
+  const { order: orderRaw, moveColumn, reset } = useColumnOrder(
     "rainfall_reports_table",
     COLS as unknown as string[],
   );
+  const order = (orderRaw as Col[]).filter(columnPrefs.isVisible);
 
   const headerMap: Record<Col, React.ReactNode> = {
     date: <ReorderableHead columnId="date" onDropColumn={moveColumn} sort={{ active: getSortDirection("date"), onSort: () => toggleSort("date") }}>Date</ReorderableHead>,
@@ -313,19 +327,20 @@ function RainfallTable({ rows }: { rows: any[] }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-end px-2 pt-2">
+      <div className="flex justify-end gap-2 px-2 pt-2">
+        <ColumnSelector prefs={columnPrefs} />
         <ColumnSettingsMenu onReset={reset} />
       </div>
       <Table>
         <TableHeader>
           <TableRow>
-            {(order as Col[]).map((id) => <Fragment key={id}>{headerMap[id]}</Fragment>)}
+            {order.map((id) => <Fragment key={id}>{headerMap[id]}</Fragment>)}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sorted.map((r) => (
             <TableRow key={r.date}>
-              {(order as Col[]).map((id) => <Fragment key={id}>{renderCell(r, id)}</Fragment>)}
+              {order.map((id) => <Fragment key={id}>{renderCell(r, id)}</Fragment>)}
             </TableRow>
           ))}
         </TableBody>

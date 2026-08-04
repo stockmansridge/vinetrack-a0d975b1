@@ -52,6 +52,7 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { Fragment } from "react";
 import { useSortableTable } from "@/lib/useSortableTable";
 
@@ -530,25 +531,32 @@ function DocumentsLibraryTable({
 }) {
   const DOC_COLS = ["name","type","vineyard","block","related","date","source"] as const;
   type DocCol = (typeof DOC_COLS)[number];
-  const { order, moveColumn, reset } = useColumnOrder(
-    "documents_library_table",
-    DOC_COLS as unknown as string[],
-    { vineyardId },
-  );
   const labels: Record<DocCol, string> = {
     name: "Name", type: "Type", vineyard: "Vineyard", block: blockLabel,
     related: "Related", date: "Date", source: "Source",
   };
+  const COLUMN_DEFS: ColumnDef<DocCol>[] = DOC_COLS.map((key) => ({ key, label: labels[key] }));
+  const columnPrefs = useColumnPrefs<DocCol>({
+    storageKey: "documentsLibrary.columns",
+    columns: COLUMN_DEFS,
+  });
+  const { order: orderRaw, moveColumn, reset } = useColumnOrder(
+    "documents_library_table",
+    DOC_COLS as unknown as string[],
+    { vineyardId },
+  );
+  const order = (orderRaw as DocCol[]).filter(columnPrefs.isVisible);
   return (
     <>
-      <div className="flex justify-end mb-2">
+      <div className="flex justify-end gap-2 mb-2">
+        <ColumnSelector prefs={columnPrefs} />
         <ColumnSettingsMenu onReset={reset} />
       </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
-              {(order as DocCol[]).map((id) => (
+              {order.map((id) => (
                 <ReorderableHead key={id} columnId={id} onDropColumn={moveColumn}
                   sort={{ active: getSortDirection(id as DocSortKey), onSort: () => toggleSort(id as DocSortKey) }}>
                   {labels[id]}
@@ -560,12 +568,12 @@ function DocumentsLibraryTable({
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">Loading…</TableCell>
+                <TableCell colSpan={order.length + 1} className="text-center text-sm text-muted-foreground py-8">Loading…</TableCell>
               </TableRow>
             )}
             {!loading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">No documents match the current filters.</TableCell>
+                <TableCell colSpan={order.length + 1} className="text-center text-sm text-muted-foreground py-8">No documents match the current filters.</TableCell>
               </TableRow>
             )}
             {!loading && rows.map((it) => {
@@ -580,7 +588,7 @@ function DocumentsLibraryTable({
               };
               return (
                 <TableRow key={it.id}>
-                  {(order as DocCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                  {order.map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                   <TableCell className="text-right space-x-1">
                     {it.formats.map((f) =>
                       it.onDownload ? (

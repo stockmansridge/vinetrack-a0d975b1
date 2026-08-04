@@ -47,6 +47,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
@@ -467,6 +468,25 @@ export default function CostReportsPage() {
     COST_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+
+  const COST_COLUMN_LABELS: Record<CostCol, string> = {
+    season: "Season", block: rf.blockLabel, variety: "Variety",
+    area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
+    labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
+    total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
+    trips: "Trips", status: "Status", warnings: "Warnings",
+  };
+  const COST_RIGHT_COLS = new Set<CostCol>(["area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips"]);
+  const COST_COLUMN_DEFS: ColumnDef<CostCol>[] = COST_COLS.map((key) => ({
+    key,
+    label: COST_COLUMN_LABELS[key],
+    align: COST_RIGHT_COLS.has(key) ? "right" : undefined,
+  }));
+  const costColumnPrefs = useColumnPrefs<CostCol>({
+    storageKey: "costReports.table",
+    columns: COST_COLUMN_DEFS,
+  });
+  const visibleCostOrder = (cOrder as CostCol[]).filter((id) => costColumnPrefs.isVisible(id));
   const { sorted: filteredSorted, getSortDirection: cDir, toggleSort: cToggle } = useSortableTable<typeof filtered[number], CostCol>(filtered, {
     accessors: {
       season: (g) => g.season_year ?? null,
@@ -521,6 +541,39 @@ export default function CostReportsPage() {
     a.download = `cost-reports-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function exportCostTablePdf() {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+    const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+    const cellText: Record<CostCol, (g: typeof filteredSorted[number]) => string> = {
+      season: (g) => String(g.season_year ?? "—"),
+      block: (g) => g.paddock_name ?? "—",
+      variety: (g) => g.variety ?? "Unassigned",
+      area: (g) => fmtArea(g.allocation_area_ha),
+      yield: (g) => fmtNum(g.yield_tonnes),
+      labour: (g) => fmtMoney(g.labour_cost),
+      fuel: (g) => fmtMoney(g.fuel_cost),
+      chemical: (g) => fmtMoney(g.chemical_cost),
+      input: (g) => fmtMoney(g.input_cost),
+      total: (g) => fmtMoney(g.total_cost),
+      cost_ha: (g) => fmtMoneyPerArea(g.cost_per_ha),
+      cost_t: (g) => fmtMoney(g.cost_per_tonne),
+      trips: (g) => String(g.trip_count),
+      status: (g) => g.status ?? "—",
+      warnings: (g) => String(g.warnings_count),
+    };
+    autoTable(doc, {
+      head: [visibleCostOrder.map((id) => COST_COLUMN_LABELS[id])],
+      body: filteredSorted.map((g) => visibleCostOrder.map((id) => cellText[id](g))),
+      styles: { fontSize: 7.5, cellPadding: 3 },
+      headStyles: { fillColor: [40, 62, 44], textColor: 255 },
+      margin: { left: 24, right: 24 },
+    });
+    doc.save(`cost-reports-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
   const setupSummary = useCostingSetupSummary(canSeeCosts ? selectedVineyardId : null);
@@ -957,6 +1010,10 @@ export default function CostReportsPage() {
         <TabsContent value="table" className="space-y-3">
           <div className="flex justify-end gap-2">
             <ColumnSettingsMenu onReset={cReset} />
+            <ColumnSelector prefs={costColumnPrefs} />
+            <Button onClick={exportCostTablePdf} variant="outline" size="sm" disabled={filtered.length === 0}>
+              <Download className="h-4 w-4 mr-2" />Export PDF
+            </Button>
             <Button onClick={exportCsv} variant="outline" size="sm" disabled={filtered.length === 0}>
               <Download className="h-4 w-4 mr-2" />Export CSV
             </Button>
@@ -965,20 +1022,12 @@ export default function CostReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {(cOrder as CostCol[]).map((id) => {
-                    const labels: Record<CostCol, string> = {
-                      season: "Season", block: rf.blockLabel, variety: "Variety",
-                      area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
-                      labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
-                      total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
-                      trips: "Trips", status: "Status", warnings: "Warnings",
-                    };
-                    const rightCols = new Set<CostCol>(["area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips"]);
-                    const align: "left" | "right" = rightCols.has(id) ? "right" : "left";
+                  {visibleCostOrder.map((id) => {
+                    const align: "left" | "right" = COST_RIGHT_COLS.has(id) ? "right" : "left";
                     return (
                       <ReorderableHead key={id} columnId={id} onDropColumn={cMove} align={align}
                         sort={{ active: cDir(id), onSort: () => cToggle(id) }}>
-                        {labels[id]}
+                        {COST_COLUMN_LABELS[id]}
                       </ReorderableHead>
                     );
                   })}
@@ -986,10 +1035,10 @@ export default function CostReportsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
                 )}
                 {!isLoading && filteredSorted.length === 0 && (
-                  <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground py-8">
+                  <TableRow><TableCell colSpan={visibleCostOrder.length} className="text-center text-muted-foreground py-8">
                     No cost allocations match these filters.
                   </TableCell></TableRow>
                 )}
@@ -1042,7 +1091,7 @@ export default function CostReportsPage() {
                   };
                   return (
                     <TableRow key={g.key} className="cursor-pointer" onClick={() => setDrill(g)}>
-                      {(cOrder as CostCol[]).map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
+                      {visibleCostOrder.map((id) => <Fragment key={id}>{cellMap[id]}</Fragment>)}
                     </TableRow>
                   );
                 })}
