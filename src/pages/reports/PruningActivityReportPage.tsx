@@ -1061,7 +1061,15 @@ export default function PruningActivityReportPage() {
                 </TableCell>
               </TableRow>
             ) : sorted.map((r) => (
-              <TableRow key={r.id} className={r.isReversed ? "bg-muted/20" : undefined}>
+              <TableRow
+                key={r.id}
+                className={[
+                  r.isReversed ? "bg-muted/20" : "",
+                  // Grouping treatment: allocations of one activity share a left rule.
+                  r.activityBlockCount > 1 ? "border-l-2 border-l-primary/50" : "",
+                  r.activityBlockCount > 1 && !r.isPrimaryAllocation ? "bg-muted/10" : "",
+                ].filter(Boolean).join(" ") || undefined}
+              >
                 {visibleColumns.map((c) => (
                   <TableCell key={c.key} className={cellClass(c.key)}>{renderCell(c.key, r)}</TableCell>
                 ))}
