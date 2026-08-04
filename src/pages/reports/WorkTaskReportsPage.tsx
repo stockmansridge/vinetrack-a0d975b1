@@ -1587,8 +1587,8 @@ export default function WorkTaskReportsPage() {
     XLSX.writeFile(wb, `work-task-${fmt.blockLabel.toLowerCase()}-allocation-${safeName}-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
     toast({ title: "Excel exported", description: `${allocationRows.length} row${allocationRows.length === 1 ? "" : "s"} exported.` });
   };
-  // Toggle + Block + Tasks + Area + Labour + Machine + Linked + Status = 8 base; cost adds 6.
-  const allocColSpan = 8 + (canSeeCosts ? 6 : 0);
+
+
 
   // Independent expand state for allocation rows (keyed by row.key, e.g. paddockId
   // or "__unallocated__"). Kept separate from `expanded` so opening an allocation
