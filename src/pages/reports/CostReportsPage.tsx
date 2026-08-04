@@ -536,7 +536,7 @@ export default function CostReportsPage() {
   );
 
   const COST_COLUMN_LABELS: Record<CostCol, string> = {
-    season: "Season", block: rf.blockLabel, variety: "Variety",
+    season: "Vintage", block: rf.blockLabel, variety: "Variety",
     area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
     labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
     total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
@@ -577,7 +577,7 @@ export default function CostReportsPage() {
 
   function exportCsv() {
     const headers = [
-      "season","block","variety","treated_area_ha","yield_tonnes",
+      "vintage_year","block","variety","treated_area_ha","yield_tonnes",
       "labour_cost","fuel_cost","chemical_cost","input_cost","total_cost",
       "cost_per_ha","cost_per_tonne","contributing_trips","warnings_count","status",
     ];
@@ -687,8 +687,8 @@ export default function CostReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Cost Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Decision-support view of trip cost allocations. Filters apply
-            across every tab.
+            Unified operational costs — field trips and pruning activity labour —
+            grouped by vintage. Filters apply across every tab.
           </p>
         </div>
       </div>
@@ -1180,7 +1180,7 @@ export default function CostReportsPage() {
                   {drill.variety ? ` · ${drill.variety}` : ""}
                 </SheetTitle>
                 <SheetDescription>
-                  Season {drill.season_year ?? "—"} · {drill.trip_count} contributing trip{drill.trip_count === 1 ? "" : "s"}
+                  Vintage {drill.season_year ?? "—"} · {drill.trip_count} contributing trip{drill.trip_count === 1 ? "" : "s"}
                 </SheetDescription>
               </SheetHeader>
 
@@ -1260,7 +1260,7 @@ export default function CostReportsPage() {
                         <Badge variant="outline">{tripFunctionLabel(r.trip_function ?? "") ?? "—"}</Badge>
                       </div>
                       <div className="text-muted-foreground">
-                        Season {r.season_year ?? "—"} · total {fmtMoney(Number(r.total_cost ?? 0))}
+                        Vintage {r.season_year ?? "—"} · total {fmtMoney(Number(r.total_cost ?? 0))}
                       </div>
                       {warns.length > 0 && (
                         <ul className="text-[11px] mt-1 space-y-0.5 list-disc list-inside text-amber-700">
