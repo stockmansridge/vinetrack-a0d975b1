@@ -33,11 +33,7 @@ export default function ActivityHistory({
   const reverse = useReversePruningEntry(seasonId);
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
 
-  // Only non-reversed entries can be opened/edited; navigation walks this list.
-  const editableEntries = entries.filter((e) => !e.deleted_at);
-  const editIndex = editEntryId ? editableEntries.findIndex((e) => e.id === editEntryId) : -1;
-  const editEntry = editIndex >= 0 ? editableEntries[editIndex] : null;
-  const rowsClickable = canEdit && !!vineyardId;
+  const editEntry = editEntryId ? entries.find((e) => e.id === editEntryId) ?? null : null;
 
   const handleReverse = async (entry: PruningEntry) => {
     if (!confirm("Reverse this entry? Its row quarters will become available again.")) return;
