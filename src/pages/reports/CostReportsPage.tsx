@@ -47,6 +47,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
+import { useColumnPrefs, ColumnSelector, type ColumnDef } from "@/hooks/useColumnPrefs";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
@@ -467,6 +468,25 @@ export default function CostReportsPage() {
     COST_COLS as unknown as string[],
     { vineyardId: selectedVineyardId },
   );
+
+  const COST_COLUMN_LABELS: Record<CostCol, string> = {
+    season: "Season", block: rf.blockLabel, variety: "Variety",
+    area: `Treated area (${rf.areaUnitLabel})`, yield: "Yield (t)",
+    labour: "Labour", fuel: "Fuel", chemical: "Chemical", input: "Seed/input",
+    total: "Total", cost_ha: `Cost/${rf.areaUnitLabel}`, cost_t: "Cost/t",
+    trips: "Trips", status: "Status", warnings: "Warnings",
+  };
+  const COST_RIGHT_COLS = new Set<CostCol>(["area","yield","labour","fuel","chemical","input","total","cost_ha","cost_t","trips"]);
+  const COST_COLUMN_DEFS: ColumnDef<CostCol>[] = COST_COLS.map((key) => ({
+    key,
+    label: COST_COLUMN_LABELS[key],
+    align: COST_RIGHT_COLS.has(key) ? "right" : undefined,
+  }));
+  const costColumnPrefs = useColumnPrefs<CostCol>({
+    storageKey: "costReports.table",
+    columns: COST_COLUMN_DEFS,
+  });
+  const visibleCostOrder = (cOrder as CostCol[]).filter((id) => costColumnPrefs.isVisible(id));
   const { sorted: filteredSorted, getSortDirection: cDir, toggleSort: cToggle } = useSortableTable<typeof filtered[number], CostCol>(filtered, {
     accessors: {
       season: (g) => g.season_year ?? null,
