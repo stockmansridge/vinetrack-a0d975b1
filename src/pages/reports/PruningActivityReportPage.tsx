@@ -803,7 +803,7 @@ export default function PruningActivityReportPage() {
                     : <span className="text-xs text-muted-foreground">Recorded</span>}
                 </TableCell>
                 {canEdit && (
-                  <TableCell className="text-right">
+                  <TableCell className="text-right sticky right-0 bg-background border-l shadow-[-6px_0_8px_-8px_hsl(var(--foreground)/0.3)]">
                     <Button
                       size="sm"
                       variant="ghost"
@@ -815,6 +815,7 @@ export default function PruningActivityReportPage() {
                     </Button>
                   </TableCell>
                 )}
+
 
               </TableRow>
             ))}
