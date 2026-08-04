@@ -497,6 +497,10 @@ export default function PruningActivityReportPage() {
     const pdfCell = (k: SortKey, r: PruningActivityRow): string => {
       switch (k) {
         case "date": return formatDate(r.date);
+        case "activity":
+          return r.activityId
+            ? `${activityCode(r)} (${r.allocationIndex}/${r.activityBlockCount})`
+            : "Single entry";
         case "season": return r.hasSeasonLink ? String(r.seasonYear ?? "—") : "Unassigned";
         case "vintage": return r.vintageYear == null ? "—" : String(r.vintageYear);
         case "block": return r.blockName;
@@ -507,13 +511,20 @@ export default function PruningActivityReportPage() {
         case "quarters": return String(r.quarters);
         case "rowEq": return r.rowEquivalents.toFixed(2);
         case "vines": return r.vines.toLocaleString();
-        case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+        case "share": return `${(r.allocationShare * 100).toFixed(1)}%`;
+        case "hours": return r.allocatedHours.toFixed(2);
         case "start": return formatTime(r.startTime);
         case "finish": return formatTime(r.finishTime);
         case "duration": return formatDuration(r.durationMinutes);
         case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
         case "rate": return money(r.hourlyRate);
-        case "cost": return money(r.labourCost);
+        case "cost": return money(r.allocatedCost);
+        case "activityHours":
+          return r.isPrimaryAllocation && r.activityHours != null
+            ? `${r.activityHours.toFixed(2)} (activity total)` : "";
+        case "activityCost":
+          return r.isPrimaryAllocation && r.activityCost != null
+            ? `${money(r.activityCost)} (activity total)` : "";
         case "task": return r.workTaskLabel ?? "—";
         case "taskStatus": return r.workTaskStatus ?? "—";
         case "createdBy": return resolveUser(r.createdById) ?? "—";
@@ -534,9 +545,12 @@ export default function PruningActivityReportPage() {
         case "hours": return totals.hours.toFixed(2);
         case "vinesPerHour": return avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0);
         case "cost": return money(totals.cost);
+        case "activityHours": return totals.activityHours.toFixed(2);
+        case "activityCost": return money(totals.activityCost);
         default: return "";
       }
     };
+
     const totalsRow = visibleColumns.map((c, i) =>
       i === 0 ? "Totals (active only)" : pdfTotal(c.key),
     );
