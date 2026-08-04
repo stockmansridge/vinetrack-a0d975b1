@@ -15,12 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
 import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocationEditor";
+import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
+
 import {
   activityTotals, allocationKey, allocationQuarterCount,
   type BlockAllocationDraft, type PruningActivityDraft,
@@ -331,15 +333,17 @@ export default function PruningActivityDialog({
                     ...d, hourlyRate: e.target.value === "" ? null : Number(e.target.value),
                   }))} />
               </div>
-              <div className="space-y-1">
-                <Label>Work Task</Label>
-                <div className="h-10 flex items-center text-sm text-muted-foreground">
-                  {draft.workTaskId
-                    ? <Badge variant="outline">Linked</Badge>
-                    : <span>Not linked</span>}
-                </div>
-              </div>
             </div>
+
+            <ActivityWorkTaskField
+              vineyardId={vineyardId}
+              draft={draft}
+              activityId={activityId}
+              value={draft.workTaskId}
+              onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
+              disabled={save.isPending}
+            />
+
 
             <div className="space-y-1">
               <Label htmlFor="pa-notes">Notes</Label>
