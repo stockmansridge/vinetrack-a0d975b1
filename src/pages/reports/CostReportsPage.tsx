@@ -278,6 +278,7 @@ export default function CostReportsPage() {
 
   const [tab, setTab] = useState<string>("overview");
   const [season, setSeason] = useState<string>(ANY);
+  const [opYear, setOpYear] = useState<string>(ANY);
   const [paddock, setPaddock] = useState<string>(ANY);
   const [variety, setVariety] = useState<string>(ANY);
   const [tripFn, setTripFn] = useState<string>(ANY);
@@ -291,9 +292,11 @@ export default function CostReportsPage() {
     return rows.filter((r) => {
       if (tripFn !== ANY && (r.trip_function ?? "") !== tripFn) return false;
       if (status !== ANY && (r.costing_status ?? "") !== status) return false;
+      if (opYear !== ANY && String(r.operation_year ?? "") !== opYear) return false;
       return true;
     });
-  }, [rows, tripFn, status]);
+  }, [rows, tripFn, status, opYear]);
+
 
   const grouped: GroupedRow[] = useMemo(() => {
     const map = new Map<string, GroupedRow>();
