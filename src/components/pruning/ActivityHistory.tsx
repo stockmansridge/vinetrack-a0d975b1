@@ -33,7 +33,13 @@ export default function ActivityHistory({
   const reverse = useReversePruningEntry(seasonId);
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
 
-  const editEntry = editEntryId ? entries.find((e) => e.id === editEntryId) ?? null : null;
+  // Entries that can be opened in the editor, in the order they are listed.
+  // Used to drive the dialog's prev/next navigation (same as the Pruning
+  // Activity Report).
+  const editable = entries.filter((e) => !e.deleted_at);
+  const editIndex = editEntryId ? editable.findIndex((e) => e.id === editEntryId) : -1;
+  const editEntry = editIndex >= 0 ? editable[editIndex] : null;
+
 
   const handleReverse = async (entry: PruningEntry) => {
     if (!confirm("Reverse this entry? Its row quarters will become available again.")) return;
@@ -155,8 +161,12 @@ export default function ActivityHistory({
           allSegments={allSegments}
           vineyardId={vineyardId}
           paddockName={paddockName}
+          onPrev={editIndex > 0 ? () => setEditEntryId(editable[editIndex - 1].id) : undefined}
+          onNext={editIndex < editable.length - 1 ? () => setEditEntryId(editable[editIndex + 1].id) : undefined}
+          navLabel={`${editIndex + 1} of ${editable.length}`}
         />
       )}
+
     </Card>
   );
 }
