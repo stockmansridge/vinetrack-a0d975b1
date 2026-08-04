@@ -331,15 +331,17 @@ export default function PruningActivityDialog({
                     ...d, hourlyRate: e.target.value === "" ? null : Number(e.target.value),
                   }))} />
               </div>
-              <div className="space-y-1">
-                <Label>Work Task</Label>
-                <div className="h-10 flex items-center text-sm text-muted-foreground">
-                  {draft.workTaskId
-                    ? <Badge variant="outline">Linked</Badge>
-                    : <span>Not linked</span>}
-                </div>
-              </div>
             </div>
+
+            <ActivityWorkTaskField
+              vineyardId={vineyardId}
+              draft={draft}
+              activityId={activityId}
+              value={draft.workTaskId}
+              onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
+              disabled={save.isPending}
+            />
+
 
             <div className="space-y-1">
               <Label htmlFor="pa-notes">Notes</Label>
