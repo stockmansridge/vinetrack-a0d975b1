@@ -665,13 +665,38 @@ export default function PruningActivityReportPage() {
       case "quarters": return r.quarters;
       case "rowEq": return r.rowEquivalents.toFixed(2);
       case "vines": return r.vines.toLocaleString();
-      case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+      case "share":
+        return (
+          <span title="Share of this activity's total row equivalents">
+            {(r.allocationShare * 100).toFixed(1)}%
+          </span>
+        );
+      case "hours": return r.allocatedHours.toFixed(2);
       case "start": return formatTime(r.startTime);
       case "finish": return formatTime(r.finishTime);
       case "duration": return formatDuration(r.durationMinutes);
       case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
       case "rate": return money(r.hourlyRate);
-      case "cost": return money(r.labourCost);
+      case "cost": return money(r.allocatedCost);
+      case "activityHours":
+        return r.isPrimaryAllocation && r.activityHours != null ? (
+          <span>
+            {r.activityHours.toFixed(2)}
+            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+              Activity total
+            </span>
+          </span>
+        ) : <span className="text-muted-foreground text-xs">—</span>;
+      case "activityCost":
+        return r.isPrimaryAllocation && r.activityCost != null ? (
+          <span className="font-medium">
+            {money(r.activityCost)}
+            <span className="block text-[10px] uppercase tracking-wide font-normal text-muted-foreground">
+              Activity total
+            </span>
+          </span>
+        ) : <span className="text-muted-foreground text-xs">—</span>;
+
       case "task":
         return r.workTaskId ? (
           <Link
