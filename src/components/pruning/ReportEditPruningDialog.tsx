@@ -18,10 +18,13 @@ interface Props {
   entry: PruningEntry;
   vineyardId: string;
   paddockName: string;
+  onPrev?: () => void;
+  onNext?: () => void;
+  navLabel?: string;
 }
 
 export default function ReportEditPruningDialog({
-  open, onOpenChange, entry, vineyardId, paddockName,
+  open, onOpenChange, entry, vineyardId, paddockName, onPrev, onNext, navLabel,
 }: Props) {
   const ctx = useQuery({
     queryKey: ["pruning", "edit-context", entry.id, entry.paddock_id, entry.pruning_season_id],
