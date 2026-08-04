@@ -663,7 +663,14 @@ export default function CostReportsPage() {
     byBlock.map((b) => ({ name: b.name, value: b.total, costPerHa: b.costPerHa, trips: b.trips, warnings: b.warnings })),
     10,
   );
+  const topVarietyByTotal = topNWithOther(
+    byVariety.map((v) => ({
+      name: v.name, value: v.total, costPerHa: v.costPerHa, costPerT: v.costPerT, yieldT: v.yieldT,
+    })),
+    10,
+  );
   const topVarietyByCostPerHa = topNWithOther(
+
     byVariety
       .filter((v) => v.costPerHa != null)
       .map((v) => ({ name: v.name, value: v.costPerHa as number, total: v.total, trips: v.trips })),
