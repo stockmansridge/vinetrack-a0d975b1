@@ -722,19 +722,21 @@ export default function CostReportsPage() {
 
       {/* Global filter bar — applies to every tab */}
       <Card className="p-3 flex flex-wrap gap-2 items-center">
-        <FilterSelect label="Season" value={season} onChange={setSeason} options={seasons.map(String)} />
+        <FilterSelect label="Vintage" value={season} onChange={setSeason} options={seasons.map(String)} />
+        <FilterSelect label="Operation year" value={opYear} onChange={setOpYear} options={opYears.map(String)} />
         <FilterSelect label={rf.blockLabel} value={paddock} onChange={setPaddock} options={paddocks} />
         <FilterSelect label="Variety" value={variety} onChange={setVariety} options={varieties} />
         <FilterSelect label="Function" value={tripFn} onChange={setTripFn} options={tripFns} renderLabel={(v) => tripFunctionLabel(v) ?? v} />
         <FilterSelect label="Status" value={status} onChange={setStatus} options={statuses} />
-        {(season !== ANY || paddock !== ANY || variety !== ANY || tripFn !== ANY || status !== ANY) && (
+        {(season !== ANY || opYear !== ANY || paddock !== ANY || variety !== ANY || tripFn !== ANY || status !== ANY) && (
           <Button
             variant="ghost" size="sm"
-            onClick={() => { setSeason(ANY); setPaddock(ANY); setVariety(ANY); setTripFn(ANY); setStatus(ANY); }}
+            onClick={() => { setSeason(ANY); setOpYear(ANY); setPaddock(ANY); setVariety(ANY); setTripFn(ANY); setStatus(ANY); }}
           >
             Clear filters
           </Button>
         )}
+
       </Card>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
