@@ -385,7 +385,7 @@ export default function PruningActivityReportPage() {
 
     const head = [
       "Date", fmt.blockLabel, "Variety", "Worker", "Method", "Rows",
-      "Qtrs", "Row eq.", "Vines", "Hours", "Duration", "Vines/hr", "Work task", "Status",
+      "Qtrs", "Row eq.", "Vines", "Hours", "Duration", "Vines/hr", "Work task", "Created by", "Status",
     ];
     if (canSeeCosts) head.push("Labour cost", "Rate/hr");
 
@@ -404,6 +404,7 @@ export default function PruningActivityReportPage() {
         formatDuration(r.durationMinutes),
         r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0),
         r.workTaskLabel ?? "—",
+        resolveUser(r.createdById) ?? "—",
         r.isReversed ? "Reversed" : "Recorded",
       ];
       if (canSeeCosts) base.push(money(r.labourCost), money(r.hourlyRate));
@@ -418,7 +419,7 @@ export default function PruningActivityReportPage() {
       totals.hours.toFixed(2),
       "",
       avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0),
-      "", "",
+      "", "", "",
     ];
     if (canSeeCosts) totalsRow.push(money(totals.cost), "");
 
