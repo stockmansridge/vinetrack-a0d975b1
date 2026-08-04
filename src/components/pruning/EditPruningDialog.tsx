@@ -177,17 +177,27 @@ export default function EditPruningDialog({
   const [labourDrafts, setLabourDrafts] = useState<LabourDraft[]>([]);
   const [removedLineIds, setRemovedLineIds] = useState<Set<string>>(new Set());
 
+  // Creating a NEW Work Task for an entry that has none (cost tracking).
+  const [createTask, setCreateTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskStatus, setNewTaskStatus] = useState("completed");
+
   useEffect(() => {
     if (!open) return;
     setSyncLinkedTask(true);
     setClearWorkTask(false);
     setRemovedLineIds(new Set());
-  }, [open, entry.id]);
+    setCreateTask(false);
+    setNewTaskTitle(`Pruning — ${paddockName}`);
+    setNewTaskStatus("completed");
+    if (!entry.work_task_id) setLabourDrafts([]);
+  }, [open, entry.id, entry.work_task_id, paddockName]);
 
   useEffect(() => {
     if (!linkedTaskQ.data) return;
     setLabourDrafts(linkedLines.map(toDraft));
   }, [linkedTaskQ.data, linkedLines]);
+
 
   // Worker type categories
   const { data: categoriesResult } = useQuery({
