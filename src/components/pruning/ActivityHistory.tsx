@@ -161,8 +161,12 @@ export default function ActivityHistory({
           allSegments={allSegments}
           vineyardId={vineyardId}
           paddockName={paddockName}
+          onPrev={editIndex > 0 ? () => setEditEntryId(editable[editIndex - 1].id) : undefined}
+          onNext={editIndex < editable.length - 1 ? () => setEditEntryId(editable[editIndex + 1].id) : undefined}
+          navLabel={`${editIndex + 1} of ${editable.length}`}
         />
       )}
+
     </Card>
   );
 }
