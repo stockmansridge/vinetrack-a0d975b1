@@ -54,14 +54,16 @@ const UNASSIGNED = "__unassigned__";
 
 
 type SortKey =
-  | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
-  | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "start" | "finish"
-  | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
+  | "date" | "activity" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
+  | "rows" | "quarters" | "rowEq" | "vines" | "share" | "hours" | "start" | "finish"
+  | "duration" | "vinesPerHour" | "rate" | "cost" | "activityHours" | "activityCost"
+  | "task" | "taskStatus"
   | "createdBy" | "created" | "updated" | "status";
 
 /** Column registry — order here is the display order of the table. */
 const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolean }[] = [
   { key: "date", label: "Date" },
+  { key: "activity", label: "Activity" },
   { key: "season", label: "Season", align: "right" },
   { key: "vintage", label: "Vintage", align: "right" },
   { key: "block", label: "Block" },
@@ -72,13 +74,16 @@ const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolea
   { key: "quarters", label: "Qtrs", align: "right" },
   { key: "rowEq", label: "Row eq.", align: "right" },
   { key: "vines", label: "Vines", align: "right" },
-  { key: "hours", label: "Hours", align: "right" },
+  { key: "share", label: "Share", align: "right" },
+  { key: "hours", label: "Allocated hrs", align: "right" },
   { key: "start", label: "Start" },
   { key: "finish", label: "Finish" },
   { key: "duration", label: "Duration", align: "right" },
   { key: "vinesPerHour", label: "Vines / hr", align: "right" },
   { key: "rate", label: "Rate / hr", align: "right", cost: true },
-  { key: "cost", label: "Labour cost", align: "right", cost: true },
+  { key: "cost", label: "Allocated labour cost", align: "right", cost: true },
+  { key: "activityHours", label: "Activity total hrs", align: "right" },
+  { key: "activityCost", label: "Activity total cost", align: "right", cost: true },
   { key: "task", label: "Work task" },
   { key: "taskStatus", label: "Task status" },
   { key: "createdBy", label: "Created by" },
@@ -92,7 +97,8 @@ const DEFAULT_HIDDEN: SortKey[] = [
   "created", "updated", "status", "start", "finish", "duration", "task", "taskStatus",
 ];
 
-const COLUMN_PREFS_KEY = "vinetrack.pruningActivity.columns.v1";
+const COLUMN_PREFS_KEY = "vinetrack.pruningActivity.columns.v2";
+
 
 
 
