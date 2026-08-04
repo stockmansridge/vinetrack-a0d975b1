@@ -40,6 +40,8 @@ import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib
 import { useAuth } from "@/context/AuthContext";
 import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { useTeamLookup } from "@/hooks/useTeamLookup";
+
 
 interface Props {
   open: boolean;
@@ -103,6 +105,9 @@ export default function EditPruningDialog({
   const rf = useRegionFormatters();
   const money = (v: number) => rf.currency(v);
   const update = useUpdatePruningEntry(entry.pruning_season_id, vineyardId);
+  const { resolve: resolveUser } = useTeamLookup(vineyardId);
+  const createdByName = resolveUser(entry.created_by) ?? "—";
+
 
   // ---------- Ownership split ----------
   const { ownedByThis, ownedByOthers } = useMemo(() => {
@@ -479,7 +484,30 @@ export default function EditPruningDialog({
               </div>
             )}
           </div>
+
+          {/* Record metadata (read-only) */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+            <div>
+              <span className="text-muted-foreground">Created by </span>
+              <span className="font-medium">{createdByName}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Created </span>
+              <span className="font-medium">{entry.created_at ? rf.dateTime(new Date(entry.created_at)) : "—"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Updated </span>
+              <span className="font-medium">{entry.updated_at ? rf.dateTime(new Date(entry.updated_at)) : "—"}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Status</span>
+              {entry.deleted_at
+                ? <Badge variant="destructive">Reversed</Badge>
+                : <Badge variant="secondary">Recorded</Badge>}
+            </div>
+          </div>
         </DialogHeader>
+
 
 
         <div className="grid gap-6 lg:grid-cols-[1fr_400px] px-6 pb-4 max-h-[70vh] overflow-y-auto">

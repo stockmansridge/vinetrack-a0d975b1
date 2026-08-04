@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Download, Scissors, Search, ExternalLink, Pencil } from "lucide-react";
+import { AlertTriangle, Columns3, Download, Scissors, Search, ExternalLink, Pencil } from "lucide-react";
 import ReportEditPruningDialog from "@/components/pruning/ReportEditPruningDialog";
 
 
@@ -27,6 +27,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -50,6 +55,43 @@ type SortKey =
   | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "start" | "finish"
   | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
   | "createdBy" | "created" | "updated" | "status";
+
+/** Column registry — order here is the display order of the table. */
+const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolean }[] = [
+  { key: "date", label: "Date" },
+  { key: "season", label: "Season", align: "right" },
+  { key: "vintage", label: "Vintage", align: "right" },
+  { key: "block", label: "Block" },
+  { key: "variety", label: "Variety" },
+  { key: "worker", label: "Worker / crew" },
+  { key: "method", label: "Method" },
+  { key: "rows", label: "Rows" },
+  { key: "quarters", label: "Qtrs", align: "right" },
+  { key: "rowEq", label: "Row eq.", align: "right" },
+  { key: "vines", label: "Vines", align: "right" },
+  { key: "hours", label: "Hours", align: "right" },
+  { key: "start", label: "Start" },
+  { key: "finish", label: "Finish" },
+  { key: "duration", label: "Duration", align: "right" },
+  { key: "vinesPerHour", label: "Vines / hr", align: "right" },
+  { key: "rate", label: "Rate / hr", align: "right", cost: true },
+  { key: "cost", label: "Labour cost", align: "right", cost: true },
+  { key: "task", label: "Work task" },
+  { key: "taskStatus", label: "Task status" },
+  { key: "createdBy", label: "Created by" },
+  { key: "created", label: "Created" },
+  { key: "updated", label: "Updated" },
+  { key: "status", label: "Status" },
+];
+
+/** Columns hidden until the user turns them on. */
+const DEFAULT_HIDDEN: SortKey[] = [
+  "created", "updated", "status", "start", "finish", "duration", "task", "taskStatus",
+];
+
+const COLUMN_PREFS_KEY = "vinetrack.pruningActivity.columns.v1";
+
+
 
 /** Render "8:30 am" from a time or timestamp column, tolerating both shapes. */
 function formatTime(value: string | null): string {
@@ -101,6 +143,35 @@ export default function PruningActivityReportPage() {
   const money = (n: number | null) => (n == null ? "—" : fmt.currency(n));
 
   const [editRow, setEditRow] = useState<PruningActivityRow | null>(null);
+
+  // -------------------- Column visibility --------------------
+  const [hidden, setHidden] = useState<Set<SortKey>>(() => {
+    try {
+      const raw = localStorage.getItem(COLUMN_PREFS_KEY);
+      if (raw) return new Set(JSON.parse(raw) as SortKey[]);
+    } catch { /* ignore */ }
+    return new Set(DEFAULT_HIDDEN);
+  });
+  useEffect(() => {
+    try { localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(Array.from(hidden))); } catch { /* ignore */ }
+  }, [hidden]);
+  const toggleColumn = (k: SortKey) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  const availableColumns = useMemo(
+    () => COLUMN_DEFS.filter((c) => !c.cost || canSeeCosts)
+      .map((c) => (c.key === "block" ? { ...c, label: fmt.blockLabel } : c)),
+    [canSeeCosts, fmt.blockLabel],
+  );
+  const visibleColumns = useMemo(
+    () => availableColumns.filter((c) => !hidden.has(c.key)),
+    [availableColumns, hidden],
+  );
+  const isVisible = (k: SortKey) => !hidden.has(k);
+
 
   const { data: rows = [], isLoading, error } = usePruningActivity(selectedVineyardId);
 
@@ -436,7 +507,129 @@ export default function PruningActivityReportPage() {
     toast({ title: "PDF exported", description: `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} included.` });
   };
 
-  const colSpan = (canSeeCosts ? 24 : 22) + (canEdit ? 1 : 0);
+  const colSpan = visibleColumns.length + (canEdit ? 1 : 0);
+
+  const cellClass = (k: SortKey): string => {
+    const def = availableColumns.find((c) => c.key === k);
+    const right = def?.align === "right" ? "text-right tabular-nums" : "";
+    switch (k) {
+      case "date":
+      case "start":
+      case "finish":
+        return `whitespace-nowrap ${right}`.trim();
+      case "block":
+        return "font-medium";
+      case "variety":
+      case "rows":
+        return "max-w-[180px] truncate";
+      case "method":
+        return "capitalize";
+      case "cost":
+        return "text-right tabular-nums font-medium";
+      case "taskStatus":
+      case "createdBy":
+      case "created":
+      case "updated":
+        return "text-xs whitespace-nowrap";
+      default:
+        return right;
+    }
+  };
+
+  const renderCell = (k: SortKey, r: PruningActivityRow): React.ReactNode => {
+    switch (k) {
+      case "date":
+        return (
+          <>
+            <div>{formatDate(r.date)}</div>
+            {(r.startTime || r.finishTime) && (
+              <div className="text-[11px] text-muted-foreground">
+                {formatTime(r.startTime)}–{formatTime(r.finishTime)}
+              </div>
+            )}
+          </>
+        );
+      case "season":
+        if (!r.hasSeasonLink) return <span className="text-muted-foreground">Unassigned</span>;
+        if (!r.seasonMismatch) return r.seasonYear;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-help">
+                  {r.seasonYear} <AlertTriangle className="h-3.5 w-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[280px]">
+                This entry's season information does not match the linked pruning season.
+                <ul className="mt-1 list-disc pl-4 text-xs">
+                  {r.seasonIssues.map((i) => <li key={i}>{i}</li>)}
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      case "vintage": return r.vintageYear ?? "—";
+      case "block": return r.blockName;
+      case "variety": return <span title={r.variety}>{r.variety}</span>;
+      case "worker": return r.worker;
+      case "method": return r.method;
+      case "rows":
+        return (
+          <span title={r.rowsLabel}>
+            {r.rowsLabel}
+            {r.rowCount > 0 && <span className="text-[11px] text-muted-foreground"> ({r.rowCount})</span>}
+          </span>
+        );
+      case "quarters": return r.quarters;
+      case "rowEq": return r.rowEquivalents.toFixed(2);
+      case "vines": return r.vines.toLocaleString();
+      case "hours": return r.labourHours == null ? "—" : r.labourHours.toFixed(2);
+      case "start": return formatTime(r.startTime);
+      case "finish": return formatTime(r.finishTime);
+      case "duration": return formatDuration(r.durationMinutes);
+      case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
+      case "rate": return money(r.hourlyRate);
+      case "cost": return money(r.labourCost);
+      case "task":
+        return r.workTaskId ? (
+          <Link
+            to={`/work-tasks?highlight=${r.workTaskId}`}
+            className="text-primary inline-flex items-center gap-1 hover:underline"
+          >
+            {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
+          </Link>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        );
+      case "taskStatus":
+        return r.workTaskStatus
+          ? <span className="capitalize">{r.workTaskStatus}</span>
+          : <span className="text-muted-foreground">—</span>;
+      case "createdBy": return resolveUser(r.createdById) ?? "—";
+      case "created": return r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—";
+      case "updated": return r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—";
+      case "status":
+        return r.isReversed
+          ? <Badge variant="destructive">Reversed</Badge>
+          : <span className="text-xs text-muted-foreground">Recorded</span>;
+      default: return null;
+    }
+  };
+
+  const totalsCell = (k: SortKey): React.ReactNode => {
+    switch (k) {
+      case "quarters": return <span className="font-medium">{totals.quarters}</span>;
+      case "rowEq": return <span className="font-medium">{totals.rowEq.toFixed(2)}</span>;
+      case "vines": return <span className="font-medium">{totals.vines.toLocaleString()}</span>;
+      case "hours": return <span className="font-medium">{totals.hours.toFixed(2)}</span>;
+      case "vinesPerHour":
+        return <span className="font-medium">{avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}</span>;
+      case "cost": return <span className="font-semibold">{money(totals.cost)}</span>;
+      default: return null;
+    }
+  };
+
 
   return (
     <div className="p-4 sm:p-6 space-y-4 w-full">
@@ -670,6 +863,31 @@ export default function PruningActivityReportPage() {
       )}
 
       <div className="flex items-center justify-end gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Columns3 className="h-3.5 w-3.5 mr-1" />
+              Columns ({visibleColumns.length}/{availableColumns.length})
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 max-h-[70vh] overflow-y-auto">
+            <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {availableColumns.map((c) => (
+              <DropdownMenuCheckboxItem
+                key={c.key}
+                checked={isVisible(c.key)}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={() => toggleColumn(c.key)}
+              >
+                {c.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setHidden(new Set())}>Show all</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHidden(new Set(DEFAULT_HIDDEN))}>Reset to default</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button size="sm" variant="outline" onClick={downloadPdf} disabled={!sorted.length}>
           <Download className="h-3.5 w-3.5 mr-1" /> Export PDF
@@ -679,41 +897,23 @@ export default function PruningActivityReportPage() {
         </Button>
       </div>
 
+
       {/* -------------------- Table -------------------- */}
       <Card className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <SortableTableHead active={getSortDirection("date")} onSort={() => toggleSort("date")}>Date</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("season")} onSort={() => toggleSort("season")}>Season</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("vintage")} onSort={() => toggleSort("vintage")}>Vintage</SortableTableHead>
-              <SortableTableHead active={getSortDirection("block")} onSort={() => toggleSort("block")}>{fmt.blockLabel}</SortableTableHead>
-              <SortableTableHead active={getSortDirection("variety")} onSort={() => toggleSort("variety")}>Variety</SortableTableHead>
-              <SortableTableHead active={getSortDirection("worker")} onSort={() => toggleSort("worker")}>Worker / crew</SortableTableHead>
-              <SortableTableHead active={getSortDirection("method")} onSort={() => toggleSort("method")}>Method</SortableTableHead>
-              <SortableTableHead active={getSortDirection("rows")} onSort={() => toggleSort("rows")}>Rows</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("quarters")} onSort={() => toggleSort("quarters")}>Qtrs</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("rowEq")} onSort={() => toggleSort("rowEq")}>Row eq.</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("vines")} onSort={() => toggleSort("vines")}>Vines</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("hours")} onSort={() => toggleSort("hours")}>Hours</SortableTableHead>
-              <SortableTableHead active={getSortDirection("start")} onSort={() => toggleSort("start")}>Start</SortableTableHead>
-              <SortableTableHead active={getSortDirection("finish")} onSort={() => toggleSort("finish")}>Finish</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("duration")} onSort={() => toggleSort("duration")}>Duration</SortableTableHead>
-              <SortableTableHead align="right" active={getSortDirection("vinesPerHour")} onSort={() => toggleSort("vinesPerHour")}>Vines / hr</SortableTableHead>
-              {canSeeCosts && (
-                <>
-                  <SortableTableHead align="right" active={getSortDirection("rate")} onSort={() => toggleSort("rate")}>Rate / hr</SortableTableHead>
-                  <SortableTableHead align="right" active={getSortDirection("cost")} onSort={() => toggleSort("cost")}>Labour cost</SortableTableHead>
-                </>
-              )}
-              <SortableTableHead active={getSortDirection("task")} onSort={() => toggleSort("task")}>Work task</SortableTableHead>
-              <SortableTableHead active={getSortDirection("taskStatus")} onSort={() => toggleSort("taskStatus")}>Task status</SortableTableHead>
-              <SortableTableHead active={getSortDirection("createdBy")} onSort={() => toggleSort("createdBy")}>Created by</SortableTableHead>
-              <SortableTableHead active={getSortDirection("created")} onSort={() => toggleSort("created")}>Created</SortableTableHead>
-              <SortableTableHead active={getSortDirection("updated")} onSort={() => toggleSort("updated")}>Updated</SortableTableHead>
-              <SortableTableHead active={getSortDirection("status")} onSort={() => toggleSort("status")}>Status</SortableTableHead>
+              {visibleColumns.map((c) => (
+                <SortableTableHead
+                  key={c.key}
+                  align={c.align}
+                  active={getSortDirection(c.key)}
+                  onSort={() => toggleSort(c.key)}
+                >
+                  {c.label}
+                </SortableTableHead>
+              ))}
               {canEdit && <th className="h-10 px-2 text-right align-middle text-xs font-medium text-muted-foreground sticky right-0 bg-background border-l shadow-[-6px_0_8px_-8px_hsl(var(--foreground)/0.3)]">Edit</th>}
-
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -725,90 +925,9 @@ export default function PruningActivityReportPage() {
               </TableRow>
             ) : sorted.map((r) => (
               <TableRow key={r.id} className={r.isReversed ? "bg-muted/20" : undefined}>
-                <TableCell className="whitespace-nowrap">
-                  <div>{formatDate(r.date)}</div>
-                  {(r.startTime || r.finishTime) && (
-                    <div className="text-[11px] text-muted-foreground">
-                      {formatTime(r.startTime)}–{formatTime(r.finishTime)}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {!r.hasSeasonLink ? (
-                    <span className="text-muted-foreground">Unassigned</span>
-                  ) : r.seasonMismatch ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-help">
-                            {r.seasonYear} <AlertTriangle className="h-3.5 w-3.5" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-[280px]">
-                          This entry's season information does not match the linked pruning season.
-                          <ul className="mt-1 list-disc pl-4 text-xs">
-                            {r.seasonIssues.map((i) => <li key={i}>{i}</li>)}
-                          </ul>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    r.seasonYear
-                  )}
-                </TableCell>
-
-                <TableCell className="text-right tabular-nums">{r.vintageYear ?? "—"}</TableCell>
-                <TableCell className="font-medium">{r.blockName}</TableCell>
-                <TableCell className="max-w-[180px] truncate" title={r.variety}>{r.variety}</TableCell>
-                <TableCell>{r.worker}</TableCell>
-                <TableCell className="capitalize">{r.method}</TableCell>
-                <TableCell className="max-w-[180px] truncate" title={r.rowsLabel}>
-                  {r.rowsLabel}
-                  {r.rowCount > 0 && (
-                    <span className="text-[11px] text-muted-foreground"> ({r.rowCount})</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{r.quarters}</TableCell>
-                <TableCell className="text-right tabular-nums">{r.rowEquivalents.toFixed(2)}</TableCell>
-                <TableCell className="text-right tabular-nums">{r.vines.toLocaleString()}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {r.labourHours == null ? "—" : r.labourHours.toFixed(2)}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">{formatTime(r.startTime)}</TableCell>
-                <TableCell className="whitespace-nowrap">{formatTime(r.finishTime)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatDuration(r.durationMinutes)}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0)}
-                </TableCell>
-                {canSeeCosts && (
-                  <>
-                    <TableCell className="text-right tabular-nums">{money(r.hourlyRate)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{money(r.labourCost)}</TableCell>
-                  </>
-                )}
-                <TableCell>
-                  {r.workTaskId ? (
-                    <Link
-                      to={`/work-tasks?highlight=${r.workTaskId}`}
-                      className="text-primary inline-flex items-center gap-1 hover:underline"
-                    >
-                      {r.workTaskLabel} <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {r.workTaskStatus ? <span className="capitalize">{r.workTaskStatus}</span> : <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell className="text-xs whitespace-nowrap">{resolveUser(r.createdById) ?? "—"}</TableCell>
-                <TableCell className="text-xs whitespace-nowrap">{r.createdAt ? formatDate(r.createdAt.slice(0, 10)) : "—"}</TableCell>
-                <TableCell className="text-xs whitespace-nowrap">{r.updatedAt ? formatDate(r.updatedAt.slice(0, 10)) : "—"}</TableCell>
-                <TableCell>
-                  {r.isReversed
-                    ? <Badge variant="destructive">Reversed</Badge>
-                    : <span className="text-xs text-muted-foreground">Recorded</span>}
-                </TableCell>
+                {visibleColumns.map((c) => (
+                  <TableCell key={c.key} className={cellClass(c.key)}>{renderCell(c.key, r)}</TableCell>
+                ))}
                 {canEdit && (
                   <TableCell className="text-right sticky right-0 bg-background border-l shadow-[-6px_0_8px_-8px_hsl(var(--foreground)/0.3)]">
                     <Button
@@ -823,41 +942,19 @@ export default function PruningActivityReportPage() {
                     </Button>
                   </TableCell>
                 )}
-
-
               </TableRow>
             ))}
           </TableBody>
           {sorted.length > 0 && (
             <TableBody>
               <TableRow className="bg-muted/30">
-                <TableCell className="font-medium">Totals (active only)</TableCell>
-                <TableCell colSpan={7} />
-                <TableCell className="text-right tabular-nums font-medium">{totals.quarters}</TableCell>
-                <TableCell className="text-right tabular-nums font-medium">{totals.rowEq.toFixed(2)}</TableCell>
-                <TableCell className="text-right tabular-nums font-medium">{totals.vines.toLocaleString()}</TableCell>
-                <TableCell className="text-right tabular-nums font-medium">{totals.hours.toFixed(2)}</TableCell>
-                <TableCell />
-                <TableCell />
-                <TableCell />
-                <TableCell className="text-right tabular-nums font-medium">
-                  {avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}
-                </TableCell>
-                {canSeeCosts && (
-                  <>
-                    <TableCell />
-                    <TableCell className="text-right tabular-nums font-semibold">{money(totals.cost)}</TableCell>
-                  </>
-                )}
-                <TableCell />
-                <TableCell />
-                <TableCell />
-                <TableCell />
-                <TableCell />
-                <TableCell />
+                {visibleColumns.map((c, i) => (
+                  <TableCell key={c.key} className={cellClass(c.key)}>
+                    {i === 0 ? <span className="font-medium">Totals (active only)</span> : totalsCell(c.key)}
+                  </TableCell>
+                ))}
                 {canEdit && <TableCell />}
               </TableRow>
-
             </TableBody>
           )}
         </Table>
