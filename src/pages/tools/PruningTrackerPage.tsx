@@ -856,16 +856,17 @@ function BlockDetail({
         </Button>
         <div className="flex gap-2">
           {canEdit && (
-            <>
-              <Button variant="outline" size="sm" onClick={onOpenSettings}>
-                <Settings2 className="h-4 w-4 mr-1" /> Settings
-              </Button>
-              <Button size="sm" onClick={onOpenComplete} disabled={block.identities.length === 0}>
-                Record Pruning
-              </Button>
-            </>
+            <Button variant="outline" size="sm" onClick={onOpenSettings}>
+              <Settings2 className="h-4 w-4 mr-1" /> Settings
+            </Button>
           )}
+          <NewPruningActivityButton
+            seasonYear={seasonYear}
+            paddockId={block.paddock.id}
+            label="Record Pruning"
+          />
         </div>
+
       </div>
 
       <Card>
