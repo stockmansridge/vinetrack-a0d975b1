@@ -306,6 +306,20 @@ export function toGeoJson(polys: LatLng[][][]): any {
   return { type: "MultiPolygon", coordinates: polys.map(toCoords) };
 }
 
+/** Convert parsed rings to GeoJSON in EPSG:3857 (Web Mercator metres). */
+export function toGeoJson3857(polys: LatLng[][][]): any {
+  const R = 6378137;
+  const x = (lng: number) => (lng * Math.PI / 180) * R;
+  const y = (lat: number) => {
+    const clamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+    return R * Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI / 180) / 2));
+  };
+  const toCoords = (poly: LatLng[][]) => poly.map((ring) => ring.map((p) => [x(p.lng), y(p.lat)]));
+  if (polys.length === 0) return null;
+  if (polys.length === 1) return { type: "Polygon", coordinates: toCoords(polys[0]) };
+  return { type: "MultiPolygon", coordinates: polys.map(toCoords) };
+}
+
 export function computeBbox(polys: LatLng[][][]): [number, number, number, number] | null {
   let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
   for (const poly of polys)

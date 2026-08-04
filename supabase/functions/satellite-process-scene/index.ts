@@ -16,7 +16,7 @@
 //   5. Mark the job complete or failed.
 import {
   corsHeaders, jsonError, jsonOk, verifySystemAdmin, getServiceClient,
-  parseGeometryRings, toGeoJson, computeBbox, computeImageSize, bboxSizeMeters,
+  parseGeometryRings, toGeoJson, toGeoJson3857, computeBbox, computeImageSize, bboxSizeMeters,
   evalscriptFor, statsEvalscript, analyticalEvalscript, processImage, processAnalyticalRaster, statisticsQuery,
   INDEX_TYPES, INDEX_NATIVE_RES_M, INDEX_BANDS, QC, PROCESSING_VERSION, PROVIDER, SENTINEL2_COLLECTION,
   DISPLAY_ASSET_TYPE, ANALYTICAL_ASSET_TYPE, ANALYTICAL_NO_DATA_SENTINEL, ANALYTICAL_ROW_ORIENTATION,
@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
   const polys = parseGeometryRings(paddock.polygon_points);
   if (polys.length === 0) return jsonError(422, "geometry_invalid", "Paddock geometry is missing or invalid.");
   const geometry = toGeoJson(polys);
+  const geometry3857 = toGeoJson3857(polys);
   const bbox = computeBbox(polys)!;
 
   // One shared, globally-snapped display grid for this paddock. Every layer for
@@ -262,7 +263,7 @@ Deno.serve(async (req) => {
         // Process API — rendered on the aligned EPSG:3857 grid, then masked to
         // the exact paddock polygon so the rectangular bounds are never shown.
         const rawPng = await processImage({
-          geometry, bbox: grid.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
+          geometry: geometry3857, bbox: grid.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
           evalscript: evalscriptFor(idx),
           width, height,
         });
@@ -352,7 +353,7 @@ Deno.serve(async (req) => {
 
         if (!existingAnalytical) {
           const analytical = await processAnalyticalRaster({
-            geometry, bbox: analyticalSize.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
+            geometry: geometry3857, bbox: analyticalSize.bbox3857, crs: GRID_CRS_URI, dateStart, dateEnd,
             evalscript: analyticalEvalscript(idx),
             width: analyticalSize.width, height: analyticalSize.height,
           });
