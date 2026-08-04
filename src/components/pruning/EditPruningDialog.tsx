@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CheckSquare, Plus, Square, Trash2, AlertCircle, Link2, Link2Off, ExternalLink } from "lucide-react";
+import { CheckSquare, Plus, Square, Trash2, AlertCircle, Link2, Link2Off, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { PruningEntry, PruningRowSegment, RecordSegmentInput, UpdateEntryResult } from "@/lib/pruningQuery";
@@ -50,6 +50,10 @@ interface Props {
   allSegments: PruningRowSegment[];
   vineyardId: string;
   paddockName: string;
+  /** Optional navigation between records (prev/next). Omit to hide arrows. */
+  onPrev?: () => void;
+  onNext?: () => void;
+  navLabel?: string;
 }
 
 const QUARTERS = [1, 2, 3, 4] as const;
@@ -92,7 +96,7 @@ function timeOnly(ts: string | null): string {
 }
 
 export default function EditPruningDialog({
-  open, onOpenChange, entry, identities, allSegments, vineyardId, paddockName,
+  open, onOpenChange, entry, identities, allSegments, vineyardId, paddockName, onPrev, onNext, navLabel,
 }: Props) {
   const { user } = useAuth();
   const canSeeCosts = useCanSeeCosts();
@@ -448,11 +452,35 @@ export default function EditPruningDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl p-0 gap-0">
         <DialogHeader className="p-6 pb-3">
-          <DialogTitle>Edit Pruning Record — {paddockName}</DialogTitle>
-          <DialogDescription>
-            Toggle quarters to add or remove them from this entry. Green quarters belong to another entry and are locked.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <DialogTitle>Edit Pruning Record — {paddockName}</DialogTitle>
+              <DialogDescription>
+                Toggle quarters to add or remove them from this entry. Green quarters belong to another entry and are locked.
+              </DialogDescription>
+            </div>
+            {(onPrev || onNext) && (
+              <div className="flex items-center gap-1 shrink-0 pr-8">
+                <Button
+                  type="button" variant="outline" size="icon"
+                  aria-label="Previous record"
+                  onClick={onPrev} disabled={!onPrev}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {navLabel && <span className="text-xs text-muted-foreground tabular-nums px-1">{navLabel}</span>}
+                <Button
+                  type="button" variant="outline" size="icon"
+                  aria-label="Next record"
+                  onClick={onNext} disabled={!onNext}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogHeader>
+
 
         <div className="grid gap-6 lg:grid-cols-[1fr_400px] px-6 pb-4 max-h-[70vh] overflow-y-auto">
           {/* --- Grid --- */}
