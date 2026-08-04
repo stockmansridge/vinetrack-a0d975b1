@@ -282,7 +282,7 @@ export default function PruningActivityReportPage() {
     "Date", "Pruning season", "Season link", "Season integrity", "Vintage", fmt.blockLabel, "Variety", "Worker / crew",
     "Method", "Rows", "Row count", "Quarters", "Row equivalents", "Vines",
     "Labour hours", "Start", "Finish", "Duration (minutes)", "Vines / hour",
-    "Work task", "Work task status", "Created at", "Updated at", "Status", "Notes",
+    "Work task", "Work task status", "Created by", "Created at", "Updated at", "Status", "Notes",
   ];
   const costHeader = ["Labour cost", "Effective rate / hour", "currency"];
 
@@ -310,6 +310,7 @@ export default function PruningActivityReportPage() {
       r.vinesPerHour == null ? "" : r.vinesPerHour.toFixed(1),
       r.workTaskLabel ?? "",
       r.workTaskStatus ?? "",
+      resolveUser(r.createdById) ?? "",
       r.createdAt ?? "",
       r.updatedAt ?? "",
       r.isReversed ? "Reversed" : "Recorded",
