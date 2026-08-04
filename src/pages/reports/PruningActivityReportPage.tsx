@@ -805,13 +805,14 @@ export default function PruningActivityReportPage() {
                 {canEdit && (
                   <TableCell className="text-right sticky right-0 bg-background border-l shadow-[-6px_0_8px_-8px_hsl(var(--foreground)/0.3)]">
                     <Button
-                      size="sm"
+                      size="icon"
                       variant="ghost"
+                      className="h-7 w-7"
                       disabled={r.isReversed}
                       onClick={() => setEditRow(r)}
                       aria-label={`Edit pruning entry from ${formatDate(r.date)}`}
                     >
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </TableCell>
                 )}
