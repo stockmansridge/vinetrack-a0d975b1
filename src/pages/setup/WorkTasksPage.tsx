@@ -5,6 +5,8 @@ import { useVineyard } from "@/context/VineyardContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchList } from "@/lib/queries";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
+import WorkTaskLabourFields from "@/components/work-tasks/WorkTaskLabourFields";
+
 import { useCanSeeCosts, canSeeCosts as canSeeCostsFn } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1478,13 +1480,8 @@ function LabourLineRow({
       : line?.hourly_rate ?? null;
   const derivedWorkerType = selectedCategory?.name ?? line?.worker_type ?? null;
 
-  const estimatedCost = useMemo(() => {
-    const rate = derivedHourlyRate;
-    const workers = workerCount === "" ? NaN : Number(workerCount);
-    const hours = hoursPerWorker === "" ? NaN : Number(hoursPerWorker);
-    if (rate == null || Number.isNaN(workers) || Number.isNaN(hours)) return null;
-    return rate * workers * hours;
-  }, [derivedHourlyRate, workerCount, hoursPerWorker]);
+
+
 
 
   const save = useMutation({
@@ -1556,46 +1553,28 @@ function LabourLineRow({
 
   return (
     <div className="rounded border p-3 space-y-2">
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Work date">
-          <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-        </Field>
-        <Field label="Worker type">
-          <Select value={categoryId} onValueChange={setCategoryId}>
-            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>None</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {(c.name ?? c.id.slice(0, 8)) +
-                    (c.cost_per_hour != null ? ` — ${money(Number(c.cost_per_hour))}/h` : "")}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Worker count">
-          <Input type="number" step="1" value={workerCount} onChange={(e) => setWorkerCount(e.target.value)} />
-        </Field>
-        <Field label="Hours per worker">
-          <Input type="number" step="0.25" value={hoursPerWorker} onChange={(e) => setHoursPerWorker(e.target.value)} />
-        </Field>
-      </div>
+      <Field label="Work date">
+        <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+      </Field>
+      {/* Shared labour type / people / hours-per-person block + calculations. */}
+      <WorkTaskLabourFields
+        categories={categories}
+        money={money}
+        value={{
+          workerTypeId: categoryId === NONE ? null : categoryId,
+          workerCount,
+          hoursPerWorker,
+        }}
+        onChange={(v) => {
+          setCategoryId(v.workerTypeId ?? NONE);
+          setWorkerCount(v.workerCount);
+          setHoursPerWorker(v.hoursPerWorker);
+        }}
+      />
       <Field label="Notes">
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
-      <div className="rounded border bg-muted/40 px-3 py-2">
-        <div className="text-xs text-muted-foreground mb-1">Cost estimate</div>
-        <div className="text-sm flex flex-wrap items-center gap-1">
-          <span>{derivedHourlyRate != null ? money(derivedHourlyRate) : "—"}/h</span>
-          <span className="text-muted-foreground">×</span>
-          <span>{workerCount || "—"} workers</span>
-          <span className="text-muted-foreground">×</span>
-          <span>{hoursPerWorker || "—"}h</span>
-          <span className="text-muted-foreground">=</span>
-          <span className="font-semibold">{estimatedCost != null ? money(estimatedCost) : "—"}</span>
-        </div>
-      </div>
+
       <div className="flex justify-end gap-2">
 
         {(line || onCancel) && (

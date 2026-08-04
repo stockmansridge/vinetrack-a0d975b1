@@ -308,14 +308,6 @@ export default function PruningActivityDialog({
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="pa-hours">Labour hours</Label>
-                <Input id="pa-hours" type="number" step="0.25" min="0"
-                  value={draft.labourHours ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d, labourHours: e.target.value === "" ? null : Number(e.target.value),
-                  }))} />
-              </div>
-              <div className="space-y-1">
                 <Label htmlFor="pa-start">Start</Label>
                 <Input id="pa-start" type="time" value={startInput}
                   onChange={(e) => setStartInput(e.target.value)} />
@@ -325,24 +317,27 @@ export default function PruningActivityDialog({
                 <Input id="pa-finish" type="time" value={finishInput}
                   onChange={(e) => setFinishInput(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="pa-rate">Hourly rate</Label>
-                <Input id="pa-rate" type="number" step="0.01" min="0"
-                  value={draft.hourlyRate ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d, hourlyRate: e.target.value === "" ? null : Number(e.target.value),
-                  }))} />
-              </div>
             </div>
 
+            {/* Labour hours, rate and cost belong to the linked Work Task — the
+                activity mirrors them read-only and never owns a second source. */}
             <ActivityWorkTaskField
               vineyardId={vineyardId}
               draft={draft}
               activityId={activityId}
               value={draft.workTaskId}
+              startTime={startInput}
+              finishTime={finishInput}
+              legacyLabourHours={draft.workTaskId ? null : draft.labourHours}
+              legacyHourlyRate={draft.workTaskId ? null : draft.hourlyRate}
               onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
+              onLabourResolved={({ hours, rate }) => setDraft((d) =>
+                d.labourHours === hours && d.hourlyRate === rate
+                  ? d
+                  : { ...d, labourHours: hours, hourlyRate: rate })}
               disabled={save.isPending}
             />
+
 
 
             <div className="space-y-1">
