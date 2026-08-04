@@ -349,9 +349,9 @@ export default function EditPruningDialog({
     }
   };
 
-  const toLabourInput = (line: LabourDraft): UpsertLabourLineInput => ({
+  const toLabourInput = (line: LabourDraft, taskId?: string): UpsertLabourLineInput => ({
     id: line.id,
-    work_task_id: entry.work_task_id!,
+    work_task_id: taskId ?? entry.work_task_id!,
     vineyard_id: vineyardId,
     work_date: entryDate,
     worker_type_id: line.workerTypeId === NONE ? null : line.workerTypeId,
