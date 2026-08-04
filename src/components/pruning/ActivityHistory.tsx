@@ -151,7 +151,22 @@ export default function ActivityHistory({
         )}
       </CardContent>
 
-      {editEntry && vineyardId && (
+      {/* SQL 166: entries with a parent activity open the multi-block editor. */}
+      {editEntry && vineyardId && editEntry.pruning_activity_id && (
+        <PruningActivityDialog
+          key={editEntry.pruning_activity_id}
+          open={!!editEntry}
+          onOpenChange={(o) => { if (!o) setEditEntryId(null); }}
+          vineyardId={vineyardId}
+          seasonYear={editEntry.vintage_year ? editEntry.vintage_year - 1 : new Date().getFullYear()}
+          activityId={editEntry.pruning_activity_id}
+          onPrev={editIndex > 0 ? () => setEditEntryId(editable[editIndex - 1].id) : undefined}
+          onNext={editIndex < editable.length - 1 ? () => setEditEntryId(editable[editIndex + 1].id) : undefined}
+          navLabel={`${editIndex + 1} of ${editable.length}`}
+        />
+      )}
+
+      {editEntry && vineyardId && !editEntry.pruning_activity_id && (
         <EditPruningDialog
           key={editEntry.id}
           open={!!editEntry}
