@@ -434,8 +434,13 @@ export function usePruningActivity(vineyardId: string | null) {
           workTaskId: e.work_task_id,
           workTaskLabel: task
             ? (task.task_type?.trim() || task.description?.trim() || "Work Task")
-            : e.work_task_id ? "Work Task" : null,
+            : e.work_task_id ? "Deleted work task" : null,
           workTaskStatus: task?.status ?? null,
+          workTaskMissing: !!e.work_task_id && !task,
+          activityTitle:
+            (e as any).activity_title ?? (e as any).activity_name ??
+            (e as any).activity_description ?? (e as any).title ?? null,
+
           labourCost,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",
