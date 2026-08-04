@@ -448,11 +448,35 @@ export default function EditPruningDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl p-0 gap-0">
         <DialogHeader className="p-6 pb-3">
-          <DialogTitle>Edit Pruning Record — {paddockName}</DialogTitle>
-          <DialogDescription>
-            Toggle quarters to add or remove them from this entry. Green quarters belong to another entry and are locked.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <DialogTitle>Edit Pruning Record — {paddockName}</DialogTitle>
+              <DialogDescription>
+                Toggle quarters to add or remove them from this entry. Green quarters belong to another entry and are locked.
+              </DialogDescription>
+            </div>
+            {(onPrev || onNext) && (
+              <div className="flex items-center gap-1 shrink-0 pr-8">
+                <Button
+                  type="button" variant="outline" size="icon"
+                  aria-label="Previous record"
+                  onClick={onPrev} disabled={!onPrev}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {navLabel && <span className="text-xs text-muted-foreground tabular-nums px-1">{navLabel}</span>}
+                <Button
+                  type="button" variant="outline" size="icon"
+                  aria-label="Next record"
+                  onClick={onNext} disabled={!onNext}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogHeader>
+
 
         <div className="grid gap-6 lg:grid-cols-[1fr_400px] px-6 pb-4 max-h-[70vh] overflow-y-auto">
           {/* --- Grid --- */}
