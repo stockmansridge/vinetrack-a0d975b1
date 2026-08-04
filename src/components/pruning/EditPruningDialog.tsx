@@ -33,7 +33,8 @@ import type { PruningEntry, PruningRowSegment, RecordSegmentInput, UpdateEntryRe
 import { useUpdatePruningEntry } from "@/lib/pruningQuery";
 import type { RowIdentity } from "@/lib/pruningCalc";
 import {
-  createLabourLine, fetchLabourLinesForTask, fetchWorkTaskById,
+  createLabourLine, createWorkTask, fetchLabourLinesForTask, fetchWorkTaskById,
+  fetchWorkTaskPaddocksForVineyard, syncWorkTaskPaddocks,
   softDeleteLabourLine, updateLabourLine, updateWorkTask, type WorkTaskLabourLine, type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
 import { fetchOperatorCategoriesForVineyard, type OperatorCategory } from "@/lib/operatorCategoriesQuery";
@@ -176,17 +177,27 @@ export default function EditPruningDialog({
   const [labourDrafts, setLabourDrafts] = useState<LabourDraft[]>([]);
   const [removedLineIds, setRemovedLineIds] = useState<Set<string>>(new Set());
 
+  // Creating a NEW Work Task for an entry that has none (cost tracking).
+  const [createTask, setCreateTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskStatus, setNewTaskStatus] = useState("completed");
+
   useEffect(() => {
     if (!open) return;
     setSyncLinkedTask(true);
     setClearWorkTask(false);
     setRemovedLineIds(new Set());
-  }, [open, entry.id]);
+    setCreateTask(false);
+    setNewTaskTitle(`Pruning — ${paddockName}`);
+    setNewTaskStatus("completed");
+    if (!entry.work_task_id) setLabourDrafts([]);
+  }, [open, entry.id, entry.work_task_id, paddockName]);
 
   useEffect(() => {
     if (!linkedTaskQ.data) return;
     setLabourDrafts(linkedLines.map(toDraft));
   }, [linkedTaskQ.data, linkedLines]);
+
 
   // Worker type categories
   const { data: categoriesResult } = useQuery({
@@ -307,7 +318,9 @@ export default function EditPruningDialog({
   const newCount = selected.size;
   const originalHours = entry.labour_hours ?? 0;
   const willUpdateTask = !!linkedTask && syncLinkedTask && !clearWorkTask;
-  const nextHours = willUpdateTask ? labourTotals.hours : (labourHours ? Number(labourHours) : null);
+  const willCreateTask = !entry.work_task_id && createTask;
+  const labourDrivesHours = willUpdateTask || willCreateTask;
+  const nextHours = labourDrivesHours ? labourTotals.hours : (labourHours ? Number(labourHours) : null);
 
   // ---------- Labour line editing ----------
   const updateDraft = (id: string, patch: Partial<LabourDraft>) => {
@@ -336,9 +349,9 @@ export default function EditPruningDialog({
     }
   };
 
-  const toLabourInput = (line: LabourDraft): UpsertLabourLineInput => ({
+  const toLabourInput = (line: LabourDraft, taskId?: string): UpsertLabourLineInput => ({
     id: line.id,
-    work_task_id: entry.work_task_id!,
+    work_task_id: taskId ?? entry.work_task_id!,
     vineyard_id: vineyardId,
     work_date: entryDate,
     worker_type_id: line.workerTypeId === NONE ? null : line.workerTypeId,
@@ -441,6 +454,45 @@ export default function EditPruningDialog({
       }
     }
 
+    // 3b. No Work Task yet and the user asked to add one — create it, attach
+    //     the labour lines and link it to this pruning entry.
+    if (willCreateTask) {
+      try {
+        const task = await createWorkTask({
+          vineyard_id: vineyardId,
+          paddock_id: entry.paddock_id,
+          paddock_name: paddockName,
+          task_type: "Pruning",
+          status: newTaskStatus,
+          description: newTaskTitle.trim() || `Pruning — ${paddockName}`,
+          notes: notes,
+          date: entryDate,
+          start_date: entryDate,
+          end_date: entryDate,
+          duration_hours: labourTotals.hours,
+          is_finalized: newTaskStatus === "completed",
+          user_id: user?.id ?? null,
+        });
+        const existingTaskPaddocks = (await fetchWorkTaskPaddocksForVineyard(vineyardId))
+          .filter((row) => row.work_task_id === task.id);
+        await syncWorkTaskPaddocks({
+          workTaskId: task.id,
+          vineyardId,
+          selections: [{ paddock_id: entry.paddock_id, area_ha: null }],
+          existing: existingTaskPaddocks,
+          userId: user?.id ?? null,
+        });
+        for (const draft of labourDrafts) {
+          await createLabourLine(toLabourInput(draft, task.id));
+        }
+        const { setPruningEntryWorkTask } = await import("@/lib/pruningQuery");
+        await setPruningEntryWorkTask(entry.id, task.id);
+      } catch (e: any) {
+        toast.error(`Pruning saved, but the Work Task could not be created: ${e?.message ?? e}`);
+        return;
+      }
+    }
+
     toast.success("Pruning record updated.");
     onOpenChange(false);
   };
@@ -451,6 +503,77 @@ export default function EditPruningDialog({
     setUnlinkOpen(false);
     toast.info("Work Task will be unlinked when you save.");
   };
+
+  // Shared labour-line editor — used by the linked-task panel and by the
+  // "add a Work Task" panel for entries that have no task yet.
+  const labourEditor = (
+    <div className="space-y-2 pt-1 border-t">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">Labour lines</div>
+      {labourDrafts.map((line, i) => {
+        const wc = Number(line.workerCount) || 0;
+        const h = Number(line.hoursPerWorker) || 0;
+        const rate = Number(line.hourlyRate) || 0;
+        return (
+          <div key={line.id} className="rounded border bg-background p-2 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5 col-span-2">
+                <Label>Worker / crew type</Label>
+                <Select value={line.workerTypeId} onValueChange={(v) => updateDraft(line.id, { workerTypeId: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Manual entry</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {(c.name ?? c.id.slice(0, 8)) + (canSeeCosts && c.cost_per_hour != null ? ` — ${money(Number(c.cost_per_hour))}/h` : "")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {line.workerTypeId === NONE && (
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Name</Label>
+                  <Input value={line.workerType} onChange={(e) => updateDraft(line.id, { workerType: e.target.value })} />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Workers</Label>
+                <Input type="number" step="1" value={line.workerCount} onChange={(e) => updateDraft(line.id, { workerCount: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Hours each</Label>
+                <Input type="number" step="0.25" value={line.hoursPerWorker} onChange={(e) => updateDraft(line.id, { hoursPerWorker: e.target.value })} />
+              </div>
+              {canSeeCosts && (
+                <div className="space-y-1.5">
+                  <Label>Cost / hour</Label>
+                  <Input type="number" step="0.01" value={line.hourlyRate} onChange={(e) => updateDraft(line.id, { hourlyRate: e.target.value })} />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>{canSeeCosts ? "Line total" : "Total hours"}</Label>
+                <Input readOnly disabled value={canSeeCosts ? money(wc * h * rate) : `${(wc * h).toFixed(2)} h`} />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Input placeholder="Notes" value={line.notes} onChange={(e) => updateDraft(line.id, { notes: e.target.value })} />
+              <Button type="button" variant="ghost" size="icon" onClick={() => removeDraft(line.id)} aria-label={`Remove labour line ${i + 1}`}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" onClick={addDraft}>
+        <Plus className="h-4 w-4 mr-1" /> Add labour line
+      </Button>
+      <div className="rounded border bg-background px-3 py-2 text-sm space-y-1">
+        <div className="flex justify-between"><span className="text-muted-foreground">Total person-hours</span><b>{labourTotals.hours.toFixed(2)}</b></div>
+        {canSeeCosts && <div className="flex justify-between"><span className="text-muted-foreground">Total labour cost</span><b>{money(labourTotals.cost)}</b></div>}
+      </div>
+    </div>
+  );
+
 
   return (
     <>
@@ -638,12 +761,12 @@ export default function EditPruningDialog({
               <Label>Labour hours</Label>
               <Input
                 type="number" step="0.1"
-                value={willUpdateTask ? labourTotals.hours.toFixed(2) : labourHours}
-                disabled={willUpdateTask}
+                value={labourDrivesHours ? labourTotals.hours.toFixed(2) : labourHours}
+                disabled={labourDrivesHours}
                 onChange={(e) => setLabourHours(e.target.value)}
               />
-              {willUpdateTask && (
-                <p className="text-xs text-muted-foreground">Derived from linked Work Task labour lines.</p>
+              {labourDrivesHours && (
+                <p className="text-xs text-muted-foreground">Derived from Work Task labour lines.</p>
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -687,77 +810,51 @@ export default function EditPruningDialog({
                       <Switch id="sync-task" checked={syncLinkedTask} onCheckedChange={setSyncLinkedTask} />
                     </div>
 
-                    {syncLinkedTask && (
-                      <div className="space-y-2 pt-1 border-t">
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Labour lines</div>
-                        {labourDrafts.map((line, i) => {
-                          const wc = Number(line.workerCount) || 0;
-                          const h = Number(line.hoursPerWorker) || 0;
-                          const rate = Number(line.hourlyRate) || 0;
-                          return (
-                            <div key={line.id} className="rounded border bg-background p-2 space-y-2">
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1.5 col-span-2">
-                                  <Label>Worker / crew type</Label>
-                                  <Select value={line.workerTypeId} onValueChange={(v) => updateDraft(line.id, { workerTypeId: v })}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value={NONE}>Manual entry</SelectItem>
-                                      {categories.map((c) => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                          {(c.name ?? c.id.slice(0, 8)) + (canSeeCosts && c.cost_per_hour != null ? ` — ${money(Number(c.cost_per_hour))}/h` : "")}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                {line.workerTypeId === NONE && (
-                                  <div className="space-y-1.5 col-span-2">
-                                    <Label>Name</Label>
-                                    <Input value={line.workerType} onChange={(e) => updateDraft(line.id, { workerType: e.target.value })} />
-                                  </div>
-                                )}
-                                <div className="space-y-1.5">
-                                  <Label>Workers</Label>
-                                  <Input type="number" step="1" value={line.workerCount} onChange={(e) => updateDraft(line.id, { workerCount: e.target.value })} />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <Label>Hours each</Label>
-                                  <Input type="number" step="0.25" value={line.hoursPerWorker} onChange={(e) => updateDraft(line.id, { hoursPerWorker: e.target.value })} />
-                                </div>
-                                {canSeeCosts && (
-                                  <div className="space-y-1.5">
-                                    <Label>Cost / hour</Label>
-                                    <Input type="number" step="0.01" value={line.hourlyRate} onChange={(e) => updateDraft(line.id, { hourlyRate: e.target.value })} />
-                                  </div>
-                                )}
-                                <div className="space-y-1.5">
-                                  <Label>{canSeeCosts ? "Line total" : "Total hours"}</Label>
-                                  <Input readOnly disabled value={canSeeCosts ? money(wc * h * rate) : `${(wc * h).toFixed(2)} h`} />
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <Input placeholder="Notes" value={line.notes} onChange={(e) => updateDraft(line.id, { notes: e.target.value })} />
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeDraft(line.id)} aria-label={`Remove labour line ${i + 1}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <Button type="button" variant="outline" size="sm" onClick={addDraft}>
-                          <Plus className="h-4 w-4 mr-1" /> Add labour line
-                        </Button>
-                        <div className="rounded border bg-background px-3 py-2 text-sm space-y-1">
-                          <div className="flex justify-between"><span className="text-muted-foreground">Total person-hours</span><b>{labourTotals.hours.toFixed(2)}</b></div>
-                          {canSeeCosts && <div className="flex justify-between"><span className="text-muted-foreground">Total labour cost</span><b>{money(labourTotals.cost)}</b></div>}
-                        </div>
-                      </div>
-                    )}
+                    {syncLinkedTask && labourEditor}
                   </>
                 )}
               </div>
             )}
+
+            {/* No Work Task yet — offer to create one for cost tracking */}
+            {!entry.work_task_id && (
+              <div className="rounded-md border p-3 space-y-3 bg-muted/20">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="create-task" className="text-sm">Add a Work Task</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Track labour hours and costs for this pruning entry.
+                    </p>
+                  </div>
+                  <Switch id="create-task" checked={createTask} onCheckedChange={setCreateTask} />
+                </div>
+
+                {createTask && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1.5 col-span-2">
+                        <Label>Task title</Label>
+                        <Input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5 col-span-2">
+                        <Label>Status</Label>
+                        <Select value={newTaskStatus} onValueChange={setNewTaskStatus}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="in_progress">In progress</SelectItem>
+                            <SelectItem value="planned">Planned</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {labourEditor}
+                  </>
+                )}
+              </div>
+            )}
+
+
 
             {/* Preview */}
             <div className="rounded border bg-background/60 p-3 text-xs space-y-0.5 tabular-nums">
