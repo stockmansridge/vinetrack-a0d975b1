@@ -49,7 +49,7 @@ type SortKey =
   | "date" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
   | "rows" | "quarters" | "rowEq" | "vines" | "hours" | "start" | "finish"
   | "duration" | "vinesPerHour" | "rate" | "cost" | "task" | "taskStatus"
-  | "created" | "updated" | "status";
+  | "createdBy" | "created" | "updated" | "status";
 
 /** Render "8:30 am" from a time or timestamp column, tolerating both shapes. */
 function formatTime(value: string | null): string {
@@ -97,6 +97,7 @@ export default function PruningActivityReportPage() {
   const canSeeCosts = useCanSeeCosts();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const fmt = useRegionFormatters();
+  const { resolve: resolveUser } = useTeamLookup(selectedVineyardId);
   const money = (n: number | null) => (n == null ? "—" : fmt.currency(n));
 
   const [editRow, setEditRow] = useState<PruningActivityRow | null>(null);
