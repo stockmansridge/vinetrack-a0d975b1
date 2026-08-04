@@ -152,7 +152,6 @@ export default function ActivityHistory({
           onOpenChange={(o) => { if (!o) setEditEntryId(null); }}
           entry={editEntry}
           identities={identities}
-          identities={identities}
           allSegments={allSegments}
           vineyardId={vineyardId}
           paddockName={paddockName}
