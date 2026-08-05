@@ -309,6 +309,16 @@ export default function CostingSetupWizard({ vineyardId }: Props) {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{row.detail}</p>
+                {row.note && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {row.note}{" "}
+                    {row.noteHref && (
+                      <Link to={row.noteHref} className="text-primary hover:underline">
+                        {row.noteLabel ?? "Open"}
+                      </Link>
+                    )}
+                  </p>
+                )}
               </div>
               {row.href && (
                 <Link
