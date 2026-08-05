@@ -321,9 +321,11 @@ export default function PruningActivityReportPage() {
   const activeRows = useMemo(() => filtered.filter((r) => !r.isReversed), [filtered]);
   const reversedCount = filtered.length - activeRows.length;
 
-  // Allocated figures sum per block (safe to add up — they are a split of the
-  // parent activity). Activity totals are counted once per parent activity so
-  // a two-block activity never double-counts its labour or cost.
+  // Shared calculator — identical formulas to the Pruning Tracker.
+  const summary = useMemo(() => calculatePruningSummary(filtered), [filtered]);
+
+  // Allocation-level column totals for the table footer only. Allocated hours
+  // and cost are a split of the parent activity, so they add up safely.
   const totals = useMemo(() => {
     const seen = new Set<string>();
     return activeRows.reduce(
@@ -345,17 +347,8 @@ export default function PruningActivityReportPage() {
     );
   }, [activeRows]);
 
-  const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
+  const avgVinesPerHour = summary.vinesPerLabourHour;
 
-  // Cost per vine — two denominators.
-  // 1) Only vines in activities that carry a labour cost.
-  // 2) All pruned vines, spread against the total activity labour cost.
-  const costedVines = useMemo(
-    () => activeRows.reduce((sum, r) => sum + ((r.allocatedCost ?? 0) > 0 ? r.vines : 0), 0),
-    [activeRows],
-  );
-  const costPerVineCosted = costedVines > 0 ? totals.cost / costedVines : null;
-  const costPerVineAll = totals.vines > 0 ? totals.activityCost / totals.vines : null;
 
 
   // -------------------- Season integrity diagnostic (read-only) --------------------
