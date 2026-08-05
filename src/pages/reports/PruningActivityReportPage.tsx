@@ -1141,19 +1141,22 @@ export default function PruningActivityReportPage() {
             </TableBody>
           )}
         </Table>
+        </SynchronisedHorizontalScroll>
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        Rows sharing an activity code belong to one pruning activity. Labour hours and
+        Rows sharing an activity belong to one pruning activity. Labour hours and
         labour cost are recorded once on the activity; the <em>allocated</em> columns split
         them across blocks by each block's share of the activity's row equivalents
         (rounding differences are applied to the largest allocation so the allocated
-        figures always add back to the activity total). Activity totals are shown once,
-        on the first allocation, and are counted once in the report totals. Labour cost
-        and effective rate come from the labour lines of the linked Work Task; activities
-        without one show no cost. Reversed entries stay visible for audit but are excluded
-        from all totals and averages (average vines / hour = active vines ÷ allocated hours).
+        figures always add back to the activity total). Headline cards count each
+        activity once and use the shared pruning summary calculator, so they always
+        match the Pruning Tracker for the same season. Labour cost and effective rate
+        come from the labour lines of the linked Work Task; activities without one show
+        no cost. Reversed entries stay visible for audit but are excluded from all
+        totals and averages.
       </p>
+
 
 
       {editRow && selectedVineyardId && (() => {
