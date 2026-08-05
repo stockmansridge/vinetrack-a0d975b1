@@ -42,6 +42,8 @@ import {
   type RowCompletionState,
 } from "@/lib/pruningCalc";
 import { usePruningVineyardSummary, type PruningVineyardSummary, type PruningVineyardSummaryBlock } from "@/lib/pruningSummaryQuery";
+import { usePruningActivity } from "@/lib/pruningActivityQuery";
+import { calculateSeasonPruningSummary } from "@/lib/pruningSummaryCalc";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
