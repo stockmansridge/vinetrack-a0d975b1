@@ -174,21 +174,10 @@ export type BaseActivityRow = Omit<
   | "activityHours" | "activityCost" | "activityLabel" | "activityLabelKind"
 >;
 
-/** Readable date used inside generated activity labels ("2 August 2026"). */
-function longDate(iso: string | null | undefined): string {
-  if (!iso) return "undated";
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
-  const d = m
-    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)
-    : new Date(String(iso));
-  if (Number.isNaN(d.getTime())) return "undated";
-  return d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
-}
-
 /**
  * Resolves the user-facing activity label for one parent activity's rows.
- * Never returns an identifier — priority is linked Work Task title, then the
- * stored activity title, then a generated readable label.
+ * Never returns an identifier or a date — the table already has a Date column.
+ * Priority: linked Work Task title, stored activity title, then "Pruning".
  */
 export function resolveActivityLabel(members: BaseActivityRow[]): {
   activityLabel: string;
@@ -209,14 +198,12 @@ export function resolveActivityLabel(members: BaseActivityRow[]): {
   }
 
   if (first.activityId) {
-    return {
-      activityLabel: `Pruning activity — ${longDate(first.date)}`,
-      activityLabelKind: "generated",
-    };
+    return { activityLabel: "Pruning", activityLabelKind: "generated" };
   }
   if (deleted) return { activityLabel: "Deleted work task", activityLabelKind: "unavailable" };
-  return { activityLabel: "Not linked", activityLabelKind: "none" };
+  return { activityLabel: "Pruning", activityLabelKind: "generated" };
 }
+
 
 
 
