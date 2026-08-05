@@ -41,15 +41,15 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     supabase.from(t).select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId).is("deleted_at", null);
 
   const [
-    opCat, opCatWithRate, members, membersCat,
+    opCat, opCatWithRate, memberRows,
     tractors, tractorsLph, trips, tripsTractor,
     fuel, chems, inputs, inputsCost, paddocks, yieldR,
   ] = await Promise.all([
     eq("worker_types"),
     eq("worker_types").not("cost_per_hour", "is", null),
-    supabase.from("vineyard_members").select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId),
-    supabase.from("vineyard_members").select("*", { count: "exact", head: true })
-      .eq("vineyard_id", vineyardId).not("worker_type_id", "is", null),
+    // Full rows so inactive / archived / duplicate memberships can be excluded
+    // client-side — a head-only count would include them.
+    supabase.from("vineyard_members").select("*").eq("vineyard_id", vineyardId),
     eq("tractors"),
     eq("tractors").not("fuel_usage_l_per_hour", "is", null),
     eq("trips"),
@@ -68,6 +68,28 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     supabase.from("historical_yield_records").select("*", { count: "exact", head: true })
       .eq("vineyard_id", vineyardId),
   ]);
+
+  // ---- Active operational workers only ----
+  // Excludes soft-deleted / archived / removed / pending-invite memberships and
+  // deduplicates by user_id so an owner with two membership rows counts once.
+  const WORKER_ROLES = new Set(["owner", "manager", "supervisor", "operator"]);
+  const rawMembers = (memberRows.data ?? []) as any[];
+  const activeByUser = new Map<string, any>();
+  rawMembers.forEach((m) => {
+    if (!m?.user_id) return;                       // pending invite / no account
+    if (m.deleted_at || m.removed_at || m.archived_at) return;
+    const status = String(m.status ?? m.membership_status ?? "active").toLowerCase();
+    if (status && status !== "active") return;     // pending, invited, suspended…
+    if (m.is_service_account === true) return;
+    const role = String(m.role ?? "").toLowerCase();
+    if (role && !WORKER_ROLES.has(role)) return;   // non-operational account
+    const existing = activeByUser.get(m.user_id);
+    // Keep whichever membership actually carries an assignment.
+    if (!existing || (!existing.worker_type_id && m.worker_type_id)) {
+      activeByUser.set(m.user_id, m);
+    }
+  });
+  const activeWorkers = Array.from(activeByUser.values());
 
   const chemsRows = (chems.data ?? []) as { purchase: any }[];
   const chemsWithPurchase = chemsRows.filter((r) => {
@@ -88,8 +110,8 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
   return {
     operatorCategories: opCat.count ?? 0,
     operatorCategoriesWithRate: opCatWithRate.count ?? 0,
-    membersTotal: members.count ?? 0,
-    membersWithCategory: membersCat.count ?? 0,
+    membersTotal: activeWorkers.length,
+    membersWithCategory: activeWorkers.filter((m) => !!m.worker_type_id).length,
     tractors: tractors.count ?? 0,
     tractorsWithLph: tractorsLph.count ?? 0,
     tripsTotal: trips.count ?? 0,
@@ -104,6 +126,7 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     yieldRecords: yieldR.count ?? 0,
   };
 }
+
 
 type RowState = "ok" | "warn" | "empty";
 
