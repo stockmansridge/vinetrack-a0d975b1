@@ -332,6 +332,16 @@ export default function PruningTrackerPage() {
   const summaryQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
   const summary = summaryQ.data ?? null;
 
+  // Shared pruning summary contract — the SAME calculator the Pruning Activity
+  // Report uses, scoped to the current pruning season, so "Vines pruned" and
+  // "Vines per labour hour" reconcile exactly across the two pages.
+  const { data: activityRows = [] } = usePruningActivity(selectedVineyardId);
+  const shared = useMemo(
+    () => calculateSeasonPruningSummary(activityRows, pruningSeasonYear),
+    [activityRows, pruningSeasonYear],
+  );
+
+
   const membershipCheckQ = useQuery({
     queryKey: ["pruning", "membership-check", selectedVineyardId, user?.id ?? null],
     enabled: !!selectedVineyardId && !!user && isSystemAdmin,
