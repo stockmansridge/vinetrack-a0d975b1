@@ -1070,7 +1070,11 @@ export default function PruningActivityReportPage() {
 
 
       {/* -------------------- Table -------------------- */}
-      <Card className="overflow-x-auto">
+      {/* Synchronised top + bottom horizontal scrollbars: the table is wider
+          than the viewport and users shouldn't have to reach the last row to
+          scroll sideways. */}
+      <Card className="overflow-hidden">
+        <SynchronisedHorizontalScroll>
         <Table>
           <TableHeader>
             <TableRow>
