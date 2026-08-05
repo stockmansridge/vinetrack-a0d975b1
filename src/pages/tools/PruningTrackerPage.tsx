@@ -42,6 +42,8 @@ import {
   type RowCompletionState,
 } from "@/lib/pruningCalc";
 import { usePruningVineyardSummary, type PruningVineyardSummary, type PruningVineyardSummaryBlock } from "@/lib/pruningSummaryQuery";
+import { usePruningActivity } from "@/lib/pruningActivityQuery";
+import { calculateSeasonPruningSummary } from "@/lib/pruningSummaryCalc";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
 import SeasonDialog from "@/components/pruning/SeasonDialog";
@@ -332,6 +334,16 @@ export default function PruningTrackerPage() {
   const summaryQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
   const summary = summaryQ.data ?? null;
 
+  // Shared pruning summary contract — the SAME calculator the Pruning Activity
+  // Report uses, scoped to the current pruning season, so "Vines pruned" and
+  // "Vines per labour hour" reconcile exactly across the two pages.
+  const { data: activityRows = [] } = usePruningActivity(selectedVineyardId);
+  const shared = useMemo(
+    () => calculateSeasonPruningSummary(activityRows, pruningSeasonYear),
+    [activityRows, pruningSeasonYear],
+  );
+
+
   const membershipCheckQ = useQuery({
     queryKey: ["pruning", "membership-check", selectedVineyardId, user?.id ?? null],
     enabled: !!selectedVineyardId && !!user && isSystemAdmin,
@@ -571,10 +583,17 @@ export default function PruningTrackerPage() {
                     <Progress value={summary.overall_progress * 100} className="h-2" />
                   </div>
                   <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                    <Metric label="Vines pruned" value={summary.vines_pruned.toLocaleString()} icon={Scissors} />
+                    {/* Vines pruned and vines per labour hour come from the shared
+                        pruning summary calculator (same figures as the Pruning
+                        Activity Report for this season). */}
+                    <Metric label="Vines pruned" value={(shared.vines || summary.vines_pruned).toLocaleString()} icon={Scissors} />
                     <Metric label="Vines remaining" value={summary.vines_remaining.toLocaleString()} icon={Grape} />
                     <Metric label="Vines / day" value={summary.vines_per_day ? Math.round(summary.vines_per_day).toLocaleString() : "—"} icon={CalendarDays} />
-                    <Metric label="Vines / labour hr" value={summary.vines_per_labour_hour ? Math.round(summary.vines_per_labour_hour).toLocaleString() : "—"} icon={User} />
+                    <Metric
+                      label={shared.usesEstimatedHours ? "Est. vines per labour hour" : "Vines per labour hour"}
+                      value={shared.vinesPerLabourHour ? Math.round(shared.vinesPerLabourHour).toLocaleString() : "—"}
+                      icon={User}
+                    />
                     <Metric label="Blocks complete" value={`${summary.blocks_complete} / ${summary.blocks_total || blocks.length}`} icon={CheckCircle2} />
                     <Metric label="Blocks at risk" value={String(summary.blocks_at_risk)} icon={AlertTriangle} tone="warning" />
                   </div>
@@ -910,7 +929,7 @@ function BlockDetail({
           ) : (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 text-sm">
               <Metric label="Vines / day" value={vinesPerDay ? Math.round(vinesPerDay).toLocaleString() : "—"} />
-              <Metric label="Vines / labour hr" value={vinesPerHour ? Math.round(vinesPerHour).toLocaleString() : "—"} />
+              <Metric label="Vines per labour hour" value={vinesPerHour ? Math.round(vinesPerHour).toLocaleString() : "—"} />
               <Metric label="Estimated completion" value={rpcBlock?.estimated_completion_date ? formatDate(rpcBlock.estimated_completion_date) : (local.estimatedCompletionDate ? formatDate(local.estimatedCompletionDate) : "—")} />
               <Metric label="Due date" value={(canonicalSeason ?? block.season)?.due_date ? formatDate((canonicalSeason ?? block.season)!.due_date!) : "—"} />
             </div>

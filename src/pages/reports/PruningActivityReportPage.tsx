@@ -20,6 +20,8 @@ import { formatDate } from "@/lib/dateFormat";
 import { ReportDateCell, reportDateText } from "@/components/reports/ReportDateCell";
 
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
+import { calculatePruningSummary } from "@/lib/pruningSummaryCalc";
+import { SynchronisedHorizontalScroll } from "@/components/reports/SynchronisedHorizontalScroll";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -321,9 +323,11 @@ export default function PruningActivityReportPage() {
   const activeRows = useMemo(() => filtered.filter((r) => !r.isReversed), [filtered]);
   const reversedCount = filtered.length - activeRows.length;
 
-  // Allocated figures sum per block (safe to add up — they are a split of the
-  // parent activity). Activity totals are counted once per parent activity so
-  // a two-block activity never double-counts its labour or cost.
+  // Shared calculator — identical formulas to the Pruning Tracker.
+  const summary = useMemo(() => calculatePruningSummary(filtered), [filtered]);
+
+  // Allocation-level column totals for the table footer only. Allocated hours
+  // and cost are a split of the parent activity, so they add up safely.
   const totals = useMemo(() => {
     const seen = new Set<string>();
     return activeRows.reduce(
@@ -345,17 +349,8 @@ export default function PruningActivityReportPage() {
     );
   }, [activeRows]);
 
-  const avgVinesPerHour = totals.hours > 0 ? totals.vines / totals.hours : null;
+  const avgVinesPerHour = summary.vinesPerLabourHour;
 
-  // Cost per vine — two denominators.
-  // 1) Only vines in activities that carry a labour cost.
-  // 2) All pruned vines, spread against the total activity labour cost.
-  const costedVines = useMemo(
-    () => activeRows.reduce((sum, r) => sum + ((r.allocatedCost ?? 0) > 0 ? r.vines : 0), 0),
-    [activeRows],
-  );
-  const costPerVineCosted = costedVines > 0 ? totals.cost / costedVines : null;
-  const costPerVineAll = totals.vines > 0 ? totals.activityCost / totals.vines : null;
 
 
   // -------------------- Season integrity diagnostic (read-only) --------------------
@@ -805,45 +800,44 @@ export default function PruningActivityReportPage() {
       )}
 
       {/* -------------------- Summary -------------------- */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* Shared contract: every figure comes from calculatePruningSummary so the
+          Pruning Tracker and this report can never drift apart. Labour hours and
+          cost count each parent activity once — allocation splits live in the
+          table for block attribution only. */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {[
           {
-            label: "Matching allocations",
-            value: filtered.length.toLocaleString(),
-            hint: `${totals.activities.toLocaleString()} activit${totals.activities === 1 ? "y" : "ies"} • ${reversedCount.toLocaleString()} reversed`,
-          },
-          { label: "Vines pruned", value: totals.vines.toLocaleString(), hint: "Across the filtered blocks" },
-          {
-            label: blockId === ANY ? "Allocated labour hours" : "Allocated labour hours (filtered blocks)",
-            value: totals.hours.toFixed(2),
-            hint: "Share of activity hours by row equivalents",
+            label: "Activities",
+            value: summary.activities.toLocaleString(),
+            hint: `${summary.allocations.toLocaleString()} allocation row${summary.allocations === 1 ? "" : "s"}${reversedCount ? ` • ${reversedCount.toLocaleString()} reversed` : ""}`,
           },
           {
-            label: "Total activity labour hours",
-            value: totals.activityHours.toFixed(2),
-            hint: "Each activity counted once",
+            label: "Vines pruned",
+            value: summary.vines.toLocaleString(),
+            hint: `Across ${summary.blocks.toLocaleString()} ${summary.blocks === 1 ? fmt.blockLabel.toLowerCase() : fmt.blocksLabel.toLowerCase()}`,
           },
-          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0), hint: "Vines ÷ allocated hours" },
+          {
+            label: "Labour hours",
+            value: `${summary.labourHours.toFixed(2)}`,
+            hint: "Person-hours • each activity counted once",
+          },
+          {
+            label: summary.usesEstimatedHours ? "Estimated vines per labour hour" : "Vines per labour hour",
+            value: summary.vinesPerLabourHour == null ? "—" : Math.round(summary.vinesPerLabourHour).toLocaleString(),
+            hint: "Vines ÷ person-hours",
+          },
           ...(canSeeCosts ? [
             {
-              label: blockId === ANY ? "Allocated labour cost" : "Allocated labour cost (filtered blocks)",
-              value: money(totals.cost),
-              hint: "Activity cost split by row equivalents",
-            },
-            {
-              label: "Total activity labour cost",
-              value: money(totals.activityCost),
+              label: "Labour cost",
+              value: money(summary.labourCost),
               hint: "Each activity counted once",
             },
             {
-              label: "Cost / vine (costed)",
-              value: costPerVineCosted == null ? "—" : money(costPerVineCosted),
-              hint: `${money(totals.cost)} ÷ ${costedVines.toLocaleString()} vines with a cost`,
-            },
-            {
-              label: "Cost / vine (all)",
-              value: costPerVineAll == null ? "—" : money(costPerVineAll),
-              hint: `${money(totals.activityCost)} ÷ ${totals.vines.toLocaleString()} vines pruned`,
+              label: "Cost per vine",
+              value: summary.costPerVine == null ? "—" : money(summary.costPerVine),
+              hint: summary.costedVines && summary.costedVines !== summary.vines
+                ? `Based on ${summary.vines.toLocaleString()} included vines • cost data available for ${summary.costedVines.toLocaleString()} vines`
+                : `Based on ${summary.vines.toLocaleString()} included vines`,
             },
           ] : []),
         ].map((s) => (
@@ -854,6 +848,7 @@ export default function PruningActivityReportPage() {
           </Card>
         ))}
       </div>
+
 
 
       {/* -------------------- Filters -------------------- */}
@@ -1075,7 +1070,11 @@ export default function PruningActivityReportPage() {
 
 
       {/* -------------------- Table -------------------- */}
-      <Card className="overflow-x-auto">
+      {/* Synchronised top + bottom horizontal scrollbars: the table is wider
+          than the viewport and users shouldn't have to reach the last row to
+          scroll sideways. */}
+      <Card className="overflow-hidden">
+        <SynchronisedHorizontalScroll>
         <Table>
           <TableHeader>
             <TableRow>
@@ -1142,19 +1141,22 @@ export default function PruningActivityReportPage() {
             </TableBody>
           )}
         </Table>
+        </SynchronisedHorizontalScroll>
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        Rows sharing an activity code belong to one pruning activity. Labour hours and
+        Rows sharing an activity belong to one pruning activity. Labour hours and
         labour cost are recorded once on the activity; the <em>allocated</em> columns split
         them across blocks by each block's share of the activity's row equivalents
         (rounding differences are applied to the largest allocation so the allocated
-        figures always add back to the activity total). Activity totals are shown once,
-        on the first allocation, and are counted once in the report totals. Labour cost
-        and effective rate come from the labour lines of the linked Work Task; activities
-        without one show no cost. Reversed entries stay visible for audit but are excluded
-        from all totals and averages (average vines / hour = active vines ÷ allocated hours).
+        figures always add back to the activity total). Headline cards count each
+        activity once and use the shared pruning summary calculator, so they always
+        match the Pruning Tracker for the same season. Labour cost and effective rate
+        come from the labour lines of the linked Work Task; activities without one show
+        no cost. Reversed entries stay visible for audit but are excluded from all
+        totals and averages.
       </p>
+
 
 
       {editRow && selectedVineyardId && (() => {

@@ -41,15 +41,15 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     supabase.from(t).select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId).is("deleted_at", null);
 
   const [
-    opCat, opCatWithRate, members, membersCat,
+    opCat, opCatWithRate, memberRows,
     tractors, tractorsLph, trips, tripsTractor,
     fuel, chems, inputs, inputsCost, paddocks, yieldR,
   ] = await Promise.all([
     eq("worker_types"),
     eq("worker_types").not("cost_per_hour", "is", null),
-    supabase.from("vineyard_members").select("*", { count: "exact", head: true }).eq("vineyard_id", vineyardId),
-    supabase.from("vineyard_members").select("*", { count: "exact", head: true })
-      .eq("vineyard_id", vineyardId).not("worker_type_id", "is", null),
+    // Full rows so inactive / archived / duplicate memberships can be excluded
+    // client-side — a head-only count would include them.
+    supabase.from("vineyard_members").select("*").eq("vineyard_id", vineyardId),
     eq("tractors"),
     eq("tractors").not("fuel_usage_l_per_hour", "is", null),
     eq("trips"),
@@ -68,6 +68,28 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
     supabase.from("historical_yield_records").select("*", { count: "exact", head: true })
       .eq("vineyard_id", vineyardId),
   ]);
+
+  // ---- Active operational workers only ----
+  // Excludes soft-deleted / archived / removed / pending-invite memberships and
+  // deduplicates by user_id so an owner with two membership rows counts once.
+  const WORKER_ROLES = new Set(["owner", "manager", "supervisor", "operator"]);
+  const rawMembers = (memberRows.data ?? []) as any[];
+  const activeByUser = new Map<string, any>();
+  rawMembers.forEach((m) => {
+    if (!m?.user_id) return;                       // pending invite / no account
+    if (m.deleted_at || m.removed_at || m.archived_at) return;
+    const status = String(m.status ?? m.membership_status ?? "active").toLowerCase();
+    if (status && status !== "active") return;     // pending, invited, suspended…
+    if (m.is_service_account === true) return;
+    const role = String(m.role ?? "").toLowerCase();
+    if (role && !WORKER_ROLES.has(role)) return;   // non-operational account
+    const existing = activeByUser.get(m.user_id);
+    // Keep whichever membership actually carries an assignment.
+    if (!existing || (!existing.worker_type_id && m.worker_type_id)) {
+      activeByUser.set(m.user_id, m);
+    }
+  });
+  const activeWorkers = Array.from(activeByUser.values());
 
   const chemsRows = (chems.data ?? []) as { purchase: any }[];
   const chemsWithPurchase = chemsRows.filter((r) => {
@@ -88,8 +110,8 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
   return {
     operatorCategories: opCat.count ?? 0,
     operatorCategoriesWithRate: opCatWithRate.count ?? 0,
-    membersTotal: members.count ?? 0,
-    membersWithCategory: membersCat.count ?? 0,
+    membersTotal: activeWorkers.length,
+    membersWithCategory: activeWorkers.filter((m) => !!m.worker_type_id).length,
     tractors: tractors.count ?? 0,
     tractorsWithLph: tractorsLph.count ?? 0,
     tripsTotal: trips.count ?? 0,
@@ -105,6 +127,7 @@ async function fetchSetupCounts(vineyardId: string): Promise<SetupCounts> {
   };
 }
 
+
 type RowState = "ok" | "warn" | "empty";
 
 interface CheckRow {
@@ -114,27 +137,40 @@ interface CheckRow {
   detail: string;
   href?: string;
   linkLabel?: string;
+  /** Informational secondary line — never affects readiness. */
+  note?: string;
+  noteHref?: string;
+  noteLabel?: string;
 }
 
 function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
-  const rateOk = c.operatorCategories > 0 && c.operatorCategoriesWithRate === c.operatorCategories;
-  const memberOk = c.membersTotal > 0 && c.membersWithCategory === c.membersTotal;
+  // Labour readiness depends ONLY on whether labour cost can be resolved:
+  // at least one worker type exists and every worker type carries an hourly
+  // rate. An unused worker type is a perfectly valid setup record, and a team
+  // member without a default worker type never blocks costing — Work Task
+  // labour lines carry their own worker type and rate.
+  const missingRates = c.operatorCategories - c.operatorCategoriesWithRate;
+  const categoriesReady = c.operatorCategories > 0 && missingRates === 0;
+  const unassignedWorkers = Math.max(0, c.membersTotal - c.membersWithCategory);
   return [
     {
       key: "labour",
       title: "Operator labour",
-      state: c.operatorCategories === 0 || c.membersTotal === 0 ? "empty" :
-        rateOk && memberOk ? "ok" : "warn",
+      state: c.operatorCategories === 0 ? "empty" : categoriesReady ? "ok" : "warn",
       detail: c.operatorCategories === 0
-        ? "No worker types yet. Add categories with an hourly rate."
-        : !rateOk
-          ? `${c.operatorCategories - c.operatorCategoriesWithRate} of ${c.operatorCategories} categories are missing an hourly rate.`
-          : !memberOk
-            ? `${c.membersTotal - c.membersWithCategory} of ${c.membersTotal} team members are not yet assigned to an worker type.`
-            : "All categories have a rate and all team members are assigned.",
+        ? "No worker types yet. Add worker types with an hourly rate."
+        : !categoriesReady
+          ? `${missingRates} of ${c.operatorCategories} worker type${c.operatorCategories === 1 ? "" : "s"} ${missingRates === 1 ? "is" : "are"} missing an hourly rate.`
+          : `${c.operatorCategories} worker type${c.operatorCategories === 1 ? "" : "s"} with an hourly rate — labour cost can be resolved.`,
       href: "/setup/operator-categories",
       linkLabel: "Worker types",
+      note: unassignedWorkers > 0
+        ? `Worker assignments: ${unassignedWorkers} active worker${unassignedWorkers === 1 ? " has" : "s have"} no default worker type. Optional — it only pre-fills new labour lines.`
+        : undefined,
+      noteHref: unassignedWorkers > 0 ? "/team" : undefined,
+      noteLabel: unassignedWorkers > 0 ? "Assign worker types" : undefined,
     },
+
     {
       key: "fuel",
       title: "Fuel costing",
@@ -273,6 +309,16 @@ export default function CostingSetupWizard({ vineyardId }: Props) {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{row.detail}</p>
+                {row.note && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {row.note}{" "}
+                    {row.noteHref && (
+                      <Link to={row.noteHref} className="text-primary hover:underline">
+                        {row.noteLabel ?? "Open"}
+                      </Link>
+                    )}
+                  </p>
+                )}
               </div>
               {row.href && (
                 <Link
