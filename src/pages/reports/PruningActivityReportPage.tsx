@@ -20,6 +20,8 @@ import { formatDate } from "@/lib/dateFormat";
 import { ReportDateCell, reportDateText } from "@/components/reports/ReportDateCell";
 
 import { usePruningActivity, type PruningActivityRow } from "@/lib/pruningActivityQuery";
+import { calculatePruningSummary } from "@/lib/pruningSummaryCalc";
+import { SynchronisedHorizontalScroll } from "@/components/reports/SynchronisedHorizontalScroll";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
