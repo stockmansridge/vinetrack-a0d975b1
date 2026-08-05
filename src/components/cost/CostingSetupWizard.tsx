@@ -137,27 +137,40 @@ interface CheckRow {
   detail: string;
   href?: string;
   linkLabel?: string;
+  /** Informational secondary line — never affects readiness. */
+  note?: string;
+  noteHref?: string;
+  noteLabel?: string;
 }
 
 function buildRows(c: SetupCounts, rf: RegionFormatters): CheckRow[] {
-  const rateOk = c.operatorCategories > 0 && c.operatorCategoriesWithRate === c.operatorCategories;
-  const memberOk = c.membersTotal > 0 && c.membersWithCategory === c.membersTotal;
+  // Labour readiness depends ONLY on whether labour cost can be resolved:
+  // at least one worker type exists and every worker type carries an hourly
+  // rate. An unused worker type is a perfectly valid setup record, and a team
+  // member without a default worker type never blocks costing — Work Task
+  // labour lines carry their own worker type and rate.
+  const missingRates = c.operatorCategories - c.operatorCategoriesWithRate;
+  const categoriesReady = c.operatorCategories > 0 && missingRates === 0;
+  const unassignedWorkers = Math.max(0, c.membersTotal - c.membersWithCategory);
   return [
     {
       key: "labour",
       title: "Operator labour",
-      state: c.operatorCategories === 0 || c.membersTotal === 0 ? "empty" :
-        rateOk && memberOk ? "ok" : "warn",
+      state: c.operatorCategories === 0 ? "empty" : categoriesReady ? "ok" : "warn",
       detail: c.operatorCategories === 0
-        ? "No worker types yet. Add categories with an hourly rate."
-        : !rateOk
-          ? `${c.operatorCategories - c.operatorCategoriesWithRate} of ${c.operatorCategories} categories are missing an hourly rate.`
-          : !memberOk
-            ? `${c.membersTotal - c.membersWithCategory} of ${c.membersTotal} team members are not yet assigned to an worker type.`
-            : "All categories have a rate and all team members are assigned.",
+        ? "No worker types yet. Add worker types with an hourly rate."
+        : !categoriesReady
+          ? `${missingRates} of ${c.operatorCategories} worker type${c.operatorCategories === 1 ? "" : "s"} ${missingRates === 1 ? "is" : "are"} missing an hourly rate.`
+          : `${c.operatorCategories} worker type${c.operatorCategories === 1 ? "" : "s"} with an hourly rate — labour cost can be resolved.`,
       href: "/setup/operator-categories",
       linkLabel: "Worker types",
+      note: unassignedWorkers > 0
+        ? `Worker assignments: ${unassignedWorkers} active worker${unassignedWorkers === 1 ? " has" : "s have"} no default worker type. Optional — it only pre-fills new labour lines.`
+        : undefined,
+      noteHref: unassignedWorkers > 0 ? "/team" : undefined,
+      noteLabel: unassignedWorkers > 0 ? "Assign worker types" : undefined,
     },
+
     {
       key: "fuel",
       title: "Fuel costing",
