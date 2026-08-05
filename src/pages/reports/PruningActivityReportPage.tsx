@@ -805,45 +805,44 @@ export default function PruningActivityReportPage() {
       )}
 
       {/* -------------------- Summary -------------------- */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* Shared contract: every figure comes from calculatePruningSummary so the
+          Pruning Tracker and this report can never drift apart. Labour hours and
+          cost count each parent activity once — allocation splits live in the
+          table for block attribution only. */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {[
           {
-            label: "Matching allocations",
-            value: filtered.length.toLocaleString(),
-            hint: `${totals.activities.toLocaleString()} activit${totals.activities === 1 ? "y" : "ies"} • ${reversedCount.toLocaleString()} reversed`,
-          },
-          { label: "Vines pruned", value: totals.vines.toLocaleString(), hint: "Across the filtered blocks" },
-          {
-            label: blockId === ANY ? "Allocated labour hours" : "Allocated labour hours (filtered blocks)",
-            value: totals.hours.toFixed(2),
-            hint: "Share of activity hours by row equivalents",
+            label: "Activities",
+            value: summary.activities.toLocaleString(),
+            hint: `${summary.allocations.toLocaleString()} allocation row${summary.allocations === 1 ? "" : "s"}${reversedCount ? ` • ${reversedCount.toLocaleString()} reversed` : ""}`,
           },
           {
-            label: "Total activity labour hours",
-            value: totals.activityHours.toFixed(2),
-            hint: "Each activity counted once",
+            label: "Vines pruned",
+            value: summary.vines.toLocaleString(),
+            hint: `Across ${summary.blocks.toLocaleString()} ${summary.blocks === 1 ? fmt.blockLabel.toLowerCase() : fmt.blocksLabel.toLowerCase()}`,
           },
-          { label: "Avg vines / hour", value: avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0), hint: "Vines ÷ allocated hours" },
+          {
+            label: "Labour hours",
+            value: `${summary.labourHours.toFixed(2)}`,
+            hint: "Person-hours • each activity counted once",
+          },
+          {
+            label: summary.usesEstimatedHours ? "Estimated vines per labour hour" : "Vines per labour hour",
+            value: summary.vinesPerLabourHour == null ? "—" : Math.round(summary.vinesPerLabourHour).toLocaleString(),
+            hint: "Vines ÷ person-hours",
+          },
           ...(canSeeCosts ? [
             {
-              label: blockId === ANY ? "Allocated labour cost" : "Allocated labour cost (filtered blocks)",
-              value: money(totals.cost),
-              hint: "Activity cost split by row equivalents",
-            },
-            {
-              label: "Total activity labour cost",
-              value: money(totals.activityCost),
+              label: "Labour cost",
+              value: money(summary.labourCost),
               hint: "Each activity counted once",
             },
             {
-              label: "Cost / vine (costed)",
-              value: costPerVineCosted == null ? "—" : money(costPerVineCosted),
-              hint: `${money(totals.cost)} ÷ ${costedVines.toLocaleString()} vines with a cost`,
-            },
-            {
-              label: "Cost / vine (all)",
-              value: costPerVineAll == null ? "—" : money(costPerVineAll),
-              hint: `${money(totals.activityCost)} ÷ ${totals.vines.toLocaleString()} vines pruned`,
+              label: "Cost per vine",
+              value: summary.costPerVine == null ? "—" : money(summary.costPerVine),
+              hint: summary.costedVines && summary.costedVines !== summary.vines
+                ? `Based on ${summary.vines.toLocaleString()} included vines • cost data available for ${summary.costedVines.toLocaleString()} vines`
+                : `Based on ${summary.vines.toLocaleString()} included vines`,
             },
           ] : []),
         ].map((s) => (
@@ -854,6 +853,7 @@ export default function PruningActivityReportPage() {
           </Card>
         ))}
       </div>
+
 
 
       {/* -------------------- Filters -------------------- */}
