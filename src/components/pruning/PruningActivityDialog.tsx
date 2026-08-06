@@ -173,9 +173,13 @@ export default function PruningActivityDialog({
       setDraft(emptyDraft());
       setStartInput("");
       setFinishInput("");
+      setSkipped(false);
+      skipEntryIds.current = {};
     }
+    setConfirmSkip(false);
     setConflicts([]);
     setSaveError(null);
+
   }, [open, isEdit, loaded]);
 
   /** Quarters already owned by THIS activity — they must stay selectable. */
