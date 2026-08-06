@@ -204,8 +204,7 @@ export default function YieldReportsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Yields</h1>
         <p className="text-sm text-muted-foreground">
-          Forecasting, Sampling &amp; Recording. Read-only in the portal —
-          soft-deleted records are excluded.
+          Record and review vineyard production results by block, variety and season. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
         </p>
       </div>
 

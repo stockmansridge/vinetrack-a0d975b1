@@ -533,7 +533,7 @@ export default function PruningTrackerPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      <PageHead title="Pruning Tracker" description="Track pruning progress across the vineyard." path="/tools/pruning-tracker" />
+      <PageHead title="Pruning Tracker" description="Record pruning activity and monitor progress across vineyard blocks and rows. Track pruning dates, methods, crews, completed areas and the work that remains." path="/tools/pruning-tracker" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -543,7 +543,7 @@ export default function PruningTrackerPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Pruning Tracker</h1>
             <p className="text-sm text-muted-foreground">
-              {vineyard?.vineyard_name ? `${vineyard.vineyard_name} · ${pruningSeasonYear} Winter Pruning · Vintage ${vintage}` : "No vineyard selected"}
+              Record pruning activity and monitor progress across vineyard blocks and rows. Track pruning dates, methods, crews, completed areas and the work that remains.
             </p>
           </div>
         </div>
