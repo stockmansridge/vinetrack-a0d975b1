@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, X } from "lucide-react";
+import { RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -27,7 +27,8 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailSheet from "@/components/PinDetailSheet";
-import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
+import { pinDisplayStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
+import { PIN_CATEGORY_ORDER, normalisePinCategoryId, pinCategoryStyleById, pinPlacement, type PinCategoryId } from "@/lib/pinCategory";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -68,6 +69,7 @@ export default function PinsPage() {
   const [tab, setTab] = useState("table");
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
+  const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
   const rf = useRegionFormatters();
@@ -184,8 +186,20 @@ export default function PinsPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const categoryCounts = useMemo(() => {
+    const m = new Map<PinCategoryId, number>();
+    for (const p of statusFiltered) {
+      const id = normalisePinCategoryId(p as any);
+      m.set(id, (m.get(id) ?? 0) + 1);
+    }
+    return m;
+  }, [statusFiltered]);
+
   const filtered = useMemo(() => {
     let list = statusFiltered;
+    if (categoryFilter !== "all") {
+      list = list.filter((p: any) => normalisePinCategoryId(p) === categoryFilter);
+    }
     if (paddockFilter) {
       list = list.filter((p: any) => p.paddock_id === paddockFilter);
     }
@@ -195,7 +209,7 @@ export default function PinsPage() {
       [p.title, (p as any).button_name, p.mode, p.category, p.priority, p.status, p.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [statusFiltered, filter, paddockFilter]);
+  }, [statusFiltered, filter, paddockFilter, categoryFilter]);
 
   const PRIORITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
   type PinSortKey =
@@ -213,7 +227,7 @@ export default function PinsPage() {
       },
       status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
       priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
-      category: (p: any) => (p.category ?? "") as string,
+      category: (p: any) => pinCategoryStyleById(normalisePinCategoryId(p)).label,
       stage: (p: any) => (p.growth_stage_code ?? "") as string,
       created: (p: any) => (p.created_at ? new Date(p.created_at) : null),
       createdBy: (p: any) => resolvePerson(p.created_by, p.created_by_user_id),
@@ -226,7 +240,7 @@ export default function PinsPage() {
   // Hide optional columns when no pins have a value for them.
   const hasMode = pins.some((p: any) => p.mode);
   const hasPriority = pins.some((p: any) => p.priority);
-  const hasCategory = pins.some((p: any) => p.category);
+  const hasCategory = true;
   const hasStage = pins.some((p: any) => p.growth_stage_code);
   const hasAnyCompleted = pins.some((p: any) => p.is_completed);
 
@@ -361,6 +375,38 @@ export default function PinsPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-1.5" aria-label="Category legend and filter">
+        <Button
+          size="sm"
+          variant={categoryFilter === "all" ? "secondary" : "ghost"}
+          className="h-7 px-3 text-xs"
+          onClick={() => setCategoryFilter("all")}
+        >
+          All categories
+        </Button>
+        {PIN_CATEGORY_ORDER.map((id) => {
+          const cs = pinCategoryStyleById(id);
+          const count = categoryCounts.get(id) ?? 0;
+          if (!count && id !== "other" && id !== "unknown") return null;
+          return (
+            <Button
+              key={id}
+              size="sm"
+              variant={categoryFilter === id ? "secondary" : "ghost"}
+              className="h-7 gap-1.5 px-3 text-xs"
+              data-category-id={id}
+              onClick={() => setCategoryFilter(categoryFilter === id ? "all" : id)}
+            >
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full"
+                style={{ background: cs.hex }}
+              />
+              {cs.label} ({count})
+            </Button>
+          );
+        })}
+      </div>
+
       <TabsContent value="table" className="mt-0 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs text-muted-foreground">
@@ -434,7 +480,8 @@ export default function PinsPage() {
                 </TableRow>
               )}
               {sorted.map((p) => {
-                const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
+                const style = pinDisplayStyle(p as any);
+                const placement = pinPlacement(p as any);
                 const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
                 const completedBy = (p as any).is_completed
                   ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
@@ -443,16 +490,36 @@ export default function PinsPage() {
                   title: (
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ background: style.hex }} title={style.label} />
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ background: style.hex }}
+                          title={style.label}
+                          data-category-id={style.categoryId}
+                        />
                         <span className="truncate">{pinDisplayTitle(p as any)}</span>
+                        {!placement.assigned && (
+                          <span
+                            className="inline-flex shrink-0 text-amber-500"
+                            title={placement.reasonLabel ?? "Unassigned location"}
+                            aria-label="Unassigned location"
+                          >
+                            <TriangleAlert className="h-3.5 w-3.5" />
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                   ),
                   mode: <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>,
-                  paddock: <TableCell>{p.paddock_id ? (paddockNameById.get(p.paddock_id) ?? "—") : "—"}</TableCell>,
+                  paddock: (
+                    <TableCell>
+                      {placement.assigned
+                        ? (paddockNameById.get(p.paddock_id!) ?? "—")
+                        : <span className="text-amber-600 dark:text-amber-400 text-xs">Unassigned location</span>}
+                    </TableCell>
+                  ),
                   row: (
                     <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
-                      {formatPinRowSummary(p as any) ?? "—"}
+                      {placement.assigned ? (formatPinRowSummary(p as any) ?? "—") : "—"}
                     </TableCell>
                   ),
                   status: (
@@ -461,7 +528,7 @@ export default function PinsPage() {
                     </TableCell>
                   ),
                   priority: <TableCell>{p.priority ? <Badge variant="secondary">{p.priority}</Badge> : "—"}</TableCell>,
-                  category: <TableCell>{p.category ?? "—"}</TableCell>,
+                  category: <TableCell>{style.label}</TableCell>,
                   stage: <TableCell>{p.growth_stage_code ?? "—"}</TableCell>,
                   created: <TableCell className="text-sm text-muted-foreground">{p.created_at ? rf.date(p.created_at) : "—"}</TableCell>,
                   createdBy: <TableCell className="text-sm">{createdBy}</TableCell>,

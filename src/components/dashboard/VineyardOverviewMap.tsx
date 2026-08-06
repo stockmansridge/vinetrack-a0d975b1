@@ -23,7 +23,7 @@ import {
   type LatLng,
 } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
 import { initMapKit } from "@/lib/mapkit";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
@@ -454,7 +454,7 @@ export default function VineyardOverviewMap({
         const lng = coords.lng;
         if (!validPt({ lat, lng })) continue;
         allPts.push({ lat, lng });
-        const style = pinStyle(pin.mode, pin.button_color, pin.category);
+        const style = pinDisplayStyle(pin as any);
         const fill = pinColorMode === "age" ? pinAgeColor((pin as any).created_at) : style.hex;
         const isSelected =
           selection?.kind === "pin" && selection.id === pin.id;
@@ -958,7 +958,7 @@ function PinPanelBody({
   paddockRowDirection?: number | null;
 }) {
   const rf = useRegionFormatters();
-  const style = pinStyle(pin.mode, pin.button_color, pin.category);
+  const style = pinDisplayStyle(pin as any);
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl = pin.photo_url ?? pin.image_url ?? pin.attachment_url ?? null;
   const signed = usePinPhoto(photoPath ?? undefined);

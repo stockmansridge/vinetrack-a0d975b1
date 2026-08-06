@@ -10,7 +10,7 @@ import { MapPin as MapPinIcon } from "lucide-react";
 import { initMapKit } from "@/lib/mapkit";
 import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
-import { pinStyle, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinDisplayStyle, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
 import { extractPathPoints } from "@/lib/tripReport";
 import type { Trip } from "@/lib/tripsQuery";
 import PinDetailSheet from "@/components/PinDetailSheet";
@@ -196,7 +196,7 @@ export default function BlockMap({
     // Pin annotations
     if (filters.pins) {
       for (const { pin, coords } of pinsWithCoords) {
-        const style = pinStyle(pin.mode, pin.button_color, pin.category);
+        const style = pinDisplayStyle(pin as any);
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(coords.lat, coords.lng),
           () => {

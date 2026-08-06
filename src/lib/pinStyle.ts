@@ -1,3 +1,4 @@
+import { pinCategoryStyle, type PinCategoryId } from "@/lib/pinCategory";
 // Pin colour mapping — mirrors the iOS app's per-button colour palette.
 //
 // In the iOS app every Repair / Growth button (e.g. "Irrigation",
@@ -122,6 +123,34 @@ export function pinStyle(
   // 3. Neutral default.
   return DEFAULT_STYLE;
 }
+
+/**
+ * Canonical display style for a pin.
+ *
+ * Colour comes from the normalised category id (the shared iOS/Android
+ * contract) and NOTHING else — not the stored marker colour, title text,
+ * completion status, placement, sync state, creator or source platform.
+ *
+ * Non-repair modes (Growth / Note / Hazard / Spray / Manual Issue) keep
+ * their existing mode identity colour when the category is unknown.
+ */
+export function pinDisplayStyle(pin: {
+  mode?: string | null;
+  category?: string | null;
+  category_id?: string | null;
+  button_name?: string | null;
+}): PinStyle & { categoryId: PinCategoryId } {
+  const cat = pinCategoryStyle(pin);
+  if (cat.id !== "unknown") {
+    return { hex: cat.hex, label: cat.label, categoryId: cat.id };
+  }
+  const modeKey = (pin.mode ?? "").trim().toLowerCase();
+  const isRepair = modeKey === "repair" || modeKey === "repairs";
+  const modeStyle = !isRepair ? lookupMode(pin.mode) ?? lookupMode(pin.category) : null;
+  if (modeStyle) return { ...modeStyle, categoryId: "unknown" };
+  return { hex: cat.hex, label: cat.label, categoryId: "unknown" };
+}
+
 
 // Row-number display: VineTrack stores whole-row integers but operationally
 // rows are referred to as the .5 mid-row/path between adjacent rows. Show

@@ -6,7 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
-import { pinStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinDisplayStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } from "@/lib/pinStyle";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -202,7 +202,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
                   <Marker
                     key={p.id}
                     position={[p.latitude!, p.longitude!]}
-                    icon={pinIcon(pinStyle(p.mode, (p as any).button_color, (p as any).category).hex)}
+                    icon={pinIcon(pinDisplayStyle(p as any).hex)}
                     title={pinDisplayTitle(p as any)}
                     eventHandlers={{ click: () => setSelectedId(p.id) }}
                   />
