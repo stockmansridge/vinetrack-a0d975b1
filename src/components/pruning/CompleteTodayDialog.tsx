@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -122,6 +126,7 @@ export default function CompleteTodayDialog({
 
   // SQL 168: mark the selected quarters as skipped instead of pruned.
   const [markSkipped, setMarkSkipped] = useState(false);
+  const [confirmSkipOpen, setConfirmSkipOpen] = useState(false);
 
   const [createTask, setCreateTask] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
@@ -413,10 +418,23 @@ export default function CompleteTodayDialog({
   });
 
   const handleSubmit = async () => {
-    if (!segments.length) { toast.error("Select at least one quarter"); return; }
+    if (!segments.length) {
+      toast.error(markSkipped
+        ? "Select at least one row or row section to mark as skipped."
+        : "Select at least one quarter");
+      return;
+    }
     if (!entryDate) { toast.error("Date is required"); return; }
 
     // SQL 168: skipped entries carry no worker, labour, cost, method or task.
+    if (markSkipped) {
+      setConfirmSkipOpen(true);
+      return;
+    }
+    await runSave();
+  };
+
+  const runSave = async () => {
     if (markSkipped) {
       const skippedId = pendingEntryId ?? crypto.randomUUID();
       setPendingEntryId(skippedId);
@@ -429,7 +447,7 @@ export default function CompleteTodayDialog({
           seasonYear: season.season_year,
           entryDate,
           segments,
-          notes: "",
+          notes,
         });
         toast.success(`Marked ${segments.length} quarter${segments.length === 1 ? "" : "s"} as skipped.`);
         onOpenChange(false);
@@ -650,10 +668,10 @@ export default function CompleteTodayDialog({
             </div>
             <div className="rounded-md border p-3 bg-muted/20 flex items-start justify-between gap-3">
               <div>
-                <Label htmlFor="mark-skipped" className="text-sm">Mark as skipped</Label>
+                <Label htmlFor="mark-skipped" className="text-sm">Mark selected rows as skipped</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Counts the selected rows as complete without recording any work,
-                  labour or cost.
+                  Skipped rows count as complete in pruning progress but do not
+                  record labour, cost or pruning work.
                 </p>
               </div>
               <Switch
@@ -662,6 +680,13 @@ export default function CompleteTodayDialog({
                 onCheckedChange={(v) => { setMarkSkipped(v); if (v) setCreateTask(false); }}
               />
             </div>
+
+            {markSkipped && (
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
+            )}
 
             {!markSkipped && (
             <>
@@ -839,6 +864,24 @@ export default function CompleteTodayDialog({
           </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={confirmSkipOpen} onOpenChange={setConfirmSkipOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark selected rows as skipped?</AlertDialogTitle>
+            <AlertDialogDescription>
+              These rows will count as complete in pruning progress, but no
+              labour, cost or pruning work will be recorded.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmSkipOpen(false); void runSave(); }}>
+              Mark Skipped
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

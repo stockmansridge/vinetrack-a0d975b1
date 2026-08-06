@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Scissors, Settings2, ArrowLeft, CheckCircle2, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
+import { Scissors, Settings2, ArrowLeft, CheckCircle2, CheckSquare, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   usePruningSeasons,
@@ -885,6 +885,11 @@ function BlockDetail({
           {canEdit && (
             <Button variant="outline" size="sm" onClick={onOpenSettings}>
               <Settings2 className="h-4 w-4 mr-1" /> Settings
+            </Button>
+          )}
+          {canEdit && block.season && (
+            <Button variant="outline" size="sm" onClick={onOpenComplete}>
+              <CheckSquare className="h-4 w-4 mr-1" /> Add pruning entry
             </Button>
           )}
           <NewPruningActivityButton

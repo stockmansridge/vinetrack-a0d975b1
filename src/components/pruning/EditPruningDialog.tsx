@@ -28,9 +28,9 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckSquare, Plus, Square, Trash2, AlertCircle, Link2, Link2Off, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PruningEntry, PruningRowSegment, RecordSegmentInput, UpdateEntryResult } from "@/lib/pruningQuery";
-import { useUpdatePruningEntry } from "@/lib/pruningQuery";
+import { useUpdatePruningEntry, updateSkippedPruningEntry } from "@/lib/pruningQuery";
 import type { RowIdentity } from "@/lib/pruningCalc";
 import {
   createLabourLine, createWorkTask, fetchLabourLinesForTask, fetchWorkTaskById,
@@ -106,6 +106,9 @@ export default function EditPruningDialog({
   const rf = useRegionFormatters();
   const money = (v: number) => rf.currency(v);
   const update = useUpdatePruningEntry(entry.pruning_season_id, vineyardId);
+  const qc = useQueryClient();
+  // SQL 168: a skipped entry can only ever be edited as a skipped entry.
+  const isSkippedEntry = (entry as any).is_skipped === true;
   const { resolve: resolveUser } = useTeamLookup(vineyardId);
   const createdByName = resolveUser(entry.created_by) ?? "—";
 
@@ -369,6 +372,23 @@ export default function EditPruningDialog({
     if (!entryDate) { toast.error("Date is required"); return; }
     if (segments.length === 0 && originalCount > 0) {
       if (!confirm("This edit removes ALL quarters from the entry. Continue?")) return;
+    }
+
+    // SQL 168: skipped entries use their own update RPC and never touch
+    // worker, labour, method, cost or Work Task values.
+    if (isSkippedEntry) {
+      try {
+        const res = await updateSkippedPruningEntry({
+          entryId: entry.id, entryDate, segments, notes,
+        });
+        if ((res as any)?.error) { toast.error(`Could not save: ${(res as any).error}`); return; }
+        await qc.invalidateQueries({ queryKey: ["pruning"] });
+        toast.success("Skipped record updated.");
+        onOpenChange(false);
+      } catch (e: any) {
+        toast.error(`Failed to save: ${e?.message ?? e}`);
+      }
+      return;
     }
 
     // 1. Call the pruning update RPC FIRST. We must not mutate the linked
@@ -753,6 +773,16 @@ export default function EditPruningDialog({
               <Label>Date</Label>
               <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
             </div>
+            {isSkippedEntry ? (
+              <div className="rounded-md border p-3 bg-amber-500/10 border-amber-500/40 text-sm">
+                <span className="font-medium">Skipped record.</span>{" "}
+                <span className="text-muted-foreground">
+                  These rows count as complete in pruning progress but record no
+                  labour, cost or pruning work.
+                </span>
+              </div>
+            ) : (
+            <>
             <div className="space-y-1.5">
               <Label>Worker or crew</Label>
               <Input value={worker} onChange={(e) => setWorker(e.target.value)} />
@@ -780,13 +810,15 @@ export default function EditPruningDialog({
                 <SelectContent>{METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            </>
+            )}
             <div className="space-y-1.5">
               <Label>Notes</Label>
               <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
 
             {/* Linked Work Task section */}
-            {entry.work_task_id && (
+            {!isSkippedEntry && entry.work_task_id && (
               <div className="rounded-md border p-3 space-y-3 bg-muted/20">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -817,7 +849,7 @@ export default function EditPruningDialog({
             )}
 
             {/* No Work Task yet — offer to create one for cost tracking */}
-            {!entry.work_task_id && (
+            {!isSkippedEntry && !entry.work_task_id && (
               <div className="rounded-md border p-3 space-y-3 bg-muted/20">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">

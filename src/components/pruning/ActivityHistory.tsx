@@ -159,7 +159,7 @@ export default function ActivityHistory({
       </CardContent>
 
       {/* SQL 166: entries with a parent activity open the multi-block editor. */}
-      {editEntry && vineyardId && editEntry.pruning_activity_id && (
+      {editEntry && vineyardId && editEntry.pruning_activity_id && !editEntry.is_skipped && (
         <PruningActivityDialog
           key={editEntry.pruning_activity_id}
           open={!!editEntry}
@@ -173,7 +173,7 @@ export default function ActivityHistory({
         />
       )}
 
-      {editEntry && vineyardId && !editEntry.pruning_activity_id && (
+      {editEntry && vineyardId && (!editEntry.pruning_activity_id || editEntry.is_skipped) && (
         <EditPruningDialog
           key={editEntry.id}
           open={!!editEntry}
