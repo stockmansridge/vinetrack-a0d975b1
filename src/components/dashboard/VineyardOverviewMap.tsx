@@ -153,6 +153,7 @@ export default function VineyardOverviewMap({
   height = 520,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const catColours = usePinCategoryColours();
   const rf = useRegionFormatters();
   const navigate = useNavigate();
   const [selection, setSelection] = useState<Selection>(null);
@@ -512,6 +513,7 @@ export default function VineyardOverviewMap({
     vineyardExtent,
     fitToBounds,
     navigate,
+    catColours,
   ]);
 
   // Reset fit when vineyard switches.
