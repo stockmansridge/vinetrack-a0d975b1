@@ -246,7 +246,7 @@ export default function ManualIssueDialog({
                       ? [{ id: "picked", lat: form.latitude, lng: form.longitude, colour: MANUAL_ISSUE_COLOUR }]
                       : []
                   }
-                  polygons={polygons}
+                  polygons={fallbackPolygons}
                   onPick={(lat, lng) => set({ latitude: lat, longitude: lng })}
                   fitKey={form.id ?? "new"}
                 />
