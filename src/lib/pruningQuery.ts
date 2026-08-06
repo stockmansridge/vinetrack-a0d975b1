@@ -503,16 +503,63 @@ const toRpcSegments = (segments: RecordSegmentInput[]) =>
   }));
 
 /**
+ * Ensure a pruning season row exists for a block and return its id.
+ * Resolve-then-adopt: never generates a random season id.
+ */
+export async function ensurePruningSeasonId(
+  vineyardId: string,
+  paddockId: string,
+  seasonYear: number,
+): Promise<string> {
+  const resolved = await resolvePruningSeasonId(vineyardId, paddockId, seasonYear);
+  if (resolved.existed) return resolved.id;
+  const { error } = await supabase.from("pruning_seasons").insert({
+    id: resolved.id,
+    vineyard_id: vineyardId,
+    paddock_id: paddockId,
+    season_year: seasonYear,
+    pruning_method: "spur",
+    assigned_crew: "",
+    working_days: [1, 2, 3, 4, 5],
+    notes: "",
+    status: "active",
+    client_updated_at: new Date().toISOString(),
+  });
+  if (error && !/duplicate|unique/i.test(error.message)) throw error;
+  return resolved.id;
+}
+
+/**
  * Record a SKIPPED pruning entry (SQL 168). No worker, labour, cost, method
  * or Work Task is involved — the quarters are simply marked as done-by-skip.
  * Idempotent on `entryId`: reuse the same uuid when retrying.
  */
+export async function recordSkippedPruningEntry(
+  input: RecordSkippedEntryInput,
+): Promise<RecordEntryResult> {
+  const entryId = input.entryId ?? crypto.randomUUID();
+  const { data, error } = await (supabase as any).rpc("record_skipped_pruning_entry", {
+    p_id: entryId,
+    p_vineyard_id: input.vineyardId,
+    p_season_id: input.seasonId,
+    p_paddock_id: input.paddockId,
+    p_season_year: input.seasonYear,
+    p_entry_date: input.entryDate,
+    p_segments: toRpcSegments(input.segments),
+    p_notes: input.notes ?? "",
+    p_client_updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+  return data as RecordEntryResult;
+}
+
 export function useRecordSkippedPruningEntry(seasonId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: RecordSkippedEntryInput): Promise<RecordEntryResult> => {
       const entryId = input.entryId ?? crypto.randomUUID();
       const { data, error } = await (supabase as any).rpc("record_skipped_pruning_entry", {
+
         p_id: entryId,
         p_vineyard_id: input.vineyardId,
         p_season_id: input.seasonId,
