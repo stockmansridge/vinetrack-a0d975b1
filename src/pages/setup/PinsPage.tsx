@@ -326,8 +326,9 @@ export default function PinsPage() {
       <PortalNotice
         variant="warning"
         compact
-        description="Production data — read-only view. No edits, archives, or deletions are possible from this page."
+        description="Production data — existing pins are read-only here. New pins can be added with Add Pin / Action."
       />
+
 
       {paddockFilter && (
         <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
