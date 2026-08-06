@@ -1472,12 +1472,19 @@ function LabourLineRow({
   const [workerCount, setWorkerCount] = useState(line?.worker_count == null ? "" : String(line.worker_count));
   const [hoursPerWorker, setHoursPerWorker] = useState(line?.hours_per_worker == null ? "" : String(line.hours_per_worker));
   const [notes, setNotes] = useState(line?.notes ?? "");
+  // Manual rate used only when no worker type is selected.
+  const [manualRate, setManualRate] = useState(
+    line?.worker_type_id || line?.hourly_rate == null ? "" : String(line.hourly_rate),
+  );
 
   const selectedCategory = categoryId === NONE ? null : categories.find((c) => c.id === categoryId) ?? null;
+  const manualRateNum = manualRate.trim() === "" ? null : Number(manualRate);
   const derivedHourlyRate =
     selectedCategory?.cost_per_hour != null
       ? Number(selectedCategory.cost_per_hour)
-      : line?.hourly_rate ?? null;
+      : manualRateNum != null && Number.isFinite(manualRateNum)
+        ? manualRateNum
+        : line?.hourly_rate ?? null;
   const derivedWorkerType = selectedCategory?.name ?? line?.worker_type ?? null;
 
 
@@ -1564,11 +1571,13 @@ function LabourLineRow({
           workerTypeId: categoryId === NONE ? null : categoryId,
           workerCount,
           hoursPerWorker,
+          hourlyRate: manualRate,
         }}
         onChange={(v) => {
           setCategoryId(v.workerTypeId ?? NONE);
           setWorkerCount(v.workerCount);
           setHoursPerWorker(v.hoursPerWorker);
+          setManualRate(v.hourlyRate ?? "");
         }}
       />
       <Field label="Notes">
