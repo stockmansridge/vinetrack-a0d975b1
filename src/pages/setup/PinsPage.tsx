@@ -498,11 +498,13 @@ export default function PinsPage() {
                         />
                         <span className="truncate">{pinDisplayTitle(p as any)}</span>
                         {!placement.assigned && (
-                          <TriangleAlert
-                            className="h-3.5 w-3.5 shrink-0 text-amber-500"
-                            aria-label="Unassigned location"
+                          <span
+                            className="inline-flex shrink-0 text-amber-500"
                             title={placement.reasonLabel ?? "Unassigned location"}
-                          />
+                            aria-label="Unassigned location"
+                          >
+                            <TriangleAlert className="h-3.5 w-3.5" />
+                          </span>
                         )}
                       </div>
                     </TableCell>
