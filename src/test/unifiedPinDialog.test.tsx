@@ -80,7 +80,7 @@ describe("Add Pin / Action composer", () => {
     renderDialog();
     openGrowth();
     fireEvent.click(screen.getByRole("button", { name: "Growth Stage" }));
-    expect(screen.getByText("Select growth stage")).toBeTruthy();
+    expect(screen.getByLabelText("Search growth stages")).toBeTruthy();
     // Reuses the shared E-L catalogue, not a new list.
     expect(screen.getByLabelText("Growth stage EL23")).toBeTruthy();
   });
@@ -111,7 +111,7 @@ describe("Add Pin / Action composer", () => {
     expect(createPin).not.toHaveBeenCalled();
     // Saving without a stage re-opens the picker instead of writing a pin.
     fireEvent.click(screen.getByText("Save pin"));
-    await waitFor(() => expect(screen.getByText("Select growth stage")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Search growth stages")).toBeTruthy());
     expect(createPin).not.toHaveBeenCalled();
   });
 
