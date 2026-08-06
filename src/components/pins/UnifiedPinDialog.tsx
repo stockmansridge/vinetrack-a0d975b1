@@ -33,19 +33,28 @@ import {
 } from "@/lib/manualIssues";
 import GrowthStagePickerDialog from "@/components/pins/GrowthStagePickerDialog";
 import { GROWTH_STAGE_LABEL } from "@/lib/vspWaterRate";
+import { Check, MapPin, Rows3, Square } from "lucide-react";
 import {
   applyPinScopeChange,
+  buildBlockRowGroups,
   dedupePinButtons,
   isGrowthStageButton,
   emptyUnifiedPinForm,
+  orderGrowthButtons,
+  toggleRowInBlock,
+  LOCATION_CARD_MIN_HEIGHT,
+  PIN_BURGUNDY,
   PIN_TYPE_LABELS,
   polygonCentroid,
+  ROW_BLOCK_MATCH_ERROR,
+  SCOPE_DESCRIPTIONS,
   SCOPE_LABELS,
   UNIFIED_PIN_SCOPES,
   UNIFIED_PIN_TYPES,
   validateUnifiedPin,
   type PinButtonDef,
   type UnifiedPinForm,
+  type UnifiedPinScope,
   type UnifiedPinType,
 } from "@/lib/unifiedPin";
 import {
@@ -55,11 +64,19 @@ import {
   usePinButtonCatalogue,
 } from "@/lib/unifiedPinQuery";
 
+const SCOPE_ICONS: Record<UnifiedPinScope, typeof MapPin> = {
+  point: MapPin,
+  row: Rows3,
+  block: Square,
+};
+
 export interface PaddockOption {
   id: string;
   name: string | null;
   polygon_points?: any;
+  rows?: any;
 }
+
 
 const FALLBACK_COLOUR = "#8E8E93";
 
