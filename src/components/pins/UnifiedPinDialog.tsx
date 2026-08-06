@@ -326,15 +326,40 @@ export default function UnifiedPinDialog({
 
             {form.scope === "row" && (
               <div className="space-y-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="up-rows">Rows</Label>
-                  <Input
-                    id="up-rows"
-                    placeholder="e.g. 8-9, 12"
-                    value={form.rowSelection}
-                    onChange={(e) => set({ rowSelection: e.target.value })}
-                  />
-                </div>
+                <Label>Rows</Label>
+                {rowGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No mapped rows are available for this vineyard yet.
+                  </p>
+                ) : (
+                  <div className="max-h-64 space-y-3 overflow-y-auto rounded-md border p-3">
+                    {rowGroups.map((g) => (
+                      <div key={g.paddockId} className="space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground">{g.blockName}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.rows.map((n) => {
+                            const active = form.paddockId === g.paddockId && selectedRows.includes(n);
+                            return (
+                              <button
+                                key={n}
+                                type="button"
+                                aria-label={`${g.blockName} row ${n}`}
+                                aria-pressed={active}
+                                onClick={() => setForm((f) => toggleRowInBlock(f, g.paddockId, n))}
+                                style={active ? { borderColor: PIN_BURGUNDY, color: PIN_BURGUNDY } : undefined}
+                                className={`rounded border px-2 py-1 text-xs tabular-nums ${
+                                  active ? "bg-accent font-semibold" : "hover:bg-muted"
+                                }`}
+                              >
+                                Row {n}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Row sections</Label>
                   <div className="flex flex-wrap gap-4">
@@ -356,10 +381,13 @@ export default function UnifiedPinDialog({
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {segmentPreview ?? "Select at least one row."}
+                  {selectedRows.length && !form.paddockId
+                    ? ROW_BLOCK_MATCH_ERROR
+                    : segmentPreview ?? "Select at least one row."}
                 </p>
               </div>
             )}
+
 
             {form.scope === "block" && (
               <p className="text-sm text-muted-foreground">
