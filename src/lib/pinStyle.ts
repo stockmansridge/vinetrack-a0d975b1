@@ -1,3 +1,4 @@
+import { pinCategoryStyle, type PinCategoryId } from "@/lib/pinCategory";
 // Pin colour mapping — mirrors the iOS app's per-button colour palette.
 //
 // In the iOS app every Repair / Growth button (e.g. "Irrigation",
