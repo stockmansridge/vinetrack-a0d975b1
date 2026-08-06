@@ -154,7 +154,7 @@ export default function ManualIssuesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Manual Issues</h1>
           <p className="text-sm text-muted-foreground">
-            Shared with the VineTrack mobile apps — {counts.open} open, {counts.in_progress} in progress.
+            Record general vineyard issues that are not associated with a mapped pin or automatically captured during field work. Use this page for operational concerns, follow-up items and problems that need to be assigned, monitored or resolved.
           </p>
         </div>
         <div className="flex items-center gap-2">

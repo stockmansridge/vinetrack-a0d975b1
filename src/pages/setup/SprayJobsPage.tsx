@@ -186,9 +186,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
             {templatesOnly ? "Spray Templates" : "Spray Jobs & Templates"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {templatesOnly
-              ? "Create and manage reusable spray templates. Field staff can start a planned job from any active template."
-              : "Plan upcoming spray work and maintain reusable templates. Completed compliance records live under Spray Records."}
+            Plan and record vineyard spray applications, or create reusable templates for regular spray programs. Record products, application rates, equipment, operators, vineyard blocks, weather conditions and other spray details.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

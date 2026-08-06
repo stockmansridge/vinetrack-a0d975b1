@@ -54,7 +54,7 @@ export default function IrrigationRecordsPage() {
     <div className="space-y-6">
       <PageHead
         title="Irrigation Records | VineTrack"
-        description="Record irrigation sessions, water volumes and per-block water use for your vineyard."
+        description="Record irrigation applied to vineyard blocks and monitor water use over time. Capture irrigation dates, run times, blocks or valves irrigated, application volumes and any issues observed during the irrigation event."
         path="/irrigation"
         noindex
       />
@@ -70,16 +70,8 @@ export default function IrrigationRecordsPage() {
             )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {capabilities.can_view_irrigation_reports
-              ? `Vintage ${s?.season?.current_vintage_year ?? vintage} · water applied, runtime and per-block water use from recorded sessions.`
-              : "Record and view irrigation activity."}
+            Record irrigation applied to vineyard blocks and monitor water use over time. Capture irrigation dates, run times, blocks or valves irrigated, application volumes and any issues observed during the irrigation event.
           </p>
-          {capabilities.can_import_irrigation && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add an irrigation record manually or import irrigation history from a supported
-              controller.
-            </p>
-          )}
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">

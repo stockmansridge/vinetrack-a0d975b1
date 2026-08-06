@@ -319,9 +319,7 @@ export default function MaintenancePage() {
         <div>
           <h1 className="text-2xl font-semibold">Maintenance logs</h1>
           <p className="text-sm text-muted-foreground">
-            {canWrite
-              ? "Add, edit and archive maintenance records for the selected vineyard."
-              : "Read-only. Archived and soft-deleted records are excluded."}
+            Record servicing, repairs and maintenance completed on tractors, vehicles, implements and other equipment. Track maintenance dates, meter readings, work performed, parts, costs and upcoming service requirements.
           </p>
         </div>
         {canWrite && (

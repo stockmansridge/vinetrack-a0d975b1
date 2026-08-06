@@ -645,7 +645,7 @@ export default function WorkTasksPage() {
         <div>
           <h1 className="text-2xl font-semibold">Work Tasks</h1>
           <p className="text-sm text-muted-foreground">
-            View and manage task logs for completed vineyard work.
+            Record vineyard activities that are not associated with a tracked field trip. This includes canopy management, wire lifting, shoot thinning, mowing, slashing, cultivation, weed control, planting, trellis work, bird-netting and general vineyard labour.
           </p>
         </div>
         <div className="flex gap-2">

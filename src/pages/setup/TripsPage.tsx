@@ -310,7 +310,7 @@ export default function TripsPage() {
         <div className="min-w-0 space-y-1.5">
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Trips</h1>
           <p className="text-sm text-muted-foreground">
-            Read-only. Soft-deleted trips are excluded.
+            Review vineyard work completed using a tractor, vehicle or other machinery during a tracked trip. Field trips record where equipment travelled, the blocks and rows worked, operating time, distance, operator and associated job details.
           </p>
           {!isLoading && !error && (
             <p className="text-xs text-muted-foreground">

@@ -267,7 +267,7 @@ export default function DamageRecordsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Damage records</h1>
           <p className="text-sm text-muted-foreground">
-            Frost, hail, disease and other damage observations. Synced with the iOS app.
+            Record damage affecting vineyard blocks, vines, crops, infrastructure or equipment. Capture the cause, location, date, severity, estimated impact, supporting photos and any follow-up or repair work required.
           </p>
         </div>
         {canEdit && (
