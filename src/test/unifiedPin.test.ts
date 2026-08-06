@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPinScopeChange,
+  buildBlockRowGroups,
+  orderGrowthButtons,
+  toggleRowInBlock,
+  ROW_BLOCK_MATCH_ERROR,
   buildCustomPinArgs,
   buildPinInsertRow,
   canonicalButtonKey,
