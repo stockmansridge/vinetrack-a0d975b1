@@ -1,74 +1,78 @@
-// SQL 168 — "Mark as skipped" portal contract.
-//
-// Skipped pruning counts towards progress but never towards labour, cost,
-// vines pruned or productivity, and never creates a Work Task. These tests
-// pin the portal to the same behaviour as iOS and Android.
+// SQL 168 — "Mark as skipped" now lives inside the single Record Pruning
+// workflow (PruningActivityDialog). Skipped pruning counts towards progress
+// but never towards labour, cost, vines pruned or productivity, and never
+// creates a Work Task.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import CompleteTodayDialog from "@/components/pruning/CompleteTodayDialog";
-import type { PruningSeason, PruningRowSegment } from "@/lib/pruningQuery";
-import { buildRowCompletion, type RowCompletionState } from "@/lib/pruningCalc";
+import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
 import { calculatePruningSummary } from "@/lib/pruningSummaryCalc";
+import { buildRowCompletion } from "@/lib/pruningCalc";
+import type { PruningRowSegment } from "@/lib/pruningQuery";
 import type { PruningActivityRow } from "@/lib/pruningActivityQuery";
-import { createWorkTask, createLabourLine } from "@/lib/workTasksQuery";
+import { recordSkippedPruningEntry, ensurePruningSeasonId } from "@/lib/pruningQuery";
+import { allocationKey, type BlockAllocationDraft } from "@/lib/pruningActivityContract";
 
-const recordSkipped = vi.fn(async (_input: any) => ({ entry_id: "e-skip", requested: 4, attributed: 4 }));
-const recordNormal = vi.fn(async (_input: any) => ({ entry_id: "e1", requested: 4, attributed: 4 }));
+const saveActivity = vi.fn(async () => ({ error: null, stale: false, conflicts: [], activity: null }));
 
-vi.mock("@/lib/pruningQuery", async () => {
-  const actual = await vi.importActual<any>("@/lib/pruningQuery");
-  return {
-    ...actual,
-    useRecordPruningEntry: () => ({ mutateAsync: recordNormal, isPending: false }),
-    useRecordSkippedPruningEntry: () => ({ mutateAsync: recordSkipped, isPending: false }),
-  };
-});
-vi.mock("@/lib/workTasksQuery", () => ({
-  createWorkTask: vi.fn(),
-  createLabourLine: vi.fn(),
-  syncWorkTaskPaddocks: vi.fn(),
-  fetchWorkTaskPaddocksForVineyard: vi.fn(async () => []),
+vi.mock("@/lib/pruningActivityApi", () => ({
+  usePruningActivityDetail: () => ({ data: null, isLoading: false, error: null }),
+  useSavePruningActivity: () => ({ mutateAsync: saveActivity, isPending: false }),
 }));
-vi.mock("@/lib/operatorCategoriesQuery", () => ({
-  fetchOperatorCategoriesForVineyard: vi.fn(async () => ({ categories: [] })),
+vi.mock("@/lib/pruningQuery", () => ({
+  recordSkippedPruningEntry: vi.fn(async () => ({ entry_id: "e1", requested: 1, attributed: 1 })),
+  ensurePruningSeasonId: vi.fn(async () => "season-1"),
 }));
-vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
-vi.mock("@/context/VineyardContext", () => ({ useVineyard: () => ({ currentRole: "owner" }) }));
-vi.mock("@/lib/permissions", () => ({ useCanSeeCosts: () => true }));
-vi.mock("@/lib/systemAdmin", () => ({ useIsSystemAdmin: () => ({ isAdmin: false, loading: false }) }));
+vi.mock("@/hooks/useTeamLookup", () => ({ useTeamLookup: () => ({ resolve: () => null }) }));
+vi.mock("@/components/pruning/ActivityWorkTaskField", () => ({
+  default: () => <div>Work Task</div>,
+}));
 
-const season: PruningSeason = {
-  id: "s1", vineyard_id: "v1", paddock_id: "p1", season_year: 2026,
-  start_date: null, due_date: null, pruning_method: "spur", assigned_crew: "",
-  working_days: [1, 2, 3, 4, 5], manual_row_count: null, estimated_labour_hours: null,
-  notes: "", status: "active", created_at: "", updated_at: "", deleted_at: null,
-};
-
-function rows(nums: number[]): RowCompletionState[] {
-  return nums.map((n, idx) => ({
-    identity: {
-      paddockRowId: `row-${n}`, rowNumber: n, rowLabel: String(n),
-      order: idx, lengthM: 100, estimatedVines: 80,
-    },
-    completed: new Set<number>(),
-    skipped: new Set<number>(),
-  }));
-}
+// Stand-in for the real allocation editor: the row/quarter controls stay in
+// the same place, we just drive them deterministically here.
+vi.mock("@/components/pruning/MultiBlockAllocationEditor", () => ({
+  default: ({ value, onChange }: any) => {
+    const add = (paddockId: string, row: number, segment: number) => {
+      const existing: BlockAllocationDraft = value[paddockId] ?? {
+        paddockId, paddockName: `Block ${paddockId}`, variety: "Shiraz",
+        quarters: {}, seasonId: null,
+      };
+      onChange({
+        ...value,
+        [paddockId]: {
+          ...existing,
+          quarters: {
+            ...existing.quarters,
+            [allocationKey(row, segment)]: {
+              rowNumber: row, segmentNumber: segment,
+              paddockRowId: `row-${row}`, rowLabel: String(row), vines: 20,
+            },
+          },
+        },
+      });
+    };
+    return (
+      <div>
+        <div>Blocks and rows</div>
+        <button onClick={() => add("p1", 68, 1)}>Row 68 quarter 1</button>
+        <button onClick={() => add("p1", 68, 2)}>Row 68 quarter 2</button>
+        <button onClick={() => add("p2", 5, 1)}>Block 2 row 5 quarter 1</button>
+      </div>
+    );
+  },
+}));
 
 function renderDialog() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <CompleteTodayDialog
+      <PruningActivityDialog
         open
         onOpenChange={() => {}}
-        season={season}
         vineyardId="v1"
-        paddockId="p1"
-        paddockName="Block A"
-        rows={rows([1, 2])}
+        seasonYear={2026}
       />
     </QueryClientProvider>,
   );
@@ -76,47 +80,103 @@ function renderDialog() {
 
 const toggleSkip = () => fireEvent.click(screen.getByLabelText("Mark selected rows as skipped"));
 
-describe("skipped pruning entry form", () => {
+describe("Record Pruning dialog — skipped mode", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("hides labour, worker, method and Work Task fields when skipped is on", () => {
+  it("shows the skipped toggle in the activity dialog", () => {
     renderDialog();
-    expect(screen.getByText("Worker or crew")).toBeTruthy();
-    toggleSkip();
-    expect(screen.queryByText("Worker or crew")).toBeNull();
-    expect(screen.queryByText("Labour hours")).toBeNull();
-    expect(screen.queryByText("Method")).toBeNull();
-    expect(screen.queryByText("Create a Work Task for this pruning work")).toBeNull();
+    expect(screen.getByLabelText("Mark selected rows as skipped")).toBeTruthy();
+    expect(screen.getByText("Record activity")).toBeTruthy();
   });
 
-  it("keeps date and the existing row-selection controls available", () => {
+  it("hides worker, method, times and Work Task when skipped is on", () => {
+    renderDialog();
+    expect(screen.getByText("Worker / crew")).toBeTruthy();
+    toggleSkip();
+    expect(screen.queryByText("Worker / crew")).toBeNull();
+    expect(screen.queryByText("Method")).toBeNull();
+    expect(screen.queryByText("Start")).toBeNull();
+    expect(screen.queryByText("Finish")).toBeNull();
+    expect(screen.queryByText("Work Task")).toBeNull();
+  });
+
+  it("keeps date, notes and the block/row selector visible, and renames the button", () => {
     renderDialog();
     toggleSkip();
     expect(screen.getByText("Date")).toBeTruthy();
     expect(screen.getByText("Notes")).toBeTruthy();
-    expect(screen.getByPlaceholderText(/Row ranges/)).toBeTruthy();
-    expect(screen.getByText("Select all incomplete")).toBeTruthy();
-    expect(screen.getByLabelText("Row 1 quarter 1")).toBeTruthy();
+    expect(screen.getByText("Blocks and rows")).toBeTruthy();
+    expect(screen.getByText("Row 68 quarter 1")).toBeTruthy();
+    expect(screen.getByText("Mark skipped")).toBeTruthy();
+    expect(screen.queryByText("Record activity")).toBeNull();
   });
 
-  it("saves a skipped entry with no Work Task, labour or cost", async () => {
+  it("requires at least one selected row section", async () => {
     renderDialog();
     toggleSkip();
-    fireEvent.click(screen.getByLabelText("Row 1 quarter 1"));
-    fireEvent.click(screen.getByText(/Mark 1 quarter skipped/));
-    // SQL 168: skipping is confirmed before it is written.
-    await waitFor(() => expect(screen.getByText("Mark Skipped")).toBeTruthy());
+    fireEvent.click(screen.getByText("Mark skipped"));
+    await waitFor(() =>
+      expect(screen.getByText("Select at least one row or row section to mark as skipped.")).toBeTruthy());
+    expect(recordSkippedPruningEntry).not.toHaveBeenCalled();
+  });
+
+  it("confirms, then saves one canonical segment payload per block", async () => {
+    renderDialog();
+    toggleSkip();
+    fireEvent.click(screen.getByText("Row 68 quarter 1"));
+    fireEvent.click(screen.getByText("Row 68 quarter 2"));
+    fireEvent.click(screen.getByText("Mark skipped"));
+
+    await waitFor(() => expect(screen.getByText("Mark selected rows as skipped?")).toBeTruthy());
     fireEvent.click(screen.getByText("Mark Skipped"));
 
-    await waitFor(() => expect(recordSkipped).toHaveBeenCalledTimes(1));
-    const payload = recordSkipped.mock.calls[0][0] as any;
-    expect(payload.segments).toHaveLength(1);
+    await waitFor(() => expect(recordSkippedPruningEntry).toHaveBeenCalledTimes(1));
+    const payload = (recordSkippedPruningEntry as any).mock.calls[0][0];
     expect(payload.paddockId).toBe("p1");
+    expect(payload.seasonId).toBe("season-1");
+    expect(payload.seasonYear).toBe(2026);
+    expect(payload.segments.map((s: any) => [s.rowNumber, s.segmentNumber])).toEqual([[68, 1], [68, 2]]);
     expect(payload).not.toHaveProperty("labourHours");
     expect(payload).not.toHaveProperty("workTaskId");
-    expect(recordNormal).not.toHaveBeenCalled();
-    expect(createWorkTask).not.toHaveBeenCalled();
-    expect(createLabourLine).not.toHaveBeenCalled();
+    expect(ensurePruningSeasonId).toHaveBeenCalled();
+    expect(saveActivity).not.toHaveBeenCalled();
+  });
+
+  it("saves multiple blocks as one user action, one skipped entry per block", async () => {
+    renderDialog();
+    toggleSkip();
+    fireEvent.click(screen.getByText("Row 68 quarter 1"));
+    fireEvent.click(screen.getByText("Block 2 row 5 quarter 1"));
+    fireEvent.click(screen.getByText("Mark skipped"));
+    await waitFor(() => expect(screen.getByText("Mark selected rows as skipped?")).toBeTruthy());
+    fireEvent.click(screen.getByText("Mark Skipped"));
+
+    await waitFor(() => expect(recordSkippedPruningEntry).toHaveBeenCalledTimes(2));
+    const blocks = (recordSkippedPruningEntry as any).mock.calls.map((c: any[]) => c[0].paddockId);
+    expect(blocks.sort()).toEqual(["p1", "p2"]);
+  });
+
+  it("normal mode still uses the parent activity save path", async () => {
+    renderDialog();
+    fireEvent.click(screen.getByText("Row 68 quarter 1"));
+    fireEvent.click(screen.getByText("Record activity"));
+    await waitFor(() => expect(saveActivity).toHaveBeenCalledTimes(1));
+    expect(recordSkippedPruningEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe("Pruning block page controls", () => {
+  const src = readFileSync("src/pages/tools/PruningTrackerPage.tsx", "utf8");
+
+  it("no longer shows Settings or Add pruning entry on the block page", () => {
+    expect(src).not.toContain("Add pruning entry");
+    expect(src).not.toContain("CompleteTodayDialog");
+    expect(src).not.toContain("SeasonDialog");
+    expect(src).not.toMatch(/>\s*Settings\s*</);
+  });
+
+  it("keeps a single Record Pruning action", () => {
+    expect(src.match(/label="Record Pruning"/g)?.length).toBe(1);
   });
 });
 
@@ -130,10 +190,14 @@ describe("skipped quarters in progress and statistics", () => {
     completed, completed_at: null, completed_by: null, created_at: "",
   });
 
+  const identities = (nums: number[]) => nums.map((n, idx) => ({
+    paddockRowId: `row-${n}`, rowNumber: n, rowLabel: String(n),
+    order: idx, lengthM: 100, estimatedVines: 80,
+  }));
+
   it("counts skipped quarters as complete but marks them separately", () => {
-    const identities = rows([1, 2]).map((r) => r.identity);
     const completion = buildRowCompletion(
-      identities,
+      identities([1, 2]) as any,
       [segment(1, 1, "pruned"), segment(2, 1, "skip-1"), segment(2, 2, "skip-1")],
       new Set(["skip-1"]),
     );
@@ -145,9 +209,8 @@ describe("skipped quarters in progress and statistics", () => {
   });
 
   it("drops skipped quarters again after reversal", () => {
-    const identities = rows([1]).map((r) => r.identity);
     const completion = buildRowCompletion(
-      identities, [segment(1, 1, "skip-1", false)], new Set(["skip-1"]),
+      identities([1]) as any, [segment(1, 1, "skip-1", false)], new Set(["skip-1"]),
     );
     expect(completion[0].completed.size).toBe(0);
     expect(completion[0].skipped.size).toBe(0);
