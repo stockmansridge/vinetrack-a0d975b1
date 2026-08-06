@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -35,6 +35,7 @@ import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
 
 interface PaddockLite {
   id: string;
@@ -68,6 +69,7 @@ export default function PinsPage() {
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
+  const [addOpen, setAddOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
@@ -299,17 +301,34 @@ export default function PinsPage() {
           <h1 className="text-2xl font-semibold">Pins</h1>
           <p className="text-sm text-muted-foreground">Record location-based repairs, hazards, observations and other field items directly on the vineyard map. Use pins for anything that needs to be found, reviewed or actioned at a specific location.</p>
         </div>
-        <TabsList>
-          <TabsTrigger value="table">Table</TabsTrigger>
-          <TabsTrigger value="map">Map</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setAddOpen(true)} disabled={!selectedVineyardId}>
+            <Plus className="mr-1.5 h-4 w-4" /> Add Pin / Action
+          </Button>
+          <TabsList>
+            <TabsTrigger value="table">Table</TabsTrigger>
+            <TabsTrigger value="map">Map</TabsTrigger>
+          </TabsList>
+        </div>
       </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Drop a pin, select a row or select a block.
+      </p>
+
+      <UnifiedPinDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        vineyardId={selectedVineyardId}
+        paddocks={paddocks as any}
+      />
+
 
       <PortalNotice
         variant="warning"
         compact
-        description="Production data — read-only view. No edits, archives, or deletions are possible from this page."
+        description="Production data — existing pins are read-only here. New pins can be added with Add Pin / Action."
       />
+
 
       {paddockFilter && (
         <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">

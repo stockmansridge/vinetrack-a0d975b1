@@ -32,7 +32,6 @@ import VineyardMachinesPage from "./pages/setup/VineyardMachinesPage";
 import SprayEquipmentPage from "./pages/setup/SprayEquipmentPage";
 import NewPaddockPage from "./pages/setup/NewPaddockPage";
 import PinsPage from "./pages/setup/PinsPage";
-import ManualIssuesPage from "./pages/ManualIssuesPage";
 import DamageRecordsPage from "./pages/setup/DamageRecordsPage";
 import SprayRecordsPage from "./pages/setup/SprayRecordsPage";
 import WorkTasksPage from "./pages/setup/WorkTasksPage";
@@ -156,7 +155,7 @@ const App = () => (
                       element={<DetailPage table="spray_equipment" title="Spray equipment detail" basePath="/setup/spray-equipment" />}
                     />
                     <Route path="/pins" element={<PinsPage />} />
-                    <Route path="/manual-issues" element={<ManualIssuesPage />} />
+                    <Route path="/manual-issues" element={<Navigate to="/pins" replace />} />
                     <Route path="/spray-records" element={<SprayRecordsPage />} />
                     <Route path="/work-tasks" element={<WorkTasksPage />} />
                     <Route path="/maintenance" element={<MaintenancePage />} />
