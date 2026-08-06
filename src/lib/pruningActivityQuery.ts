@@ -76,6 +76,9 @@ export interface PruningActivityRow {
   createdAt: string | null;
   updatedAt: string | null;
   isReversed: boolean;
+  /** SQL 168: quarters marked skipped, not pruned. Excluded from labour,
+   *  cost, vines-pruned and productivity everywhere in the portal. */
+  isSkipped: boolean;
 
   // ---- Parent-activity grouping (SQL 166) ----
   /** Stable grouping key: the parent activity id, or the entry id for legacy rows. */
@@ -185,6 +188,11 @@ export function resolveActivityLabel(members: BaseActivityRow[]): {
 } {
   const first = members[0];
   if (!first) return { activityLabel: "Not linked", activityLabelKind: "none" };
+
+  // SQL 168: skipped work is never labour — it always reads as "Skipped".
+  if (members.every((r) => r.isSkipped)) {
+    return { activityLabel: "Skipped", activityLabelKind: "generated" };
+  }
 
   const taskRow = members.find((r) => r.workTaskId && !r.workTaskMissing && r.workTaskLabel);
   if (taskRow) return { activityLabel: taskRow.workTaskLabel!, activityLabelKind: "task" };
@@ -357,14 +365,16 @@ export function usePruningActivity(vineyardId: string | null) {
           .filter((n) => Number.isFinite(n))
           .sort((a, b) => a - b);
 
-        const labourHours =
-          e.labour_hours == null ? null : Number(e.labour_hours) || 0;
-        const vines = Number(e.estimated_vines_completed ?? 0);
+        const isSkipped = (e as any).is_skipped === true;
+        const labourHours = isSkipped
+          ? null
+          : e.labour_hours == null ? null : Number(e.labour_hours) || 0;
+        const vines = isSkipped ? 0 : Number(e.estimated_vines_completed ?? 0);
         const rowEq = Number(e.row_equivalents_completed ?? 0);
 
         const task = e.work_task_id ? taskById.get(e.work_task_id) ?? null : null;
         const taskLabour = e.work_task_id ? labourByTask.get(e.work_task_id) ?? null : null;
-        const labourCost = taskLabour ? taskLabour.cost : null;
+        const labourCost = isSkipped ? null : taskLabour ? taskLabour.cost : null;
         const rateHours = labourHours && labourHours > 0
           ? labourHours
           : taskLabour && taskLabour.hours > 0 ? taskLabour.hours : null;
@@ -439,6 +449,7 @@ export function usePruningActivity(vineyardId: string | null) {
           createdAt: e.created_at ?? null,
           updatedAt: e.updated_at ?? null,
           isReversed: !!e.deleted_at,
+          isSkipped,
         } satisfies BaseActivityRow;
       });
 
