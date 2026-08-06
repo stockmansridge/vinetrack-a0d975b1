@@ -131,14 +131,21 @@ export default function UnifiedPinDialog({
         : form.pinType === "growth"
           ? buttons.data?.growth ?? []
           : [];
-    return dedupePinButtons(raw);
+    const deduped = dedupePinButtons(raw);
+    return form.pinType === "growth" ? orderGrowthButtons(deduped) : deduped;
   }, [form.pinType, buttons.data]);
 
   const selectedButton = buttonList.find((b) => b.id === form.buttonId) ?? null;
   const selectedType = (customTypes.data ?? []).find((t) => t.id === form.customTypeId) ?? null;
 
+  // Row mode lists every mapped row grouped by its block; the block is derived
+  // from whichever row the user picks.
+  const rowGroups = useMemo(() => buildBlockRowGroups(paddocks), [paddocks]);
+
   const rows = parseRowSelection(form.rowSelection);
+  const selectedRows = rows;
   const segmentPreview = summariseSegments(buildSegments(rows, form.rowSections));
+
 
   const chooseType = (t: UnifiedPinType) => {
     setGrowthStageCode(null);
