@@ -93,11 +93,14 @@ export default function ManualIssueDialog({
     [paddocks],
   );
 
-  const centre: [number, number] =
-    form.latitude != null && form.longitude != null
-      ? [form.latitude, form.longitude]
-      : defaultCentre ??
-        (polygons[0] ? [polygons[0].pts[0].lat, polygons[0].pts[0].lng] : [-33.87, 151.21]);
+  const fallbackPolygons = useMemo(
+    () =>
+      polygons.length || !defaultCentre
+        ? polygons
+        : [{ id: "centre", pts: [{ lat: defaultCentre[0], lng: defaultCentre[1] }] as LatLng[] }],
+    [polygons, defaultCentre],
+  );
+
 
   const rows = parseRowSelection(form.rowSelection);
   const segmentPreview = summariseSegments(buildSegments(rows, form.rowSections));
