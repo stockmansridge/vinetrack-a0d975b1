@@ -7,6 +7,7 @@ import { useVineyard } from "@/context/VineyardContext";
 import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { pinDisplayStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } from "@/lib/pinStyle";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -48,6 +49,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
   const { selectedVineyardId } = useVineyard();
   const isMobile = useIsMobile();
   const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
+  const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: paddocks = [] } = useQuery({
@@ -202,7 +204,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
                   <Marker
                     key={p.id}
                     position={[p.latitude!, p.longitude!]}
-                    icon={pinIcon(pinDisplayStyle(p as any).hex)}
+                    icon={pinIcon(pinDisplayStyle(p as any, catColours).hex)}
                     title={pinDisplayTitle(p as any)}
                     eventHandlers={{ click: () => setSelectedId(p.id) }}
                   />

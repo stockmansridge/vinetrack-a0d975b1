@@ -11,6 +11,7 @@ import { initMapKit } from "@/lib/mapkit";
 import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
 import { pinDisplayStyle, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { extractPathPoints } from "@/lib/tripReport";
 import type { Trip } from "@/lib/tripsQuery";
 import PinDetailSheet from "@/components/PinDetailSheet";
@@ -196,7 +197,7 @@ export default function BlockMap({
     // Pin annotations
     if (filters.pins) {
       for (const { pin, coords } of pinsWithCoords) {
-        const style = pinDisplayStyle(pin as any);
+        const style = pinDisplayStyle(pin as any, catColours);
         const ann = new mapkit.Annotation(
           new mapkit.Coordinate(coords.lat, coords.lng),
           () => {

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { initMapKit } from "@/lib/mapkit";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { pinDisplayCoords, pinDisplayStyle, pinDisplayTitle } from "@/lib/pinStyle";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import type { PinRecord } from "@/components/PinDetailPanel";
 
 interface Props {
@@ -37,7 +38,8 @@ export default function SelectedPinMap({ pin }: Props) {
     );
   }
 
-  const style = pinDisplayStyle(pin as any);
+  const catColours = usePinCategoryColours(pin?.vineyard_id ?? null);
+  const style = pinDisplayStyle(pin as any, catColours);
   const title = pinDisplayTitle(pin as any);
   const openInAppleMapsUrl = `https://maps.apple.com/?ll=${coords.lat},${coords.lng}&q=${encodeURIComponent(title)}&z=19&t=k`;
   const openInGoogleMapsUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;

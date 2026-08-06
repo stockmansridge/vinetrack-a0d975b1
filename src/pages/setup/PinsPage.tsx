@@ -29,6 +29,7 @@ import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailSheet from "@/components/PinDetailSheet";
 import { pinDisplayStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { PIN_CATEGORY_ORDER, normalisePinCategoryId, pinCategoryStyleById, pinPlacement, type PinCategoryId } from "@/lib/pinCategory";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -70,6 +71,7 @@ export default function PinsPage() {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
+  const catColours = usePinCategoryColours();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { resolve } = useTeamLookup(selectedVineyardId);
   const rf = useRegionFormatters();
@@ -386,6 +388,8 @@ export default function PinsPage() {
         </Button>
         {PIN_CATEGORY_ORDER.map((id) => {
           const cs = pinCategoryStyleById(id);
+          const hex = catColours.byCategory[id] ?? cs.hex;
+          const label = catColours.labelByCategory[id] ?? cs.label;
           const count = categoryCounts.get(id) ?? 0;
           if (!count && id !== "other" && id !== "unknown") return null;
           return (
@@ -399,9 +403,9 @@ export default function PinsPage() {
             >
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ background: cs.hex }}
+                style={{ background: hex }}
               />
-              {cs.label} ({count})
+              {label} ({count})
             </Button>
           );
         })}
@@ -480,7 +484,7 @@ export default function PinsPage() {
                 </TableRow>
               )}
               {sorted.map((p) => {
-                const style = pinDisplayStyle(p as any);
+                const style = pinDisplayStyle(p as any, catColours);
                 const placement = pinPlacement(p as any);
                 const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
                 const completedBy = (p as any).is_completed

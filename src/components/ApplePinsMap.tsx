@@ -5,6 +5,7 @@ import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
 import { pinDisplayStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } from "@/lib/pinStyle";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -187,7 +188,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
 
     const newAnns: any[] = [];
     for (const pin of withCoords) {
-      const hex = pinDisplayStyle(pin as any).hex;
+      const hex = pinDisplayStyle(pin as any, catColours).hex;
       const ann = new mapkit.Annotation(
         new mapkit.Coordinate(pin.latitude!, pin.longitude!),
         () => makePinElement(hex),
