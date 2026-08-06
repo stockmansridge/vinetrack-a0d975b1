@@ -61,6 +61,10 @@ export interface PruningEntry {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** SQL 168: the quarters were marked skipped, not pruned. Skipped entries
+   *  count towards progress but never towards labour, cost, vines pruned or
+   *  productivity, and never create a Work Task. */
+  is_skipped?: boolean | null;
 }
 
 
