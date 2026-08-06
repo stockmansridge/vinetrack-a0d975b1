@@ -36,7 +36,6 @@ import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
-import { PIN_BURGUNDY_DARK, PIN_BURGUNDY_GRADIENT } from "@/lib/unifiedPin";
 
 interface PaddockLite {
   id: string;
@@ -307,8 +306,6 @@ export default function PinsPage() {
             size="sm"
             onClick={() => setAddOpen(true)}
             disabled={!selectedVineyardId}
-            style={{ background: PIN_BURGUNDY_GRADIENT, color: "#fff", borderColor: PIN_BURGUNDY_DARK }}
-            className="hover:opacity-90"
           >
             <Plus className="mr-1.5 h-4 w-4" /> Manual Pin / Repair / Observation
           </Button>
