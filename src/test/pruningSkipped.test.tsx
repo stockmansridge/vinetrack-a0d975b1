@@ -74,7 +74,7 @@ function renderDialog() {
   );
 }
 
-const toggleSkip = () => fireEvent.click(screen.getByLabelText("Mark as skipped"));
+const toggleSkip = () => fireEvent.click(screen.getByLabelText("Mark selected rows as skipped"));
 
 describe("skipped pruning entry form", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -93,6 +93,7 @@ describe("skipped pruning entry form", () => {
     renderDialog();
     toggleSkip();
     expect(screen.getByText("Date")).toBeTruthy();
+    expect(screen.getByText("Notes")).toBeTruthy();
     expect(screen.getByPlaceholderText(/Row ranges/)).toBeTruthy();
     expect(screen.getByText("Select all incomplete")).toBeTruthy();
     expect(screen.getByLabelText("Row 1 quarter 1")).toBeTruthy();
@@ -103,6 +104,9 @@ describe("skipped pruning entry form", () => {
     toggleSkip();
     fireEvent.click(screen.getByLabelText("Row 1 quarter 1"));
     fireEvent.click(screen.getByText(/Mark 1 quarter skipped/));
+    // SQL 168: skipping is confirmed before it is written.
+    await waitFor(() => expect(screen.getByText("Mark Skipped")).toBeTruthy());
+    fireEvent.click(screen.getByText("Mark Skipped"));
 
     await waitFor(() => expect(recordSkipped).toHaveBeenCalledTimes(1));
     const payload = recordSkipped.mock.calls[0][0] as any;
