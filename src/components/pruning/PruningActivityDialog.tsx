@@ -147,8 +147,17 @@ export default function PruningActivityDialog({
   const [finishInput, setFinishInput] = useState("");
   const [conflicts, setConflicts] = useState<ActivitySaveConflict[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // SQL 168 — skipped mode. One workflow: the same dialog records normal
+  // pruning and skipped rows; only the save routing differs.
+  const [skipped, setSkipped] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const [savingSkip, setSavingSkip] = useState(false);
+  // Stable per-block entry ids so a retry of a skipped save is idempotent.
+  const skipEntryIds = useRef<Record<string, string>>({});
+  const qc = useQueryClient();
   // Client uuid, generated once per dialog instance so a retry is idempotent.
   const [newId] = useState(() => crypto.randomUUID());
+
 
   const loaded = detailQ.data ?? null;
 
