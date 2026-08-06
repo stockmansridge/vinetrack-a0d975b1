@@ -248,6 +248,15 @@ export default function PruningTrackerPage() {
     return m;
   }, [currentSeasonsByPaddock]);
 
+  /** SQL 168: entries whose quarters were marked skipped, not pruned. */
+  const skippedEntryIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of (entriesQ.data ?? []) as any[]) {
+      if (e?.is_skipped === true && e.id) set.add(String(e.id));
+    }
+    return set;
+  }, [entriesQ.data]);
+
   const blocks: BlockView[] = useMemo(() => {
     const segs = segmentsQ.data ?? [];
     const ents = entriesQ.data ?? [];
@@ -274,7 +283,7 @@ export default function PruningTrackerPage() {
       const season = canonicalSeasonByPaddock.get(paddock.id) ?? null;
       const paddockRows = parseRows(paddock.rows);
       const identities = buildRowIdentities(paddockRows, paddock, season?.manual_row_count ?? null);
-      const completion = buildRowCompletion(identities, (bySeg.get(paddock.id) ?? []) as any);
+      const completion = buildRowCompletion(identities, (bySeg.get(paddock.id) ?? []) as any, skippedEntryIds);
       const shellSeason: PruningSeason = season ?? {
         id: "",
         vineyard_id: selectedVineyardId ?? "",
@@ -310,7 +319,7 @@ export default function PruningTrackerPage() {
         firstRowNumber,
       };
     });
-  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, selectedVineyardId, pruningSeasonYear]);
+  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, skippedEntryIds, selectedVineyardId, pruningSeasonYear]);
 
   const sortedBlocks = useMemo(() => {
     const arr = [...blocks];
@@ -429,8 +438,8 @@ export default function PruningTrackerPage() {
   const selectedSegmentsQ = { data: selectedSegments };
   const selectedCompletion = useMemo(() => {
     if (!selected) return [];
-    return buildRowCompletion(selected.identities, (selectedSegmentsQ.data ?? []) as any);
-  }, [selected, selectedSegmentsQ.data]);
+    return buildRowCompletion(selected.identities, (selectedSegmentsQ.data ?? []) as any, skippedEntryIds);
+  }, [selected, selectedSegmentsQ.data, skippedEntryIds]);
 
   const selectedCanonicalQ = useQuery({
     queryKey: ["pruning", "canonical-season-detail", selectedVineyardId, selectedPaddockId, pruningSeasonYear, summary?.blocks.map((b) => `${b.paddock_id}:${b.season_id ?? ""}`).join("|") ?? ""],
@@ -724,7 +733,7 @@ export default function PruningTrackerPage() {
             canonicalError={(selectedCanonicalQ.error as any)?.message ?? null}
             entries={selectedCanonicalQ.data?.entries ?? selectedEntriesQ.data ?? []}
             segments={selectedCanonicalQ.data?.segments ?? selectedSegmentsQ.data ?? []}
-            completion={selectedCanonicalQ.data?.segments ? buildRowCompletion(selected.identities, selectedCanonicalQ.data.segments as any) : selectedCompletion}
+            completion={selectedCanonicalQ.data?.segments ? buildRowCompletion(selected.identities, selectedCanonicalQ.data.segments as any, new Set([...skippedEntryIds, ...((selectedCanonicalQ.data?.entries ?? []) as any[]).filter((e) => e?.is_skipped === true).map((e) => String(e.id))])) : selectedCompletion}
             canEdit={canEdit}
             isSystemAdmin={isSystemAdmin}
             onBack={() => setSelectedPaddockId(null)}
@@ -941,7 +950,12 @@ function BlockDetail({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Rows</CardTitle>
-          <CardDescription>Green quarters are done. Use <b>Record Pruning</b> to log work.</CardDescription>
+          <CardDescription>Green quarters are pruned, amber quarters were skipped. Use <b>Record Pruning</b> to log work.</CardDescription>
+          <div className="flex flex-wrap items-center gap-4 pt-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5"><span className="h-3 w-4 rounded bg-emerald-500" /> Pruned</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-4 rounded bg-amber-500" /> Skipped</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-4 rounded bg-muted border" /> Remaining</span>
+          </div>
         </CardHeader>
         <CardContent>
           {completion.length === 0 ? (
@@ -967,11 +981,12 @@ function BlockDetail({
                   <div className="flex gap-1 flex-1">
                     {[1, 2, 3, 4].map((q) => {
                       const done = r.completed.has(q);
+                      const skipped = r.skipped.has(q);
                       return (
                         <div
                           key={q}
-                          className={`h-6 flex-1 rounded ${done ? "bg-emerald-500" : "bg-muted"}`}
-                          title={`Q${q}${done ? " · done" : ""}`}
+                          className={`h-6 flex-1 rounded ${skipped ? "bg-amber-500" : done ? "bg-emerald-500" : "bg-muted"}`}
+                          title={`Q${q}${skipped ? " · skipped" : done ? " · done" : ""}`}
                         />
                       );
                     })}

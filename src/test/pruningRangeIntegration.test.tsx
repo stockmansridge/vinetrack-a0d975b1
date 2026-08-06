@@ -30,6 +30,7 @@ function makeRows(nums: number[]): RowCompletionState[] {
       estimatedVines: 80,
     },
     completed: new Set<number>(),
+    skipped: new Set<number>(),
   }));
 }
 

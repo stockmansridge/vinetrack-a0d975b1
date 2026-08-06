@@ -229,6 +229,8 @@ export function buildUnifiedCostDataset({
   // 1) Pruning allocations first — they own their linked Work Task cost.
   for (const p of pruningRows) {
     if (p.isReversed && !includeReversed) continue;
+    // SQL 168: skipped pruning carries no labour or cost — never a cost row.
+    if (p.isSkipped) continue;
     const row = pruningRowToUnified(p, vineyardId);
     if (seen.has(row.dedup_key)) continue;
     seen.add(row.dedup_key);

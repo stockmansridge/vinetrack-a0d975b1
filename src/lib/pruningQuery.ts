@@ -61,6 +61,10 @@ export interface PruningEntry {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** SQL 168: the quarters were marked skipped, not pruned. Skipped entries
+   *  count towards progress but never towards labour, cost, vines pruned or
+   *  productivity, and never create a Work Task. */
+  is_skipped?: boolean | null;
 }
 
 
@@ -476,3 +480,80 @@ export function useUpdatePruningEntry(seasonId: string, vineyardId: string | nul
   });
 }
 
+
+// ---------- SQL 168: skipped pruning entries ----------
+
+export interface RecordSkippedEntryInput {
+  entryId?: string;
+  vineyardId: string;
+  seasonId: string;
+  paddockId: string;
+  seasonYear: number;
+  entryDate: string;
+  notes?: string;
+  segments: RecordSegmentInput[];
+}
+
+const toRpcSegments = (segments: RecordSegmentInput[]) =>
+  segments.map((s) => ({
+    row: s.rowNumber,
+    segment: s.segmentNumber,
+    row_id: s.paddockRowId ?? null,
+    label: s.rowLabel,
+  }));
+
+/**
+ * Record a SKIPPED pruning entry (SQL 168). No worker, labour, cost, method
+ * or Work Task is involved — the quarters are simply marked as done-by-skip.
+ * Idempotent on `entryId`: reuse the same uuid when retrying.
+ */
+export function useRecordSkippedPruningEntry(seasonId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RecordSkippedEntryInput): Promise<RecordEntryResult> => {
+      const entryId = input.entryId ?? crypto.randomUUID();
+      const { data, error } = await (supabase as any).rpc("record_skipped_pruning_entry", {
+        p_id: entryId,
+        p_vineyard_id: input.vineyardId,
+        p_season_id: input.seasonId,
+        p_paddock_id: input.paddockId,
+        p_season_year: input.seasonYear,
+        p_entry_date: input.entryDate,
+        p_segments: toRpcSegments(input.segments),
+        p_notes: input.notes ?? "",
+        p_client_updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      return data as RecordEntryResult;
+    },
+    onSuccess: async (data) => {
+      const canonicalSeasonId = data?.season_id ?? seasonId;
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: QK.entries(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(seasonId) }),
+        qc.invalidateQueries({ queryKey: QK.entries(canonicalSeasonId) }),
+        qc.invalidateQueries({ queryKey: QK.segments(canonicalSeasonId) }),
+        qc.invalidateQueries({ queryKey: ["pruning"] }),
+      ]);
+      await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
+    },
+  });
+}
+
+/** Update an existing skipped entry's date, quarters or notes (SQL 168). */
+export async function updateSkippedPruningEntry(input: {
+  entryId: string;
+  entryDate: string;
+  segments: RecordSegmentInput[];
+  notes?: string;
+}) {
+  const { data, error } = await (supabase as any).rpc("update_skipped_pruning_entry", {
+    p_entry_id: input.entryId,
+    p_entry_date: input.entryDate,
+    p_segments: toRpcSegments(input.segments),
+    p_notes: input.notes ?? "",
+    p_client_updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+  return data as UpdateEntryResult;
+}

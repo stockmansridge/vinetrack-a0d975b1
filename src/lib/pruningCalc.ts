@@ -96,23 +96,31 @@ export function buildRowIdentities(
 export interface RowCompletionState {
   identity: RowIdentity;
   completed: Set<number>; // segment numbers 1..4
+  /** SQL 168: subset of `completed` whose quarters were marked skipped. */
+  skipped: Set<number>;
 }
 
 export function buildRowCompletion(
   identities: RowIdentity[],
   segments: PruningRowSegment[],
+  /** Entry ids that are skipped entries (SQL 168). */
+  skippedEntryIds?: Set<string> | ReadonlySet<string>,
 ): RowCompletionState[] {
   // Index by paddock_row_id first (stable), fall back to row_number.
   // IMPORTANT: only count segments that are actually completed. Reversed entries
   // leave the row present with completed = false / pruning_entry_id = null.
   const byId = new Map<string, Set<number>>();
   const byNumber = new Map<number, Set<number>>();
+  const skipById = new Map<string, Set<number>>();
+  const skipByNumber = new Map<number, Set<number>>();
   for (const s of segments) {
     // Shared contract with iOS/Android: a quarter is done iff completed === true.
     // Do NOT also require pruning_entry_id — cross-platform records (and some
     // legacy rows) may leave it null while completed remains true. Reversal
     // sets completed = false, so this stays consistent with the reverse flow.
     if ((s as any).completed !== true) continue;
+    const isSkipped =
+      !!skippedEntryIds && !!s.pruning_entry_id && skippedEntryIds.has(s.pruning_entry_id);
     // Index by BOTH paddock_row_id and row_number. Some records only have
     // one or the other, and paddock row ids can change when a block's rows
     // are regenerated — falling back to row_number keeps green quarters
@@ -121,11 +129,21 @@ export function buildRowCompletion(
       const set = byId.get(s.paddock_row_id) ?? new Set<number>();
       set.add(s.segment_number);
       byId.set(s.paddock_row_id, set);
+      if (isSkipped) {
+        const sk = skipById.get(s.paddock_row_id) ?? new Set<number>();
+        sk.add(s.segment_number);
+        skipById.set(s.paddock_row_id, sk);
+      }
     }
     if (Number.isFinite(s.row_number)) {
       const set = byNumber.get(s.row_number) ?? new Set<number>();
       set.add(s.segment_number);
       byNumber.set(s.row_number, set);
+      if (isSkipped) {
+        const sk = skipByNumber.get(s.row_number) ?? new Set<number>();
+        sk.add(s.segment_number);
+        skipByNumber.set(s.row_number, sk);
+      }
     }
   }
   return identities.map((id) => {
@@ -137,7 +155,10 @@ export function buildRowCompletion(
     } else {
       completed = byIdMatch ?? byNumMatch ?? new Set<number>();
     }
-    return { identity: id, completed };
+    const skipIdMatch = id.paddockRowId ? skipById.get(id.paddockRowId) : null;
+    const skipNumMatch = skipByNumber.get(id.rowNumber);
+    const skipped = new Set<number>([...(skipIdMatch ?? []), ...(skipNumMatch ?? [])]);
+    return { identity: id, completed, skipped };
   });
 
 }

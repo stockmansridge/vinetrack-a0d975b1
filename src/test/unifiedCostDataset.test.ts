@@ -22,7 +22,8 @@ const baseRow = (over: Partial<BaseActivityRow>): BaseActivityRow => ({
   workTaskLabel: "Pruning", workTaskMissing: false, activityTitle: null,
   workTaskStatus: "open", labourCost: null, hourlyRate: null, notes: "",
   createdById: null, createdAt: "2026-08-04T08:00:00Z", updatedAt: null,
-  isReversed: false, ...over,
+  isReversed: false,
+  isSkipped: false, ...over,
 });
 
 function twoBlockActivity(over: Partial<BaseActivityRow> = {}) {

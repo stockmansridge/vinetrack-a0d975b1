@@ -631,11 +631,18 @@ export default function PruningActivityReportPage() {
       case "activity":
         return (
           <div className="flex flex-col gap-0.5 min-w-0">
-            <span
-              className={`truncate ${r.activityLabelKind === "none" || r.activityLabelKind === "unavailable" ? "text-muted-foreground text-xs" : "font-medium"}`}
-              title={r.activityLabel}
-            >
-              {r.activityLabel}
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span
+                className={`truncate ${r.activityLabelKind === "none" || r.activityLabelKind === "unavailable" ? "text-muted-foreground text-xs" : "font-medium"}`}
+                title={r.activityLabel}
+              >
+                {r.activityLabel}
+              </span>
+              {r.isSkipped && (
+                <Badge variant="outline" className="shrink-0 border-amber-500/60 text-amber-700 dark:text-amber-300">
+                  Skipped
+                </Badge>
+              )}
             </span>
             {activityKindLabel(r) && (
               <span className="text-[11px] text-muted-foreground">{activityKindLabel(r)}</span>
