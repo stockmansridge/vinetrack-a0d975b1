@@ -215,8 +215,59 @@ export default function PruningActivityDialog({
   };
 
   const totals = activityTotals(draft);
+  const busy = save.isPending || savingSkip;
   const canSave =
-    !!draft.entryDate && totals.quarters > 0 && !save.isPending && (!isEdit || !!loaded);
+    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || !!loaded);
+
+  /** SQL 168: one skipped entry per block, presented as a single save. */
+  const handleSkippedSave = async () => {
+    setConfirmSkip(false);
+    setSaveError(null);
+    const allocations = Object.values(draft.allocations)
+      .filter((a) => allocationQuarterCount(a) > 0);
+    if (!draft.entryDate || allocations.length === 0) {
+      setSaveError("Select at least one row or row section to mark as skipped.");
+      return;
+    }
+    setSavingSkip(true);
+    try {
+      for (const alloc of allocations) {
+        const seasonId = alloc.seasonId
+          ?? (await ensurePruningSeasonId(vineyardId, alloc.paddockId, seasonYear));
+        const entryId = skipEntryIds.current[alloc.paddockId]
+          ?? (skipEntryIds.current[alloc.paddockId] = crypto.randomUUID());
+        await recordSkippedPruningEntry({
+          entryId,
+          vineyardId,
+          seasonId,
+          paddockId: alloc.paddockId,
+          seasonYear,
+          entryDate: draft.entryDate,
+          notes: draft.notes ?? "",
+          segments: allocationSegments(alloc).map((s) => ({
+            rowNumber: s.row,
+            segmentNumber: s.segment,
+            paddockRowId: s.row_id,
+            rowLabel: s.label,
+          })),
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ["pruning"] });
+      await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
+      toast.success(
+        allocations.length === 1
+          ? "Rows marked as skipped."
+          : `Rows marked as skipped across ${allocations.length} blocks.`,
+      );
+      onSaved?.(null);
+      onOpenChange(false);
+    } catch (e: any) {
+      setSaveError(e?.message ?? String(e));
+    } finally {
+      setSavingSkip(false);
+    }
+  };
+
 
   const handleSave = async () => {
     setConflicts([]);
