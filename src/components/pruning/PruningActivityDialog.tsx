@@ -458,7 +458,7 @@ export default function PruningActivityDialog({
               onChange={handleAllocationsChange}
               ownedByActivity={ownedByActivity}
               initialPaddockId={paddockId}
-              disabled={save.isPending}
+              disabled={busy}
             />
 
             {conflicts.length > 0 && (
@@ -488,17 +488,47 @@ export default function PruningActivityDialog({
         <DialogFooter className="flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="text-xs text-muted-foreground tabular-nums">
             {totals.blocks} block{totals.blocks === 1 ? "" : "s"} · {totals.quarters} quarters ·{" "}
-            {totals.rowEquivalents.toFixed(2)} row eq. · ~{totals.vines.toLocaleString()} vines
+            {totals.rowEquivalents.toFixed(2)} row eq.
+            {!skipped && ` · ~${totals.vines.toLocaleString()} vines`}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="button" onClick={handleSave} disabled={!canSave}>
-              {save.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              {isEdit ? "Save changes" : "Record activity"}
+            <Button
+              type="button"
+              onClick={() => {
+                if (!skipped) { handleSave(); return; }
+                if (totals.quarters === 0) {
+                  setSaveError("Select at least one row or row section to mark as skipped.");
+                  return;
+                }
+                setSaveError(null);
+                setConfirmSkip(true);
+              }}
+              disabled={skipped ? busy || !draft.entryDate : !canSave}
+            >
+              {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {skipped ? "Mark skipped" : isEdit ? "Save changes" : "Record activity"}
             </Button>
           </div>
         </DialogFooter>
+
+        <AlertDialog open={confirmSkip} onOpenChange={setConfirmSkip}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mark selected rows as skipped?</AlertDialogTitle>
+              <AlertDialogDescription>
+                These rows will count as complete in pruning progress, but no labour,
+                cost or pruning work will be recorded.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSkippedSave}>Mark Skipped</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
+
     </Dialog>
   );
 }
