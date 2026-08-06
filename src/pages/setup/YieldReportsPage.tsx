@@ -215,18 +215,6 @@ export default function YieldReportsPage() {
         description="Historical yield records are used by Cost Reports to calculate cost per tonne. Make sure each block has an actual yield record for the relevant season."
       />
 
-      <PortalNotice
-        variant="warning"
-        compact
-        title="Production data — read-only view in the portal"
-        description={
-          <>
-            Add or edit actual yield records from the iOS app (table:{" "}
-            <code>historical_yield_records</code>). Estimation and sampling
-            sessions are also captured on iOS.
-          </>
-        }
-      />
 
       <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
 
