@@ -191,8 +191,87 @@ export function isGrowthStageButton(button: PinButtonDef | null | undefined): bo
   return canonicalButtonKey(button) === "growthstage";
 }
 
+/** Fixed Growth tab order (mobile parity); unknown buttons keep catalogue order after these. */
+export const GROWTH_BUTTON_ORDER = ["growthstage", "powdery", "downy", "blackberries"];
 
+export function orderGrowthButtons(buttons: PinButtonDef[]): PinButtonDef[] {
+  const rank = (b: PinButtonDef) => {
+    const i = GROWTH_BUTTON_ORDER.indexOf(canonicalButtonKey(b));
+    return i === -1 ? GROWTH_BUTTON_ORDER.length : i;
+  };
+  return buttons
+    .map((b, i) => ({ b, i }))
+    .sort((x, y) => rank(x.b) - rank(y.b) || x.i - y.i)
+    .map((x) => x.b);
+}
 
+// -------------------------------------------------------- row-first picking
+
+export interface BlockRowGroup {
+  paddockId: string;
+  blockName: string;
+  rows: number[];
+}
+
+export interface RowSourcePaddock {
+  id: string;
+  name?: string | null;
+  rows?: unknown;
+}
+
+/**
+ * Rows grouped by their owning block. Row mode lists these directly, so the
+ * user never has to choose a block first — the block is derived from the row.
+ */
+export function buildBlockRowGroups(paddocks: RowSourcePaddock[] | null | undefined): BlockRowGroup[] {
+  const out: BlockRowGroup[] = [];
+  for (const p of paddocks ?? []) {
+    if (!p?.id) continue;
+    const raw = typeof p.rows === "string" ? safeParse(p.rows) : p.rows;
+    if (!Array.isArray(raw)) continue;
+    const nums: number[] = [];
+    raw.forEach((r: any, idx: number) => {
+      const n = Number(r?.number ?? r?.row_number ?? r?.rowNumber ?? idx + 1);
+      if (Number.isFinite(n) && !nums.includes(n)) nums.push(n);
+    });
+    if (!nums.length) continue;
+    out.push({
+      paddockId: p.id,
+      blockName: (p.name ?? "").trim() || "Unnamed block",
+      rows: nums.sort((a, b) => a - b),
+    });
+  }
+  return out.sort((a, b) => a.blockName.localeCompare(b.blockName));
+}
+
+function safeParse(v: string): unknown {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Toggle a row inside row mode. Choosing a row in a different block resets the
+ * previous selection so a save never mixes blocks or ambiguous row numbers.
+ */
+export function toggleRowInBlock(
+  form: UnifiedPinForm,
+  paddockId: string,
+  rowNumber: number,
+): UnifiedPinForm {
+  const switching = form.paddockId !== paddockId;
+  const current = switching ? [] : parseRowSelection(form.rowSelection);
+  const next = current.includes(rowNumber)
+    ? current.filter((r) => r !== rowNumber)
+    : [...current, rowNumber].sort((a, b) => a - b);
+  return {
+    ...form,
+    paddockId: next.length ? paddockId : switching ? paddockId : form.paddockId,
+    rowSelection: next.join(", "),
+  };
+}
 
 
 // ------------------------------------------------------------- custom types
