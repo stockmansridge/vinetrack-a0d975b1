@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Scissors, Settings2, ArrowLeft, CheckCircle2, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
+import { Scissors, Settings2, ArrowLeft, CheckCircle2, CheckSquare, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   usePruningSeasons,
