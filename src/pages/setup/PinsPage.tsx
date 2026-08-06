@@ -324,9 +324,9 @@ export default function PinsPage() {
 
 
       <PortalNotice
-        variant="warning"
+        variant="info"
         compact
-        description="Production data — existing pins are read-only here. New pins can be added with Add Pin / Action."
+        description="Pins can only be closed while in the field or through the VineTrack mobile app. This ensures VineTrack records when the pin was completed and who completed it."
       />
 
 

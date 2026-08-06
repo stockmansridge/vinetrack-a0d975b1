@@ -6,7 +6,6 @@ import { fetchList } from "@/lib/queries";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PortalNotice } from "@/components/ui/PortalNotice";
 import {
   Select,
   SelectContent,
@@ -368,11 +367,6 @@ export default function TripsPage() {
       </div>
 
 
-      <PortalNotice
-        variant="warning"
-        compact
-        description="Production data — read-only view. No edits, archives, or deletions are possible from this page."
-      />
 
       <div className="rounded-2xl border border-border bg-card p-4 flex flex-wrap items-end gap-3">
         <div className="space-y-1">
