@@ -26,10 +26,27 @@ export const PIN_TYPE_LABELS: Record<UnifiedPinType, string> = {
 };
 
 export const SCOPE_LABELS: Record<UnifiedPinScope, string> = {
-  point: "Drop a pin",
+  point: "Drop a pin manually",
   row: "Select a row",
   block: "Select a block",
 };
+
+export const SCOPE_DESCRIPTIONS: Record<UnifiedPinScope, string> = {
+  point: "Tap the map to place the pin at an exact location.",
+  row: "Pick the row (and quarters) directly — the block is derived for you.",
+  block: "Apply the pin to a whole block.",
+};
+
+/** Burgundy accent used only by the unified composer launch button and selection accents. */
+export const PIN_BURGUNDY = "#800020";
+export const PIN_BURGUNDY_DARK = "#5C0017";
+export const PIN_BURGUNDY_GRADIENT = `linear-gradient(180deg, ${PIN_BURGUNDY} 0%, ${PIN_BURGUNDY_DARK} 100%)`;
+
+/** Minimum height (px) of the enlarged location cards. */
+export const LOCATION_CARD_MIN_HEIGHT = 128;
+
+/** Exact message shown when a selected row cannot be matched to a block. */
+export const ROW_BLOCK_MATCH_ERROR = "Couldn't match the selected row to a block.";
 
 /** Pin mode stored on the shared record for each pin type. */
 export const PIN_TYPE_MODE: Record<UnifiedPinType, string> = {
@@ -37,6 +54,10 @@ export const PIN_TYPE_MODE: Record<UnifiedPinType, string> = {
   growth: "Growth",
   custom: "ManualIssue",
 };
+
+/** Colour stored on Growth Stage pins (matches iOS/Android). */
+export const GROWTH_STAGE_PIN_COLOUR = "darkgreen";
+
 
 // ------------------------------------------------------------- button sets
 
@@ -170,8 +191,87 @@ export function isGrowthStageButton(button: PinButtonDef | null | undefined): bo
   return canonicalButtonKey(button) === "growthstage";
 }
 
+/** Fixed Growth tab order (mobile parity); unknown buttons keep catalogue order after these. */
+export const GROWTH_BUTTON_ORDER = ["growthstage", "powdery", "downy", "blackberries"];
 
+export function orderGrowthButtons(buttons: PinButtonDef[]): PinButtonDef[] {
+  const rank = (b: PinButtonDef) => {
+    const i = GROWTH_BUTTON_ORDER.indexOf(canonicalButtonKey(b));
+    return i === -1 ? GROWTH_BUTTON_ORDER.length : i;
+  };
+  return buttons
+    .map((b, i) => ({ b, i }))
+    .sort((x, y) => rank(x.b) - rank(y.b) || x.i - y.i)
+    .map((x) => x.b);
+}
 
+// -------------------------------------------------------- row-first picking
+
+export interface BlockRowGroup {
+  paddockId: string;
+  blockName: string;
+  rows: number[];
+}
+
+export interface RowSourcePaddock {
+  id: string;
+  name?: string | null;
+  rows?: unknown;
+}
+
+/**
+ * Rows grouped by their owning block. Row mode lists these directly, so the
+ * user never has to choose a block first — the block is derived from the row.
+ */
+export function buildBlockRowGroups(paddocks: RowSourcePaddock[] | null | undefined): BlockRowGroup[] {
+  const out: BlockRowGroup[] = [];
+  for (const p of paddocks ?? []) {
+    if (!p?.id) continue;
+    const raw = typeof p.rows === "string" ? safeParse(p.rows) : p.rows;
+    if (!Array.isArray(raw)) continue;
+    const nums: number[] = [];
+    raw.forEach((r: any, idx: number) => {
+      const n = Number(r?.number ?? r?.row_number ?? r?.rowNumber ?? idx + 1);
+      if (Number.isFinite(n) && !nums.includes(n)) nums.push(n);
+    });
+    if (!nums.length) continue;
+    out.push({
+      paddockId: p.id,
+      blockName: (p.name ?? "").trim() || "Unnamed block",
+      rows: nums.sort((a, b) => a - b),
+    });
+  }
+  return out.sort((a, b) => a.blockName.localeCompare(b.blockName));
+}
+
+function safeParse(v: string): unknown {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Toggle a row inside row mode. Choosing a row in a different block resets the
+ * previous selection so a save never mixes blocks or ambiguous row numbers.
+ */
+export function toggleRowInBlock(
+  form: UnifiedPinForm,
+  paddockId: string,
+  rowNumber: number,
+): UnifiedPinForm {
+  const switching = form.paddockId !== paddockId;
+  const current = switching ? [] : parseRowSelection(form.rowSelection);
+  const next = current.includes(rowNumber)
+    ? current.filter((r) => r !== rowNumber)
+    : [...current, rowNumber].sort((a, b) => a - b);
+  return {
+    ...form,
+    paddockId: next.length ? paddockId : switching ? paddockId : form.paddockId,
+    rowSelection: next.join(", "),
+  };
+}
 
 
 // ------------------------------------------------------------- custom types
@@ -241,6 +341,10 @@ export function applyPinScopeChange(form: UnifiedPinForm, next: UnifiedPinScope)
   if (next !== "row") {
     base.rowSelection = "";
     base.rowSections = [...ROW_SEGMENTS];
+  } else {
+    // Row mode derives the block from the chosen row.
+    base.paddockId = null;
+    base.rowSelection = "";
   }
   return base;
 }
@@ -252,10 +356,13 @@ export function validatePinLocation(form: UnifiedPinForm): string | null {
   }
   if (form.scope === "block" && !form.paddockId) return "Choose a block.";
   if (form.scope === "row") {
-    if (!form.paddockId) return "Choose a block.";
-    if (!parseRowSelection(form.rowSelection).length) return "Select at least one row.";
+    if (!parseRowSelection(form.rowSelection).length) {
+      return "Select at least one row or row section to mark.";
+    }
+    if (!form.paddockId) return ROW_BLOCK_MATCH_ERROR;
     if (!form.rowSections.length) return "Select at least one row section.";
   }
+
   return null;
 }
 
@@ -378,17 +485,23 @@ export function buildPinInsertRow(
 ): PinInsertRow {
   const lat = form.scope === "point" ? form.latitude : opts.centre?.lat ?? null;
   const lng = form.scope === "point" ? form.longitude : opts.centre?.lng ?? null;
+  const stage = opts.growthStageCode ?? opts.button.growthStageCode ?? null;
+  // Growth Stage pins carry the selected E-L code in their name and the shared
+  // darkgreen marker colour (iOS/Android parity).
+  const isStagePin = isGrowthStageButton(opts.button) && !!opts.growthStageCode;
+  const name = isStagePin ? `Growth Stage ${opts.growthStageCode}` : opts.button.name;
   return {
     id: opts.id,
     vineyard_id: opts.vineyardId,
     paddock_id: form.paddockId,
     mode: PIN_TYPE_MODE[form.pinType],
-    title: opts.button.name,
-    button_name: opts.button.name,
-    button_color: opts.button.colour,
+    title: name,
+    button_name: name,
+    button_color: isStagePin ? GROWTH_STAGE_PIN_COLOUR : opts.button.colour,
     category_id: opts.button.id,
     category: opts.button.name,
-    growth_stage_code: opts.growthStageCode ?? opts.button.growthStageCode,
+    growth_stage_code: stage,
+
     latitude: lat,
     longitude: lng,
     driving_row_number: form.scope === "point" ? form.drivingRowNumber : null,

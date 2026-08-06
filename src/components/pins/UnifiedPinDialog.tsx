@@ -33,19 +33,28 @@ import {
 } from "@/lib/manualIssues";
 import GrowthStagePickerDialog from "@/components/pins/GrowthStagePickerDialog";
 import { GROWTH_STAGE_LABEL } from "@/lib/vspWaterRate";
+import { Check, MapPin, Rows3, Square } from "lucide-react";
 import {
   applyPinScopeChange,
+  buildBlockRowGroups,
   dedupePinButtons,
   isGrowthStageButton,
   emptyUnifiedPinForm,
+  orderGrowthButtons,
+  toggleRowInBlock,
+  LOCATION_CARD_MIN_HEIGHT,
+  PIN_BURGUNDY,
   PIN_TYPE_LABELS,
   polygonCentroid,
+  ROW_BLOCK_MATCH_ERROR,
+  SCOPE_DESCRIPTIONS,
   SCOPE_LABELS,
   UNIFIED_PIN_SCOPES,
   UNIFIED_PIN_TYPES,
   validateUnifiedPin,
   type PinButtonDef,
   type UnifiedPinForm,
+  type UnifiedPinScope,
   type UnifiedPinType,
 } from "@/lib/unifiedPin";
 import {
@@ -55,11 +64,19 @@ import {
   usePinButtonCatalogue,
 } from "@/lib/unifiedPinQuery";
 
+const SCOPE_ICONS: Record<UnifiedPinScope, typeof MapPin> = {
+  point: MapPin,
+  row: Rows3,
+  block: Square,
+};
+
 export interface PaddockOption {
   id: string;
   name: string | null;
   polygon_points?: any;
+  rows?: any;
 }
+
 
 const FALLBACK_COLOUR = "#8E8E93";
 
@@ -131,14 +148,21 @@ export default function UnifiedPinDialog({
         : form.pinType === "growth"
           ? buttons.data?.growth ?? []
           : [];
-    return dedupePinButtons(raw);
+    const deduped = dedupePinButtons(raw);
+    return form.pinType === "growth" ? orderGrowthButtons(deduped) : deduped;
   }, [form.pinType, buttons.data]);
 
   const selectedButton = buttonList.find((b) => b.id === form.buttonId) ?? null;
   const selectedType = (customTypes.data ?? []).find((t) => t.id === form.customTypeId) ?? null;
 
+  // Row mode lists every mapped row grouped by its block; the block is derived
+  // from whichever row the user picks.
+  const rowGroups = useMemo(() => buildBlockRowGroups(paddocks), [paddocks]);
+
   const rows = parseRowSelection(form.rowSelection);
+  const selectedRows = rows;
   const segmentPreview = summariseSegments(buildSegments(rows, form.rowSections));
+
 
   const chooseType = (t: UnifiedPinType) => {
     setGrowthStageCode(null);
@@ -199,7 +223,7 @@ export default function UnifiedPinDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Pin / Action</DialogTitle>
+          <DialogTitle>Manual Pin / Repair / Observation</DialogTitle>
           <DialogDescription>
             Drop a pin, select a row or select a block. Pins are shared with the VineTrack mobile apps.
           </DialogDescription>
@@ -209,22 +233,42 @@ export default function UnifiedPinDialog({
           {/* Step 1 — location */}
           <section className="grid gap-3">
             <Label>1. Location</Label>
-            <div className="inline-flex w-fit rounded-md border bg-background p-0.5">
-              {UNIFIED_PIN_SCOPES.map((s) => (
-                <Button
-                  key={s}
-                  type="button"
-                  size="sm"
-                  variant={form.scope === s ? "secondary" : "ghost"}
-                  className="h-7 px-3 text-xs"
-                  onClick={() => setForm((f) => applyPinScopeChange(f, s))}
-                >
-                  {SCOPE_LABELS[s]}
-                </Button>
-              ))}
+            <div className="grid gap-2">
+              {UNIFIED_PIN_SCOPES.map((s) => {
+                const active = form.scope === s;
+                const Icon = SCOPE_ICONS[s];
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={active}
+                    data-testid={`pin-scope-${s}`}
+                    onClick={() => setForm((f) => applyPinScopeChange(f, s))}
+                    style={{
+                      minHeight: LOCATION_CARD_MIN_HEIGHT,
+                      borderColor: active ? PIN_BURGUNDY : undefined,
+                    }}
+                    className={`flex w-full items-center gap-4 rounded-lg border-2 px-4 py-4 text-left transition-colors ${
+                      active ? "bg-accent" : "hover:bg-muted"
+                    }`}
+                  >
+                    <span
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted"
+                      style={active ? { background: PIN_BURGUNDY, color: "#fff" } : undefined}
+                    >
+                      <Icon className="h-6 w-6" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-semibold">{SCOPE_LABELS[s]}</span>
+                      <span className="block text-sm text-muted-foreground">{SCOPE_DESCRIPTIONS[s]}</span>
+                    </span>
+                    {active && <Check className="h-5 w-5 shrink-0" style={{ color: PIN_BURGUNDY }} />}
+                  </button>
+                );
+              })}
             </div>
 
-            {form.scope !== "point" && (
+            {form.scope === "block" && (
               <div className="grid gap-2">
                 <Label htmlFor="up-block">Block</Label>
                 <Select
@@ -241,6 +285,7 @@ export default function UnifiedPinDialog({
                 </Select>
               </div>
             )}
+
 
             {form.scope === "point" && (
               <div className="space-y-2">
@@ -305,15 +350,40 @@ export default function UnifiedPinDialog({
 
             {form.scope === "row" && (
               <div className="space-y-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="up-rows">Rows</Label>
-                  <Input
-                    id="up-rows"
-                    placeholder="e.g. 8-9, 12"
-                    value={form.rowSelection}
-                    onChange={(e) => set({ rowSelection: e.target.value })}
-                  />
-                </div>
+                <Label>Rows</Label>
+                {rowGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No mapped rows are available for this vineyard yet.
+                  </p>
+                ) : (
+                  <div className="max-h-64 space-y-3 overflow-y-auto rounded-md border p-3">
+                    {rowGroups.map((g) => (
+                      <div key={g.paddockId} className="space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground">{g.blockName}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.rows.map((n) => {
+                            const active = form.paddockId === g.paddockId && selectedRows.includes(n);
+                            return (
+                              <button
+                                key={n}
+                                type="button"
+                                aria-label={`${g.blockName} row ${n}`}
+                                aria-pressed={active}
+                                onClick={() => setForm((f) => toggleRowInBlock(f, g.paddockId, n))}
+                                style={active ? { borderColor: PIN_BURGUNDY, color: PIN_BURGUNDY } : undefined}
+                                className={`rounded border px-2 py-1 text-xs tabular-nums ${
+                                  active ? "bg-accent font-semibold" : "hover:bg-muted"
+                                }`}
+                              >
+                                Row {n}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Row sections</Label>
                   <div className="flex flex-wrap gap-4">
@@ -335,10 +405,13 @@ export default function UnifiedPinDialog({
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {segmentPreview ?? "Select at least one row."}
+                  {selectedRows.length && !form.paddockId
+                    ? ROW_BLOCK_MATCH_ERROR
+                    : segmentPreview ?? "Select at least one row."}
                 </p>
               </div>
             )}
+
 
             {form.scope === "block" && (
               <p className="text-sm text-muted-foreground">
