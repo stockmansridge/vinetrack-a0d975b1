@@ -103,9 +103,12 @@ export function parseButtonCatalogue(
         growthStageCode: firstString(button, STAGE_FIELDS),
       });
     }
+  }
+  return out;
 }
 
 // ------------------------------------------------- left / right normalising
+
 
 /**
  * The Repair and Growth catalogues historically hold one record per side
