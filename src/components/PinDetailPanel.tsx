@@ -16,6 +16,8 @@ export interface PinRecord {
   paddock_id?: string | null;
   mode?: string | null;
   category?: string | null;
+  category_id?: string | null;
+  assignment_reason?: string | null;
   priority?: string | null;
   status?: string | null;
   title?: string | null;
