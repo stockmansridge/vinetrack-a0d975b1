@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { CheckSquare, Plus, Square, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PruningSeason, RecordEntryResult, RecordSegmentInput } from "@/lib/pruningQuery";
-import { useRecordPruningEntry } from "@/lib/pruningQuery";
+import { useRecordPruningEntry, useRecordSkippedPruningEntry } from "@/lib/pruningQuery";
 import type { RowCompletionState, RowIdentity } from "@/lib/pruningCalc";
 import { createWorkTask, createLabourLine, fetchWorkTaskPaddocksForVineyard, syncWorkTaskPaddocks } from "@/lib/workTasksQuery";
 import type { UpsertLabourLineInput } from "@/lib/workTasksQuery";
@@ -100,6 +100,7 @@ export default function CompleteTodayDialog({
   open, onOpenChange, season, vineyardId, paddockId, paddockName, rows,
 }: Props) {
   const record = useRecordPruningEntry(season.id);
+  const recordSkipped = useRecordSkippedPruningEntry(season.id);
   const { user } = useAuth();
   const { currentRole } = useVineyard();
   const canSeeCosts = useCanSeeCosts();
@@ -118,6 +119,9 @@ export default function CompleteTodayDialog({
   const [rangeInput, setRangeInput] = useState("");
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [rangeDiagnostic, setRangeDiagnostic] = useState<RangeDiagnostic | null>(null);
+
+  // SQL 168: mark the selected quarters as skipped instead of pruned.
+  const [markSkipped, setMarkSkipped] = useState(false);
 
   const [createTask, setCreateTask] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
@@ -410,6 +414,29 @@ export default function CompleteTodayDialog({
   const handleSubmit = async () => {
     if (!segments.length) { toast.error("Select at least one quarter"); return; }
     if (!entryDate) { toast.error("Date is required"); return; }
+
+    // SQL 168: skipped entries carry no worker, labour, cost, method or task.
+    if (markSkipped) {
+      const skippedId = pendingEntryId ?? crypto.randomUUID();
+      setPendingEntryId(skippedId);
+      try {
+        await recordSkipped.mutateAsync({
+          entryId: skippedId,
+          vineyardId,
+          seasonId: season.id,
+          paddockId,
+          seasonYear: season.season_year,
+          entryDate,
+          segments,
+          notes: "",
+        });
+        toast.success(`Marked ${segments.length} quarter${segments.length === 1 ? "" : "s"} as skipped.`);
+        onOpenChange(false);
+      } catch (e: any) {
+        toast.error(`Failed to record skipped quarters: ${e?.message ?? e}`);
+      }
+      return;
+    }
     if (createTask && !taskTitle.trim()) { toast.error("Task title is required"); return; }
     if (!validateLabourLines()) return;
 
@@ -620,6 +647,23 @@ export default function CompleteTodayDialog({
               <Label>Date</Label>
               <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
             </div>
+            <div className="rounded-md border p-3 bg-muted/20 flex items-start justify-between gap-3">
+              <div>
+                <Label htmlFor="mark-skipped" className="text-sm">Mark as skipped</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Counts the selected rows as complete without recording any work,
+                  labour or cost.
+                </p>
+              </div>
+              <Switch
+                id="mark-skipped"
+                checked={markSkipped}
+                onCheckedChange={(v) => { setMarkSkipped(v); if (v) setCreateTask(false); }}
+              />
+            </div>
+
+            {!markSkipped && (
+            <>
             <div className="space-y-1.5">
               <Label>Worker or crew</Label>
               <Input value={worker} onChange={(e) => setWorker(e.target.value)} />
@@ -763,6 +807,8 @@ export default function CompleteTodayDialog({
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
 
@@ -779,9 +825,14 @@ export default function CompleteTodayDialog({
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={record.isPending || segments.length === 0}>
-              {record.isPending
+            <Button
+              onClick={handleSubmit}
+              disabled={record.isPending || recordSkipped.isPending || segments.length === 0}
+            >
+              {record.isPending || recordSkipped.isPending
                 ? "Recording…"
+                : markSkipped
+                ? `Mark ${segments.length} quarter${segments.length === 1 ? "" : "s"} skipped`
                 : `Record ${segments.length} quarter${segments.length === 1 ? "" : "s"}${createTask ? " + task" : ""}`}
             </Button>
           </div>
