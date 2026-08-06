@@ -83,6 +83,7 @@ const work: NavItem[] = [
   { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
   { title: "Field Trips", url: "/trips", icon: Sprout },
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
+  { title: "Manual Issues", url: "/manual-issues", icon: AlertTriangle },
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
