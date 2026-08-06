@@ -26,10 +26,27 @@ export const PIN_TYPE_LABELS: Record<UnifiedPinType, string> = {
 };
 
 export const SCOPE_LABELS: Record<UnifiedPinScope, string> = {
-  point: "Drop a pin",
+  point: "Drop a pin manually",
   row: "Select a row",
   block: "Select a block",
 };
+
+export const SCOPE_DESCRIPTIONS: Record<UnifiedPinScope, string> = {
+  point: "Tap the map to place the pin at an exact location.",
+  row: "Pick the row (and quarters) directly — the block is derived for you.",
+  block: "Apply the pin to a whole block.",
+};
+
+/** Burgundy accent used only by the unified composer launch button and selection accents. */
+export const PIN_BURGUNDY = "#800020";
+export const PIN_BURGUNDY_DARK = "#5C0017";
+export const PIN_BURGUNDY_GRADIENT = `linear-gradient(180deg, ${PIN_BURGUNDY} 0%, ${PIN_BURGUNDY_DARK} 100%)`;
+
+/** Minimum height (px) of the enlarged location cards. */
+export const LOCATION_CARD_MIN_HEIGHT = 128;
+
+/** Exact message shown when a selected row cannot be matched to a block. */
+export const ROW_BLOCK_MATCH_ERROR = "Couldn't match the selected row to a block.";
 
 /** Pin mode stored on the shared record for each pin type. */
 export const PIN_TYPE_MODE: Record<UnifiedPinType, string> = {
@@ -37,6 +54,10 @@ export const PIN_TYPE_MODE: Record<UnifiedPinType, string> = {
   growth: "Growth",
   custom: "ManualIssue",
 };
+
+/** Colour stored on Growth Stage pins (matches iOS/Android). */
+export const GROWTH_STAGE_PIN_COLOUR = "darkgreen";
+
 
 // ------------------------------------------------------------- button sets
 
