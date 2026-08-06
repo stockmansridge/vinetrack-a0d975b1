@@ -1,6 +1,12 @@
-// Canonical pin category → colour contract (shared with iOS / Android).
+// Pin category → colour contract (shared with iOS / Android).
 //
-// Colour is derived ONLY from the normalised category id. It is never
+// Colour resolution order for a recognised category:
+//   1. The current vineyard's configured colour for the stable
+//      category/button id (see pinCategoryConfig.ts)
+//   2. The canonical fallback colour below
+//   3. Neutral grey
+//
+// Colour is derived ONLY from the stable category identity. It is never
 // derived from the stored marker colour, the title text, completion
 // status, missing block/row placement, sync state, creator, source
 // platform, or manual-vs-GPS creation.
@@ -68,11 +74,13 @@ const SYNONYMS: Record<string, PinCategoryId> = {
   unknown: "unknown",
 };
 
-function key(raw?: string | null): string | null {
+export function normaliseKey(raw?: string | null): string | null {
   const s = (raw ?? "").trim().toLowerCase();
   if (!s) return null;
-  return s.replace(/[\s-]+/g, "");
+  return s.replace(/[\s-]+/g, "") || null;
 }
+
+const key = normaliseKey;
 
 function match(raw?: string | null): PinCategoryId | null {
   const k = key(raw);
@@ -84,6 +92,8 @@ export interface PinCategoryLike {
   category_id?: string | null;
   category?: string | null;
   button_name?: string | null;
+  button_id?: string | null;
+  button_key?: string | null;
   mode?: string | null;
 }
 
