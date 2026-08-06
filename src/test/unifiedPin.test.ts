@@ -34,15 +34,76 @@ describe("unified pin (SQL 170)", () => {
     expect(validateUnifiedPin({ ...placed, buttonId: "broken_post" })).toBeNull();
   });
 
-  it("requires a block and rows for row scope, and a custom item for custom pins", () => {
+  it("row scope asks for rows first, then derives the block", () => {
     const row = applyPinScopeChange(emptyUnifiedPinForm(), "row");
-    expect(validateUnifiedPin(row)).toMatch(/block/i);
-    const withBlock = { ...row, paddockId: "p1" };
-    expect(validateUnifiedPin(withBlock)).toMatch(/row/i);
-    const withRows = { ...withBlock, rowSelection: "8-9", pinType: "custom" as const };
+    expect(validateUnifiedPin(row)).toMatch(/row/i);
+    // Rows chosen but no block derived → the exact match failure message.
+    expect(validateUnifiedPin({ ...row, rowSelection: "8-9" })).toBe(ROW_BLOCK_MATCH_ERROR);
+    const withRows = { ...row, paddockId: "p1", rowSelection: "8-9", pinType: "custom" as const };
     expect(validateUnifiedPin(withRows)).toMatch(/custom item/i);
     expect(pinSegments(withRows)).toHaveLength(8);
   });
+
+  it("groups mapped rows by block and derives the block from the picked row", () => {
+    const groups = buildBlockRowGroups([
+      { id: "p2", name: "Shiraz", rows: [{ number: 3 }, { number: 1 }] },
+      { id: "p1", name: "Chardonnay", rows: JSON.stringify([{ row_number: 68 }]) },
+      { id: "p3", name: "No rows", rows: [] },
+    ]);
+    expect(groups.map((g) => g.blockName)).toEqual(["Chardonnay", "Shiraz"]);
+    expect(groups[1].rows).toEqual([1, 3]);
+
+    let form = applyPinScopeChange(emptyUnifiedPinForm(), "row");
+    form = toggleRowInBlock(form, "p1", 68);
+    expect(form.paddockId).toBe("p1");
+    expect(form.rowSelection).toBe("68");
+    expect(pinSegments(form)).toEqual([
+      { row: 68, segment: 1 },
+      { row: 68, segment: 2 },
+      { row: 68, segment: 3 },
+      { row: 68, segment: 4 },
+    ]);
+    // Picking a row in another block starts a fresh, single-block selection.
+    form = toggleRowInBlock(form, "p2", 3);
+    expect(form.paddockId).toBe("p2");
+    expect(form.rowSelection).toBe("3");
+  });
+
+  it("orders the Growth tab exactly as the mobile apps do", () => {
+    const cat = parseButtonCatalogue([
+      {
+        config_type: "growth_buttons",
+        config_data: [
+          { id: "blackberries", name: "Blackberries" },
+          { id: "downy", name: "Downy" },
+          { id: "powdery", name: "Powdery" },
+          { id: "growth_stage", name: "Growth Stage" },
+        ],
+      },
+    ]);
+    expect(orderGrowthButtons(dedupePinButtons(cat.growth)).map((b) => b.name)).toEqual([
+      "Growth Stage",
+      "Powdery",
+      "Downy",
+      "Blackberries",
+    ]);
+  });
+
+  it("writes Growth Stage pins with the mobile title, mode and colour", () => {
+    const form = { ...emptyUnifiedPinForm(), pinType: "growth" as const, latitude: -33, longitude: 149 };
+    const rowOut = buildPinInsertRow(form, {
+      id: "pin-1",
+      vineyardId: "v1",
+      button: { id: "growth_stage", name: "Growth Stage", colour: null, growthStageCode: null },
+      growthStageCode: "EL23",
+    });
+    expect(rowOut.mode).toBe("Growth");
+    expect(rowOut.title).toBe("Growth Stage EL23");
+    expect(rowOut.button_name).toBe("Growth Stage EL23");
+    expect(rowOut.button_color).toBe("darkgreen");
+    expect(rowOut.growth_stage_code).toBe("EL23");
+  });
+
 
   it("clears point state when the scope changes", () => {
     const point = { ...emptyUnifiedPinForm(), latitude: 1, longitude: 2, drivingRowNumber: 5 };
