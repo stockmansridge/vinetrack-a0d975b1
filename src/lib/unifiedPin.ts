@@ -341,6 +341,10 @@ export function applyPinScopeChange(form: UnifiedPinForm, next: UnifiedPinScope)
   if (next !== "row") {
     base.rowSelection = "";
     base.rowSections = [...ROW_SEGMENTS];
+  } else {
+    // Row mode derives the block from the chosen row.
+    base.paddockId = null;
+    base.rowSelection = "";
   }
   return base;
 }
@@ -352,10 +356,13 @@ export function validatePinLocation(form: UnifiedPinForm): string | null {
   }
   if (form.scope === "block" && !form.paddockId) return "Choose a block.";
   if (form.scope === "row") {
-    if (!form.paddockId) return "Choose a block.";
-    if (!parseRowSelection(form.rowSelection).length) return "Select at least one row.";
+    if (!parseRowSelection(form.rowSelection).length) {
+      return "Select at least one row or row section to mark.";
+    }
+    if (!form.paddockId) return ROW_BLOCK_MATCH_ERROR;
     if (!form.rowSections.length) return "Select at least one row section.";
   }
+
   return null;
 }
 
