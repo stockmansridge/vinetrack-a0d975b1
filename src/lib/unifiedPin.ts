@@ -370,6 +370,8 @@ export function buildPinInsertRow(
     id: string;
     vineyardId: string;
     button: PinButtonDef;
+    /** Stage chosen in the Growth Stage picker (overrides the button default). */
+    growthStageCode?: string | null;
     centre?: LatLng | null;
     clientUpdatedAt?: string;
   },
@@ -386,7 +388,7 @@ export function buildPinInsertRow(
     button_color: opts.button.colour,
     category_id: opts.button.id,
     category: opts.button.name,
-    growth_stage_code: opts.button.growthStageCode,
+    growth_stage_code: opts.growthStageCode ?? opts.button.growthStageCode,
     latitude: lat,
     longitude: lng,
     driving_row_number: form.scope === "point" ? form.drivingRowNumber : null,
