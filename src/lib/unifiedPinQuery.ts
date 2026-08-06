@@ -88,12 +88,14 @@ export interface CreateUnifiedPinInput {
   customTypeName?: string | null;
   /** Block centroid used for block-scoped and row-scoped pins. */
   centre?: LatLng | null;
+  /** Stage chosen in the Growth Stage picker (Growth pins only). */
+  growthStageCode?: string | null;
 }
 
 export function useCreateUnifiedPin(vineyardId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ form, button, customTypeName, centre }: CreateUnifiedPinInput) => {
+    mutationFn: async ({ form, button, customTypeName, centre, growthStageCode }: CreateUnifiedPinInput) => {
       if (!vineyardId) throw new Error("Select a vineyard first.");
       const id = newId();
 
@@ -110,7 +112,7 @@ export function useCreateUnifiedPin(vineyardId: string | null) {
       }
 
       if (!button) throw new Error("Choose a button.");
-      const row = buildPinInsertRow(form, { id, vineyardId, button, centre });
+      const row = buildPinInsertRow(form, { id, vineyardId, button, centre, growthStageCode });
       const { error } = await supabase.from("pins").insert(row as any);
       if (error) throw new Error(manualIssueErrorMessage(error));
 
@@ -125,6 +127,7 @@ export function useCreateUnifiedPin(vineyardId: string | null) {
       qc.invalidateQueries({ queryKey: ["pins"] });
       qc.invalidateQueries({ queryKey: ["pins-raw-counts"] });
       qc.invalidateQueries({ queryKey: ["manual-issues"] });
+      qc.invalidateQueries({ queryKey: ["growth_stage_records"] });
     },
   });
 }

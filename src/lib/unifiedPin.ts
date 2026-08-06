@@ -107,6 +107,73 @@ export function parseButtonCatalogue(
   return out;
 }
 
+// ------------------------------------------------- left / right normalising
+
+
+/**
+ * The Repair and Growth catalogues historically hold one record per side
+ * ("Powdery Left" / "Powdery Right"). The unified composer does not track a
+ * side, so the two records collapse to one selectable button. The catalogue
+ * itself is never rewritten — older workflows still reference both records.
+ */
+const SIDE_PATTERN =
+  /(^|[\s_\-–—([]+)(left|right|lhs|rhs|l|r)([\s_\-–—)\]]*)$/i;
+
+/** Strip a trailing side marker from a display name or identifier. */
+export function stripSideToken(value: string): string {
+  const cleaned = value.replace(SIDE_PATTERN, "").trim().replace(/[\s_\-]+$/, "");
+  return cleaned || value.trim();
+}
+
+/** Canonical, side-free key a button is deduplicated on. */
+export function canonicalButtonKey(button: PinButtonDef): string {
+  const base = stripSideToken(button.name);
+  return base.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Collapse left/right variants to one button per logical type, preserving the
+ * canonical base identifier where the id itself carries the side marker.
+ */
+export function dedupePinButtons(buttons: PinButtonDef[]): PinButtonDef[] {
+  const out: PinButtonDef[] = [];
+  const seen = new Map<string, number>();
+  for (const b of buttons) {
+    const key = canonicalButtonKey(b);
+    if (!key) continue;
+    const baseId = stripSideToken(b.id);
+    const canonical: PinButtonDef = {
+      ...b,
+      id: baseId !== b.id ? baseId : b.id,
+      name: stripSideToken(b.name),
+    };
+    const at = seen.get(key);
+    if (at == null) {
+      seen.set(key, out.length);
+      out.push(canonical);
+      continue;
+    }
+    // Keep the first record, but fill any detail the first variant lacked.
+    const existing = out[at];
+    out[at] = {
+      ...existing,
+      colour: existing.colour ?? canonical.colour,
+      growthStageCode: existing.growthStageCode ?? canonical.growthStageCode,
+    };
+  }
+  return out;
+}
+
+/** True when the button is the "Growth Stage" action that opens the stage picker. */
+export function isGrowthStageButton(button: PinButtonDef | null | undefined): boolean {
+  if (!button) return false;
+  return canonicalButtonKey(button) === "growthstage";
+}
+
+
+
+
+
 // ------------------------------------------------------------- custom types
 
 export interface CustomPinType {
@@ -303,6 +370,8 @@ export function buildPinInsertRow(
     id: string;
     vineyardId: string;
     button: PinButtonDef;
+    /** Stage chosen in the Growth Stage picker (overrides the button default). */
+    growthStageCode?: string | null;
     centre?: LatLng | null;
     clientUpdatedAt?: string;
   },
@@ -319,7 +388,7 @@ export function buildPinInsertRow(
     button_color: opts.button.colour,
     category_id: opts.button.id,
     category: opts.button.name,
-    growth_stage_code: opts.button.growthStageCode,
+    growth_stage_code: opts.growthStageCode ?? opts.button.growthStageCode,
     latitude: lat,
     longitude: lng,
     driving_row_number: form.scope === "point" ? form.drivingRowNumber : null,

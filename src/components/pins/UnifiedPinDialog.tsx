@@ -31,8 +31,12 @@ import {
   ROW_SEGMENTS,
   summariseSegments,
 } from "@/lib/manualIssues";
+import GrowthStagePickerDialog from "@/components/pins/GrowthStagePickerDialog";
+import { GROWTH_STAGE_LABEL } from "@/lib/vspWaterRate";
 import {
   applyPinScopeChange,
+  dedupePinButtons,
+  isGrowthStageButton,
   emptyUnifiedPinForm,
   PIN_TYPE_LABELS,
   polygonCentroid,
@@ -76,6 +80,9 @@ export default function UnifiedPinDialog({
   const [form, setForm] = useState<UnifiedPinForm>(emptyUnifiedPinForm());
   const [newCustomName, setNewCustomName] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
+  // Growth Stage uses the existing stage picker before the pin is written.
+  const [stagePickerOpen, setStagePickerOpen] = useState(false);
+  const [growthStageCode, setGrowthStageCode] = useState<string | null>(null);
 
   const buttons = usePinButtonCatalogue(vineyardId);
   const customTypes = useCustomPinTypes(vineyardId);
@@ -87,6 +94,8 @@ export default function UnifiedPinDialog({
     setForm(emptyUnifiedPinForm());
     setNewCustomName("");
     setAddingCustom(false);
+    setStagePickerOpen(false);
+    setGrowthStageCode(null);
   }, [open]);
 
   const set = (patch: Partial<UnifiedPinForm>) => setForm((f) => ({ ...f, ...patch }));
@@ -113,12 +122,17 @@ export default function UnifiedPinDialog({
     return polygonCentroid(poly?.pts ?? null);
   }, [form.paddockId, polygons, defaultCentre]);
 
-  const buttonList: PinButtonDef[] =
-    form.pinType === "repair"
-      ? buttons.data?.repair ?? []
-      : form.pinType === "growth"
-        ? buttons.data?.growth ?? []
-        : [];
+  // Left/right catalogue variants collapse to one selectable button — the
+  // unified workflow never stores a side.
+  const buttonList: PinButtonDef[] = useMemo(() => {
+    const raw =
+      form.pinType === "repair"
+        ? buttons.data?.repair ?? []
+        : form.pinType === "growth"
+          ? buttons.data?.growth ?? []
+          : [];
+    return dedupePinButtons(raw);
+  }, [form.pinType, buttons.data]);
 
   const selectedButton = buttonList.find((b) => b.id === form.buttonId) ?? null;
   const selectedType = (customTypes.data ?? []).find((t) => t.id === form.customTypeId) ?? null;
@@ -126,8 +140,20 @@ export default function UnifiedPinDialog({
   const rows = parseRowSelection(form.rowSelection);
   const segmentPreview = summariseSegments(buildSegments(rows, form.rowSections));
 
-  const chooseType = (t: UnifiedPinType) =>
+  const chooseType = (t: UnifiedPinType) => {
+    setGrowthStageCode(null);
     setForm((f) => ({ ...f, pinType: t, buttonId: null, customTypeId: null }));
+  };
+
+  const chooseButton = (b: PinButtonDef) => {
+    set({ buttonId: b.id });
+    if (isGrowthStageButton(b)) {
+      setGrowthStageCode(null);
+      setStagePickerOpen(true);
+    } else {
+      setGrowthStageCode(null);
+    }
+  };
 
   const addCustomType = async () => {
     const name = newCustomName.trim();
@@ -149,12 +175,17 @@ export default function UnifiedPinDialog({
       toast({ title: problem, variant: "destructive" });
       return;
     }
+    if (isGrowthStageButton(selectedButton) && !growthStageCode) {
+      setStagePickerOpen(true);
+      return;
+    }
     try {
       await createPin.mutateAsync({
         form,
         button: selectedButton,
         customTypeName: selectedType?.name ?? null,
         centre,
+        growthStageCode,
       });
       toast({ title: "Pin added" });
       onOpenChange(false);
@@ -164,6 +195,7 @@ export default function UnifiedPinDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -355,7 +387,7 @@ export default function UnifiedPinDialog({
                         size="sm"
                         variant={form.buttonId === b.id ? "secondary" : "outline"}
                         className="h-8 gap-2"
-                        onClick={() => set({ buttonId: b.id })}
+                        onClick={() => chooseButton(b)}
                       >
                         <span
                           className="inline-block h-2.5 w-2.5 rounded-full"
@@ -364,6 +396,18 @@ export default function UnifiedPinDialog({
                         {b.name}
                       </Button>
                     ))}
+                  </div>
+                )}
+                {isGrowthStageButton(selectedButton) && (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      {growthStageCode
+                        ? `Stage ${GROWTH_STAGE_LABEL.get(growthStageCode) ?? growthStageCode}`
+                        : "No growth stage selected yet."}
+                    </span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setStagePickerOpen(true)}>
+                      {growthStageCode ? "Change stage" : "Select growth stage"}
+                    </Button>
                   </div>
                 )}
               </>
@@ -448,5 +492,16 @@ export default function UnifiedPinDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      <GrowthStagePickerDialog
+        open={stagePickerOpen}
+        onOpenChange={setStagePickerOpen}
+        value={growthStageCode}
+        onSelect={(code) => {
+          setGrowthStageCode(code);
+          setStagePickerOpen(false);
+        }}
+      />
+    </>
   );
 }
