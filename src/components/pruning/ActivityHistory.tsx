@@ -85,23 +85,29 @@ export default function ActivityHistory({
             {entries.map((e) => {
               // Reversed/deleted entries: `deleted_at` is set. Skip Edit.
               const isReversed = !!e.deleted_at;
+              // SQL 168: skipped entries record progress only — no worker,
+              // labour, cost, method or Work Task.
+              const isSkipped = e.is_skipped === true;
               return (
                 <li key={e.id} className="p-4 flex items-start justify-between gap-4">
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{formatDate(e.entry_date)}</span>
-                      <Badge variant="secondary">{e.pruning_method}</Badge>
+                      {isSkipped
+                        ? <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300">Skipped</Badge>
+                        : <Badge variant="secondary">{e.pruning_method}</Badge>}
                       {e.work_task_id && (
                         <Badge variant="outline" className="gap-1"><Link2 className="h-3 w-3" /> Work Task</Badge>
                       )}
                       {isReversed && <Badge variant="destructive">Reversed</Badge>}
-                      <span className="text-sm text-muted-foreground">{e.worker_or_crew || "—"}</span>
+                      <span className="text-sm text-muted-foreground">{isSkipped ? "—" : (e.worker_or_crew || "—")}</span>
                     </div>
                     <div className="text-sm text-muted-foreground mt-1 tabular-nums">
                       {Number(e.row_equivalents_completed).toFixed(2)} row eq.
-                      {" · "}~{(e.estimated_vines_completed ?? 0).toLocaleString()} vines
-                      {e.labour_hours ? ` · ${Number(e.labour_hours).toFixed(1)} hrs` : ""}
+                      {isSkipped
+                        ? " · Vines — · Labour hours — · Cost —"
+                        : `${" · ~"}${(e.estimated_vines_completed ?? 0).toLocaleString()} vines${e.labour_hours ? ` · ${Number(e.labour_hours).toFixed(1)} hrs` : ""}`}
                       {e.vintage_year ? ` · Vintage ${e.vintage_year}` : ""}
                     </div>
                     {e.notes && <div className="text-sm mt-1 whitespace-pre-wrap">{e.notes}</div>}
