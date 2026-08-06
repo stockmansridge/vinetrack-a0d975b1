@@ -78,12 +78,11 @@ const dashboard: NavItem[] = [
 
 // "Work" — day-to-day operational records
 const work: NavItem[] = [
+  { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
+  { title: "Field Trips", url: "/trips", icon: Sprout },
   { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
   { title: "Work Tasks", url: "/work-tasks", icon: ClipboardList },
   { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
-  { title: "Field Trips", url: "/trips", icon: Sprout },
-  { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
-  
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },
   { title: "Yields", url: "/yield", icon: Grape },
   { title: "Damage Records", url: "/damage-records", icon: AlertTriangle },
