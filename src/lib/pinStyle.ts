@@ -35,6 +35,9 @@ const MODE_PALETTE: Record<string, PinStyle> = {
   notes: { hex: "#007AFF", label: "Note" },
   hazard: { hex: "#FFCC00", label: "Hazard" },
   spray: { hex: "#AF52DE", label: "Spray" },
+  // Manual Issues (SQL 169) — amber identity shared with iOS and Android.
+  manualissue: { hex: "#FF9500", label: "Manual Issue" },
+  manual_issue: { hex: "#FF9500", label: "Manual Issue" },
 };
 
 // SwiftUI / UIKit named colours → hex. Light-mode system tints where
