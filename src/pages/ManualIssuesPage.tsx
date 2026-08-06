@@ -2,10 +2,6 @@
 // detail, status actions, filtering and exports. SQL 169 contract.
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, Marker, Polygon, TileLayer, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { useEffect } from "react";
 import { AlertTriangle, Download, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +26,7 @@ import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { fetchList } from "@/lib/queries";
 import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
 import ManualIssueDialog from "@/components/manual-issues/ManualIssueDialog";
+import ManualIssuesAppleMap from "@/components/manual-issues/ManualIssuesAppleMap";
 import ReportDateCell from "@/components/reports/ReportDateCell";
 import {
   ACTIVE_STATUSES,
@@ -64,25 +61,6 @@ interface Paddock {
   id: string;
   name: string | null;
   polygon_points: any;
-}
-
-const issueIcon = (hex: string) =>
-  L.divIcon({
-    className: "",
-    html: `<div style="width:16px;height:16px;border-radius:50%;background:${hex};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
-
-function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    try {
-      map.fitBounds(L.latLngBounds(bounds as L.LatLngBoundsLiteral).pad(0.25), { padding: [16, 16] });
-    } catch { /* noop */ }
-  }, [bounds, map]);
-  return null;
 }
 
 const statusVariant = (s?: string | null) =>
@@ -128,14 +106,19 @@ export default function ManualIssuesPage() {
     (i) => i.latitude != null && i.longitude != null && Math.abs(i.latitude) <= 90,
   );
 
-  const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
-    if (mapped.length) {
-      return L.latLngBounds(mapped.map((i) => [i.latitude!, i.longitude!] as [number, number]));
-    }
-    const all: [number, number][] = [];
-    polygons.forEach((p) => p.pts.forEach((pt) => all.push([pt.lat, pt.lng])));
-    return all.length ? L.latLngBounds(all) : null;
-  }, [mapped, polygons]);
+  const markers = useMemo(
+    () =>
+      mapped.map((i) => ({
+        id: i.id,
+        lat: i.latitude!,
+        lng: i.longitude!,
+        colour: manualIssueMarkerColour(i.status),
+        title: i.title,
+      })),
+    [mapped],
+  );
+
+  const hasGeometry = markers.length > 0 || polygons.length > 0;
 
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? "Vineyard";
@@ -269,31 +252,13 @@ export default function ManualIssuesPage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <Card className="overflow-hidden">
           <div className="h-[420px] w-full bg-muted">
-            {bounds ? (
-              <MapContainer center={[0, 0]} zoom={15} scrollWheelZoom className="h-full w-full">
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  maxZoom={19}
-                />
-                <FitBounds bounds={bounds} />
-                {polygons.map((p) => (
-                  <Polygon
-                    key={p.id}
-                    positions={p.pts.map((pt) => [pt.lat, pt.lng]) as [number, number][]}
-                    pathOptions={{ color: "#34C759", weight: 1, opacity: 0.6, fillOpacity: 0.08 }}
-                  />
-                ))}
-                {mapped.map((i) => (
-                  <Marker
-                    key={i.id}
-                    position={[i.latitude!, i.longitude!]}
-                    icon={issueIcon(manualIssueMarkerColour(i.status))}
-                    title={i.title}
-                    eventHandlers={{ click: () => setSelectedId(i.id) }}
-                  />
-                ))}
-              </MapContainer>
+            {hasGeometry ? (
+              <ManualIssuesAppleMap
+                markers={markers}
+                polygons={polygons}
+                onSelect={setSelectedId}
+                fitKey={selectedVineyardId ?? ""}
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground">
                 No mapped issues or block geometry yet.
