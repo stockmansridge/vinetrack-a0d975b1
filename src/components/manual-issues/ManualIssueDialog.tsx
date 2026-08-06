@@ -1,8 +1,5 @@
 // Create / edit a Manual Issue. Writes through the shared SQL 169 RPCs.
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, Marker, Polygon, TileLayer, useMapEvents } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +44,7 @@ import {
 } from "@/lib/manualIssues";
 import { useSaveManualIssue } from "@/lib/manualIssuesQuery";
 import { parsePolygonPoints, type LatLng } from "@/lib/paddockGeometry";
+import ManualIssuesAppleMap from "@/components/manual-issues/ManualIssuesAppleMap";
 
 export interface PaddockOption {
   id: string;
@@ -57,20 +55,6 @@ export interface PaddockOption {
 export interface MemberOption {
   user_id: string;
   name: string;
-}
-
-const markerIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:18px;height:18px;border-radius:50%;background:${MANUAL_ISSUE_COLOUR};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-});
-
-function ClickCapture({ onPick }: { onPick: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click: (e) => onPick(e.latlng.lat, e.latlng.lng),
-  });
-  return null;
 }
 
 export default function ManualIssueDialog({
@@ -253,24 +237,16 @@ export default function ManualIssueDialog({
           {form.locationScope === "point" && (
             <div className="space-y-2">
               <div className="h-[280px] w-full overflow-hidden rounded-md border">
-                <MapContainer center={centre} zoom={16} scrollWheelZoom className="h-full w-full">
-                  <TileLayer
-                    attribution='&copy; OpenStreetMap'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    maxZoom={19}
-                  />
-                  <ClickCapture onPick={(lat, lng) => set({ latitude: lat, longitude: lng })} />
-                  {polygons.map((p) => (
-                    <Polygon
-                      key={p.id}
-                      positions={p.pts.map((pt) => [pt.lat, pt.lng]) as [number, number][]}
-                      pathOptions={{ color: "#34C759", weight: 1, opacity: 0.6, fillOpacity: 0.08 }}
-                    />
-                  ))}
-                  {form.latitude != null && form.longitude != null && (
-                    <Marker position={[form.latitude, form.longitude]} icon={markerIcon} />
-                  )}
-                </MapContainer>
+                <ManualIssuesAppleMap
+                  markers={
+                    form.latitude != null && form.longitude != null
+                      ? [{ id: "picked", lat: form.latitude, lng: form.longitude, colour: MANUAL_ISSUE_COLOUR }]
+                      : []
+                  }
+                  polygons={polygons}
+                  onPick={(lat, lng) => set({ latitude: lat, longitude: lng })}
+                  fitKey={form.id ?? "new"}
+                />
               </div>
               <p className="text-xs text-muted-foreground">
                 {form.latitude != null && form.longitude != null
