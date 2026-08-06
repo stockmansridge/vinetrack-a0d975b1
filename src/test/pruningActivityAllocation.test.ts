@@ -48,6 +48,7 @@ const baseRow = (over: Partial<BaseActivityRow>): BaseActivityRow => ({
   createdAt: "2026-07-01T08:00:00Z",
   updatedAt: null,
   isReversed: false,
+  isSkipped: false,
   ...over,
 });
 
