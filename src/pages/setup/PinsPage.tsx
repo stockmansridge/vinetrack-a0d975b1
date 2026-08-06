@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { useVineyard } from "@/context/VineyardContext";
@@ -35,6 +35,7 @@ import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
 
 interface PaddockLite {
   id: string;
@@ -68,6 +69,7 @@ export default function PinsPage() {
   const vineyardName =
     memberships.find((m) => m.vineyard_id === selectedVineyardId)?.vineyard_name ?? null;
   const [tab, setTab] = useState("table");
+  const [addOpen, setAddOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<PinStatusFilter>("active");
   const [categoryFilter, setCategoryFilter] = useState<PinCategoryId | "all">("all");
