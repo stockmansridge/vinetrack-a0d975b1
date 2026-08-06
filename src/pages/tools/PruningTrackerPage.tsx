@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Scissors, Settings2, ArrowLeft, CheckCircle2, CheckSquare, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
+import { Scissors, ArrowLeft, CheckCircle2, AlertTriangle, Clock, Grape, CalendarDays, User, ExternalLink, LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   usePruningSeasons,
@@ -46,8 +46,6 @@ import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { calculateSeasonPruningSummary } from "@/lib/pruningSummaryCalc";
 import { parseRows, parseVarietyAllocations } from "@/lib/paddockGeometry";
 import { formatDate } from "@/lib/dateFormat";
-import SeasonDialog from "@/components/pruning/SeasonDialog";
-import CompleteTodayDialog from "@/components/pruning/CompleteTodayDialog";
 import NewPruningActivityButton from "@/components/pruning/NewPruningActivityButton";
 
 import ActivityHistory from "@/components/pruning/ActivityHistory";
@@ -152,8 +150,6 @@ export default function PruningTrackerPage() {
   const paddocksQ = usePaddocks(selectedVineyardId);
 
   const [selectedPaddockId, setSelectedPaddockId] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [completeOpen, setCompleteOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("name");
 
   // Switching vineyards must not leak a stale block selection or dialog
@@ -161,8 +157,6 @@ export default function PruningTrackerPage() {
   // match and we'd render an empty detail view.
   useEffect(() => {
     setSelectedPaddockId(null);
-    setSettingsOpen(false);
-    setCompleteOpen(false);
   }, [selectedVineyardId]);
 
   const seasons = seasonsQ.data ?? [];
@@ -493,44 +487,6 @@ export default function PruningTrackerPage() {
     },
   });
 
-  const openSettings = () => setSettingsOpen(true);
-
-  // Ensure a season row exists for the selected block before opening Complete
-  // Today. Resolve-then-adopt: never generate a random season id, and if a
-  // live row already exists (iOS/Android may have created it) we adopt it.
-  const openComplete = async () => {
-    if (!selected || !selectedVineyardId) return;
-    if (!selected.season) {
-      try {
-        const resolved = await resolvePruningSeasonId(
-          selectedVineyardId, selected.paddock.id, pruningSeasonYear,
-        );
-        if (!resolved.existed) {
-          const { error } = await supabase.from("pruning_seasons").insert({
-            id: resolved.id,
-            vineyard_id: selectedVineyardId,
-            paddock_id: selected.paddock.id,
-            season_year: pruningSeasonYear,
-            pruning_method: "spur",
-            assigned_crew: "",
-            working_days: [1, 2, 3, 4, 5],
-            notes: "",
-            status: "active",
-            client_updated_at: new Date().toISOString(),
-          });
-          // Duplicate-key = another client won the race; refetch will pick
-          // up the existing row. Any other error surfaces to the caller.
-          if (error && !/duplicate|unique/i.test(error.message)) throw error;
-        }
-        await seasonsQ.refetch();
-      } catch {
-        // Refetch and let the user retry from the reopened dialog.
-        await seasonsQ.refetch();
-      }
-    }
-    setCompleteOpen(true);
-  };
-
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       <PageHead title="Pruning Tracker" description="Record pruning activity and monitor progress across vineyard blocks and rows. Track pruning dates, methods, crews, completed areas and the work that remains." path="/tools/pruning-tracker" />
@@ -737,37 +693,10 @@ export default function PruningTrackerPage() {
             canEdit={canEdit}
             isSystemAdmin={isSystemAdmin}
             onBack={() => setSelectedPaddockId(null)}
-            onOpenSettings={openSettings}
-            onOpenComplete={openComplete}
           />
         )
       )}
 
-      {settingsOpen && selected && selectedVineyardId && (
-        <SeasonDialog
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          vineyardId={selectedVineyardId}
-          paddockId={selected.paddock.id}
-          paddockName={selected.paddock.name ?? "Block"}
-          seasonYear={pruningSeasonYear}
-          existing={selected.season}
-          hasConfiguredRows={parseRows(selected.paddock.rows).length > 0}
-          isSystemAdmin={isSystemAdmin}
-        />
-      )}
-
-      {completeOpen && selected && selected.season && selectedVineyardId && (
-        <CompleteTodayDialog
-          open={completeOpen}
-          onOpenChange={setCompleteOpen}
-          season={selected.season}
-          vineyardId={selectedVineyardId}
-          paddockId={selected.paddock.id}
-          paddockName={selected.paddock.name ?? "Block"}
-          rows={selectedCompletion}
-        />
-      )}
     </div>
   );
 }
@@ -822,8 +751,6 @@ interface DetailProps {
   canEdit: boolean;
   isSystemAdmin: boolean;
   onBack: () => void;
-  onOpenSettings: () => void;
-  onOpenComplete: () => void;
 }
 
 function BlockDetail({
@@ -846,8 +773,6 @@ function BlockDetail({
   canEdit,
   isSystemAdmin,
   onBack,
-  onOpenSettings,
-  onOpenComplete,
 }: DetailProps) {
   const local = block.progress;
   const reDone = rpcBlock?.completed_row_equivalents ?? local.rowEquivalentsCompleted ?? 0;
@@ -882,16 +807,6 @@ function BlockDetail({
           <ArrowLeft className="h-4 w-4 mr-1" /> All blocks
         </Button>
         <div className="flex gap-2">
-          {canEdit && (
-            <Button variant="outline" size="sm" onClick={onOpenSettings}>
-              <Settings2 className="h-4 w-4 mr-1" /> Settings
-            </Button>
-          )}
-          {canEdit && block.season && (
-            <Button variant="outline" size="sm" onClick={onOpenComplete}>
-              <CheckSquare className="h-4 w-4 mr-1" /> Add pruning entry
-            </Button>
-          )}
           <NewPruningActivityButton
             seasonYear={seasonYear}
             paddockId={block.paddock.id}
@@ -966,7 +881,7 @@ function BlockDetail({
           {completion.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               This block has no configured rows.{" "}
-              {canEdit && "Add a manual row count in Settings, or configure row geometry in Setup → Paddocks."}
+              {canEdit && "Configure row geometry in Setup → Paddocks."}
             </p>
           ) : (
             <div className="columns-1 sm:columns-2 lg:columns-3 gap-1.5 [column-fill:_balance]">
