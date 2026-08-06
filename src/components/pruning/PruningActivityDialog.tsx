@@ -4,16 +4,22 @@
 //   create -> record_pruning_activity(p_payload)
 //   edit   -> update_pruning_activity(p_activity_id, p_activity, p_allocations)
 // The legacy one-entry-per-block path is never used from here.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
@@ -24,15 +30,17 @@ import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocatio
 import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
 
 import {
-  activityTotals, allocationKey, allocationQuarterCount,
+  activityTotals, allocationKey, allocationQuarterCount, allocationSegments,
   type BlockAllocationDraft, type PruningActivityDraft,
 } from "@/lib/pruningActivityContract";
 import {
   usePruningActivityDetail, useSavePruningActivity,
   type ActivitySaveConflict, type PruningActivity,
 } from "@/lib/pruningActivityApi";
+import { ensurePruningSeasonId, recordSkippedPruningEntry } from "@/lib/pruningQuery";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { formatDate } from "@/lib/dateFormat";
+
 
 const METHODS = ["spur", "cane", "mechanical", "minimal"];
 
@@ -139,8 +147,17 @@ export default function PruningActivityDialog({
   const [finishInput, setFinishInput] = useState("");
   const [conflicts, setConflicts] = useState<ActivitySaveConflict[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // SQL 168 — skipped mode. One workflow: the same dialog records normal
+  // pruning and skipped rows; only the save routing differs.
+  const [skipped, setSkipped] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const [savingSkip, setSavingSkip] = useState(false);
+  // Stable per-block entry ids so a retry of a skipped save is idempotent.
+  const skipEntryIds = useRef<Record<string, string>>({});
+  const qc = useQueryClient();
   // Client uuid, generated once per dialog instance so a retry is idempotent.
   const [newId] = useState(() => crypto.randomUUID());
+
 
   const loaded = detailQ.data ?? null;
 
@@ -156,9 +173,13 @@ export default function PruningActivityDialog({
       setDraft(emptyDraft());
       setStartInput("");
       setFinishInput("");
+      setSkipped(false);
+      skipEntryIds.current = {};
     }
+    setConfirmSkip(false);
     setConflicts([]);
     setSaveError(null);
+
   }, [open, isEdit, loaded]);
 
   /** Quarters already owned by THIS activity — they must stay selectable. */
@@ -198,8 +219,59 @@ export default function PruningActivityDialog({
   };
 
   const totals = activityTotals(draft);
+  const busy = save.isPending || savingSkip;
   const canSave =
-    !!draft.entryDate && totals.quarters > 0 && !save.isPending && (!isEdit || !!loaded);
+    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || !!loaded);
+
+  /** SQL 168: one skipped entry per block, presented as a single save. */
+  const handleSkippedSave = async () => {
+    setConfirmSkip(false);
+    setSaveError(null);
+    const allocations = Object.values(draft.allocations)
+      .filter((a) => allocationQuarterCount(a) > 0);
+    if (!draft.entryDate || allocations.length === 0) {
+      setSaveError("Select at least one row or row section to mark as skipped.");
+      return;
+    }
+    setSavingSkip(true);
+    try {
+      for (const alloc of allocations) {
+        const seasonId = alloc.seasonId
+          ?? (await ensurePruningSeasonId(vineyardId, alloc.paddockId, seasonYear));
+        const entryId = skipEntryIds.current[alloc.paddockId]
+          ?? (skipEntryIds.current[alloc.paddockId] = crypto.randomUUID());
+        await recordSkippedPruningEntry({
+          entryId,
+          vineyardId,
+          seasonId,
+          paddockId: alloc.paddockId,
+          seasonYear,
+          entryDate: draft.entryDate,
+          notes: draft.notes ?? "",
+          segments: allocationSegments(alloc).map((s) => ({
+            rowNumber: s.row,
+            segmentNumber: s.segment,
+            paddockRowId: s.row_id,
+            rowLabel: s.label,
+          })),
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ["pruning"] });
+      await qc.refetchQueries({ queryKey: ["pruning"], type: "active" });
+      toast.success(
+        allocations.length === 1
+          ? "Rows marked as skipped."
+          : `Rows marked as skipped across ${allocations.length} blocks.`,
+      );
+      onSaved?.(null);
+      onOpenChange(false);
+    } catch (e: any) {
+      setSaveError(e?.message ?? String(e));
+    } finally {
+      setSavingSkip(false);
+    }
+  };
+
 
   const handleSave = async () => {
     setConflicts([]);
@@ -284,6 +356,26 @@ export default function PruningActivityDialog({
 
         {(!isEdit || loaded) && (
           <div className="space-y-4">
+            {/* SQL 168 — skipped mode toggle. Same dialog, same selectors. */}
+            {!isEdit && (
+              <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="pa-skipped">Mark selected rows as skipped</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Skipped rows count as complete in pruning progress, but no labour,
+                    cost or pruning work is recorded.
+                  </p>
+                </div>
+                <Switch
+                  id="pa-skipped"
+                  aria-label="Mark selected rows as skipped"
+                  checked={skipped}
+                  onCheckedChange={setSkipped}
+                  disabled={busy}
+                />
+              </div>
+            )}
+
             {/* ---------------- Activity-level fields ---------------- */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1">
@@ -291,6 +383,7 @@ export default function PruningActivityDialog({
                 <Input id="pa-date" type="date" value={draft.entryDate}
                   onChange={(e) => setDraft((d) => ({ ...d, entryDate: e.target.value }))} />
               </div>
+              {!skipped && (<>
               <div className="space-y-1">
                 <Label htmlFor="pa-worker">Worker / crew</Label>
                 <Input id="pa-worker" value={draft.worker} placeholder="Who did the work"
@@ -317,26 +410,30 @@ export default function PruningActivityDialog({
                 <Input id="pa-finish" type="time" value={finishInput}
                   onChange={(e) => setFinishInput(e.target.value)} />
               </div>
+              </>)}
             </div>
 
             {/* Labour hours, rate and cost belong to the linked Work Task — the
                 activity mirrors them read-only and never owns a second source. */}
-            <ActivityWorkTaskField
-              vineyardId={vineyardId}
-              draft={draft}
-              activityId={activityId}
-              value={draft.workTaskId}
-              startTime={startInput}
-              finishTime={finishInput}
-              legacyLabourHours={draft.workTaskId ? null : draft.labourHours}
-              legacyHourlyRate={draft.workTaskId ? null : draft.hourlyRate}
-              onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
-              onLabourResolved={({ hours, rate }) => setDraft((d) =>
-                d.labourHours === hours && d.hourlyRate === rate
-                  ? d
-                  : { ...d, labourHours: hours, hourlyRate: rate })}
-              disabled={save.isPending}
-            />
+            {!skipped && (
+              <ActivityWorkTaskField
+                vineyardId={vineyardId}
+                draft={draft}
+                activityId={activityId}
+                value={draft.workTaskId}
+                startTime={startInput}
+                finishTime={finishInput}
+                legacyLabourHours={draft.workTaskId ? null : draft.labourHours}
+                legacyHourlyRate={draft.workTaskId ? null : draft.hourlyRate}
+                onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
+                onLabourResolved={({ hours, rate }) => setDraft((d) =>
+                  d.labourHours === hours && d.hourlyRate === rate
+                    ? d
+                    : { ...d, labourHours: hours, hourlyRate: rate })}
+                disabled={busy}
+              />
+            )}
+
 
 
 
@@ -365,7 +462,7 @@ export default function PruningActivityDialog({
               onChange={handleAllocationsChange}
               ownedByActivity={ownedByActivity}
               initialPaddockId={paddockId}
-              disabled={save.isPending}
+              disabled={busy}
             />
 
             {conflicts.length > 0 && (
@@ -395,17 +492,47 @@ export default function PruningActivityDialog({
         <DialogFooter className="flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="text-xs text-muted-foreground tabular-nums">
             {totals.blocks} block{totals.blocks === 1 ? "" : "s"} · {totals.quarters} quarters ·{" "}
-            {totals.rowEquivalents.toFixed(2)} row eq. · ~{totals.vines.toLocaleString()} vines
+            {totals.rowEquivalents.toFixed(2)} row eq.
+            {!skipped && ` · ~${totals.vines.toLocaleString()} vines`}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="button" onClick={handleSave} disabled={!canSave}>
-              {save.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              {isEdit ? "Save changes" : "Record activity"}
+            <Button
+              type="button"
+              onClick={() => {
+                if (!skipped) { handleSave(); return; }
+                if (totals.quarters === 0) {
+                  setSaveError("Select at least one row or row section to mark as skipped.");
+                  return;
+                }
+                setSaveError(null);
+                setConfirmSkip(true);
+              }}
+              disabled={skipped ? busy || !draft.entryDate : !canSave}
+            >
+              {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {skipped ? "Mark skipped" : isEdit ? "Save changes" : "Record activity"}
             </Button>
           </div>
         </DialogFooter>
+
+        <AlertDialog open={confirmSkip} onOpenChange={setConfirmSkip}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mark selected rows as skipped?</AlertDialogTitle>
+              <AlertDialogDescription>
+                These rows will count as complete in pruning progress, but no labour,
+                cost or pruning work will be recorded.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSkippedSave}>Mark Skipped</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
+
     </Dialog>
   );
 }
