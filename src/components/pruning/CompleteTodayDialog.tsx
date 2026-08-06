@@ -156,6 +156,7 @@ export default function CompleteTodayDialog({
     setRangeInput("");
     setRangeError(null);
     setRangeDiagnostic(null);
+    setMarkSkipped(false);
     setCreateTask(false);
     setTaskTitle(`Pruning — ${paddockName}`);
     setTaskStatus("completed");
