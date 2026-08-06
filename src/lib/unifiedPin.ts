@@ -168,10 +168,8 @@ export function dedupePinButtons(buttons: PinButtonDef[]): PinButtonDef[] {
 export function isGrowthStageButton(button: PinButtonDef | null | undefined): boolean {
   if (!button) return false;
   return canonicalButtonKey(button) === "growthstage";
-}
 
-  return out;
-}
+
 
 // ------------------------------------------------------------- custom types
 
