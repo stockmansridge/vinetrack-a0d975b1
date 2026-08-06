@@ -96,11 +96,15 @@ export function buildRowIdentities(
 export interface RowCompletionState {
   identity: RowIdentity;
   completed: Set<number>; // segment numbers 1..4
+  /** SQL 168: subset of `completed` whose quarters were marked skipped. */
+  skipped: Set<number>;
 }
 
 export function buildRowCompletion(
   identities: RowIdentity[],
   segments: PruningRowSegment[],
+  /** Entry ids that are skipped entries (SQL 168). */
+  skippedEntryIds?: Set<string> | ReadonlySet<string>,
 ): RowCompletionState[] {
   // Index by paddock_row_id first (stable), fall back to row_number.
   // IMPORTANT: only count segments that are actually completed. Reversed entries
