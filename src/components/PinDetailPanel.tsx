@@ -138,18 +138,27 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
               variant="secondary"
-              className="capitalize"
+              data-category-id={style.categoryId}
               style={{ background: style.hex + "22", color: style.hex }}
             >
               {style.label}
             </Badge>
-            {pin.category && <Badge variant="outline">{pin.category}</Badge>}
             {pin.priority && <Badge variant="outline">{pin.priority}</Badge>}
             {pin.status && <Badge variant="outline">{pin.status}</Badge>}
             <Badge variant={pin.is_completed ? "default" : "outline"}>
               {pin.is_completed ? "Completed" : "Not completed"}
             </Badge>
+            {!placement.assigned && (
+              <Badge
+                variant="outline"
+                className="gap-1 border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              >
+                <TriangleAlert className="h-3 w-3" />
+                Unassigned location
+              </Badge>
+            )}
           </div>
+
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
           <X className="h-4 w-4" />
