@@ -485,17 +485,23 @@ export function buildPinInsertRow(
 ): PinInsertRow {
   const lat = form.scope === "point" ? form.latitude : opts.centre?.lat ?? null;
   const lng = form.scope === "point" ? form.longitude : opts.centre?.lng ?? null;
+  const stage = opts.growthStageCode ?? opts.button.growthStageCode ?? null;
+  // Growth Stage pins carry the selected E-L code in their name and the shared
+  // darkgreen marker colour (iOS/Android parity).
+  const isStagePin = isGrowthStageButton(opts.button) && !!opts.growthStageCode;
+  const name = isStagePin ? `Growth Stage ${opts.growthStageCode}` : opts.button.name;
   return {
     id: opts.id,
     vineyard_id: opts.vineyardId,
     paddock_id: form.paddockId,
     mode: PIN_TYPE_MODE[form.pinType],
-    title: opts.button.name,
-    button_name: opts.button.name,
-    button_color: opts.button.colour,
+    title: name,
+    button_name: name,
+    button_color: isStagePin ? GROWTH_STAGE_PIN_COLOUR : opts.button.colour,
     category_id: opts.button.id,
     category: opts.button.name,
-    growth_stage_code: opts.growthStageCode ?? opts.button.growthStageCode,
+    growth_stage_code: stage,
+
     latitude: lat,
     longitude: lng,
     driving_row_number: form.scope === "point" ? form.drivingRowNumber : null,
