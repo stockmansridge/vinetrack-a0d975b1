@@ -319,7 +319,7 @@ export default function PruningTrackerPage() {
         firstRowNumber,
       };
     });
-  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, selectedVineyardId, pruningSeasonYear]);
+  }, [paddocks, canonicalSeasonByPaddock, paddockBySeasonId, segmentsQ.data, entriesQ.data, skippedEntryIds, selectedVineyardId, pruningSeasonYear]);
 
   const sortedBlocks = useMemo(() => {
     const arr = [...blocks];
