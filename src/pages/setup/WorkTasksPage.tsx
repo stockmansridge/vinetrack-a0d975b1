@@ -1571,11 +1571,13 @@ function LabourLineRow({
           workerTypeId: categoryId === NONE ? null : categoryId,
           workerCount,
           hoursPerWorker,
+          hourlyRate: manualRate,
         }}
         onChange={(v) => {
           setCategoryId(v.workerTypeId ?? NONE);
           setWorkerCount(v.workerCount);
           setHoursPerWorker(v.hoursPerWorker);
+          setManualRate(v.hourlyRate ?? "");
         }}
       />
       <Field label="Notes">
