@@ -28,9 +28,9 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckSquare, Plus, Square, Trash2, AlertCircle, Link2, Link2Off, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PruningEntry, PruningRowSegment, RecordSegmentInput, UpdateEntryResult } from "@/lib/pruningQuery";
-import { useUpdatePruningEntry } from "@/lib/pruningQuery";
+import { useUpdatePruningEntry, updateSkippedPruningEntry } from "@/lib/pruningQuery";
 import type { RowIdentity } from "@/lib/pruningCalc";
 import {
   createLabourLine, createWorkTask, fetchLabourLinesForTask, fetchWorkTaskById,
