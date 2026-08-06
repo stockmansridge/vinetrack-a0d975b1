@@ -24,6 +24,7 @@ import {
 } from "@/lib/paddockGeometry";
 import { paddockColor } from "@/lib/paddockColor";
 import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayCoords, pinDisplayTitle } from "@/lib/pinStyle";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { initMapKit } from "@/lib/mapkit";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
@@ -152,6 +153,7 @@ export default function VineyardOverviewMap({
   height = 520,
 }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const catColours = usePinCategoryColours();
   const rf = useRegionFormatters();
   const navigate = useNavigate();
   const [selection, setSelection] = useState<Selection>(null);
@@ -454,7 +456,7 @@ export default function VineyardOverviewMap({
         const lng = coords.lng;
         if (!validPt({ lat, lng })) continue;
         allPts.push({ lat, lng });
-        const style = pinDisplayStyle(pin as any);
+        const style = pinDisplayStyle(pin as any, catColours);
         const fill = pinColorMode === "age" ? pinAgeColor((pin as any).created_at) : style.hex;
         const isSelected =
           selection?.kind === "pin" && selection.id === pin.id;
@@ -511,6 +513,7 @@ export default function VineyardOverviewMap({
     vineyardExtent,
     fitToBounds,
     navigate,
+    catColours,
   ]);
 
   // Reset fit when vineyard switches.
@@ -958,7 +961,8 @@ function PinPanelBody({
   paddockRowDirection?: number | null;
 }) {
   const rf = useRegionFormatters();
-  const style = pinDisplayStyle(pin as any);
+  const catColours = usePinCategoryColours(pin.vineyard_id ?? null);
+  const style = pinDisplayStyle(pin as any, catColours);
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl = pin.photo_url ?? pin.image_url ?? pin.attachment_url ?? null;
   const signed = usePinPhoto(photoPath ?? undefined);

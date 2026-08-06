@@ -5,6 +5,7 @@ import { fetchList } from "@/lib/queries";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { initMapKit } from "@/lib/mapkit";
 import { pinDisplayStyle, pinDisplayCoords, applyPinStatusFilter, pinDisplayTitle } from "@/lib/pinStyle";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
@@ -39,6 +40,7 @@ function makePinElement(hex: string) {
 
 export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const catColours = usePinCategoryColours();
   const isMobile = useIsMobile();
   const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -187,7 +189,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
 
     const newAnns: any[] = [];
     for (const pin of withCoords) {
-      const hex = pinDisplayStyle(pin as any).hex;
+      const hex = pinDisplayStyle(pin as any, catColours).hex;
       const ann = new mapkit.Annotation(
         new mapkit.Coordinate(pin.latitude!, pin.longitude!),
         () => makePinElement(hex),
@@ -246,7 +248,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
         } catch { /* noop */ }
       }
     }
-  }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length]);
+  }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length, catColours]);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 

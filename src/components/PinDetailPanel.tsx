@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { TriangleAlert, X } from "lucide-react";
 import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayTitle } from "@/lib/pinStyle";
 import { pinPlacement } from "@/lib/pinCategory";
+import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -79,7 +80,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, onClose }: Props) {
   const rf = useRegionFormatters();
-  const style = pinDisplayStyle(pin);
+  const catColours = usePinCategoryColours(pin.vineyard_id ?? null);
+  const style = pinDisplayStyle(pin, catColours);
   const placement = pinPlacement(pin);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;

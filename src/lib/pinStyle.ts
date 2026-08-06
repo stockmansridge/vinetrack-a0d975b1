@@ -1,4 +1,5 @@
 import { pinCategoryStyle, type PinCategoryId } from "@/lib/pinCategory";
+import { configuredPinColour, type PinCategoryColourMap } from "@/lib/pinCategoryConfig";
 // Pin colour mapping — mirrors the iOS app's per-button colour palette.
 //
 // In the iOS app every Repair / Growth button (e.g. "Irrigation",
@@ -125,25 +126,38 @@ export function pinStyle(
 }
 
 /**
- * Canonical display style for a pin.
+ * Display style for a pin.
  *
- * Colour comes from the normalised category id (the shared iOS/Android
- * contract) and NOTHING else — not the stored marker colour, title text,
+ * Colour resolution for a recognised category:
+ *   1. the current vineyard's configured colour for the stable
+ *      category/button identifier
+ *   2. the canonical fallback colour
+ *   3. neutral grey
+ *
+ * It is never derived from the pin's own stored marker colour, title text,
  * completion status, placement, sync state, creator or source platform.
  *
  * Non-repair modes (Growth / Note / Hazard / Spray / Manual Issue) keep
  * their existing mode identity colour when the category is unknown.
  */
-export function pinDisplayStyle(pin: {
-  mode?: string | null;
-  category?: string | null;
-  category_id?: string | null;
-  button_name?: string | null;
-}): PinStyle & { categoryId: PinCategoryId } {
+export function pinDisplayStyle(
+  pin: {
+    mode?: string | null;
+    category?: string | null;
+    category_id?: string | null;
+    button_id?: string | null;
+    button_key?: string | null;
+    button_name?: string | null;
+  },
+  colours?: PinCategoryColourMap | null,
+): PinStyle & { categoryId: PinCategoryId } {
   const cat = pinCategoryStyle(pin);
+  const configured = configuredPinColour(pin, colours);
   if (cat.id !== "unknown") {
-    return { hex: cat.hex, label: cat.label, categoryId: cat.id };
+    const label = colours?.labelByCategory?.[cat.id] ?? cat.label;
+    return { hex: configured ?? cat.hex, label, categoryId: cat.id };
   }
+  if (configured) return { hex: configured, label: cat.label, categoryId: "unknown" };
   const modeKey = (pin.mode ?? "").trim().toLowerCase();
   const isRepair = modeKey === "repair" || modeKey === "repairs";
   const modeStyle = !isRepair ? lookupMode(pin.mode) ?? lookupMode(pin.category) : null;
