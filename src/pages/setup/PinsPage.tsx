@@ -36,6 +36,7 @@ import { fetchPinsForVineyard } from "@/lib/pinsQuery";
 import { fetchPinsRawCounts } from "@/lib/pinsRawCounts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
+import { PIN_BURGUNDY_DARK, PIN_BURGUNDY_GRADIENT } from "@/lib/unifiedPin";
 
 interface PaddockLite {
   id: string;
