@@ -773,6 +773,16 @@ export default function EditPruningDialog({
               <Label>Date</Label>
               <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
             </div>
+            {isSkippedEntry ? (
+              <div className="rounded-md border p-3 bg-amber-500/10 border-amber-500/40 text-sm">
+                <span className="font-medium">Skipped record.</span>{" "}
+                <span className="text-muted-foreground">
+                  These rows count as complete in pruning progress but record no
+                  labour, cost or pruning work.
+                </span>
+              </div>
+            ) : (
+            <>
             <div className="space-y-1.5">
               <Label>Worker or crew</Label>
               <Input value={worker} onChange={(e) => setWorker(e.target.value)} />
@@ -800,6 +810,8 @@ export default function EditPruningDialog({
                 <SelectContent>{METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            </>
+            )}
             <div className="space-y-1.5">
               <Label>Notes</Label>
               <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
