@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
-import { pinStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayTitle } from "@/lib/pinStyle";
+import { TriangleAlert, X } from "lucide-react";
+import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinPlacement } from "@/lib/pinCategory";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
@@ -76,7 +77,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, onClose }: Props) {
   const rf = useRegionFormatters();
-  const style = pinStyle(pin.mode, pin.button_color, pin.category);
+  const style = pinDisplayStyle(pin);
+  const placement = pinPlacement(pin);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl =
@@ -172,7 +174,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
         <Section title="Details">
           <Field label="Title" value={pin.title} />
           <Field label="Mode" value={pin.mode} />
-          <Field label="Category" value={pin.category} />
+          <Field label="Category" value={style.label} />
           <Field label="Priority" value={pin.priority} />
           <Field label="Status" value={pin.status} />
           <Field label="Growth stage" value={pin.growth_stage_code} />
@@ -180,13 +182,27 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
 
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
-          <Field label={rf.blockLabel} value={paddockName} />
-          <Field label="On Row" value={formatAttachedRow(pin)} />
-          <Field label="Driving row" value={formatDrivingPath(pin, paddockRowDirection)} />
-          {!formatAttachedRow(pin) && !formatDrivingPath(pin, paddockRowDirection) && (
+          {placement.assigned ? (
             <>
-              <Field label="Row" value={formatLegacyRow(pin)} />
-              <Field label="Side" value={pin.side} />
+              <Field label={rf.blockLabel} value={paddockName} />
+              <Field label="On Row" value={formatAttachedRow(pin)} />
+              <Field label="Driving row" value={formatDrivingPath(pin, paddockRowDirection)} />
+              {!formatAttachedRow(pin) && !formatDrivingPath(pin, paddockRowDirection) && (
+                <Field label="Row" value={formatLegacyRow(pin)} />
+              )}
+            </>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-muted-foreground">Assignment</span>
+                <span className="flex items-center gap-1.5 text-right font-medium text-amber-600 dark:text-amber-400">
+                  <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                  Unassigned location
+                </span>
+              </div>
+              {placement.reasonLabel && (
+                <Field label="Reason" value={placement.reasonLabel} />
+              )}
             </>
           )}
           {coords && (
