@@ -27,7 +27,7 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailSheet from "@/components/PinDetailSheet";
-import { pinStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
+import { pinDisplayStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
 import { fetchPinsForVineyard } from "@/lib/pinsQuery";
@@ -434,7 +434,7 @@ export default function PinsPage() {
                 </TableRow>
               )}
               {sorted.map((p) => {
-                const style = pinStyle(p.mode, (p as any).button_color, (p as any).category);
+                const style = pinDisplayStyle(p as any);
                 const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
                 const completedBy = (p as any).is_completed
                   ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
