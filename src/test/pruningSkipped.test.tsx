@@ -14,8 +14,8 @@ import { calculatePruningSummary } from "@/lib/pruningSummaryCalc";
 import type { PruningActivityRow } from "@/lib/pruningActivityQuery";
 import { createWorkTask, createLabourLine } from "@/lib/workTasksQuery";
 
-const recordSkipped = vi.fn(async () => ({ entry_id: "e-skip", requested: 4, attributed: 4 }));
-const recordNormal = vi.fn(async () => ({ entry_id: "e1", requested: 4, attributed: 4 }));
+const recordSkipped = vi.fn(async (_input: any) => ({ entry_id: "e-skip", requested: 4, attributed: 4 }));
+const recordNormal = vi.fn(async (_input: any) => ({ entry_id: "e1", requested: 4, attributed: 4 }));
 
 vi.mock("@/lib/pruningQuery", async () => {
   const actual = await vi.importActual<any>("@/lib/pruningQuery");
