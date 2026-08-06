@@ -227,7 +227,7 @@ export default function PinsPage() {
       },
       status: (p: any) => (p.is_completed ? "Completed" : (p.status ?? "Open")),
       priority: (p: any) => (p.priority ? PRIORITY_ORDER[String(p.priority).toLowerCase()] ?? 0 : null),
-      category: (p: any) => (p.category ?? "") as string,
+      category: (p: any) => pinCategoryStyleById(normalisePinCategoryId(p)).label,
       stage: (p: any) => (p.growth_stage_code ?? "") as string,
       created: (p: any) => (p.created_at ? new Date(p.created_at) : null),
       createdBy: (p: any) => resolvePerson(p.created_by, p.created_by_user_id),
