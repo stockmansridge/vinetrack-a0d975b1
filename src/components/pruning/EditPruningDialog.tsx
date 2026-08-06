@@ -374,6 +374,23 @@ export default function EditPruningDialog({
       if (!confirm("This edit removes ALL quarters from the entry. Continue?")) return;
     }
 
+    // SQL 168: skipped entries use their own update RPC and never touch
+    // worker, labour, method, cost or Work Task values.
+    if (isSkippedEntry) {
+      try {
+        const res = await updateSkippedPruningEntry({
+          entryId: entry.id, entryDate, segments, notes,
+        });
+        if ((res as any)?.error) { toast.error(`Could not save: ${(res as any).error}`); return; }
+        await qc.invalidateQueries({ queryKey: ["pruning"] });
+        toast.success("Skipped record updated.");
+        onOpenChange(false);
+      } catch (e: any) {
+        toast.error(`Failed to save: ${e?.message ?? e}`);
+      }
+      return;
+    }
+
     // 1. Call the pruning update RPC FIRST. We must not mutate the linked
     //    Work Task (hours, labour lines) until the pruning entry has actually
     //    saved cleanly — otherwise a stale/error/conflict response would
