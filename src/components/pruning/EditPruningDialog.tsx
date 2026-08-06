@@ -818,7 +818,7 @@ export default function EditPruningDialog({
             </div>
 
             {/* Linked Work Task section */}
-            {entry.work_task_id && (
+            {!isSkippedEntry && entry.work_task_id && (
               <div className="rounded-md border p-3 space-y-3 bg-muted/20">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -849,7 +849,7 @@ export default function EditPruningDialog({
             )}
 
             {/* No Work Task yet — offer to create one for cost tracking */}
-            {!entry.work_task_id && (
+            {!isSkippedEntry && !entry.work_task_id && (
               <div className="rounded-md border p-3 space-y-3 bg-muted/20">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
