@@ -4,16 +4,22 @@
 //   create -> record_pruning_activity(p_payload)
 //   edit   -> update_pruning_activity(p_activity_id, p_activity, p_allocations)
 // The legacy one-entry-per-block path is never used from here.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
@@ -24,15 +30,17 @@ import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocatio
 import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
 
 import {
-  activityTotals, allocationKey, allocationQuarterCount,
+  activityTotals, allocationKey, allocationQuarterCount, allocationSegments,
   type BlockAllocationDraft, type PruningActivityDraft,
 } from "@/lib/pruningActivityContract";
 import {
   usePruningActivityDetail, useSavePruningActivity,
   type ActivitySaveConflict, type PruningActivity,
 } from "@/lib/pruningActivityApi";
+import { ensurePruningSeasonId, recordSkippedPruningEntry } from "@/lib/pruningQuery";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { formatDate } from "@/lib/dateFormat";
+
 
 const METHODS = ["spur", "cane", "mechanical", "minimal"];
 
