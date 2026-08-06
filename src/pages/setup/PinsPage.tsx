@@ -302,9 +302,16 @@ export default function PinsPage() {
           <p className="text-sm text-muted-foreground">Record location-based repairs, hazards, observations and other field items directly on the vineyard map. Use pins for anything that needs to be found, reviewed or actioned at a specific location.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setAddOpen(true)} disabled={!selectedVineyardId}>
-            <Plus className="mr-1.5 h-4 w-4" /> Add Pin / Action
+          <Button
+            size="sm"
+            onClick={() => setAddOpen(true)}
+            disabled={!selectedVineyardId}
+            style={{ background: PIN_BURGUNDY_GRADIENT, color: "#fff", borderColor: PIN_BURGUNDY_DARK }}
+            className="hover:opacity-90"
+          >
+            <Plus className="mr-1.5 h-4 w-4" /> Manual Pin / Repair / Observation
           </Button>
+
           <TabsList>
             <TabsTrigger value="table">Table</TabsTrigger>
             <TabsTrigger value="map">Map</TabsTrigger>
