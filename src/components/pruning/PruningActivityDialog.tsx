@@ -352,6 +352,26 @@ export default function PruningActivityDialog({
 
         {(!isEdit || loaded) && (
           <div className="space-y-4">
+            {/* SQL 168 — skipped mode toggle. Same dialog, same selectors. */}
+            {!isEdit && (
+              <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="pa-skipped">Mark selected rows as skipped</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Skipped rows count as complete in pruning progress, but no labour,
+                    cost or pruning work is recorded.
+                  </p>
+                </div>
+                <Switch
+                  id="pa-skipped"
+                  aria-label="Mark selected rows as skipped"
+                  checked={skipped}
+                  onCheckedChange={setSkipped}
+                  disabled={busy}
+                />
+              </div>
+            )}
+
             {/* ---------------- Activity-level fields ---------------- */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1">
@@ -359,6 +379,7 @@ export default function PruningActivityDialog({
                 <Input id="pa-date" type="date" value={draft.entryDate}
                   onChange={(e) => setDraft((d) => ({ ...d, entryDate: e.target.value }))} />
               </div>
+              {!skipped && (<>
               <div className="space-y-1">
                 <Label htmlFor="pa-worker">Worker / crew</Label>
                 <Input id="pa-worker" value={draft.worker} placeholder="Who did the work"
@@ -385,26 +406,30 @@ export default function PruningActivityDialog({
                 <Input id="pa-finish" type="time" value={finishInput}
                   onChange={(e) => setFinishInput(e.target.value)} />
               </div>
+              </>)}
             </div>
 
             {/* Labour hours, rate and cost belong to the linked Work Task — the
                 activity mirrors them read-only and never owns a second source. */}
-            <ActivityWorkTaskField
-              vineyardId={vineyardId}
-              draft={draft}
-              activityId={activityId}
-              value={draft.workTaskId}
-              startTime={startInput}
-              finishTime={finishInput}
-              legacyLabourHours={draft.workTaskId ? null : draft.labourHours}
-              legacyHourlyRate={draft.workTaskId ? null : draft.hourlyRate}
-              onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
-              onLabourResolved={({ hours, rate }) => setDraft((d) =>
-                d.labourHours === hours && d.hourlyRate === rate
-                  ? d
-                  : { ...d, labourHours: hours, hourlyRate: rate })}
-              disabled={save.isPending}
-            />
+            {!skipped && (
+              <ActivityWorkTaskField
+                vineyardId={vineyardId}
+                draft={draft}
+                activityId={activityId}
+                value={draft.workTaskId}
+                startTime={startInput}
+                finishTime={finishInput}
+                legacyLabourHours={draft.workTaskId ? null : draft.labourHours}
+                legacyHourlyRate={draft.workTaskId ? null : draft.hourlyRate}
+                onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
+                onLabourResolved={({ hours, rate }) => setDraft((d) =>
+                  d.labourHours === hours && d.hourlyRate === rate
+                    ? d
+                    : { ...d, labourHours: hours, hourlyRate: rate })}
+                disabled={busy}
+              />
+            )}
+
 
 
 
