@@ -887,6 +887,11 @@ function BlockDetail({
               <Settings2 className="h-4 w-4 mr-1" /> Settings
             </Button>
           )}
+          {canEdit && block.season && (
+            <Button variant="outline" size="sm" onClick={onOpenComplete}>
+              <CheckSquare className="h-4 w-4 mr-1" /> Add pruning entry
+            </Button>
+          )}
           <NewPruningActivityButton
             seasonYear={seasonYear}
             paddockId={block.paddock.id}
