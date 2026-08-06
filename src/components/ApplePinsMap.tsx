@@ -40,6 +40,7 @@ function makePinElement(hex: string) {
 
 export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }: Props) {
   const { selectedVineyardId } = useVineyard();
+  const catColours = usePinCategoryColours();
   const isMobile = useIsMobile();
   const showMapPinDiagnostics = useDiagnosticPanel("show_map_pin_diagnostics");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -247,7 +248,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
         } catch { /* noop */ }
       }
     }
-  }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length]);
+  }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length, catColours]);
 
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 

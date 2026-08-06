@@ -45,6 +45,7 @@ export default function BlockMap({
   onPinSelected,
 }: Props) {
   const navigate = useNavigate();
+  const catColours = usePinCategoryColours(paddock?.vineyard_id ?? null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
@@ -244,6 +245,7 @@ export default function BlockMap({
     tripsWithPath,
     navigate,
     fitToPolygon,
+    catColours,
   ]);
 
   if (!hasGeometry) {
