@@ -6,8 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import UnifiedPinDialog from "@/components/pins/UnifiedPinDialog";
 import { parseButtonCatalogue } from "@/lib/unifiedPin";
 
-const createPin = vi.fn(async () => "pin-1");
-const createType = vi.fn(async () => "custom-1");
+const createPin = vi.fn(async (_input: any) => "pin-1");
+const createType = vi.fn(async (_input: any) => "custom-1");
 const listTypes = vi.fn();
 
 const catalogue = parseButtonCatalogue([
