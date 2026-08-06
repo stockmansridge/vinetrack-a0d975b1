@@ -195,6 +195,7 @@ export default function UnifiedPinDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -490,6 +491,7 @@ export default function UnifiedPinDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
 
       <GrowthStagePickerDialog
         open={stagePickerOpen}
@@ -500,6 +502,6 @@ export default function UnifiedPinDialog({
           setStagePickerOpen(false);
         }}
       />
-    </Dialog>
+    </>
   );
 }
