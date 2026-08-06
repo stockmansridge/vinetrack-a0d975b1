@@ -3,6 +3,9 @@ import {
   applyPinScopeChange,
   buildCustomPinArgs,
   buildPinInsertRow,
+  canonicalButtonKey,
+  dedupePinButtons,
+  isGrowthStageButton,
   emptyUnifiedPinForm,
   parseButtonCatalogue,
   pinSegments,
@@ -75,5 +78,57 @@ describe("unified pin (SQL 170)", () => {
     expect(row.button_name).toBe("Broken Post");
     expect(row.category_id).toBe("broken_post");
     expect(row.is_completed).toBe(false);
+    // The unified workflow never stores a side.
+    expect(Object.keys(row)).not.toContain("pin_side");
+    expect(JSON.stringify(row)).not.toMatch(/left|right/i);
+  });
+
+  const sided = [
+    { id: "growth_stage_left", name: "Growth Stage Left", colour: null, growthStageCode: null },
+    { id: "growth_stage_right", name: "Growth Stage Right", colour: "#34C759", growthStageCode: null },
+    { id: "powdery_l", name: "Powdery (L)", colour: "#FF9500", growthStageCode: null },
+    { id: "powdery_r", name: "Powdery (R)", colour: null, growthStageCode: null },
+    { id: "blackberries", name: "Blackberries", colour: null, growthStageCode: null },
+  ];
+
+  it("collapses left/right catalogue variants to one canonical button", () => {
+    const deduped = dedupePinButtons(sided);
+    expect(deduped.map((b) => b.name)).toEqual(["Growth Stage", "Powdery", "Blackberries"]);
+    expect(deduped[0].id).toBe("growth_stage");
+    expect(deduped[1].id).toBe("powdery");
+    // Detail missing on the first variant is filled from its sibling.
+    expect(deduped[0].colour).toBe("#34C759");
+  });
+
+  it("deduplicates repair buttons the same way", () => {
+    const deduped = dedupePinButtons([
+      { id: "broken_post_left", name: "Broken Post Left", colour: "#A2845E", growthStageCode: null },
+      { id: "broken_post_right", name: "Broken Post Right", colour: "#A2845E", growthStageCode: null },
+    ]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]).toEqual({ id: "broken_post", name: "Broken Post", colour: "#A2845E", growthStageCode: null });
+  });
+
+  it("keeps distinct buttons apart and identifies the growth stage action", () => {
+    expect(canonicalButtonKey(sided[0])).toBe("growthstage");
+    expect(isGrowthStageButton(sided[0])).toBe(true);
+    expect(isGrowthStageButton(sided[4])).toBe(false);
+    expect(dedupePinButtons([
+      { id: "downy", name: "Downy", colour: null, growthStageCode: null },
+      { id: "powdery", name: "Powdery", colour: null, growthStageCode: null },
+    ])).toHaveLength(2);
+  });
+
+  it("stores the picked growth stage identifier on the pin", () => {
+    const form = { ...emptyUnifiedPinForm(), pinType: "growth" as const, latitude: -33.1, longitude: 149.2, buttonId: "growth_stage" };
+    const row = buildPinInsertRow(form, {
+      id: "id1",
+      vineyardId: "v1",
+      button: { id: "growth_stage", name: "Growth Stage", colour: null, growthStageCode: null },
+      growthStageCode: "EL23",
+    });
+    expect(row.mode).toBe("Growth");
+    expect(row.growth_stage_code).toBe("EL23");
+    expect(row.category_id).toBe("growth_stage");
   });
 });
