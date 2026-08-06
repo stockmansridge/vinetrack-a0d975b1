@@ -41,12 +41,18 @@ export interface PruningSummary {
   usesEstimatedHours: boolean;
   /** Reversed rows seen in the input (excluded from every figure above). */
   reversedCount: number;
+  /** SQL 168 skipped allocations seen in the input (excluded from every
+   *  figure above except `skippedQuarters`). */
+  skippedCount: number;
+  /** Quarters marked skipped. They count as complete for progress only. */
+  skippedQuarters: number;
 }
 
 export const EMPTY_PRUNING_SUMMARY: PruningSummary = {
   activities: 0, allocations: 0, blocks: 0, vines: 0, rowEquivalents: 0,
   quarters: 0, labourHours: 0, labourCost: 0, vinesPerLabourHour: null,
   costPerVine: null, costedVines: 0, usesEstimatedHours: false, reversedCount: 0,
+  skippedCount: 0, skippedQuarters: 0,
 };
 
 /**
@@ -56,8 +62,17 @@ export const EMPTY_PRUNING_SUMMARY: PruningSummary = {
  */
 export function calculatePruningSummary(rows: PruningActivityRow[]): PruningSummary {
   const reversedCount = rows.filter((r) => r.isReversed).length;
-  const active = rows.filter((r) => !r.isReversed);
-  if (!active.length) return { ...EMPTY_PRUNING_SUMMARY, reversedCount };
+  // SQL 168: skipped allocations never contribute labour, cost, vines or
+  // productivity. They are reported separately so progress views can show
+  // them without inflating any work figure.
+  const notReversed = rows.filter((r) => !r.isReversed);
+  const skippedRows = notReversed.filter((r) => r.isSkipped);
+  const skippedCount = skippedRows.length;
+  const skippedQuarters = skippedRows.reduce((sum, r) => sum + r.quarters, 0);
+  const active = notReversed.filter((r) => !r.isSkipped);
+  if (!active.length) {
+    return { ...EMPTY_PRUNING_SUMMARY, reversedCount, skippedCount, skippedQuarters };
+  }
 
   const blocks = new Set<string>();
   let vines = 0;
@@ -108,6 +123,8 @@ export function calculatePruningSummary(rows: PruningActivityRow[]): PruningSumm
     costedVines,
     usesEstimatedHours,
     reversedCount,
+    skippedCount,
+    skippedQuarters,
   };
 }
 
