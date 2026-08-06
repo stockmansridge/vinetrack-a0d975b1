@@ -106,6 +106,9 @@ export default function EditPruningDialog({
   const rf = useRegionFormatters();
   const money = (v: number) => rf.currency(v);
   const update = useUpdatePruningEntry(entry.pruning_season_id, vineyardId);
+  const qc = useQueryClient();
+  // SQL 168: a skipped entry can only ever be edited as a skipped entry.
+  const isSkippedEntry = (entry as any).is_skipped === true;
   const { resolve: resolveUser } = useTeamLookup(vineyardId);
   const createdByName = resolveUser(entry.created_by) ?? "—";
 
