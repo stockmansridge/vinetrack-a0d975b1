@@ -1,16 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
-import { Droplet, CalendarDays } from "lucide-react";
+import { Droplet, CalendarDays, Scissors } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
+import { usePruningVineyardSummary } from "@/lib/pruningSummaryQuery";
 import { MetricCard } from "@/components/ui/metric-card";
 
 const fmt = (n: number) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
 
+const fmtPercent = (n: number | null | undefined) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `${Math.round(n * 100)}%`;
+};
+
 export default function VintageOverviewSection() {
   const { selectedVineyardId } = useVineyard();
   const { vintage, hemisphere, startISO, endISO } = useVintage();
+  const pruningSeasonYear = new Date().getFullYear();
 
   const sprayCountQ = useQuery({
     queryKey: ["vintage-spray-count", selectedVineyardId, startISO, endISO],
@@ -29,6 +36,8 @@ export default function VintageOverviewSection() {
     },
     staleTime: 60_000,
   });
+
+  const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
   const rangeHint = `${startISO} → ${endISO}`;
   const hemLabel = hemisphere === "southern" ? "Southern Hemisphere" : "Northern Hemisphere";
@@ -66,7 +75,22 @@ export default function VintageOverviewSection() {
           }
           to="/reports/spray"
         />
+        <MetricCard
+          label="Pruning complete"
+          icon={Scissors}
+          tone="amber"
+          value={
+            pruningQ.isLoading
+              ? "…"
+              : pruningQ.error
+                ? "—"
+                : fmtPercent(pruningQ.data?.overall_progress)
+          }
+          hint={`Season ${pruningSeasonYear}`}
+          to="/tools/pruning-tracker"
+        />
       </div>
     </section>
   );
 }
+
