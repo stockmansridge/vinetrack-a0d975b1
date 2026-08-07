@@ -59,26 +59,49 @@ export default function GrowthStagePickerDialog({
         />
 
         <div className="grid gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-          {stages.map((s) => (
-            <button
-              key={s.code}
-              type="button"
-              aria-label={`Growth stage ${s.code}`}
-              onClick={() => setPicked(s.code)}
-              className={`flex items-start gap-3 rounded-md border p-2 text-left text-sm transition-colors ${
-                picked === s.code ? "border-primary bg-accent" : "hover:bg-muted"
-              }`}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-muted text-xs font-semibold tabular-nums">
-                {s.code.replace(/^EL/i, "")}
-              </span>
-              <span className="min-w-0 whitespace-normal">{s.label}</span>
-            </button>
-          ))}
+          {stages.map((s) => {
+            const src = growthStageImageUrl(s.code);
+            return (
+              <button
+                key={s.code}
+                type="button"
+                aria-label={`Growth stage ${s.code}`}
+                onClick={() => setPicked(s.code)}
+                className={`flex items-start gap-3 rounded-md border p-2 text-left text-sm transition-colors ${
+                  picked === s.code ? "border-primary bg-accent" : "hover:bg-muted"
+                }`}
+              >
+                {src ? (
+                  <img
+                    src={src}
+                    alt={growthStageImageAlt(s.code, s.label)}
+                    loading="lazy"
+                    width={64}
+                    height={64}
+                    className="h-16 w-16 shrink-0 rounded object-cover"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    data-testid={`growth-stage-placeholder-${s.code}`}
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted text-xs font-semibold tabular-nums text-muted-foreground"
+                  >
+                    {s.code.replace(/^EL/i, "")}
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold tabular-nums text-muted-foreground">{s.code}</span>
+                  <span className="block whitespace-normal">{s.label.replace(/^EL\d+\s*—\s*/i, "")}</span>
+                  {!src && <span className="sr-only">No reference image available</span>}
+                </span>
+              </button>
+            );
+          })}
           {stages.length === 0 && (
             <p className="text-sm text-muted-foreground">No stages match that search.</p>
           )}
         </div>
+
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
