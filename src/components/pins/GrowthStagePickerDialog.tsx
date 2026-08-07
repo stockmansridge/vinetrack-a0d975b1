@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { GROWTH_STAGES } from "@/lib/vspWaterRate";
+import { growthStageImageAlt, growthStageImageUrl } from "@/lib/growthStageImages";
+
 
 export default function GrowthStagePickerDialog({
   open,
