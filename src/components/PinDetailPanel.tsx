@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TriangleAlert, X } from "lucide-react";
-import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayTitle } from "@/lib/pinStyle";
-import { pinPlacement } from "@/lib/pinCategory";
+import { pinDisplayStyle, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinPlacementDisplay, type PinPlacementRow } from "@/lib/pinPlacement";
 import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { usePinPhoto } from "@/hooks/usePinPhoto";
 import { formatCell } from "@/pages/setup/ListPage";
@@ -58,6 +58,8 @@ interface Props {
   vineyardName?: string | null;
   /** Paddock row_direction in degrees, used to render "facing North" wording. */
   paddockRowDirection?: number | null;
+  /** Canonical SQL 171 placement row for this pin (public.pin_placements). */
+  placement?: PinPlacementRow | null;
   onClose: () => void;
 }
 
@@ -78,11 +80,11 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, onClose }: Props) {
+export default function PinDetailPanel({ pin, paddockName, vineyardName, paddockRowDirection, placement: placementRow, onClose }: Props) {
   const rf = useRegionFormatters();
   const catColours = usePinCategoryColours(pin.vineyard_id ?? null);
   const style = pinDisplayStyle(pin, catColours);
-  const placement = pinPlacement(pin);
+  const placement = pinPlacementDisplay(placementRow);
   // Pins may store photo as a storage path (signed) or as a direct URL.
   const photoPath = pin.photo_path ?? pin.attachment_path ?? null;
   const directPhotoUrl =
@@ -154,7 +156,7 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
             <Badge variant={pin.is_completed ? "default" : "outline"}>
               {pin.is_completed ? "Completed" : "Not completed"}
             </Badge>
-            {!placement.assigned && (
+            {placement.showWarning && (
               <Badge
                 variant="outline"
                 className="gap-1 border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
@@ -186,27 +188,22 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
 
         <Section title="Location">
           <Field label="Vineyard" value={vineyardName} />
-          {placement.assigned ? (
-            <>
-              <Field label={rf.blockLabel} value={paddockName} />
-              <Field label="On Row" value={formatAttachedRow(pin)} />
-              <Field label="Driving row" value={formatDrivingPath(pin, paddockRowDirection)} />
-              {!formatAttachedRow(pin) && !formatDrivingPath(pin, paddockRowDirection) && (
-                <Field label="Row" value={formatLegacyRow(pin)} />
-              )}
-            </>
+          {placement.showWarning ? (
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Assignment</span>
+              <span className="flex items-center gap-1.5 text-right font-medium text-amber-600 dark:text-amber-400">
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                Unassigned location
+              </span>
+            </div>
           ) : (
             <>
-              <div className="flex items-start justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">Assignment</span>
-                <span className="flex items-center gap-1.5 text-right font-medium text-amber-600 dark:text-amber-400">
-                  <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-                  Unassigned location
-                </span>
-              </div>
-              {placement.reasonLabel && (
-                <Field label="Reason" value={placement.reasonLabel} />
+              {placement.paddockName ? (
+                <Field label={rf.blockLabel} value={placement.paddockName} />
+              ) : (
+                <Field label="Assignment" value={placement.assignmentLabel} />
               )}
+              {placement.rowSummary && <Field label="Rows" value={placement.rowSummary} />}
             </>
           )}
           {coords && (

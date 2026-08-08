@@ -27,8 +27,10 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailSheet from "@/components/PinDetailSheet";
-import { pinDisplayStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
-import { PIN_CATEGORY_ORDER, normalisePinCategoryId, pinCategoryStyleById, pinPlacement, type PinCategoryId } from "@/lib/pinCategory";
+import { pinDisplayStyle, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
+import { PIN_CATEGORY_ORDER, normalisePinCategoryId, pinCategoryStyleById, type PinCategoryId } from "@/lib/pinCategory";
+import { pinPlacementDisplay } from "@/lib/pinPlacement";
+import { usePinPlacements } from "@/lib/pinPlacementQuery";
 import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { buildPinsDiagnostics, pinDisplayTitle } from "@/lib/pinsDiagnostics";
 import { parsePolygonPoints } from "@/lib/paddockGeometry";
@@ -257,6 +259,7 @@ export default function PinsPage() {
     2 /* created, createdBy */ +
     (hasAnyCompleted ? 2 : 0);
 
+  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   const PIN_ALL_COLS = ["title","mode","paddock","row","status","priority","category","stage","created","createdBy","completed","completedBy"] as const;
@@ -509,7 +512,7 @@ export default function PinsPage() {
               )}
               {sorted.map((p) => {
                 const style = pinDisplayStyle(p as any, catColours);
-                const placement = pinPlacement(p as any);
+                const placement = pinPlacementDisplay(placements.get(p.id));
                 const createdBy = resolvePerson((p as any).created_by, (p as any).created_by_user_id);
                 const completedBy = (p as any).is_completed
                   ? resolvePerson((p as any).completed_by, (p as any).completed_by_user_id)
@@ -525,10 +528,10 @@ export default function PinsPage() {
                           data-category-id={style.categoryId}
                         />
                         <span className="truncate">{pinDisplayTitle(p as any)}</span>
-                        {!placement.assigned && (
+                        {placement.showWarning && (
                           <span
                             className="inline-flex shrink-0 text-amber-500"
-                            title={placement.reasonLabel ?? "Unassigned location"}
+                            title="Unassigned location"
                             aria-label="Unassigned location"
                           >
                             <TriangleAlert className="h-3.5 w-3.5" />
@@ -540,14 +543,14 @@ export default function PinsPage() {
                   mode: <TableCell className="capitalize">{p.mode ?? "—"}</TableCell>,
                   paddock: (
                     <TableCell>
-                      {placement.assigned
-                        ? (paddockNameById.get(p.paddock_id!) ?? "—")
-                        : <span className="text-amber-600 dark:text-amber-400 text-xs">Unassigned location</span>}
+                      {placement.showWarning
+                        ? <span className="text-amber-600 dark:text-amber-400 text-xs">Unassigned location</span>
+                        : placement.blockLabel}
                     </TableCell>
                   ),
                   row: (
                     <TableCell className="text-right tabular-nums whitespace-pre-line text-xs leading-tight">
-                      {placement.assigned ? (formatPinRowSummary(p as any) ?? "—") : "—"}
+{placement.rowLabel}
                     </TableCell>
                   ),
                   status: (
@@ -587,6 +590,7 @@ export default function PinsPage() {
           paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
           vineyardName={vineyardName}
           paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+          placement={selected ? placements.get(selected.id) ?? null : null}
           side={isMobile ? "bottom" : "right"}
         />
 

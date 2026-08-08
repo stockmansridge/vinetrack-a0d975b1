@@ -128,81 +128,8 @@ export function pinCategoryLabel(pin: PinCategoryLike): string {
   return pinCategoryStyle(pin).label;
 }
 
-// ---------- Placement (separate from category) ----------
-
-export type PinAssignmentReason =
-  | "outside_mapped_blocks"
-  | "rows_not_configured"
-  | "snap_failed"
-  | "no_location";
-
-const REASON_LABELS: Record<PinAssignmentReason, string> = {
-  outside_mapped_blocks: "Outside mapped blocks",
-  rows_not_configured: "Block rows are not configured",
-  snap_failed: "Row assignment failed",
-  no_location: "Location unavailable",
-};
-
-export function assignmentReasonLabel(raw?: string | null): string | null {
-  const k = (raw ?? "").trim().toLowerCase();
-  if (!k) return null;
-  return REASON_LABELS[k as PinAssignmentReason] ?? null;
-}
-
-export interface PinPlacementLike {
-  paddock_id?: string | null;
-  pin_row_number?: number | null;
-  driving_row_number?: number | null;
-  row_number?: number | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  snapped_latitude?: number | null;
-  snapped_longitude?: number | null;
-  assignment_reason?: string | null;
-  placement_reason?: string | null;
-  unassigned_reason?: string | null;
-}
-
-export interface PinPlacement {
-  assigned: boolean;
-  /** "Unassigned location" when placement is incomplete. */
-  label: string;
-  reason: PinAssignmentReason | null;
-  reasonLabel: string | null;
-}
-
-const finite = (v: unknown) => v != null && Number.isFinite(Number(v));
-
-function hasCoords(pin: PinPlacementLike): boolean {
-  return (
-    (finite(pin.snapped_latitude) && finite(pin.snapped_longitude)) ||
-    (finite(pin.latitude) && finite(pin.longitude))
-  );
-}
-
-/**
- * Placement state for a pin. Never affects category colour.
- */
-export function pinPlacement(pin: PinPlacementLike): PinPlacement {
-  const hasRow =
-    finite(pin.pin_row_number) || finite(pin.driving_row_number) || finite(pin.row_number);
-  const assigned = !!pin.paddock_id && hasRow;
-  if (assigned) {
-    return { assigned: true, label: "Assigned", reason: null, reasonLabel: null };
-  }
-  const stored = (pin.assignment_reason ?? pin.placement_reason ?? pin.unassigned_reason ?? "")
-    .trim()
-    .toLowerCase();
-  let reason: PinAssignmentReason | null =
-    stored && stored in REASON_LABELS ? (stored as PinAssignmentReason) : null;
-  if (!reason) {
-    if (!hasCoords(pin)) reason = "no_location";
-    else if (!pin.paddock_id) reason = "outside_mapped_blocks";
-  }
-  return {
-    assigned: false,
-    label: "Unassigned location",
-    reason,
-    reasonLabel: reason ? REASON_LABELS[reason] : null,
-  };
-}
+// ---------- Placement ----------
+//
+// Placement/assignment is NOT derived here any more. The canonical source is
+// the SQL 171 view `public.pin_placements` — see `src/lib/pinPlacement.ts`.
+// The old `pinPlacement()` helper (paddock_id && row heuristics) was removed.

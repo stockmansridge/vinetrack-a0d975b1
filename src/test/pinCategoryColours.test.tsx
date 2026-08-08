@@ -4,8 +4,6 @@ import {
   normalisePinCategoryId,
   pinCategoryStyle,
   pinCategoryStyleById,
-  pinPlacement,
-  assignmentReasonLabel,
 } from "@/lib/pinCategory";
 import { pinDisplayStyle } from "@/lib/pinStyle";
 
@@ -45,7 +43,6 @@ describe("canonical category colours", () => {
   it("vine_issue without a block or row is still green", () => {
     const p = pin({ paddock_id: null, pin_row_number: null, driving_row_number: null });
     expect(pinDisplayStyle(p as any).hex).toBe(GREEN);
-    expect(pinPlacement(p as any).assigned).toBe(false);
   });
 
   it("other is grey and unknown is grey", () => {
@@ -79,36 +76,6 @@ describe("canonical category colours", () => {
     expect(normalisePinCategoryId({ button_name: "broken-wire" })).toBe("broken_wire");
     expect(normalisePinCategoryId({ category: "Irrigation" })).toBe("irrigation");
     expect(pinCategoryStyle({ category: "Broken Post" }).hex).toBe(BROWN);
-  });
-});
-
-describe("placement is separate from category", () => {
-  it("reports assigned placement for a fully assigned row pin", () => {
-    expect(pinPlacement(pin() as any)).toMatchObject({ assigned: true, reason: null });
-  });
-
-  it("flags missing block/row as unassigned", () => {
-    const p = pinPlacement(pin({ paddock_id: null, pin_row_number: null, driving_row_number: null }) as any);
-    expect(p.assigned).toBe(false);
-    expect(p.label).toBe("Unassigned location");
-    expect(p.reason).toBe("outside_mapped_blocks");
-  });
-
-  it("uses friendly assignment reason labels", () => {
-    expect(assignmentReasonLabel("outside_mapped_blocks")).toBe("Outside mapped blocks");
-    expect(assignmentReasonLabel("rows_not_configured")).toBe("Block rows are not configured");
-    expect(assignmentReasonLabel("snap_failed")).toBe("Row assignment failed");
-    expect(assignmentReasonLabel("no_location")).toBe("Location unavailable");
-  });
-
-  it("derives no_location when coordinates are missing", () => {
-    const p = pinPlacement({ paddock_id: null, latitude: null, longitude: null } as any);
-    expect(p.reason).toBe("no_location");
-  });
-
-  it("prefers a stored assignment reason", () => {
-    const p = pinPlacement(pin({ paddock_id: "b1", pin_row_number: null, driving_row_number: null, row_number: null, assignment_reason: "rows_not_configured" }) as any);
-    expect(p.reasonLabel).toBe("Block rows are not configured");
   });
 });
 

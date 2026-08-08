@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/table";
 import BlockMap from "@/components/BlockMap";
 import PinDetailSheet from "@/components/PinDetailSheet";
+import { useResolvedPinPlacement } from "@/lib/pinPlacementQuery";
 import type { PinRecord } from "@/components/PinDetailPanel";
 
 type DateRangeKey = "7d" | "30d" | "90d" | "season" | "all";
@@ -232,6 +233,7 @@ export default function BlockDetailPage() {
   const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
   const [pinScope, setPinScope] = useState<"open" | "range">("open");
   const [activePin, setActivePin] = useState<PinRecord | null>(null);
+  const activePinPlacement = useResolvedPinPlacement(activePin?.id ?? null);
 
   const since = useMemo(() => rangeStart(dateRange), [dateRange]);
 
@@ -581,6 +583,7 @@ export default function BlockDetailPage() {
       </Card>
 
       <PinDetailSheet
+        placement={activePinPlacement}
         open={!!activePin}
         onOpenChange={(o) => !o && setActivePin(null)}
         pin={activePin}
