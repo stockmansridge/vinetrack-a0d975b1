@@ -50,8 +50,12 @@ export interface PinPlacementDisplay {
   metadataIncomplete: boolean;
   /** Table "Block" cell / drawer block line. */
   blockLabel: string;
-  /** Table "Row" cell / drawer rows line. */
+  /** Table "Row" cell — may be multi-line (newline separated). */
   rowLabel: string;
+  /** Individual row lines, for surfaces that render them as fields. */
+  rowLines: string[];
+  /** True when the view supplied any row information at all. */
+  hasRowInfo: boolean;
   /** Drawer "Assignment" line, when there is no block name to show. */
   assignmentLabel: string | null;
   scope: PinLocationScope | null;
@@ -59,6 +63,7 @@ export interface PinPlacementDisplay {
   paddockName: string | null;
   rowSummary: string | null;
 }
+
 
 export const UNASSIGNED_LABEL = "Unassigned location";
 export const POINT_LOCATION_LABEL = "Point location";
