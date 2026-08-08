@@ -8,6 +8,8 @@
 // Placement never affects category colour. The amber "Unassigned location"
 // treatment is shown ONLY when location_warning_code = 'unassigned_location'.
 
+import { formatSideWording } from "@/lib/pinStyle";
+
 export type PinLocationScope = "point" | "row" | "block" | string;
 
 export type PinLocationAssignmentBasis =
