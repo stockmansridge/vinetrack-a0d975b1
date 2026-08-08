@@ -203,7 +203,15 @@ export default function PinDetailPanel({ pin, paddockName, vineyardName, paddock
               ) : (
                 <Field label="Assignment" value={placement.assignmentLabel} />
               )}
-              {placement.rowSummary && <Field label="Rows" value={placement.rowSummary} />}
+              {placement.rowSummary ? (
+                <Field label="Rows" value={placement.rowSummary} />
+              ) : (
+                placement.rowLines.map((line) => {
+                  const [label, ...rest] = line.split(": ");
+                  return <Field key={line} label={label} value={rest.join(": ")} />;
+                })
+              )}
+
             </>
           )}
           {coords && (
