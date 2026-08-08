@@ -16,6 +16,7 @@ import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePinPlacements } from "@/lib/pinPlacementQuery";
 
 interface Paddock {
   id: string;
@@ -148,6 +149,8 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
     });
   }
 
+  const pinIds = useMemo(() => pins.map((p) => p.id), [pins]);
+  const { placements } = usePinPlacements(pinIds);
   const selected = pins.find((p) => p.id === selectedId) ?? null;
   const hasMap = !!bounds;
   const initialCenter: [number, number] = withCoords[0]
@@ -233,6 +236,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
               pin={selected}
               paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
               paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+              placement={placements.get(selected.id) ?? null}
               onClose={() => setSelectedId(null)}
             />
           ) : (
@@ -248,6 +252,7 @@ export default function PinsMap({ statusFilter = "active" }: { statusFilter?: "a
         pin={selected}
         paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
         paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+        placement={selected ? placements.get(selected.id) ?? null : null}
       />
     </div>
   );

@@ -27,7 +27,7 @@ import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import PinsMapView, { type PinStatusFilter } from "@/components/PinsMapView";
 import PinDetailSheet from "@/components/PinDetailSheet";
-import { pinDisplayStyle, formatPinRowSummary, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
+import { pinDisplayStyle, applyPinStatusFilter, pinIsCompleted } from "@/lib/pinStyle";
 import { PIN_CATEGORY_ORDER, normalisePinCategoryId, pinCategoryStyleById, type PinCategoryId } from "@/lib/pinCategory";
 import { pinPlacementDisplay } from "@/lib/pinPlacement";
 import { usePinPlacements } from "@/lib/pinPlacementQuery";
@@ -259,6 +259,7 @@ export default function PinsPage() {
     2 /* created, createdBy */ +
     (hasAnyCompleted ? 2 : 0);
 
+  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   const PIN_ALL_COLS = ["title","mode","paddock","row","status","priority","category","stage","created","createdBy","completed","completedBy"] as const;
@@ -589,6 +590,7 @@ export default function PinsPage() {
           paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
           vineyardName={vineyardName}
           paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+          placement={selected ? placements.get(selected.id) ?? null : null}
           side={isMobile ? "bottom" : "right"}
         />
 
