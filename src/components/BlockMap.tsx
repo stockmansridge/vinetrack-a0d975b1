@@ -60,6 +60,7 @@ export default function BlockMap({
     trips: true,
   });
   const [activePin, setActivePin] = useState<PinRecord | null>(null);
+  const activePinPlacement = useResolvedPinPlacement(activePin?.id ?? null);
 
   const polygon = useMemo(
     () => parsePolygonPoints(paddock?.polygon_points),

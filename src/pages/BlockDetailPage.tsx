@@ -233,6 +233,7 @@ export default function BlockDetailPage() {
   const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
   const [pinScope, setPinScope] = useState<"open" | "range">("open");
   const [activePin, setActivePin] = useState<PinRecord | null>(null);
+  const activePinPlacement = useResolvedPinPlacement(activePin?.id ?? null);
 
   const since = useMemo(() => rangeStart(dateRange), [dateRange]);
 
