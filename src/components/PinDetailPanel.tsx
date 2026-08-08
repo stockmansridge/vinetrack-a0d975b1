@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TriangleAlert, X } from "lucide-react";
-import { pinDisplayStyle, formatAttachedRow, formatDrivingPath, formatLegacyRow, pinDisplayTitle } from "@/lib/pinStyle";
+import { pinDisplayStyle, pinDisplayTitle } from "@/lib/pinStyle";
 import { pinPlacementDisplay, type PinPlacementRow } from "@/lib/pinPlacement";
 import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { usePinPhoto } from "@/hooks/usePinPhoto";

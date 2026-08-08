@@ -1,5 +1,6 @@
 import PinDetailPanel, { type PinRecord } from "@/components/PinDetailPanel";
 import SelectedPinMap from "@/components/SelectedPinMap";
+import type { PinPlacementRow } from "@/lib/pinPlacement";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   paddockName?: string | null;
   vineyardName?: string | null;
   paddockRowDirection?: number | null;
+  placement?: PinPlacementRow | null;
   side?: "bottom" | "right";
 }
 
@@ -19,6 +21,7 @@ export default function PinDetailSheet({
   paddockName,
   vineyardName,
   paddockRowDirection,
+  placement,
   side = "bottom",
 }: Props) {
   const contentClass =
@@ -40,6 +43,7 @@ export default function PinDetailSheet({
                 paddockName={paddockName}
                 vineyardName={vineyardName}
                 paddockRowDirection={paddockRowDirection}
+                placement={placement}
                 onClose={() => onOpenChange(false)}
               />
             </>
