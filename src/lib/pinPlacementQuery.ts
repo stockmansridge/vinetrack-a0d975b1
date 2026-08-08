@@ -60,6 +60,17 @@ export async function resolvePinPlacement(pinId: string): Promise<PinPlacementRo
   return (row as PinPlacementRow) ?? null;
 }
 
+/** Single-pin placement hook — used by surfaces that show one pin at a time. */
+export function useResolvedPinPlacement(pinId: string | null | undefined) {
+  const q = useQuery({
+    queryKey: ["pin_placement", pinId],
+    enabled: !!pinId,
+    queryFn: () => resolvePinPlacement(pinId!),
+    staleTime: 60_000,
+  });
+  return q.data ?? null;
+}
+
 /** Export rows — canonical export surface. */
 export async function fetchPinsExport(vineyardId: string): Promise<Record<string, any>[]> {
   const { data, error } = await (supabase as any)

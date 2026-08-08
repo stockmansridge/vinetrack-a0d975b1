@@ -10,6 +10,7 @@ import MapSourceBadge from "@/components/MapSourceBadge";
 import { Card } from "@/components/ui/card";
 import PinDetailPanel, { PinRecord } from "@/components/PinDetailPanel";
 import PinDetailSheet from "@/components/PinDetailSheet";
+import { usePinPlacements } from "@/lib/pinPlacementQuery";
 import { parsePolygonPoints, LatLng } from "@/lib/paddockGeometry";
 import { validCoord } from "@/lib/pinsDiagnostics";
 import { useDiagnosticPanel } from "@/lib/systemAdmin";
@@ -250,6 +251,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
     }
   }, [withCoords, paddockPolygons, mapReady, selectedVineyardId, pins.length, catColours]);
 
+  const { placements } = usePinPlacements(useMemo(() => pins.map((p) => p.id), [pins]));
   const selected = pins.find((p) => p.id === selectedId) ?? null;
 
   if (!selectedVineyardId) {
@@ -304,6 +306,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
               pin={selected}
               paddockName={selected.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
               paddockRowDirection={selected.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+              placement={placements.get(selected.id) ?? null}
               onClose={() => setSelectedId(null)}
             />
           ) : (
@@ -319,6 +322,7 @@ export default function ApplePinsMap({ onUnavailable, statusFilter = "active" }:
         pin={selected}
         paddockName={selected?.paddock_id ? paddockNameById.get(selected.paddock_id) ?? null : null}
         paddockRowDirection={selected?.paddock_id ? paddockRowDirById.get(selected.paddock_id) ?? null : null}
+        placement={selected ? placements.get(selected.id) ?? null : null}
       />
     </div>
   );

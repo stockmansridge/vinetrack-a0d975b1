@@ -15,6 +15,7 @@ import { usePinCategoryColours } from "@/lib/pinCategoryColoursQuery";
 import { extractPathPoints } from "@/lib/tripReport";
 import type { Trip } from "@/lib/tripsQuery";
 import PinDetailSheet from "@/components/PinDetailSheet";
+import { useResolvedPinPlacement } from "@/lib/pinPlacementQuery";
 import type { PinRecord } from "@/components/PinDetailPanel";
 import MapSourceBadge from "@/components/MapSourceBadge";
 import { Badge } from "@/components/ui/badge";
@@ -299,6 +300,7 @@ export default function BlockMap({
         {!mapError && <MapSourceBadge source="apple" />}
       </div>
       <PinDetailSheet
+        placement={activePinPlacement}
         open={!!activePin}
         onOpenChange={(o) => !o && setActivePin(null)}
         pin={activePin}

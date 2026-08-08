@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/table";
 import BlockMap from "@/components/BlockMap";
 import PinDetailSheet from "@/components/PinDetailSheet";
+import { useResolvedPinPlacement } from "@/lib/pinPlacementQuery";
 import type { PinRecord } from "@/components/PinDetailPanel";
 
 type DateRangeKey = "7d" | "30d" | "90d" | "season" | "all";
@@ -581,6 +582,7 @@ export default function BlockDetailPage() {
       </Card>
 
       <PinDetailSheet
+        placement={activePinPlacement}
         open={!!activePin}
         onOpenChange={(o) => !o && setActivePin(null)}
         pin={activePin}
