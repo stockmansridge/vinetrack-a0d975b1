@@ -108,3 +108,38 @@ describe("placement never affects colour or mapping", () => {
     expect(screen.getByTestId("dot").getAttribute("style")).toContain("rgb(0, 122, 255)");
   });
 });
+
+// --- SQL 171 row-field regression (row_summary vs pin/driving row numbers) ---
+describe("placement row information", () => {
+  it("displays row_summary verbatim", () => {
+    const d = pinPlacementDisplay({ pin_id: "1", row_summary: "Rows 41–43", location_scope: "row", is_location_assigned: true } as any);
+    expect(d.rowLabel).toBe("Rows 41–43");
+  });
+
+  it("displays attached row when row_summary is null", () => {
+    const d = pinPlacementDisplay({ pin_id: "2", paddock_name: "Pinot Noir", row_summary: null, pin_row_number: 87, pin_side: "Left", location_scope: "point", location_assignment_basis: "snapped_point", is_location_assigned: true } as any);
+    expect(d.rowLabel).not.toBe("—");
+    expect(d.rowLabel).toContain("On Row: Row 87");
+    expect(d.rowLabel).toContain("Side: Left hand side");
+    expect(d.blockLabel).toBe("Pinot Noir");
+  });
+
+  it("preserves fractional row numbers and shows the driving row", () => {
+    const d = pinPlacementDisplay({ pin_id: "3", pin_row_number: 87.5, driving_row_number: 87, pin_side: "right", is_location_assigned: true } as any);
+    expect(d.rowLabel).toContain("On Row: Row 87.5");
+    expect(d.rowLabel).toContain("Driving row: 87");
+    expect(d.rowLabel).toContain("Side: Right hand side");
+  });
+
+  it("block-only pin shows an em dash row", () => {
+    const d = pinPlacementDisplay({ pin_id: "4", paddock_name: "Pinot Noir", location_scope: "block", is_location_assigned: true } as any);
+    expect(d.rowLabel).toBe("—");
+    expect(d.blockLabel).toBe("Pinot Noir");
+  });
+
+  it("coordinate-only point shows Point location with em dash row", () => {
+    const d = pinPlacementDisplay({ pin_id: "5", location_scope: "point", location_assignment_basis: "point_coordinates", is_location_assigned: true } as any);
+    expect(d.blockLabel).toBe("Point location");
+    expect(d.rowLabel).toBe("—");
+  });
+});

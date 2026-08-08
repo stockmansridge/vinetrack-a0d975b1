@@ -203,7 +203,7 @@ function titleCaseSide(side: AttachableSide): string | null {
  * Customer-facing side wording — "Left hand side" / "Right hand side".
  * Falls back to title-cased original for non-LR values (e.g. "North").
  */
-function formatSideWording(side: AttachableSide): string | null {
+export function formatSideWording(side: AttachableSide): string | null {
   if (!side) return null;
   const s = String(side).trim().toLowerCase();
   if (!s) return null;
