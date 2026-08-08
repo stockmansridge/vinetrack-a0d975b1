@@ -100,12 +100,28 @@ export function pinPlacementDisplay(
     assignmentLabel = POINT_LOCATION_LABEL;
   }
 
+  // Row information. SQL 171 exposes BOTH a row-scope summary and the
+  // per-point attachment fields; they are not interchangeable.
+  const rowLines: string[] = [];
+  if (rowSummary) {
+    rowLines.push(rowSummary);
+  } else {
+    const attached = numeric(row?.pin_row_number);
+    const driving = numeric(row?.driving_row_number);
+    const side = formatSideWording(row?.pin_side ?? null);
+    if (attached != null) rowLines.push(`On Row: Row ${attached}`);
+    if (driving != null) rowLines.push(`Driving row: ${driving}`);
+    if (side && (attached != null || driving != null)) rowLines.push(`Side: ${side}`);
+  }
+
   return {
     assigned,
     showWarning,
     metadataIncomplete,
     blockLabel,
-    rowLabel: rowSummary ?? EM_DASH,
+    rowLabel: rowLines.length ? rowLines.join("\n") : EM_DASH,
+    rowLines,
+    hasRowInfo: rowLines.length > 0,
     assignmentLabel,
     scope,
     basis,
@@ -113,3 +129,12 @@ export function pinPlacementDisplay(
     rowSummary,
   };
 }
+
+/** Numbers verbatim — fractional values are never rounded. */
+function numeric(v: number | string | null | undefined): string | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return String(n);
+}
+
