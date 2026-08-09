@@ -54,7 +54,7 @@ export function usePinPlacements(pinIds: string[]) {
 
 /** Single-pin RPC — only where one pin is resolved in isolation. */
 export async function resolvePinPlacement(pinId: string): Promise<PinPlacementRow | null> {
-  const { data, error } = await (supabase as any).rpc("resolve_pin_placement", { pin_id: pinId });
+  const { data, error } = await (supabase as any).rpc("resolve_pin_placement", { p_pin_id: pinId });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return (row as PinPlacementRow) ?? null;
