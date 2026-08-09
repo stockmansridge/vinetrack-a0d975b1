@@ -1,7 +1,7 @@
 // READ-ONLY placement queries against the SQL 171 contract.
 //   display/table  → public.pin_placements
 //   exports        → public.pins_export
-//   single pin     → public.resolve_pin_placement(pin_id)
+//   single pin     → public.resolve_pin_placement(p_pin_id)
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { PinPlacementRow } from "@/lib/pinPlacement";
