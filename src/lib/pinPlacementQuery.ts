@@ -1,7 +1,7 @@
 // READ-ONLY placement queries against the SQL 171 contract.
 //   display/table  → public.pin_placements
 //   exports        → public.pins_export
-//   single pin     → public.resolve_pin_placement(pin_id)
+//   single pin     → public.resolve_pin_placement(p_pin_id)
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import type { PinPlacementRow } from "@/lib/pinPlacement";
@@ -54,7 +54,7 @@ export function usePinPlacements(pinIds: string[]) {
 
 /** Single-pin RPC — only where one pin is resolved in isolation. */
 export async function resolvePinPlacement(pinId: string): Promise<PinPlacementRow | null> {
-  const { data, error } = await (supabase as any).rpc("resolve_pin_placement", { pin_id: pinId });
+  const { data, error } = await (supabase as any).rpc("resolve_pin_placement", { p_pin_id: pinId });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return (row as PinPlacementRow) ?? null;
