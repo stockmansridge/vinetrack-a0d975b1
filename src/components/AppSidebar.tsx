@@ -39,6 +39,7 @@ import {
   Mail,
   Upload,
   CreditCard,
+  Plug,
 } from "lucide-react";
 import {
   Collapsible,
