@@ -39,6 +39,7 @@ import {
   Mail,
   Upload,
   CreditCard,
+  Plug,
 } from "lucide-react";
 import {
   Collapsible,
@@ -163,6 +164,7 @@ const toolsSystemAdmin: NavItem[] = [
 // "Account" — customer-facing, Owner-only billing (Phase 2E).
 const account: NavItem[] = [
   { title: "Billing", url: "/account/billing", icon: CreditCard },
+  { title: "Integrations & API", url: "/settings/integrations", icon: Plug },
 ];
 
 const systemAdmin: NavItem[] = [
@@ -311,7 +313,11 @@ export function AppSidebar() {
         )}
 
 
-        {showAccountBilling && renderGroup("Account", account, false)}
+        {renderGroup(
+          "Account",
+          visible(showAccountBilling ? account : account.filter((i) => i.url !== "/account/billing")),
+          false,
+        )}
 
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 

@@ -27,6 +27,7 @@ const ROUTE_ALLOW: Record<string, Role[]> = {
   "/setup/weather": ADMIN_ROLES,
   "/setup/tractors": ADMIN_ROLES,
   "/settings/data-coverage": ADMIN_ROLES,
+  "/settings/integrations": ["owner"],
   "/reports/data-coverage": ADMIN_ROLES,
 
   // Owner/manager/supervisor — operational records and templates
