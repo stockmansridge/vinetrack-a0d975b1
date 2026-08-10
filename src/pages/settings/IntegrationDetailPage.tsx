@@ -26,8 +26,9 @@ import {
 } from "@/lib/integrationsQuery";
 
 export default function IntegrationDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const clientId = id ?? "";
+  // Route is declared as /settings/integrations/:clientId — read that param.
+  const params = useParams<{ clientId?: string; id?: string }>();
+  const clientId = params.clientId ?? params.id ?? "";
   const { currentRole, loading: rolesLoading } = useVineyard();
   const canManage = currentRole === "owner";
   const [tab, setTab] = useState("overview");
