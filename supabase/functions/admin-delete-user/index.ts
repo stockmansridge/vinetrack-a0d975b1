@@ -70,7 +70,6 @@ const VINEYARD_TABLES = [
   "rainfall_daily",
   "vineyard_weather_observations",
   "vineyard_weather_integrations",
-  "vineyard_alert_user_status_placeholder",
   "vineyard_alerts",
   "vineyard_alert_preferences",
   "vineyard_button_configs",
