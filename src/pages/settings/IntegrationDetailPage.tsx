@@ -147,7 +147,7 @@ export default function IntegrationDetailPage() {
           />
         </TabsContent>
         <TabsContent value="logs">
-          <IntegrationApiLogsTab />
+          <IntegrationApiLogsTab clientId={clientId} />
         </TabsContent>
         <TabsContent value="audit">
           <IntegrationAuditTab clientId={clientId} />
