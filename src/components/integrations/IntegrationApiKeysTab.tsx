@@ -138,7 +138,7 @@ export function IntegrationApiKeysTab({
           <div>
             <CardTitle className="text-base">API keys</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Secrets are shown once at creation and can never be retrieved again.
+              This API key cannot be viewed again. Create a new key if the secret has been lost.
             </p>
           </div>
           {canManage && !disabled && (
