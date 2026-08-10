@@ -89,6 +89,7 @@ export const INTEGRATION_KEYS = {
   scopes: (id: string) => ["integrations", "client", id, "scopes"] as const,
   keys: (id: string) => ["integrations", "client", id, "api-keys"] as const,
   audit: (id: string) => ["integrations", "client", id, "audit"] as const,
+  requests: (id: string) => ["integrations", "client", id, "api-requests"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -675,14 +676,138 @@ export function useRevokeApiKey(clientId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Backend gap (reported, not worked around)
+// API request logs — SQL 177 (integration_list_api_requests)
 // ---------------------------------------------------------------------------
+//
+// Live signature (verified against the shared backend):
+//   integration_list_api_requests(
+//     p_client_id uuid,
+//     p_from timestamptz, p_to timestamptz,
+//     p_status_code int, p_vineyard_id uuid, p_api_key_id uuid,
+//     p_error_only boolean,
+//     p_limit int,
+//     p_before_created_at timestamptz, p_before_id uuid
+//   )
+// Keyset pagination: pass the last row's created_at + id as the "before" cursor.
+// The portal never reads public.integration_api_requests directly.
 
-/** Stage 2 created public.integration_api_requests but no management read RPC
- *  exists yet. The portal will not query the protected table directly. */
-export const API_REQUEST_LOG_RPC_AVAILABLE = false;
-export const API_REQUEST_LOG_GAP_MESSAGE =
-  "Backend read RPC required for integration_api_requests.";
+export const API_REQUEST_LOG_RPC = "integration_list_api_requests";
+export const API_REQUEST_PAGE_SIZE = 100;
+
+export interface IntegrationApiRequest {
+  id: string;
+  created_at: string | null;
+  method: string | null;
+  endpoint: string | null;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  api_key_id: string | null;
+  api_key_name: string | null;
+  api_key_prefix: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  error_code: string | null;
+}
+
+export interface ApiRequestCursor {
+  created_at: string;
+  id: string;
+}
+
+export interface ApiRequestFilters {
+  from?: string | null;
+  to?: string | null;
+  statusCode?: number | null;
+  vineyardId?: string | null;
+  apiKeyId?: string | null;
+  errorOnly?: boolean;
+}
+
+export function normaliseApiRequest(row: Record<string, any>): IntegrationApiRequest {
+  return {
+    id: String(row.id ?? row.request_id ?? ""),
+    created_at: str(row.created_at) ?? str(row.requested_at) ?? str(row.occurred_at),
+    method: str(row.method) ?? str(row.http_method),
+    endpoint: str(row.endpoint) ?? str(row.path) ?? str(row.route),
+    vineyard_id: str(row.vineyard_id),
+    vineyard_name: str(row.vineyard_name),
+    api_key_id: str(row.api_key_id),
+    api_key_name: str(row.api_key_name) ?? str(row.key_name),
+    api_key_prefix: str(row.api_key_prefix) ?? str(row.key_prefix),
+    status_code: num(row.status_code ?? row.http_status ?? row.response_status),
+    duration_ms: num(row.duration_ms ?? row.response_time_ms ?? row.latency_ms),
+    error_code: str(row.error_code) ?? str(row.error),
+  };
+}
+
+/** Compact status tone. Expected permission failures are not catastrophic. */
+export function apiStatusTone(
+  status: number | null,
+): "success" | "warning" | "error" | "neutral" {
+  if (status === null) return "neutral";
+  if (status >= 200 && status < 300) return "success";
+  if (status >= 400 && status < 500) return "warning";
+  if (status >= 500) return "error";
+  return "neutral";
+}
+
+export function formatDuration(ms: number | null): string {
+  if (ms === null) return "—";
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
+}
+
+/** Cursor for the next keyset page, or null when the page was not full. */
+export function nextApiRequestCursor(
+  rows: IntegrationApiRequest[],
+  limit: number,
+): ApiRequestCursor | null {
+  if (rows.length < limit) return null;
+  const last = rows[rows.length - 1];
+  if (!last?.created_at || !last.id) return null;
+  return { created_at: last.created_at, id: last.id };
+}
+
+export function apiRequestRpcArgs(
+  clientId: string,
+  filters: ApiRequestFilters,
+  cursor: ApiRequestCursor | null,
+  limit = API_REQUEST_PAGE_SIZE,
+): Record<string, unknown> {
+  return {
+    p_client_id: clientId,
+    p_from: filters.from || null,
+    p_to: filters.to || null,
+    p_status_code: filters.statusCode ?? null,
+    p_vineyard_id: filters.vineyardId || null,
+    p_api_key_id: filters.apiKeyId || null,
+    p_error_only: filters.errorOnly ?? false,
+    p_limit: limit,
+    p_before_created_at: cursor?.created_at ?? null,
+    p_before_id: cursor?.id ?? null,
+  };
+}
+
+export function useIntegrationApiRequests(
+  clientId: string | undefined,
+  filters: ApiRequestFilters,
+  cursor: ApiRequestCursor | null,
+  limit = API_REQUEST_PAGE_SIZE,
+) {
+  return useQuery({
+    queryKey: [
+      ...INTEGRATION_KEYS.requests(clientId ?? ""),
+      filters,
+      cursor,
+      limit,
+    ],
+    enabled: !!clientId,
+    queryFn: async () =>
+      asArray(
+        await rpc(API_REQUEST_LOG_RPC, apiRequestRpcArgs(clientId!, filters, cursor, limit)),
+      ).map(normaliseApiRequest),
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Formatting
