@@ -313,7 +313,11 @@ export function AppSidebar() {
         )}
 
 
-        {showAccountBilling && renderGroup("Account", account, false)}
+        {renderGroup(
+          "Account",
+          visible(showAccountBilling ? account : account.filter((i) => i.url !== "/account/billing")),
+          false,
+        )}
 
         {isSystemAdmin && renderGroup("System Admin", systemAdmin, false)}
 
