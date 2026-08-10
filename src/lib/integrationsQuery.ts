@@ -89,6 +89,7 @@ export const INTEGRATION_KEYS = {
   scopes: (id: string) => ["integrations", "client", id, "scopes"] as const,
   keys: (id: string) => ["integrations", "client", id, "api-keys"] as const,
   audit: (id: string) => ["integrations", "client", id, "audit"] as const,
+  requests: (id: string) => ["integrations", "client", id, "api-requests"] as const,
 };
 
 // ---------------------------------------------------------------------------
