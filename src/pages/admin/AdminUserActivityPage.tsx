@@ -606,12 +606,37 @@ export default function AdminUserActivityPage() {
                       {c.render(r)}
                     </TableCell>
                   ))}
+                  <TableCell className="whitespace-nowrap text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setUserToDelete(r)}
+                      title="Delete user"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </Card>
+
+      <DeleteUserDialog
+        user={
+          userToDelete
+            ? {
+                user_id: userToDelete.user_id,
+                email: userToDelete.email,
+                display_name: userToDelete.display_name,
+              }
+            : null
+        }
+        onOpenChange={(open) => !open && setUserToDelete(null)}
+        onDeleted={() => refetch()}
+      />
     </AdminGate>
   );
 }
