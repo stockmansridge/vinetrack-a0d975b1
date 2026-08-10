@@ -167,7 +167,7 @@ export function DeleteUserDialog({ user, onOpenChange, onDeleted }: Props) {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={
                 deleting ||
-                confirmText.trim().toLowerCase() !== (expected || user?.user_id ?? "").toLowerCase()
+                confirmText.trim().toLowerCase() !== (expected || (user?.user_id ?? "")).toLowerCase()
               }
               onClick={(e) => {
                 e.preventDefault();
