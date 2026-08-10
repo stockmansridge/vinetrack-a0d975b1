@@ -163,6 +163,7 @@ const toolsSystemAdmin: NavItem[] = [
 // "Account" — customer-facing, Owner-only billing (Phase 2E).
 const account: NavItem[] = [
   { title: "Billing", url: "/account/billing", icon: CreditCard },
+  { title: "Integrations & API", url: "/settings/integrations", icon: Plug },
 ];
 
 const systemAdmin: NavItem[] = [
