@@ -15,14 +15,16 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { RefreshCw, Download } from "lucide-react";
+import { RefreshCw, Download, Trash2 } from "lucide-react";
 import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
+import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
 import {
   AdminGate,
   AdminPageHeader,
@@ -335,6 +337,7 @@ export default function AdminUserActivityPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [loginFilter, setLoginFilter] = useState<LastLoginFilter>("all");
+  const [userToDelete, setUserToDelete] = useState<UserActivityRow | null>(null);
 
   const vineyards = useMemo(
     () =>
@@ -596,6 +599,7 @@ export default function AdminUserActivityPage() {
                     {c.label}
                   </ReorderableHead>
                 ))}
+                <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -606,12 +610,37 @@ export default function AdminUserActivityPage() {
                       {c.render(r)}
                     </TableCell>
                   ))}
+                  <TableCell className="whitespace-nowrap text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setUserToDelete(r)}
+                      title="Delete user"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </Card>
+
+      <DeleteUserDialog
+        user={
+          userToDelete
+            ? {
+                user_id: userToDelete.user_id,
+                email: userToDelete.email,
+                display_name: userToDelete.display_name,
+              }
+            : null
+        }
+        onOpenChange={(open) => !open && setUserToDelete(null)}
+        onDeleted={() => refetch()}
+      />
     </AdminGate>
   );
 }

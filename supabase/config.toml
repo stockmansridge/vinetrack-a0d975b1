@@ -81,3 +81,6 @@ verify_jwt = false
 [functions.satellite-backfill-status]
 verify_jwt = false
 
+
+[functions.admin-delete-user]
+verify_jwt = false
