@@ -26,6 +26,10 @@ import BlockDetailPage from "./pages/BlockDetailPage";
 import PaddocksListPage from "./pages/PaddocksListPage";
 import NotFound from "./pages/NotFound";
 import DataCoverage from "./pages/DataCoverage";
+import IntegrationsPage from "./pages/settings/IntegrationsPage";
+import IntegrationDetailPage from "./pages/settings/IntegrationDetailPage";
+import IntegrationDocsPage from "./pages/settings/IntegrationDocsPage";
+
 import PaddocksPage from "./pages/setup/PaddocksPage";
 import TractorsPage from "./pages/setup/TractorsPage";
 import VineyardMachinesPage from "./pages/setup/VineyardMachinesPage";
@@ -222,6 +226,10 @@ const App = () => (
                     <Route path="/billing" element={<BillingPage />} />
                     <Route path="/account/billing" element={<AccountBillingPage />} />
                     <Route path="/settings/data-coverage" element={<DataCoverage />} />
+                    <Route path="/settings/integrations" element={<IntegrationsPage />} />
+                    <Route path="/settings/integrations/docs" element={<IntegrationDocsPage />} />
+                    <Route path="/settings/integrations/:clientId" element={<IntegrationDetailPage />} />
+
                     <Route element={<RequireIrrigationCapability capability="can_import_irrigation" />}>
                       <Route path="/irrigation/import" element={<IrrigationImportPage />} />
                     </Route>
