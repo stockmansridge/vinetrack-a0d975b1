@@ -220,6 +220,16 @@ export const SENSITIVE_SCOPE_NOTES: Record<string, string> = {
     "Reserved for future team-level integration access. Does not grant resource access on its own.",
 };
 
+/** Sensitive scopes gate approved cost/labour/team fields, not resources. */
+export function isSensitiveScope(scope: string): boolean {
+  return Object.prototype.hasOwnProperty.call(SENSITIVE_SCOPE_NOTES, scope);
+}
+
+/** The external API is read-only; write scopes exist in the catalog but cannot be granted. */
+export function isWriteScope(scope: string): boolean {
+  return scope.split(":")[1] === "write";
+}
+
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "integration.created": "Integration created",
   "integration.updated": "Integration updated",
