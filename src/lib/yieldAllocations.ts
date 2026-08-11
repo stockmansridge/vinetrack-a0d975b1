@@ -182,3 +182,90 @@ export function allocationOptionLabel(
   return parts.join(" · ");
 }
 
+
+// ---------------------------------------------------------------------------
+// Planting groups (production reporting unit)
+//
+// A physical `variety_allocations[]` entry is a configuration section, NOT a
+// reporting unit. Two sections of the same Variety + Clone + Rootstock in the
+// same block are analytically one planting and must be reported (and picked)
+// as one group with the summed hectares. Block Setup keeps showing every
+// physical section — this grouping applies to Yield reporting and Picking
+// selection only.
+//
+// Identity: block + variety + clone identity + rootstock identity, using the
+// stable catalogue keys when present and the display snapshots as fallback.
+// ---------------------------------------------------------------------------
+
+export interface PlantingGroup extends AllocationUnit {
+  /** Every physical allocation id behind the group (may be empty for legacy). */
+  allocationIds: string[];
+  /** Member allocation unit keys (physical sections). */
+  memberKeys: string[];
+  /** Number of physical sections combined into this group. */
+  sectionCount: number;
+}
+
+/** Stable, deterministic planting-group key for one block. */
+export function plantingGroupIdentity(u: {
+  variety?: string | null;
+  cloneKey?: string | null;
+  cloneLabel?: string | null;
+  rootstockKey?: string | null;
+  rootstockLabel?: string | null;
+}): string {
+  return [
+    norm(u.variety),
+    norm(u.cloneKey || u.cloneLabel),
+    norm(u.rootstockKey || u.rootstockLabel),
+  ].join("|");
+}
+
+/**
+ * Combine physical allocations into planting groups. Hectares and percentages
+ * are summed so a block's groups always reconcile back to the block total.
+ */
+export function buildPlantingGroups(units: AllocationUnit[]): PlantingGroup[] {
+  const out: PlantingGroup[] = [];
+  const byIdentity = new Map<string, PlantingGroup>();
+  for (const u of units) {
+    const blockId = u.key.split("::")[0] ?? "";
+    const identity = plantingGroupIdentity(u);
+    const key = `${blockId}::group::${identity}`;
+    const existing = byIdentity.get(key);
+    if (existing) {
+      if (u.areaHa != null) existing.areaHa = (existing.areaHa ?? 0) + u.areaHa;
+      if (u.percent != null) existing.percent = (existing.percent ?? 0) + u.percent;
+      if (u.id) existing.allocationIds.push(u.id);
+      existing.memberKeys.push(u.key);
+      existing.sectionCount += 1;
+      // Keep the first non-empty display snapshots.
+      existing.cloneLabel = existing.cloneLabel ?? u.cloneLabel;
+      existing.rootstockLabel = existing.rootstockLabel ?? u.rootstockLabel;
+      continue;
+    }
+    const group: PlantingGroup = {
+      id: null,
+      key,
+      variety: u.variety,
+      cloneLabel: u.cloneLabel,
+      cloneKey: u.cloneKey,
+      rootstockLabel: u.rootstockLabel,
+      rootstockKey: u.rootstockKey,
+      percent: u.percent,
+      areaHa: u.areaHa,
+      allocationIds: u.id ? [u.id] : [],
+      memberKeys: [u.key],
+      sectionCount: 1,
+    };
+    byIdentity.set(key, group);
+    out.push(group);
+  }
+  return out;
+}
+
+/** Group option label, e.g. "Pinot Noir · Clone 777 · Richter 110 · 1.26 ha · 2 sections". */
+export function plantingGroupOptionLabel(g: PlantingGroup, areaUnitLabel = "ha"): string {
+  const base = allocationOptionLabel(g, areaUnitLabel);
+  return g.sectionCount > 1 ? `${base} · ${g.sectionCount} sections` : base;
+}
