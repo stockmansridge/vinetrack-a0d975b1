@@ -680,33 +680,34 @@ function DetailedForm({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>Clone / planting</Label>
-            {cloneOptions.length ? (
-              <Select value={clone} onValueChange={setClone}>
-                <SelectTrigger aria-label="Clone">
-                  <SelectValue placeholder="Select a clone" />
+            <Label>Planting</Label>
+            {plantingOptions.length ? (
+              <Select value={plantingKey} onValueChange={setPlantingKey}>
+                <SelectTrigger aria-label="Planting">
+                  <SelectValue placeholder="Select a planting" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_CLONE}>Not specified</SelectItem>
-                  {cloneOptions.map((c) => (
-                    <SelectItem key={c.clone} value={c.clone}>
-                      {c.label}
+                  <SelectItem value={NOT_LINKED}>Planting not linked</SelectItem>
+                  {plantingOptions.map((u) => (
+                    <SelectItem key={u.key} value={u.key}>
+                      {allocationOptionLabel(u, rf.areaUnitLabel)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
               <p className="text-xs text-muted-foreground">
-                No clone recorded for this variety in the block configuration.
+                No plantings configured for this variety in the block.
               </p>
             )}
-            {cloneOptions.some((c) => c.ambiguous) && (
+            {plantingKey === NOT_LINKED && plantingOptions.length > 1 && (
               <p className="text-xs text-muted-foreground">
-                Two plantings share this clone on different rootstocks — the pick records the clone
-                only, so it will show as unallocated in yield reporting.
+                Pick the exact planting so this harvest is attributed to one allocation — plantings
+                can share a clone and rootstock and are separated by allocated area.
               </p>
             )}
           </div>
+
         </div>
 
         <div className="grid grid-cols-2 gap-3">
