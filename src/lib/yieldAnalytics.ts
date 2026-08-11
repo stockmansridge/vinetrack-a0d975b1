@@ -474,10 +474,13 @@ export function threeYearTrend(
     .filter((p) => p.value != null && Number.isFinite(p.value))
     .sort((a, b) => b.vintage - a.vintage);
   const current = valid.find((p) => p.vintage === currentVintage)?.value ?? null;
-  const window = valid.filter((p) => p.vintage <= currentVintage).slice(0, 3);
+  // Only the genuine three-vintage window ending at the current vintage counts;
+  // older, non-contiguous vintages must not masquerade as a 3-year average.
+  const window = valid.filter((p) => p.vintage <= currentVintage && p.vintage >= currentVintage - 2);
   if (window.length < 3) return { current, threeYearAverage: null, difference: null, years: window.length };
   const sum = window.reduce((a, p) => a + (p.value as number), 0);
-  const avg = metricIsRate ? sum / window.length : sum / window.length;
+  const avg = sum / window.length;
+
   return {
     current,
     threeYearAverage: avg,
