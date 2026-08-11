@@ -23,6 +23,8 @@ export interface OverviewBlockVariety {
   rootstockLabel?: string | null;
   /** Allocated hectares for this planting. */
   areaHa?: number | null;
+  /** Physical allocation sections combined into this planting group. */
+  sectionCount?: number | null;
 }
 
 export interface OverviewBlockInput {
@@ -54,6 +56,7 @@ export interface OverviewVarietyRow {
   rootstockLabel: string | null;
   percent: number | null;
   areaHa: number | null;
+  sectionCount: number | null;
   estimatedTonnes: number | null;
   actualTonnes: number | null;
   actualSource: ActualSource;
@@ -225,6 +228,7 @@ export function buildYieldOverview(args: {
         rootstockLabel: v.rootstockLabel ?? null,
         percent: v.percent ?? null,
         areaHa: v.areaHa ?? null,
+        sectionCount: v.sectionCount ?? null,
         estimatedTonnes: allocEst ?? shares[i] ?? null,
         actualTonnes: actual,
         actualSource: actual == null ? null : sourceOf(parts),

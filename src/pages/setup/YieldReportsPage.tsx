@@ -746,6 +746,9 @@ function YieldOverviewGrid({
                             : v.percent != null
                             ? `${fmtNum(v.percent)}%`
                             : null,
+                          v.sectionCount != null && v.sectionCount > 1
+                            ? `${v.sectionCount} sections`
+                            : null,
                           h && h.tonnes != null && v.areaHa
                             ? perArea(h.tonnes / v.areaHa)
                             : null,
