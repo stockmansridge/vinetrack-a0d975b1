@@ -106,14 +106,19 @@ export async function fetchYieldReportsForVineyard(
 }
 
 // ---------------------------------------------------------------------------
-// Blocks (area + effective vine count) — needed for tonnage parity with iOS.
+// Blocks (area + effective vine count + variety allocations) — needed for
+// tonnage parity with iOS and for Record Actual Yield's block → variety flow.
+// NOTE: `paddocks` has NO `variety` column; varieties live in the
+// `variety_allocations` jsonb (docs/supabase-schema.md §3.8).
 // ---------------------------------------------------------------------------
 
-export async function fetchYieldBlocks(vineyardId: string): Promise<SessionBlockInfo[]> {
+export type YieldBlockInfo = SessionBlockInfo & { varietyAllocations: any };
+
+export async function fetchYieldBlocks(vineyardId: string): Promise<YieldBlockInfo[]> {
   const { data, error } = await supabase
     .from("paddocks")
     .select(
-      "id, name, variety, rows, polygon_points, vine_spacing, vine_count_override, row_length_override, row_length_overrides",
+      "id, name, rows, polygon_points, vine_spacing, vine_count_override, row_length_override, row_length_overrides, variety_allocations",
     )
     .eq("vineyard_id", vineyardId)
     .is("deleted_at", null)
@@ -126,9 +131,11 @@ export async function fetchYieldBlocks(vineyardId: string): Promise<SessionBlock
       name: (p.name as string) ?? null,
       areaHa: m.areaHa > 0 ? m.areaHa : null,
       vineCount: m.vineCount,
-    } satisfies SessionBlockInfo;
+      varietyAllocations: p.variety_allocations ?? null,
+    } satisfies YieldBlockInfo;
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // Soft deletes (RPC only — the portal never hard-deletes production data).
