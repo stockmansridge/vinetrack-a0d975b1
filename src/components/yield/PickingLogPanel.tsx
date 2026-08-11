@@ -105,19 +105,25 @@ export default function PickingLogPanel({
   const plantingFor = (r: PickingRecord) => {
     const units = unitsByBlock.get((r.paddock_id ?? "").toLowerCase()) ?? [];
     const match = matchAllocation(units, r.variety_name, r.clone, {
-      allocationId: r.variety_allocation_id ?? null,
+      plantingGroupKey: r.planting_group_key ?? null,
+      allocationIds: r.variety_allocation_ids ?? null,
       rootstock: r.rootstock ?? null,
     });
     const unit = match.key ? units.find((u) => u.key === match.key) ?? null : null;
+    // Historical picks with no stored group key stay explicitly unlinked until
+    // someone assigns the planting by editing the record.
+    const linked = match.reason === "planting-group-key" || match.reason === "allocation-id";
     return {
       label:
         plantingLabel({
           cloneLabel: r.clone ?? unit?.cloneLabel ?? null,
           rootstockLabel: r.rootstock ?? unit?.rootstockLabel ?? null,
         }) ?? null,
-      ambiguous: match.reason === "ambiguous",
+      linked,
+      ambiguous: !linked && !r.planting_group_key,
     };
   };
+
 
 
   const del = useMutation({

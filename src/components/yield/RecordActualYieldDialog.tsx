@@ -522,18 +522,22 @@ function DetailedForm({
   }, [units, variety]);
 
   // Editing: resolve the stored pick to its planting once the block config has
-  // loaded. The stored allocation id wins; otherwise the snapshots are used and
-  // an ambiguous pick simply stays "Planting not linked".
+  // loaded. The stored planting-group key wins; member allocation ids come
+  // next; a historical pick with neither stays "Planting not linked".
   const resolvedForRecord = useRef(false);
   useEffect(() => {
     if (!editing || resolvedForRecord.current || !record || !units.length) return;
     resolvedForRecord.current = true;
     const match = matchAllocation(units, record.variety_name, record.clone, {
-      allocationId: record.variety_allocation_id ?? null,
+      plantingGroupKey: record.planting_group_key ?? null,
+      allocationIds: record.variety_allocation_ids ?? null,
       rootstock: record.rootstock ?? null,
     });
-    if (match.key) setPlantingKey(match.key);
+    if (match.key && (match.reason === "planting-group-key" || match.reason === "allocation-id")) {
+      setPlantingKey(match.key);
+    }
   }, [editing, record, units]);
+
 
   // Nothing ambiguous to warn about any more — the allocation id is explicit.
   const selectedUnit = useMemo(
@@ -581,17 +585,15 @@ function DetailedForm({
         varietyId: variety?.id ?? null,
         varietyKey: variety?.key ?? null,
         varietyName: variety?.name ?? null,
-        // Snapshots stay attached to the pick; the allocation id is the link.
+        // Snapshots stay attached to the pick; the group key is the link.
         clone: selectedUnit?.cloneLabel ?? (editing ? record?.clone ?? null : null),
         rootstock: selectedUnit?.rootstockLabel ?? (editing ? record?.rootstock ?? null : null),
-        // Group identity: a planting group can span several physical sections,
-        // so the first member id is only a hint until the shared backend
-        // contract exposes a group-level reference. A group with more than one
-        // section is deliberately NOT attributed to one arbitrary section.
-        varietyAllocationId:
-          selectedUnit && selectedUnit.sectionCount === 1
-            ? selectedUnit.allocationIds[0] ?? null
-            : null,
+        // sql/184: the planting group is authoritative and every member section
+        // id travels with the pick for audit. A group spanning several sections
+        // is stored as the group, never as one arbitrary section.
+        plantingGroupKey: selectedUnit?.groupKey ?? null,
+        varietyAllocationIds: selectedUnit?.allocationIds ?? null,
+
         weightKg: weight,
         sugarValue: num(sugar),
         sugarUnit,

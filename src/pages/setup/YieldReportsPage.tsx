@@ -54,10 +54,13 @@ import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview"
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import {
   aggregatePickingRecordsByPlanting,
+  detailedActualsFromPlantingTotals,
+  fetchPickingPlantingTotals,
   fetchPickingRecords,
   supersedeActualYield,
   type ActualYieldEntry,
 } from "@/lib/pickingRecordsQuery";
+
 import {
   buildAllocationUnits,
   buildPlantingGroups,
@@ -137,6 +140,15 @@ export default function YieldReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchPickingRecords(selectedVineyardId!),
   });
+  // Allocation/group-level actuals come from the server aggregation
+  // (picking_yield_planting_totals, sql/184); the record-level read is the
+  // fallback while the view is still warming or a pick is unlinked.
+  const pickingPlantingTotalsQ = useQuery({
+    queryKey: ["picking_yield_planting_totals", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPickingPlantingTotals(selectedVineyardId!),
+  });
+
 
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
@@ -370,16 +382,21 @@ export default function YieldReportsPage() {
     }));
 
     // Detailed picks supersede Basic for the same Block + Variety + Vintage —
-    // they are never summed together. Picks keep their clone snapshot so they
-    // can be attributed to a single planting where that is unambiguous.
-    const detailed = aggregatePickingRecordsByPlanting(pickingRecordsQ.data ?? []).filter(
+    // they are never summed together. The server planting-totals view is the
+    // authority; the record-level aggregation is the fallback.
+    const plantingTotals = pickingPlantingTotalsQ.data ?? [];
+    const detailedAll = plantingTotals.length
+      ? detailedActualsFromPlantingTotals(plantingTotals)
+      : aggregatePickingRecordsByPlanting(pickingRecordsQ.data ?? []);
+    const detailed = detailedAll.filter(
       (d) => activeVintage === ANY || String(d.vintage ?? "") === activeVintage,
     );
 
     const actuals = supersedeActualYield(basic, detailed).map((a) => {
       const units = unitsByBlock.get((a.blockId ?? "").toLowerCase()) ?? [];
       const match = matchAllocation(units, a.variety, a.clone ?? null, {
-        allocationId: a.varietyAllocationId ?? null,
+        plantingGroupKey: a.plantingGroupKey ?? null,
+        allocationIds: a.varietyAllocationIds ?? null,
         rootstock: a.rootstock ?? null,
       });
       return {
@@ -401,7 +418,9 @@ export default function YieldReportsPage() {
     rowVintage,
     sessionSummaries,
     pickingRecordsQ.data,
+    pickingPlantingTotalsQ.data,
   ]);
+
 
 
 

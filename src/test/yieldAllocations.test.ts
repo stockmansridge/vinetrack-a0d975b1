@@ -305,10 +305,18 @@ describe("planting groups", () => {
 
   it("resolves a member allocation id to its group", () => {
     const groups = buildPlantingGroups(units);
-    expect(matchAllocation(groups, "Pinot Noir", null, { allocationId: "a3" }).key).toBe(
+    expect(matchAllocation(groups, "Pinot Noir", null, { allocationIds: ["a3"] }).key).toBe(
       groups[0].key,
     );
   });
+
+  it("resolves a stored planting group key outright", () => {
+    const groups = buildPlantingGroups(units);
+    const m = matchAllocation(groups, null, null, { plantingGroupKey: groups[1].groupKey });
+    expect(m.key).toBe(groups[1].key);
+    expect(m.reason).toBe("planting-group-key");
+  });
+
 
   it("labels multi-section groups", () => {
     const groups = buildPlantingGroups(units);

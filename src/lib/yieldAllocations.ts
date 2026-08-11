@@ -108,6 +108,7 @@ export interface AllocationMatch {
   /** Matched allocation key, or null when it cannot be resolved safely. */
   key: string | null;
   reason:
+    | "planting-group-key"
     | "allocation-id"
     | "single-variety-allocation"
     | "clone-snapshot"
@@ -117,8 +118,10 @@ export interface AllocationMatch {
 }
 
 export interface AllocationMatchHints {
-  /** Authoritative stable `variety_allocations[].id` stored on the record. */
-  allocationId?: string | null;
+  /** Authoritative planting-group key stored on the record (sql/184). */
+  plantingGroupKey?: string | null;
+  /** Member `variety_allocations[].id` values stored with the record. */
+  allocationIds?: string[] | null;
   /** Rootstock display snapshot, when the record carries one. */
   rootstock?: string | null;
 }
@@ -126,10 +129,10 @@ export interface AllocationMatchHints {
 /**
  * Resolve one harvest record to a planting.
  *
- * The stable allocation id wins outright when the record carries one. Without
- * it the clone (and rootstock, when stored) snapshots are used, and anything
- * still ambiguous is reported as such — the caller shows "Planting not linked"
- * rather than guessing or duplicating the harvest.
+ * The stored planting-group key wins outright; member allocation ids are the
+ * next authority. Without either, the clone (and rootstock) snapshots are used
+ * and anything still ambiguous is reported as such — the caller shows
+ * "Planting not linked" rather than guessing or duplicating the harvest.
  */
 export function matchAllocation(
   units: AllocationUnit[],
@@ -138,14 +141,19 @@ export function matchAllocation(
   hints: AllocationMatchHints = {},
 ): AllocationMatch {
   if (!units.length) return { key: null, reason: "no-allocations" };
-  const allocationId = (hints.allocationId ?? "").trim();
-  if (allocationId) {
+  const groupKey = norm(hints.plantingGroupKey);
+  if (groupKey) {
+    const byGroup = units.find((u) => plantingGroupIdentity(u) === groupKey);
+    if (byGroup) return { key: byGroup.key, reason: "planting-group-key" };
+  }
+  const ids = (hints.allocationIds ?? []).map(norm).filter(Boolean);
+  if (ids.length) {
     // Works for physical allocations and for planting groups, which carry every
     // member allocation id so a section-level id still resolves to its group.
     const byId = units.find(
       (u) =>
-        norm(u.id) === norm(allocationId) ||
-        ((u as PlantingGroup).allocationIds ?? []).some((id) => norm(id) === norm(allocationId)),
+        ids.includes(norm(u.id)) ||
+        ((u as PlantingGroup).allocationIds ?? []).some((id) => ids.includes(norm(id))),
     );
     if (byId) return { key: byId.key, reason: "allocation-id" };
   }
@@ -167,6 +175,7 @@ export function matchAllocation(
   if (byClone.length === 1) return { key: byClone[0].key, reason: "clone-snapshot" };
   return { key: null, reason: "ambiguous" };
 }
+
 
 /**
  * Selectable planting label. Allocated area is included because two plantings
@@ -204,6 +213,8 @@ export function allocationOptionLabel(
 // ---------------------------------------------------------------------------
 
 export interface PlantingGroup extends AllocationUnit {
+  /** Canonical, block-scoped `planting_group_key` written on picking records. */
+  groupKey: string;
   /** Every physical allocation id behind the group (may be empty for legacy). */
   allocationIds: string[];
   /** Member allocation unit keys (physical sections). */
@@ -211,6 +222,7 @@ export interface PlantingGroup extends AllocationUnit {
   /** Number of physical sections combined into this group. */
   sectionCount: number;
 }
+
 
 /** Stable, deterministic planting-group key for one block. */
 export function plantingGroupIdentity(u: {
@@ -253,6 +265,8 @@ export function buildPlantingGroups(units: AllocationUnit[]): PlantingGroup[] {
     const group: PlantingGroup = {
       id: null,
       key,
+      groupKey: identity,
+
       variety: u.variety,
       cloneLabel: u.cloneLabel,
       cloneKey: u.cloneKey,
