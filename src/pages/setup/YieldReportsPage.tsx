@@ -372,7 +372,10 @@ export default function YieldReportsPage() {
 
     const actuals = supersedeActualYield(basic, detailed).map((a) => {
       const units = unitsByBlock.get((a.blockId ?? "").toLowerCase()) ?? [];
-      const match = matchAllocation(units, a.variety, a.clone ?? null);
+      const match = matchAllocation(units, a.variety, a.clone ?? null, {
+        allocationId: a.varietyAllocationId ?? null,
+        rootstock: a.rootstock ?? null,
+      });
       return {
         blockId: a.blockId,
         variety: a.variety,
