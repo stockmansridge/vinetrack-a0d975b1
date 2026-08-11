@@ -40,7 +40,7 @@ import {
 
 const HA_PER_AC = 0.40468564224;
 const VINTAGE_HISTORY_YEARS = 15;
-const NO_CLONE = "__none__";
+
 /** Sentinel for a pick that is deliberately not tied to a planting allocation. */
 const NOT_LINKED = "__not_linked__";
 
