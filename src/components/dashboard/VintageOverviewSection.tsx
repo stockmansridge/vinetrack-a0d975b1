@@ -57,6 +57,23 @@ export default function VintageOverviewSection() {
     staleTime: 60_000,
   });
 
+  const workTasksCountQ = useQuery({
+    queryKey: ["vintage-work-tasks-count", selectedVineyardId, startISO, endISO],
+    enabled: !!selectedVineyardId,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("work_tasks")
+        .select("*", { count: "exact", head: true })
+        .eq("vineyard_id", selectedVineyardId!)
+        .is("deleted_at", null)
+        .gte("date", startISO)
+        .lte("date", endISO);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60_000,
+  });
+
   const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
   const rangeHint = `${startISO} → ${endISO}`;
