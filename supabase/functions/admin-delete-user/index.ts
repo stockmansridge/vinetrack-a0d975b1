@@ -93,7 +93,7 @@ const VINEYARD_TABLES = [
   "audit_events",
   "vinetrack_invoice_records",
   "vinetrack_user_licences",
-  "vineyard_members",
+  // NOTE: vineyard_members is handled separately (last-owner trigger).
 ];
 
 // User-scoped tables cleaned up before the profile / auth user is removed.
