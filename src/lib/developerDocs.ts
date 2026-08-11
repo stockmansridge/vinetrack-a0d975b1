@@ -14,6 +14,7 @@ import eventCatalogue from "../../docs/webhooks/vinetrack-events-v1.json";
 import developerGuideRaw from "../../docs/vinetrack-developer-platform.md?raw";
 import webhookGuideRaw from "../../docs/vinetrack-webhooks.md?raw";
 import changelogRaw from "../../docs/vinetrack-api-changelog.md?raw";
+import postmanCollectionRaw from "../../docs/postman/VineTrack-v1.postman_collection.json?raw";
 
 export const OPENAPI_YAML = openApiRaw;
 export const OPENAPI_FILENAME = "vinetrack-v1.yaml";
