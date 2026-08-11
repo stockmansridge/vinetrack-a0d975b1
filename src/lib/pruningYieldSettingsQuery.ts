@@ -101,8 +101,14 @@ export async function savePruningYieldSettings(
   if (!input.vineyardId || !input.paddockId) {
     throw new Error("A block must be selected before saving pruning settings.");
   }
-  const now = new Date().toISOString();
+  // Canonical write (docs/pruning-yield-settings-contract.md §"How to write"):
+  // UPSERT on the block key `(vineyard_id, paddock_id)` with
+  // resolution=merge-duplicates — never a plain insert, never keyed on `id`.
+  // A client `id` is minted for the insert case; concurrent clients converge on
+  // the first row and the returned representation is authoritative. The upsert
+  // also resurrects a soft-deleted row for the block.
   const payload = {
+    id: crypto.randomUUID(),
     vineyard_id: input.vineyardId,
     paddock_id: input.paddockId,
     prune_method: input.pruneMethod,
@@ -111,41 +117,21 @@ export async function savePruningYieldSettings(
     spurs_per_vine: input.spursPerVine,
     buds_per_cane: input.budsPerCane,
     canes_per_vine: input.canesPerVine,
-    vines_per_ha: input.vinesPerHa,
+    // null clears the override so clients re-derive from the block config.
+    vines_per_ha: input.vinesPerHa > 0 ? input.vinesPerHa : null,
     bunch_weight_grams: input.bunchWeightGrams,
-    updated_at: now,
-    client_updated_at: now,
-    deleted_at: null,
+    client_updated_at: new Date().toISOString(),
   };
-
-  const { data: existing, error: findError } = await (supabase as any)
-    .from(PRUNING_YIELD_SETTINGS_TABLE)
-    .select("id")
-    .eq("vineyard_id", input.vineyardId)
-    .eq("paddock_id", input.paddockId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (findError) throw findError;
-
-  if (existing?.id) {
-    const { data, error } = await (supabase as any)
-      .from(PRUNING_YIELD_SETTINGS_TABLE)
-      .update(payload)
-      .eq("id", existing.id)
-      .select(PRUNING_YIELD_SETTINGS_COLUMNS)
-      .single();
-    if (error) throw error;
-    return mapSettingsRow(data);
-  }
 
   const { data, error } = await (supabase as any)
     .from(PRUNING_YIELD_SETTINGS_TABLE)
-    .insert(payload)
+    .upsert(payload, { onConflict: "vineyard_id,paddock_id" })
     .select(PRUNING_YIELD_SETTINGS_COLUMNS)
     .single();
   if (error) throw error;
   return mapSettingsRow(data);
 }
+
 
 /** Canonical defaults for a block with no shared saved settings. */
 export function defaultSettingsForBlock(
