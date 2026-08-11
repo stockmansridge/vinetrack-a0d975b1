@@ -627,6 +627,7 @@ export default function AdminUserActivityPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </Card>
 
