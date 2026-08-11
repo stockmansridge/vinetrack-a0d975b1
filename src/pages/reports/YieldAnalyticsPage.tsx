@@ -775,36 +775,34 @@ export default function YieldAnalyticsPage() {
       <Card className="p-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Vintage mode</div>
-            <Select value={vintageMode} onValueChange={(v) => setVintageMode(v as "single" | "range")}>
-              <SelectTrigger className="h-9 w-[140px]">
+            <div className="text-xs text-muted-foreground">Vintage</div>
+            <Select
+              value={vintageMode === "range" ? RANGE : vintage}
+              onValueChange={(v) => {
+                if (v === RANGE) {
+                  setVintageMode("range");
+                  return;
+                }
+                setVintageMode("single");
+                setVintage(v);
+              }}
+            >
+              <SelectTrigger className="h-9 w-[170px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="single">Single vintage</SelectItem>
-                <SelectItem value="range">Multi-year range</SelectItem>
+                <SelectItem value={ALL}>All vintages</SelectItem>
+                {vintages.map((v) => (
+                  <SelectItem key={v} value={String(v)}>
+                    {v}
+                  </SelectItem>
+                ))}
+                <SelectItem value={RANGE}>Custom range…</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {vintageMode === "single" ? (
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Vintage</div>
-              <Select value={vintage} onValueChange={setVintage}>
-                <SelectTrigger className="h-9 w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All vintages</SelectItem>
-                  {vintages.map((v) => (
-                    <SelectItem key={v} value={String(v)}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
+          {vintageMode === "range" && (
             <>
               <div className="space-y-1">
                 <div className="text-xs text-muted-foreground">From</div>
@@ -840,6 +838,7 @@ export default function YieldAnalyticsPage() {
               </div>
             </>
           )}
+
 
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Variety</div>
