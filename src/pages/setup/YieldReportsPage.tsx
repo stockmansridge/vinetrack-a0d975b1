@@ -705,15 +705,17 @@ function YieldOverviewGrid({
               ))}
               {c.unallocated.map((u, i) => (
                 <div
-                  key={`unallocated-${i}`}
+                  key={`not-linked-${i}`}
                   className="rounded-md border border-dashed border-border p-2 text-sm"
                 >
                   <div className="text-foreground">
-                    {u.variety ?? "No variety recorded"} — unallocated
+                    {u.variety ?? "No variety recorded"} — planting not linked
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Could not be matched to a single planting in this block.
+                    These picks are not linked to a specific planting allocation yet. Open the pick
+                    and assign the planting to include it at allocation level.
                   </div>
+
                   <div className="text-xs text-muted-foreground">
                     Actual: {fmtNum(u.actualTonnes)} t
                   </div>
