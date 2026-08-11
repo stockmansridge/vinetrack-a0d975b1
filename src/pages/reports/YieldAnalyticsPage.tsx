@@ -998,54 +998,94 @@ export default function YieldAnalyticsPage() {
 
 
           {/* Production breakdown */}
-          <section className="space-y-3">
+          <section id="ya-production" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Production breakdown
             </h2>
             <div className="grid gap-3 lg:grid-cols-2">
               <ChartCard
                 title="Yield by variety"
-                subtitle="Share of total tonnes harvested"
+                subtitle="Share of total tonnes harvested — click a variety to filter"
                 empty={!varietyPie.rows.length}
+                action={
+                  varietyPie.mode === "pie" ? (
+                    <div className="flex rounded-md border p-0.5">
+                      {(["share", "tonnes"] as const).map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          size="sm"
+                          variant={varietyView === m ? "secondary" : "ghost"}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setVarietyView(m)}
+                        >
+                          {m === "share" ? "Share" : "Tonnes"}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : undefined
+                }
               >
-                {varietyPie.mode === "pie" ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie
-                        data={varietyPie.rows}
-                        dataKey="tonnes"
-                        nameKey="label"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        onClick={(d: any) => setVarietyFilter([d?.label])}
-                      >
-                        {varietyPie.rows.map((_, i) => (
-                          <Cell key={i} fill={colourFor(i)} cursor="pointer" />
-                        ))}
-                      </Pie>
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <RTooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null;
-                          const g = payload[0].payload as GroupedMetrics;
-                          const share = totals.tonnes > 0 ? (g.tonnes / totals.tonnes) * 100 : null;
-                          return (
-                            <div style={tooltipStyle} className="p-2 space-y-0.5">
-                              <div className="font-medium">{g.label}</div>
-                              <div>{num(g.tonnes)} t ({num(share, 1)}% of crop)</div>
-                              <div>Area: {areaFmt(g.areaHa)}</div>
-                              <div>
-                                {perArea(g.tonnesPerHa)} t/{rf.areaUnitLabel}
+                {varietyPie.mode === "pie" && varietyView === "share" ? (
+                  <div className="grid items-center gap-3 sm:grid-cols-2">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie
+                          data={varietyPie.rows}
+                          dataKey="tonnes"
+                          nameKey="label"
+                          innerRadius={55}
+                          outerRadius={92}
+                          paddingAngle={2}
+                          onClick={(d: any) => setVarietyFilter([d?.label])}
+                        >
+                          {varietyPie.rows.map((_, i) => (
+                            <Cell key={i} fill={colourFor(i)} cursor="pointer" />
+                          ))}
+                        </Pie>
+                        <RTooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const g = payload[0].payload as GroupedMetrics;
+                            const share = totals.tonnes > 0 ? (g.tonnes / totals.tonnes) * 100 : null;
+                            return (
+                              <div style={tooltipStyle} className="p-2 space-y-0.5">
+                                <div className="font-medium">{g.label}</div>
+                                <div>{num(g.tonnes)} t ({num(share, 1)}% of crop)</div>
+                                <div>Area: {areaFmt(g.areaHa)}</div>
+                                <div>
+                                  {perArea(g.tonnesPerHa)} t/{rf.areaUnitLabel}
+                                </div>
+                                <div>Avg sale price: {money(g.pricePerTonne)} /t</div>
+                                <div>Grape revenue: {money(g.revenue)}</div>
                               </div>
-                              <div>Avg price: {money(g.pricePerTonne)} /t</div>
-                              <div>Crop value: {money(g.revenue)}</div>
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <ol className="space-y-1 text-xs">
+                      {varietyPie.rows.map((g, i) => (
+                        <li key={g.key}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-accent"
+                            onClick={() => setVarietyFilter([g.label])}
+                          >
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ background: colourFor(i) }}
+                            />
+                            <span className="flex-1 truncate">{g.label}</span>
+                            <span className="tabular-nums">{num(g.tonnes)} t</span>
+                            <span className="w-12 text-right tabular-nums text-muted-foreground">
+                              {totals.tonnes > 0 ? `${num((g.tonnes / totals.tonnes) * 100, 1)}%` : "—"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 ) : (
                   rankBars(varietyPie.rows, METRICS[0], (label) => setVarietyFilter([label]))
                 )}
@@ -1053,7 +1093,7 @@ export default function YieldAnalyticsPage() {
 
               <ChartCard
                 title="Yield by block"
-                subtitle="Top 15 blocks — click a bar to filter"
+                subtitle="Top 15 blocks by block name — click a bar to filter"
                 empty={!blockGroups.length}
                 action={<MetricSelect value={blockMetric} onChange={setBlockMetric} />}
               >
@@ -1066,25 +1106,27 @@ export default function YieldAnalyticsPage() {
           </section>
 
           {/* Productivity */}
-          <section className="space-y-3">
+          <section id="ya-productivity" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Productivity</h2>
             <div className="grid gap-3 lg:grid-cols-2">
               <ChartCard
                 title={`Yield / ${rf.areaUnitLabel} by variety`}
-                subtitle="Based on the hectares of the blocks growing each variety"
+                subtitle="Yield divided by allocated variety hectares"
+                info="Mixed-variety blocks are split using the existing variety allocation percentages recorded against the block, so each variety is measured against its own allocated area."
                 empty={!varietyGroups.length}
               >
                 {rankBars(varietyGroups, METRICS[1], (label) => setVarietyFilter([label]))}
               </ChartCard>
               <ChartCard
                 title={`Yield / ${rf.areaUnitLabel} by block`}
-                subtitle="Dashed line marks the property average"
+                subtitle="Block names — dashed line marks the property average"
                 empty={!blockGroups.length}
               >
                 {rankBars(blockGroups, METRICS[1])}
               </ChartCard>
             </div>
           </section>
+
 
           {/* Grape sales — sold-fruit metrics only */}
           <section id="ya-sales" className="space-y-3 scroll-mt-24">
