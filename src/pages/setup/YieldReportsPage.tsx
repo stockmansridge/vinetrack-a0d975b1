@@ -642,24 +642,62 @@ function YieldOverviewGrid({
             </div>
             <div className="space-y-2">
               {c.varieties.map((v, i) => (
-                <div key={`${v.variety ?? "none"}-${i}`} className="text-sm">
+                <div
+                  key={v.allocationKey ?? `${v.variety ?? "none"}-${i}`}
+                  className="rounded-md border border-border/60 p-2 text-sm"
+                >
                   <div className="text-foreground">{v.variety ?? "No variety configured"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {plantingLabel(v) ?? "Clone / rootstock not recorded"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Allocated area:{" "}
+                    {v.areaHa != null
+                      ? rf.area(v.areaHa, 2)
+                      : v.percent != null
+                      ? `${fmtNum(v.percent)}%`
+                      : "—"}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Estimated: {v.estimatedTonnes == null ? "—" : `${fmtNum(v.estimatedTonnes)} t`}
                   </div>
+                  <div className="text-xs text-muted-foreground">
+                    Actual: {v.actualTonnes == null ? "—" : `${fmtNum(v.actualTonnes)} t`}
+                  </div>
                   {v.actualTonnes != null && (
-                    <>
-                      <div className="text-xs text-muted-foreground">
-                        Actual: {fmtNum(v.actualTonnes)} t
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {actualSourceLabel(v.actualSource, v.actualPickCount)}
-                      </div>
-                    </>
+                    <div className="text-xs text-muted-foreground">
+                      {actualSourceLabel(v.actualSource, v.actualPickCount)}
+                    </div>
                   )}
                 </div>
               ))}
+              {c.unallocated.map((u, i) => (
+                <div
+                  key={`unallocated-${i}`}
+                  className="rounded-md border border-dashed border-border p-2 text-sm"
+                >
+                  <div className="text-foreground">
+                    {u.variety ?? "No variety recorded"} — unallocated
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Could not be matched to a single planting in this block.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Actual: {fmtNum(u.actualTonnes)} t
+                  </div>
+                </div>
+              ))}
+              {(c.actualTonnes != null || c.estimatedTonnes != null) && (
+                <div className="flex items-baseline justify-between border-t pt-2 text-sm">
+                  <span className="text-muted-foreground text-xs">Block total</span>
+                  <span className="tabular-nums text-xs">
+                    Est {c.estimatedTonnes == null ? "—" : `${fmtNum(c.estimatedTonnes)} t`} · Actual{" "}
+                    {c.actualTonnes == null ? "—" : `${fmtNum(c.actualTonnes)} t`}
+                  </span>
+                </div>
+              )}
             </div>
+
           </Card>
         ))}
       </div>
