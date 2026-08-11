@@ -53,11 +53,17 @@ import {
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import {
-  detailedActualsFromTotals,
-  fetchPickingYieldTotals,
+  aggregatePickingRecordsByPlanting,
+  fetchPickingRecords,
   supersedeActualYield,
   type ActualYieldEntry,
 } from "@/lib/pickingRecordsQuery";
+import {
+  buildAllocationUnits,
+  matchAllocation,
+  plantingLabel,
+  type AllocationUnit,
+} from "@/lib/yieldAllocations";
 import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
@@ -122,11 +128,13 @@ export default function YieldReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchYieldBlocks(selectedVineyardId!),
   });
-  // Detailed Picking Log totals (server aggregation view, sql/180).
-  const pickingTotalsQ = useQuery({
-    queryKey: ["picking_yield_totals", selectedVineyardId],
+  // Detailed Picking Log rows (sql/180). Read at record level rather than via
+  // the Block + Variety aggregation view so the clone snapshot — the only
+  // planting identity a pick carries — survives into the Overview.
+  const pickingRecordsQ = useQuery({
+    queryKey: ["picking_records", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchPickingYieldTotals(selectedVineyardId!),
+    queryFn: () => fetchPickingRecords(selectedVineyardId!),
   });
 
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
@@ -304,14 +312,31 @@ export default function YieldReportsPage() {
 
   // ---- Overview (quick view) for the selected vintage -----------------------
   const overviewCards = useMemo(() => {
-    const blocks = (blocksQ.data ?? []).map((b) => ({
-      id: b.id,
-      name: b.name ?? null,
-      areaHa: b.areaHa ?? null,
-      varieties: resolvePaddockAllocations(b.varietyAllocations, varietyMap)
-        .map((a) => ({ name: (a.name ?? "").trim() || null, percent: a.percent }))
-        .filter((v) => v.name != null),
-    }));
+    // Allocation units per block — each planting (variety + clone + rootstock)
+    // is its own production unit so yield is never repeated across rows.
+    const unitsByBlock = new Map<string, AllocationUnit[]>();
+    const blocks = (blocksQ.data ?? []).map((b) => {
+      const units = buildAllocationUnits({
+        blockId: b.id,
+        areaHa: b.areaHa ?? null,
+        allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
+      }).filter((u) => u.variety != null);
+      unitsByBlock.set(b.id.toLowerCase(), units);
+      return {
+        id: b.id,
+        name: b.name ?? null,
+        areaHa: b.areaHa ?? null,
+        varieties: units.map((u) => ({
+          name: u.variety,
+          percent: u.percent,
+          allocationKey: u.key,
+          allocationId: u.id,
+          cloneLabel: u.cloneLabel,
+          rootstockLabel: u.rootstockLabel,
+          areaHa: u.areaHa,
+        })),
+      };
+    });
 
     const vintageRows = allRows.filter(
       (r) => activeVintage === ANY || String(rowVintage(r) ?? "") === activeVintage,
@@ -339,18 +364,24 @@ export default function YieldReportsPage() {
     }));
 
     // Detailed picks supersede Basic for the same Block + Variety + Vintage —
-    // they are never summed together.
-    const detailed = detailedActualsFromTotals(pickingTotalsQ.data ?? []).filter(
+    // they are never summed together. Picks keep their clone snapshot so they
+    // can be attributed to a single planting where that is unambiguous.
+    const detailed = aggregatePickingRecordsByPlanting(pickingRecordsQ.data ?? []).filter(
       (d) => activeVintage === ANY || String(d.vintage ?? "") === activeVintage,
     );
 
-    const actuals = supersedeActualYield(basic, detailed).map((a) => ({
-      blockId: a.blockId,
-      variety: a.variety,
-      tonnes: a.tonnes,
-      source: a.source,
-      pickCount: a.pickCount ?? null,
-    }));
+    const actuals = supersedeActualYield(basic, detailed).map((a) => {
+      const units = unitsByBlock.get((a.blockId ?? "").toLowerCase()) ?? [];
+      const match = matchAllocation(units, a.variety, a.clone ?? null);
+      return {
+        blockId: a.blockId,
+        variety: a.variety,
+        tonnes: a.tonnes,
+        allocationKey: match.key,
+        source: a.source,
+        pickCount: a.pickCount ?? null,
+      };
+    });
 
     return buildYieldOverview({ blocks, estimatedByBlock, actuals });
   }, [
@@ -360,8 +391,9 @@ export default function YieldReportsPage() {
     activeVintage,
     rowVintage,
     sessionSummaries,
-    pickingTotalsQ.data,
+    pickingRecordsQ.data,
   ]);
+
 
 
   if (import.meta.env.DEV) {
@@ -642,24 +674,62 @@ function YieldOverviewGrid({
             </div>
             <div className="space-y-2">
               {c.varieties.map((v, i) => (
-                <div key={`${v.variety ?? "none"}-${i}`} className="text-sm">
+                <div
+                  key={v.allocationKey ?? `${v.variety ?? "none"}-${i}`}
+                  className="rounded-md border border-border/60 p-2 text-sm"
+                >
                   <div className="text-foreground">{v.variety ?? "No variety configured"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {plantingLabel(v) ?? "Clone / rootstock not recorded"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Allocated area:{" "}
+                    {v.areaHa != null
+                      ? rf.area(v.areaHa, 2)
+                      : v.percent != null
+                      ? `${fmtNum(v.percent)}%`
+                      : "—"}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Estimated: {v.estimatedTonnes == null ? "—" : `${fmtNum(v.estimatedTonnes)} t`}
                   </div>
+                  <div className="text-xs text-muted-foreground">
+                    Actual: {v.actualTonnes == null ? "—" : `${fmtNum(v.actualTonnes)} t`}
+                  </div>
                   {v.actualTonnes != null && (
-                    <>
-                      <div className="text-xs text-muted-foreground">
-                        Actual: {fmtNum(v.actualTonnes)} t
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {actualSourceLabel(v.actualSource, v.actualPickCount)}
-                      </div>
-                    </>
+                    <div className="text-xs text-muted-foreground">
+                      {actualSourceLabel(v.actualSource, v.actualPickCount)}
+                    </div>
                   )}
                 </div>
               ))}
+              {c.unallocated.map((u, i) => (
+                <div
+                  key={`unallocated-${i}`}
+                  className="rounded-md border border-dashed border-border p-2 text-sm"
+                >
+                  <div className="text-foreground">
+                    {u.variety ?? "No variety recorded"} — unallocated
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Could not be matched to a single planting in this block.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Actual: {fmtNum(u.actualTonnes)} t
+                  </div>
+                </div>
+              ))}
+              {(c.actualTonnes != null || c.estimatedTonnes != null) && (
+                <div className="flex items-baseline justify-between border-t pt-2 text-sm">
+                  <span className="text-muted-foreground text-xs">Block total</span>
+                  <span className="tabular-nums text-xs">
+                    Est {c.estimatedTonnes == null ? "—" : `${fmtNum(c.estimatedTonnes)} t`} · Actual{" "}
+                    {c.actualTonnes == null ? "—" : `${fmtNum(c.actualTonnes)} t`}
+                  </span>
+                </div>
+              )}
             </div>
+
           </Card>
         ))}
       </div>

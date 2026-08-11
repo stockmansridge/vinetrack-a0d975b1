@@ -232,6 +232,8 @@ export interface ActualYieldEntry {
   blockId: string | null;
   blockName?: string | null;
   variety: string | null;
+  /** Clone display snapshot stored on the pick (planting identity hint). */
+  clone?: string | null;
   vintage: number | null;
   tonnes: number | null;
   areaHa?: number | null;
@@ -239,6 +241,43 @@ export interface ActualYieldEntry {
   /** Number of individual picks behind a detailed entry. */
   pickCount?: number | null;
 }
+
+/**
+ * Detailed picks aggregated by Block + Variety + Clone + Vintage.
+ *
+ * The clone snapshot is the ONLY planting identity `picking_records` carries
+ * today, so it must survive aggregation — collapsing to Block + Variety is
+ * what causes same-variety plantings to share (and repeat) one total.
+ */
+export function aggregatePickingRecordsByPlanting(
+  records: PickingRecord[],
+): ActualYieldEntry[] {
+  const byKey = new Map<string, ActualYieldEntry>();
+  for (const r of records) {
+    if (!r.paddock_id || !Number.isFinite(Number(r.weight_kg))) continue;
+    const clone = r.clone?.trim() || null;
+    const k = `${pickingKey(r.paddock_id, r.variety_name, r.vintage)}|${norm(clone)}`;
+    const tonnes = Number(r.weight_kg) / 1000;
+    const cur = byKey.get(k);
+    if (cur) {
+      cur.tonnes = (cur.tonnes ?? 0) + tonnes;
+      cur.pickCount = (cur.pickCount ?? 0) + 1;
+    } else {
+      byKey.set(k, {
+        blockId: r.paddock_id,
+        blockName: r.paddock_name ?? null,
+        variety: r.variety_name?.trim() || null,
+        clone,
+        vintage: r.vintage ?? null,
+        tonnes,
+        source: "detailed",
+        pickCount: 1,
+      });
+    }
+  }
+  return Array.from(byKey.values());
+}
+
 
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
 
