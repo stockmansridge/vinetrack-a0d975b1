@@ -90,6 +90,39 @@ export default function PickingLogPanel({
 
   const totalTonnes = rows.reduce((a, r) => a + (Number(r.weight_kg) || 0) / 1000, 0);
 
+  // Vintage totals grouped by Block + Variety (client-side view of the same
+  // rows shown below — the backend aggregation view stays the source of truth
+  // for yield precedence).
+  const groups = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        block: string;
+        variety: string;
+        picks: number;
+        kg: number;
+        soldKg: number;
+        unsoldKg: number;
+      }
+    >();
+    for (const r of rows) {
+      const block = r.paddock_name || "—";
+      const variety = r.variety_name || "—";
+      const k = `${block.toLowerCase()}|${variety.toLowerCase()}`;
+      const kg = Number(r.weight_kg) || 0;
+      const g =
+        map.get(k) ?? { block, variety, picks: 0, kg: 0, soldKg: 0, unsoldKg: 0 };
+      g.picks += 1;
+      g.kg += kg;
+      if (r.sold) g.soldKg += kg;
+      else g.unsoldKg += kg;
+      map.set(k, g);
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => a.block.localeCompare(b.block) || a.variety.localeCompare(b.variety),
+    );
+  }, [rows]);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
@@ -103,6 +136,63 @@ export default function PickingLogPanel({
           />
         </div>
       </div>
+
+      {groups.length > 0 && (
+        <Card className="p-4 space-y-2">
+          <div className="text-sm font-medium">
+            {vintage != null ? `Vintage ${vintage} totals` : "Totals (all vintages)"} — by block and
+            variety
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Block</TableHead>
+                <TableHead>Variety</TableHead>
+                <TableHead className="text-right">Picks</TableHead>
+                <TableHead className="text-right">Total kg</TableHead>
+                <TableHead className="text-right">Tonnes</TableHead>
+                <TableHead className="text-right">Sold t</TableHead>
+                <TableHead className="text-right">Unsold t</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groups.map((g) => (
+                <TableRow key={`${g.block}|${g.variety}`}>
+                  <TableCell className="font-medium">{g.block}</TableCell>
+                  <TableCell>{g.variety}</TableCell>
+                  <TableCell className="text-right tabular-nums">{g.picks}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmt(g.kg, 0)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmt(g.kg / 1000)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmt(g.soldKg / 1000)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmt(g.unsoldKg / 1000)}
+                  </TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/40">
+                <TableCell colSpan={2} className="font-semibold">
+                  All blocks
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {rows.length}
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {fmt(totalTonnes * 1000, 0)}
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {fmt(totalTonnes)}
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {fmt(groups.reduce((a, g) => a + g.soldKg, 0) / 1000)}
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {fmt(groups.reduce((a, g) => a + g.unsoldKg, 0) / 1000)}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
       <Card>
         <Table>
