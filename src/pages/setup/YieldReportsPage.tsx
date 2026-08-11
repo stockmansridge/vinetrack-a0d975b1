@@ -53,11 +53,17 @@ import {
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import {
-  detailedActualsFromTotals,
-  fetchPickingYieldTotals,
+  aggregatePickingRecordsByPlanting,
+  fetchPickingRecords,
   supersedeActualYield,
   type ActualYieldEntry,
 } from "@/lib/pickingRecordsQuery";
+import {
+  buildAllocationUnits,
+  matchAllocation,
+  plantingLabel,
+  type AllocationUnit,
+} from "@/lib/yieldAllocations";
 import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
@@ -122,11 +128,13 @@ export default function YieldReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchYieldBlocks(selectedVineyardId!),
   });
-  // Detailed Picking Log totals (server aggregation view, sql/180).
-  const pickingTotalsQ = useQuery({
-    queryKey: ["picking_yield_totals", selectedVineyardId],
+  // Detailed Picking Log rows (sql/180). Read at record level rather than via
+  // the Block + Variety aggregation view so the clone snapshot — the only
+  // planting identity a pick carries — survives into the Overview.
+  const pickingRecordsQ = useQuery({
+    queryKey: ["picking_records", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchPickingYieldTotals(selectedVineyardId!),
+    queryFn: () => fetchPickingRecords(selectedVineyardId!),
   });
 
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
