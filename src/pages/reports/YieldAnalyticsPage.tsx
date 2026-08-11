@@ -40,6 +40,8 @@ import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import MultiSelect from "@/components/yield/analytics/MultiSelect";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
