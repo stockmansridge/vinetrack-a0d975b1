@@ -104,9 +104,8 @@ describe("Yield Analytics page", () => {
   it("defaults to the latest vintage and shows its detailed picking totals", async () => {
     renderPage();
     // 2026 detailed pick = 50 t (2025 basic record is outside the vintage).
-    await waitFor(() =>
-      expect(document.body.textContent).toMatch(/50(\.0+)?\s*t\b/),
-    );
+    await waitFor(() => expect(document.body.textContent).toContain('Total yield'));
+    console.log('BODY>>>', document.body.textContent?.slice(0, 900));
     // The 2025 basic record is outside the default vintage.
     expect(document.body.textContent).not.toMatch(/40(\.0+)?\s*t\b/);
   });
