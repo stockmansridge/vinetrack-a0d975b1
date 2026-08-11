@@ -33,6 +33,8 @@ import {
   RegionSettings,
   fetchVineyardRegionSettings,
   saveVineyardRegionSettings,
+  resolveSugarUnit,
+  sugarUnitLabel,
 } from "@/lib/vineyardRegionSettingsQuery";
 import { describeVineyardError } from "@/lib/vineyardSettingsQuery";
 
@@ -243,6 +245,24 @@ export default function VineyardRegionSettingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </Field>
+
+              <Field label="Grape sugar measurement">
+                <Select
+                  value={draft.sugar_measurement_unit ?? resolveSugarUnit(draft)}
+                  onValueChange={(v) => set("sugar_measurement_unit", v as "brix" | "baume")}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="baume">{sugarUnitLabel("baume")}</SelectItem>
+                    <SelectItem value="brix">{sugarUnitLabel("brix")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used for new picking entries. Existing picks keep the unit they were recorded
+                  with.
+                </p>
               </Field>
             </div>
 

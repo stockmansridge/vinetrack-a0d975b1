@@ -16,6 +16,7 @@ export type FuelUnit = "litres" | "gallons";
 export type SprayRateAreaUnit = "hectare" | "acre";
 export type DateFormat = "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
 export type TerminologyRegion = "AU_NZ" | "US_CA" | "UK_ZA";
+export type SugarUnit = "brix" | "baume";
 
 export interface RegionSettings {
   country_code: CountryCode;
@@ -28,6 +29,8 @@ export interface RegionSettings {
   date_format: DateFormat;
   terminology_region: TerminologyRegion;
   timezone: string | null;
+  /** Default grape sugar unit for NEW picking entries (sql/180). */
+  sugar_measurement_unit: SugarUnit | null;
 }
 
 export const AU_DEFAULTS: RegionSettings = {
@@ -41,6 +44,7 @@ export const AU_DEFAULTS: RegionSettings = {
   date_format: "DD/MM/YYYY",
   terminology_region: "AU_NZ",
   timezone: null,
+  sugar_measurement_unit: null,
 };
 
 export const COUNTRY_OPTIONS: { code: CountryCode; name: string }[] = [
@@ -65,6 +69,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     date_format: "DD/MM/YYYY",
     terminology_region: "AU_NZ",
     timezone: null,
+    sugar_measurement_unit: null,
   },
   US: {
     country_code: "US",
@@ -77,6 +82,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     date_format: "MM/DD/YYYY",
     terminology_region: "US_CA",
     timezone: null,
+    sugar_measurement_unit: null,
   },
   CA: {
     country_code: "CA",
@@ -89,6 +95,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     date_format: "YYYY-MM-DD",
     terminology_region: "US_CA",
     timezone: null,
+    sugar_measurement_unit: null,
   },
   GB: {
     country_code: "GB",
@@ -101,6 +108,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     date_format: "DD/MM/YYYY",
     terminology_region: "UK_ZA",
     timezone: null,
+    sugar_measurement_unit: null,
   },
   ZA: {
     country_code: "ZA",
@@ -113,6 +121,7 @@ export const COUNTRY_PRESETS: Record<CountryCode, RegionSettings> = {
     date_format: "DD/MM/YYYY",
     terminology_region: "UK_ZA",
     timezone: null,
+    sugar_measurement_unit: null,
   },
 };
 
@@ -133,6 +142,8 @@ function applyAuDefaults(raw: Partial<RegionSettings> | null | undefined): Regio
     terminology_region:
       (r.terminology_region as TerminologyRegion) ?? AU_DEFAULTS.terminology_region,
     timezone: r.timezone ?? null,
+    sugar_measurement_unit:
+      (r.sugar_measurement_unit as SugarUnit | null | undefined) ?? null,
   };
 }
 
@@ -163,6 +174,34 @@ export async function saveVineyardRegionSettings(
     p_spray_rate_area_unit: settings.spray_rate_area_unit,
     p_date_format: settings.date_format,
     p_terminology_region: settings.terminology_region,
+    // 12-parameter overload (sql/180). The legacy 11-param form never touches
+    // the sugar column, so the portal always calls this one.
+    p_sugar_measurement_unit: settings.sugar_measurement_unit ?? null,
   });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Grape sugar measurement (sql/180). Resolution rule shared with iOS/Android:
+// explicit vineyard value when set, otherwise the regional default —
+// AU/NZ → Baumé, everywhere else → Brix.
+// ---------------------------------------------------------------------------
+
+export function resolveSugarUnit(
+  settings?: Pick<RegionSettings, "sugar_measurement_unit" | "country_code"> | null,
+): SugarUnit {
+  const explicit = settings?.sugar_measurement_unit;
+  if (explicit === "brix" || explicit === "baume") return explicit;
+  const country = settings?.country_code ?? AU_DEFAULTS.country_code;
+  return country === "AU" || country === "NZ" ? "baume" : "brix";
+}
+
+/** Short unit symbol, e.g. "°Bé". */
+export function sugarUnitSymbol(unit: SugarUnit | string | null | undefined): string {
+  return unit === "baume" ? "\u00b0B\u00e9" : "\u00b0Bx";
+}
+
+/** Full field label, e.g. "Baumé (°Bé)". */
+export function sugarUnitLabel(unit: SugarUnit | string | null | undefined): string {
+  return unit === "baume" ? "Baum\u00e9 (\u00b0B\u00e9)" : "Brix (\u00b0Bx)";
 }

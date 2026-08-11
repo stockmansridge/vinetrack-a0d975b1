@@ -19,8 +19,15 @@ import {
 import { Download } from "lucide-react";
 import {
   extractHistoricalBlockRows,
+  fetchYieldBlocks,
   fetchYieldReportsForVineyard,
 } from "@/lib/yieldReportsQuery";
+import {
+  detailedActualsFromTotals,
+  fetchPickingYieldTotals,
+  supersedeActualYield,
+  type ActualYieldEntry,
+} from "@/lib/pickingRecordsQuery";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const ANY = "__any__";
@@ -41,16 +48,55 @@ export default function YieldReportsComparisonPage() {
     queryFn: () => fetchYieldReportsForVineyard(selectedVineyardId!),
   });
 
-  const rows = useMemo(
-    () =>
-      // Vintage is the user-facing harvest year; fall back to the stored season
-      // label only when the record has no year.
-      extractHistoricalBlockRows(data?.historical ?? []).map((r) => ({
-        ...r,
-        season: r.year != null ? String(r.year) : r.season,
-      })),
-    [data?.historical],
-  );
+  const blocksQ = useQuery({
+    queryKey: ["yield", "blocks", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchYieldBlocks(selectedVineyardId!),
+  });
+
+  const pickingTotalsQ = useQuery({
+    queryKey: ["picking_yield_totals", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPickingYieldTotals(selectedVineyardId!),
+  });
+
+  const rows = useMemo(() => {
+    // Vintage is the user-facing harvest year; fall back to the stored season
+    // label only when the record has no year.
+    const basicRows = extractHistoricalBlockRows(data?.historical ?? []).map((r) => ({
+      ...r,
+      season: r.year != null ? String(r.year) : r.season,
+    }));
+
+    const areaByBlock = new Map<string, number | null>(
+      (blocksQ.data ?? []).map((b) => [b.id.toLowerCase(), b.areaHa ?? null]),
+    );
+
+    const basic: ActualYieldEntry[] = basicRows.map((r) => ({
+      blockId: r.blockId,
+      blockName: r.blockName,
+      variety: r.variety,
+      vintage: r.year ?? null,
+      tonnes: r.yieldTonnes,
+      areaHa: r.areaHa,
+    }));
+
+    // Detailed picking totals supersede Basic actual yield for the same
+    // Block + Variety + Vintage (never summed).
+    const detailed = detailedActualsFromTotals(pickingTotalsQ.data ?? []);
+    const merged = supersedeActualYield(basic, detailed);
+
+    return merged.map((m, i) => ({
+      key: `${m.source}-${i}`,
+      blockId: m.blockId ?? "",
+      blockName: m.blockName || "Unnamed block",
+      variety: m.variety,
+      year: m.vintage,
+      season: m.vintage != null ? String(m.vintage) : "—",
+      yieldTonnes: m.tonnes,
+      areaHa: m.areaHa ?? areaByBlock.get((m.blockId ?? "").toLowerCase()) ?? null,
+    }));
+  }, [data?.historical, blocksQ.data, pickingTotalsQ.data]);
 
   const seasons = useMemo(() => {
     const set = new Set(rows.map((r) => r.season));
