@@ -18,6 +18,10 @@ import PaddockBoundaryExportDialog from "@/components/paddocks/PaddockBoundaryEx
 import PaddockFullBlockBackupDialog from "@/components/paddocks/PaddockFullBlockBackupDialog";
 import ArchivedPaddocksSection from "@/components/paddocks/ArchivedPaddocksSection";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import {
+  allocationCloneLabel,
+  allocationRootstockLabel,
+} from "@/lib/cloneRootstockCatalog";
 
 const fmtNum = (n: number, digits = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
@@ -29,8 +33,8 @@ function allocValues(row: Record<string, unknown>, field: "clone" | "rootstock")
   const out: string[] = [];
   for (const item of list) {
     const a = (item ?? {}) as Record<string, unknown>;
-    const v = a[field] ?? (field === "rootstock" ? a.root_stock : undefined);
-    const s = typeof v === "string" ? v.trim() : "";
+    const s =
+      (field === "clone" ? allocationCloneLabel(a) : allocationRootstockLabel(a)) ?? "";
     if (s && !out.includes(s)) out.push(s);
   }
   return out.join(", ");
