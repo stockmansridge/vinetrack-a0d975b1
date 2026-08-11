@@ -116,6 +116,7 @@ const reports: NavItem[] = [
   { title: "Spray Records", url: "/reports/spray", icon: FileBarChart },
   { title: "Rainfall Reports", url: "/reports/rainfall", icon: CloudRain },
   { title: "Growth Stage Records", url: "/reports/growth-stage", icon: Sprout },
+  { title: "Yield Reports", url: "/reports/yield", icon: Grape },
   { title: "Documents & Exports", url: "/reports/documents", icon: FolderOpen },
 ];
 
