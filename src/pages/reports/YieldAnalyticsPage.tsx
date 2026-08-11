@@ -303,6 +303,15 @@ export default function YieldAnalyticsPage() {
   const [mixMode, setMixMode] = useState<"tonnes" | "percent" | "area">("tonnes");
   const [trendVarieties, setTrendVarieties] = useState<string[]>([]);
   const [trendBlocks, setTrendBlocks] = useState<string[]>([]);
+  const [varietyView, setVarietyView] = useState<"share" | "tonnes">("share");
+  const [highlightDim, setHighlightDim] = useState<"block" | "variety">("block");
+
+  // Historical/trend visuals are only meaningful across two or more vintages.
+  const multiVintage = useMemo(
+    () => new Set(dimensionFiltered.map((f) => f.vintage)).size >= 2,
+    [dimensionFiltered],
+  );
+
 
   const metricOf = (key: MetricKey) => metricOptions.find((m) => m.key === key) ?? METRICS[0];
 
