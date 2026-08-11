@@ -1443,6 +1443,7 @@ export default function YieldAnalyticsPage() {
                       area: areaFmt(r.area),
                       tonnes: num(r.tonnes, 3),
                       tPerHa: perArea(r.tPerHa),
+                      disposition: r.disposition,
                       price: money(r.price),
                       revenue: money(r.revenue),
                       revPerHa: moneyPerArea(r.revPerHa),
@@ -1459,9 +1460,10 @@ export default function YieldAnalyticsPage() {
                           <TableCell
                             key={c.key}
                             className={`whitespace-nowrap ${
-                              ["block", "variety", "source"].includes(c.key) ? "" : "tabular-nums text-right"
+                              ["block", "variety", "source", "disposition"].includes(c.key) ? "" : "tabular-nums text-right"
                             }`}
                           >
+
                             {cells[c.key]}
                           </TableCell>
                         ))}
