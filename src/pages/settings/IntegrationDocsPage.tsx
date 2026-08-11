@@ -34,6 +34,7 @@ import {
   OPENAPI_FILENAME,
   OPENAPI_YAML,
   POSTMAN_COLLECTION,
+  POSTMAN_FILENAME,
   SCOPE_COUNT,
   WEBHOOK_EVENTS,
   WEBHOOK_EVENTS_EMITTED,
@@ -202,16 +203,10 @@ export default function IntegrationDocsPage() {
             </Button>
             <Button
               variant="outline"
-              disabled={!POSTMAN_COLLECTION}
-              title={
-                POSTMAN_COLLECTION
-                  ? "Download the Postman collection"
-                  : "The Postman collection is not published in this portal build"
-              }
+              title="Download the Postman collection"
               onClick={() =>
-                POSTMAN_COLLECTION &&
                 downloadTextFile(
-                  "VineTrack-v1.postman_collection.json",
+                  POSTMAN_FILENAME,
                   POSTMAN_COLLECTION,
                   "application/json",
                 )

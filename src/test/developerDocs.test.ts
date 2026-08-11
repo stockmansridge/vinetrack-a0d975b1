@@ -10,6 +10,8 @@ import {
   groupRoutesByTag,
   splitSections,
   CHANGELOG_MD,
+  POSTMAN_COLLECTION,
+  POSTMAN_FILENAME,
 } from "@/lib/developerDocs";
 
 describe("developer docs (canonical Stage 6A assets)", () => {
@@ -52,4 +54,16 @@ describe("developer docs (canonical Stage 6A assets)", () => {
   it("never embeds a real API key in the bundled spec", () => {
     expect(/vt_live_(?!REPLACE|\.\.\.|…)[A-Za-z0-9]{10,}/.test(OPENAPI_YAML)).toBe(false);
   });
+});
+
+describe("Postman collection bundle", () => {
+  it("bundles the canonical Stage 6A collection verbatim", () => {
+    expect(POSTMAN_FILENAME).toBe("VineTrack-v1.postman_collection.json");
+    const parsed = JSON.parse(POSTMAN_COLLECTION);
+    expect(parsed.info.name).toBe("VineTrack API v1");
+    expect(parsed.info.schema).toContain("collection/v2.1.0");
+    expect(Array.isArray(parsed.item)).toBe(true);
+    expect(parsed.item.length).toBeGreaterThan(0);
+  });
+
 });
