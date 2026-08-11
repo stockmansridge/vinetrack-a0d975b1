@@ -538,19 +538,6 @@ function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vin
   );
 }
 
-function pickFirst(obj: any, keys: string[]): any {
-  if (!obj || typeof obj !== "object") return undefined;
-  for (const k of keys) {
-    if (obj[k] != null && obj[k] !== "") return obj[k];
-  }
-  return undefined;
-}
-
-function asArray(v: any): any[] {
-  if (Array.isArray(v)) return v;
-  return [];
-}
-
 function fmtCoord(lat: any, lon: any): string | null {
   const la = Number(lat);
   const lo = Number(lon);
@@ -558,99 +545,21 @@ function fmtCoord(lat: any, lon: any): string | null {
   return `${la.toFixed(5)}, ${lo.toFixed(5)}`;
 }
 
-function summarizeSession(payload: any) {
-  const p = payload && typeof payload === "object" ? payload : {};
-  const season = pickFirst(p, ["season", "year", "vintage"]);
-  const notes = pickFirst(p, ["notes", "note", "comment"]);
-
-  const sampleSets = asArray(
-    pickFirst(p, ["sampleSets", "sample_sets", "blocks", "blockSamples", "block_samples", "samples"]),
-  );
-
-  const blocks = sampleSets.map((set: any) => {
-    const blockName =
-      pickFirst(set, ["paddockName", "paddock_name", "blockName", "block_name", "name", "paddock", "block"]) ?? null;
-    const blockId =
-      pickFirst(set, ["paddockId", "paddock_id", "blockId", "block_id", "id"]) ?? null;
-    const variety = pickFirst(set, ["variety", "varietyName", "variety_name"]) ?? null;
-    const setNotes = pickFirst(set, ["notes", "note", "comment"]) ?? null;
-    const areaHa = pickFirst(set, ["areaHa", "area_ha", "areaHectares", "area_hectares"]);
-    const avgBunchWeight = pickFirst(set, [
-      "avgBunchWeight", "averageBunchWeight", "bunchWeight", "bunch_weight",
-      "avg_bunch_weight_kg", "avgBunchWeightKg",
-    ]);
-
-    const sites = asArray(
-      pickFirst(set, ["sites", "sampleSites", "sample_sites", "samples", "vines"]),
-    ).map((site: any) => ({
-      vineNumber: pickFirst(site, ["vineNumber", "vine_number", "sampleVine", "sample_vine", "vine"]) ?? null,
-      bunchCount: pickFirst(site, ["bunchCount", "bunch_count", "bunches", "count"]) ?? null,
-      lat: pickFirst(site, ["latitude", "lat"]),
-      lon: pickFirst(site, ["longitude", "lng", "lon", "long"]),
-      recordedAt: pickFirst(site, ["recordedAt", "recorded_at", "createdAt", "created_at", "timestamp"]) ?? null,
-      recordedBy: pickFirst(site, ["recordedBy", "recorded_by", "operator", "userName", "user_name"]) ?? null,
-      notes: pickFirst(site, ["notes", "note"]) ?? null,
-    }));
-
-    const bunches = sites
-      .map((s) => Number(s.bunchCount))
-      .filter((n) => Number.isFinite(n));
-    const totalBunches = bunches.reduce((a, b) => a + b, 0);
-    const avgBunchesPerVine = bunches.length ? totalBunches / bunches.length : null;
-
-    return {
-      blockId,
-      blockName,
-      variety,
-      notes: setNotes,
-      areaHa: areaHa != null ? Number(areaHa) : null,
-      avgBunchWeightKg: avgBunchWeight != null ? Number(avgBunchWeight) : null,
-      sites,
-      siteCount: sites.length,
-      totalBunches,
-      avgBunchesPerVine,
-    };
-  });
-
-  // Yield rollups across all blocks where we have enough data.
-  const blocksWithEstimate = blocks.filter(
-    (b) => b.avgBunchesPerVine != null && b.avgBunchWeightKg != null && b.areaHa != null,
-  );
-  let totalEstTonnes: number | null = null;
-  let totalAreaHa: number | null = null;
-  if (blocksWithEstimate.length) {
-    totalEstTonnes = 0;
-    totalAreaHa = 0;
-    for (const b of blocksWithEstimate) {
-      // Assume bunches/vine * vines/ha is encoded via avg bunch weight to tonnes; without vines/ha,
-      // fall back to bunches/vine * bunch weight * vines if vines available, else just per-vine kg.
-      // Most accurate fallback: estimated kg per vine = avgBunchesPerVine * avgBunchWeightKg.
-      // Without vines/ha we can't convert to tonnes/ha reliably, so we surface only what we have.
-      totalAreaHa! += b.areaHa!;
-    }
-  }
-
-  return {
-    season,
-    notes,
-    blocks,
-    totalAreaHa,
-    totalEstTonnes, // will stay null in most cases without vines/ha
-    hasAnySamples: blocks.some((b) => b.siteCount > 0),
-    missing: {
-      sampleSets: sampleSets.length === 0,
-      bunchWeight: blocks.some((b) => b.avgBunchWeightKg == null),
-      area: blocks.some((b) => b.areaHa == null),
-      vines: true, // vines/ha not known from payload — flag as missing for the user
-    },
-  };
-}
-
-function SessionDetail({ row }: { row: YieldEstimationSession }) {
+function SessionDetail({
+  row,
+  blocks,
+}: {
+  row: YieldEstimationSession;
+  blocks: SessionBlockInfo[];
+}) {
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const areaVal = mkAreaVal(rf);
-  const summary = summarizeSession(row.payload);
+  const yieldPerArea = mkYieldPerArea(rf);
+  const summary = useMemo(
+    () => summariseYieldSession(row.payload, { blocks }),
+    [row.payload, blocks],
+  );
   const showDev = import.meta.env.DEV;
 
   return (
@@ -659,6 +568,9 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
         <Field label="Created" value={fmtDate(row.session_created_at ?? row.created_at)} />
         <Field label="Completed" value={row.is_completed ? "Yes" : "No"} />
         <Field label="Completed at" value={fmtDate(row.completed_at)} />
+        {summary.samplesPerHectare != null && (
+          <Field label={`Samples per ${rf.areaUnitLabel === "ac" ? "acre" : "hectare"}`} value={fmtNum(summary.samplesPerHectare, 0)} />
+        )}
         {summary.season != null && <Field label="Season / year" value={fmt(summary.season)} />}
         {summary.notes && (
           <div className="pt-1">
@@ -680,13 +592,27 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
                   {b.variety && <Badge variant="outline">{String(b.variety)}</Badge>}
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                  <Field label="Sample sites" value={String(b.siteCount)} />
-                  <Field label="Total bunches" value={fmtNum(b.totalBunches, 0)} />
+                  <Field label="Sample sites" value={`${b.recordedCount} / ${b.siteCount}`} />
                   <Field label="Avg bunches / vine" value={fmtNum(b.avgBunchesPerVine)} />
-                  {b.avgBunchWeightKg != null && (
-                    <Field label="Avg bunch weight (kg)" value={fmtNum(b.avgBunchWeightKg, 3)} />
-                  )}
+                  <Field
+                    label="Avg bunch weight (kg)"
+                    value={`${fmtNum(b.bunchWeightKg, 3)}${b.bunchWeightIsDefault ? " (default)" : ""}`}
+                  />
+                  <Field label="Vines" value={b.totalVines != null ? fmtNum(b.totalVines, 0) : "—"} />
                   {b.areaHa != null && <Field label="Area" value={areaVal(b.areaHa)} />}
+                  <Field label="Total bunches" value={fmtNum(b.totalBunches, 0)} />
+                  <Field
+                    label="Estimated yield (t)"
+                    value={fmtNum(b.estimatedYieldTonnes)}
+                  />
+                  <Field
+                    label={`Yield per ${rf.areaUnitLabel}`}
+                    value={
+                      b.estimatedYieldTonnes != null && b.areaHa
+                        ? yieldPerArea(b.estimatedYieldTonnes / b.areaHa)
+                        : "—"
+                    }
+                  />
                 </div>
                 {b.notes && (
                   <p className="text-xs text-muted-foreground whitespace-pre-wrap pt-1">{String(b.notes)}</p>
@@ -700,8 +626,9 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="h-8 text-xs">Vine</TableHead>
-                            <TableHead className="h-8 text-xs text-right">Bunches</TableHead>
+                            <TableHead className="h-8 text-xs">Site</TableHead>
+                            <TableHead className="h-8 text-xs">Row</TableHead>
+                            <TableHead className="h-8 text-xs text-right">Bunches / vine</TableHead>
                             <TableHead className="h-8 text-xs">Coords</TableHead>
                             <TableHead className="h-8 text-xs">Recorded</TableHead>
                             <TableHead className="h-8 text-xs">By</TableHead>
@@ -710,9 +637,10 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
                         <TableBody>
                           {b.sites.map((s, idx) => (
                             <TableRow key={idx}>
-                              <TableCell className="text-xs">{s.vineNumber != null ? String(s.vineNumber) : "—"}</TableCell>
+                              <TableCell className="text-xs">{s.siteIndex != null ? String(s.siteIndex) : "—"}</TableCell>
+                              <TableCell className="text-xs">{s.rowNumber != null ? String(s.rowNumber) : "—"}</TableCell>
                               <TableCell className="text-xs text-right tabular-nums">
-                                {s.bunchCount != null ? fmtNum(Number(s.bunchCount), 0) : "—"}
+                                {s.bunchesPerVine != null ? fmtNum(s.bunchesPerVine, 1) : "—"}
                               </TableCell>
                               <TableCell className="text-xs font-mono">{fmtCoord(s.lat, s.lon) ?? "—"}</TableCell>
                               <TableCell className="text-xs text-muted-foreground">{fmtDate(s.recordedAt as any)}</TableCell>
@@ -730,26 +658,40 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
         </Section>
       ) : (
         <Section title="Blocks sampled">
-          <span className="text-muted-foreground">No sample sets recorded in this session.</span>
+          <span className="text-muted-foreground">No sample sites recorded in this session.</span>
         </Section>
       )}
 
       <Section title="Yield estimate">
-        {summary.hasAnySamples ? (
+        {summary.totalEstTonnes != null ? (
+          <div className="space-y-1.5">
+            <Field label="Estimated total (t)" value={fmtNum(summary.totalEstTonnes)} />
+            <Field label="Total area" value={areaVal(summary.totalAreaHa)} />
+            <Field
+              label={`Yield per ${rf.areaUnitLabel}`}
+              value={
+                summary.totalAreaHa
+                  ? yieldPerArea(summary.totalEstTonnes / summary.totalAreaHa)
+                  : "—"
+              }
+            />
+            {(summary.missing.bunchWeight || summary.missing.vines) && (
+              <p className="text-xs text-muted-foreground pt-1">
+                {summary.missing.bunchWeight && "Some blocks use the default 0.15 kg bunch weight. "}
+                {summary.missing.vines && "Some blocks have no vine count, so they are excluded from the total."}
+              </p>
+            )}
+          </div>
+        ) : summary.hasAnySamples ? (
           <div className="space-y-1.5">
             <p className="text-muted-foreground text-xs">
               Yield estimate not available yet — the session is missing the data required to
-              calculate tonnes / {rf.areaUnitLabel}:
+              calculate tonnes:
             </p>
             <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
-              {summary.missing.bunchWeight && <li>Average bunch weight (kg) per block</li>}
-              {summary.missing.area && <li>Block area ({rf.areaUnitLabel})</li>}
-              {summary.missing.vines && <li>Vines per {rf.areaUnitLabel === "ac" ? "acre" : "hectare"} (planting density)</li>}
+              {summary.missing.vines && <li>Vine count on the block (set vine spacing or a vine count override)</li>}
+              {summary.missing.area && <li>Block area (map the block boundary)</li>}
             </ul>
-            <p className="text-xs pt-1">
-              Per-vine sampling totals are shown above. Once bunch weight and vines / {rf.areaUnitLabel} are
-              recorded, the tonnage estimate will appear here.
-            </p>
           </div>
         ) : (
           <span className="text-muted-foreground">No samples recorded yet.</span>
@@ -774,6 +716,7 @@ function SessionDetail({ row }: { row: YieldEstimationSession }) {
     </div>
   );
 }
+
 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
