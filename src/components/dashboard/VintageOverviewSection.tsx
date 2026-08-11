@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Droplet, CalendarDays, Scissors, Wrench } from "lucide-react";
+import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
