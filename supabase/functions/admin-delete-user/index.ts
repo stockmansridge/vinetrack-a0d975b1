@@ -226,8 +226,36 @@ Deno.serve(async (req: Request) => {
         if (pass === 1) errors.push(`${table}: ${error.message}`);
       }
     }
+    // The `prevent_last_owner_loss` trigger blocks removing the sole owner, so
+    // temporarily add the calling system admin as an owner, drop the target's
+    // membership, then delete the vineyard itself.
+    for (const vid of soleOwnerIds) {
+      const { error: tmpErr } = await admin
+        .from("vineyard_members")
+        .upsert(
+          { vineyard_id: vid, user_id: caller.id, role: "owner" },
+          { onConflict: "vineyard_id,user_id" },
+        );
+      if (tmpErr) errors.push(`vineyard_members(temp owner): ${tmpErr.message}`);
+    }
+
+    const { error: memDelErr } = await admin
+      .from("vineyard_members")
+      .delete()
+      .eq("user_id", targetId)
+      .in("vineyard_id", soleOwnerIds);
+    if (memDelErr) errors.push(`vineyard_members: ${memDelErr.message}`);
+
     const { error: vErr } = await admin.from("vineyards").delete().in("id", soleOwnerIds);
     if (vErr) errors.push(`vineyards: ${vErr.message}`);
+
+    // Remove any temp ownership left behind (e.g. if the vineyard delete failed).
+    await admin
+      .from("vineyard_members")
+      .delete()
+      .eq("user_id", caller.id)
+      .in("vineyard_id", soleOwnerIds)
+      .neq("vineyard_id", "00000000-0000-0000-0000-000000000000");
   }
 
   for (let pass = 0; pass < 2; pass++) {
