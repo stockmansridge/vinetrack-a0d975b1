@@ -95,6 +95,10 @@ export interface CreatePickingRecordInput {
   varietyKey?: string | null;
   varietyName?: string | null;
   clone?: string | null;
+  /** Stable `paddocks.variety_allocations[].id` for the selected planting. */
+  varietyAllocationId?: string | null;
+  /** Rootstock display snapshot for the selected planting. */
+  rootstock?: string | null;
   weightKg: number;
   sugarValue?: number | null;
   sugarUnit?: SugarUnitValue | null;
