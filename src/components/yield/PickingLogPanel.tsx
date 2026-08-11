@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -26,6 +26,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { sugarUnitSymbol } from "@/lib/vineyardRegionSettingsQuery";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { EditPickingRecordDialog } from "@/components/yield/RecordActualYieldDialog";
 import {
   fetchPickingRecords,
   softDeletePickingRecord,
@@ -45,16 +47,20 @@ export default function PickingLogPanel({
   vineyardId,
   vintage,
   canDelete,
+  canEdit = canDelete,
 }: {
   vineyardId: string | null;
   /** Active vintage filter, or null for all vintages. */
   vintage: number | null;
   canDelete: boolean;
+  /** Same permission as recording picks; RLS remains authoritative. */
+  canEdit?: boolean;
 }) {
   const rf = useRegionFormatters();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState<PickingRecord | null>(null);
+  const [editing, setEditing] = useState<PickingRecord | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["picking_records", vineyardId],
@@ -209,7 +215,7 @@ export default function PickingLogPanel({
               <TableHead className="text-right">TA</TableHead>
               <TableHead>Purpose</TableHead>
               <TableHead>Sold</TableHead>
-              {canDelete && <TableHead className="w-10" />}
+              {(canEdit || canDelete) && <TableHead className="w-20 text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -268,16 +274,40 @@ export default function PickingLogPanel({
                     "—"
                   )}
                 </TableCell>
-                {canDelete && (
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Remove pick ${r.paddock_name ?? ""}`}
-                      onClick={() => setPending(r)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                {(canEdit || canDelete) && (
+                  <TableCell className="text-right whitespace-nowrap">
+                    <TooltipProvider>
+                      {canEdit && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Edit picking record ${r.paddock_name ?? ""}`}
+                              onClick={() => setEditing(r)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Edit picking record</TooltipContent>
+                        </Tooltip>
+                      )}
+                      {canDelete && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Remove pick ${r.paddock_name ?? ""}`}
+                              onClick={() => setPending(r)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete picking record</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </TooltipProvider>
                   </TableCell>
                 )}
               </TableRow>
@@ -290,12 +320,19 @@ export default function PickingLogPanel({
                 <TableCell className="text-right font-semibold tabular-nums">
                   {fmt(totalTonnes)} t
                 </TableCell>
-                <TableCell colSpan={canDelete ? 6 : 5} />
+                <TableCell colSpan={canEdit || canDelete ? 6 : 5} />
               </TableRow>
             )}
           </TableBody>
         </Table>
       </Card>
+
+      <EditPickingRecordDialog
+        vineyardId={vineyardId}
+        record={editing}
+        open={!!editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+      />
 
       <AlertDialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
         <AlertDialogContent>
