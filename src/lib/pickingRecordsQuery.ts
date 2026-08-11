@@ -176,10 +176,8 @@ export async function updatePickingRecord(
     throw new Error("Weight must be greater than zero");
   }
 
+  // Sale fields follow the same rules as creating a sold pick.
   const sold = !!input.sold;
-  if (sold && !(input.soldTo ?? "").trim()) {
-    throw new Error("A buyer is required for sold fruit");
-  }
   const sugarValue =
     input.sugarValue != null && Number.isFinite(input.sugarValue) ? input.sugarValue : null;
 
