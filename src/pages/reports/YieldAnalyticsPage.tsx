@@ -109,13 +109,14 @@ interface MetricOption {
 const METRICS: MetricOption[] = [
   { key: "tonnes", label: "Total tonnes", kind: "tonnes" },
   { key: "tonnesPerHa", label: "Tonnes / area", kind: "rate" },
-  { key: "pricePerTonne", label: "Average $ / tonne", kind: "money" },
-  { key: "revenue", label: "Crop value", kind: "money" },
-  { key: "revenuePerHa", label: "Revenue / area", kind: "moneyPerArea" },
+  { key: "pricePerTonne", label: "Average sale $ / tonne", kind: "money" },
+  { key: "revenue", label: "Grape revenue", kind: "money" },
+  { key: "revenuePerHa", label: "Grape revenue / sold area", kind: "moneyPerArea" },
   { key: "costPerHa", label: "Cost / area", kind: "moneyPerArea", costOnly: true },
   { key: "costPerTonne", label: "Cost / tonne", kind: "money", costOnly: true },
-  { key: "marginPerHa", label: "Margin / area", kind: "moneyPerArea", costOnly: true },
+  { key: "marginPerHa", label: "Grape-sale margin / sold area", kind: "moneyPerArea", costOnly: true },
 ];
+
 
 export default function YieldAnalyticsPage() {
   const { selectedVineyardId } = useVineyard();
@@ -303,7 +304,18 @@ export default function YieldAnalyticsPage() {
 
   const metricOf = (key: MetricKey) => metricOptions.find((m) => m.key === key) ?? METRICS[0];
 
+  // Harvest disposition donut — inferred from whether a sale value is recorded.
+  const dispositionRows = useMemo(
+    () =>
+      [
+        { name: "Sold", value: totals.soldTonnes },
+        { name: "Retained / internal use", value: totals.retainedTonnes },
+      ].filter((r) => r.value > 1e-6),
+    [totals.soldTonnes, totals.retainedTonnes],
+  );
+
   // Donut becomes a ranked bar when there are too many varieties to read.
+
   const varietyPie = useMemo(() => {
     const rows = varietyGroups.filter((g) => g.tonnes > 0);
     if (rows.length <= 8) return { rows, mode: "pie" as const };
@@ -464,19 +476,21 @@ export default function YieldAnalyticsPage() {
       { key: "area", label: rf.areaUnitLabel === "ac" ? "Acres" : "Hectares" },
       { key: "tonnes", label: "Tonnes" },
       { key: "tPerHa", label: `t/${rf.areaUnitLabel}` },
-      { key: "price", label: "Avg $/t" },
-      { key: "revenue", label: "Crop revenue" },
-      { key: "revPerHa", label: `Revenue/${rf.areaUnitLabel}` },
+      { key: "disposition", label: "Disposition" },
+      { key: "price", label: "Sale $/t" },
+      { key: "revenue", label: "Grape revenue" },
+      { key: "revPerHa", label: `Revenue/sold ${rf.areaUnitLabel}` },
       ...(costAvailable
         ? [
             { key: "cost", label: "Production cost" },
             { key: "costPerHa", label: `Cost/${rf.areaUnitLabel}` },
             { key: "costPerT", label: "Cost/t" },
-            { key: "margin", label: "Gross margin" },
-            { key: "marginPerHa", label: `Margin/${rf.areaUnitLabel}` },
+            { key: "margin", label: "Grape-sale margin" },
+            { key: "marginPerHa", label: `Margin/sold ${rf.areaUnitLabel}` },
           ]
         : []),
       { key: "source", label: "Source" },
+
     ],
     [rf.areaUnitLabel, costAvailable],
   );
@@ -487,13 +501,15 @@ export default function YieldAnalyticsPage() {
     const rows = facts.map((f) => {
       const tPerHa = f.areaHa && f.areaHa > 0 ? f.tonnes / f.areaHa : null;
       const price = f.pricedTonnes > 0 && f.revenue != null ? f.revenue / f.pricedTonnes : null;
-      const revPerHa = f.revenue != null && f.areaHa ? f.revenue / f.areaHa : null;
+      // Sold-fruit basis: hectares and cost are pro-rated to the sold share so
+      // retained fruit never depresses grape-sale metrics.
+      const soldFraction = f.tonnes > 0 ? Math.min(1, f.pricedTonnes / f.tonnes) : 0;
+      const soldArea = f.areaHa != null ? f.areaHa * soldFraction : null;
+      const revPerHa = f.revenue != null && soldArea ? f.revenue / soldArea : null;
       const costPerHa = f.cost != null && f.areaHa ? f.cost / f.areaHa : null;
       const costPerT = f.cost != null && f.tonnes > 0 ? f.cost / f.tonnes : null;
-      // Margin only where the whole row is priced, otherwise full block cost
-      // would be subtracted from partial revenue.
-      const fullyPriced = f.tonnes > 0 && f.pricedTonnes >= f.tonnes - 1e-6;
-      const margin = f.revenue != null && f.cost != null && fullyPriced ? f.revenue - f.cost : null;
+      const soldCost = f.cost != null ? f.cost * soldFraction : null;
+      const margin = f.revenue != null && soldCost != null ? f.revenue - soldCost : null;
 
       return {
         fact: f,
@@ -503,6 +519,8 @@ export default function YieldAnalyticsPage() {
         area: f.areaHa,
         tonnes: f.tonnes,
         tPerHa,
+        disposition:
+          f.disposition === "sold" ? "Sold" : f.disposition === "mixed" ? "Part sold" : "Internal / retained",
         price,
         revenue: f.revenue,
         revPerHa,
@@ -510,10 +528,11 @@ export default function YieldAnalyticsPage() {
         costPerHa,
         costPerT,
         margin,
-        marginPerHa: margin != null && f.areaHa ? margin / f.areaHa : null,
+        marginPerHa: margin != null && soldArea ? margin / soldArea : null,
         source: f.source === "detailed" ? `Picking records${f.pickCount ? ` (${f.pickCount})` : ""}` : "Manual actual yield",
       };
     });
+
     const needle = tableSearch.trim().toLowerCase();
     const filteredRows = needle
       ? rows.filter((r) => `${r.block} ${r.variety} ${r.vintage ?? ""}`.toLowerCase().includes(needle))
@@ -860,51 +879,105 @@ export default function YieldAnalyticsPage() {
               prior={priorAvgTPerHa}
             />
             <KpiCard
-              label="Average price / tonne"
+              label="Average sale price / tonne"
               value={money(totals.pricePerTonne)}
               current={totals.pricePerTonne}
               prior={priorTotals?.pricePerTonne ?? null}
-              hint={totals.pricePerTonne == null ? "Needs priced picking records" : undefined}
+              hint={totals.pricePerTonne == null ? "No grape sale recorded" : "Based on sold fruit only"}
             />
             <KpiCard
-              label="Crop value"
+              label="Grape revenue"
               value={money(totals.revenue)}
               current={totals.revenue}
               prior={priorTotals?.revenue ?? null}
-              hint={totals.revenue == null ? "Needs priced picking records" : undefined}
+              hint={totals.revenue == null ? "No grape sale recorded" : "Sold fruit only"}
             />
             <KpiCard
-              label={`Revenue / ${rf.areaUnitLabel}`}
+              label={`Grape revenue / sold ${rf.areaUnitLabel}`}
               value={moneyPerArea(totals.revenuePerHa)}
               current={totals.revenuePerHa}
               prior={priorTotals?.revenuePerHa ?? null}
-              hint={
-                totals.revenuePerHa == null
-                  ? "Needs priced picking records"
-                  : !totals.revenueComplete
-                    ? "Based on priced area only"
-                    : undefined
-              }
+              hint={totals.revenuePerHa == null ? "No grape sale recorded" : "Sold-fruit area basis"}
             />
           </div>
 
-          {totals.revenue != null && !totals.revenueComplete && (
-            <PortalNotice
-              variant="info"
-              compact
-              title="Some harvest in view has no pricing"
-              description={`${(totals.tonnes - totals.pricedTonnes).toFixed(2)} t of ${totals.tonnes.toFixed(2)} t carry no sale price. Price, crop value, revenue per ${rf.areaUnitLabel} and margin are calculated from the priced records only — unpriced harvest is excluded rather than treated as $0.`}
-            />
-          )}
-
+          {/* Harvest disposition — sold vs internally retained fruit */}
+          <Card className="p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold">Harvest disposition</h2>
+                <p className="text-sm text-muted-foreground">
+                  {num(totals.soldTonnes, 2)} t sold
+                  {" | "}
+                  {num(totals.retainedTonnes, 2)} t retained for internal use
+                </p>
+                <p className="max-w-3xl text-xs text-muted-foreground">
+                  Harvest without a grape sale price is treated as retained/internal-use fruit rather than
+                  missing price data. It contributes to yield and production cost metrics but not grape-sale
+                  revenue. Disposition is inferred from whether a grape sale value is recorded.
+                </p>
+              </div>
+              <div className="flex items-center gap-6">
+                <div className="grid gap-2 text-sm">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-muted-foreground">Harvested</span>
+                    <span className="font-semibold">{num(totals.tonnes, 2)} t</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-muted-foreground">Sold</span>
+                    <span className="font-semibold">
+                      {num(totals.soldTonnes, 2)} t
+                      {totals.soldShare != null && ` (${num(totals.soldShare * 100, 1)}%)`}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-muted-foreground">Retained / internal</span>
+                    <span className="font-semibold">
+                      {num(totals.retainedTonnes, 2)} t
+                      {totals.soldShare != null && ` (${num((1 - totals.soldShare) * 100, 1)}%)`}
+                    </span>
+                  </div>
+                </div>
+                {dispositionRows.length > 1 && (
+                  <ResponsiveContainer width={180} height={140}>
+                    <PieChart>
+                      <Pie
+                        data={dispositionRows}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={34}
+                        outerRadius={58}
+                        paddingAngle={2}
+                      >
+                        {dispositionRows.map((_, i) => (
+                          <Cell key={i} fill={colourFor(i)} />
+                        ))}
+                      </Pie>
+                      <RTooltip formatter={(v: number, n: string) => [`${num(v, 2)} t`, n]} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </Card>
 
           {costAvailable && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              <KpiCard label="Production cost" value={money(totals.cost)} current={totals.cost} prior={priorTotals?.cost ?? null} />
-              <KpiCard label={`Cost / ${rf.areaUnitLabel}`} value={moneyPerArea(totals.costPerHa)} current={totals.costPerHa} prior={priorTotals?.costPerHa ?? null} />
-              <KpiCard label="Cost / tonne" value={money(totals.costPerTonne)} current={totals.costPerTonne} prior={priorTotals?.costPerTonne ?? null} />
-              <KpiCard label="Gross margin" value={money(totals.margin)} current={totals.margin} prior={priorTotals?.margin ?? null} />
-              <KpiCard label={`Margin / ${rf.areaUnitLabel}`} value={moneyPerArea(totals.marginPerHa)} current={totals.marginPerHa} prior={priorTotals?.marginPerHa ?? null} />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <KpiCard label="Production cost" value={money(totals.cost)} current={totals.cost} prior={priorTotals?.cost ?? null} hint="All harvested fruit" />
+              <KpiCard label={`Cost / ${rf.areaUnitLabel}`} value={moneyPerArea(totals.costPerHa)} current={totals.costPerHa} prior={priorTotals?.costPerHa ?? null} hint="All harvested area" />
+              <KpiCard label="Cost / tonne" value={money(totals.costPerTonne)} current={totals.costPerTonne} prior={priorTotals?.costPerTonne ?? null} hint="Sold and retained tonnes" />
+              {totals.hasRetained && (
+                <KpiCard
+                  label="Retained fruit cost"
+                  value={money(totals.retainedCost)}
+                  current={totals.retainedCost}
+                  prior={priorTotals?.retainedCost ?? null}
+                  hint="Cost base of internal-use fruit"
+                />
+              )}
+              <KpiCard label="Grape-sale margin" value={money(totals.margin)} current={totals.margin} prior={priorTotals?.margin ?? null} hint="Sale revenue less sold-fruit cost" />
+              <KpiCard label={`Margin / sold ${rf.areaUnitLabel}`} value={moneyPerArea(totals.marginPerHa)} current={totals.marginPerHa} prior={priorTotals?.marginPerHa ?? null} hint="Sold fruit only" />
             </div>
           )}
 
@@ -912,14 +985,15 @@ export default function YieldAnalyticsPage() {
             <PortalNotice
               variant="info"
               compact
-              title="Cost and margin analytics unavailable"
+              title="Production cost data unavailable"
               description={
                 canSeeCosts
-                  ? "No allocated production costs were found for the harvested blocks and vintages in view. Cost, margin and cost-per-tonne sections appear automatically once trip or pruning cost allocations exist."
-                  : "Cost and margin metrics are visible to owners and managers only."
+                  ? "No allocated production costs were found for the harvested blocks and vintages in view. Cost-per-tonne, cost-per-hectare and grape-sale margin metrics will appear when production cost allocations are available."
+                  : "Production cost and margin metrics are visible to owners and managers only."
               }
             />
           )}
+
 
           {/* Production breakdown */}
           <section className="space-y-3">
@@ -1370,6 +1444,7 @@ export default function YieldAnalyticsPage() {
                       area: areaFmt(r.area),
                       tonnes: num(r.tonnes, 3),
                       tPerHa: perArea(r.tPerHa),
+                      disposition: r.disposition,
                       price: money(r.price),
                       revenue: money(r.revenue),
                       revPerHa: moneyPerArea(r.revPerHa),
@@ -1386,9 +1461,10 @@ export default function YieldAnalyticsPage() {
                           <TableCell
                             key={c.key}
                             className={`whitespace-nowrap ${
-                              ["block", "variety", "source"].includes(c.key) ? "" : "tabular-nums text-right"
+                              ["block", "variety", "source", "disposition"].includes(c.key) ? "" : "tabular-nums text-right"
                             }`}
                           >
+
                             {cells[c.key]}
                           </TableCell>
                         ))}

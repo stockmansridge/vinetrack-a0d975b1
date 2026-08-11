@@ -170,16 +170,26 @@ describe("pricing and cost integrity", () => {
       blocks,
     });
 
-  it("excludes unpriced hectares from revenue per hectare", () => {
+  it("splits sold and retained tonnes and prices only sold fruit", () => {
     const agg = aggregate(mixed());
     expect(agg.areaHa).toBe(15);
-    expect(agg.pricedAreaHa).toBe(10);
-    expect(agg.revenueComplete).toBe(false);
-    expect(agg.revenuePerHa).toBe(2000); // 20000 / 10 ha, not / 15 ha
-    expect(agg.pricePerTonne).toBe(2000); // priced tonnes only
+    expect(agg.soldTonnes).toBe(10);
+    expect(agg.retainedTonnes).toBe(10);
+    expect(agg.soldShare).toBe(0.5);
+    expect(agg.soldAreaHa).toBe(10);
+    expect(agg.allSold).toBe(false);
+    expect(agg.hasRetained).toBe(true);
+    expect(agg.revenuePerHa).toBe(2000); // 20000 / 10 sold ha, not / 15 ha
+    expect(agg.pricePerTonne).toBe(2000); // sold tonnes only
   });
 
-  it("suppresses margin when part of the harvest is unpriced", () => {
+  it("classifies each fact's disposition without a database field", () => {
+    const facts = mixed();
+    expect(facts.find((f) => f.blockId === "b1")!.disposition).toBe("sold");
+    expect(facts.find((f) => f.blockId === "b2")!.disposition).toBe("retained");
+  });
+
+  it("charges retained fruit with cost but excludes it from grape-sale margin", () => {
     const facts = buildYieldFacts({
       historicalRows: [],
       pickingTotals: [
@@ -193,10 +203,13 @@ describe("pricing and cost integrity", () => {
       ],
     });
     const agg = aggregate(facts);
-    expect(agg.cost).toBe(10000);
-    expect(agg.margin).toBeNull();
-    expect(agg.costPerTonne).toBe(500); // canonical tonnes, not cost-row tonnes
+    expect(agg.cost).toBe(10000); // all harvested fruit
+    expect(agg.soldCost).toBe(5000);
+    expect(agg.retainedCost).toBe(5000); // cost base of internal-use fruit
+    expect(agg.margin).toBe(15000); // 20000 sale revenue less 5000 sold-fruit cost
+    expect(agg.costPerTonne).toBe(500); // canonical tonnes, sold and retained
   });
+
 
   it("treats zero-value cost allocations as no cost data", () => {
     const agg = aggregate(
