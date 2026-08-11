@@ -107,3 +107,46 @@ describe("sugar measurement unit", () => {
     expect(sugarUnitSymbol("brix")).toBe("°Bx");
   });
 });
+
+// --- Final UX refinements -------------------------------------------------
+import { buildYieldOverview } from "@/lib/yieldOverview";
+import { actualSourceLabel } from "@/pages/setup/YieldReportsPage";
+import { resolveSugarUnit } from "@/lib/vineyardRegionSettingsQuery";
+
+describe("Actual yield source attribution", () => {
+  const blocks = [{ id: "b1", name: "Block 1", varieties: [{ name: "Shiraz", percent: null }] }];
+
+  it("labels detailed totals with the pick count", () => {
+    const [card] = buildYieldOverview({
+      blocks,
+      estimatedByBlock: new Map(),
+      actuals: [{ blockId: "b1", variety: "Shiraz", tonnes: 4, source: "detailed", pickCount: 3 }],
+    });
+    expect(card.actualSource).toBe("detailed");
+    expect(card.actualPickCount).toBe(3);
+    expect(actualSourceLabel(card.actualSource, card.actualPickCount)).toBe(
+      "From 3 picking records",
+    );
+  });
+
+  it("labels basic totals as manual", () => {
+    const [card] = buildYieldOverview({
+      blocks,
+      estimatedByBlock: new Map(),
+      actuals: [{ blockId: "b1", variety: "Shiraz", tonnes: 4, source: "basic" }],
+    });
+    expect(actualSourceLabel(card.actualSource, card.actualPickCount)).toBe("Manual actual yield");
+  });
+});
+
+describe("Sugar unit resolution", () => {
+  it("explicit vineyard preference always wins over the regional default", () => {
+    expect(resolveSugarUnit({ country_code: "AU", sugar_measurement_unit: "brix" })).toBe("brix");
+    expect(resolveSugarUnit({ country_code: "US", sugar_measurement_unit: "baume" })).toBe("baume");
+  });
+
+  it("falls back to the regional default only when unset", () => {
+    expect(resolveSugarUnit({ country_code: "AU", sugar_measurement_unit: null })).toBe("baume");
+    expect(resolveSugarUnit({ country_code: "US", sugar_measurement_unit: null })).toBe("brix");
+  });
+});
