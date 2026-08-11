@@ -975,17 +975,19 @@ export default function YieldAnalyticsPage() {
           )}
 
           {!costAvailable && (
-            <PortalNotice
-              variant="info"
-              compact
-              title="Production cost data unavailable"
-              description={
-                canSeeCosts
-                  ? "No allocated production costs were found for the harvested blocks and vintages in view. Cost-per-tonne, cost-per-hectare and grape-sale margin metrics will appear when production cost allocations are available."
-                  : "Production cost and margin metrics are visible to owners and managers only."
-              }
-            />
+            <Card className="border-dashed bg-muted/30 px-4 py-3">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-sm font-medium">Production cost</span>
+                <span className="text-sm text-muted-foreground">Not available for this vintage</span>
+                <span className="text-xs text-muted-foreground">
+                  {canSeeCosts
+                    ? "Cost metrics appear when allocated vineyard production costs are available."
+                    : "Production cost and margin metrics are visible to owners and managers only."}
+                </span>
+              </div>
+            </Card>
           )}
+
 
 
           {/* Production breakdown */}
