@@ -304,14 +304,31 @@ export default function YieldReportsPage() {
 
   // ---- Overview (quick view) for the selected vintage -----------------------
   const overviewCards = useMemo(() => {
-    const blocks = (blocksQ.data ?? []).map((b) => ({
-      id: b.id,
-      name: b.name ?? null,
-      areaHa: b.areaHa ?? null,
-      varieties: resolvePaddockAllocations(b.varietyAllocations, varietyMap)
-        .map((a) => ({ name: (a.name ?? "").trim() || null, percent: a.percent }))
-        .filter((v) => v.name != null),
-    }));
+    // Allocation units per block — each planting (variety + clone + rootstock)
+    // is its own production unit so yield is never repeated across rows.
+    const unitsByBlock = new Map<string, AllocationUnit[]>();
+    const blocks = (blocksQ.data ?? []).map((b) => {
+      const units = buildAllocationUnits({
+        blockId: b.id,
+        areaHa: b.areaHa ?? null,
+        allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
+      }).filter((u) => u.variety != null);
+      unitsByBlock.set(b.id.toLowerCase(), units);
+      return {
+        id: b.id,
+        name: b.name ?? null,
+        areaHa: b.areaHa ?? null,
+        varieties: units.map((u) => ({
+          name: u.variety,
+          percent: u.percent,
+          allocationKey: u.key,
+          allocationId: u.id,
+          cloneLabel: u.cloneLabel,
+          rootstockLabel: u.rootstockLabel,
+          areaHa: u.areaHa,
+        })),
+      };
+    });
 
     const vintageRows = allRows.filter(
       (r) => activeVintage === ANY || String(rowVintage(r) ?? "") === activeVintage,
@@ -339,18 +356,24 @@ export default function YieldReportsPage() {
     }));
 
     // Detailed picks supersede Basic for the same Block + Variety + Vintage —
-    // they are never summed together.
-    const detailed = detailedActualsFromTotals(pickingTotalsQ.data ?? []).filter(
+    // they are never summed together. Picks keep their clone snapshot so they
+    // can be attributed to a single planting where that is unambiguous.
+    const detailed = aggregatePickingRecordsByPlanting(pickingRecordsQ.data ?? []).filter(
       (d) => activeVintage === ANY || String(d.vintage ?? "") === activeVintage,
     );
 
-    const actuals = supersedeActualYield(basic, detailed).map((a) => ({
-      blockId: a.blockId,
-      variety: a.variety,
-      tonnes: a.tonnes,
-      source: a.source,
-      pickCount: a.pickCount ?? null,
-    }));
+    const actuals = supersedeActualYield(basic, detailed).map((a) => {
+      const units = unitsByBlock.get((a.blockId ?? "").toLowerCase()) ?? [];
+      const match = matchAllocation(units, a.variety, a.clone ?? null);
+      return {
+        blockId: a.blockId,
+        variety: a.variety,
+        tonnes: a.tonnes,
+        allocationKey: match.key,
+        source: a.source,
+        pickCount: a.pickCount ?? null,
+      };
+    });
 
     return buildYieldOverview({ blocks, estimatedByBlock, actuals });
   }, [
@@ -360,8 +383,9 @@ export default function YieldReportsPage() {
     activeVintage,
     rowVintage,
     sessionSummaries,
-    pickingTotalsQ.data,
+    pickingRecordsQ.data,
   ]);
+
 
 
   if (import.meta.env.DEV) {
