@@ -22,6 +22,21 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 const fmtNum = (n: number, digits = 1) =>
   Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
 
+/** Collect distinct clone / rootstock values from a block's variety allocations. */
+function allocValues(row: Record<string, unknown>, field: "clone" | "rootstock"): string {
+  const raw = (row as { variety_allocations?: unknown }).variety_allocations;
+  const list = Array.isArray(raw) ? raw : [];
+  const out: string[] = [];
+  for (const item of list) {
+    const a = (item ?? {}) as Record<string, unknown>;
+    const v = a[field] ?? (field === "rootstock" ? a.root_stock : undefined);
+    const s = typeof v === "string" ? v.trim() : "";
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out.join(", ");
+}
+
+
 export default function PaddocksPage() {
   const [tab, setTab] = useState("table");
   const [advancedOpen, setAdvancedOpen] = useState(false);
