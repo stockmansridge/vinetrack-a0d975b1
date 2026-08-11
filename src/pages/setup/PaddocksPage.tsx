@@ -70,9 +70,22 @@ export default function PaddocksPage() {
         },
         filterValue: (r) => String(Math.round(deriveMetrics(r).totalRowLengthM)),
       },
+      {
+        key: "clone",
+        label: "Clone",
+        render: (r) => allocValues(r, "clone") || "—",
+        filterValue: (r) => allocValues(r, "clone"),
+      },
+      {
+        key: "rootstock",
+        label: "Rootstock",
+        render: (r) => allocValues(r, "rootstock") || "—",
+        filterValue: (r) => allocValues(r, "rootstock"),
+      },
       { key: "vine_spacing", label: "Vine spacing (m)" },
       { key: "intermediate_post_spacing", label: "Int. post spacing (m)" },
       { key: "updated_at", label: "Updated" },
+
     ],
     [rf],
   );
