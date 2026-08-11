@@ -48,12 +48,23 @@ export function seasonLabelForVintage(vintage: number, seasonStartMonth: number)
   return `${vintage - 1}/${String(vintage).slice(-2)}`;
 }
 
+export interface PlantingOption {
+  /** Stored on the pick — the clone display snapshot. */
+  clone: string;
+  /** "Clone 777 · 101-14" when the rootstock is known. */
+  label: string;
+  /** Two plantings share this clone but differ by rootstock. */
+  ambiguous: boolean;
+}
+
 interface VarietyOption {
   id: string | null;
   key: string | null;
   name: string;
   percent: number | null;
   clones: string[];
+  /** Distinguishable plantings of this variety inside the block. */
+  plantings: PlantingOption[];
 }
 
 /** Split the block area across varieties by allocation percent (equal when unset). */
@@ -77,10 +88,15 @@ function useBlockVarieties(selected: YieldBlockInfo | null, vineyardId: string |
     const resolved = resolvePaddockAllocations(selected.varietyAllocations, varietyMap);
     const out: VarietyOption[] = [];
     const byName = new Map<string, VarietyOption>();
+    const rootstocksByClone = new Map<string, Set<string>>();
     for (const a of resolved) {
       const name = (a.name ?? "").trim();
       if (!name) continue;
       const clone = (a.clone ?? "").trim();
+      const rootstock = (a.rootstock ?? "").trim();
+      const ck = `${name.toLowerCase()}|${clone.toLowerCase()}`;
+      if (!rootstocksByClone.has(ck)) rootstocksByClone.set(ck, new Set());
+      if (rootstock) rootstocksByClone.get(ck)!.add(rootstock);
       const existing = byName.get(name.toLowerCase());
       if (existing) {
         if (clone && !existing.clones.includes(clone)) existing.clones.push(clone);
@@ -92,9 +108,25 @@ function useBlockVarieties(selected: YieldBlockInfo | null, vineyardId: string |
         name,
         percent: a.percent,
         clones: clone ? [clone] : [],
+        plantings: [],
       };
       byName.set(name.toLowerCase(), opt);
       out.push(opt);
+    }
+    // A planting label pairs the clone with its rootstock so the user is never
+    // shown two indistinguishable options. Where one clone appears with more
+    // than one rootstock the pick cannot record which — it is flagged instead
+    // of being silently guessed (picking_records has no rootstock column).
+    for (const opt of out) {
+      opt.plantings = opt.clones.map((clone) => {
+        const set = rootstocksByClone.get(`${opt.name.toLowerCase()}|${clone.toLowerCase()}`);
+        const roots = Array.from(set ?? []);
+        return {
+          clone,
+          label: roots.length === 1 ? `${clone} · ${roots[0]}` : clone,
+          ambiguous: roots.length > 1,
+        };
+      });
     }
     return out;
   }, [selected, varietyMap]);
@@ -438,6 +470,7 @@ function DetailedForm({
         name: recorded,
         percent: null,
         clones: [],
+        plantings: [],
       },
       ...varieties,
     ];
@@ -454,10 +487,15 @@ function DetailedForm({
 
   // The recorded clone stays selectable even when the block configuration has
   // since changed — historical picks are snapshots.
-  const cloneOptions = useMemo(() => {
-    const list = [...(variety?.clones ?? [])];
+  const cloneOptions = useMemo<PlantingOption[]>(() => {
+    const list: PlantingOption[] = [
+      ...(variety?.plantings ??
+        (variety?.clones ?? []).map((c) => ({ clone: c, label: c, ambiguous: false }))),
+    ];
     const recorded = (record?.clone ?? "").trim();
-    if (recorded && !list.includes(recorded)) list.unshift(recorded);
+    if (recorded && !list.some((p) => p.clone === recorded)) {
+      list.unshift({ clone: recorded, label: recorded, ambiguous: false });
+    }
     return list;
   }, [variety, record]);
 
@@ -593,7 +631,7 @@ function DetailedForm({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>Clone</Label>
+            <Label>Clone / planting</Label>
             {cloneOptions.length ? (
               <Select value={clone} onValueChange={setClone}>
                 <SelectTrigger aria-label="Clone">
@@ -602,8 +640,8 @@ function DetailedForm({
                 <SelectContent>
                   <SelectItem value={NO_CLONE}>Not specified</SelectItem>
                   {cloneOptions.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
+                    <SelectItem key={c.clone} value={c.clone}>
+                      {c.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -611,6 +649,12 @@ function DetailedForm({
             ) : (
               <p className="text-xs text-muted-foreground">
                 No clone recorded for this variety in the block configuration.
+              </p>
+            )}
+            {cloneOptions.some((c) => c.ambiguous) && (
+              <p className="text-xs text-muted-foreground">
+                Two plantings share this clone on different rootstocks — the pick records the clone
+                only, so it will show as unallocated in yield reporting.
               </p>
             )}
           </div>
