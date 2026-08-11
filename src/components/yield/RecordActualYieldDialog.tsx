@@ -30,10 +30,30 @@ const VINTAGE_HISTORY_YEARS = 15;
  * Season label derived from the vintage under the shared VineTrack season
  * contract: a season starting in January is a single calendar year, otherwise
  * it straddles two years and ends in the vintage year (e.g. 2026 → "2025/26").
+ *
+ * Backend-only — the portal shows the grower "Vintage 2026".
  */
 export function seasonLabelForVintage(vintage: number, seasonStartMonth: number): string {
   if (seasonStartMonth <= 1) return String(vintage);
   return `${vintage - 1}/${String(vintage).slice(-2)}`;
+}
+
+interface VarietyOption {
+  id: string | null;
+  name: string;
+  percent: number | null;
+}
+
+/** Split the block area across varieties by allocation percent (equal when unset). */
+export function apportionArea(
+  areaHa: number | null | undefined,
+  percents: (number | null)[],
+): (number | null)[] {
+  if (areaHa == null || !(areaHa > 0) || !percents.length) return percents.map(() => null);
+  const p = percents.map((v) => (typeof v === "number" && v > 0 ? v : 0));
+  const sum = p.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return p.map(() => areaHa / p.length);
+  return p.map((v) => (areaHa * v) / sum);
 }
 
 export default function RecordActualYieldDialog({
@@ -50,8 +70,7 @@ export default function RecordActualYieldDialog({
   const { vintage: currentVintage, seasonStartMonth } = useVintage();
   const [year, setYear] = useState<number | null>(null);
   const [blockId, setBlockId] = useState<string>("");
-  const [variety, setVariety] = useState("");
-  const [tonnes, setTonnes] = useState("");
+  const [tonnesByVariety, setTonnesByVariety] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
 
   const blocksQ = useQuery({
@@ -79,47 +98,68 @@ export default function RecordActualYieldDialog({
 
   const selected = useMemo(() => blocks.find((b) => b.id === blockId) ?? null, [blocks, blockId]);
 
-  const varieties = useMemo(() => {
-    if (!selected) return [] as { id: string | null; name: string }[];
+  const varieties = useMemo<VarietyOption[]>(() => {
+    if (!selected) return [];
     const resolved = resolvePaddockAllocations(selected.varietyAllocations, varietyMap);
     const seen = new Set<string>();
-    const out: { id: string | null; name: string }[] = [];
+    const out: VarietyOption[] = [];
     for (const a of resolved) {
       const name = (a.name ?? "").trim();
       if (!name || seen.has(name.toLowerCase())) continue;
       seen.add(name.toLowerCase());
       const rawId = (a.raw?.varietyId ?? a.raw?.variety_id ?? null) as string | null;
-      out.push({ id: rawId, name });
+      out.push({ id: rawId, name, percent: a.percent });
     }
     return out;
   }, [selected, varietyMap]);
 
-  // Reset / auto-select the variety whenever the block (or its varieties) change.
+  // Clear the entered tonnes whenever the block changes.
   useEffect(() => {
-    if (varieties.length === 1) setVariety(varieties[0].name);
-    else setVariety((v) => (varieties.some((x) => x.name === v) ? v : ""));
-  }, [varieties]);
+    setTonnesByVariety({});
+  }, [blockId]);
 
-  const varietyId = useMemo(
-    () => varieties.find((v) => v.name === variety)?.id ?? null,
-    [varieties, variety],
+  const areaShares = useMemo(
+    () => apportionArea(selected?.areaHa ?? null, varieties.map((v) => v.percent)),
+    [selected, varieties],
   );
 
-  const parsed = Number(tonnes.trim());
-  const valid =
-    tonnes.trim() !== "" &&
-    Number.isFinite(parsed) &&
-    parsed >= 0 &&
-    !!selected &&
-    !!vineyardId &&
-    (varieties.length === 0 || !!variety);
+  const entries = useMemo(() => {
+    return varieties
+      .map((v, i) => {
+        const raw = (tonnesByVariety[v.name] ?? "").trim();
+        if (raw === "") return null;
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 0) return null;
+        return {
+          variety: v.name,
+          varietyId: v.id,
+          actualYieldTonnes: n,
+          areaHectares: areaShares[i] ?? null,
+        };
+      })
+      .filter((e): e is NonNullable<typeof e> => e != null);
+  }, [varieties, tonnesByVariety, areaShares]);
 
+  const hasInvalid = useMemo(
+    () =>
+      varieties.some((v) => {
+        const raw = (tonnesByVariety[v.name] ?? "").trim();
+        if (raw === "") return false;
+        const n = Number(raw);
+        return !Number.isFinite(n) || n < 0;
+      }),
+    [varieties, tonnesByVariety],
+  );
+
+  const valid = !!selected && !!vineyardId && varieties.length > 0 && entries.length > 0 && !hasInvalid;
+
+  const totalTonnes = entries.reduce((a, e) => a + e.actualYieldTonnes, 0);
   const perArea = useMemo(() => {
     if (!valid || !selected?.areaHa) return null;
-    const perHa = parsed / selected.areaHa;
+    const perHa = totalTonnes / selected.areaHa;
     const v = rf.areaUnitLabel === "ac" ? perHa * HA_PER_AC : perHa;
     return `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} t/${rf.areaUnitLabel}`;
-  }, [valid, parsed, selected, rf]);
+  }, [valid, totalTonnes, selected, rf]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -130,19 +170,17 @@ export default function RecordActualYieldDialog({
         season,
         blockId: selected.id,
         blockName: selected.name ?? "Unnamed block",
-        variety,
-        varietyId,
         areaHectares: selected.areaHa,
         vineCount: selected.vineCount,
-        actualYieldTonnes: parsed,
         notes,
+        varieties: entries,
       });
     },
     onSuccess: () => {
       toast({ title: "Actual yield recorded" });
       qc.invalidateQueries({ queryKey: ["yield_reports"] });
       onOpenChange(false);
-      setTonnes("");
+      setTonnesByVariety({});
       setNotes("");
     },
     onError: (e: any) =>
@@ -151,11 +189,12 @@ export default function RecordActualYieldDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record actual yield</DialogTitle>
           <DialogDescription>
-            Harvested tonnes for a block and variety. Used by Cost Reports to calculate cost per tonne.
+            Harvested tonnes for each variety in a block. Used by Cost Reports to calculate cost per
+            tonne.
           </DialogDescription>
         </DialogHeader>
 
@@ -175,7 +214,7 @@ export default function RecordActualYieldDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Harvest year. Season {season} is derived from your vineyard's season start.
+              The harvest vintage these tonnes belong to.
             </p>
           </div>
 
@@ -198,44 +237,38 @@ export default function RecordActualYieldDialog({
             ) : null}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Variety</Label>
-            {varieties.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                This block has no configured varieties. Add variety allocations in Setup → Blocks to
-                record yield by variety.
-              </p>
-            ) : varieties.length === 1 ? (
-              <p className="text-sm">{varieties[0].name}</p>
-            ) : (
-              <Select value={variety} onValueChange={setVariety}>
-                <SelectTrigger aria-label="Variety">
-                  <SelectValue placeholder="Select a variety" />
-                </SelectTrigger>
-                <SelectContent>
-                  {varieties.map((v) => (
-                    <SelectItem key={v.name} value={v.name}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="ay-tonnes">Actual yield (tonnes)</Label>
-            <Input
-              id="ay-tonnes"
-              inputMode="decimal"
-              value={tonnes}
-              onChange={(e) => setTonnes(e.target.value)}
-              placeholder="0.00"
-            />
+          {varieties.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              {perArea ?? "Used by Cost Reports to calculate cost per tonne."}
+              This block has no configured varieties. Add variety allocations in Setup → Blocks to
+              record yield by variety.
             </p>
-          </div>
+          ) : (
+            <div className="space-y-3">
+              {varieties.map((v) => (
+                <div key={v.name} className="rounded-md border p-3 space-y-1.5">
+                  <div className="text-sm font-medium">{v.name}</div>
+                  <Label htmlFor={`ay-${v.name}`} className="text-xs text-muted-foreground">
+                    Actual yield (tonnes)
+                  </Label>
+                  <Input
+                    id={`ay-${v.name}`}
+                    aria-label={`Actual yield (tonnes) — ${v.name}`}
+                    inputMode="decimal"
+                    value={tonnesByVariety[v.name] ?? ""}
+                    onChange={(e) =>
+                      setTonnesByVariety((prev) => ({ ...prev, [v.name]: e.target.value }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                {perArea
+                  ? `Total ${totalTonnes.toLocaleString(undefined, { maximumFractionDigits: 2 })} t · ${perArea}`
+                  : "Leave a variety blank if it was not harvested."}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="ay-notes">Notes (optional)</Label>

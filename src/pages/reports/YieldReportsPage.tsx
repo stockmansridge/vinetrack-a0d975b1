@@ -42,7 +42,13 @@ export default function YieldReportsComparisonPage() {
   });
 
   const rows = useMemo(
-    () => extractHistoricalBlockRows(data?.historical ?? []),
+    () =>
+      // Vintage is the user-facing harvest year; fall back to the stored season
+      // label only when the record has no year.
+      extractHistoricalBlockRows(data?.historical ?? []).map((r) => ({
+        ...r,
+        season: r.year != null ? String(r.year) : r.season,
+      })),
     [data?.historical],
   );
 
@@ -167,7 +173,7 @@ export default function YieldReportsComparisonPage() {
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
             className="w-64"
-            placeholder="Block or season…"
+            placeholder="Block or vintage…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
