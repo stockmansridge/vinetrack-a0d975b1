@@ -86,6 +86,8 @@ import { downloadYieldAnalyticsCsv, downloadYieldAnalyticsXlsx } from "@/lib/yie
 
 const HA_PER_AC = 0.40468564224;
 const ALL = "__all__";
+const RANGE = "__range__";
+
 
 const CHART_COLORS = [
   "hsl(var(--primary))",
