@@ -157,7 +157,21 @@ export async function softDeleteHistoricalYieldRecord(id: string): Promise<void>
 
 // ---------------------------------------------------------------------------
 // Record Actual Yield — parity with iOS RecordActualYieldSheet.
+//
+// A block can be mixed-planted, so one save may produce several variety
+// specific results that all belong to the same physical block. Each entry is
+// written as its own element of the existing `block_results` array, keeping
+// `paddockId` identical and `variety`/`varietyId` discrete — the shape iOS and
+// Android already read (they group by paddockId and display `paddockName`).
 // ---------------------------------------------------------------------------
+
+export interface ActualYieldVarietyEntry {
+  variety?: string | null;
+  varietyId?: string | null;
+  actualYieldTonnes: number;
+  /** Share of the block area attributed to this variety (hectares). */
+  areaHectares?: number | null;
+}
 
 export interface RecordActualYieldInput {
   vineyardId: string;
@@ -165,40 +179,48 @@ export interface RecordActualYieldInput {
   season?: string | null;
   blockId: string;
   blockName: string;
-  variety?: string | null;
-  varietyId?: string | null;
   areaHectares?: number | null;
   vineCount?: number | null;
-  actualYieldTonnes: number;
   notes?: string | null;
+  /** One entry per harvested variety in the block (at least one). */
+  varieties: ActualYieldVarietyEntry[];
 }
 
 export async function recordActualYield(input: RecordActualYieldInput): Promise<void> {
   const now = new Date().toISOString();
-  const area = input.areaHectares && input.areaHectares > 0 ? input.areaHectares : 0;
-  const variety = (input.variety ?? "").trim();
-  const label = variety ? `${input.blockName} — ${variety}` : input.blockName;
+  const entries = (input.varieties ?? []).filter(
+    (e) => Number.isFinite(e.actualYieldTonnes) && e.actualYieldTonnes >= 0,
+  );
+  if (!entries.length) throw new Error("No variety yields to record");
 
-  const blockResult = {
-    paddockId: input.blockId,
-    paddockName: label,
-    // Block identity and harvested variety are preserved discretely as well as
-    // in the display label, so iOS/Android can group by block × variety.
-    blockName: input.blockName,
-    variety: variety || null,
-    varietyId: input.varietyId ?? null,
-    areaHectares: area,
-    yieldTonnes: input.actualYieldTonnes,
-    yieldPerHectare: area > 0 ? input.actualYieldTonnes / area : 0,
-    averageBunchesPerVine: 0,
-    averageBunchWeightGrams: 0,
-    totalVines: input.vineCount ?? 0,
-    samplesRecorded: 0,
-    damageFactor: 1.0,
-    actualYieldTonnes: input.actualYieldTonnes,
-    actualRecordedAt: now,
-  };
+  const blockArea = input.areaHectares && input.areaHectares > 0 ? input.areaHectares : 0;
 
+  const blockResults = entries.map((e) => {
+    const variety = (e.variety ?? "").trim();
+    const area = e.areaHectares && e.areaHectares > 0 ? e.areaHectares : 0;
+    return {
+      paddockId: input.blockId,
+      paddockName: variety ? `${input.blockName} — ${variety}` : input.blockName,
+      // Block identity and harvested variety are preserved discretely as well as
+      // in the display label, so iOS/Android can group by block × variety.
+      blockName: input.blockName,
+      variety: variety || null,
+      varietyId: e.varietyId ?? null,
+      areaHectares: area,
+      yieldTonnes: e.actualYieldTonnes,
+      yieldPerHectare: area > 0 ? e.actualYieldTonnes / area : 0,
+      averageBunchesPerVine: 0,
+      averageBunchWeightGrams: 0,
+      totalVines: input.vineCount ?? 0,
+      samplesRecorded: 0,
+      damageFactor: 1.0,
+      actualYieldTonnes: e.actualYieldTonnes,
+      actualRecordedAt: now,
+    };
+  });
+
+  const totalTonnes = blockResults.reduce((a, b) => a + b.yieldTonnes, 0);
+  const summedArea = blockResults.reduce((a, b) => a + b.areaHectares, 0);
 
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth?.user?.id ?? null;
@@ -208,9 +230,9 @@ export async function recordActualYield(input: RecordActualYieldInput): Promise<
     season: (input.season ?? "").trim(),
     year: input.year,
     archived_at: now,
-    block_results: [blockResult],
-    total_yield_tonnes: input.actualYieldTonnes,
-    total_area_hectares: area,
+    block_results: blockResults,
+    total_yield_tonnes: totalTonnes,
+    total_area_hectares: blockArea || summedArea,
     notes: (input.notes ?? "").trim(),
     created_by: userId,
     updated_by: userId,
@@ -218,6 +240,7 @@ export async function recordActualYield(input: RecordActualYieldInput): Promise<
   });
   if (error) throw error;
 }
+
 
 // ---------------------------------------------------------------------------
 // Block-level rows extracted from historical records (multi-vintage reporting).
@@ -229,6 +252,7 @@ export interface HistoricalBlockRow {
   year: number | null;
   blockId: string | null;
   blockName: string;
+  variety: string | null;
   areaHa: number | null;
   yieldTonnes: number | null;
   yieldPerHa: number | null;
@@ -247,6 +271,7 @@ export function extractHistoricalBlockRows(records: HistoricalYieldRecord[]): Hi
         year: r.year ?? null,
         blockId: null,
         blockName: "All blocks",
+        variety: null,
         areaHa: r.total_area_hectares ?? null,
         yieldTonnes: r.total_yield_tonnes ?? null,
         yieldPerHa:
@@ -269,7 +294,8 @@ export function extractHistoricalBlockRows(records: HistoricalYieldRecord[]): Hi
         season: seasonLabel,
         year: r.year ?? null,
         blockId: (b?.paddockId ?? b?.paddock_id ?? null) as string | null,
-        blockName: String(b?.paddockName ?? b?.paddock_name ?? "Unnamed block"),
+        blockName: String(b?.blockName ?? b?.block_name ?? b?.paddockName ?? b?.paddock_name ?? "Unnamed block"),
+        variety: (b?.variety ?? b?.variety_name ?? b?.varietyName ?? null) as string | null,
         areaHa,
         yieldTonnes,
         yieldPerHa: yieldTonnes != null && areaHa ? yieldTonnes / areaHa : null,

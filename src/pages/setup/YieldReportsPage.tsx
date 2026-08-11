@@ -42,6 +42,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
+  extractHistoricalBlockRows,
   fetchYieldBlocks,
   fetchYieldReportsForVineyard,
   softDeleteHistoricalYieldRecord,
@@ -49,6 +50,10 @@ import {
   type YieldEstimationSession,
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
+import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
+import { useVintage } from "@/lib/useVintage";
+import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
+import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
 import { summariseYieldSession, type SessionBlockInfo } from "@/lib/yieldSessionSummary";
 import RecordActualYieldDialog from "@/components/yield/RecordActualYieldDialog";
 import YieldDamageAdjustmentPanel from "@/components/YieldDamageAdjustmentPanel";
@@ -89,6 +94,7 @@ export default function YieldReportsPage() {
   // the real security boundary — this only avoids showing an action that would fail.
   const canManageYields = currentRole === "owner" || currentRole === "manager";
   const rf = useRegionFormatters();
+  const { vintage: currentVintage, seasonStartMonth, seasonStartDay } = useVintage();
   const fmtDate = mkFmtDate(rf);
   const areaVal = mkAreaVal(rf);
   const yieldPerArea = mkYieldPerArea(rf);
@@ -96,9 +102,10 @@ export default function YieldReportsPage() {
   const [filter, setFilter] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [yearFilter, setYearFilter] = useState<string>(ANY);
+  // `null` means "not chosen yet" and resolves to the vineyard's current vintage.
+  const [vintageFilter, setVintageFilter] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string>(ANY);
-  const [tab, setTab] = useState<"all" | "sessions" | "historical">("all");
+  const [tab, setTab] = useState<"overview" | "sessions" | "historical">("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const qc = useQueryClient();
@@ -108,6 +115,8 @@ export default function YieldReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchYieldBlocks(selectedVineyardId!),
   });
+  const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
 
   const del = useMutation({
     mutationFn: async (row: AnyRow) =>
@@ -124,7 +133,7 @@ export default function YieldReportsPage() {
   });
 
 
-  const YIELD_COLS = ["date", "type", "season", "yield", "area", "status"] as const;
+  const YIELD_COLS = ["date", "type", "vintage", "block", "variety", "yield", "area", "status"] as const;
   type YieldCol = (typeof YIELD_COLS)[number];
   const { order: yOrder, moveColumn: yMove, reset: yReset } = useColumnOrder(
     "yield_reports_table",
@@ -141,26 +150,47 @@ export default function YieldReportsPage() {
   const sessions = data?.sessions ?? [];
   const historical = data?.historical ?? [];
 
-  const years = useMemo(() => {
-    const s = new Set<string>();
-    historical.forEach((r) => {
-      if (r.year != null) s.add(String(r.year));
-      else if (r.season) s.add(r.season);
-    });
-    return Array.from(s).sort().reverse();
-  }, [historical]);
-
   const allRows = useMemo<AnyRow[]>(() => {
     const a = sessions.map((s) => ({ ...s, __kind: "session" as const }));
     const b = historical.map((h) => ({ ...h, __kind: "historical" as const }));
     return [...a, ...b];
   }, [sessions, historical]);
 
+  /** Harvest vintage of a row: stored year for historical records, derived from
+   *  the session date via the shared season contract for estimations. */
+  const rowVintage = useMemo(() => {
+    return (r: AnyRow): number | null => {
+      if (r.__kind === "historical") {
+        const h = r as HistoricalYieldRecord;
+        if (h.year != null) return Number(h.year);
+        const m = /(\d{4})/.exec(h.season ?? "");
+        return m ? Number(m[1]) : null;
+      }
+      const d = sortDate(r);
+      if (!d) return null;
+      const parsed = new Date(d);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return vintageForDate(parsed, seasonStartMonth, seasonStartDay);
+    };
+  }, [seasonStartMonth, seasonStartDay]);
+
+  const activeVintage = vintageFilter ?? String(currentVintage);
+
+  const vintages = useMemo(() => {
+    const s = new Set<string>();
+    allRows.forEach((r) => {
+      const v = rowVintage(r);
+      if (v != null) s.add(String(v));
+    });
+    s.add(String(currentVintage));
+    return Array.from(s).sort().reverse();
+  }, [allRows, rowVintage, currentVintage]);
+
   const rows = useMemo(() => {
-    let list: AnyRow[] = tab === "sessions"
-      ? allRows.filter((r) => r.__kind === "session")
-      : tab === "historical"
+    let list: AnyRow[] = tab === "historical"
       ? allRows.filter((r) => r.__kind === "historical")
+      : tab === "sessions"
+      ? allRows.filter((r) => r.__kind === "session")
       : allRows;
 
     list.sort((a, b) => {
@@ -172,14 +202,8 @@ export default function YieldReportsPage() {
     if (from) list = list.filter((r) => (sortDate(r) ?? "") >= from);
     if (to) list = list.filter((r) => (sortDate(r) ?? "") <= to + "T23:59:59");
 
-    if (yearFilter !== ANY) {
-      list = list.filter((r) => {
-        if (r.__kind === "historical") {
-          const h = r as HistoricalYieldRecord;
-          return String(h.year ?? "") === yearFilter || h.season === yearFilter;
-        }
-        return false;
-      });
+    if (activeVintage !== ANY) {
+      list = list.filter((r) => String(rowVintage(r) ?? "") === activeVintage);
     }
 
     if (completion === "completed") {
@@ -197,7 +221,7 @@ export default function YieldReportsPage() {
       list = list.filter((r) => {
         if (r.__kind === "historical") {
           const h = r as HistoricalYieldRecord;
-          return [h.season, h.year, h.notes]
+          return [h.season, h.year, h.notes, JSON.stringify(h.block_results ?? {})]
             .some((v) => String(v ?? "").toLowerCase().includes(f));
         }
         const s = r as YieldEstimationSession;
@@ -205,38 +229,97 @@ export default function YieldReportsPage() {
       });
     }
     return list;
-  }, [allRows, tab, from, to, yearFilter, completion, filter]);
+  }, [allRows, tab, from, to, activeVintage, completion, filter, rowVintage]);
 
   // Session totals come from the same parser the detail sheet uses — one calculation only.
-  const sessionTotals = useMemo(() => {
+  const sessionSummaries = useMemo(() => {
     const blocks = blocksQ.data ?? [];
-    const map = new Map<string, { tonnes: number | null; areaHa: number | null }>();
-    for (const s of sessions) {
-      const summary = summariseYieldSession(s.payload, { blocks });
-      map.set(s.id, { tonnes: summary.totalEstTonnes, areaHa: summary.totalAreaHa });
-    }
+    const map = new Map<string, ReturnType<typeof summariseYieldSession>>();
+    for (const s of sessions) map.set(s.id, summariseYieldSession(s.payload, { blocks }));
     return map;
   }, [sessions, blocksQ.data]);
 
   const rowTonnes = (r: AnyRow): number | null =>
     r.__kind === "historical"
       ? (r as HistoricalYieldRecord).total_yield_tonnes ?? null
-      : sessionTotals.get(r.id)?.tonnes ?? null;
+      : sessionSummaries.get(r.id)?.totalEstTonnes ?? null;
   const rowAreaHa = (r: AnyRow): number | null =>
     r.__kind === "historical"
       ? (r as HistoricalYieldRecord).total_area_hectares ?? null
-      : sessionTotals.get(r.id)?.areaHa ?? null;
+      : sessionSummaries.get(r.id)?.totalAreaHa ?? null;
+
+  /** Honest block/variety context for a row: a single name when there is one,
+   *  otherwise a count — never a misleading single block name. */
+  const rowBlockVariety = (r: AnyRow): { block: string; variety: string } => {
+    const names = new Set<string>();
+    const varieties = new Set<string>();
+    if (r.__kind === "historical") {
+      const results = Array.isArray((r as HistoricalYieldRecord).block_results)
+        ? ((r as HistoricalYieldRecord).block_results as any[])
+        : [];
+      for (const b of results) {
+        const n = String(b?.blockName ?? b?.block_name ?? b?.paddockName ?? b?.paddock_name ?? "").trim();
+        if (n) names.add(n);
+        const v = String(b?.variety ?? b?.varietyName ?? b?.variety_name ?? "").trim();
+        if (v) varieties.add(v);
+      }
+    } else {
+      const summary = sessionSummaries.get(r.id);
+      for (const b of summary?.blocks ?? []) {
+        if (b.blockName) names.add(b.blockName);
+        if (b.variety) varieties.add(b.variety);
+      }
+    }
+    const label = (set: Set<string>, noun: string) =>
+      set.size === 0 ? "—" : set.size === 1 ? Array.from(set)[0] : `${set.size} ${noun}`;
+    return { block: label(names, "blocks"), variety: label(varieties, "varieties") };
+  };
 
   const { sorted: rowsSorted, getSortDirection: yDir, toggleSort: yToggle } = useSortableTable<AnyRow, YieldCol>(rows, {
     accessors: {
       date: (r) => sortDate(r) ?? null,
-      type: (r) => (r.__kind === "historical" ? "Historical" : "Estimation"),
-      season: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).season ?? (r as HistoricalYieldRecord).year ?? null) : null,
+      type: (r) => (r.__kind === "historical" ? "Actual yield" : "Estimation"),
+      vintage: (r) => rowVintage(r),
+      block: (r) => rowBlockVariety(r).block,
+      variety: (r) => rowBlockVariety(r).variety,
       yield: (r) => rowTonnes(r),
       area: (r) => rowAreaHa(r),
       status: (r) => r.__kind === "historical" ? "Archived" : ((r as YieldEstimationSession).is_completed ? "Completed" : "Open"),
     },
   });
+
+  // ---- Overview (quick view) for the selected vintage -----------------------
+  const overviewCards = useMemo(() => {
+    const blocks = (blocksQ.data ?? []).map((b) => ({
+      id: b.id,
+      name: b.name ?? null,
+      areaHa: b.areaHa ?? null,
+      varieties: resolvePaddockAllocations(b.varietyAllocations, varietyMap)
+        .map((a) => ({ name: (a.name ?? "").trim() || null, percent: a.percent }))
+        .filter((v) => v.name != null),
+    }));
+
+    const vintageRows = allRows.filter(
+      (r) => activeVintage === ANY || String(rowVintage(r) ?? "") === activeVintage,
+    );
+
+    const estimatedByBlock = new Map<string, number>();
+    for (const r of vintageRows) {
+      if (r.__kind !== "session") continue;
+      const summary = sessionSummaries.get(r.id);
+      for (const b of summary?.blocks ?? []) {
+        if (!b.blockId || b.estimatedYieldTonnes == null) continue;
+        const k = b.blockId.toLowerCase();
+        estimatedByBlock.set(k, (estimatedByBlock.get(k) ?? 0) + b.estimatedYieldTonnes);
+      }
+    }
+
+    const actuals = extractHistoricalBlockRows(
+      vintageRows.filter((r) => r.__kind === "historical") as unknown as HistoricalYieldRecord[],
+    ).map((h) => ({ blockId: h.blockId, variety: h.variety, tonnes: h.yieldTonnes }));
+
+    return buildYieldOverview({ blocks, estimatedByBlock, actuals });
+  }, [blocksQ.data, varietyMap, allRows, activeVintage, rowVintage, sessionSummaries]);
 
 
   if (import.meta.env.DEV) {
@@ -249,19 +332,7 @@ export default function YieldReportsPage() {
         sessions: data?.sessionCount ?? 0,
         historical: data?.historicalCount ?? 0,
       },
-      deletedExcluded: {
-        sessions: data?.deletedExcludedSessions ?? 0,
-        historical: data?.deletedExcludedHistorical ?? 0,
-      },
-      missingDisplayFields: {
-        missingSeason: data?.missingSeason ?? 0,
-        missingYieldFields: data?.missingYieldFields ?? 0,
-      },
-      schemaGaps: [
-        "no top-level paddock_id / variety / block_id (live inside payload/block_results jsonb)",
-        "no estimated vs actual split column (only total_yield_tonnes on historical)",
-        "no archive flag (only deleted_at on both tables)",
-      ],
+      activeVintage,
       filtered: rows.length,
     });
   }
@@ -272,7 +343,7 @@ export default function YieldReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Yields</h1>
           <p className="text-sm text-muted-foreground">
-            Record and review vineyard production results by block, variety and season. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
+            Record and review vineyard production results by block, variety and vintage. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
           </p>
         </div>
         <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
@@ -285,61 +356,89 @@ export default function YieldReportsPage() {
         variant="success"
         compact
         title="Actual yield records"
-        description="Historical yield records are used by Cost Reports to calculate cost per tonne. Make sure each block has an actual yield record for the relevant season."
+        description="Actual yield records are used by Cost Reports to calculate cost per tonne. Make sure each block has an actual yield record for the relevant vintage."
       />
 
 
       <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList>
-          <TabsTrigger value="all">All ({allRows.length})</TabsTrigger>
-          <TabsTrigger value="sessions">Estimation sessions ({sessions.length})</TabsTrigger>
-          <TabsTrigger value="historical">Historical ({historical.length})</TabsTrigger>
+        <TabsList className="border border-border bg-muted/70 shadow-sm">
+          <TabsTrigger
+            value="overview"
+            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
+          >
+            Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="sessions"
+            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
+          >
+            Estimations ({sessions.length})
+          </TabsTrigger>
+          <TabsTrigger
+            value="historical"
+            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
+          >
+            Actual Yields ({historical.length})
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex flex-wrap items-end gap-2 mt-4">
+          {tab !== "overview" && (
+            <>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">From</div>
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">To</div>
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+              </div>
+            </>
+          )}
           <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">From</div>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">To</div>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Season / year</div>
-            <Select value={yearFilter} onValueChange={setYearFilter}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Any" /></SelectTrigger>
+            <div className="text-xs text-muted-foreground">Vintage</div>
+            <Select value={activeVintage} onValueChange={setVintageFilter}>
+              <SelectTrigger className="w-40" aria-label="Vintage"><SelectValue placeholder="Vintage" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ANY}>Any season</SelectItem>
-                {years.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
+                <SelectItem value={ANY}>All vintages</SelectItem>
+                {vintages.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Completion</div>
-            <Select value={completion} onValueChange={setCompletion}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Any" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY}>All</SelectItem>
-                <SelectItem value="open">Open sessions</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1 ml-auto">
-            <div className="text-xs text-muted-foreground">Search</div>
-            <Input
-              placeholder="Season, notes, payload…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="w-72"
-            />
-          </div>
+          {tab !== "overview" && (
+            <>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Completion</div>
+                <Select value={completion} onValueChange={setCompletion}>
+                  <SelectTrigger className="w-40"><SelectValue placeholder="Any" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>All</SelectItem>
+                    <SelectItem value="open">Open sessions</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 ml-auto">
+                <div className="text-xs text-muted-foreground">Search</div>
+                <Input
+                  placeholder="Block, variety, notes…"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="w-72"
+                />
+              </div>
+            </>
+          )}
         </div>
 
-        <TabsContent value={tab} className="mt-4">
+        <TabsContent value="overview" className="mt-4">
+          <YieldOverviewGrid cards={overviewCards} vintage={activeVintage === ANY ? null : activeVintage} />
+        </TabsContent>
+
+        {(["sessions", "historical"] as const).map((t) => (
+        <TabsContent key={t} value={t} className="mt-4">
           <div className="flex justify-end mb-2">
             <ColumnSettingsMenu onReset={yReset} />
           </div>
@@ -351,7 +450,9 @@ export default function YieldReportsPage() {
                     const labels: Record<YieldCol, string> = {
                       date: "Date",
                       type: "Type",
-                      season: "Season / year",
+                      vintage: "Vintage",
+                      block: "Block",
+                      variety: "Variety",
                       yield: "Total yield (t)",
                       area: "Area",
                       status: "Status",
@@ -366,32 +467,34 @@ export default function YieldReportsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No yield reports found for this vineyard.
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      No yield records found for this vintage.
                     </TableCell>
                   </TableRow>
                 )}
                 {rowsSorted.map((r) => {
                   const isHist = r.__kind === "historical";
-                  const h = r as HistoricalYieldRecord;
                   const s = r as YieldEstimationSession;
+                  const bv = rowBlockVariety(r);
                   const cellMap: Record<YieldCol, React.ReactNode> = {
                     date: <TableCell>{fmtDate(sortDate(r))}</TableCell>,
                     type: (
                       <TableCell>
                         <Badge variant={isHist ? "secondary" : "outline"}>
-                          {isHist ? "Historical" : "Estimation"}
+                          {isHist ? "Actual yield" : "Estimation"}
                         </Badge>
                       </TableCell>
                     ),
-                    season: <TableCell>{isHist ? fmt(h.season ?? h.year) : "—"}</TableCell>,
+                    vintage: <TableCell>{fmt(rowVintage(r))}</TableCell>,
+                    block: <TableCell>{bv.block}</TableCell>,
+                    variety: <TableCell>{bv.variety}</TableCell>,
                     yield: <TableCell>{fmtNum(rowTonnes(r))}</TableCell>,
                     area: <TableCell>{areaVal(rowAreaHa(r))}</TableCell>,
                     status: (
@@ -414,6 +517,7 @@ export default function YieldReportsPage() {
             </Table>
           </Card>
         </TabsContent>
+        ))}
       </Tabs>
 
 
@@ -438,6 +542,57 @@ export default function YieldReportsPage() {
   );
 }
 
+function YieldOverviewGrid({
+  cards,
+  vintage,
+}: {
+  cards: OverviewBlockCard[];
+  vintage: string | null;
+}) {
+  const rf = useRegionFormatters();
+  if (!cards.length) {
+    return (
+      <Card className="p-6 text-center text-sm text-muted-foreground">
+        No blocks configured for this vineyard yet.
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        {vintage ? `Vintage ${vintage}` : "All vintages"} — estimated and actual tonnes by block and variety.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((c) => (
+          <Card key={c.blockId} className="p-4 space-y-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="font-medium">{c.blockName}</div>
+              {c.areaHa != null && (
+                <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
+              )}
+            </div>
+            <div className="space-y-2">
+              {c.varieties.map((v, i) => (
+                <div key={`${v.variety ?? "none"}-${i}`} className="text-sm">
+                  <div className="text-foreground">{v.variety ?? "No variety configured"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Estimated: {v.estimatedTonnes == null ? "—" : `${fmtNum(v.estimatedTonnes)} t`}
+                  </div>
+                  {v.actualTonnes != null && (
+                    <div className="text-xs text-muted-foreground">
+                      Actual: {fmtNum(v.actualTonnes)} t
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function sortDate(r: AnyRow): string | null | undefined {
   if (r.__kind === "historical") {
     const h = r as HistoricalYieldRecord;
@@ -446,6 +601,7 @@ function sortDate(r: AnyRow): string | null | undefined {
   const s = r as YieldEstimationSession;
   return s.completed_at ?? s.session_created_at ?? s.updated_at ?? s.created_at ?? null;
 }
+
 
 function YieldSheet({
   row,
@@ -527,8 +683,7 @@ function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vin
   return (
     <div className="mt-4 space-y-4 text-sm">
       <Section title="Summary">
-        <Field label="Season" value={fmt(row.season)} />
-        <Field label="Year" value={fmt(row.year)} />
+        <Field label="Vintage" value={fmt(row.year ?? row.season)} />
         <Field label="Total yield (t)" value={fmtNum(row.total_yield_tonnes)} />
         <Field label="Total area" value={areaVal(row.total_area_hectares)} />
         <Field label={`Yield per ${rf.areaUnitLabel}`} value={
@@ -600,7 +755,7 @@ function SessionDetail({
         {summary.samplesPerHectare != null && (
           <Field label={`Samples per ${rf.areaUnitLabel === "ac" ? "acre" : "hectare"}`} value={fmtNum(summary.samplesPerHectare, 0)} />
         )}
-        {summary.season != null && <Field label="Season / year" value={fmt(summary.season)} />}
+        {summary.season != null && <Field label="Vintage" value={fmt(summary.season)} />}
         {summary.notes && (
           <div className="pt-1">
             <div className="text-muted-foreground text-xs mb-1">Notes</div>
