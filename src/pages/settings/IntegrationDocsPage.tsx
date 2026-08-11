@@ -1,11 +1,17 @@
-// Stage 4 — Portal-hosted documentation for the live, read-only VineTrack API.
-// No real API keys are ever shown here; examples use the <VT_API_KEY> placeholder.
+// Stage 6B — Portal-hosted developer documentation & onboarding.
+//
+// Every route, event and scope on this page is derived at build time from the
+// canonical Stage 6A assets (see src/lib/developerDocs.ts). Nothing is
+// hand-maintained here and no API key or secret is ever displayed — examples
+// use the <VT_API_KEY> placeholder only.
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Check, Copy, Download, FileJson, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import {
   Table,
@@ -16,64 +22,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { IOS_SUPABASE_URL } from "@/integrations/ios-supabase/client";
-import { SCOPE_LABELS } from "@/lib/integrationsQuery";
+import { scopeLabel, SENSITIVE_SCOPE_NOTES } from "@/lib/integrationsQuery";
+import { DocsMarkdown } from "@/components/integrations/DocsMarkdown";
+import {
+  API_INFO,
+  API_ROUTE_COUNT,
+  API_ROUTES,
+  CHANGELOG_MD,
+  DEVELOPER_GUIDE_MD,
+  DOC_SCOPES,
+  OPENAPI_FILENAME,
+  OPENAPI_YAML,
+  POSTMAN_COLLECTION,
+  SCOPE_COUNT,
+  WEBHOOK_EVENTS,
+  WEBHOOK_EVENTS_EMITTED,
+  WEBHOOK_EVENT_COUNT,
+  WEBHOOK_GUIDE_MD,
+  downloadTextFile,
+  groupRoutesByTag,
+  sectionsByHeadingPrefix,
+} from "@/lib/developerDocs";
 
 const API_BASE_URL = `${IOS_SUPABASE_URL}/functions/v1/vinetrack-api/v1`;
-
-const RESOURCES: { group: string; items: { path: string; scope: string; description: string }[] }[] = [
-  {
-    group: "Core",
-    items: [
-      { path: "/vineyards", scope: "vineyards:read", description: "Vineyards granted to the integration." },
-      { path: "/blocks", scope: "blocks:read", description: "Block/paddock structure and row layout." },
-    ],
-  },
-  {
-    group: "Operations",
-    items: [
-      { path: "/trips", scope: "trips:read", description: "Operational trip records." },
-      { path: "/spray-jobs", scope: "sprays:read", description: "Completed/applied spray records." },
-      { path: "/fuel-records", scope: "fuel:read", description: "Fuel usage records." },
-      { path: "/fuel-purchases", scope: "fuel:read", description: "Fuel purchases (monetary fields require costs:read)." },
-      { path: "/equipment", scope: "equipment:read", description: "Tractors, spray equipment and other assets." },
-      { path: "/work-tasks", scope: "work_tasks:read", description: "Work tasks." },
-      { path: "/pruning", scope: "pruning:read", description: "Pruning activity and season progress." },
-      { path: "/irrigation-records", scope: "irrigation:read", description: "Irrigation records." },
-      { path: "/growth-stages", scope: "growth_stages:read", description: "Growth stage observations." },
-      { path: "/yield-records", scope: "yield:read", description: "Yield records." },
-      { path: "/pins", scope: "pins:read", description: "Observation pins with canonical placement." },
-    ],
-  },
-  {
-    group: "Environment",
-    items: [
-      { path: "/weather", scope: "weather:read", description: "Weather observations for granted vineyards." },
-      { path: "/rainfall", scope: "rainfall:read", description: "Rainfall records." },
-      { path: "/disease-risk", scope: "disease_risk:read", description: "Disease risk assessments." },
-    ],
-  },
-];
-
-const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  "vineyards:read": "Read vineyard metadata for granted vineyards.",
-  "blocks:read": "Read block/paddock structure and row layout.",
-  "trips:read": "Read tractor and operational trip records for granted vineyards.",
-  "sprays:read": "Read completed/applied spray records for granted vineyards.",
-  "fuel:read": "Read fuel usage and purchase records. Monetary fields additionally require Costs access.",
-  "equipment:read": "Read equipment and asset records.",
-  "work_tasks:read": "Read work tasks for granted vineyards.",
-  "pruning:read": "Read pruning activities and season progress.",
-  "irrigation:read": "Read irrigation records.",
-  "growth_stages:read": "Read growth stage observations.",
-  "yield:read": "Read yield records.",
-  "pins:read": "Read observation pins and their canonical placement.",
-  "weather:read": "Read weather data for granted vineyards.",
-  "rainfall:read": "Read rainfall data for granted vineyards.",
-  "disease_risk:read": "Read disease risk assessments.",
-  "labour:read": "Unlock approved operator/worker identity fields on resources already granted.",
-  "costs:read": "Unlock approved monetary fields on resources already granted.",
-  "team:read": "Reserved for future team-level integration access.",
-};
 
 function CodeBlock({ label, code }: { label: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -106,7 +77,98 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
   );
 }
 
+function StatTile({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xl font-semibold tracking-tight">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
 export default function IntegrationDocsPage() {
+  const [routeFilter, setRouteFilter] = useState("");
+  const [eventFilter, setEventFilter] = useState("");
+
+  const gettingStarted = useMemo(
+    () =>
+      sectionsByHeadingPrefix(DEVELOPER_GUIDE_MD, [
+        "1.",
+        "2.",
+        "3.",
+        "23.",
+      ]),
+    [],
+  );
+
+  const referenceSections = useMemo(
+    () =>
+      sectionsByHeadingPrefix(DEVELOPER_GUIDE_MD, [
+        "7.",
+        "8.",
+        "9.",
+        "10.",
+        "18.",
+      ]),
+    [],
+  );
+
+  const webhookSections = useMemo(
+    () =>
+      sectionsByHeadingPrefix(DEVELOPER_GUIDE_MD, [
+        "11.",
+        "12.",
+        "14.",
+        "15.",
+        "16.",
+        "17.",
+      ]),
+    [],
+  );
+
+  const webhookDeepSections = useMemo(
+    () =>
+      sectionsByHeadingPrefix(WEBHOOK_GUIDE_MD, [
+        "Delivery model",
+        "Prerequisites",
+        "Endpoint URL policy",
+        "Security properties",
+        "Retention and limitations",
+      ]),
+    [],
+  );
+
+  const scopeSection = useMemo(
+    () => sectionsByHeadingPrefix(DEVELOPER_GUIDE_MD, ["4."]),
+    [],
+  );
+
+  const filteredRouteGroups = useMemo(() => {
+    const q = routeFilter.trim().toLowerCase();
+    const routes = q
+      ? API_ROUTES.filter(
+          (r) =>
+            r.path.toLowerCase().includes(q) ||
+            r.summary.toLowerCase().includes(q) ||
+            r.tag.toLowerCase().includes(q) ||
+            (r.scope ?? "").toLowerCase().includes(q),
+        )
+      : API_ROUTES;
+    return groupRoutesByTag(routes);
+  }, [routeFilter]);
+
+  const filteredEvents = useMemo(() => {
+    const q = eventFilter.trim().toLowerCase();
+    if (!q) return WEBHOOK_EVENTS;
+    return WEBHOOK_EVENTS.filter(
+      (e) =>
+        e.event.toLowerCase().includes(q) ||
+        e.resource_type.toLowerCase().includes(q) ||
+        (e.required_scope ?? "").toLowerCase().includes(q) ||
+        e.description.toLowerCase().includes(q),
+    );
+  }, [eventFilter]);
+
   return (
     <div className="space-y-6 p-4 md:p-8">
       <div className="space-y-3">
@@ -116,27 +178,73 @@ export default function IntegrationDocsPage() {
             Integrations &amp; API
           </Link>
         </Button>
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">VineTrack API documentation</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            The VineTrack external API is read-only. Requests are authenticated with
-            an integration API key and scoped to the vineyards and permissions
-            granted to that integration.
-          </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              VineTrack developer platform
+            </h1>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Onboarding, REST API reference, webhook events and change history for
+              the VineTrack {API_INFO.version} integration platform. The API is
+              read-only and scoped to the vineyards and permissions granted to each
+              integration.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadTextFile(OPENAPI_FILENAME, OPENAPI_YAML, "application/yaml")
+              }
+            >
+              <Download className="mr-2 h-4 w-4" />
+              OpenAPI 3.1 (YAML)
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!POSTMAN_COLLECTION}
+              title={
+                POSTMAN_COLLECTION
+                  ? "Download the Postman collection"
+                  : "The Postman collection is not published in this portal build"
+              }
+              onClick={() =>
+                POSTMAN_COLLECTION &&
+                downloadTextFile(
+                  "VineTrack-v1.postman_collection.json",
+                  POSTMAN_COLLECTION,
+                  "application/json",
+                )
+              }
+            >
+              <FileJson className="mr-2 h-4 w-4" />
+              Postman collection
+            </Button>
+          </div>
         </div>
       </div>
 
       <PortalNotice
         variant="info"
         title="Read-only API"
-        description="Only GET requests are supported. POST, PUT, PATCH and DELETE are not available."
+        description="Only GET requests are supported. There are no public write endpoints in v1. Webhooks notify you that something changed; the read API remains the authority on what it now looks like."
       />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="API routes" value={API_ROUTE_COUNT} />
+        <StatTile
+          label={`Webhook events (${WEBHOOK_EVENTS_EMITTED} emitted in v1)`}
+          value={WEBHOOK_EVENT_COUNT}
+        />
+        <StatTile label="Scopes" value={SCOPE_COUNT} />
+        <StatTile label="API version" value={API_INFO.version} />
+      </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Base URL &amp; version</CardTitle>
+          <CardTitle className="text-base">Base URL &amp; authentication</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
+        <CardContent className="space-y-4 text-sm">
           <div>
             <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Base URL
@@ -145,35 +253,18 @@ export default function IntegrationDocsPage() {
           </div>
           <p className="text-muted-foreground">
             The API is versioned in the path. The current version is{" "}
-            <Badge variant="outline">v1</Badge>.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Authentication</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <p className="text-muted-foreground">
-            Send your integration API key as a bearer token. Keys begin with{" "}
-            <code className="font-mono">vt_live_</code> and are shown once at
+            <Badge variant="outline">{API_INFO.version}</Badge>. Send your
+            integration API key as a bearer token — keys begin with{" "}
+            <code className="font-mono">vt_live_</code> or{" "}
+            <code className="font-mono">vt_test_</code> and are shown once at
             creation.
           </p>
           <CodeBlock label="Header" code={`Authorization: Bearer <VT_API_KEY>`} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Examples</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
           <CodeBlock
             label="curl"
             code={`curl \\
   -H "Authorization: Bearer <VT_API_KEY>" \\
-  "${API_BASE_URL}/vineyards"`}
+  "${API_BASE_URL}/me"`}
           />
           <CodeBlock
             label="JavaScript (fetch)"
@@ -182,111 +273,255 @@ export default function IntegrationDocsPage() {
 });
 const data = await res.json();`}
           />
-          <CodeBlock
-            label="PowerShell"
-            code={`Invoke-RestMethod -Uri "${API_BASE_URL}/vineyards" \`
-  -Headers @{ Authorization = "Bearer $env:VT_API_KEY" }`}
-          />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Pagination, errors &amp; rate limiting</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Pagination.</span> List
-            endpoints accept <code className="font-mono">limit</code> and{" "}
-            <code className="font-mono">offset</code> query parameters and return
-            paging metadata alongside the result set.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Errors.</span> Errors use
-            standard HTTP status codes with a machine-readable error code:{" "}
-            <code className="font-mono">401</code> authentication failed,{" "}
-            <code className="font-mono">403</code> missing scope or vineyard grant,{" "}
-            <code className="font-mono">404</code> unknown resource,{" "}
-            <code className="font-mono">429</code> rate limited,{" "}
-            <code className="font-mono">5xx</code> server error.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Rate limiting.</span>{" "}
-            Requests are rate limited per API key. When the limit is exceeded the
-            API responds with <code className="font-mono">429</code>; retry after a
-            short delay.
-          </p>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="start" className="space-y-4">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="start">Getting started</TabsTrigger>
+          <TabsTrigger value="api">API reference</TabsTrigger>
+          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+          <TabsTrigger value="scopes">Scopes</TabsTrigger>
+          <TabsTrigger value="changelog">Changelog</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Resources</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {RESOURCES.map((group) => (
-            <div key={group.group} className="space-y-2">
-              <h3 className="text-sm font-semibold">{group.group}</h3>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Endpoint</TableHead>
-                      <TableHead>Required scope</TableHead>
-                      <TableHead>Description</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.items.map((item) => (
-                      <TableRow key={item.path}>
-                        <TableCell>
-                          <code className="font-mono text-xs">GET /v1{item.path}</code>
-                        </TableCell>
-                        <TableCell>
-                          <code className="font-mono text-xs">{item.scope}</code>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {item.description}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+        {/* Getting started ------------------------------------------------ */}
+        <TabsContent value="start" className="space-y-4">
+          {gettingStarted.map((section) => (
+            <Card key={section.heading}>
+              <CardHeader>
+                <CardTitle className="text-base">{section.heading}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocsMarkdown>{section.body}</DocsMarkdown>
+              </CardContent>
+            </Card>
           ))}
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Scopes</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Scope</TableHead>
-                <TableHead>Permission</TableHead>
-                <TableHead>Description</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.keys(SCOPE_LABELS).map((scope) => (
-                <TableRow key={scope}>
-                  <TableCell>
-                    <code className="font-mono text-xs">{scope}</code>
-                  </TableCell>
-                  <TableCell>{SCOPE_LABELS[scope]}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {SCOPE_DESCRIPTIONS[scope] ?? "—"}
-                  </TableCell>
-                </TableRow>
+        {/* API reference --------------------------------------------------- */}
+        <TabsContent value="api" className="space-y-4">
+          <Card>
+            <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base">
+                REST catalogue
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {API_ROUTE_COUNT} routes
+                </span>
+              </CardTitle>
+              <Input
+                value={routeFilter}
+                onChange={(e) => setRouteFilter(e.target.value)}
+                placeholder="Filter routes, scopes or tags…"
+                className="sm:max-w-xs"
+              />
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {filteredRouteGroups.length === 0 && (
+                <p className="text-sm text-muted-foreground">No routes match that filter.</p>
+              )}
+              {filteredRouteGroups.map((group) => (
+                <div key={group.tag} className="space-y-2">
+                  <h3 className="text-sm font-semibold">{group.tag}</h3>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Endpoint</TableHead>
+                          <TableHead>Required scope</TableHead>
+                          <TableHead>Description</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.routes.map((route) => (
+                          <TableRow key={`${route.method} ${route.path}`}>
+                            <TableCell className="whitespace-nowrap">
+                              <code className="font-mono text-xs">
+                                {route.method} {route.path}
+                              </code>
+                            </TableCell>
+                            <TableCell>
+                              {route.scope ? (
+                                <code className="font-mono text-xs">{route.scope}</code>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  No resource scope
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              <div>{route.summary}</div>
+                              {route.description && (
+                                <div className="text-xs">{route.description}</div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+
+          {referenceSections.map((section) => (
+            <Card key={section.heading}>
+              <CardHeader>
+                <CardTitle className="text-base">{section.heading}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocsMarkdown>{section.body}</DocsMarkdown>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+
+        {/* Webhooks -------------------------------------------------------- */}
+        <TabsContent value="webhooks" className="space-y-4">
+          <Card>
+            <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base">
+                Event catalogue
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {WEBHOOK_EVENT_COUNT} events · {WEBHOOK_EVENTS_EMITTED} emitted in v1
+                </span>
+              </CardTitle>
+              <Input
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                placeholder="Filter events…"
+                className="sm:max-w-xs"
+              />
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Required scope</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredEvents.map((event) => (
+                    <TableRow key={event.event}>
+                      <TableCell className="whitespace-nowrap">
+                        <code className="font-mono text-xs">{event.event}</code>
+                      </TableCell>
+                      <TableCell>
+                        {event.required_scope ? (
+                          <code className="font-mono text-xs">{event.required_scope}</code>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="space-x-1 whitespace-nowrap">
+                        <Badge variant={event.emitted_in_v1 ? "default" : "outline"}>
+                          {event.emitted_in_v1 ? "Emitted" : "Reserved"}
+                        </Badge>
+                        {!event.subscribable && (
+                          <Badge variant="outline">Not subscribable</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {event.description}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredEvents.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                        No events match that filter.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {[...webhookSections, ...webhookDeepSections].map((section) => (
+            <Card key={section.heading}>
+              <CardHeader>
+                <CardTitle className="text-base">{section.heading}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocsMarkdown>{section.body}</DocsMarkdown>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+
+        {/* Scopes ---------------------------------------------------------- */}
+        <TabsContent value="scopes" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Scopes
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {SCOPE_COUNT} scopes
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Scope</TableHead>
+                    <TableHead>Permission</TableHead>
+                    <TableHead>Routes</TableHead>
+                    <TableHead>Events</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {DOC_SCOPES.map((scope) => (
+                    <TableRow key={scope.scope}>
+                      <TableCell className="whitespace-nowrap">
+                        <code className="font-mono text-xs">{scope.scope}</code>
+                      </TableCell>
+                      <TableCell>{scopeLabel(scope.scope)}</TableCell>
+                      <TableCell>{scope.routeCount}</TableCell>
+                      <TableCell>{scope.eventCount}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {SENSITIVE_SCOPE_NOTES[scope.scope] ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {scopeSection.map((section) => (
+            <Card key={section.heading}>
+              <CardHeader>
+                <CardTitle className="text-base">{section.heading}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocsMarkdown>{section.body}</DocsMarkdown>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+
+        {/* Changelog ------------------------------------------------------- */}
+        <TabsContent value="changelog">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                API &amp; webhooks changelog
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DocsMarkdown>{CHANGELOG_MD}</DocsMarkdown>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
