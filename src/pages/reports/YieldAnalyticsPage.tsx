@@ -1269,53 +1269,61 @@ export default function YieldAnalyticsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
-
-              <Card className="p-4 space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold">Benchmarks</h3>
-                  <p className="text-xs text-muted-foreground">Calculated from the current filters.</p>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Property average</span>
-                    <span className="tabular-nums">
-                      {perArea(propertyAvgTPerHa)} t/{rf.areaUnitLabel}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Previous vintage {effectiveVintage != null ? effectiveVintage - 1 : ""}
-                    </span>
-                    <span className="tabular-nums">
-                      {priorAvgTPerHa == null ? "—" : `${perArea(priorAvgTPerHa)} t/${rf.areaUnitLabel}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">3-year average</span>
-                    <span className="tabular-nums">
-                      {propertyThreeYear?.threeYearAverage == null
-                        ? "Needs 3 vintages"
-                        : `${perArea(propertyThreeYear.threeYearAverage)} t/${rf.areaUnitLabel}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Difference vs 3-year average</span>
-                    <span className="tabular-nums">
-                      {propertyThreeYear?.difference == null
-                        ? "—"
-                        : `${propertyThreeYear.difference >= 0 ? "+" : ""}${perArea(
-                            propertyThreeYear.difference,
-                          )} t/${rf.areaUnitLabel}`}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-start gap-1.5 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                  Averages are suppressed rather than estimated when fewer than three valid vintages exist.
-                </div>
-              </Card>
+              </>
+              )}
             </div>
+
+            <Card className="p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Benchmarks</h3>
+                <p className="text-xs text-muted-foreground">Calculated from the current filters.</p>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Property average</span>
+                  <span className="tabular-nums">
+                    {perArea(propertyAvgTPerHa)} t/{rf.areaUnitLabel}
+                  </span>
+                </div>
+                {multiVintage && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        Previous vintage {effectiveVintage != null ? effectiveVintage - 1 : ""}
+                      </span>
+                      <span className="tabular-nums">
+                        {priorAvgTPerHa == null ? "—" : `${perArea(priorAvgTPerHa)} t/${rf.areaUnitLabel}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">3-year average</span>
+                      <span className="tabular-nums">
+                        {propertyThreeYear?.threeYearAverage == null
+                          ? "Needs 3 vintages"
+                          : `${perArea(propertyThreeYear.threeYearAverage)} t/${rf.areaUnitLabel}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Difference vs 3-year average</span>
+                      <span className="tabular-nums">
+                        {propertyThreeYear?.difference == null
+                          ? "—"
+                          : `${propertyThreeYear.difference >= 0 ? "+" : ""}${perArea(
+                              propertyThreeYear.difference,
+                            )} t/${rf.areaUnitLabel}`}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {multiVintage
+                  ? "Averages are suppressed rather than estimated when fewer than three valid vintages exist."
+                  : "Historical benchmarks will appear when additional vintages are available."}
+              </p>
+            </Card>
           </section>
+
 
           {/* Highlights */}
           <section className="space-y-3">
