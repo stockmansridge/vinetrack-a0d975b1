@@ -693,7 +693,7 @@ function DetailedForm({
                   <SelectItem value={NOT_LINKED}>Planting not linked</SelectItem>
                   {plantingOptions.map((u) => (
                     <SelectItem key={u.key} value={u.key}>
-                      {allocationOptionLabel(u, rf.areaUnitLabel)}
+                      {allocationOptionLabel(u)}
                     </SelectItem>
                   ))}
                 </SelectContent>
