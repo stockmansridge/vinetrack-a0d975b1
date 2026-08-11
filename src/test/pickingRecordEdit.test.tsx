@@ -25,6 +25,10 @@ const RECORD: PickingRecord = {
   variety_key: null,
   variety_name: "Shiraz",
   clone: "BVRC12",
+  rootstock: null,
+  planting_group_key: "shiraz|bvrc12|",
+  variety_allocation_ids: null,
+
   weight_kg: 1200,
   sugar_value: 13.2,
   sugar_unit: "baume",
