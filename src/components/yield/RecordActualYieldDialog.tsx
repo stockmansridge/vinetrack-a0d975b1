@@ -457,7 +457,7 @@ function DetailedForm({
   const [pickedAt, setPickedAt] = useState(record?.picked_at?.slice(0, 10) ?? today);
   const [blockId, setBlockId] = useState(record?.paddock_id ?? "");
   const [varietyName, setVarietyName] = useState(record?.variety_name ?? "");
-  const [clone, setClone] = useState(record?.clone || NO_CLONE);
+  const [plantingKey, setPlantingKey] = useState(NOT_LINKED);
   const [weightKg, setWeightKg] = useState(str(record?.weight_kg));
   const [sugar, setSugar] = useState(str(record?.sugar_value));
   const [ph, setPh] = useState(str(record?.ph));
