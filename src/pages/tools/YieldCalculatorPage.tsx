@@ -370,10 +370,13 @@ function Field({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const id = `pyc-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} />
+      <Label className="text-xs" htmlFor={id}>
+        {label}
+      </Label>
+      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
