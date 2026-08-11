@@ -143,7 +143,7 @@ export default function VintageOverviewSection() {
         <MetricCard
           label="Work tasks"
           icon={ClipboardList}
-          tone="blue"
+          tone="accent"
           value={
             workTasksCountQ.isLoading
               ? "…"
