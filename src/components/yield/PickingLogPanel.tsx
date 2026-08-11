@@ -303,7 +303,7 @@ export default function PickingLogPanel({
                 <TableCell className="text-xs text-muted-foreground">
                   {(() => {
                     const p = plantingFor(r);
-                    if (p.ambiguous) return <Badge variant="outline">Unallocated</Badge>;
+                    if (p.ambiguous) return <Badge variant="outline">Planting not linked</Badge>;
                     return p.label ?? "—";
                   })()}
                 </TableCell>
