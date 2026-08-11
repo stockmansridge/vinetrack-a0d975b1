@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   buildAllocationUnits,
   matchAllocation,
+  buildPlantingGroups,
+  plantingGroupOptionLabel,
   plantingLabel,
   allocationLabel,
 } from "@/lib/yieldAllocations";
@@ -262,5 +264,55 @@ describe("yield overview by allocation", () => {
     expect(card.unallocated).toHaveLength(1);
     expect(card.unallocated[0].actualTonnes).toBe(5);
     expect(card.actualTonnes).toBe(5);
+  });
+});
+
+describe("planting groups", () => {
+  const units = buildAllocationUnits({
+    blockId: "b1",
+    areaHa: 1.8,
+    allocations: [
+      { id: "a1", name: "Pinot Noir", clone: "777", rootstock: "Richter 110", percent: 30 } as any,
+      { id: "a2", name: "Pinot Noir", clone: "667", rootstock: "Richter 110", percent: 30 } as any,
+      { id: "a3", name: "Pinot Noir", clone: "777", rootstock: "Richter 110", percent: 40 } as any,
+    ],
+  });
+
+  it("combines same variety + clone + rootstock sections and sums hectares", () => {
+    const groups = buildPlantingGroups(units);
+    expect(groups).toHaveLength(2);
+    const g777 = groups[0];
+    expect(g777.sectionCount).toBe(2);
+    expect(g777.allocationIds).toEqual(["a1", "a3"]);
+    expect(g777.areaHa).toBeCloseTo(1.26, 5);
+    expect(groups[1].areaHa).toBeCloseTo(0.54, 5);
+    expect((groups[0].areaHa ?? 0) + (groups[1].areaHa ?? 0)).toBeCloseTo(1.8, 5);
+  });
+
+  it("keeps different clone or rootstock separate", () => {
+    const g = buildPlantingGroups(
+      buildAllocationUnits({
+        blockId: "b1",
+        areaHa: 2,
+        allocations: [
+          { id: "x", name: "Pinot Noir", clone: "777", rootstock: "Richter 110" } as any,
+          { id: "y", name: "Pinot Noir", clone: "777", rootstock: "101-14" } as any,
+        ],
+      }),
+    );
+    expect(g).toHaveLength(2);
+  });
+
+  it("resolves a member allocation id to its group", () => {
+    const groups = buildPlantingGroups(units);
+    expect(matchAllocation(groups, "Pinot Noir", null, { allocationId: "a3" }).key).toBe(
+      groups[0].key,
+    );
+  });
+
+  it("labels multi-section groups", () => {
+    const groups = buildPlantingGroups(units);
+    expect(plantingGroupOptionLabel(groups[0])).toContain("2 sections");
+    expect(plantingGroupOptionLabel(groups[1])).not.toContain("sections");
   });
 });
