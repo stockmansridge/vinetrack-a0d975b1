@@ -578,9 +578,11 @@ export default function AdminUserActivityPage() {
           <AdminEmpty>No users match the current filters.</AdminEmpty>
         )}
         {!isLoading && filtered.length > 0 && (
+          <div className="max-h-[70vh] overflow-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
               <TableRow>
+
                 {finalColumns.map((c) => (
                   <ReorderableHead
                     key={c.key}
@@ -625,6 +627,7 @@ export default function AdminUserActivityPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </Card>
 
