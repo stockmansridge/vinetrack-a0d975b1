@@ -347,15 +347,41 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="boundary">Boundary</TabsTrigger>
-          <TabsTrigger value="rows">Rows</TabsTrigger>
-          <TabsTrigger value="varieties">Varieties</TabsTrigger>
-          <TabsTrigger value="trellis">Trellis</TabsTrigger>
-          <TabsTrigger value="irrigation">Irrigation</TabsTrigger>
-          <TabsTrigger value="soil">Soil</TabsTrigger>
-          {canEdit && <TabsTrigger value="danger" className="text-destructive">Danger Zone</TabsTrigger>}
+        <TabsList className="flex flex-wrap h-auto gap-1 rounded-lg border border-border bg-muted/70 p-1.5 shadow-sm">
+          <TabsTrigger value="overview" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <LayoutDashboard className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="boundary" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <MapIcon className="h-4 w-4" />
+            Boundary
+          </TabsTrigger>
+          <TabsTrigger value="rows" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <Table className="h-4 w-4" />
+            Rows
+          </TabsTrigger>
+          <TabsTrigger value="varieties" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <Grape className="h-4 w-4" />
+            Varieties
+          </TabsTrigger>
+          <TabsTrigger value="trellis" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <Fence className="h-4 w-4" />
+            Trellis
+          </TabsTrigger>
+          <TabsTrigger value="irrigation" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <Droplets className="h-4 w-4" />
+            Irrigation
+          </TabsTrigger>
+          <TabsTrigger value="soil" className="gap-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border">
+            <Shovel className="h-4 w-4" />
+            Soil
+          </TabsTrigger>
+          {canEdit && (
+            <TabsTrigger value="danger" className="gap-2 text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive data-[state=active]:border data-[state=active]:border-destructive/30 data-[state=active]:shadow">
+              <AlertTriangle className="h-4 w-4" />
+              Danger Zone
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Overview */}
