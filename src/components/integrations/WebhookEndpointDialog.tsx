@@ -76,6 +76,9 @@ export function WebhookEndpointDialog({
         const result = await create.mutateAsync({ name: trimmedName, url: trimmedUrl });
         onOpenChange(false);
         onCreated?.(result.secret, result.endpoint);
+        // Drop the plaintext secret from the mutation result cache; it now
+        // lives only in the parent's transient state.
+        create.reset();
       }
     } catch (e) {
       setError(integrationErrorMessage(e));
