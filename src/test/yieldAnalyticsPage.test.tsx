@@ -98,12 +98,16 @@ describe("Yield Analytics page", () => {
     expect(await screen.findByRole("heading", { name: /Yield Analytics/i })).toBeTruthy();
     await waitFor(() => expect(screen.getByText(/Total yield/i)).toBeTruthy());
     expect(screen.getByText(/Reset filters/i)).toBeTruthy();
-    expect(screen.getByText(/Average price \/ tonne/i)).toBeTruthy();
+    expect(screen.getAllByText(/Average price \/ tonne/i).length).toBeGreaterThan(0);
   });
 
   it("defaults to the latest vintage and shows its detailed picking totals", async () => {
     renderPage();
     // 2026 detailed pick = 50 t (2025 basic record is outside the vintage).
-    await waitFor(() => expect(screen.getAllByText(/50 t/).length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(document.body.textContent).toMatch(/50(\.0+)?\s*t\b/),
+    );
+    // The 2025 basic record is outside the default vintage.
+    expect(document.body.textContent).not.toMatch(/40(\.0+)?\s*t\b/);
   });
 });
