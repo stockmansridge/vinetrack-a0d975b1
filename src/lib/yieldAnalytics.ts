@@ -294,20 +294,43 @@ export function buildYieldFacts({
 // ---------------------------------------------------------------------------
 
 export interface AggMetrics {
+  /** All harvested tonnes, sold and internally retained. */
   tonnes: number;
   areaHa: number | null;
+  /** Grape-sale revenue. Null when no fruit in the group was sold. */
   revenue: number | null;
+  /** Tonnes with a recorded grape sale value. */
+  soldTonnes: number;
+  /** Harvested tonnes with no grape sale value — treated as internal use. */
+  retainedTonnes: number;
+  /** Share of harvested tonnes that were sold, 0-1. */
+  soldShare: number | null;
+  /** @deprecated alias of soldTonnes, kept for existing callers. */
   pricedTonnes: number;
-  /** Hectares behind the priced tonnes — the denominator for Revenue/ha. */
+  /** Hectares behind sold fruit — the denominator for grape revenue / ha. */
+  soldAreaHa: number | null;
+  /** @deprecated alias of soldAreaHa. */
   pricedAreaHa: number | null;
-  /** True when every harvested tonne in the group carries a price. */
-  revenueComplete: boolean;
+  /** True when every harvested tonne in the group was sold. */
+  allSold: boolean;
+  /** True when part of the harvest was retained for internal use. */
+  hasRetained: boolean;
+  /** Allocated production cost for ALL harvested fruit. */
   cost: number | null;
+  /** Portion of allocated cost attributable to sold fruit. */
+  soldCost: number | null;
+  /** Portion of allocated cost carried by internally retained fruit. */
+  retainedCost: number | null;
   tonnesPerHa: number | null;
+  /** Average sale price achieved on sold fruit only. */
   pricePerTonne: number | null;
+  /** Grape revenue per sold hectare. */
   revenuePerHa: number | null;
+  /** Production cost across all harvested hectares. */
   costPerHa: number | null;
+  /** Production cost across all harvested tonnes, sold and retained. */
   costPerTonne: number | null;
+  /** Grape-sale margin: sale revenue less the cost attributable to sold fruit. */
   margin: number | null;
   marginPerHa: number | null;
   count: number;
@@ -319,14 +342,21 @@ const div = (a: number | null, b: number | null): number | null =>
 /**
  * Aggregate facts.
  *
- * Pricing integrity: historical yield records carry NO price, so revenue and
- * price metrics are derived only from the records that actually hold a value.
- * Unpriced tonnes and their hectares are excluded from the price and
- * Revenue/ha denominators rather than dragging them toward zero, and gross
- * margin is only reported when the whole group is priced (otherwise it would
- * subtract whole-block cost from partial revenue).
+ * Harvest disposition: a harvest record with no grape sale value is NOT missing
+ * data — it is fruit retained for internal use (e.g. the business's own wine).
+ * Sold and retained tonnes are reported separately, and no sale price is ever
+ * imputed for retained fruit.
  *
- * Cost integrity: Cost/tonne is always allocated cost ÷ the CANONICAL yield
+ * Sale metrics (revenue, average sale price, revenue per hectare, grape-sale
+ * margin) are derived from sold fruit only. Production metrics (yield, cost,
+ * cost per tonne, cost per hectare) cover ALL harvested fruit, because the cost
+ * of retained fruit is real and becomes an input cost of the internal product.
+ *
+ * Grape-sale margin subtracts only the cost attributable to sold fruit, so a
+ * view mixing sold and retained fruit still reports a meaningful margin rather
+ * than an artificial loss.
+ *
+ * Cost integrity: cost per tonne is always allocated cost ÷ the CANONICAL yield
  * tonnes computed here — never the `yield_tonnes` snapshot stored on cost
  * allocations, which can be stale, zero or null.
  */
@@ -336,11 +366,12 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
   let areaSeen = false;
   let revenue = 0;
   let revenueSeen = false;
-  let pricedTonnes = 0;
-  let pricedArea = 0;
-  let pricedAreaSeen = false;
+  let soldTonnes = 0;
+  let soldArea = 0;
+  let soldAreaSeen = false;
   let cost = 0;
   let costSeen = false;
+  let soldCost = 0;
 
   for (const f of facts) {
     tonnes += f.tonnes;
@@ -351,45 +382,58 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
     if (f.revenue != null) {
       revenue += f.revenue;
       revenueSeen = true;
-      if (f.areaHa != null) {
-        pricedArea += f.areaHa;
-        pricedAreaSeen = true;
-      }
     }
-    pricedTonnes += f.pricedTonnes;
+    soldTonnes += f.pricedTonnes;
+    // Hectares attributed to sold fruit, pro-rated when a record is part sold.
+    const soldFraction = f.tonnes > 0 ? Math.min(1, f.pricedTonnes / f.tonnes) : 0;
+    if (f.areaHa != null && soldFraction > 0) {
+      soldArea += f.areaHa * soldFraction;
+      soldAreaSeen = true;
+    }
     if (f.cost != null) {
       cost += f.cost;
       costSeen = true;
+      soldCost += f.cost * soldFraction;
     }
   }
 
   const areaHa = areaSeen && area > 0 ? area : null;
-  const pricedAreaHa = pricedAreaSeen && pricedArea > 0 ? pricedArea : null;
+  const soldAreaHa = soldAreaSeen && soldArea > 0 ? soldArea : null;
   const rev = revenueSeen ? revenue : null;
   const cst = costSeen ? cost : null;
+  const retainedTonnes = Math.max(0, tonnes - soldTonnes);
   // Tolerate float noise on the tonnage comparison.
-  const revenueComplete = tonnes > 0 && pricedTonnes >= tonnes - 1e-6;
-  const margin = rev != null && cst != null && revenueComplete ? rev - cst : null;
+  const allSold = tonnes > 0 && soldTonnes >= tonnes - 1e-6;
+  const hasRetained = retainedTonnes > 1e-6;
+  const sCost = costSeen ? soldCost : null;
+  const margin = rev != null && sCost != null ? rev - sCost : null;
 
   return {
     tonnes,
     areaHa,
     revenue: rev,
-    pricedTonnes,
-    pricedAreaHa,
-    revenueComplete,
+    soldTonnes,
+    retainedTonnes,
+    soldShare: tonnes > 0 ? soldTonnes / tonnes : null,
+    pricedTonnes: soldTonnes,
+    soldAreaHa,
+    pricedAreaHa: soldAreaHa,
+    allSold,
+    hasRetained,
     cost: cst,
+    soldCost: sCost,
+    retainedCost: cst != null && sCost != null ? Math.max(0, cst - sCost) : null,
     tonnesPerHa: div(tonnes, areaHa),
-    pricePerTonne: pricedTonnes > 0 && rev != null ? rev / pricedTonnes : null,
-    revenuePerHa: div(rev, pricedAreaHa),
+    pricePerTonne: soldTonnes > 0 && rev != null ? rev / soldTonnes : null,
+    revenuePerHa: div(rev, soldAreaHa),
     costPerHa: div(cst, areaHa),
     costPerTonne: cst != null && tonnes > 0 ? cst / tonnes : null,
     margin,
-    marginPerHa: div(margin, areaHa),
+    marginPerHa: div(margin, soldAreaHa),
     count: facts.length,
-
   };
 }
+
 
 export interface GroupedMetrics extends AggMetrics {
   key: string;
