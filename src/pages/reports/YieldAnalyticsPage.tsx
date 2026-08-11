@@ -195,7 +195,13 @@ export default function YieldAnalyticsPage() {
       buildYieldFacts({
         historicalRows: extractHistoricalBlockRows(reportsQ.data?.historical ?? []),
         pickingTotals: pickingQ.data ?? [],
-        blocks: (blocksQ.data ?? []).map((b) => ({ id: b.id, name: b.name, areaHa: b.areaHa })),
+        blocks: (blocksQ.data ?? []).map((b) => ({
+          id: b.id,
+          name: b.name,
+          areaHa: b.areaHa,
+          varietyAllocations: b.varietyAllocations,
+        })),
+
         costRows,
       }),
     [reportsQ.data?.historical, pickingQ.data, blocksQ.data, costRows],
