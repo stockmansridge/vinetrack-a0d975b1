@@ -140,7 +140,13 @@ export function matchAllocation(
   if (!units.length) return { key: null, reason: "no-allocations" };
   const allocationId = (hints.allocationId ?? "").trim();
   if (allocationId) {
-    const byId = units.find((u) => norm(u.id) === norm(allocationId));
+    // Works for physical allocations and for planting groups, which carry every
+    // member allocation id so a section-level id still resolves to its group.
+    const byId = units.find(
+      (u) =>
+        norm(u.id) === norm(allocationId) ||
+        ((u as PlantingGroup).allocationIds ?? []).some((id) => norm(id) === norm(allocationId)),
+    );
     if (byId) return { key: byId.key, reason: "allocation-id" };
   }
   const v = norm(variety);
