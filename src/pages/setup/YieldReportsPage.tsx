@@ -97,6 +97,29 @@ export default function YieldReportsPage() {
   const [completion, setCompletion] = useState<string>(ANY);
   const [tab, setTab] = useState<"all" | "sessions" | "historical">("all");
   const [selected, setSelected] = useState<AnyRow | null>(null);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const qc = useQueryClient();
+
+  const blocksQ = useQuery({
+    queryKey: ["yield", "blocks", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchYieldBlocks(selectedVineyardId!),
+  });
+
+  const del = useMutation({
+    mutationFn: async (row: AnyRow) =>
+      row.__kind === "session"
+        ? softDeleteYieldEstimationSession(row.id)
+        : softDeleteHistoricalYieldRecord(row.id),
+    onSuccess: () => {
+      toast({ title: "Record deleted" });
+      setSelected(null);
+      qc.invalidateQueries({ queryKey: ["yield_reports"] });
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not delete", description: e?.message ?? String(e), variant: "destructive" }),
+  });
+
 
   const YIELD_COLS = ["date", "type", "season", "yield", "area", "status"] as const;
   type YieldCol = (typeof YIELD_COLS)[number];
