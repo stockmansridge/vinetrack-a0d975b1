@@ -98,7 +98,7 @@ describe("Yield Analytics page", () => {
     expect(await screen.findByRole("heading", { name: /Yield Analytics/i })).toBeTruthy();
     await waitFor(() => expect(screen.getByText(/Total yield/i)).toBeTruthy());
     expect(screen.getByText(/Reset filters/i)).toBeTruthy();
-    expect(screen.getAllByText(/Average price \/ tonne/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Average sale price \/ tonne/i).length).toBeGreaterThan(0);
   });
 
   it("merges basic and detailed yield across vintages with area apportioned once", async () => {

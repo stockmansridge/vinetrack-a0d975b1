@@ -40,6 +40,8 @@ import { useCanSeeCosts } from "@/lib/permissions";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import MultiSelect from "@/components/yield/analytics/MultiSelect";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +86,8 @@ import { downloadYieldAnalyticsCsv, downloadYieldAnalyticsXlsx } from "@/lib/yie
 
 const HA_PER_AC = 0.40468564224;
 const ALL = "__all__";
+const RANGE = "__range__";
+
 
 const CHART_COLORS = [
   "hsl(var(--primary))",
@@ -301,6 +305,15 @@ export default function YieldAnalyticsPage() {
   const [mixMode, setMixMode] = useState<"tonnes" | "percent" | "area">("tonnes");
   const [trendVarieties, setTrendVarieties] = useState<string[]>([]);
   const [trendBlocks, setTrendBlocks] = useState<string[]>([]);
+  const [varietyView, setVarietyView] = useState<"share" | "tonnes">("share");
+  const [highlightDim, setHighlightDim] = useState<"block" | "variety">("block");
+
+  // Historical/trend visuals are only meaningful across two or more vintages.
+  const multiVintage = useMemo(
+    () => new Set(dimensionFiltered.map((f) => f.vintage)).size >= 2,
+    [dimensionFiltered],
+  );
+
 
   const metricOf = (key: MetricKey) => metricOptions.find((m) => m.key === key) ?? METRICS[0];
 
@@ -574,12 +587,14 @@ export default function YieldAnalyticsPage() {
   const ChartCard = ({
     title,
     subtitle,
+    info,
     action,
     children,
     empty,
   }: {
     title: string;
     subtitle?: string;
+    info?: string;
     action?: React.ReactNode;
     children: React.ReactNode;
     empty?: boolean;
@@ -587,11 +602,15 @@ export default function YieldAnalyticsPage() {
     <Card className="p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold">{title}</h3>
+            {info && <InfoHint text={info} />}
+          </div>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action}
       </div>
+
       {empty ? (
         <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
           No data for the selected filters.
@@ -758,36 +777,34 @@ export default function YieldAnalyticsPage() {
       <Card className="p-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Vintage mode</div>
-            <Select value={vintageMode} onValueChange={(v) => setVintageMode(v as "single" | "range")}>
-              <SelectTrigger className="h-9 w-[140px]">
+            <div className="text-xs text-muted-foreground">Vintage</div>
+            <Select
+              value={vintageMode === "range" ? RANGE : vintage}
+              onValueChange={(v) => {
+                if (v === RANGE) {
+                  setVintageMode("range");
+                  return;
+                }
+                setVintageMode("single");
+                setVintage(v);
+              }}
+            >
+              <SelectTrigger className="h-9 w-[170px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="single">Single vintage</SelectItem>
-                <SelectItem value="range">Multi-year range</SelectItem>
+                <SelectItem value={ALL}>All vintages</SelectItem>
+                {vintages.map((v) => (
+                  <SelectItem key={v} value={String(v)}>
+                    {v}
+                  </SelectItem>
+                ))}
+                <SelectItem value={RANGE}>Custom range…</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {vintageMode === "single" ? (
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Vintage</div>
-              <Select value={vintage} onValueChange={setVintage}>
-                <SelectTrigger className="h-9 w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All vintages</SelectItem>
-                  {vintages.map((v) => (
-                    <SelectItem key={v} value={String(v)}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
+          {vintageMode === "range" && (
             <>
               <div className="space-y-1">
                 <div className="text-xs text-muted-foreground">From</div>
@@ -824,6 +841,7 @@ export default function YieldAnalyticsPage() {
             </>
           )}
 
+
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Variety</div>
             <MultiSelect
@@ -858,8 +876,29 @@ export default function YieldAnalyticsPage() {
 
       {!isLoading && !noData && (
         <>
+          {/* Section navigation for this long dashboard */}
+          <nav className="sticky top-0 z-20 -mx-1 flex flex-wrap gap-1 overflow-x-auto rounded-md border bg-background/95 px-1 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            {[
+              ["ya-overview", "Overview"],
+              ["ya-productivity", "Productivity"],
+              ["ya-sales", "Grape sales"],
+              ["ya-economics", "Economics"],
+              ["ya-trends", "Trends"],
+              ["ya-data", "Data"],
+            ].map(([id, label]) => (
+              <a
+                key={id}
+                href={`#${id}`}
+                className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+
           {/* KPIs */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div id="ya-overview" className="grid gap-3 scroll-mt-24 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+
             <KpiCard
               label="Total yield"
               value={`${num(totals.tonnes)} t`}
@@ -902,65 +941,56 @@ export default function YieldAnalyticsPage() {
           </div>
 
           {/* Harvest disposition — sold vs internally retained fruit */}
-          <Card className="p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-1">
+          <Card className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-semibold">Harvest disposition</h2>
-                <p className="text-sm text-muted-foreground">
-                  {num(totals.soldTonnes, 2)} t sold
-                  {" | "}
-                  {num(totals.retainedTonnes, 2)} t retained for internal use
-                </p>
-                <p className="max-w-3xl text-xs text-muted-foreground">
-                  Harvest without a grape sale price is treated as retained/internal-use fruit rather than
-                  missing price data. It contributes to yield and production cost metrics but not grape-sale
-                  revenue. Disposition is inferred from whether a grape sale value is recorded.
-                </p>
+                <InfoHint text="Harvest without a grape sale price is treated as retained/internal-use fruit rather than missing price data. Disposition is inferred from whether a grape sale value is recorded." />
               </div>
-              <div className="flex items-center gap-6">
-                <div className="grid gap-2 text-sm">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground">Harvested</span>
-                    <span className="font-semibold">{num(totals.tonnes, 2)} t</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground">Sold</span>
-                    <span className="font-semibold">
-                      {num(totals.soldTonnes, 2)} t
-                      {totals.soldShare != null && ` (${num(totals.soldShare * 100, 1)}%)`}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground">Retained / internal</span>
-                    <span className="font-semibold">
-                      {num(totals.retainedTonnes, 2)} t
-                      {totals.soldShare != null && ` (${num((1 - totals.soldShare) * 100, 1)}%)`}
-                    </span>
-                  </div>
-                </div>
-                {dispositionRows.length > 1 && (
-                  <ResponsiveContainer width={180} height={140}>
-                    <PieChart>
-                      <Pie
-                        data={dispositionRows}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={34}
-                        outerRadius={58}
-                        paddingAngle={2}
-                      >
-                        {dispositionRows.map((_, i) => (
-                          <Cell key={i} fill={colourFor(i)} />
-                        ))}
-                      </Pie>
-                      <RTooltip formatter={(v: number, n: string) => [`${num(v, 2)} t`, n]} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
+              <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
+                <span className="text-muted-foreground">
+                  Harvested <span className="font-semibold text-foreground">{num(totals.tonnes, 2)} t</span>
+                </span>
+                <span className="text-muted-foreground">
+                  Sold{" "}
+                  <span className="font-semibold text-foreground">
+                    {num(totals.soldTonnes, 2)} t
+                    {totals.soldShare != null && ` (${num(totals.soldShare * 100, 1)}%)`}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  Retained / internal{" "}
+                  <span className="font-semibold text-foreground">
+                    {num(totals.retainedTonnes, 2)} t
+                    {totals.soldShare != null && ` (${num((1 - totals.soldShare) * 100, 1)}%)`}
+                  </span>
+                </span>
               </div>
+              {dispositionRows.length > 1 && (
+                <ResponsiveContainer width={90} height={66}>
+                  <PieChart>
+                    <Pie
+                      data={dispositionRows}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={18}
+                      outerRadius={31}
+                      paddingAngle={2}
+                    >
+                      {dispositionRows.map((_, i) => (
+                        <Cell key={i} fill={colourFor(i)} />
+                      ))}
+                    </Pie>
+                    <RTooltip formatter={(v: number, n: string) => [`${num(v, 2)} t`, n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Internal fruit contributes to yield and production cost metrics but not grape-sale revenue.
+              </p>
             </div>
           </Card>
+
 
           {costAvailable && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -982,68 +1012,110 @@ export default function YieldAnalyticsPage() {
           )}
 
           {!costAvailable && (
-            <PortalNotice
-              variant="info"
-              compact
-              title="Production cost data unavailable"
-              description={
-                canSeeCosts
-                  ? "No allocated production costs were found for the harvested blocks and vintages in view. Cost-per-tonne, cost-per-hectare and grape-sale margin metrics will appear when production cost allocations are available."
-                  : "Production cost and margin metrics are visible to owners and managers only."
-              }
-            />
+            <Card className="border-dashed bg-muted/30 px-4 py-3">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-sm font-medium">Production cost</span>
+                <span className="text-sm text-muted-foreground">Not available for this vintage</span>
+                <span className="text-xs text-muted-foreground">
+                  {canSeeCosts
+                    ? "Cost metrics appear when allocated vineyard production costs are available."
+                    : "Production cost and margin metrics are visible to owners and managers only."}
+                </span>
+              </div>
+            </Card>
           )}
 
 
+
           {/* Production breakdown */}
-          <section className="space-y-3">
+          <section id="ya-production" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Production breakdown
             </h2>
             <div className="grid gap-3 lg:grid-cols-2">
               <ChartCard
                 title="Yield by variety"
-                subtitle="Share of total tonnes harvested"
+                subtitle="Share of total tonnes harvested — click a variety to filter"
                 empty={!varietyPie.rows.length}
+                action={
+                  varietyPie.mode === "pie" ? (
+                    <div className="flex rounded-md border p-0.5">
+                      {(["share", "tonnes"] as const).map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          size="sm"
+                          variant={varietyView === m ? "secondary" : "ghost"}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setVarietyView(m)}
+                        >
+                          {m === "share" ? "Share" : "Tonnes"}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : undefined
+                }
               >
-                {varietyPie.mode === "pie" ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie
-                        data={varietyPie.rows}
-                        dataKey="tonnes"
-                        nameKey="label"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        onClick={(d: any) => setVarietyFilter([d?.label])}
-                      >
-                        {varietyPie.rows.map((_, i) => (
-                          <Cell key={i} fill={colourFor(i)} cursor="pointer" />
-                        ))}
-                      </Pie>
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <RTooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null;
-                          const g = payload[0].payload as GroupedMetrics;
-                          const share = totals.tonnes > 0 ? (g.tonnes / totals.tonnes) * 100 : null;
-                          return (
-                            <div style={tooltipStyle} className="p-2 space-y-0.5">
-                              <div className="font-medium">{g.label}</div>
-                              <div>{num(g.tonnes)} t ({num(share, 1)}% of crop)</div>
-                              <div>Area: {areaFmt(g.areaHa)}</div>
-                              <div>
-                                {perArea(g.tonnesPerHa)} t/{rf.areaUnitLabel}
+                {varietyPie.mode === "pie" && varietyView === "share" ? (
+                  <div className="grid items-center gap-3 sm:grid-cols-2">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie
+                          data={varietyPie.rows}
+                          dataKey="tonnes"
+                          nameKey="label"
+                          innerRadius={55}
+                          outerRadius={92}
+                          paddingAngle={2}
+                          onClick={(d: any) => setVarietyFilter([d?.label])}
+                        >
+                          {varietyPie.rows.map((_, i) => (
+                            <Cell key={i} fill={colourFor(i)} cursor="pointer" />
+                          ))}
+                        </Pie>
+                        <RTooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const g = payload[0].payload as GroupedMetrics;
+                            const share = totals.tonnes > 0 ? (g.tonnes / totals.tonnes) * 100 : null;
+                            return (
+                              <div style={tooltipStyle} className="p-2 space-y-0.5">
+                                <div className="font-medium">{g.label}</div>
+                                <div>{num(g.tonnes)} t ({num(share, 1)}% of crop)</div>
+                                <div>Area: {areaFmt(g.areaHa)}</div>
+                                <div>
+                                  {perArea(g.tonnesPerHa)} t/{rf.areaUnitLabel}
+                                </div>
+                                <div>Avg sale price: {money(g.pricePerTonne)} /t</div>
+                                <div>Grape revenue: {money(g.revenue)}</div>
                               </div>
-                              <div>Avg price: {money(g.pricePerTonne)} /t</div>
-                              <div>Crop value: {money(g.revenue)}</div>
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <ol className="space-y-1 text-xs">
+                      {varietyPie.rows.map((g, i) => (
+                        <li key={g.key}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-accent"
+                            onClick={() => setVarietyFilter([g.label])}
+                          >
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ background: colourFor(i) }}
+                            />
+                            <span className="flex-1 truncate">{g.label}</span>
+                            <span className="tabular-nums">{num(g.tonnes)} t</span>
+                            <span className="w-12 text-right tabular-nums text-muted-foreground">
+                              {totals.tonnes > 0 ? `${num((g.tonnes / totals.tonnes) * 100, 1)}%` : "—"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 ) : (
                   rankBars(varietyPie.rows, METRICS[0], (label) => setVarietyFilter([label]))
                 )}
@@ -1051,7 +1123,7 @@ export default function YieldAnalyticsPage() {
 
               <ChartCard
                 title="Yield by block"
-                subtitle="Top 15 blocks — click a bar to filter"
+                subtitle="Top 15 blocks by block name — click a bar to filter"
                 empty={!blockGroups.length}
                 action={<MetricSelect value={blockMetric} onChange={setBlockMetric} />}
               >
@@ -1064,19 +1136,20 @@ export default function YieldAnalyticsPage() {
           </section>
 
           {/* Productivity */}
-          <section className="space-y-3">
+          <section id="ya-productivity" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Productivity</h2>
             <div className="grid gap-3 lg:grid-cols-2">
               <ChartCard
                 title={`Yield / ${rf.areaUnitLabel} by variety`}
-                subtitle="Based on the hectares of the blocks growing each variety"
+                subtitle="Yield divided by allocated variety hectares"
+                info="Mixed-variety blocks are split using the existing variety allocation percentages recorded against the block, so each variety is measured against its own allocated area."
                 empty={!varietyGroups.length}
               >
                 {rankBars(varietyGroups, METRICS[1], (label) => setVarietyFilter([label]))}
               </ChartCard>
               <ChartCard
                 title={`Yield / ${rf.areaUnitLabel} by block`}
-                subtitle="Dashed line marks the property average"
+                subtitle="Block names — dashed line marks the property average"
                 empty={!blockGroups.length}
               >
                 {rankBars(blockGroups, METRICS[1])}
@@ -1084,21 +1157,23 @@ export default function YieldAnalyticsPage() {
             </div>
           </section>
 
-          {/* Financial performance */}
-          <section className="space-y-3">
+
+          {/* Grape sales — sold-fruit metrics only */}
+          <section id="ya-sales" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Financial performance
+              Grape sales
             </h2>
             <div className="grid gap-3 lg:grid-cols-2">
               <ChartCard
-                title="Average price / tonne by variety"
-                subtitle="Tonnage-weighted (crop value ÷ tonnes)"
+                title="Average sale price / tonne by variety"
+                subtitle="Sale revenue ÷ sold tonnes"
+                info="Sold fruit only. Fruit retained for internal use carries no sale price and is excluded."
                 empty={!varietyGroups.some((g) => g.pricePerTonne != null)}
               >
                 {rankBars(varietyGroups.filter((g) => g.pricePerTonne != null), METRICS[2])}
               </ChartCard>
               <ChartCard
-                title="Average price / tonne by block"
+                title="Average sale price / tonne by block"
                 subtitle="Ranked by the selected measure"
                 empty={!blockGroups.some((g) => g.pricePerTonne != null)}
                 action={<MetricSelect value={priceBlockSort} onChange={setPriceBlockSort} />}
@@ -1106,17 +1181,18 @@ export default function YieldAnalyticsPage() {
                 {rankBars(blockGroups.filter((g) => g.pricePerTonne != null), metricOf(priceBlockSort))}
               </ChartCard>
               <ChartCard
-                title={`Revenue / ${rf.areaUnitLabel} by block`}
-                subtitle="Commercial productivity ranking"
+                title={`Grape revenue / sold ${rf.areaUnitLabel} by block`}
+                subtitle="Commercial productivity of sold fruit"
                 empty={!blockGroups.some((g) => g.revenuePerHa != null)}
               >
                 {rankBars(blockGroups.filter((g) => g.revenuePerHa != null), METRICS[4])}
               </ChartCard>
               <ChartCard
-                title="Yield vs average price"
-                subtitle="One point per block for the selected vintage"
+                title={`Yield / ${rf.areaUnitLabel} vs sale price / tonne`}
+                subtitle="One point per block — dashed lines mark the property averages"
                 empty={!scatterData.length}
               >
+
                 <ResponsiveContainer width="100%" height={280}>
                   <ScatterChart margin={{ left: 8, right: 16, top: 8, bottom: 16 }}>
                     <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
@@ -1135,14 +1211,14 @@ export default function YieldAnalyticsPage() {
                         return (
                           <div style={tooltipStyle} className="p-2 space-y-0.5">
                             <div className="font-medium">{d.block}</div>
-                            {d.variety && <div className="text-muted-foreground">{d.variety}</div>}
+                            {d.variety && <div className="text-muted-foreground">Variety: {d.variety}</div>}
                             <div>Vintage: {vintageMode === "range" ? "range" : effectiveVintage ?? "—"}</div>
                             <div>Area: {areaFmt(d.areaHa)}</div>
                             <div>
-                              {num(d.x)} t/{rf.areaUnitLabel}
+                              Yield: {num(d.x)} t/{rf.areaUnitLabel}
                             </div>
-                            <div>{money(d.y)} /t</div>
-                            <div>Revenue/area: {moneyPerArea(d.revenuePerHa)}</div>
+                            <div>Sale price: {money(d.y)} /t</div>
+                            <div>Revenue / sold {rf.areaUnitLabel}: {moneyPerArea(d.revenuePerHa)}</div>
                           </div>
                         );
                       }}
@@ -1153,6 +1229,20 @@ export default function YieldAnalyticsPage() {
                         x={metricAxisValue(METRICS[1], propertyAvgTPerHa) ?? 0}
                         stroke="hsl(var(--muted-foreground))"
                         strokeDasharray="4 4"
+                        label={{ value: "Avg yield", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      />
+                    )}
+                    {totals.pricePerTonne != null && (
+                      <ReferenceLine
+                        y={totals.pricePerTonne}
+                        stroke="hsl(var(--muted-foreground))"
+                        strokeDasharray="4 4"
+                        label={{
+                          value: "Avg sale price",
+                          fontSize: 10,
+                          position: "insideTopRight",
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
                       />
                     )}
                   </ScatterChart>
@@ -1161,12 +1251,44 @@ export default function YieldAnalyticsPage() {
             </div>
           </section>
 
+          {costAvailable && (
+            <section id="ya-economics" className="space-y-3 scroll-mt-24">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Production economics
+              </h2>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <ChartCard
+                  title={`Production cost / ${rf.areaUnitLabel} by block`}
+                  subtitle="All harvested fruit, sold and retained"
+                  empty={!blockGroups.some((g) => g.costPerHa != null)}
+                >
+                  {rankBars(blockGroups.filter((g) => g.costPerHa != null), metricOf("costPerHa"))}
+                </ChartCard>
+                <ChartCard
+                  title={`Grape-sale margin / sold ${rf.areaUnitLabel} by block`}
+                  subtitle="Sale revenue less the cost carried by sold fruit"
+                  empty={!blockGroups.some((g) => g.marginPerHa != null)}
+                >
+                  {rankBars(blockGroups.filter((g) => g.marginPerHa != null), metricOf("marginPerHa"))}
+                </ChartCard>
+              </div>
+            </section>
+          )}
+
+
           {/* Historical trends */}
-          <section className="space-y-3">
+          <section id="ya-trends" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Historical trends
             </h2>
             <div className="grid gap-3 lg:grid-cols-2">
+              {!multiVintage ? (
+                <Card className="p-6 text-sm text-muted-foreground lg:col-span-2">
+                  More vintages are required to show year-on-year trends.
+                </Card>
+              ) : (
+              <>
+
               <ChartCard
                 title="Variety performance over time"
                 subtitle="Each selected variety is its own series"
@@ -1267,65 +1389,90 @@ export default function YieldAnalyticsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
-
-              <Card className="p-4 space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold">Benchmarks</h3>
-                  <p className="text-xs text-muted-foreground">Calculated from the current filters.</p>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Property average</span>
-                    <span className="tabular-nums">
-                      {perArea(propertyAvgTPerHa)} t/{rf.areaUnitLabel}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Previous vintage {effectiveVintage != null ? effectiveVintage - 1 : ""}
-                    </span>
-                    <span className="tabular-nums">
-                      {priorAvgTPerHa == null ? "—" : `${perArea(priorAvgTPerHa)} t/${rf.areaUnitLabel}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">3-year average</span>
-                    <span className="tabular-nums">
-                      {propertyThreeYear?.threeYearAverage == null
-                        ? "Needs 3 vintages"
-                        : `${perArea(propertyThreeYear.threeYearAverage)} t/${rf.areaUnitLabel}`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Difference vs 3-year average</span>
-                    <span className="tabular-nums">
-                      {propertyThreeYear?.difference == null
-                        ? "—"
-                        : `${propertyThreeYear.difference >= 0 ? "+" : ""}${perArea(
-                            propertyThreeYear.difference,
-                          )} t/${rf.areaUnitLabel}`}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-start gap-1.5 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                  Averages are suppressed rather than estimated when fewer than three valid vintages exist.
-                </div>
-              </Card>
+              </>
+              )}
             </div>
+
+            <Card className="p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Benchmarks</h3>
+                <p className="text-xs text-muted-foreground">Calculated from the current filters.</p>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Property average</span>
+                  <span className="tabular-nums">
+                    {perArea(propertyAvgTPerHa)} t/{rf.areaUnitLabel}
+                  </span>
+                </div>
+                {multiVintage && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        Previous vintage {effectiveVintage != null ? effectiveVintage - 1 : ""}
+                      </span>
+                      <span className="tabular-nums">
+                        {priorAvgTPerHa == null ? "—" : `${perArea(priorAvgTPerHa)} t/${rf.areaUnitLabel}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">3-year average</span>
+                      <span className="tabular-nums">
+                        {propertyThreeYear?.threeYearAverage == null
+                          ? "Needs 3 vintages"
+                          : `${perArea(propertyThreeYear.threeYearAverage)} t/${rf.areaUnitLabel}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Difference vs 3-year average</span>
+                      <span className="tabular-nums">
+                        {propertyThreeYear?.difference == null
+                          ? "—"
+                          : `${propertyThreeYear.difference >= 0 ? "+" : ""}${perArea(
+                              propertyThreeYear.difference,
+                            )} t/${rf.areaUnitLabel}`}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {multiVintage
+                  ? "Averages are suppressed rather than estimated when fewer than three valid vintages exist."
+                  : "Historical benchmarks will appear when additional vintages are available."}
+              </p>
+            </Card>
           </section>
+
 
           {/* Highlights */}
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Performance highlights
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Performance highlights
+              </h2>
+              <div className="flex rounded-md border p-0.5">
+                {(["block", "variety"] as const).map((d) => (
+                  <Button
+                    key={d}
+                    type="button"
+                    size="sm"
+                    variant={highlightDim === d ? "secondary" : "ghost"}
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setHighlightDim(d)}
+                  >
+                    {d === "block" ? "Blocks" : "Varieties"}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <HighlightCard
                 title={`Highest yield / ${rf.areaUnitLabel}`}
                 items={highlights.highestYield.map((g) => ({
                   label: g.label,
                   value: `${perArea(g.tonnesPerHa)} t/${rf.areaUnitLabel}`,
+                  weight: g.tonnesPerHa ?? 0,
                 }))}
               />
               <HighlightCard
@@ -1333,13 +1480,15 @@ export default function YieldAnalyticsPage() {
                 items={highlights.lowestYield.map((g) => ({
                   label: g.label,
                   value: `${perArea(g.tonnesPerHa)} t/${rf.areaUnitLabel}`,
+                  weight: g.tonnesPerHa ?? 0,
                 }))}
               />
               <HighlightCard
-                title={`Highest revenue / ${rf.areaUnitLabel}`}
+                title={`Highest revenue / sold ${rf.areaUnitLabel}`}
                 items={highlights.highestRevenue.map((g) => ({
                   label: g.label,
                   value: moneyPerArea(g.revenuePerHa),
+                  weight: g.revenuePerHa ?? 0,
                 }))}
               />
               <HighlightCard
@@ -1347,6 +1496,7 @@ export default function YieldAnalyticsPage() {
                 items={highlights.improved.map((d) => ({
                   label: d.label,
                   value: `+${perArea(d.delta)} t/${rf.areaUnitLabel}`,
+                  weight: Math.abs(d.delta),
                 }))}
                 empty="Needs a comparable prior vintage"
               />
@@ -1355,15 +1505,17 @@ export default function YieldAnalyticsPage() {
                 items={highlights.declined.map((d) => ({
                   label: d.label,
                   value: `${perArea(d.delta)} t/${rf.areaUnitLabel}`,
+                  weight: Math.abs(d.delta),
                 }))}
                 empty="Needs a comparable prior vintage"
               />
               {costAvailable && (
                 <HighlightCard
-                  title={`Highest margin / ${rf.areaUnitLabel}`}
+                  title={`Highest margin / sold ${rf.areaUnitLabel}`}
                   items={highlights.highestMargin.map((g) => ({
                     label: g.label,
                     value: moneyPerArea(g.marginPerHa),
+                    weight: g.marginPerHa ?? 0,
                   }))}
                 />
               )}
@@ -1371,7 +1523,8 @@ export default function YieldAnalyticsPage() {
           </section>
 
           {/* Detailed table */}
-          <section className="space-y-3">
+          <section id="ya-data" className="space-y-3 scroll-mt-24">
+
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Detailed data
@@ -1444,7 +1597,15 @@ export default function YieldAnalyticsPage() {
                       area: areaFmt(r.area),
                       tonnes: num(r.tonnes, 3),
                       tPerHa: perArea(r.tPerHa),
-                      disposition: r.disposition,
+                      disposition: (
+                        <Badge
+                          variant={r.fact.disposition === "sold" ? "default" : "secondary"}
+                          className="font-normal"
+                        >
+                          {r.disposition}
+                        </Badge>
+                      ),
+
                       price: money(r.price),
                       revenue: money(r.revenue),
                       revPerHa: moneyPerArea(r.revPerHa),
@@ -1487,26 +1648,54 @@ function HighlightCard({
   empty = "No data",
 }: {
   title: string;
-  items: { label: string; value: string }[];
+  items: { label: string; value: string; weight?: number }[];
   empty?: string;
 }) {
+  const max = Math.max(0, ...items.map((it) => Math.abs(it.weight ?? 0)));
   return (
     <Card className="p-4 space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">{empty}</p>
       ) : (
-        <ol className="space-y-1 text-sm">
+        <ol className="space-y-1.5 text-sm">
           {items.map((it, i) => (
-            <li key={`${it.label}-${i}`} className="flex items-center justify-between gap-2">
-              <span className="truncate text-muted-foreground">
-                {i + 1}. {it.label}
-              </span>
-              <span className="tabular-nums">{it.value}</span>
+            <li key={`${it.label}-${i}`} className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-muted-foreground">
+                  {i + 1}. {it.label}
+                </span>
+                <span className="tabular-nums">{it.value}</span>
+              </div>
+              {max > 0 && (
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${Math.min(100, (Math.abs(it.weight ?? 0) / max) * 100)}%` }}
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ol>
       )}
     </Card>
+  );
+}
+
+
+/** Small inline "?" style hint that moves long explanations out of the layout. */
+function InfoHint({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" aria-label="More information" className="text-muted-foreground">
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
