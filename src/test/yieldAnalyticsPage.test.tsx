@@ -6,6 +6,13 @@ import { MemoryRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import YieldAnalyticsPage from "@/pages/reports/YieldAnalyticsPage";
 
+class RO {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+(globalThis as any).ResizeObserver = (globalThis as any).ResizeObserver ?? RO;
+
 const BLOCK = "11111111-1111-1111-1111-111111111111";
 
 vi.mock("@/context/VineyardContext", () => ({
