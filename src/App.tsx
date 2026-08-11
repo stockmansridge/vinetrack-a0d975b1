@@ -196,7 +196,9 @@ const App = () => (
                     <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
                     <Route path="/reports/documents" element={<DocumentsPage />} />
                     <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
-                    <Route path="/reports/yield" element={<YieldReportsComparisonPage />} />
+                    <Route path="/reports/yield" element={<YieldAnalyticsPage />} />
+                    <Route path="/reports/yield-comparison" element={<YieldReportsComparisonPage />} />
+
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/satellite-mapping" element={<SatelliteMappingPage />} />
                     <Route path="/tools/pruning-tracker" element={<PruningTrackerPage />} />
