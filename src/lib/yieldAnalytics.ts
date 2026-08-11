@@ -298,6 +298,10 @@ export interface AggMetrics {
   areaHa: number | null;
   revenue: number | null;
   pricedTonnes: number;
+  /** Hectares behind the priced tonnes — the denominator for Revenue/ha. */
+  pricedAreaHa: number | null;
+  /** True when every harvested tonne in the group carries a price. */
+  revenueComplete: boolean;
   cost: number | null;
   tonnesPerHa: number | null;
   pricePerTonne: number | null;
@@ -312,6 +316,20 @@ export interface AggMetrics {
 const div = (a: number | null, b: number | null): number | null =>
   a != null && b != null && b > 0 ? a / b : null;
 
+/**
+ * Aggregate facts.
+ *
+ * Pricing integrity: historical yield records carry NO price, so revenue and
+ * price metrics are derived only from the records that actually hold a value.
+ * Unpriced tonnes and their hectares are excluded from the price and
+ * Revenue/ha denominators rather than dragging them toward zero, and gross
+ * margin is only reported when the whole group is priced (otherwise it would
+ * subtract whole-block cost from partial revenue).
+ *
+ * Cost integrity: Cost/tonne is always allocated cost ÷ the CANONICAL yield
+ * tonnes computed here — never the `yield_tonnes` snapshot stored on cost
+ * allocations, which can be stale, zero or null.
+ */
 export function aggregate(facts: YieldFact[]): AggMetrics {
   let tonnes = 0;
   let area = 0;
@@ -319,6 +337,8 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
   let revenue = 0;
   let revenueSeen = false;
   let pricedTonnes = 0;
+  let pricedArea = 0;
+  let pricedAreaSeen = false;
   let cost = 0;
   let costSeen = false;
 
@@ -331,6 +351,10 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
     if (f.revenue != null) {
       revenue += f.revenue;
       revenueSeen = true;
+      if (f.areaHa != null) {
+        pricedArea += f.areaHa;
+        pricedAreaSeen = true;
+      }
     }
     pricedTonnes += f.pricedTonnes;
     if (f.cost != null) {
@@ -340,24 +364,30 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
   }
 
   const areaHa = areaSeen && area > 0 ? area : null;
+  const pricedAreaHa = pricedAreaSeen && pricedArea > 0 ? pricedArea : null;
   const rev = revenueSeen ? revenue : null;
   const cst = costSeen ? cost : null;
-  const margin = rev != null && cst != null ? rev - cst : null;
+  // Tolerate float noise on the tonnage comparison.
+  const revenueComplete = tonnes > 0 && pricedTonnes >= tonnes - 1e-6;
+  const margin = rev != null && cst != null && revenueComplete ? rev - cst : null;
 
   return {
     tonnes,
     areaHa,
     revenue: rev,
     pricedTonnes,
+    pricedAreaHa,
+    revenueComplete,
     cost: cst,
     tonnesPerHa: div(tonnes, areaHa),
     pricePerTonne: pricedTonnes > 0 && rev != null ? rev / pricedTonnes : null,
-    revenuePerHa: div(rev, areaHa),
+    revenuePerHa: div(rev, pricedAreaHa),
     costPerHa: div(cst, areaHa),
     costPerTonne: cst != null && tonnes > 0 ? cst / tonnes : null,
     margin,
     marginPerHa: div(margin, areaHa),
     count: facts.length,
+
   };
 }
 
