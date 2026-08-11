@@ -73,7 +73,7 @@ describe("allocation identity", () => {
         alloc({ clone: "Clone MV6", percent: 20 }),
       ],
     });
-    expect(units.map((u) => u.areaHa)).toEqual([0.9, 0.54, 0.36000000000000004]);
+    units.map((u) => u.areaHa).forEach((v, i) => expect(v).toBeCloseTo([0.9, 0.54, 0.36][i], 6));
     expect(units.reduce((a, u) => a + (u.areaHa ?? 0), 0)).toBeCloseTo(1.8, 6);
     expect(new Set(units.map((u) => u.key)).size).toBe(3);
   });
@@ -161,7 +161,9 @@ describe("yield overview by allocation", () => {
       estimatedByBlock: new Map([["b1", 9]]),
       actuals,
     });
-    expect(card.varieties.map((v) => v.actualTonnes)).toEqual([4.138, 2.586, null]);
+    expect(card.varieties[0].actualTonnes).toBeCloseTo(4.138, 6);
+    expect(card.varieties[1].actualTonnes).toBeCloseTo(2.586, 6);
+    expect(card.varieties[2].actualTonnes).toBeNull();
     expect(card.varieties.map((v) => v.cloneLabel)).toEqual([
       "Clone 777",
       "Clone 667",
@@ -187,7 +189,7 @@ describe("yield overview by allocation", () => {
       actuals: [],
     });
     expect(card.varieties.map((v) => v.estimatedTonnes)).toEqual([5, 3, 2]);
-    expect(card.varieties.map((v) => v.areaHa)).toEqual([0.9, 0.54, 0.36000000000000004]);
+    card.varieties.forEach((v, i) => expect(v.areaHa).toBeCloseTo([0.9, 0.54, 0.36][i], 6));
   });
 
   it("keeps a single-allocation block working unchanged", () => {
