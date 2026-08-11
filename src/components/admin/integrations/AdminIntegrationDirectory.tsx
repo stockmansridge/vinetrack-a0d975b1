@@ -30,16 +30,11 @@ import {
   nextCursor,
   useAdminIntegrations,
   type AdminIntegrationFilters,
-  type AdminIntegrationRow,
 } from "@/lib/adminIntegrationsQuery";
 
 const ALL = "__all__";
 
-export function AdminIntegrationDirectory({
-  onRowsChange,
-}: {
-  onRowsChange?: (rows: AdminIntegrationRow[]) => void;
-}) {
+export function AdminIntegrationDirectory() {
   const pager = useKeysetPager();
   const [status, setStatus] = useState(ALL);
   const [environment, setEnvironment] = useState(ALL);
@@ -66,7 +61,6 @@ export function AdminIntegrationDirectory({
   const q = useAdminIntegrations(filters, pager.cursor);
   const rows = q.data ?? [];
   const cursor = rows.length >= ADMIN_PAGE_SIZE ? nextCursor(rows) : null;
-  if (onRowsChange && q.data) onRowsChange(q.data);
 
   const change = (fn: () => void) => {
     fn();
