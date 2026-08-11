@@ -140,6 +140,19 @@ export default function VintageOverviewSection() {
           hint="Trips with no sprays"
           to="/trips"
         />
+        <MetricCard
+          label="Work tasks"
+          icon={ClipboardList}
+          tone="blue"
+          value={
+            workTasksCountQ.isLoading
+              ? "…"
+              : workTasksCountQ.error
+                ? "—"
+                : fmt(workTasksCountQ.data ?? 0)
+          }
+          to="/work-tasks"
+        />
       </div>
     </section>
   );
