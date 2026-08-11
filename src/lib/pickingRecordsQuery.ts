@@ -286,6 +286,10 @@ export interface ActualYieldEntry {
   variety: string | null;
   /** Clone display snapshot stored on the pick (planting identity hint). */
   clone?: string | null;
+  /** Rootstock display snapshot, once the contract stores it. */
+  rootstock?: string | null;
+  /** Authoritative planting identity when the pick is linked. */
+  varietyAllocationId?: string | null;
   vintage: number | null;
   tonnes: number | null;
   areaHa?: number | null;
@@ -295,11 +299,11 @@ export interface ActualYieldEntry {
 }
 
 /**
- * Detailed picks aggregated by Block + Variety + Clone + Vintage.
+ * Detailed picks aggregated per planting.
  *
- * The clone snapshot is the ONLY planting identity `picking_records` carries
- * today, so it must survive aggregation — collapsing to Block + Variety is
- * what causes same-variety plantings to share (and repeat) one total.
+ * `variety_allocation_id` is the authoritative identity when present; the
+ * clone/rootstock snapshots are only the legacy fallback so pre-contract picks
+ * are still split rather than collapsed onto one same-variety planting.
  */
 export function aggregatePickingRecordsByPlanting(
   records: PickingRecord[],
@@ -308,7 +312,12 @@ export function aggregatePickingRecordsByPlanting(
   for (const r of records) {
     if (!r.paddock_id || !Number.isFinite(Number(r.weight_kg))) continue;
     const clone = r.clone?.trim() || null;
-    const k = `${pickingKey(r.paddock_id, r.variety_name, r.vintage)}|${norm(clone)}`;
+    const rootstock = r.rootstock?.trim() || null;
+    const allocationId = r.variety_allocation_id?.trim() || null;
+    const identity = allocationId
+      ? `alloc:${norm(allocationId)}`
+      : `${norm(clone)}|${norm(rootstock)}`;
+    const k = `${pickingKey(r.paddock_id, r.variety_name, r.vintage)}|${identity}`;
     const tonnes = Number(r.weight_kg) / 1000;
     const cur = byKey.get(k);
     if (cur) {
@@ -320,6 +329,8 @@ export function aggregatePickingRecordsByPlanting(
         blockName: r.paddock_name ?? null,
         variety: r.variety_name?.trim() || null,
         clone,
+        rootstock,
+        varietyAllocationId: allocationId,
         vintage: r.vintage ?? null,
         tonnes,
         source: "detailed",
@@ -327,6 +338,7 @@ export function aggregatePickingRecordsByPlanting(
       });
     }
   }
+
   return Array.from(byKey.values());
 }
 
