@@ -166,6 +166,7 @@ export interface RecordActualYieldInput {
   blockId: string;
   blockName: string;
   variety?: string | null;
+  varietyId?: string | null;
   areaHectares?: number | null;
   vineCount?: number | null;
   actualYieldTonnes: number;
@@ -181,6 +182,11 @@ export async function recordActualYield(input: RecordActualYieldInput): Promise<
   const blockResult = {
     paddockId: input.blockId,
     paddockName: label,
+    // Block identity and harvested variety are preserved discretely as well as
+    // in the display label, so iOS/Android can group by block × variety.
+    blockName: input.blockName,
+    variety: variety || null,
+    varietyId: input.varietyId ?? null,
     areaHectares: area,
     yieldTonnes: input.actualYieldTonnes,
     yieldPerHectare: area > 0 ? input.actualYieldTonnes / area : 0,
@@ -192,6 +198,7 @@ export async function recordActualYield(input: RecordActualYieldInput): Promise<
     actualYieldTonnes: input.actualYieldTonnes,
     actualRecordedAt: now,
   };
+
 
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth?.user?.id ?? null;
