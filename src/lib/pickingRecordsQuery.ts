@@ -305,14 +305,16 @@ export async function updatePickingRecord(
     client_updated_at: new Date().toISOString(),
   };
 
-  return writePickingRecord(() =>
-    (supabase as any)
-      .from("picking_records")
-      .update(patch)
-      .eq("id", input.id)
-      .is("deleted_at", null)
-      .select("*")
-      .single(),
+  return writePickingRecord(
+    () =>
+      (supabase as any)
+        .from("picking_records")
+        .update(patch)
+        .eq("id", input.id)
+        .is("deleted_at", null)
+        .select("*")
+        .maybeSingle(),
+    () => readPickingRecord(input.id),
   );
 
 }
