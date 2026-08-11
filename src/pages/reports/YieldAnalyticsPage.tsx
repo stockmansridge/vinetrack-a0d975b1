@@ -876,8 +876,29 @@ export default function YieldAnalyticsPage() {
 
       {!isLoading && !noData && (
         <>
+          {/* Section navigation for this long dashboard */}
+          <nav className="sticky top-0 z-20 -mx-1 flex flex-wrap gap-1 overflow-x-auto rounded-md border bg-background/95 px-1 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            {[
+              ["ya-overview", "Overview"],
+              ["ya-productivity", "Productivity"],
+              ["ya-sales", "Grape sales"],
+              ["ya-economics", "Economics"],
+              ["ya-trends", "Trends"],
+              ["ya-data", "Data"],
+            ].map(([id, label]) => (
+              <a
+                key={id}
+                href={`#${id}`}
+                className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+
           {/* KPIs */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div id="ya-kpis" className="grid gap-3 scroll-mt-24 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+
             <KpiCard
               label="Total yield"
               value={`${num(totals.tonnes)} t`}
