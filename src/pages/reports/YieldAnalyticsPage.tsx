@@ -109,13 +109,14 @@ interface MetricOption {
 const METRICS: MetricOption[] = [
   { key: "tonnes", label: "Total tonnes", kind: "tonnes" },
   { key: "tonnesPerHa", label: "Tonnes / area", kind: "rate" },
-  { key: "pricePerTonne", label: "Average $ / tonne", kind: "money" },
-  { key: "revenue", label: "Crop value", kind: "money" },
-  { key: "revenuePerHa", label: "Revenue / area", kind: "moneyPerArea" },
+  { key: "pricePerTonne", label: "Average sale $ / tonne", kind: "money" },
+  { key: "revenue", label: "Grape revenue", kind: "money" },
+  { key: "revenuePerHa", label: "Grape revenue / sold area", kind: "moneyPerArea" },
   { key: "costPerHa", label: "Cost / area", kind: "moneyPerArea", costOnly: true },
   { key: "costPerTonne", label: "Cost / tonne", kind: "money", costOnly: true },
-  { key: "marginPerHa", label: "Margin / area", kind: "moneyPerArea", costOnly: true },
+  { key: "marginPerHa", label: "Grape-sale margin / sold area", kind: "moneyPerArea", costOnly: true },
 ];
+
 
 export default function YieldAnalyticsPage() {
   const { selectedVineyardId } = useVineyard();
