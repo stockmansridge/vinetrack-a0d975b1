@@ -108,6 +108,7 @@ export interface AllocationMatch {
   /** Matched allocation key, or null when it cannot be resolved safely. */
   key: string | null;
   reason:
+    | "allocation-id"
     | "single-variety-allocation"
     | "clone-snapshot"
     | "ambiguous"
@@ -115,17 +116,33 @@ export interface AllocationMatch {
     | "no-allocations";
 }
 
+export interface AllocationMatchHints {
+  /** Authoritative stable `variety_allocations[].id` stored on the record. */
+  allocationId?: string | null;
+  /** Rootstock display snapshot, when the record carries one. */
+  rootstock?: string | null;
+}
+
 /**
- * Resolve one harvest record (block + variety + clone snapshot) to a planting.
- * Never guesses: when two allocations of the variety could match, the record
- * is reported ambiguous so the caller can show it as unallocated.
+ * Resolve one harvest record to a planting.
+ *
+ * The stable allocation id wins outright when the record carries one. Without
+ * it the clone (and rootstock, when stored) snapshots are used, and anything
+ * still ambiguous is reported as such — the caller shows "Planting not linked"
+ * rather than guessing or duplicating the harvest.
  */
 export function matchAllocation(
   units: AllocationUnit[],
   variety: string | null | undefined,
   clone: string | null | undefined,
+  hints: AllocationMatchHints = {},
 ): AllocationMatch {
   if (!units.length) return { key: null, reason: "no-allocations" };
+  const allocationId = (hints.allocationId ?? "").trim();
+  if (allocationId) {
+    const byId = units.find((u) => norm(u.id) === norm(allocationId));
+    if (byId) return { key: byId.key, reason: "allocation-id" };
+  }
   const v = norm(variety);
   const candidates = v ? units.filter((u) => norm(u.variety) === v) : units.slice();
   if (!candidates.length) return { key: null, reason: "no-variety-match" };
@@ -133,7 +150,35 @@ export function matchAllocation(
     return { key: candidates[0].key, reason: "single-variety-allocation" };
   }
   const c = norm(clone);
-  const byClone = candidates.filter((u) => norm(u.cloneLabel) === c || norm(u.cloneKey) === c);
+  let byClone = candidates.filter((u) => norm(u.cloneLabel) === c || norm(u.cloneKey) === c);
+  const rs = norm(hints.rootstock);
+  if (byClone.length > 1 && rs) {
+    const byRootstock = byClone.filter(
+      (u) => norm(u.rootstockLabel) === rs || norm(u.rootstockKey) === rs,
+    );
+    if (byRootstock.length) byClone = byRootstock;
+  }
   if (byClone.length === 1) return { key: byClone[0].key, reason: "clone-snapshot" };
   return { key: null, reason: "ambiguous" };
 }
+
+/**
+ * Selectable planting label. Allocated area is included because two plantings
+ * of the same variety may share clone AND rootstock — the area (and the stable
+ * allocation id behind the option) is what keeps them distinguishable.
+ */
+export function allocationOptionLabel(
+  u: AllocationUnit,
+  areaUnitLabel = "ha",
+): string {
+  const parts = [u.variety?.trim() || "Unspecified variety", u.cloneLabel, u.rootstockLabel]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean);
+  if (u.areaHa != null && u.areaHa > 0) {
+    parts.push(`${Number(u.areaHa).toFixed(2)} ${areaUnitLabel}`);
+  } else if (u.percent != null) {
+    parts.push(`${u.percent}%`);
+  }
+  return parts.join(" · ");
+}
+
