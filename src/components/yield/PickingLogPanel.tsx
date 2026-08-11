@@ -28,6 +28,9 @@ import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { sugarUnitSymbol } from "@/lib/vineyardRegionSettingsQuery";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EditPickingRecordDialog } from "@/components/yield/RecordActualYieldDialog";
+import { fetchYieldBlocks } from "@/lib/yieldReportsQuery";
+import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
+import { buildAllocationUnits, matchAllocation, plantingLabel } from "@/lib/yieldAllocations";
 import {
   fetchPickingRecords,
   softDeletePickingRecord,
@@ -68,6 +71,44 @@ export default function PickingLogPanel({
     queryFn: () => fetchPickingRecords(vineyardId!),
   });
 
+  // Block allocations — used only to DISPLAY the planting a stored pick maps
+  // to. Historical snapshots on the record itself are never rewritten.
+  const blocksQ = useQuery({
+    queryKey: ["yield", "blocks", vineyardId],
+    enabled: !!vineyardId,
+    queryFn: () => fetchYieldBlocks(vineyardId!),
+  });
+  const { data: grapeVarieties } = useGrapeVarieties(vineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
+  const unitsByBlock = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildAllocationUnits>>();
+    for (const b of blocksQ.data ?? []) {
+      map.set(
+        b.id.toLowerCase(),
+        buildAllocationUnits({
+          blockId: b.id,
+          areaHa: b.areaHa ?? null,
+          allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
+        }),
+      );
+    }
+    return map;
+  }, [blocksQ.data, varietyMap]);
+
+  const plantingFor = (r: PickingRecord) => {
+    const units = unitsByBlock.get((r.paddock_id ?? "").toLowerCase()) ?? [];
+    const match = matchAllocation(units, r.variety_name, r.clone);
+    const unit = match.key ? units.find((u) => u.key === match.key) ?? null : null;
+    return {
+      label:
+        plantingLabel({
+          cloneLabel: r.clone ?? unit?.cloneLabel ?? null,
+          rootstockLabel: unit?.rootstockLabel ?? null,
+        }) ?? null,
+      ambiguous: match.reason === "ambiguous",
+    };
+  };
+
   const del = useMutation({
     mutationFn: (id: string) => softDeletePickingRecord(id),
     onSuccess: () => {
@@ -105,6 +146,7 @@ export default function PickingLogPanel({
       {
         block: string;
         variety: string;
+        clone: string;
         picks: number;
         kg: number;
         soldKg: number;
@@ -114,10 +156,11 @@ export default function PickingLogPanel({
     for (const r of rows) {
       const block = r.paddock_name || "—";
       const variety = r.variety_name || "—";
-      const k = `${block.toLowerCase()}|${variety.toLowerCase()}`;
+      const clone = r.clone?.trim() || "—";
+      const k = `${block.toLowerCase()}|${variety.toLowerCase()}|${clone.toLowerCase()}`;
       const kg = Number(r.weight_kg) || 0;
       const g =
-        map.get(k) ?? { block, variety, picks: 0, kg: 0, soldKg: 0, unsoldKg: 0 };
+        map.get(k) ?? { block, variety, clone, picks: 0, kg: 0, soldKg: 0, unsoldKg: 0 };
       g.picks += 1;
       g.kg += kg;
       if (r.sold) g.soldKg += kg;
@@ -125,7 +168,10 @@ export default function PickingLogPanel({
       map.set(k, g);
     }
     return Array.from(map.values()).sort(
-      (a, b) => a.block.localeCompare(b.block) || a.variety.localeCompare(b.variety),
+      (a, b) =>
+        a.block.localeCompare(b.block) ||
+        a.variety.localeCompare(b.variety) ||
+        a.clone.localeCompare(b.clone),
     );
   }, [rows]);
 
@@ -146,14 +192,15 @@ export default function PickingLogPanel({
       {groups.length > 0 && (
         <Card className="p-4 space-y-2">
           <div className="text-sm font-medium">
-            {vintage != null ? `Vintage ${vintage} totals` : "Totals (all vintages)"} — by block and
-            variety
+            {vintage != null ? `Vintage ${vintage} totals` : "Totals (all vintages)"} — by block,
+            variety and clone
           </div>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Block</TableHead>
                 <TableHead>Variety</TableHead>
+                <TableHead>Clone</TableHead>
                 <TableHead className="text-right">Picks</TableHead>
                 <TableHead className="text-right">Total kg</TableHead>
                 <TableHead className="text-right">Tonnes</TableHead>
@@ -163,9 +210,10 @@ export default function PickingLogPanel({
             </TableHeader>
             <TableBody>
               {groups.map((g) => (
-                <TableRow key={`${g.block}|${g.variety}`}>
+                <TableRow key={`${g.block}|${g.variety}|${g.clone}`}>
                   <TableCell className="font-medium">{g.block}</TableCell>
                   <TableCell>{g.variety}</TableCell>
+                  <TableCell>{g.clone}</TableCell>
                   <TableCell className="text-right tabular-nums">{g.picks}</TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(g.kg, 0)}</TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(g.kg / 1000)}</TableCell>
@@ -176,7 +224,7 @@ export default function PickingLogPanel({
                 </TableRow>
               ))}
               <TableRow className="bg-muted/40">
-                <TableCell colSpan={2} className="font-semibold">
+                <TableCell colSpan={3} className="font-semibold">
                   All blocks
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">
@@ -209,6 +257,7 @@ export default function PickingLogPanel({
               <TableHead>Block</TableHead>
               <TableHead>Variety</TableHead>
               <TableHead>Clone</TableHead>
+              <TableHead>Planting</TableHead>
               <TableHead className="text-right">Weight</TableHead>
               <TableHead className="text-right">Sugar</TableHead>
               <TableHead className="text-right">pH</TableHead>
@@ -221,21 +270,21 @@ export default function PickingLogPanel({
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={12} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={13} className="py-6 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={12} className="py-6 text-center text-destructive">
+                <TableCell colSpan={13} className="py-6 text-center text-destructive">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={13} className="py-8 text-center text-muted-foreground">
                   No picks recorded for this vintage yet.
                 </TableCell>
               </TableRow>
@@ -247,6 +296,13 @@ export default function PickingLogPanel({
                 <TableCell className="font-medium">{r.paddock_name || "—"}</TableCell>
                 <TableCell>{r.variety_name || "—"}</TableCell>
                 <TableCell>{r.clone || "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {(() => {
+                    const p = plantingFor(r);
+                    if (p.ambiguous) return <Badge variant="outline">Unallocated</Badge>;
+                    return p.label ?? "—";
+                  })()}
+                </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {fmt(Number(r.weight_kg) / 1000)} t
                   <div className="text-xs text-muted-foreground">{fmt(r.weight_kg, 0)} kg</div>
@@ -314,7 +370,7 @@ export default function PickingLogPanel({
             ))}
             {rows.length > 0 && (
               <TableRow className="bg-muted/40">
-                <TableCell colSpan={5} className="font-semibold">
+                <TableCell colSpan={6} className="font-semibold">
                   Total <Badge variant="outline" className="ml-1 font-normal">{rows.length} picks</Badge>
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">
