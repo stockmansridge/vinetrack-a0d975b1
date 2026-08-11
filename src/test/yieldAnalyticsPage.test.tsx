@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import YieldAnalyticsPage from "@/pages/reports/YieldAnalyticsPage";
 
 const BLOCK = "11111111-1111-1111-1111-111111111111";
@@ -75,9 +76,11 @@ const renderPage = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <YieldAnalyticsPage />
-      </MemoryRouter>
+      <HelmetProvider>
+        <MemoryRouter>
+          <YieldAnalyticsPage />
+        </MemoryRouter>
+      </HelmetProvider>
     </QueryClientProvider>,
   );
 };
