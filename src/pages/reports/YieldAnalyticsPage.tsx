@@ -585,12 +585,14 @@ export default function YieldAnalyticsPage() {
   const ChartCard = ({
     title,
     subtitle,
+    info,
     action,
     children,
     empty,
   }: {
     title: string;
     subtitle?: string;
+    info?: string;
     action?: React.ReactNode;
     children: React.ReactNode;
     empty?: boolean;
@@ -598,11 +600,15 @@ export default function YieldAnalyticsPage() {
     <Card className="p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold">{title}</h3>
+            {info && <InfoHint text={info} />}
+          </div>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action}
       </div>
+
       {empty ? (
         <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
           No data for the selected filters.
