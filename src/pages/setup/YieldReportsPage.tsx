@@ -429,6 +429,7 @@ function YieldSheet({
   onOpenChange,
   onDelete,
   deleting,
+  canDelete,
 }: {
   row: AnyRow | null;
   vineyardId: string | null;
@@ -437,6 +438,7 @@ function YieldSheet({
   onOpenChange: (o: boolean) => void;
   onDelete: (row: AnyRow) => void;
   deleting: boolean;
+  canDelete: boolean;
 }) {
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
@@ -456,7 +458,7 @@ function YieldSheet({
         {row?.__kind === "session" && (
           <SessionDetail row={row as YieldEstimationSession} blocks={blocks} />
         )}
-        {row && (
+        {row && canDelete && (
           <div className="mt-6 border-t pt-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -487,6 +489,7 @@ function YieldSheet({
     </Sheet>
   );
 }
+
 
 
 function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
