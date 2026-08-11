@@ -500,13 +500,15 @@ export default function YieldAnalyticsPage() {
     const rows = facts.map((f) => {
       const tPerHa = f.areaHa && f.areaHa > 0 ? f.tonnes / f.areaHa : null;
       const price = f.pricedTonnes > 0 && f.revenue != null ? f.revenue / f.pricedTonnes : null;
-      const revPerHa = f.revenue != null && f.areaHa ? f.revenue / f.areaHa : null;
+      // Sold-fruit basis: hectares and cost are pro-rated to the sold share so
+      // retained fruit never depresses grape-sale metrics.
+      const soldFraction = f.tonnes > 0 ? Math.min(1, f.pricedTonnes / f.tonnes) : 0;
+      const soldArea = f.areaHa != null ? f.areaHa * soldFraction : null;
+      const revPerHa = f.revenue != null && soldArea ? f.revenue / soldArea : null;
       const costPerHa = f.cost != null && f.areaHa ? f.cost / f.areaHa : null;
       const costPerT = f.cost != null && f.tonnes > 0 ? f.cost / f.tonnes : null;
-      // Margin only where the whole row is priced, otherwise full block cost
-      // would be subtracted from partial revenue.
-      const fullyPriced = f.tonnes > 0 && f.pricedTonnes >= f.tonnes - 1e-6;
-      const margin = f.revenue != null && f.cost != null && fullyPriced ? f.revenue - f.cost : null;
+      const soldCost = f.cost != null ? f.cost * soldFraction : null;
+      const margin = f.revenue != null && soldCost != null ? f.revenue - soldCost : null;
 
       return {
         fact: f,
@@ -516,6 +518,8 @@ export default function YieldAnalyticsPage() {
         area: f.areaHa,
         tonnes: f.tonnes,
         tPerHa,
+        disposition:
+          f.disposition === "sold" ? "Sold" : f.disposition === "mixed" ? "Part sold" : "Internal / retained",
         price,
         revenue: f.revenue,
         revPerHa,
@@ -523,10 +527,11 @@ export default function YieldAnalyticsPage() {
         costPerHa,
         costPerT,
         margin,
-        marginPerHa: margin != null && f.areaHa ? margin / f.areaHa : null,
+        marginPerHa: margin != null && soldArea ? margin / soldArea : null,
         source: f.source === "detailed" ? `Picking records${f.pickCount ? ` (${f.pickCount})` : ""}` : "Manual actual yield",
       };
     });
+
     const needle = tableSearch.trim().toLowerCase();
     const filteredRows = needle
       ? rows.filter((r) => `${r.block} ${r.variety} ${r.vintage ?? ""}`.toLowerCase().includes(needle))
