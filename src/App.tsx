@@ -64,6 +64,7 @@ import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
 import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import YieldReportsComparisonPage from "./pages/reports/YieldReportsPage";
+import YieldAnalyticsPage from "./pages/reports/YieldAnalyticsPage";
 import YieldCalculatorPage from "./pages/tools/YieldCalculatorPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
