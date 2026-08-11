@@ -13,3 +13,10 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// jsdom lacks these DOM APIs that Radix primitives (Select, etc.) rely on.
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+if (!Element.prototype.hasPointerCapture)
+  Element.prototype.hasPointerCapture = () => false;
+if (!Element.prototype.releasePointerCapture)
+  Element.prototype.releasePointerCapture = () => {};
