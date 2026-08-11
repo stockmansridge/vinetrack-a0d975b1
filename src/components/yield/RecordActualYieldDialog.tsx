@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -17,7 +17,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { fetchYieldBlocks, recordActualYield, type YieldBlockInfo } from "@/lib/yieldReportsQuery";
-import { createPickingRecord } from "@/lib/pickingRecordsQuery";
+import {
+  createPickingRecord,
+  updatePickingRecord,
+  type PickingRecord,
+} from "@/lib/pickingRecordsQuery";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { resolveSugarUnit, sugarUnitLabel } from "@/lib/vineyardRegionSettingsQuery";
 import { useVintage } from "@/lib/useVintage";
@@ -372,40 +376,52 @@ function DetailedForm({
   vineyardId,
   blocks,
   onOpenChange,
+  record = null,
 }: {
   vineyardId: string | null;
   blocks: YieldBlockInfo[];
   onOpenChange: (o: boolean) => void;
+  /** When set, the form edits this existing pick in place instead of adding one. */
+  record?: PickingRecord | null;
 }) {
   const qc = useQueryClient();
   const rf = useRegionFormatters();
   const { seasonStartMonth, seasonStartDay } = useVintage();
-  const sugarUnit = resolveSugarUnit(rf.settings);
+  const editing = !!record;
+  // Historical picks keep the unit they were recorded with — never reinterpreted.
+  const sugarUnit = (editing && record?.sugar_unit) || resolveSugarUnit(rf.settings);
 
   const today = new Date().toISOString().slice(0, 10);
-  const [pickedAt, setPickedAt] = useState(today);
-  const [blockId, setBlockId] = useState("");
-  const [varietyName, setVarietyName] = useState("");
-  const [clone, setClone] = useState(NO_CLONE);
-  const [weightKg, setWeightKg] = useState("");
-  const [sugar, setSugar] = useState("");
-  const [ph, setPh] = useState("");
-  const [ta, setTa] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [sold, setSold] = useState(false);
-  const [soldTo, setSoldTo] = useState("");
-  const [pricePerTonne, setPricePerTonne] = useState("");
-  const [notes, setNotes] = useState("");
+  const str = (v: unknown) => (v == null ? "" : String(v));
+  const [pickedAt, setPickedAt] = useState(record?.picked_at?.slice(0, 10) ?? today);
+  const [blockId, setBlockId] = useState(record?.paddock_id ?? "");
+  const [varietyName, setVarietyName] = useState(record?.variety_name ?? "");
+  const [clone, setClone] = useState(record?.clone || NO_CLONE);
+  const [weightKg, setWeightKg] = useState(str(record?.weight_kg));
+  const [sugar, setSugar] = useState(str(record?.sugar_value));
+  const [ph, setPh] = useState(str(record?.ph));
+  const [ta, setTa] = useState(str(record?.ta_g_l));
+  const [purpose, setPurpose] = useState(record?.purpose ?? "");
+  const [sold, setSold] = useState(!!record?.sold);
+  const [soldTo, setSoldTo] = useState(record?.sold_to ?? "");
+  const [pricePerTonne, setPricePerTonne] = useState(str(record?.price_per_tonne));
+  const [notes, setNotes] = useState(record?.notes ?? "");
 
   useEffect(() => {
-    if (!blockId && blocks.length) setBlockId(blocks[0].id);
-  }, [blocks, blockId]);
+    if (!editing && !blockId && blocks.length) setBlockId(blocks[0].id);
+  }, [blocks, blockId, editing]);
 
   const selected = useMemo(() => blocks.find((b) => b.id === blockId) ?? null, [blocks, blockId]);
   const varieties = useBlockVarieties(selected, vineyardId);
 
-  // Auto-select the sole variety; reset when the block changes.
+  // Auto-select the sole variety; reset when the block changes. Skipped on the
+  // first pass when editing so the recorded snapshot is not overwritten.
+  const skipReset = useRef(editing);
   useEffect(() => {
+    if (skipReset.current) {
+      skipReset.current = false;
+      return;
+    }
     setVarietyName(varieties.length === 1 ? varieties[0].name : "");
     setClone(NO_CLONE);
   }, [blockId, varieties.length]);
@@ -415,8 +431,25 @@ function DetailedForm({
     [varieties, varietyName],
   );
   useEffect(() => {
-    if (variety && variety.clones.length === 1) setClone(variety.clones[0]);
+    if (variety && variety.clones.length === 1 && clone === NO_CLONE) setClone(variety.clones[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variety]);
+
+  // The recorded clone stays selectable even when the block configuration has
+  // since changed — historical picks are snapshots.
+  const cloneOptions = useMemo(() => {
+    const list = [...(variety?.clones ?? [])];
+    const recorded = (record?.clone ?? "").trim();
+    if (recorded && !list.includes(recorded)) list.unshift(recorded);
+    return list;
+  }, [variety, record]);
+
+  // Varieties recorded before a block was reconfigured stay selectable too.
+  const varietyOptions = useMemo(() => {
+    const recorded = (record?.variety_name ?? "").trim();
+    if (!recorded || varieties.some((v) => v.name === recorded)) return varieties;
+    return [{ id: record?.variety_id ?? null, key: record?.variety_key ?? null, name: recorded, percent: null, clones: [] }, ...varieties];
+  }, [varieties, record]);
 
   /** Display-only mirror of the server trigger (season-end year). */
   const derivedVintage = useMemo(() => {
@@ -440,8 +473,7 @@ function DetailedForm({
         const n = Number(s);
         return s.trim() !== "" && Number.isFinite(n) ? n : null;
       };
-      await createPickingRecord({
-        vineyardId,
+      const payload = {
         pickedAt,
         paddockId: selected.id,
         paddockName: selected.name ?? "Unnamed block",
@@ -459,13 +491,22 @@ function DetailedForm({
         soldTo: sold ? soldTo : null,
         pricePerTonne: sold ? num(pricePerTonne) : null,
         notes,
-      });
+      };
+      // Editing updates the SAME row (never an insert), so totals recompute
+      // from the revised pick instead of gaining a duplicate.
+      if (editing && record) await updatePickingRecord({ id: record.id, ...payload });
+      else await createPickingRecord({ vineyardId, ...payload });
     },
     onSuccess: () => {
-      toast({ title: "Pick recorded" });
       qc.invalidateQueries({ queryKey: ["picking_records"] });
       qc.invalidateQueries({ queryKey: ["picking_yield_totals"] });
       qc.invalidateQueries({ queryKey: ["yield_reports"] });
+      if (editing) {
+        toast({ title: "Picking record updated" });
+        onOpenChange(false);
+        return;
+      }
+      toast({ title: "Pick recorded" });
       // Keep the sheet open for fast harvest entry (parity with iOS).
       setWeightKg("");
       setSugar("");
@@ -521,7 +562,7 @@ function DetailedForm({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Variety</Label>
-            {varieties.length === 0 ? (
+            {varietyOptions.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 This block has no configured varieties.
               </p>
@@ -531,7 +572,7 @@ function DetailedForm({
                   <SelectValue placeholder="Select a variety" />
                 </SelectTrigger>
                 <SelectContent>
-                  {varieties.map((v) => (
+                  {varietyOptions.map((v) => (
                     <SelectItem key={v.name} value={v.name}>
                       {v.name}
                     </SelectItem>
@@ -542,14 +583,14 @@ function DetailedForm({
           </div>
           <div className="space-y-1.5">
             <Label>Clone</Label>
-            {variety && variety.clones.length ? (
+            {cloneOptions.length ? (
               <Select value={clone} onValueChange={setClone}>
                 <SelectTrigger aria-label="Clone">
                   <SelectValue placeholder="Select a clone" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_CLONE}>Not specified</SelectItem>
-                  {variety.clones.map((c) => (
+                  {cloneOptions.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
                     </SelectItem>
@@ -639,13 +680,59 @@ function DetailedForm({
       </div>
 
       <DialogFooter className="mt-4">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          Close
+        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={save.isPending}>
+          {editing ? "Cancel" : "Close"}
         </Button>
         <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? "Saving…" : "Save pick"}
+          {save.isPending ? "Saving…" : editing ? "Save changes" : "Save pick"}
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit an existing pick — same form, pre-populated, updated in place.
+// ---------------------------------------------------------------------------
+
+export function EditPickingRecordDialog({
+  vineyardId,
+  record,
+  open,
+  onOpenChange,
+}: {
+  vineyardId: string | null;
+  record: PickingRecord | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const blocksQ = useQuery({
+    queryKey: ["yield", "blocks", vineyardId],
+    enabled: !!vineyardId && open,
+    queryFn: () => fetchYieldBlocks(vineyardId!),
+  });
+  const blocks = blocksQ.data ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit picking record</DialogTitle>
+          <DialogDescription>
+            Changes update this pick in place. Vintage and grape value are recalculated by the
+            backend from the revised date, weight and price.
+          </DialogDescription>
+        </DialogHeader>
+        {record && (
+          <DetailedForm
+            key={record.id}
+            vineyardId={vineyardId}
+            blocks={blocks}
+            onOpenChange={onOpenChange}
+            record={record}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
