@@ -1164,11 +1164,18 @@ export default function YieldAnalyticsPage() {
           </section>
 
           {/* Historical trends */}
-          <section className="space-y-3">
+          <section id="ya-trends" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Historical trends
             </h2>
             <div className="grid gap-3 lg:grid-cols-2">
+              {!multiVintage ? (
+                <Card className="p-6 text-sm text-muted-foreground lg:col-span-2">
+                  More vintages are required to show year-on-year trends.
+                </Card>
+              ) : (
+              <>
+
               <ChartCard
                 title="Variety performance over time"
                 subtitle="Each selected variety is its own series"
