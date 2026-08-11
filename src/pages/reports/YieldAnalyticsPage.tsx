@@ -1520,22 +1520,33 @@ function HighlightCard({
   empty = "No data",
 }: {
   title: string;
-  items: { label: string; value: string }[];
+  items: { label: string; value: string; weight?: number }[];
   empty?: string;
 }) {
+  const max = Math.max(0, ...items.map((it) => Math.abs(it.weight ?? 0)));
   return (
     <Card className="p-4 space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">{empty}</p>
       ) : (
-        <ol className="space-y-1 text-sm">
+        <ol className="space-y-1.5 text-sm">
           {items.map((it, i) => (
-            <li key={`${it.label}-${i}`} className="flex items-center justify-between gap-2">
-              <span className="truncate text-muted-foreground">
-                {i + 1}. {it.label}
-              </span>
-              <span className="tabular-nums">{it.value}</span>
+            <li key={`${it.label}-${i}`} className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-muted-foreground">
+                  {i + 1}. {it.label}
+                </span>
+                <span className="tabular-nums">{it.value}</span>
+              </div>
+              {max > 0 && (
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${Math.min(100, (Math.abs(it.weight ?? 0) / max) * 100)}%` }}
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ol>
@@ -1543,3 +1554,4 @@ function HighlightCard({
     </Card>
   );
 }
+
