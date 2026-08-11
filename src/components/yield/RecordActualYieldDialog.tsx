@@ -141,6 +141,26 @@ function useBlockVarieties(selected: YieldBlockInfo | null, vineyardId: string |
   }, [selected, varietyMap]);
 }
 
+/**
+ * Every planting allocation configured on the selected block, in the block's
+ * own order. Two allocations of the same variety, clone AND rootstock stay
+ * separate options — the stable allocation id (and allocated area) is what
+ * distinguishes them.
+ */
+function useBlockAllocationUnits(selected: YieldBlockInfo | null, vineyardId: string | null) {
+  const { data: grapeVarieties } = useGrapeVarieties(vineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
+  return useMemo<AllocationUnit[]>(() => {
+    if (!selected) return [];
+    return buildAllocationUnits({
+      blockId: selected.id,
+      areaHa: selected.areaHa ?? null,
+      allocations: resolvePaddockAllocations(selected.varietyAllocations, varietyMap),
+    });
+  }, [selected, varietyMap]);
+}
+
+
 export default function RecordActualYieldDialog({
   vineyardId,
   open,
