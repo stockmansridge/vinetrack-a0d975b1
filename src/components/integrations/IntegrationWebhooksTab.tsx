@@ -142,6 +142,9 @@ export function IntegrationWebhooksTab({
       setSecretEndpointName(endpoint.name);
       setSecretRotated(true);
       setSecret(res.secret);
+      // Drop the secret from the mutation result cache immediately — it now
+      // lives only in this component's transient state.
+      rotate.reset();
     } catch (e) {
       toast({
         variant: "destructive",
