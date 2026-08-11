@@ -475,19 +475,21 @@ export default function YieldAnalyticsPage() {
       { key: "area", label: rf.areaUnitLabel === "ac" ? "Acres" : "Hectares" },
       { key: "tonnes", label: "Tonnes" },
       { key: "tPerHa", label: `t/${rf.areaUnitLabel}` },
-      { key: "price", label: "Avg $/t" },
-      { key: "revenue", label: "Crop revenue" },
-      { key: "revPerHa", label: `Revenue/${rf.areaUnitLabel}` },
+      { key: "disposition", label: "Disposition" },
+      { key: "price", label: "Sale $/t" },
+      { key: "revenue", label: "Grape revenue" },
+      { key: "revPerHa", label: `Revenue/sold ${rf.areaUnitLabel}` },
       ...(costAvailable
         ? [
             { key: "cost", label: "Production cost" },
             { key: "costPerHa", label: `Cost/${rf.areaUnitLabel}` },
             { key: "costPerT", label: "Cost/t" },
-            { key: "margin", label: "Gross margin" },
-            { key: "marginPerHa", label: `Margin/${rf.areaUnitLabel}` },
+            { key: "margin", label: "Grape-sale margin" },
+            { key: "marginPerHa", label: `Margin/sold ${rf.areaUnitLabel}` },
           ]
         : []),
       { key: "source", label: "Source" },
+
     ],
     [rf.areaUnitLabel, costAvailable],
   );
