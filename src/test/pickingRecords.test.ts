@@ -111,7 +111,7 @@ describe("sugar measurement unit", () => {
 // --- Final UX refinements -------------------------------------------------
 import { buildYieldOverview } from "@/lib/yieldOverview";
 import { actualSourceLabel } from "@/pages/setup/YieldReportsPage";
-import { resolveSugarUnit } from "@/lib/vineyardRegionSettingsQuery";
+
 
 describe("Actual yield source attribution", () => {
   const blocks = [{ id: "b1", name: "Block 1", varieties: [{ name: "Shiraz", percent: null }] }];
