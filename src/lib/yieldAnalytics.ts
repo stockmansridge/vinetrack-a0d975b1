@@ -17,6 +17,8 @@ export interface AnalyticsBlockInfo {
   id: string;
   name: string | null;
   areaHa: number | null;
+  /** paddocks.variety_allocations jsonb — [{ name, percent }, ...]. */
+  varietyAllocations?: unknown;
 }
 
 export interface AnalyticsCostRow {
@@ -37,8 +39,10 @@ export interface YieldFact {
   revenue: number | null;
   /** Tonnes that carry a price — the denominator for weighted average price. */
   pricedTonnes: number;
-  /** Hectares attributed to this variety (block area apportioned by tonnes). */
+  /** Hectares attributed to this variety (allocated ha, else tonnage share). */
   areaHa: number | null;
+  /** True when hectares came from the block's variety_allocations percent. */
+  areaFromAllocation: boolean;
   /** Whole-block hectares for the vintage (never summed per variety). */
   blockAreaHa: number | null;
   /** Allocated production cost, null when no cost data is available. */
@@ -46,6 +50,7 @@ export interface YieldFact {
   source: "basic" | "detailed";
   pickCount: number | null;
 }
+
 
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
 const num = (v: unknown): number | null => {
