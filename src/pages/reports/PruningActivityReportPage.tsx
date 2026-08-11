@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Columns3, Download, Scissors, Search, ExternalLink, Pencil } from "lucide-react";
 import ReportEditPruningDialog from "@/components/pruning/ReportEditPruningDialog";
 import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
+import PruningActivityCharts from "@/components/pruning/PruningActivityCharts";
 
 
 import { useVineyard } from "@/context/VineyardContext";
@@ -856,7 +857,9 @@ export default function PruningActivityReportPage() {
         ))}
       </div>
 
-
+      {/* -------------------- Compact analytics -------------------- */}
+      {/* Same filtered allocation dataset as the KPI cards and the table. */}
+      <PruningActivityCharts rows={filtered} blockLabel={fmt.blockLabel} />
 
       {/* -------------------- Filters -------------------- */}
       <Card className="p-3 space-y-3">
