@@ -291,6 +291,13 @@ export function buildYieldFacts({
       cost,
       source: r.source,
       pickCount: r.pickCount,
+      disposition:
+        r.pricedTonnes <= 0
+          ? "retained"
+          : r.pricedTonnes >= r.tonnes - 1e-6
+            ? "sold"
+            : "mixed",
+
     } satisfies YieldFact;
   });
 }
