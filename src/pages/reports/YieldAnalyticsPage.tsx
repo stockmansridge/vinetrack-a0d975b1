@@ -1446,7 +1446,15 @@ export default function YieldAnalyticsPage() {
                       area: areaFmt(r.area),
                       tonnes: num(r.tonnes, 3),
                       tPerHa: perArea(r.tPerHa),
-                      disposition: r.disposition,
+                      disposition: (
+                        <Badge
+                          variant={r.fact.disposition === "sold" ? "default" : "secondary"}
+                          className="font-normal"
+                        >
+                          {r.disposition}
+                        </Badge>
+                      ),
+
                       price: money(r.price),
                       revenue: money(r.revenue),
                       revPerHa: moneyPerArea(r.revPerHa),
