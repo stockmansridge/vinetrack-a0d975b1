@@ -88,7 +88,8 @@ export default function RecordActualYieldDialog({
       const name = (a.name ?? "").trim();
       if (!name || seen.has(name.toLowerCase())) continue;
       seen.add(name.toLowerCase());
-      out.push({ id: a.id ?? null, name });
+      const rawId = (a.raw?.varietyId ?? a.raw?.variety_id ?? null) as string | null;
+      out.push({ id: rawId, name });
     }
     return out;
   }, [selected, varietyMap]);
