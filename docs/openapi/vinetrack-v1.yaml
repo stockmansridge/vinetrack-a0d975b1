@@ -1,0 +1,1564 @@
+# VineTrack public API — OpenAPI 3.1 (descriptive).
+# The implementation (supabase/functions/vinetrack-api/index.ts) and
+# docs/vinetrack-api-v1.md remain canonical; this document describes them and
+# must never drive or distort the implementation.
+openapi: 3.1.0
+info:
+  title: VineTrack API
+  version: "v1"
+  description: |
+    Read-only integration API for VineTrack vineyard data.
+
+    Authentication uses VineTrack API keys (`vt_live_...` / `vt_test_...`)
+    presented as `Authorization: Bearer <key>`. Supabase JWTs and
+    query-string credentials are rejected. An API key only reaches
+    vineyards and scopes that were explicitly granted to its integration —
+    nothing is inherited from the person who created the key.
+
+    Sensitive-field gating: cost fields additionally require the
+    `costs:read` scope; operator/labour identity fields additionally
+    require `labour:read`. Sensitive scopes never grant access to a
+    resource on their own. Gated fields are omitted (not null) without the
+    extra scope.
+
+    All collections use opaque cursor pagination (`limit` default 100,
+    max 1000). Operational collections are ordered newest-first.
+    Rate limit: 300 requests/minute per API key
+    (X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After headers).
+servers:
+  - url: https://tbafuqwruefgkbyxrxyb.supabase.co/functions/v1/vinetrack-api
+security:
+  - vinetrackApiKey: []
+tags:
+  - name: Identity
+  - name: Vineyards
+  - name: Blocks
+  - name: Trips
+  - name: Spray Jobs
+  - name: Fuel
+  - name: Equipment
+  - name: Work Tasks
+  - name: Pruning
+  - name: Irrigation
+  - name: Growth Stages
+  - name: Yield
+  - name: Pins
+  - name: Weather
+  - name: Rainfall
+  - name: Disease Risk
+
+paths:
+  /v1/me:
+    get:
+      tags: [Identity]
+      summary: Describe the authenticated integration
+      description: Requires a valid active key; no resource scope.
+      responses:
+        "200":
+          description: Integration profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Me" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/vineyards:
+    get:
+      tags: [Vineyards]
+      summary: List granted vineyards
+      description: "Scope: vineyards:read. Returns only explicitly granted vineyards."
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200": { $ref: "#/components/responses/VineyardCollection" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/vineyards/{vineyard_id}:
+    get:
+      tags: [Vineyards]
+      summary: Get one vineyard
+      description: "Scope: vineyards:read. Ungranted vineyards return 404 (existence is never disclosed)."
+      parameters:
+        - { name: vineyard_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Vineyard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Vineyard" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/blocks:
+    get:
+      tags: [Blocks]
+      summary: List blocks in one vineyard
+      description: "Scope: blocks:read. vineyard_id is required (explicit vineyard isolation)."
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Blocks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Block" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/blocks/{block_id}:
+    get:
+      tags: [Blocks]
+      summary: Get one block
+      description: "Scope: blocks:read. Blocks in ungranted vineyards return 404."
+      parameters:
+        - { name: block_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Block
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Block" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/trips:
+    get:
+      tags: [Trips]
+      summary: List trips in one vineyard
+      description: |
+        Scope: trips:read. Newest first. `operator` requires labour:read.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - { name: equipment_id, in: query, required: false, schema: { type: string, format: uuid }, description: "Canonical machine id; unknown/cross-vineyard ids match nothing." }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Trips
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/TripSummary" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/trips/{trip_id}:
+    get:
+      tags: [Trips]
+      summary: Get one trip (detail)
+      description: |
+        Scope: trips:read. Adds `rows` work summary; `costs` requires
+        costs:read (labour_cost also requires labour:read).
+      parameters:
+        - { name: trip_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Trip detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TripDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/spray-jobs:
+    get:
+      tags: [Spray Jobs]
+      summary: List completed spray application records
+      description: "Scope: sprays:read. Canonical completed application/compliance records; templates excluded. Newest first."
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Spray records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SpraySummary" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/spray-jobs/{spray_job_id}:
+    get:
+      tags: [Spray Jobs]
+      summary: Get one spray record (full detail)
+      description: |
+        Scope: sprays:read. Adds blocks, full tank/product mix and the
+        linked plan header. Product cost_per_unit and chemical_cost_total
+        require costs:read.
+      parameters:
+        - { name: spray_job_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Spray record detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SprayDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/fuel-records:
+    get:
+      tags: [Fuel]
+      summary: List fuel usage (fill) records
+      description: |
+        Scope: fuel:read. Newest first. `operator` requires labour:read;
+        cost_per_litre/total_cost require costs:read.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - { name: equipment_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Fuel records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/FuelRecord" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/fuel-records/{fuel_record_id}:
+    get:
+      tags: [Fuel]
+      summary: Get one fuel usage record
+      parameters:
+        - { name: fuel_record_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Fuel record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FuelRecord" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/fuel-purchases:
+    get:
+      tags: [Fuel]
+      summary: List fuel purchase records
+      description: |
+        Scope: fuel:read. Newest first. total_price/price_per_litre require
+        costs:read (omitted otherwise).
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Fuel purchases
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/FuelPurchase" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/fuel-purchases/{fuel_purchase_id}:
+    get:
+      tags: [Fuel]
+      summary: Get one fuel purchase record
+      parameters:
+        - { name: fuel_purchase_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Fuel purchase
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FuelPurchase" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/equipment:
+    get:
+      tags: [Equipment]
+      summary: List equipment in one vineyard
+      description: |
+        Scope: equipment:read. One unified typed resource (kind = machine |
+        sprayer | item). No cost fields exist canonically.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [machine, sprayer, item, tractor, atv, side_by_side, harvester, utility_vehicle, other_vineyard_machine]
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Equipment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Equipment" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/equipment/{equipment_id}:
+    get:
+      tags: [Equipment]
+      summary: Get one equipment asset
+      parameters:
+        - { name: equipment_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Equipment asset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Equipment" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/work-tasks:
+    get:
+      tags: [Work Tasks]
+      summary: List work tasks in one vineyard
+      description: |
+        Scope: work_tasks:read. Newest first. Archived tasks remain as
+        history (is_archived flag); deleted tasks never appear.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - { name: status, in: query, required: false, schema: { type: string }, description: "Stored status value (free text)." }
+        - { name: task_type, in: query, required: false, schema: { type: string } }
+        - $ref: "#/components/parameters/blockId"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Work tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorkTaskSummary" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/work-tasks/{work_task_id}:
+    get:
+      tags: [Work Tasks]
+      summary: Get one work task (detail)
+      description: |
+        Scope: work_tasks:read. Adds labour_lines, machine_lines and
+        trip_ids. Line rates/costs require costs:read; machine-line
+        operator requires labour:read.
+      parameters:
+        - { name: work_task_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Work task detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/WorkTaskDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/pruning:
+    get:
+      tags: [Pruning]
+      summary: List pruning activities in one vineyard
+      description: |
+        Scope: pruning:read. One activity = one crew/day of pruning across
+        one or more blocks. Reversed activities are omitted entirely (they
+        no longer exist in live progress). Newest first. crew requires
+        labour:read; hourly_rate/labour_cost require costs:read.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/blockId"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Pruning activities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/PruningActivity" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/pruning/{pruning_activity_id}:
+    get:
+      tags: [Pruning]
+      summary: Get one pruning activity
+      parameters:
+        - { name: pruning_activity_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Pruning activity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/PruningActivity" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/irrigation-records:
+    get:
+      tags: [Irrigation]
+      summary: List irrigation session records in one vineyard
+      description: |
+        Scope: irrigation:read. Newest first. Sessions with
+        status=reversed are excluded from the default view; request them
+        explicitly with ?status=reversed.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [completed, corrected, reversed, planned, running, cancelled, imported, estimated]
+        - $ref: "#/components/parameters/blockId"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Irrigation records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/IrrigationRecordSummary" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/irrigation-records/{irrigation_record_id}:
+    get:
+      tags: [Irrigation]
+      summary: Get one irrigation record (detail)
+      description: |
+        Scope: irrigation:read. Adds full per-block metrics plus system
+        and valve display references. Reversed sessions are retrievable
+        by id.
+      parameters:
+        - { name: irrigation_record_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Irrigation record detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/IrrigationRecordDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/growth-stages:
+    get:
+      tags: [Growth Stages]
+      summary: List growth-stage observations in one vineyard
+      description: |
+        Scope: growth_stages:read. Recorded E-L observations, newest
+        first. recorded_by requires labour:read. Photo paths are never
+        exposed.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/blockId"
+        - { name: stage_code, in: query, required: false, schema: { type: string }, description: "Canonical E-L stage code as recorded." }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Growth-stage observations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/GrowthStage" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/growth-stages/{growth_stage_id}:
+    get:
+      tags: [Growth Stages]
+      summary: Get one growth-stage observation
+      parameters:
+        - { name: growth_stage_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Growth-stage observation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/GrowthStage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/yield-records:
+    get:
+      tags: [Yield]
+      summary: List archived season yield records in one vineyard
+      description: |
+        Scope: yield:read. Archived season results with per-block
+        breakdown, newest first. No pricing/revenue fields exist
+        canonically.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - { name: vintage, in: query, required: false, schema: { type: integer, minimum: 1000, maximum: 9999 }, description: "4-digit vintage year." }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Yield records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/YieldRecord" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/yield-records/{yield_record_id}:
+    get:
+      tags: [Yield]
+      summary: Get one yield record
+      parameters:
+        - { name: yield_record_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Yield record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/YieldRecord" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/pins:
+    get:
+      tags: [Pins]
+      summary: List pins in one vineyard
+      description: |
+        Scope: pins:read. Repairs, growth observations and manual issues
+        with VineTrack's canonical placement resolution. Newest first.
+        assigned_to/completed_by require labour:read. Resolved pins remain
+        as history and are filterable by status.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/blockId"
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [open, in_progress, completed, cancelled] }
+        - { name: category, in: query, required: false, schema: { type: string } }
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, enum: [repairs, growth, manual_issue] }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Pins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/PinSummary" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/pins/{pin_id}:
+    get:
+      tags: [Pins]
+      summary: Get one pin (detail)
+      description: "Scope: pins:read. Adds row_segments (exact row/section selection)."
+      parameters:
+        - { name: pin_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Pin detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/PinDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/weather:
+    get:
+      tags: [Weather]
+      summary: Current observation + forecast for one vineyard (singleton)
+      description: |
+        Scope: weather:read. Singleton document (data + meta — no
+        pagination). `current` is the vineyard's own weather-station
+        observation served CACHE-ONLY (a public API call never triggers an
+        upstream station fetch; stale after 20 minutes). `forecast` is
+        provider-abstracted daily forecast data (up to 7 days) served from
+        a 3-hour server-side cache; on upstream failure the last good
+        bundle is returned with is_stale=true (status "stale"). Observed
+        and forecast data are never mixed. Arbitrary lat/lon lookups are
+        rejected — environmental data is vineyard-based only.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+      responses:
+        "200":
+          description: Weather document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/WeatherDocument" }
+                  meta: { $ref: "#/components/schemas/EnvironmentalMeta" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/rainfall:
+    get:
+      tags: [Rainfall]
+      summary: Daily observed rainfall history for one vineyard
+      description: |
+        Scope: rainfall:read. Observed rainfall only — never forecast.
+        One record per vineyard-local day that has data, newest first,
+        with per-day source provenance (manual > davis_weatherlink >
+        wunderground_pws > open_meteo — the exact resolution VineTrack
+        itself displays). Cursor is date-keyed and opaque.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Rainfall records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/RainfallRecord" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/disease-risk:
+    get:
+      tags: [Disease Risk]
+      summary: Current disease-pressure assessment for one vineyard (singleton)
+      description: |
+        Scope: disease_risk:read. Returns VineTrack's three implemented
+        disease models only (downy_mildew, powdery_mildew, botrytis) — the
+        same simplified MVP models the mobile apps run, with the canonical
+        estimated-wetness proxy. risk_level is low/medium/high; no numeric
+        score exists canonically so none is exposed. Current risk only —
+        VineTrack stores no historical risk results. Computed at most once
+        per vineyard per 30 minutes; if the weather source is unreachable
+        the last assessment (≤24 h) is served with
+        source_status=stale_fallback, otherwise 503
+        disease_risk_unavailable.
+      parameters:
+        - $ref: "#/components/parameters/vineyardId"
+      responses:
+        "200":
+          description: Disease risk document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/DiseaseRiskDocument" }
+                  meta: { $ref: "#/components/schemas/EnvironmentalMeta" }
+        "503":
+          description: disease_risk_unavailable — no computation possible and no usable cache
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    vinetrackApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: "vt_live_... / vt_test_... (VineTrack API key — not a JWT)"
+      description: |
+        VineTrack integration API key. Created once by a vineyard Owner;
+        the plaintext is shown exactly once and only its hash is stored.
+        Scopes granted to the integration:
+        vineyards:read, blocks:read, trips:read, sprays:read, fuel:read,
+        equipment:read, work_tasks:read, pruning:read, irrigation:read,
+        growth_stages:read, yield:read, pins:read, weather:read,
+        rainfall:read, disease_risk:read (resources);
+        costs:read, labour:read, team:read (sensitive field gating —
+        never grant resource access alone).
+
+  parameters:
+    vineyardId:
+      name: vineyard_id
+      in: query
+      required: true
+      description: Explicitly granted vineyard (required on every collection).
+      schema: { type: string, format: uuid }
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from pagination.next_cursor. Do not construct.
+      schema: { type: string }
+    from:
+      name: from
+      in: query
+      required: false
+      description: Inclusive ISO date lower bound (YYYY-MM-DD, UTC days).
+      schema: { type: string, format: date }
+    to:
+      name: to
+      in: query
+      required: false
+      description: Inclusive ISO date upper bound (YYYY-MM-DD, UTC days).
+      schema: { type: string, format: date }
+    blockId:
+      name: block_id
+      in: query
+      required: false
+      description: Restrict to records linked to one block.
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: |
+        Error envelope. Codes: missing_api_key, invalid_api_key,
+        expired_api_key, revoked_api_key (401); integration_not_active,
+        insufficient_scope, vineyard_access_denied (403);
+        resource_not_found (404 — also used for inaccessible resources,
+        existence is never disclosed); invalid_request, invalid_cursor
+        (400); rate_limit_exceeded (429); method_not_allowed (405);
+        internal_error (500); disease_risk_unavailable (503).
+        Stale environmental fallbacks are NOT errors — they return 200
+        with is_stale / source_status markers.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    VineyardCollection:
+      description: Vineyards
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items: { $ref: "#/components/schemas/Vineyard" }
+              pagination: { $ref: "#/components/schemas/Pagination" }
+
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        next_cursor:
+          type: [string, "null"]
+          description: Cursor for the next page; null on the last page.
+
+    EnvironmentalMeta:
+      type: object
+      description: Freshness metadata for singleton environmental documents.
+      properties:
+        generated_at: { type: string, format: date-time }
+        source_updated_at: { type: string, format: date-time }
+        is_stale: { type: boolean }
+
+    WeatherDocument:
+      type: object
+      properties:
+        vineyard_id: { type: string, format: uuid }
+        current:
+          oneOf:
+            - { type: "null" }
+            - $ref: "#/components/schemas/CurrentWeather"
+        current_status:
+          type: string
+          enum: [ok, no_data, not_configured]
+        forecast:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastDay" }
+        forecast_status:
+          type: string
+          enum: [ok, stale, unavailable, not_configured]
+        forecast_source:
+          oneOf:
+            - { type: "null" }
+            - $ref: "#/components/schemas/ForecastSource"
+
+    CurrentWeather:
+      type: object
+      description: |
+        Vineyard weather-station observation (Davis WeatherLink — the only
+        canonical stored observation source). Missing readings are null,
+        never zero. wind_speed_kmh is the current wind; wind_gust_kmh is
+        the recent gust (high over the last 10 minutes). leaf_wetness is
+        the measured sensor value (unitless Davis scale) when present.
+      properties:
+        temperature_c: { type: [number, "null"] }
+        humidity_percent: { type: [number, "null"] }
+        wind_speed_kmh: { type: [number, "null"] }
+        wind_gust_kmh: { type: [number, "null"] }
+        wind_direction_degrees: { type: [number, "null"] }
+        wind_direction:
+          type: [string, "null"]
+          description: Derived 16-point compass name (e.g. NW).
+        rainfall_today_mm: { type: [number, "null"] }
+        rainfall_rate_mm_per_hour: { type: [number, "null"] }
+        leaf_wetness: { type: [number, "null"] }
+        observed_at: { type: string, format: date-time }
+        fetched_at: { type: string, format: date-time }
+        is_stale:
+          type: boolean
+          description: True when the reading is older than 20 minutes (canonical threshold).
+        source:
+          type: object
+          properties:
+            provider: { type: string, enum: [davis_weatherlink] }
+            station_id: { type: [string, "null"] }
+            station_name: { type: [string, "null"] }
+
+    ForecastDay:
+      type: object
+      description: |
+        Provider-abstracted daily forecast item. rain_probability_percent
+        is provided by WillyWeather only (null from Open-Meteo). et0_mm is
+        FAO ET0 from Open-Meteo, or VineTrack's deterministic Hargreaves
+        estimate for WillyWeather.
+      properties:
+        date: { type: string, format: date }
+        rain_mm: { type: [number, "null"] }
+        rain_probability_percent: { type: [number, "null"] }
+        temp_min_c: { type: [number, "null"] }
+        temp_max_c: { type: [number, "null"] }
+        wind_speed_max_kmh: { type: [number, "null"] }
+        et0_mm: { type: [number, "null"] }
+
+    ForecastSource:
+      type: object
+      properties:
+        provider: { type: string, enum: [willyweather, open_meteo] }
+        location:
+          type: object
+          description: Coarse weather location (~1 km rounding), never precise private geometry.
+          properties:
+            latitude: { type: [number, "null"] }
+            longitude: { type: [number, "null"] }
+            label: { type: [string, "null"] }
+            basis:
+              type: string
+              enum: [forecast_location, station, blocks, pins]
+        horizon_days: { type: integer }
+        fetched_at: { type: string, format: date-time }
+        is_stale: { type: boolean }
+
+    RainfallRecord:
+      type: object
+      description: Observed daily rainfall (never forecast). One record per day with data.
+      properties:
+        date: { type: string, format: date }
+        rainfall_mm: { type: number }
+        source:
+          type: string
+          enum: [manual, davis_weatherlink, wunderground_pws, open_meteo]
+          description: Winning provenance for the day (manual always overrides providers).
+        station:
+          type: [object, "null"]
+          properties:
+            id: { type: [string, "null"] }
+            name: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        updated_at: { type: string, format: date-time }
+
+    DiseaseRiskDocument:
+      type: object
+      properties:
+        vineyard_id: { type: string, format: uuid }
+        calculated_at: { type: string, format: date-time }
+        model_version:
+          type: string
+          description: Shared iOS/Android MVP model identifier (mvp-1). Bumped whenever the models change.
+        wetness_source:
+          type: string
+          enum: [estimated_proxy]
+          description: Leaf wetness is estimated (rain > 0 OR RH >= 90% OR T - dewpoint <= 2°C), not measured.
+        weather_source:
+          type: object
+          properties:
+            provider: { type: string, enum: [open_meteo] }
+            location:
+              type: object
+              properties:
+                latitude: { type: number }
+                longitude: { type: number }
+                basis: { type: string, enum: [station, blocks, pins] }
+            fetched_at: { type: string, format: date-time }
+            observed_through: { type: [string, "null"], format: date-time }
+            hours_used: { type: integer }
+            source_status: { type: string, enum: [ok, stale_fallback] }
+        risks:
+          type: array
+          items: { $ref: "#/components/schemas/DiseaseRiskItem" }
+
+    DiseaseRiskItem:
+      type: object
+      description: One implemented disease model's current assessment. No numeric score exists canonically.
+      properties:
+        disease:
+          type: string
+          enum: [downy_mildew, powdery_mildew, botrytis]
+        risk_level: { type: string, enum: [low, medium, high] }
+        summary: { type: string }
+        window_hours: { type: integer }
+        inputs:
+          type: object
+          additionalProperties: { type: [number, "null"] }
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            request_id: { type: string, pattern: "^req_[0-9a-f]{32}$" }
+
+    Me:
+      type: object
+      properties:
+        integration_id: { type: string, format: uuid }
+        name: { type: string }
+        environment: { type: string, enum: [live, test] }
+        status: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        vineyards:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+
+    Vineyard:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        country_code: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        timezone: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Block:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        name: { type: string }
+        planting_year: { type: [integer, "null"] }
+        row_count: { type: [integer, "null"] }
+        row_width_m: { type: [number, "null"] }
+        vine_spacing_m: { type: [number, "null"] }
+        varieties:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              percent: { type: [number, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Operator:
+      type: object
+      description: Present only with labour:read.
+      properties:
+        user_id: { type: [string, "null"], format: uuid }
+        name: { type: [string, "null"] }
+
+    TripSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        title: { type: [string, "null"] }
+        function: { type: [string, "null"] }
+        status: { type: string, enum: [active, paused, completed] }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        duration_minutes:
+          type: [integer, "null"]
+          description: Pause-aware; null while a trip is active.
+        distance_km: { type: [number, "null"] }
+        block_ids:
+          type: array
+          items: { type: string, format: uuid }
+        block_name: { type: [string, "null"] }
+        equipment_id: { type: [string, "null"], format: uuid }
+        equipment_name: { type: [string, "null"] }
+        work_task_id: { type: [string, "null"], format: uuid }
+        tank_count: { type: [integer, "null"] }
+        engine_hours_start: { type: [number, "null"] }
+        engine_hours_end: { type: [number, "null"] }
+        notes: { type: [string, "null"] }
+        operator: { $ref: "#/components/schemas/Operator" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TripDetail:
+      allOf:
+        - $ref: "#/components/schemas/TripSummary"
+        - type: object
+          properties:
+            rows:
+              type: object
+              properties:
+                planned: { type: integer }
+                completed: { type: integer }
+                skipped: { type: integer }
+            costs:
+              type: [object, "null"]
+              description: >
+                Present only with costs:read; labour_cost additionally
+                requires labour:read. Null when no costing exists.
+              properties:
+                fuel_cost: { type: [number, "null"] }
+                chemical_cost: { type: [number, "null"] }
+                input_cost: { type: [number, "null"] }
+                total_cost: { type: [number, "null"] }
+                labour_cost: { type: [number, "null"] }
+
+    SprayConditions:
+      type: object
+      properties:
+        temperature_c: { type: [number, "null"] }
+        wind_speed_kmh: { type: [number, "null"] }
+        wind_direction: { type: [string, "null"] }
+        humidity_percent: { type: [number, "null"] }
+
+    SpraySummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        status: { type: string, enum: [completed] }
+        date: { type: [string, "null"], format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        reference: { type: [string, "null"] }
+        operation_type: { type: [string, "null"] }
+        equipment_id: { type: [string, "null"], format: uuid }
+        equipment_name: { type: [string, "null"] }
+        equipment_type: { type: [string, "null"] }
+        spray_equipment_id: { type: [string, "null"], format: uuid }
+        conditions: { $ref: "#/components/schemas/SprayConditions" }
+        water_volume_l: { type: number }
+        treated_area_ha:
+          type: [number, "null"]
+          description: Derived from the canonical tank mix.
+        tank_count: { type: integer }
+        product_names:
+          type: array
+          items: { type: string }
+        average_speed_kmh: { type: [number, "null"] }
+        fans_jets: { type: [string, "null"] }
+        trip_id: { type: [string, "null"], format: uuid }
+        spray_job_id: { type: [string, "null"], format: uuid }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SprayProduct:
+      type: object
+      properties:
+        product_id: { type: [string, "null"], format: uuid }
+        name: { type: [string, "null"] }
+        quantity_per_tank: { type: [number, "null"] }
+        rate_per_ha: { type: [number, "null"] }
+        rate_per_100l: { type: [number, "null"] }
+        unit:
+          type: [string, "null"]
+          description: Recorded unit (Litres, mL, Kg, g) — never converted.
+        cost_per_unit:
+          type: [number, "null"]
+          description: Present only with costs:read.
+
+    SprayDetail:
+      allOf:
+        - $ref: "#/components/schemas/SpraySummary"
+        - type: object
+          properties:
+            blocks:
+              type: array
+              items:
+                type: object
+                properties:
+                  block_id: { type: string, format: uuid }
+                  name: { type: [string, "null"] }
+            tanks:
+              type: array
+              items:
+                type: object
+                properties:
+                  tank_number: { type: [integer, "null"] }
+                  water_volume_l: { type: [number, "null"] }
+                  spray_rate_l_per_ha: { type: [number, "null"] }
+                  concentration_factor: { type: [number, "null"] }
+                  area_ha: { type: [number, "null"] }
+                  products:
+                    type: array
+                    items: { $ref: "#/components/schemas/SprayProduct" }
+            chemical_cost_total:
+              type: [number, "null"]
+              description: Present only with costs:read.
+            spray_job:
+              type: [object, "null"]
+              description: Linked planned spray job header, when any.
+              properties:
+                id: { type: string, format: uuid }
+                name: { type: [string, "null"] }
+                status: { type: string }
+                target: { type: [string, "null"] }
+                operation_type: { type: [string, "null"] }
+                planned_date: { type: [string, "null"], format: date }
+
+    FuelRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        date: { type: string, format: date-time }
+        equipment_id: { type: [string, "null"], format: uuid }
+        equipment_name: { type: [string, "null"] }
+        volume_l: { type: number }
+        engine_hours: { type: [number, "null"] }
+        filled_to_full: { type: [boolean, "null"] }
+        notes: { type: [string, "null"] }
+        operator: { $ref: "#/components/schemas/Operator" }
+        cost_per_litre:
+          type: [number, "null"]
+          description: Present only with costs:read.
+        total_cost:
+          type: [number, "null"]
+          description: Present only with costs:read.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    FuelPurchase:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        date: { type: string, format: date-time }
+        volume_l: { type: number }
+        total_price:
+          type: number
+          description: Present only with costs:read.
+        price_per_litre:
+          type: [number, "null"]
+          description: Derived (total_price / volume_l); present only with costs:read.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Equipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        kind: { type: string, enum: [machine, sprayer, item] }
+        name: { type: [string, "null"] }
+        equipment_type: { type: [string, "null"] }
+        make: { type: [string, "null"] }
+        model: { type: [string, "null"] }
+        year: { type: [integer, "null"] }
+        serial_number: { type: [string, "null"] }
+        vin_number: { type: [string, "null"] }
+        fuel_usage_l_per_hour: { type: [number, "null"] }
+        tank_capacity_l: { type: [number, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    BlockRef:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: [string, "null"] }
+
+    WorkTaskSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        task_type: { type: [string, "null"], description: "The task's label (no canonical title column exists)." }
+        status: { type: [string, "null"] }
+        date: { type: string, format: date-time }
+        start_date: { type: [string, "null"], format: date-time }
+        end_date: { type: [string, "null"], format: date-time }
+        duration_hours: { type: [number, "null"] }
+        area_ha: { type: [number, "null"] }
+        blocks:
+          type: array
+          items: { $ref: "#/components/schemas/BlockRef" }
+        description: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        is_archived: { type: boolean }
+        is_finalized: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    WorkTaskDetail:
+      allOf:
+        - $ref: "#/components/schemas/WorkTaskSummary"
+        - type: object
+          properties:
+            labour_lines:
+              type: array
+              items:
+                type: object
+                properties:
+                  work_date: { type: string, format: date }
+                  worker_type: { type: [string, "null"], description: "Worker category, never an identity." }
+                  worker_count: { type: integer }
+                  hours_per_worker: { type: number }
+                  total_hours: { type: number }
+                  notes: { type: [string, "null"] }
+                  hourly_rate: { type: [number, "null"], description: "Present only with costs:read." }
+                  total_cost: { type: [number, "null"], description: "Present only with costs:read." }
+            total_labour_hours: { type: number, description: "Derived sum of line total hours." }
+            machine_lines:
+              type: array
+              items:
+                type: object
+                properties:
+                  work_date: { type: string, format: date }
+                  equipment_id: { type: [string, "null"], format: uuid }
+                  equipment_name: { type: [string, "null"] }
+                  duration_hours: { type: [number, "null"] }
+                  started_at: { type: [string, "null"], format: date-time }
+                  ended_at: { type: [string, "null"], format: date-time }
+                  engine_hours_start: { type: [number, "null"] }
+                  engine_hours_end: { type: [number, "null"] }
+                  engine_hours_used: { type: [number, "null"] }
+                  fuel_volume_l: { type: [number, "null"] }
+                  entry_source: { type: string, enum: [manual, missed_trip, trip_failed, correction] }
+                  notes: { type: [string, "null"] }
+                  fuel_cost: { type: [number, "null"], description: "Present only with costs:read." }
+                  hourly_rate: { type: [number, "null"], description: "Present only with costs:read." }
+                  total_cost: { type: [number, "null"], description: "Present only with costs:read." }
+                  operator: { $ref: "#/components/schemas/Operator" }
+            trip_ids:
+              type: array
+              items: { type: string, format: uuid }
+
+    PruningActivity:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        pruning_method: { type: [string, "null"] }
+        season_year: { type: [integer, "null"] }
+        vintage_year: { type: [integer, "null"] }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        labour_hours: { type: [number, "null"] }
+        vines_pruned: { type: integer }
+        row_equivalents: { type: number, description: "Completed quarters ÷ 4." }
+        quarters_completed: { type: integer }
+        vines_per_labour_hour: { type: [number, "null"], description: "Derived: vines_pruned ÷ labour_hours." }
+        block_summary: { type: [string, "null"] }
+        blocks:
+          type: array
+          items:
+            type: object
+            properties:
+              block_id: { type: string, format: uuid }
+              block_name: { type: [string, "null"] }
+              row_equivalents: { type: number }
+              vines_pruned: { type: integer }
+        work_task_id: { type: [string, "null"], format: uuid }
+        notes: { type: [string, "null"] }
+        crew: { type: [string, "null"], description: "Present only with labour:read." }
+        hourly_rate: { type: [number, "null"], description: "Present only with costs:read." }
+        labour_cost: { type: [number, "null"], description: "Derived (labour_hours × hourly_rate); present only with costs:read." }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    IrrigationBlockSummary:
+      type: object
+      properties:
+        block_id: { type: string, format: uuid }
+        block_name: { type: [string, "null"] }
+        allocation_percent: { type: number }
+        volume_l: { type: number }
+
+    IrrigationRecordSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        vintage_year: { type: integer }
+        status: { type: string, enum: [completed, corrected, reversed, planned, running, cancelled, imported, estimated] }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        duration_minutes: { type: integer }
+        calculation_method: { type: string }
+        source_type: { type: string }
+        flow_l_per_hour: { type: [number, "null"] }
+        volume_l: { type: number }
+        effective_volume_l: { type: [number, "null"] }
+        efficiency_percent: { type: [number, "null"] }
+        irrigation_system_id: { type: string, format: uuid }
+        valve_id: { type: string, format: uuid }
+        blocks:
+          type: array
+          items: { $ref: "#/components/schemas/IrrigationBlockSummary" }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    IrrigationRecordDetail:
+      allOf:
+        - $ref: "#/components/schemas/IrrigationRecordSummary"
+        - type: object
+          properties:
+            blocks:
+              type: array
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/IrrigationBlockSummary"
+                  - type: object
+                    properties:
+                      effective_volume_l: { type: [number, "null"] }
+                      area_ha: { type: [number, "null"] }
+                      vine_count: { type: [integer, "null"] }
+                      water_l_per_vine: { type: [number, "null"] }
+                      water_l_per_ha: { type: [number, "null"] }
+                      depth_mm: { type: [number, "null"] }
+                      effective_depth_mm: { type: [number, "null"] }
+            system:
+              type: [object, "null"]
+              properties:
+                id: { type: string, format: uuid }
+                name: { type: string }
+            valve:
+              type: [object, "null"]
+              properties:
+                id: { type: string, format: uuid }
+                name: { type: string }
+                valve_number: { type: [string, "null"] }
+
+    GrowthStage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        block_id: { type: [string, "null"], format: uuid }
+        block_name: { type: [string, "null"] }
+        observed_at: { type: string, format: date-time }
+        stage_code: { type: string, description: "Canonical E-L stage code (stable)." }
+        stage_label: { type: [string, "null"] }
+        variety: { type: [string, "null"] }
+        variety_id: { type: [string, "null"], format: uuid }
+        row_number: { type: [integer, "null"] }
+        side: { type: [string, "null"], enum: [left, right, null] }
+        latitude: { type: [number, "null"] }
+        longitude: { type: [number, "null"] }
+        notes: { type: [string, "null"] }
+        recorded_by: { $ref: "#/components/schemas/Operator" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    YieldRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        season: { type: [string, "null"] }
+        vintage_year: { type: [integer, "null"] }
+        archived_at: { type: string, format: date-time }
+        total_yield_tonnes: { type: number }
+        total_area_ha: { type: number }
+        yield_tonnes_per_ha: { type: [number, "null"], description: "Derived: total_yield_tonnes ÷ total_area_ha." }
+        blocks:
+          type: array
+          items:
+            type: object
+            properties:
+              block_id: { type: [string, "null"], format: uuid }
+              block_name: { type: [string, "null"] }
+              area_ha: { type: [number, "null"] }
+              estimated_yield_tonnes: { type: [number, "null"] }
+              yield_tonnes_per_ha: { type: [number, "null"], description: "Canonically stored per-block value." }
+              average_bunches_per_vine: { type: [number, "null"] }
+              average_bunch_weight_g: { type: [number, "null"] }
+              vine_count: { type: [integer, "null"] }
+              samples_recorded: { type: [integer, "null"] }
+              damage_factor: { type: [number, "null"] }
+              actual_yield_tonnes: { type: [number, "null"] }
+              actual_recorded_at: { type: [string, "null"], format: date-time }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PinSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vineyard_id: { type: string, format: uuid }
+        type: { type: [string, "null"], enum: [repairs, growth, manual_issue, null] }
+        custom_type:
+          type: [object, "null"]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: [string, "null"] }
+        category: { type: [string, "null"] }
+        priority: { type: [string, "null"] }
+        status: { type: string, enum: [open, in_progress, completed, cancelled] }
+        title: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        growth_stage_code: { type: [string, "null"] }
+        block_id: { type: [string, "null"], format: uuid }
+        block_name: { type: [string, "null"] }
+        latitude: { type: [number, "null"] }
+        longitude: { type: [number, "null"] }
+        row:
+          type: object
+          description: Exact snapped path/row identity — never reduced to raw GPS.
+          properties:
+            snapped_to_row: { type: boolean }
+            path_number: { type: [number, "null"], description: "Driving path, e.g. 19.5." }
+            row_number: { type: [number, "null"] }
+            side: { type: [string, "null"], enum: [left, right, null] }
+            along_row_distance_m: { type: [number, "null"] }
+            snapped_latitude: { type: [number, "null"] }
+            snapped_longitude: { type: [number, "null"] }
+        location:
+          type: object
+          description: Server-authoritative placement resolution.
+          properties:
+            scope: { type: [string, "null"] }
+            assignment_basis:
+              type: [string, "null"]
+              enum: [point_coordinates, snapped_point, row_segments, block, legacy_block, unassigned, null]
+            row_summary: { type: [string, "null"] }
+            warning: { type: [string, "null"], enum: [location_metadata_incomplete, unassigned_location, null] }
+        due_date: { type: [string, "null"], format: date }
+        work_task_id: { type: [string, "null"], format: uuid }
+        resolved_at: { type: [string, "null"], format: date-time }
+        assigned_to: { $ref: "#/components/schemas/Operator" }
+        completed_by: { $ref: "#/components/schemas/Operator" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PinDetail:
+      allOf:
+        - $ref: "#/components/schemas/PinSummary"
+        - type: object
+          properties:
+            row_segments:
+              type: array
+              description: Exact row/section selection of a row-scope pin (sections are quarters 1-4).
+              items:
+                type: object
+                properties:
+                  row: { type: integer }
+                  segment: { type: integer, minimum: 1, maximum: 4 }
