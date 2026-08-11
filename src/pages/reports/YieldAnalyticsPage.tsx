@@ -878,8 +878,25 @@ export default function YieldAnalyticsPage() {
               value={moneyPerArea(totals.revenuePerHa)}
               current={totals.revenuePerHa}
               prior={priorTotals?.revenuePerHa ?? null}
+              hint={
+                totals.revenuePerHa == null
+                  ? "Needs priced picking records"
+                  : !totals.revenueComplete
+                    ? "Based on priced area only"
+                    : undefined
+              }
             />
           </div>
+
+          {totals.revenue != null && !totals.revenueComplete && (
+            <PortalNotice
+              variant="info"
+              compact
+              title="Some harvest in view has no pricing"
+              description={`${fmtNum(rf.toArea(0) === 0 ? totals.tonnes - totals.pricedTonnes : totals.tonnes - totals.pricedTonnes, 2)} t of ${fmtNum(totals.tonnes, 2)} t carry no sale price. Price, crop value, revenue per ${rf.areaUnitLabel} and margin are calculated from the priced records only — unpriced harvest is excluded rather than treated as $0.`}
+            />
+          )}
+
 
           {costAvailable && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
