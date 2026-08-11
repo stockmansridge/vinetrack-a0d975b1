@@ -15,6 +15,8 @@ vi.mock("@/context/VineyardContext", () => ({
   useVineyard: () => ({ selectedVineyardId: "v1", currentRole: role }),
 }));
 
+vi.mock("@/components/PageHead", () => ({ PageHead: () => null }));
+
 vi.mock("@/lib/useRegionFormatters", () => ({
   useRegionFormatters: () => ({ areaUnitLabel: "ha", area: (v: number) => `${v} ha` }),
 }));
