@@ -153,6 +153,11 @@ const tools: NavItem[] = [
   { title: "Irrigation Advisor", url: "/tools/irrigation", icon: Droplet },
 ];
 
+// Available to all vineyard roles; listed last in the Tools group.
+const toolsGeneral: NavItem[] = [
+  { title: "Pruning Yield Calculator", url: "/tools/yield-estimation", icon: Grape },
+];
+
 // System-admin-only tools (visibility gated in render).
 const toolsSystemAdmin: NavItem[] = [
   { title: "Crop Health Maps", url: "/tools/satellite-mapping", icon: Satellite },
@@ -295,7 +300,11 @@ export function AppSidebar() {
           ),
         )}
         {renderGroup("Equipment", visible(equipment), false)}
-        {renderGroup("Tools", visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin] : tools), false)}
+        {renderGroup(
+          "Tools",
+          visible(isSystemAdmin ? [...tools, ...toolsSystemAdmin, ...toolsGeneral] : [...tools, ...toolsGeneral]),
+          false,
+        )}
         {renderGroup(
           "Reports",
           visible([

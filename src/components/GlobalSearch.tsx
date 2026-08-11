@@ -40,6 +40,7 @@ const ITEMS: SearchItem[] = [
 
   // Tools
   { title: "Irrigation Advisor", url: "/tools/irrigation", group: "Tools", keywords: ["irrigation", "water", "calculator"] },
+  { title: "Pruning Yield Calculator", url: "/tools/yield-estimation", group: "Tools", keywords: ["pruning", "yield", "calculator", "buds", "bunch", "estimate"] },
 
   // Reports
   { title: "Trip Reports", url: "/reports/trips", group: "Reports", keywords: ["trip", "reports"] },
