@@ -1086,21 +1086,22 @@ export default function YieldAnalyticsPage() {
             </div>
           </section>
 
-          {/* Financial performance */}
-          <section className="space-y-3">
+          {/* Grape sales — sold-fruit metrics only */}
+          <section id="ya-sales" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Financial performance
+              Grape sales
             </h2>
             <div className="grid gap-3 lg:grid-cols-2">
               <ChartCard
-                title="Average price / tonne by variety"
-                subtitle="Tonnage-weighted (crop value ÷ tonnes)"
+                title="Average sale price / tonne by variety"
+                subtitle="Sale revenue ÷ sold tonnes"
+                info="Sold fruit only. Fruit retained for internal use carries no sale price and is excluded."
                 empty={!varietyGroups.some((g) => g.pricePerTonne != null)}
               >
                 {rankBars(varietyGroups.filter((g) => g.pricePerTonne != null), METRICS[2])}
               </ChartCard>
               <ChartCard
-                title="Average price / tonne by block"
+                title="Average sale price / tonne by block"
                 subtitle="Ranked by the selected measure"
                 empty={!blockGroups.some((g) => g.pricePerTonne != null)}
                 action={<MetricSelect value={priceBlockSort} onChange={setPriceBlockSort} />}
@@ -1108,17 +1109,18 @@ export default function YieldAnalyticsPage() {
                 {rankBars(blockGroups.filter((g) => g.pricePerTonne != null), metricOf(priceBlockSort))}
               </ChartCard>
               <ChartCard
-                title={`Revenue / ${rf.areaUnitLabel} by block`}
-                subtitle="Commercial productivity ranking"
+                title={`Grape revenue / sold ${rf.areaUnitLabel} by block`}
+                subtitle="Commercial productivity of sold fruit"
                 empty={!blockGroups.some((g) => g.revenuePerHa != null)}
               >
                 {rankBars(blockGroups.filter((g) => g.revenuePerHa != null), METRICS[4])}
               </ChartCard>
               <ChartCard
-                title="Yield vs average price"
-                subtitle="One point per block for the selected vintage"
+                title={`Yield / ${rf.areaUnitLabel} vs sale price / tonne`}
+                subtitle="One point per block — dashed lines mark the property averages"
                 empty={!scatterData.length}
               >
+
                 <ResponsiveContainer width="100%" height={280}>
                   <ScatterChart margin={{ left: 8, right: 16, top: 8, bottom: 16 }}>
                     <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
