@@ -177,13 +177,18 @@ export default function VarietyAllocationEditor({
                 value={row.varietyKey && row.name ? { varietyKey: row.varietyKey, name: row.name } : null}
                 excludeKeys={[]}
                 disabled={disabled}
-                onSelect={(v) =>
+                onSelect={(v) => {
+                  // Clones are variety-scoped: a variety change invalidates any
+                  // previously chosen clone (rootstock is variety-independent).
+                  const varietyChanged = v.varietyKey !== row.varietyKey;
                   update(row.id, {
                     varietyKey: v.varietyKey,
                     name: v.name,
                     varietyId: v.id ?? null,
-                  })
-                }
+                    ...(varietyChanged ? { cloneKey: null, clone: null } : {}),
+                  });
+                }}
+
               />
             </div>
             <div className="space-y-1">
