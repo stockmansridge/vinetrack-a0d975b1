@@ -41,8 +41,8 @@ describe("adminIntegrationsQuery", () => {
       { id: "2", created_at: "2026-01-02T00:00:00Z" },
     ];
     expect(nextCursor(rows)).toEqual({
-      beforeCreatedAt: "2026-01-02T00:00:00Z",
-      beforeId: "2",
+      createdAt: "2026-01-02T00:00:00Z",
+      id: "2",
     });
     expect(nextCursor([])).toBeNull();
   });
@@ -50,7 +50,7 @@ describe("adminIntegrationsQuery", () => {
   it("maps filters to Stage 7A rpc parameters", () => {
     const args = adminIntegrationsArgs(
       { status: "active", errorsOnly: true, ownerQuery: "acme" },
-      { beforeCreatedAt: "2026-01-02T00:00:00Z", beforeId: "2" },
+      { createdAt: "2026-01-02T00:00:00Z", id: "2" },
       ADMIN_PAGE_SIZE,
     );
     expect(args.p_status).toBe("active");
@@ -59,7 +59,7 @@ describe("adminIntegrationsQuery", () => {
     expect(args.p_before_id).toBe("2");
     expect(args.p_limit).toBe(ADMIN_PAGE_SIZE);
 
-    const req = adminApiRequestsArgs("c1", { statusClass: "5xx" }, null, 25);
+    const req = adminApiRequestsArgs({ clientId: "c1", statusClass: "5xx" }, null, 25);
     expect(req.p_client_id).toBe("c1");
     expect(req.p_status_class).toBe("5xx");
     expect(req.p_limit).toBe(25);
@@ -80,17 +80,17 @@ describe("adminIntegrationsQuery", () => {
 
   it("never exposes secret material for keys or audit entries", () => {
     expect(
-      safeKeyLabel({ name: "CI key", key_prefix: "vt_live_abc", secret: "should-not-render" }),
-    ).toBe("CI key (vt_live_abc…)");
+      safeKeyLabel({ name: "CI key", key_prefix: "vt_live_abc" }),
+    ).toBe("CI key · vt_live_abc");
     const summary = safeAuditSummary({
       id: "a",
       created_at: null,
       action: "api_key.revoked",
+      actor: null,
       actor_type: "platform_admin",
-      actor_label: null,
       client_id: null,
-      client_name: null,
-      is_platform_admin: true,
+      integration_name: null,
+      target: null,
       summary: null,
       metadata: { api_key_secret: "nope", key_id: "k1" },
     });
