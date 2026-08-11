@@ -84,7 +84,10 @@ const mkYieldPerArea = (rf: RegionFormatters) => (tPerHa?: number | null, dp = 2
 type AnyRow = (YieldEstimationSession | HistoricalYieldRecord) & { __kind: "session" | "historical" };
 
 export default function YieldReportsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
+  // Portal-side mirror of the existing VineTrack role model. The RPC/RLS remains
+  // the real security boundary — this only avoids showing an action that would fail.
+  const canManageYields = currentRole === "owner" || currentRole === "manager";
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const areaVal = mkAreaVal(rf);
@@ -204,16 +207,37 @@ export default function YieldReportsPage() {
     return list;
   }, [allRows, tab, from, to, yearFilter, completion, filter]);
 
+  // Session totals come from the same parser the detail sheet uses — one calculation only.
+  const sessionTotals = useMemo(() => {
+    const blocks = blocksQ.data ?? [];
+    const map = new Map<string, { tonnes: number | null; areaHa: number | null }>();
+    for (const s of sessions) {
+      const summary = summariseYieldSession(s.payload, { blocks });
+      map.set(s.id, { tonnes: summary.totalEstTonnes, areaHa: summary.totalAreaHa });
+    }
+    return map;
+  }, [sessions, blocksQ.data]);
+
+  const rowTonnes = (r: AnyRow): number | null =>
+    r.__kind === "historical"
+      ? (r as HistoricalYieldRecord).total_yield_tonnes ?? null
+      : sessionTotals.get(r.id)?.tonnes ?? null;
+  const rowAreaHa = (r: AnyRow): number | null =>
+    r.__kind === "historical"
+      ? (r as HistoricalYieldRecord).total_area_hectares ?? null
+      : sessionTotals.get(r.id)?.areaHa ?? null;
+
   const { sorted: rowsSorted, getSortDirection: yDir, toggleSort: yToggle } = useSortableTable<AnyRow, YieldCol>(rows, {
     accessors: {
       date: (r) => sortDate(r) ?? null,
       type: (r) => (r.__kind === "historical" ? "Historical" : "Estimation"),
       season: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).season ?? (r as HistoricalYieldRecord).year ?? null) : null,
-      yield: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).total_yield_tonnes ?? null) : null,
-      area: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).total_area_hectares ?? null) : null,
+      yield: (r) => rowTonnes(r),
+      area: (r) => rowAreaHa(r),
       status: (r) => r.__kind === "historical" ? "Archived" : ((r as YieldEstimationSession).is_completed ? "Completed" : "Open"),
     },
   });
+
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
@@ -368,8 +392,8 @@ export default function YieldReportsPage() {
                       </TableCell>
                     ),
                     season: <TableCell>{isHist ? fmt(h.season ?? h.year) : "—"}</TableCell>,
-                    yield: <TableCell>{isHist ? fmtNum(h.total_yield_tonnes) : "—"}</TableCell>,
-                    area: <TableCell>{isHist ? areaVal(h.total_area_hectares) : "—"}</TableCell>,
+                    yield: <TableCell>{fmtNum(rowTonnes(r))}</TableCell>,
+                    area: <TableCell>{areaVal(rowAreaHa(r))}</TableCell>,
                     status: (
                       <TableCell>
                         {isHist
@@ -401,7 +425,9 @@ export default function YieldReportsPage() {
         onOpenChange={(o) => !o && setSelected(null)}
         onDelete={(r) => del.mutate(r)}
         deleting={del.isPending}
+        canDelete={canManageYields}
       />
+
 
       <RecordActualYieldDialog
         vineyardId={selectedVineyardId}
@@ -429,6 +455,7 @@ function YieldSheet({
   onOpenChange,
   onDelete,
   deleting,
+  canDelete,
 }: {
   row: AnyRow | null;
   vineyardId: string | null;
@@ -437,6 +464,7 @@ function YieldSheet({
   onOpenChange: (o: boolean) => void;
   onDelete: (row: AnyRow) => void;
   deleting: boolean;
+  canDelete: boolean;
 }) {
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
@@ -456,7 +484,7 @@ function YieldSheet({
         {row?.__kind === "session" && (
           <SessionDetail row={row as YieldEstimationSession} blocks={blocks} />
         )}
-        {row && (
+        {row && canDelete && (
           <div className="mt-6 border-t pt-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -487,6 +515,7 @@ function YieldSheet({
     </Sheet>
   );
 }
+
 
 
 function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
