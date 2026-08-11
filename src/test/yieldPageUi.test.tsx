@@ -88,7 +88,7 @@ describe("Yields page", () => {
     renderPage();
     const row = await screen.findByText("Estimation");
     fireEvent.click(row);
-    await screen.findByText(/Estimation session/i);
+    await screen.findByRole("dialog");
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
   });
 });
