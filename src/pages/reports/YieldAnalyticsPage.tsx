@@ -904,65 +904,56 @@ export default function YieldAnalyticsPage() {
           </div>
 
           {/* Harvest disposition — sold vs internally retained fruit */}
-          <Card className="p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-1">
+          <Card className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-semibold">Harvest disposition</h2>
-                <p className="text-sm text-muted-foreground">
-                  {num(totals.soldTonnes, 2)} t sold
-                  {" | "}
-                  {num(totals.retainedTonnes, 2)} t retained for internal use
-                </p>
-                <p className="max-w-3xl text-xs text-muted-foreground">
-                  Harvest without a grape sale price is treated as retained/internal-use fruit rather than
-                  missing price data. It contributes to yield and production cost metrics but not grape-sale
-                  revenue. Disposition is inferred from whether a grape sale value is recorded.
-                </p>
+                <InfoHint text="Harvest without a grape sale price is treated as retained/internal-use fruit rather than missing price data. Disposition is inferred from whether a grape sale value is recorded." />
               </div>
-              <div className="flex items-center gap-6">
-                <div className="grid gap-2 text-sm">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground">Harvested</span>
-                    <span className="font-semibold">{num(totals.tonnes, 2)} t</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground">Sold</span>
-                    <span className="font-semibold">
-                      {num(totals.soldTonnes, 2)} t
-                      {totals.soldShare != null && ` (${num(totals.soldShare * 100, 1)}%)`}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-muted-foreground">Retained / internal</span>
-                    <span className="font-semibold">
-                      {num(totals.retainedTonnes, 2)} t
-                      {totals.soldShare != null && ` (${num((1 - totals.soldShare) * 100, 1)}%)`}
-                    </span>
-                  </div>
-                </div>
-                {dispositionRows.length > 1 && (
-                  <ResponsiveContainer width={180} height={140}>
-                    <PieChart>
-                      <Pie
-                        data={dispositionRows}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={34}
-                        outerRadius={58}
-                        paddingAngle={2}
-                      >
-                        {dispositionRows.map((_, i) => (
-                          <Cell key={i} fill={colourFor(i)} />
-                        ))}
-                      </Pie>
-                      <RTooltip formatter={(v: number, n: string) => [`${num(v, 2)} t`, n]} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
+              <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
+                <span className="text-muted-foreground">
+                  Harvested <span className="font-semibold text-foreground">{num(totals.tonnes, 2)} t</span>
+                </span>
+                <span className="text-muted-foreground">
+                  Sold{" "}
+                  <span className="font-semibold text-foreground">
+                    {num(totals.soldTonnes, 2)} t
+                    {totals.soldShare != null && ` (${num(totals.soldShare * 100, 1)}%)`}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  Retained / internal{" "}
+                  <span className="font-semibold text-foreground">
+                    {num(totals.retainedTonnes, 2)} t
+                    {totals.soldShare != null && ` (${num((1 - totals.soldShare) * 100, 1)}%)`}
+                  </span>
+                </span>
               </div>
+              {dispositionRows.length > 1 && (
+                <ResponsiveContainer width={90} height={66}>
+                  <PieChart>
+                    <Pie
+                      data={dispositionRows}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={18}
+                      outerRadius={31}
+                      paddingAngle={2}
+                    >
+                      {dispositionRows.map((_, i) => (
+                        <Cell key={i} fill={colourFor(i)} />
+                      ))}
+                    </Pie>
+                    <RTooltip formatter={(v: number, n: string) => [`${num(v, 2)} t`, n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Internal fruit contributes to yield and production cost metrics but not grape-sale revenue.
+              </p>
             </div>
           </Card>
+
 
           {costAvailable && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
