@@ -153,6 +153,72 @@ export async function createPickingRecord(
   return data as PickingRecord;
 }
 
+export interface UpdatePickingRecordInput extends Omit<CreatePickingRecordInput, "vineyardId"> {
+  id: string;
+}
+
+/**
+ * Update ONE existing pick in place (same row id — never an insert).
+ *
+ * Server-owned columns are deliberately never written: `vintage` is re-derived
+ * by the BEFORE trigger from the new `picked_at`, `grape_value` is a generated
+ * column recomputed from weight_kg / price_per_tonne, and
+ * updated_at / updated_by / sync_version are maintained by the backend.
+ * RLS on picking_records remains the authority for who may write.
+ */
+export async function updatePickingRecord(
+  input: UpdatePickingRecordInput,
+): Promise<PickingRecord> {
+  if (!input.id) throw new Error("A picking record is required");
+  if (!input.pickedAt) throw new Error("A pick date is required");
+  if (!input.paddockId) throw new Error("A block is required");
+  if (!Number.isFinite(input.weightKg) || input.weightKg <= 0) {
+    throw new Error("Weight must be greater than zero");
+  }
+
+  const sold = !!input.sold;
+  if (sold && !(input.soldTo ?? "").trim()) {
+    throw new Error("A buyer is required for sold fruit");
+  }
+  const sugarValue =
+    input.sugarValue != null && Number.isFinite(input.sugarValue) ? input.sugarValue : null;
+
+  const patch = {
+    picked_at: input.pickedAt,
+    paddock_id: input.paddockId,
+    paddock_name: (input.paddockName ?? "").trim(),
+    variety_id: input.varietyId ?? null,
+    variety_key: input.varietyKey ?? null,
+    variety_name: (input.varietyName ?? "").trim(),
+    clone: input.clone?.trim() || null,
+    weight_kg: input.weightKg,
+    sugar_value: sugarValue,
+    sugar_unit: sugarValue == null ? null : input.sugarUnit ?? null,
+    ph: input.ph ?? null,
+    ta_g_l: input.taGL ?? null,
+    purpose: (input.purpose ?? "").trim(),
+    sold,
+    // Switching a sold pick back to internal use clears the sale fields so no
+    // stale buyer or price stays attached to retained fruit.
+    sold_to: sold ? input.soldTo?.trim() || null : null,
+    price_per_tonne: sold ? input.pricePerTonne ?? null : null,
+    notes: (input.notes ?? "").trim(),
+    client_updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await (supabase as any)
+    .from("picking_records")
+    .update(patch)
+    .eq("id", input.id)
+    .is("deleted_at", null)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as PickingRecord;
+}
+
+
+
 /** Soft delete only — hard deletes are blocked by RLS for every client. */
 export async function softDeletePickingRecord(id: string): Promise<void> {
   const { error } = await (supabase as any).rpc("soft_delete_picking_record", { p_id: id });
