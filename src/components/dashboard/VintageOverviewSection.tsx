@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Droplet, CalendarDays, Scissors, Wrench } from "lucide-react";
+import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList } from "lucide-react";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
@@ -51,6 +51,23 @@ export default function VintageOverviewSection() {
         .neq("trip_function", "spraying")
         .gte("start_time", startISO)
         .lte("start_time", endISO);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60_000,
+  });
+
+  const workTasksCountQ = useQuery({
+    queryKey: ["vintage-work-tasks-count", selectedVineyardId, startISO, endISO],
+    enabled: !!selectedVineyardId,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("work_tasks")
+        .select("*", { count: "exact", head: true })
+        .eq("vineyard_id", selectedVineyardId!)
+        .is("deleted_at", null)
+        .gte("date", startISO)
+        .lte("date", endISO);
       if (error) throw error;
       return count ?? 0;
     },
@@ -122,6 +139,19 @@ export default function VintageOverviewSection() {
           }
           hint="Trips with no sprays"
           to="/trips"
+        />
+        <MetricCard
+          label="Work tasks"
+          icon={ClipboardList}
+          tone="accent"
+          value={
+            workTasksCountQ.isLoading
+              ? "…"
+              : workTasksCountQ.error
+                ? "—"
+                : fmt(workTasksCountQ.data ?? 0)
+          }
+          to="/work-tasks"
         />
       </div>
     </section>
