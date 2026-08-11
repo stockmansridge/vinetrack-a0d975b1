@@ -49,6 +49,13 @@ export interface YieldFact {
   cost: number | null;
   source: "basic" | "detailed";
   pickCount: number | null;
+  /**
+   * Inferred commercial disposition — NOT an explicit database field. A record
+   * with a grape sale value is treated as sold, one without as retained for
+   * internal use, and a partly priced record as mixed.
+   */
+  disposition: "sold" | "retained" | "mixed";
+
 }
 
 
