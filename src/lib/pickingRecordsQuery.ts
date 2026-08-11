@@ -167,9 +167,29 @@ function plantingFields(input: {
 
 async function writePickingRecord(
   run: () => Promise<{ data: any; error: any }>,
+  /** SQL 185: re-read used when the write returns an EMPTY representation. */
+  onEmpty?: () => Promise<PickingRecord>,
 ): Promise<PickingRecord> {
   const { data, error } = await run();
   if (error) throw error;
+  if (!data) {
+    // Stale write: a newer client_updated_at already won. Never retry —
+    // surface the authoritative server row instead.
+    if (onEmpty) return onEmpty();
+    throw new Error("This pick was updated on another device. Reload and try again.");
+  }
+  return data as PickingRecord;
+}
+
+/** Read one pick by id (used to resolve stale-write responses). */
+async function readPickingRecord(id: string): Promise<PickingRecord> {
+  const { data, error } = await (supabase as any)
+    .from("picking_records")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("This pick is no longer available.");
   return data as PickingRecord;
 }
 
@@ -285,14 +305,16 @@ export async function updatePickingRecord(
     client_updated_at: new Date().toISOString(),
   };
 
-  return writePickingRecord(() =>
-    (supabase as any)
-      .from("picking_records")
-      .update(patch)
-      .eq("id", input.id)
-      .is("deleted_at", null)
-      .select("*")
-      .single(),
+  return writePickingRecord(
+    () =>
+      (supabase as any)
+        .from("picking_records")
+        .update(patch)
+        .eq("id", input.id)
+        .is("deleted_at", null)
+        .select("*")
+        .maybeSingle(),
+    () => readPickingRecord(input.id),
   );
 
 }

@@ -1,14 +1,26 @@
 // Canonical write path: upsert on the (vineyard_id, paddock_id) block key.
 import { describe, it, expect, vi } from "vitest";
 
+let upsertRow: any = { id: "r1", vineyard_id: "v1", paddock_id: "p1" };
 const upsert = vi.fn(() => ({
-  select: () => ({ single: async () => ({ data: { id: "r1", vineyard_id: "v1", paddock_id: "p1" }, error: null }) }),
+  select: () => ({ maybeSingle: async () => ({ data: upsertRow, error: null }) }),
+}));
+// Stale-write re-read path (SQL 185): select().eq().is()
+const selectRows = vi.fn(async () => ({
+  data: [{ id: "r1", vineyard_id: "v1", paddock_id: "p1", prune_method: "cane" }],
+  error: null,
 }));
 vi.mock("@/integrations/ios-supabase/client", () => ({
-  supabase: { from: () => ({ upsert }) },
+  supabase: {
+    from: () => ({
+      upsert,
+      select: () => ({ eq: () => ({ is: () => selectRows() }) }),
+    }),
+  },
 }));
 
 import { savePruningYieldSettings } from "@/lib/pruningYieldSettingsQuery";
+
 
 describe("savePruningYieldSettings", () => {
   it("upserts on the block key and persists inputs only", async () => {
@@ -50,5 +62,25 @@ describe("savePruningYieldSettings", () => {
     await expect(
       savePruningYieldSettings({ vineyardId: "v1", paddockId: "" } as any),
     ).rejects.toThrow();
+  });
+
+  it("treats an empty representation as a stale write and re-reads without retrying", async () => {
+    upsertRow = null;
+    upsert.mockClear();
+    const res = await savePruningYieldSettings({
+      vineyardId: "v1",
+      paddockId: "p1",
+      pruneMethod: "spur",
+      bunchesPerBud: 1.5,
+      budsPerSpur: 2,
+      spursPerVine: 6,
+      budsPerCane: 10,
+      canesPerVine: 4,
+      vinesPerHa: 2000,
+      bunchWeightGrams: 120,
+    } as any);
+    expect(upsert).toHaveBeenCalledTimes(1); // never retried
+    expect(res.pruneMethod).toBe("cane");    // server value wins
+    upsertRow = { id: "r1", vineyard_id: "v1", paddock_id: "p1" };
   });
 });
