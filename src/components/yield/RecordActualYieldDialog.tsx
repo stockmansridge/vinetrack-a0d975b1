@@ -32,10 +32,11 @@ import {
   useGrapeVarieties,
 } from "@/lib/varietyResolver";
 import {
-  allocationOptionLabel,
   buildAllocationUnits,
+  buildPlantingGroups,
   matchAllocation,
-  type AllocationUnit,
+  plantingGroupOptionLabel,
+  type PlantingGroup,
 } from "@/lib/yieldAllocations";
 
 const HA_PER_AC = 0.40468564224;
@@ -142,21 +143,23 @@ function useBlockVarieties(selected: YieldBlockInfo | null, vineyardId: string |
 }
 
 /**
- * Every planting allocation configured on the selected block, in the block's
- * own order. Two allocations of the same variety, clone AND rootstock stay
- * separate options — the stable allocation id (and allocated area) is what
- * distinguishes them.
+ * Planting GROUPS for the selected block: physical allocations that share
+ * variety + clone + rootstock are combined into one production unit with the
+ * summed hectares, so the user never has to choose between two analytically
+ * identical sections. Block Setup keeps every physical section.
  */
 function useBlockAllocationUnits(selected: YieldBlockInfo | null, vineyardId: string | null) {
   const { data: grapeVarieties } = useGrapeVarieties(vineyardId);
   const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
-  return useMemo<AllocationUnit[]>(() => {
+  return useMemo<PlantingGroup[]>(() => {
     if (!selected) return [];
-    return buildAllocationUnits({
-      blockId: selected.id,
-      areaHa: selected.areaHa ?? null,
-      allocations: resolvePaddockAllocations(selected.varietyAllocations, varietyMap),
-    });
+    return buildPlantingGroups(
+      buildAllocationUnits({
+        blockId: selected.id,
+        areaHa: selected.areaHa ?? null,
+        allocations: resolvePaddockAllocations(selected.varietyAllocations, varietyMap),
+      }),
+    );
   }, [selected, varietyMap]);
 }
 
@@ -511,8 +514,8 @@ function DetailedForm({
     [varietyOptions, varietyName],
   );
 
-  // Selectable plantings for the chosen variety. Identical clone + rootstock
-  // pairs stay separate rows because each carries its own allocation id.
+  // Selectable planting groups for the chosen variety. Identical clone +
+  // rootstock sections are already combined into one option.
   const plantingOptions = useMemo(() => {
     const v = (variety?.name ?? "").trim().toLowerCase();
     return v ? units.filter((u) => (u.variety ?? "").trim().toLowerCase() === v) : units;
@@ -581,7 +584,14 @@ function DetailedForm({
         // Snapshots stay attached to the pick; the allocation id is the link.
         clone: selectedUnit?.cloneLabel ?? (editing ? record?.clone ?? null : null),
         rootstock: selectedUnit?.rootstockLabel ?? (editing ? record?.rootstock ?? null : null),
-        varietyAllocationId: selectedUnit?.id ?? null,
+        // Group identity: a planting group can span several physical sections,
+        // so the first member id is only a hint until the shared backend
+        // contract exposes a group-level reference. A group with more than one
+        // section is deliberately NOT attributed to one arbitrary section.
+        varietyAllocationId:
+          selectedUnit && selectedUnit.sectionCount === 1
+            ? selectedUnit.allocationIds[0] ?? null
+            : null,
         weightKg: weight,
         sugarValue: num(sugar),
         sugarUnit,
@@ -693,7 +703,7 @@ function DetailedForm({
                   <SelectItem value={NOT_LINKED}>Planting not linked</SelectItem>
                   {plantingOptions.map((u) => (
                     <SelectItem key={u.key} value={u.key}>
-                      {allocationOptionLabel(u)}
+                      {plantingGroupOptionLabel(u)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -706,7 +716,7 @@ function DetailedForm({
             {plantingKey === NOT_LINKED && plantingOptions.length > 1 && (
               <p className="text-xs text-muted-foreground">
                 Pick the exact planting so this harvest is attributed to one allocation — plantings
-                can share a clone and rootstock and are separated by allocated area.
+                are grouped by variety, clone and rootstock across the block.
               </p>
             )}
           </div>
