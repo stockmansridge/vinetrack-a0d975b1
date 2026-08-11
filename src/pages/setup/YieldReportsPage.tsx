@@ -207,16 +207,37 @@ export default function YieldReportsPage() {
     return list;
   }, [allRows, tab, from, to, yearFilter, completion, filter]);
 
+  // Session totals come from the same parser the detail sheet uses — one calculation only.
+  const sessionTotals = useMemo(() => {
+    const blocks = blocksQ.data ?? [];
+    const map = new Map<string, { tonnes: number | null; areaHa: number | null }>();
+    for (const s of sessions) {
+      const summary = summariseYieldSession(s.payload, { blocks });
+      map.set(s.id, { tonnes: summary.totalEstTonnes, areaHa: summary.totalAreaHa });
+    }
+    return map;
+  }, [sessions, blocksQ.data]);
+
+  const rowTonnes = (r: AnyRow): number | null =>
+    r.__kind === "historical"
+      ? (r as HistoricalYieldRecord).total_yield_tonnes ?? null
+      : sessionTotals.get(r.id)?.tonnes ?? null;
+  const rowAreaHa = (r: AnyRow): number | null =>
+    r.__kind === "historical"
+      ? (r as HistoricalYieldRecord).total_area_hectares ?? null
+      : sessionTotals.get(r.id)?.areaHa ?? null;
+
   const { sorted: rowsSorted, getSortDirection: yDir, toggleSort: yToggle } = useSortableTable<AnyRow, YieldCol>(rows, {
     accessors: {
       date: (r) => sortDate(r) ?? null,
       type: (r) => (r.__kind === "historical" ? "Historical" : "Estimation"),
       season: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).season ?? (r as HistoricalYieldRecord).year ?? null) : null,
-      yield: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).total_yield_tonnes ?? null) : null,
-      area: (r) => r.__kind === "historical" ? ((r as HistoricalYieldRecord).total_area_hectares ?? null) : null,
+      yield: (r) => rowTonnes(r),
+      area: (r) => rowAreaHa(r),
       status: (r) => r.__kind === "historical" ? "Archived" : ((r as YieldEstimationSession).is_completed ? "Completed" : "Open"),
     },
   });
+
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
