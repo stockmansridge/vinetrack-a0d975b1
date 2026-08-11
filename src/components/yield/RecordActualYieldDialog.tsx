@@ -426,9 +426,26 @@ function DetailedForm({
     setClone(NO_CLONE);
   }, [blockId, varieties.length]);
 
+  // Varieties recorded before a block was reconfigured stay selectable — the
+  // pick keeps its own snapshot rather than adopting the current allocation.
+  const varietyOptions = useMemo<VarietyOption[]>(() => {
+    const recorded = (record?.variety_name ?? "").trim();
+    if (!recorded || varieties.some((v) => v.name === recorded)) return varieties;
+    return [
+      {
+        id: record?.variety_id ?? null,
+        key: record?.variety_key ?? null,
+        name: recorded,
+        percent: null,
+        clones: [],
+      },
+      ...varieties,
+    ];
+  }, [varieties, record]);
+
   const variety = useMemo(
-    () => varieties.find((v) => v.name === varietyName) ?? null,
-    [varieties, varietyName],
+    () => varietyOptions.find((v) => v.name === varietyName) ?? null,
+    [varietyOptions, varietyName],
   );
   useEffect(() => {
     if (variety && variety.clones.length === 1 && clone === NO_CLONE) setClone(variety.clones[0]);
@@ -444,12 +461,6 @@ function DetailedForm({
     return list;
   }, [variety, record]);
 
-  // Varieties recorded before a block was reconfigured stay selectable too.
-  const varietyOptions = useMemo(() => {
-    const recorded = (record?.variety_name ?? "").trim();
-    if (!recorded || varieties.some((v) => v.name === recorded)) return varieties;
-    return [{ id: record?.variety_id ?? null, key: record?.variety_key ?? null, name: recorded, percent: null, clones: [] }, ...varieties];
-  }, [varieties, record]);
 
   /** Display-only mirror of the server trigger (season-end year). */
   const derivedVintage = useMemo(() => {
