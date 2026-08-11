@@ -578,7 +578,10 @@ function DetailedForm({
         varietyId: variety?.id ?? null,
         varietyKey: variety?.key ?? null,
         varietyName: variety?.name ?? null,
-        clone: clone === NO_CLONE ? null : clone,
+        // Snapshots stay attached to the pick; the allocation id is the link.
+        clone: selectedUnit?.cloneLabel ?? (editing ? record?.clone ?? null : null),
+        rootstock: selectedUnit?.rootstockLabel ?? (editing ? record?.rootstock ?? null : null),
+        varietyAllocationId: selectedUnit?.id ?? null,
         weightKg: weight,
         sugarValue: num(sugar),
         sugarUnit,
