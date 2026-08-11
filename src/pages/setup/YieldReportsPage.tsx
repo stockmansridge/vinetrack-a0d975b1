@@ -244,12 +244,18 @@ export default function YieldReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Yields</h1>
-        <p className="text-sm text-muted-foreground">
-          Record and review vineyard production results by block, variety and season. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Yields</h1>
+          <p className="text-sm text-muted-foreground">
+            Record and review vineyard production results by block, variety and season. Capture harvested weight, area, yield per hectare and other production information for comparing performance over time.
+          </p>
+        </div>
+        <Button onClick={() => setRecordOpen(true)} disabled={!selectedVineyardId}>
+          <Plus className="h-4 w-4 mr-1.5" /> Record Actual Yield
+        </Button>
       </div>
+
 
       <PortalNotice
         variant="success"
