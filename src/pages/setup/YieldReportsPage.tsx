@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import {
   Select,
@@ -26,12 +27,30 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Plus, Trash2 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import {
+  fetchYieldBlocks,
   fetchYieldReportsForVineyard,
+  softDeleteHistoricalYieldRecord,
+  softDeleteYieldEstimationSession,
   type YieldEstimationSession,
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
+import { summariseYieldSession, type SessionBlockInfo } from "@/lib/yieldSessionSummary";
+import RecordActualYieldDialog from "@/components/yield/RecordActualYieldDialog";
 import YieldDamageAdjustmentPanel from "@/components/YieldDamageAdjustmentPanel";
 import { Fragment } from "react";
 import { ReorderableHead } from "@/components/table/ReorderableHead";
@@ -40,6 +59,7 @@ import { useColumnOrder } from "@/lib/userTablePreferencesQuery";
 import { useSortableTable } from "@/lib/useSortableTable";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
+
 
 const ANY = "__any__";
 
