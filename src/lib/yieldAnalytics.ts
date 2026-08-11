@@ -163,7 +163,9 @@ export function buildYieldFacts({
 
   const raws = Array.from(bucket.values());
 
-  // 3) Resolve whole-block hectares once per vintage × block.
+  // 3) Resolve whole-block hectares ONCE per vintage × block. The current
+  //    paddock area wins; otherwise the largest area recorded on the harvest
+  //    records for that block/vintage is used (never their sum).
   const blockAreaKey = (r: { vintage: number | null; blockId: string | null }) =>
     `${r.vintage ?? ""}|${norm(r.blockId)}`;
   const blockArea = new Map<string, number | null>();
@@ -171,19 +173,73 @@ export function buildYieldFacts({
   for (const r of raws) {
     const k = blockAreaKey(r);
     const current = blockById.get(norm(r.blockId))?.areaHa ?? null;
-    const recorded = r.recordedAreaHa;
     const prev = blockArea.get(k) ?? null;
-    const resolved = current && current > 0 ? current : recorded && recorded > 0 ? recorded : prev;
-    blockArea.set(k, resolved ?? null);
+    const recorded =
+      r.recordedAreaHa != null && r.recordedAreaHa > 0
+        ? Math.max(r.recordedAreaHa, prev ?? 0)
+        : prev;
+    blockArea.set(k, current && current > 0 ? current : recorded && recorded > 0 ? recorded : null);
     blockTonnes.set(k, (blockTonnes.get(k) ?? 0) + r.tonnes);
   }
 
-  // 4) Allocate cost by vintage × block, split across varieties by tonnage.
+  // 4) Cost allocation. Zero-value rows are NOT evidence of costing, so a block
+  //    whose allocations all total 0 keeps `cost: null` rather than a
+  //    misleading $0 cost / $0-per-tonne. Variety-specific cost rows attach to
+  //    that variety; block-level rows split across varieties by tonnage share.
   const costByBlock = new Map<string, number>();
+  const costByVariety = new Map<string, number>();
   for (const c of costRows) {
     if (!c.block_id) continue;
-    const k = `${c.vintage_year ?? ""}|${norm(c.block_id)}`;
-    costByBlock.set(k, (costByBlock.get(k) ?? 0) + (Number(c.total_cost) || 0));
+    const amount = Number(c.total_cost) || 0;
+    if (amount === 0) continue;
+    const bk = `${c.vintage_year ?? ""}|${norm(c.block_id)}`;
+    const variety = norm(c.variety);
+    if (variety) {
+      const vk = `${bk}|${variety}`;
+      costByVariety.set(vk, (costByVariety.get(vk) ?? 0) + amount);
+    } else {
+      costByBlock.set(bk, (costByBlock.get(bk) ?? 0) + amount);
+    }
+  }
+  // Variety cost rows that match no harvested variety fall back to the block
+  // pool so allocated cost is never silently dropped inside a harvested block.
+  const factVarietyKeys = new Set(raws.map((r) => `${blockAreaKey(r)}|${norm(r.variety)}`));
+  for (const [vk, amount] of costByVariety) {
+    if (factVarietyKeys.has(vk)) continue;
+    const bk = vk.slice(0, vk.lastIndexOf("|"));
+    costByBlock.set(bk, (costByBlock.get(bk) ?? 0) + amount);
+    costByVariety.delete(vk);
+  }
+
+  // 5) Hectares per variety: use the block's variety_allocations percent where
+  //    the contract provides it, otherwise apportion by tonnage share. Either
+  //    way the block's hectares are counted at most once per vintage.
+  const allocPercent = (blockId: string | null, variety: string | null): number | null => {
+    const raw = blockById.get(norm(blockId))?.varietyAllocations;
+    if (!Array.isArray(raw) || !norm(variety)) return null;
+    let pct = 0;
+    let matched = false;
+    for (const a of raw as Array<Record<string, unknown>>) {
+      if (norm(String(a?.name ?? "")) !== norm(variety)) continue;
+      const p = num(a?.percent);
+      if (p == null || p <= 0) continue;
+      pct += p;
+      matched = true;
+    }
+    return matched ? Math.min(pct, 100) : null;
+  };
+
+  // Remaining (unallocated) hectares available to varieties with no allocation.
+  const unallocated = new Map<string, { area: number; tonnes: number }>();
+  for (const r of raws) {
+    const k = blockAreaKey(r);
+    const area = blockArea.get(k) ?? null;
+    if (area == null) continue;
+    const entry = unallocated.get(k) ?? { area, tonnes: 0 };
+    const pct = allocPercent(r.blockId, r.variety);
+    if (pct != null) entry.area -= (area * pct) / 100;
+    else entry.tonnes += r.tonnes;
+    unallocated.set(k, entry);
   }
 
   return raws.map((r) => {
@@ -191,7 +247,29 @@ export function buildYieldFacts({
     const area = blockArea.get(k) ?? null;
     const totalTonnes = blockTonnes.get(k) ?? 0;
     const share = totalTonnes > 0 ? r.tonnes / totalTonnes : 1;
-    const cost = costByBlock.has(k) ? (costByBlock.get(k) as number) * share : null;
+
+    const pct = allocPercent(r.blockId, r.variety);
+    const spare = unallocated.get(k);
+    let areaHa: number | null = null;
+    let areaFromAllocation = false;
+    if (area != null) {
+      if (pct != null) {
+        areaHa = (area * pct) / 100;
+        areaFromAllocation = true;
+      } else if (spare && spare.tonnes > 0 && spare.area > 0) {
+        areaHa = spare.area * (r.tonnes / spare.tonnes);
+      } else {
+        areaHa = area * share;
+      }
+    }
+
+    const blockCost = costByBlock.get(k);
+    const varietyCost = costByVariety.get(`${k}|${norm(r.variety)}`);
+    const cost =
+      blockCost == null && varietyCost == null
+        ? null
+        : (varietyCost ?? 0) + (blockCost != null ? blockCost * share : 0);
+
     return {
       vintage: r.vintage,
       blockId: r.blockId,
@@ -200,7 +278,8 @@ export function buildYieldFacts({
       tonnes: r.tonnes,
       revenue: r.revenue,
       pricedTonnes: r.pricedTonnes,
-      areaHa: area != null ? area * share : null,
+      areaHa,
+      areaFromAllocation,
       blockAreaHa: area,
       cost,
       source: r.source,
@@ -208,6 +287,7 @@ export function buildYieldFacts({
     } satisfies YieldFact;
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // Aggregation
