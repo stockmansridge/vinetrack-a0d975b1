@@ -104,3 +104,164 @@ export async function fetchYieldReportsForVineyard(
     ).length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Blocks (area + effective vine count) — needed for tonnage parity with iOS.
+// ---------------------------------------------------------------------------
+
+export async function fetchYieldBlocks(vineyardId: string): Promise<SessionBlockInfo[]> {
+  const { data, error } = await supabase
+    .from("paddocks")
+    .select(
+      "id, name, variety, rows, polygon_points, vine_spacing, vine_count_override, row_length_override, row_length_overrides",
+    )
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((p: any) => {
+    const m = deriveMetrics(p);
+    return {
+      id: p.id as string,
+      name: (p.name as string) ?? null,
+      areaHa: m.areaHa > 0 ? m.areaHa : null,
+      vineCount: m.vineCount,
+    } satisfies SessionBlockInfo;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Soft deletes (RPC only — the portal never hard-deletes production data).
+// ---------------------------------------------------------------------------
+
+export async function softDeleteYieldEstimationSession(id: string): Promise<void> {
+  const { error } = await (supabase as any).rpc("soft_delete_yield_estimation_session", {
+    p_id: id,
+  });
+  if (error) throw error;
+}
+
+export async function softDeleteHistoricalYieldRecord(id: string): Promise<void> {
+  const { error } = await (supabase as any).rpc("soft_delete_historical_yield_record", {
+    p_id: id,
+  });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Record Actual Yield — parity with iOS RecordActualYieldSheet.
+// ---------------------------------------------------------------------------
+
+export interface RecordActualYieldInput {
+  vineyardId: string;
+  year: number;
+  season?: string | null;
+  blockId: string;
+  blockName: string;
+  variety?: string | null;
+  areaHectares?: number | null;
+  vineCount?: number | null;
+  actualYieldTonnes: number;
+  notes?: string | null;
+}
+
+export async function recordActualYield(input: RecordActualYieldInput): Promise<void> {
+  const now = new Date().toISOString();
+  const area = input.areaHectares && input.areaHectares > 0 ? input.areaHectares : 0;
+  const variety = (input.variety ?? "").trim();
+  const label = variety ? `${input.blockName} — ${variety}` : input.blockName;
+
+  const blockResult = {
+    paddockId: input.blockId,
+    paddockName: label,
+    areaHectares: area,
+    yieldTonnes: input.actualYieldTonnes,
+    yieldPerHectare: area > 0 ? input.actualYieldTonnes / area : 0,
+    averageBunchesPerVine: 0,
+    averageBunchWeightGrams: 0,
+    totalVines: input.vineCount ?? 0,
+    samplesRecorded: 0,
+    damageFactor: 1.0,
+    actualYieldTonnes: input.actualYieldTonnes,
+    actualRecordedAt: now,
+  };
+
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth?.user?.id ?? null;
+
+  const { error } = await (supabase as any).from("historical_yield_records").insert({
+    vineyard_id: input.vineyardId,
+    season: (input.season ?? "").trim(),
+    year: input.year,
+    archived_at: now,
+    block_results: [blockResult],
+    total_yield_tonnes: input.actualYieldTonnes,
+    total_area_hectares: area,
+    notes: (input.notes ?? "").trim(),
+    created_by: userId,
+    updated_by: userId,
+    client_updated_at: now,
+  });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Block-level rows extracted from historical records (multi-vintage reporting).
+// ---------------------------------------------------------------------------
+
+export interface HistoricalBlockRow {
+  recordId: string;
+  season: string;
+  year: number | null;
+  blockId: string | null;
+  blockName: string;
+  areaHa: number | null;
+  yieldTonnes: number | null;
+  yieldPerHa: number | null;
+  archivedAt: string | null;
+}
+
+export function extractHistoricalBlockRows(records: HistoricalYieldRecord[]): HistoricalBlockRow[] {
+  const rows: HistoricalBlockRow[] = [];
+  for (const r of records) {
+    const seasonLabel = r.season?.trim() || (r.year != null ? String(r.year) : "—");
+    const blocks = Array.isArray(r.block_results) ? r.block_results : [];
+    if (!blocks.length) {
+      rows.push({
+        recordId: r.id,
+        season: seasonLabel,
+        year: r.year ?? null,
+        blockId: null,
+        blockName: "All blocks",
+        areaHa: r.total_area_hectares ?? null,
+        yieldTonnes: r.total_yield_tonnes ?? null,
+        yieldPerHa:
+          r.total_yield_tonnes != null && r.total_area_hectares
+            ? r.total_yield_tonnes / r.total_area_hectares
+            : null,
+        archivedAt: r.archived_at ?? null,
+      });
+      continue;
+    }
+    for (const b of blocks as any[]) {
+      const area = Number(b?.areaHectares ?? b?.area_hectares);
+      const tonnes = Number(
+        b?.actualYieldTonnes ?? b?.actual_yield_tonnes ?? b?.yieldTonnes ?? b?.yield_tonnes,
+      );
+      const areaHa = Number.isFinite(area) && area > 0 ? area : null;
+      const yieldTonnes = Number.isFinite(tonnes) ? tonnes : null;
+      rows.push({
+        recordId: r.id,
+        season: seasonLabel,
+        year: r.year ?? null,
+        blockId: (b?.paddockId ?? b?.paddock_id ?? null) as string | null,
+        blockName: String(b?.paddockName ?? b?.paddock_name ?? "Unnamed block"),
+        areaHa,
+        yieldTonnes,
+        yieldPerHa: yieldTonnes != null && areaHa ? yieldTonnes / areaHa : null,
+        archivedAt: r.archived_at ?? null,
+      });
+    }
+  }
+  return rows;
+}
