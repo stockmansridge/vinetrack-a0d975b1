@@ -133,7 +133,8 @@ export async function savePruningYieldSettings(
   // client_updated_at already won. That is not an error and must never be
   // retried — re-read the authoritative row and return it.
   if (!data) {
-    const current = await fetchPruningYieldSettings(input.vineyardId, input.paddockId);
+    const all = await fetchPruningYieldSettings(input.vineyardId);
+    const current = all[input.paddockId];
     if (current) return current;
     throw new Error("Settings were updated on another device. Reload and try again.");
   }
