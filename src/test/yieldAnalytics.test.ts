@@ -158,3 +158,113 @@ describe("groupings and trends", () => {
     expect(pctChange(11, 10)).toBeCloseTo(10);
   });
 });
+
+describe("pricing and cost integrity", () => {
+  const mixed = () =>
+    buildYieldFacts({
+      historicalRows: [],
+      pickingTotals: [
+        pick({ paddock_id: "b1", variety_name: "Shiraz", actual_yield_tonnes: 10, total_grape_value: 20000 }),
+        pick({ paddock_id: "b2", paddock_name: "Block Two", variety_name: "Merlot", actual_yield_tonnes: 10, total_grape_value: null }),
+      ],
+      blocks,
+    });
+
+  it("excludes unpriced hectares from revenue per hectare", () => {
+    const agg = aggregate(mixed());
+    expect(agg.areaHa).toBe(15);
+    expect(agg.pricedAreaHa).toBe(10);
+    expect(agg.revenueComplete).toBe(false);
+    expect(agg.revenuePerHa).toBe(2000); // 20000 / 10 ha, not / 15 ha
+    expect(agg.pricePerTonne).toBe(2000); // priced tonnes only
+  });
+
+  it("suppresses margin when part of the harvest is unpriced", () => {
+    const facts = buildYieldFacts({
+      historicalRows: [],
+      pickingTotals: [
+        pick({ paddock_id: "b1", actual_yield_tonnes: 10, total_grape_value: 20000 }),
+        pick({ paddock_id: "b2", paddock_name: "Block Two", variety_name: "Merlot", actual_yield_tonnes: 10, total_grape_value: null }),
+      ],
+      blocks,
+      costRows: [
+        { vintage_year: 2025, block_id: "b1", variety: null, total_cost: 5000 },
+        { vintage_year: 2025, block_id: "b2", variety: null, total_cost: 5000 },
+      ],
+    });
+    const agg = aggregate(facts);
+    expect(agg.cost).toBe(10000);
+    expect(agg.margin).toBeNull();
+    expect(agg.costPerTonne).toBe(500); // canonical tonnes, not cost-row tonnes
+  });
+
+  it("treats zero-value cost allocations as no cost data", () => {
+    const agg = aggregate(
+      buildYieldFacts({
+        historicalRows: [hist({})],
+        pickingTotals: [],
+        blocks,
+        costRows: [{ vintage_year: 2025, block_id: "b1", variety: null, total_cost: 0 }],
+      }),
+    );
+    expect(agg.cost).toBeNull();
+    expect(agg.costPerTonne).toBeNull();
+  });
+
+  it("uses variety allocation percentages for hectares and never double counts a block", () => {
+    const facts = buildYieldFacts({
+      historicalRows: [],
+      pickingTotals: [
+        pick({ paddock_id: "b1", variety_name: "Shiraz", actual_yield_tonnes: 30 }),
+        pick({ paddock_id: "b1", variety_name: "Merlot", actual_yield_tonnes: 10 }),
+      ],
+      blocks: [
+        {
+          id: "b1",
+          name: "Block One",
+          areaHa: 10,
+          varietyAllocations: [
+            { name: "Shiraz", percent: 60 },
+            { name: "Merlot", percent: 40 },
+          ],
+        },
+      ],
+    });
+    expect(facts.find((f) => f.variety === "Shiraz")!.areaHa).toBe(6);
+    expect(facts.find((f) => f.variety === "Merlot")!.areaHa).toBe(4);
+    expect(aggregate(facts).areaHa).toBe(10);
+  });
+
+  it("counts block hectares once across multiple picks of the same variety", () => {
+    const agg = aggregate(
+      buildYieldFacts({
+        historicalRows: [],
+        pickingTotals: [pick({ paddock_id: "b1", pick_count: 4, actual_yield_tonnes: 12 })],
+        blocks,
+      }),
+    );
+    expect(agg.areaHa).toBe(10);
+    expect(agg.tonnesPerHa).toBeCloseTo(1.2, 6);
+  });
+
+  it("only averages a contiguous three-vintage window", () => {
+    const sparse = threeYearTrend(
+      [
+        { vintage: 2025, value: 3 },
+        { vintage: 2019, value: 6 },
+        { vintage: 2015, value: 9 },
+      ],
+      2025,
+    );
+    expect(sparse.threeYearAverage).toBeNull();
+    const contiguous = threeYearTrend(
+      [
+        { vintage: 2025, value: 3 },
+        { vintage: 2024, value: 6 },
+        { vintage: 2023, value: 9 },
+      ],
+      2025,
+    );
+    expect(contiguous.threeYearAverage).toBe(6);
+  });
+});

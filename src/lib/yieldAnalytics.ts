@@ -17,6 +17,8 @@ export interface AnalyticsBlockInfo {
   id: string;
   name: string | null;
   areaHa: number | null;
+  /** paddocks.variety_allocations jsonb — [{ name, percent }, ...]. */
+  varietyAllocations?: unknown;
 }
 
 export interface AnalyticsCostRow {
@@ -37,8 +39,10 @@ export interface YieldFact {
   revenue: number | null;
   /** Tonnes that carry a price — the denominator for weighted average price. */
   pricedTonnes: number;
-  /** Hectares attributed to this variety (block area apportioned by tonnes). */
+  /** Hectares attributed to this variety (allocated ha, else tonnage share). */
   areaHa: number | null;
+  /** True when hectares came from the block's variety_allocations percent. */
+  areaFromAllocation: boolean;
   /** Whole-block hectares for the vintage (never summed per variety). */
   blockAreaHa: number | null;
   /** Allocated production cost, null when no cost data is available. */
@@ -46,6 +50,7 @@ export interface YieldFact {
   source: "basic" | "detailed";
   pickCount: number | null;
 }
+
 
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
 const num = (v: unknown): number | null => {
@@ -158,7 +163,9 @@ export function buildYieldFacts({
 
   const raws = Array.from(bucket.values());
 
-  // 3) Resolve whole-block hectares once per vintage × block.
+  // 3) Resolve whole-block hectares ONCE per vintage × block. The current
+  //    paddock area wins; otherwise the largest area recorded on the harvest
+  //    records for that block/vintage is used (never their sum).
   const blockAreaKey = (r: { vintage: number | null; blockId: string | null }) =>
     `${r.vintage ?? ""}|${norm(r.blockId)}`;
   const blockArea = new Map<string, number | null>();
@@ -166,19 +173,73 @@ export function buildYieldFacts({
   for (const r of raws) {
     const k = blockAreaKey(r);
     const current = blockById.get(norm(r.blockId))?.areaHa ?? null;
-    const recorded = r.recordedAreaHa;
     const prev = blockArea.get(k) ?? null;
-    const resolved = current && current > 0 ? current : recorded && recorded > 0 ? recorded : prev;
-    blockArea.set(k, resolved ?? null);
+    const recorded =
+      r.recordedAreaHa != null && r.recordedAreaHa > 0
+        ? Math.max(r.recordedAreaHa, prev ?? 0)
+        : prev;
+    blockArea.set(k, current && current > 0 ? current : recorded && recorded > 0 ? recorded : null);
     blockTonnes.set(k, (blockTonnes.get(k) ?? 0) + r.tonnes);
   }
 
-  // 4) Allocate cost by vintage × block, split across varieties by tonnage.
+  // 4) Cost allocation. Zero-value rows are NOT evidence of costing, so a block
+  //    whose allocations all total 0 keeps `cost: null` rather than a
+  //    misleading $0 cost / $0-per-tonne. Variety-specific cost rows attach to
+  //    that variety; block-level rows split across varieties by tonnage share.
   const costByBlock = new Map<string, number>();
+  const costByVariety = new Map<string, number>();
   for (const c of costRows) {
     if (!c.block_id) continue;
-    const k = `${c.vintage_year ?? ""}|${norm(c.block_id)}`;
-    costByBlock.set(k, (costByBlock.get(k) ?? 0) + (Number(c.total_cost) || 0));
+    const amount = Number(c.total_cost) || 0;
+    if (amount === 0) continue;
+    const bk = `${c.vintage_year ?? ""}|${norm(c.block_id)}`;
+    const variety = norm(c.variety);
+    if (variety) {
+      const vk = `${bk}|${variety}`;
+      costByVariety.set(vk, (costByVariety.get(vk) ?? 0) + amount);
+    } else {
+      costByBlock.set(bk, (costByBlock.get(bk) ?? 0) + amount);
+    }
+  }
+  // Variety cost rows that match no harvested variety fall back to the block
+  // pool so allocated cost is never silently dropped inside a harvested block.
+  const factVarietyKeys = new Set(raws.map((r) => `${blockAreaKey(r)}|${norm(r.variety)}`));
+  for (const [vk, amount] of costByVariety) {
+    if (factVarietyKeys.has(vk)) continue;
+    const bk = vk.slice(0, vk.lastIndexOf("|"));
+    costByBlock.set(bk, (costByBlock.get(bk) ?? 0) + amount);
+    costByVariety.delete(vk);
+  }
+
+  // 5) Hectares per variety: use the block's variety_allocations percent where
+  //    the contract provides it, otherwise apportion by tonnage share. Either
+  //    way the block's hectares are counted at most once per vintage.
+  const allocPercent = (blockId: string | null, variety: string | null): number | null => {
+    const raw = blockById.get(norm(blockId))?.varietyAllocations;
+    if (!Array.isArray(raw) || !norm(variety)) return null;
+    let pct = 0;
+    let matched = false;
+    for (const a of raw as Array<Record<string, unknown>>) {
+      if (norm(String(a?.name ?? "")) !== norm(variety)) continue;
+      const p = num(a?.percent);
+      if (p == null || p <= 0) continue;
+      pct += p;
+      matched = true;
+    }
+    return matched ? Math.min(pct, 100) : null;
+  };
+
+  // Remaining (unallocated) hectares available to varieties with no allocation.
+  const unallocated = new Map<string, { area: number; tonnes: number }>();
+  for (const r of raws) {
+    const k = blockAreaKey(r);
+    const area = blockArea.get(k) ?? null;
+    if (area == null) continue;
+    const entry = unallocated.get(k) ?? { area, tonnes: 0 };
+    const pct = allocPercent(r.blockId, r.variety);
+    if (pct != null) entry.area -= (area * pct) / 100;
+    else entry.tonnes += r.tonnes;
+    unallocated.set(k, entry);
   }
 
   return raws.map((r) => {
@@ -186,7 +247,29 @@ export function buildYieldFacts({
     const area = blockArea.get(k) ?? null;
     const totalTonnes = blockTonnes.get(k) ?? 0;
     const share = totalTonnes > 0 ? r.tonnes / totalTonnes : 1;
-    const cost = costByBlock.has(k) ? (costByBlock.get(k) as number) * share : null;
+
+    const pct = allocPercent(r.blockId, r.variety);
+    const spare = unallocated.get(k);
+    let areaHa: number | null = null;
+    let areaFromAllocation = false;
+    if (area != null) {
+      if (pct != null) {
+        areaHa = (area * pct) / 100;
+        areaFromAllocation = true;
+      } else if (spare && spare.tonnes > 0 && spare.area > 0) {
+        areaHa = spare.area * (r.tonnes / spare.tonnes);
+      } else {
+        areaHa = area * share;
+      }
+    }
+
+    const blockCost = costByBlock.get(k);
+    const varietyCost = costByVariety.get(`${k}|${norm(r.variety)}`);
+    const cost =
+      blockCost == null && varietyCost == null
+        ? null
+        : (varietyCost ?? 0) + (blockCost != null ? blockCost * share : 0);
+
     return {
       vintage: r.vintage,
       blockId: r.blockId,
@@ -195,7 +278,8 @@ export function buildYieldFacts({
       tonnes: r.tonnes,
       revenue: r.revenue,
       pricedTonnes: r.pricedTonnes,
-      areaHa: area != null ? area * share : null,
+      areaHa,
+      areaFromAllocation,
       blockAreaHa: area,
       cost,
       source: r.source,
@@ -203,6 +287,7 @@ export function buildYieldFacts({
     } satisfies YieldFact;
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // Aggregation
@@ -213,6 +298,10 @@ export interface AggMetrics {
   areaHa: number | null;
   revenue: number | null;
   pricedTonnes: number;
+  /** Hectares behind the priced tonnes — the denominator for Revenue/ha. */
+  pricedAreaHa: number | null;
+  /** True when every harvested tonne in the group carries a price. */
+  revenueComplete: boolean;
   cost: number | null;
   tonnesPerHa: number | null;
   pricePerTonne: number | null;
@@ -227,6 +316,20 @@ export interface AggMetrics {
 const div = (a: number | null, b: number | null): number | null =>
   a != null && b != null && b > 0 ? a / b : null;
 
+/**
+ * Aggregate facts.
+ *
+ * Pricing integrity: historical yield records carry NO price, so revenue and
+ * price metrics are derived only from the records that actually hold a value.
+ * Unpriced tonnes and their hectares are excluded from the price and
+ * Revenue/ha denominators rather than dragging them toward zero, and gross
+ * margin is only reported when the whole group is priced (otherwise it would
+ * subtract whole-block cost from partial revenue).
+ *
+ * Cost integrity: Cost/tonne is always allocated cost ÷ the CANONICAL yield
+ * tonnes computed here — never the `yield_tonnes` snapshot stored on cost
+ * allocations, which can be stale, zero or null.
+ */
 export function aggregate(facts: YieldFact[]): AggMetrics {
   let tonnes = 0;
   let area = 0;
@@ -234,6 +337,8 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
   let revenue = 0;
   let revenueSeen = false;
   let pricedTonnes = 0;
+  let pricedArea = 0;
+  let pricedAreaSeen = false;
   let cost = 0;
   let costSeen = false;
 
@@ -246,6 +351,10 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
     if (f.revenue != null) {
       revenue += f.revenue;
       revenueSeen = true;
+      if (f.areaHa != null) {
+        pricedArea += f.areaHa;
+        pricedAreaSeen = true;
+      }
     }
     pricedTonnes += f.pricedTonnes;
     if (f.cost != null) {
@@ -255,24 +364,30 @@ export function aggregate(facts: YieldFact[]): AggMetrics {
   }
 
   const areaHa = areaSeen && area > 0 ? area : null;
+  const pricedAreaHa = pricedAreaSeen && pricedArea > 0 ? pricedArea : null;
   const rev = revenueSeen ? revenue : null;
   const cst = costSeen ? cost : null;
-  const margin = rev != null && cst != null ? rev - cst : null;
+  // Tolerate float noise on the tonnage comparison.
+  const revenueComplete = tonnes > 0 && pricedTonnes >= tonnes - 1e-6;
+  const margin = rev != null && cst != null && revenueComplete ? rev - cst : null;
 
   return {
     tonnes,
     areaHa,
     revenue: rev,
     pricedTonnes,
+    pricedAreaHa,
+    revenueComplete,
     cost: cst,
     tonnesPerHa: div(tonnes, areaHa),
     pricePerTonne: pricedTonnes > 0 && rev != null ? rev / pricedTonnes : null,
-    revenuePerHa: div(rev, areaHa),
+    revenuePerHa: div(rev, pricedAreaHa),
     costPerHa: div(cst, areaHa),
     costPerTonne: cst != null && tonnes > 0 ? cst / tonnes : null,
     margin,
     marginPerHa: div(margin, areaHa),
     count: facts.length,
+
   };
 }
 
@@ -359,10 +474,13 @@ export function threeYearTrend(
     .filter((p) => p.value != null && Number.isFinite(p.value))
     .sort((a, b) => b.vintage - a.vintage);
   const current = valid.find((p) => p.vintage === currentVintage)?.value ?? null;
-  const window = valid.filter((p) => p.vintage <= currentVintage).slice(0, 3);
+  // Only the genuine three-vintage window ending at the current vintage counts;
+  // older, non-contiguous vintages must not masquerade as a 3-year average.
+  const window = valid.filter((p) => p.vintage <= currentVintage && p.vintage >= currentVintage - 2);
   if (window.length < 3) return { current, threeYearAverage: null, difference: null, years: window.length };
   const sum = window.reduce((a, p) => a + (p.value as number), 0);
-  const avg = metricIsRate ? sum / window.length : sum / window.length;
+  const avg = sum / window.length;
+
   return {
     current,
     threeYearAverage: avg,

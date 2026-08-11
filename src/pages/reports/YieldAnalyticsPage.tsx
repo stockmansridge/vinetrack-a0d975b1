@@ -195,7 +195,13 @@ export default function YieldAnalyticsPage() {
       buildYieldFacts({
         historicalRows: extractHistoricalBlockRows(reportsQ.data?.historical ?? []),
         pickingTotals: pickingQ.data ?? [],
-        blocks: (blocksQ.data ?? []).map((b) => ({ id: b.id, name: b.name, areaHa: b.areaHa })),
+        blocks: (blocksQ.data ?? []).map((b) => ({
+          id: b.id,
+          name: b.name,
+          areaHa: b.areaHa,
+          varietyAllocations: b.varietyAllocations,
+        })),
+
         costRows,
       }),
     [reportsQ.data?.historical, pickingQ.data, blocksQ.data, costRows],
@@ -484,7 +490,11 @@ export default function YieldAnalyticsPage() {
       const revPerHa = f.revenue != null && f.areaHa ? f.revenue / f.areaHa : null;
       const costPerHa = f.cost != null && f.areaHa ? f.cost / f.areaHa : null;
       const costPerT = f.cost != null && f.tonnes > 0 ? f.cost / f.tonnes : null;
-      const margin = f.revenue != null && f.cost != null ? f.revenue - f.cost : null;
+      // Margin only where the whole row is priced, otherwise full block cost
+      // would be subtracted from partial revenue.
+      const fullyPriced = f.tonnes > 0 && f.pricedTonnes >= f.tonnes - 1e-6;
+      const margin = f.revenue != null && f.cost != null && fullyPriced ? f.revenue - f.cost : null;
+
       return {
         fact: f,
         vintage: f.vintage,
@@ -868,8 +878,25 @@ export default function YieldAnalyticsPage() {
               value={moneyPerArea(totals.revenuePerHa)}
               current={totals.revenuePerHa}
               prior={priorTotals?.revenuePerHa ?? null}
+              hint={
+                totals.revenuePerHa == null
+                  ? "Needs priced picking records"
+                  : !totals.revenueComplete
+                    ? "Based on priced area only"
+                    : undefined
+              }
             />
           </div>
+
+          {totals.revenue != null && !totals.revenueComplete && (
+            <PortalNotice
+              variant="info"
+              compact
+              title="Some harvest in view has no pricing"
+              description={`${(totals.tonnes - totals.pricedTonnes).toFixed(2)} t of ${totals.tonnes.toFixed(2)} t carry no sale price. Price, crop value, revenue per ${rf.areaUnitLabel} and margin are calculated from the priced records only — unpriced harvest is excluded rather than treated as $0.`}
+            />
+          )}
+
 
           {costAvailable && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -1098,7 +1125,7 @@ export default function YieldAnalyticsPage() {
                         stroke={colourFor(i)}
                         strokeWidth={2}
                         dot={{ r: 3 }}
-                        connectNulls
+                        connectNulls={false}
                       />
                     ))}
                   </LineChart>
@@ -1130,7 +1157,7 @@ export default function YieldAnalyticsPage() {
                     <RTooltip contentStyle={tooltipStyle} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {blockSeries.keys.map((k, i) => (
-                      <Line key={k} type="monotone" dataKey={k} stroke={colourFor(i)} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      <Line key={k} type="monotone" dataKey={k} stroke={colourFor(i)} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
