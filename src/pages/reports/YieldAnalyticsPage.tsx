@@ -1661,3 +1661,19 @@ function HighlightCard({
   );
 }
 
+
+/** Small inline "?" style hint that moves long explanations out of the layout. */
+function InfoHint({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" aria-label="More information" className="text-muted-foreground">
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
