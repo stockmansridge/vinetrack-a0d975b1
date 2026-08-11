@@ -490,7 +490,11 @@ export default function YieldAnalyticsPage() {
       const revPerHa = f.revenue != null && f.areaHa ? f.revenue / f.areaHa : null;
       const costPerHa = f.cost != null && f.areaHa ? f.cost / f.areaHa : null;
       const costPerT = f.cost != null && f.tonnes > 0 ? f.cost / f.tonnes : null;
-      const margin = f.revenue != null && f.cost != null ? f.revenue - f.cost : null;
+      // Margin only where the whole row is priced, otherwise full block cost
+      // would be subtracted from partial revenue.
+      const fullyPriced = f.tonnes > 0 && f.pricedTonnes >= f.tonnes - 1e-6;
+      const margin = f.revenue != null && f.cost != null && fullyPriced ? f.revenue - f.cost : null;
+
       return {
         fact: f,
         vintage: f.vintage,
