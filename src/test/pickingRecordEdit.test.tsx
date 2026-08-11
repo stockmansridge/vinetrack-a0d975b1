@@ -133,7 +133,7 @@ describe("Picking record editing", () => {
 
   it("hides the edit action from read-only users", async () => {
     renderPanel({ canDelete: false, canEdit: false });
-    await screen.findByText("Block 7");
+    await screen.findAllByText("Block 7");
     expect(screen.queryByLabelText(/Edit picking record/i)).toBeNull();
   });
 
