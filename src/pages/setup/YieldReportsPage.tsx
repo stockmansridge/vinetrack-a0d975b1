@@ -51,6 +51,13 @@ import {
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
+import PickingLogPanel from "@/components/yield/PickingLogPanel";
+import {
+  detailedActualsFromTotals,
+  fetchPickingYieldTotals,
+  supersedeActualYield,
+  type ActualYieldEntry,
+} from "@/lib/pickingRecordsQuery";
 import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
@@ -105,7 +112,7 @@ export default function YieldReportsPage() {
   // `null` means "not chosen yet" and resolves to the vineyard's current vintage.
   const [vintageFilter, setVintageFilter] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string>(ANY);
-  const [tab, setTab] = useState<"overview" | "sessions" | "historical">("overview");
+  const [tab, setTab] = useState<"overview" | "sessions" | "historical" | "picking">("overview");
   const [selected, setSelected] = useState<AnyRow | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const qc = useQueryClient();
@@ -115,6 +122,13 @@ export default function YieldReportsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchYieldBlocks(selectedVineyardId!),
   });
+  // Detailed Picking Log totals (server aggregation view, sql/180).
+  const pickingTotalsQ = useQuery({
+    queryKey: ["picking_yield_totals", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPickingYieldTotals(selectedVineyardId!),
+  });
+
   const { data: grapeVarieties } = useGrapeVarieties(selectedVineyardId);
   const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
 
@@ -314,12 +328,38 @@ export default function YieldReportsPage() {
       }
     }
 
-    const actuals = extractHistoricalBlockRows(
+    // Basic actual yield (historical_yield_records).
+    const basic: ActualYieldEntry[] = extractHistoricalBlockRows(
       vintageRows.filter((r) => r.__kind === "historical") as unknown as HistoricalYieldRecord[],
-    ).map((h) => ({ blockId: h.blockId, variety: h.variety, tonnes: h.yieldTonnes }));
+    ).map((h) => ({
+      blockId: h.blockId,
+      variety: h.variety,
+      vintage: h.year ?? null,
+      tonnes: h.yieldTonnes,
+    }));
+
+    // Detailed picks supersede Basic for the same Block + Variety + Vintage —
+    // they are never summed together.
+    const detailed = detailedActualsFromTotals(pickingTotalsQ.data ?? []).filter(
+      (d) => activeVintage === ANY || String(d.vintage ?? "") === activeVintage,
+    );
+
+    const actuals = supersedeActualYield(basic, detailed).map((a) => ({
+      blockId: a.blockId,
+      variety: a.variety,
+      tonnes: a.tonnes,
+    }));
 
     return buildYieldOverview({ blocks, estimatedByBlock, actuals });
-  }, [blocksQ.data, varietyMap, allRows, activeVintage, rowVintage, sessionSummaries]);
+  }, [
+    blocksQ.data,
+    varietyMap,
+    allRows,
+    activeVintage,
+    rowVintage,
+    sessionSummaries,
+    pickingTotalsQ.data,
+  ]);
 
 
   if (import.meta.env.DEV) {
@@ -382,10 +422,16 @@ export default function YieldReportsPage() {
           >
             Actual Yields ({historical.length})
           </TabsTrigger>
+          <TabsTrigger
+            value="picking"
+            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
+          >
+            Picking Log
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex flex-wrap items-end gap-2 mt-4">
-          {tab !== "overview" && (
+          {tab !== "overview" && tab !== "picking" && (
             <>
               <div className="space-y-1">
                 <div className="text-xs text-muted-foreground">From</div>
@@ -407,7 +453,7 @@ export default function YieldReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          {tab !== "overview" && (
+          {tab !== "overview" && tab !== "picking" && (
             <>
               <div className="space-y-1">
                 <div className="text-xs text-muted-foreground">Completion</div>
@@ -432,6 +478,14 @@ export default function YieldReportsPage() {
             </>
           )}
         </div>
+
+        <TabsContent value="picking" className="mt-4">
+          <PickingLogPanel
+            vineyardId={selectedVineyardId}
+            vintage={activeVintage === ANY ? null : Number(activeVintage)}
+            canDelete={canManageYields}
+          />
+        </TabsContent>
 
         <TabsContent value="overview" className="mt-4">
           <YieldOverviewGrid cards={overviewCards} vintage={activeVintage === ANY ? null : activeVintage} />
