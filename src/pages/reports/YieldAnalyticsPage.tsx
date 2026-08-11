@@ -1125,7 +1125,7 @@ export default function YieldAnalyticsPage() {
                         stroke={colourFor(i)}
                         strokeWidth={2}
                         dot={{ r: 3 }}
-                        connectNulls
+                        connectNulls={false}
                       />
                     ))}
                   </LineChart>
@@ -1157,7 +1157,7 @@ export default function YieldAnalyticsPage() {
                     <RTooltip contentStyle={tooltipStyle} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {blockSeries.keys.map((k, i) => (
-                      <Line key={k} type="monotone" dataKey={k} stroke={colourFor(i)} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      <Line key={k} type="monotone" dataKey={k} stroke={colourFor(i)} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
