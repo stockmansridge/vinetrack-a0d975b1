@@ -27,6 +27,7 @@ const ITEMS: SearchItem[] = [
   { title: "Pins / Repairs / Observations", url: "/pins", group: "Work", keywords: ["pin", "repair", "observation", "issue"] },
   { title: "Maintenance Logs", url: "/maintenance", group: "Work", keywords: ["maintenance", "service", "repair"] },
   { title: "Yields", url: "/yield", group: "Work", keywords: ["yield", "harvest", "tonnes"] },
+  { title: "Yield Analytics", url: "/reports/yield", group: "Reports", keywords: ["yield", "analytics", "charts", "price", "revenue", "variety", "block", "vintage"] },
   { title: "Damage Records", url: "/damage-records", group: "Work", keywords: ["damage", "loss", "frost", "hail"] },
 
   // Equipment
