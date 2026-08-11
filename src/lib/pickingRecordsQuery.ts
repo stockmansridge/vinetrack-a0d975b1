@@ -141,6 +141,11 @@ export async function createPickingRecord(
     variety_key: input.varietyKey ?? null,
     variety_name: (input.varietyName ?? "").trim(),
     clone: input.clone?.trim() || null,
+    // Planting identity + snapshots. Written only while the backend contract
+    // exposes the columns; `writeWithOptionalColumns` retries without them so
+    // the portal keeps working against the pre-contract schema.
+    variety_allocation_id: input.varietyAllocationId ?? null,
+    rootstock: input.rootstock?.trim() || null,
     weight_kg: input.weightKg,
     sugar_value: sugarValue,
     // The unit is always stored with the value so history is never reinterpreted.
@@ -156,14 +161,11 @@ export async function createPickingRecord(
     client_updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (supabase as any)
-    .from("picking_records")
-    .insert(row)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as PickingRecord;
+  return writeWithOptionalColumns(row, (r) =>
+    (supabase as any).from("picking_records").insert(r).select("*").single(),
+  );
 }
+
 
 export interface UpdatePickingRecordInput extends Omit<CreatePickingRecordInput, "vineyardId"> {
   id: string;
