@@ -1319,15 +1319,32 @@ export default function YieldAnalyticsPage() {
 
           {/* Highlights */}
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Performance highlights
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Performance highlights
+              </h2>
+              <div className="flex rounded-md border p-0.5">
+                {(["block", "variety"] as const).map((d) => (
+                  <Button
+                    key={d}
+                    type="button"
+                    size="sm"
+                    variant={highlightDim === d ? "secondary" : "ghost"}
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setHighlightDim(d)}
+                  >
+                    {d === "block" ? "Blocks" : "Varieties"}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <HighlightCard
                 title={`Highest yield / ${rf.areaUnitLabel}`}
                 items={highlights.highestYield.map((g) => ({
                   label: g.label,
                   value: `${perArea(g.tonnesPerHa)} t/${rf.areaUnitLabel}`,
+                  weight: g.tonnesPerHa ?? 0,
                 }))}
               />
               <HighlightCard
@@ -1335,13 +1352,15 @@ export default function YieldAnalyticsPage() {
                 items={highlights.lowestYield.map((g) => ({
                   label: g.label,
                   value: `${perArea(g.tonnesPerHa)} t/${rf.areaUnitLabel}`,
+                  weight: g.tonnesPerHa ?? 0,
                 }))}
               />
               <HighlightCard
-                title={`Highest revenue / ${rf.areaUnitLabel}`}
+                title={`Highest revenue / sold ${rf.areaUnitLabel}`}
                 items={highlights.highestRevenue.map((g) => ({
                   label: g.label,
                   value: moneyPerArea(g.revenuePerHa),
+                  weight: g.revenuePerHa ?? 0,
                 }))}
               />
               <HighlightCard
@@ -1349,6 +1368,7 @@ export default function YieldAnalyticsPage() {
                 items={highlights.improved.map((d) => ({
                   label: d.label,
                   value: `+${perArea(d.delta)} t/${rf.areaUnitLabel}`,
+                  weight: Math.abs(d.delta),
                 }))}
                 empty="Needs a comparable prior vintage"
               />
@@ -1357,15 +1377,17 @@ export default function YieldAnalyticsPage() {
                 items={highlights.declined.map((d) => ({
                   label: d.label,
                   value: `${perArea(d.delta)} t/${rf.areaUnitLabel}`,
+                  weight: Math.abs(d.delta),
                 }))}
                 empty="Needs a comparable prior vintage"
               />
               {costAvailable && (
                 <HighlightCard
-                  title={`Highest margin / ${rf.areaUnitLabel}`}
+                  title={`Highest margin / sold ${rf.areaUnitLabel}`}
                   items={highlights.highestMargin.map((g) => ({
                     label: g.label,
                     value: moneyPerArea(g.marginPerHa),
+                    weight: g.marginPerHa ?? 0,
                   }))}
                 />
               )}
@@ -1373,7 +1395,8 @@ export default function YieldAnalyticsPage() {
           </section>
 
           {/* Detailed table */}
-          <section className="space-y-3">
+          <section id="ya-data" className="space-y-3 scroll-mt-24">
+
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Detailed data
