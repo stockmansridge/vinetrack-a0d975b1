@@ -99,21 +99,15 @@ export default function PruningActivityCharts({
     [blocks, effectiveBlockMetric],
   );
 
-  const dataKey =
-    mode === "cumulative"
-      ? metric === "hours"
-        ? "cumulativeHours"
-        : "cumulativeVines"
-      : metric === "hours"
-      ? "hours"
-      : metric === "vinesPerHour"
-      ? "vinesPerHour"
-      : "vines";
-
   // Vines / labour hour is a ratio — a running total is meaningless.
   const modeAvailable = metric !== "vinesPerHour";
   const activeMode: ProgressMode = modeAvailable ? mode : "daily";
-  const activeKey = activeMode === "cumulative" ? dataKey : dataKey.replace(/^cumulative/, "").replace(/^V/, "v").replace(/^H/, "h");
+  const activeKey =
+    activeMode === "cumulative"
+      ? metric === "hours"
+        ? "cumulativeHours"
+        : "cumulativeVines"
+      : metric;
 
   const metricLabel =
     metric === "hours" ? "Labour hours" : metric === "vinesPerHour" ? "Vines / labour hour" : "Vines pruned";
