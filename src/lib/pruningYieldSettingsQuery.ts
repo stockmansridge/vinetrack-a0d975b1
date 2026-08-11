@@ -127,8 +127,16 @@ export async function savePruningYieldSettings(
     .from(PRUNING_YIELD_SETTINGS_TABLE)
     .upsert(payload, { onConflict: "vineyard_id,paddock_id" })
     .select(PRUNING_YIELD_SETTINGS_COLUMNS)
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  // SQL 185 stale-write contract: an EMPTY representation means a newer
+  // client_updated_at already won. That is not an error and must never be
+  // retried — re-read the authoritative row and return it.
+  if (!data) {
+    const current = await fetchPruningYieldSettings(input.vineyardId, input.paddockId);
+    if (current) return current;
+    throw new Error("Settings were updated on another device. Reload and try again.");
+  }
   return mapSettingsRow(data);
 }
 
