@@ -203,6 +203,10 @@ export async function updatePickingRecord(
     variety_key: input.varietyKey ?? null,
     variety_name: (input.varietyName ?? "").trim(),
     clone: input.clone?.trim() || null,
+    // Editing may (re)assign the exact planting — the allocation id is written,
+    // not just the clone display text.
+    variety_allocation_id: input.varietyAllocationId ?? null,
+    rootstock: input.rootstock?.trim() || null,
     weight_kg: input.weightKg,
     sugar_value: sugarValue,
     sugar_unit: sugarValue == null ? null : input.sugarUnit ?? null,
@@ -218,16 +222,17 @@ export async function updatePickingRecord(
     client_updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (supabase as any)
-    .from("picking_records")
-    .update(patch)
-    .eq("id", input.id)
-    .is("deleted_at", null)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as PickingRecord;
+  return writeWithOptionalColumns(patch, (p) =>
+    (supabase as any)
+      .from("picking_records")
+      .update(p)
+      .eq("id", input.id)
+      .is("deleted_at", null)
+      .select("*")
+      .single(),
+  );
 }
+
 
 
 
