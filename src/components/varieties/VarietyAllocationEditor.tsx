@@ -127,9 +127,14 @@ export default function VarietyAllocationEditor({
 }: Props) {
   const total = useMemo(() => totalPercent(value), [value]);
   const totalOk = Math.abs(total - 100) < 0.01;
+  const { currentRole } = useVineyard();
+  // Only owners/managers may add custom catalogue entries (backend enforces
+  // the same rule via RLS; this just avoids offering a doomed action).
+  const canManageCatalogue = currentRole === "owner" || currentRole === "manager";
   // Note: the same variety may intentionally appear more than once on a block
   // (e.g. Pinot Noir split across two clones/rootstocks). We deliberately do
   // NOT filter out already-selected varieties from the picker.
+
 
   const update = (id: string, patch: Partial<VarietyAllocationRow>) => {
     onChange(value.map((r) => (r.id === id ? { ...r, ...patch } : r)));
