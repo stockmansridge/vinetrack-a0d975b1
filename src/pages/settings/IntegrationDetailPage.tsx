@@ -153,7 +153,11 @@ export default function IntegrationDetailPage() {
           <IntegrationAuditTab clientId={clientId} />
         </TabsContent>
         <TabsContent value="webhooks">
-          <IntegrationWebhooksTab />
+          <IntegrationWebhooksTab
+            clientId={clientId}
+            canManage={canManage}
+            disabled={revoked}
+          />
         </TabsContent>
       </Tabs>
     </div>
