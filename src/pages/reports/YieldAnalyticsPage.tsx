@@ -893,7 +893,7 @@ export default function YieldAnalyticsPage() {
               variant="info"
               compact
               title="Some harvest in view has no pricing"
-              description={`${fmtNum(rf.toArea(0) === 0 ? totals.tonnes - totals.pricedTonnes : totals.tonnes - totals.pricedTonnes, 2)} t of ${fmtNum(totals.tonnes, 2)} t carry no sale price. Price, crop value, revenue per ${rf.areaUnitLabel} and margin are calculated from the priced records only — unpriced harvest is excluded rather than treated as $0.`}
+              description={`${(totals.tonnes - totals.pricedTonnes).toFixed(2)} t of ${totals.tonnes.toFixed(2)} t carry no sale price. Price, crop value, revenue per ${rf.areaUnitLabel} and margin are calculated from the priced records only — unpriced harvest is excluded rather than treated as $0.`}
             />
           )}
 
