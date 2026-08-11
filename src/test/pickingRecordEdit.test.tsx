@@ -147,8 +147,8 @@ describe("Picking record editing", () => {
     expect((screen.getByLabelText("Purpose") as HTMLInputElement).value).toBe("Estate wine");
     expect((screen.getByLabelText("Sold to") as HTMLInputElement).value).toBe("Big Winery");
     expect((screen.getByLabelText("Price per tonne") as HTMLInputElement).value).toBe("2000");
-    // Recorded clone snapshot is shown, not the block's current configuration.
-    expect(screen.getByLabelText("Clone").textContent).toContain("BVRC12");
+    // The pick resolves to its planting allocation (clone snapshot BVRC12).
+    expect(screen.getByLabelText("Planting").textContent).toContain("BVRC12");
     expect(screen.getByLabelText("Variety").textContent).toContain("Shiraz");
   });
 
