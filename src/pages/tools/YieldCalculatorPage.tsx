@@ -101,14 +101,18 @@ export default function YieldCalculatorPage() {
   useEffect(() => {
     if (!selectedVineyardId) return;
     if (settingsQ.isLoading) return;
+    const fallback = defaultSettingsForBlock(
+      selectedVineyardId,
+      block ? { id: block.id, areaHa: block.areaHa, vineCount: block.vineCount } : null,
+    );
     const saved = blockId ? settingsByBlock[blockId] : undefined;
+    // vines_per_ha is nullable in the contract: null means "derive from the
+    // block's vine count ÷ area".
     setS(
       toForm(
-        saved ??
-          defaultSettingsForBlock(
-            selectedVineyardId,
-            block ? { id: block.id, areaHa: block.areaHa, vineCount: block.vineCount } : null,
-          ),
+        saved
+          ? { ...saved, vinesPerHa: saved.vinesPerHa > 0 ? saved.vinesPerHa : fallback.vinesPerHa }
+          : fallback,
       ),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,7 +139,8 @@ export default function YieldCalculatorPage() {
   const perArea = (tPerHa: number) =>
     `${fmt(rf.areaUnitLabel === "ac" ? tPerHa * HA_PER_AC : tPerHa)} t/${rf.areaUnitLabel}`;
 
-  const canEdit = currentRole === "owner" || currentRole === "manager";
+  // Contract RLS: insert/update allowed for owner / manager / supervisor / operator.
+  const canEdit = ["owner", "manager", "supervisor", "operator"].includes(currentRole ?? "");
 
   const saveM = useMutation({
     mutationFn: () =>
