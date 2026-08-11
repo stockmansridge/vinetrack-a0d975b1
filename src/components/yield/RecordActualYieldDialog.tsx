@@ -16,8 +16,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { fetchYieldBlocks, recordActualYield } from "@/lib/yieldReportsQuery";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
+import { useVintage } from "@/lib/useVintage";
+import {
+  buildVarietyMap,
+  resolvePaddockAllocations,
+  useGrapeVarieties,
+} from "@/lib/varietyResolver";
 
 const HA_PER_AC = 0.40468564224;
+const VINTAGE_HISTORY_YEARS = 15;
+
+/**
+ * Season label derived from the vintage under the shared VineTrack season
+ * contract: a season starting in January is a single calendar year, otherwise
+ * it straddles two years and ends in the vintage year (e.g. 2026 → "2025/26").
+ */
+export function seasonLabelForVintage(vintage: number, seasonStartMonth: number): string {
+  if (seasonStartMonth <= 1) return String(vintage);
+  return `${vintage - 1}/${String(vintage).slice(-2)}`;
+}
 
 export default function RecordActualYieldDialog({
   vineyardId,
@@ -30,8 +47,8 @@ export default function RecordActualYieldDialog({
 }) {
   const qc = useQueryClient();
   const rf = useRegionFormatters();
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const [season, setSeason] = useState("");
+  const { vintage: currentVintage, seasonStartMonth } = useVintage();
+  const [year, setYear] = useState<number | null>(null);
   const [blockId, setBlockId] = useState<string>("");
   const [variety, setVariety] = useState("");
   const [tonnes, setTonnes] = useState("");
@@ -43,14 +60,58 @@ export default function RecordActualYieldDialog({
     queryFn: () => fetchYieldBlocks(vineyardId!),
   });
   const blocks = blocksQ.data ?? [];
+  const { data: grapeVarieties } = useGrapeVarieties(vineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
+
+  const vintage = year ?? currentVintage;
+  const season = useMemo(
+    () => seasonLabelForVintage(vintage, seasonStartMonth),
+    [vintage, seasonStartMonth],
+  );
+  const vintageOptions = useMemo(() => {
+    const base = currentVintage + 1;
+    return Array.from({ length: VINTAGE_HISTORY_YEARS + 2 }, (_, i) => base - i);
+  }, [currentVintage]);
 
   useEffect(() => {
     if (open && !blockId && blocks.length) setBlockId(blocks[0].id);
   }, [open, blocks, blockId]);
 
   const selected = useMemo(() => blocks.find((b) => b.id === blockId) ?? null, [blocks, blockId]);
+
+  const varieties = useMemo(() => {
+    if (!selected) return [] as { id: string | null; name: string }[];
+    const resolved = resolvePaddockAllocations(selected.varietyAllocations, varietyMap);
+    const seen = new Set<string>();
+    const out: { id: string | null; name: string }[] = [];
+    for (const a of resolved) {
+      const name = (a.name ?? "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ id: a.id ?? null, name });
+    }
+    return out;
+  }, [selected, varietyMap]);
+
+  // Reset / auto-select the variety whenever the block (or its varieties) change.
+  useEffect(() => {
+    if (varieties.length === 1) setVariety(varieties[0].name);
+    else setVariety((v) => (varieties.some((x) => x.name === v) ? v : ""));
+  }, [varieties]);
+
+  const varietyId = useMemo(
+    () => varieties.find((v) => v.name === variety)?.id ?? null,
+    [varieties, variety],
+  );
+
   const parsed = Number(tonnes.trim());
-  const valid = tonnes.trim() !== "" && Number.isFinite(parsed) && parsed >= 0 && !!selected && !!vineyardId;
+  const valid =
+    tonnes.trim() !== "" &&
+    Number.isFinite(parsed) &&
+    parsed >= 0 &&
+    !!selected &&
+    !!vineyardId &&
+    (varieties.length === 0 || !!variety);
 
   const perArea = useMemo(() => {
     if (!valid || !selected?.areaHa) return null;
@@ -64,11 +125,12 @@ export default function RecordActualYieldDialog({
       if (!selected || !vineyardId) return;
       await recordActualYield({
         vineyardId,
-        year,
+        year: vintage,
         season,
         blockId: selected.id,
         blockName: selected.name ?? "Unnamed block",
         variety,
+        varietyId,
         areaHectares: selected.areaHa,
         vineCount: selected.vineCount,
         actualYieldTonnes: parsed,
@@ -81,7 +143,6 @@ export default function RecordActualYieldDialog({
       onOpenChange(false);
       setTonnes("");
       setNotes("");
-      setVariety("");
     },
     onError: (e: any) =>
       toast({ title: "Could not save", description: e?.message ?? String(e), variant: "destructive" }),
@@ -93,33 +154,34 @@ export default function RecordActualYieldDialog({
         <DialogHeader>
           <DialogTitle>Record actual yield</DialogTitle>
           <DialogDescription>
-            Harvested tonnes for a block and season. Used by Cost Reports to calculate cost per tonne.
+            Harvested tonnes for a block and variety. Used by Cost Reports to calculate cost per tonne.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="ay-year">Year</Label>
-              <Input
-                id="ay-year"
-                type="number"
-                min={2000}
-                max={2100}
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ay-season">Season (optional)</Label>
-              <Input id="ay-season" value={season} onChange={(e) => setSeason(e.target.value)} placeholder="2025/26" />
-            </div>
+          <div className="space-y-1.5">
+            <Label>Vintage</Label>
+            <Select value={String(vintage)} onValueChange={(v) => setYear(Number(v))}>
+              <SelectTrigger aria-label="Vintage">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {vintageOptions.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Harvest year. Season {season} is derived from your vineyard's season start.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>Block</Label>
             <Select value={blockId} onValueChange={setBlockId}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Block">
                 <SelectValue placeholder={blocks.length ? "Select a block" : "No blocks available"} />
               </SelectTrigger>
               <SelectContent>
@@ -136,8 +198,28 @@ export default function RecordActualYieldDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="ay-variety">Variety (optional)</Label>
-            <Input id="ay-variety" value={variety} onChange={(e) => setVariety(e.target.value)} />
+            <Label>Variety</Label>
+            {varieties.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                This block has no configured varieties. Add variety allocations in Setup → Blocks to
+                record yield by variety.
+              </p>
+            ) : varieties.length === 1 ? (
+              <p className="text-sm">{varieties[0].name}</p>
+            ) : (
+              <Select value={variety} onValueChange={setVariety}>
+                <SelectTrigger aria-label="Variety">
+                  <SelectValue placeholder="Select a variety" />
+                </SelectTrigger>
+                <SelectContent>
+                  {varieties.map((v) => (
+                    <SelectItem key={v.name} value={v.name}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-1.5">
