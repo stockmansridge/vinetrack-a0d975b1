@@ -209,30 +209,34 @@ export default function VarietyAllocationEditor({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-xs">Clone <span className="text-muted-foreground font-normal">(optional reference)</span></Label>
-              <Input
-                value={row.clone ?? ""}
-                placeholder="e.g. MV6"
-                onChange={(e) => update(row.id, { clone: e.target.value })}
-                onBlur={(e) =>
-                  update(row.id, { clone: e.target.value.trim() || null })
-                }
+              <Label className="text-xs">
+                Clone{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <ClonePicker
+                vineyardId={vineyardId}
+                varietyKey={row.varietyKey}
+                value={{ key: row.cloneKey ?? null, display: row.clone ?? null }}
                 disabled={disabled}
+                canCreate={canManageCatalogue}
+                onChange={(v) => update(row.id, { cloneKey: v.key, clone: v.display })}
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Rootstock <span className="text-muted-foreground font-normal">(optional reference)</span></Label>
-              <Input
-                value={row.rootstock ?? ""}
-                placeholder="e.g. 101-14"
-                onChange={(e) => update(row.id, { rootstock: e.target.value })}
-                onBlur={(e) =>
-                  update(row.id, { rootstock: e.target.value.trim() || null })
-                }
+              <Label className="text-xs">
+                Rootstock{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <RootstockPicker
+                vineyardId={vineyardId}
+                value={{ key: row.rootstockKey ?? null, display: row.rootstock ?? null }}
                 disabled={disabled}
+                canCreate={canManageCatalogue}
+                onChange={(v) => update(row.id, { rootstockKey: v.key, rootstock: v.display })}
               />
             </div>
           </div>
+
         </div>
       ))}
 
