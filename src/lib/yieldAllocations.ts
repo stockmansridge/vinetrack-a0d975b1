@@ -76,8 +76,8 @@ export function buildAllocationUnits(args: {
   const sum = percents.reduce((x, y) => x + y, 0);
 
   return allocations.map((a, i) => {
-    const cloneKey = (a.raw?.cloneKey ?? (a.raw as any)?.clone_key ?? null) as string | null;
-    const rootstockKey = (a.raw?.rootstockKey ??
+    const cloneKey = ((a.raw as any)?.cloneKey ?? (a.raw as any)?.clone_key ?? null) as string | null;
+    const rootstockKey = ((a.raw as any)?.rootstockKey ??
       (a.raw as any)?.rootstock_key ??
       (a.raw as any)?.root_stock_key ??
       null) as string | null;
