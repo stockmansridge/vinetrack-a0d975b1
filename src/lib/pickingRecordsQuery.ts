@@ -26,6 +26,14 @@ export interface PickingRecord {
   variety_key: string | null;
   variety_name: string | null;
   clone: string | null;
+  /**
+   * Authoritative planting identity — the stable `paddocks.variety_allocations[].id`
+   * chosen when the pick was recorded (contract: docs/picking-records-allocation-identity-contract.md).
+   * Nullable: legacy picks and ambiguous backfills stay unlinked rather than guessed.
+   */
+  variety_allocation_id?: string | null;
+  /** Historical rootstock display snapshot (present once the contract ships). */
+  rootstock?: string | null;
   weight_kg: number;
   sugar_value: number | null;
   sugar_unit: SugarUnitValue | null;
@@ -87,6 +95,10 @@ export interface CreatePickingRecordInput {
   varietyKey?: string | null;
   varietyName?: string | null;
   clone?: string | null;
+  /** Stable `paddocks.variety_allocations[].id` for the selected planting. */
+  varietyAllocationId?: string | null;
+  /** Rootstock display snapshot for the selected planting. */
+  rootstock?: string | null;
   weightKg: number;
   sugarValue?: number | null;
   sugarUnit?: SugarUnitValue | null;
@@ -98,6 +110,39 @@ export interface CreatePickingRecordInput {
   pricePerTonne?: number | null;
   notes?: string | null;
 }
+
+/**
+ * Columns introduced by the allocation-identity contract. They are written
+ * whenever the backend has them and silently dropped (once, then retried)
+ * while a device is still talking to the pre-contract schema, so the portal
+ * never loses a pick because of a rollout ordering difference.
+ */
+const OPTIONAL_ALLOCATION_COLUMNS = ["variety_allocation_id", "rootstock"] as const;
+
+function isUnknownColumnError(error: any): boolean {
+  const code = String(error?.code ?? "");
+  const text = `${error?.message ?? ""} ${error?.details ?? ""}`;
+  if (code === "42703") return true;
+  if (code === "PGRST204" || /schema cache|could not find/i.test(text)) {
+    return OPTIONAL_ALLOCATION_COLUMNS.some((c) => text.includes(c));
+  }
+  return false;
+}
+
+async function writeWithOptionalColumns(
+  row: Record<string, unknown>,
+  run: (row: Record<string, unknown>) => Promise<{ data: any; error: any }>,
+): Promise<PickingRecord> {
+  const { data, error } = await run(row);
+  if (!error) return data as PickingRecord;
+  if (!isUnknownColumnError(error)) throw error;
+  const fallback = { ...row };
+  for (const c of OPTIONAL_ALLOCATION_COLUMNS) delete fallback[c];
+  const retry = await run(fallback);
+  if (retry.error) throw retry.error;
+  return retry.data as PickingRecord;
+}
+
 
 /**
  * Insert one pick. Every save is a NEW row — a Block + Variety + Vintage may
@@ -129,6 +174,11 @@ export async function createPickingRecord(
     variety_key: input.varietyKey ?? null,
     variety_name: (input.varietyName ?? "").trim(),
     clone: input.clone?.trim() || null,
+    // Planting identity + snapshots. Written only while the backend contract
+    // exposes the columns; `writeWithOptionalColumns` retries without them so
+    // the portal keeps working against the pre-contract schema.
+    variety_allocation_id: input.varietyAllocationId ?? null,
+    rootstock: input.rootstock?.trim() || null,
     weight_kg: input.weightKg,
     sugar_value: sugarValue,
     // The unit is always stored with the value so history is never reinterpreted.
@@ -144,14 +194,11 @@ export async function createPickingRecord(
     client_updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (supabase as any)
-    .from("picking_records")
-    .insert(row)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as PickingRecord;
+  return writeWithOptionalColumns(row, (r) =>
+    (supabase as any).from("picking_records").insert(r).select("*").single(),
+  );
 }
+
 
 export interface UpdatePickingRecordInput extends Omit<CreatePickingRecordInput, "vineyardId"> {
   id: string;
@@ -189,6 +236,10 @@ export async function updatePickingRecord(
     variety_key: input.varietyKey ?? null,
     variety_name: (input.varietyName ?? "").trim(),
     clone: input.clone?.trim() || null,
+    // Editing may (re)assign the exact planting — the allocation id is written,
+    // not just the clone display text.
+    variety_allocation_id: input.varietyAllocationId ?? null,
+    rootstock: input.rootstock?.trim() || null,
     weight_kg: input.weightKg,
     sugar_value: sugarValue,
     sugar_unit: sugarValue == null ? null : input.sugarUnit ?? null,
@@ -204,16 +255,17 @@ export async function updatePickingRecord(
     client_updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (supabase as any)
-    .from("picking_records")
-    .update(patch)
-    .eq("id", input.id)
-    .is("deleted_at", null)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as PickingRecord;
+  return writeWithOptionalColumns(patch, (p) =>
+    (supabase as any)
+      .from("picking_records")
+      .update(p)
+      .eq("id", input.id)
+      .is("deleted_at", null)
+      .select("*")
+      .single(),
+  );
 }
+
 
 
 
@@ -234,6 +286,10 @@ export interface ActualYieldEntry {
   variety: string | null;
   /** Clone display snapshot stored on the pick (planting identity hint). */
   clone?: string | null;
+  /** Rootstock display snapshot, once the contract stores it. */
+  rootstock?: string | null;
+  /** Authoritative planting identity when the pick is linked. */
+  varietyAllocationId?: string | null;
   vintage: number | null;
   tonnes: number | null;
   areaHa?: number | null;
@@ -243,11 +299,11 @@ export interface ActualYieldEntry {
 }
 
 /**
- * Detailed picks aggregated by Block + Variety + Clone + Vintage.
+ * Detailed picks aggregated per planting.
  *
- * The clone snapshot is the ONLY planting identity `picking_records` carries
- * today, so it must survive aggregation — collapsing to Block + Variety is
- * what causes same-variety plantings to share (and repeat) one total.
+ * `variety_allocation_id` is the authoritative identity when present; the
+ * clone/rootstock snapshots are only the legacy fallback so pre-contract picks
+ * are still split rather than collapsed onto one same-variety planting.
  */
 export function aggregatePickingRecordsByPlanting(
   records: PickingRecord[],
@@ -256,7 +312,12 @@ export function aggregatePickingRecordsByPlanting(
   for (const r of records) {
     if (!r.paddock_id || !Number.isFinite(Number(r.weight_kg))) continue;
     const clone = r.clone?.trim() || null;
-    const k = `${pickingKey(r.paddock_id, r.variety_name, r.vintage)}|${norm(clone)}`;
+    const rootstock = r.rootstock?.trim() || null;
+    const allocationId = r.variety_allocation_id?.trim() || null;
+    const identity = allocationId
+      ? `alloc:${norm(allocationId)}`
+      : `${norm(clone)}|${norm(rootstock)}`;
+    const k = `${pickingKey(r.paddock_id, r.variety_name, r.vintage)}|${identity}`;
     const tonnes = Number(r.weight_kg) / 1000;
     const cur = byKey.get(k);
     if (cur) {
@@ -268,6 +329,8 @@ export function aggregatePickingRecordsByPlanting(
         blockName: r.paddock_name ?? null,
         variety: r.variety_name?.trim() || null,
         clone,
+        rootstock,
+        varietyAllocationId: allocationId,
         vintage: r.vintage ?? null,
         tonnes,
         source: "detailed",
@@ -275,6 +338,7 @@ export function aggregatePickingRecordsByPlanting(
       });
     }
   }
+
   return Array.from(byKey.values());
 }
 

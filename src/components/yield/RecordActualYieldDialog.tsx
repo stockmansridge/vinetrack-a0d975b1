@@ -31,10 +31,19 @@ import {
   resolvePaddockAllocations,
   useGrapeVarieties,
 } from "@/lib/varietyResolver";
+import {
+  allocationOptionLabel,
+  buildAllocationUnits,
+  matchAllocation,
+  type AllocationUnit,
+} from "@/lib/yieldAllocations";
 
 const HA_PER_AC = 0.40468564224;
 const VINTAGE_HISTORY_YEARS = 15;
-const NO_CLONE = "__none__";
+
+/** Sentinel for a pick that is deliberately not tied to a planting allocation. */
+const NOT_LINKED = "__not_linked__";
+
 
 /**
  * Season label derived from the vintage under the shared VineTrack season
@@ -131,6 +140,26 @@ function useBlockVarieties(selected: YieldBlockInfo | null, vineyardId: string |
     return out;
   }, [selected, varietyMap]);
 }
+
+/**
+ * Every planting allocation configured on the selected block, in the block's
+ * own order. Two allocations of the same variety, clone AND rootstock stay
+ * separate options — the stable allocation id (and allocated area) is what
+ * distinguishes them.
+ */
+function useBlockAllocationUnits(selected: YieldBlockInfo | null, vineyardId: string | null) {
+  const { data: grapeVarieties } = useGrapeVarieties(vineyardId);
+  const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
+  return useMemo<AllocationUnit[]>(() => {
+    if (!selected) return [];
+    return buildAllocationUnits({
+      blockId: selected.id,
+      areaHa: selected.areaHa ?? null,
+      allocations: resolvePaddockAllocations(selected.varietyAllocations, varietyMap),
+    });
+  }, [selected, varietyMap]);
+}
+
 
 export default function RecordActualYieldDialog({
   vineyardId,
@@ -428,7 +457,7 @@ function DetailedForm({
   const [pickedAt, setPickedAt] = useState(record?.picked_at?.slice(0, 10) ?? today);
   const [blockId, setBlockId] = useState(record?.paddock_id ?? "");
   const [varietyName, setVarietyName] = useState(record?.variety_name ?? "");
-  const [clone, setClone] = useState(record?.clone || NO_CLONE);
+  const [plantingKey, setPlantingKey] = useState(NOT_LINKED);
   const [weightKg, setWeightKg] = useState(str(record?.weight_kg));
   const [sugar, setSugar] = useState(str(record?.sugar_value));
   const [ph, setPh] = useState(str(record?.ph));
@@ -445,6 +474,7 @@ function DetailedForm({
 
   const selected = useMemo(() => blocks.find((b) => b.id === blockId) ?? null, [blocks, blockId]);
   const varieties = useBlockVarieties(selected, vineyardId);
+  const units = useBlockAllocationUnits(selected, vineyardId);
 
   // Auto-select the sole variety; reset when the block changes. Skipped on the
   // first pass when editing so the recorded snapshot is not overwritten.
@@ -455,7 +485,7 @@ function DetailedForm({
       return;
     }
     setVarietyName(varieties.length === 1 ? varieties[0].name : "");
-    setClone(NO_CLONE);
+    setPlantingKey(NOT_LINKED);
   }, [blockId, varieties.length]);
 
   // Varieties recorded before a block was reconfigured stay selectable — the
@@ -480,24 +510,43 @@ function DetailedForm({
     () => varietyOptions.find((v) => v.name === varietyName) ?? null,
     [varietyOptions, varietyName],
   );
-  useEffect(() => {
-    if (variety && variety.clones.length === 1 && clone === NO_CLONE) setClone(variety.clones[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variety]);
 
-  // The recorded clone stays selectable even when the block configuration has
-  // since changed — historical picks are snapshots.
-  const cloneOptions = useMemo<PlantingOption[]>(() => {
-    const list: PlantingOption[] = [
-      ...(variety?.plantings ??
-        (variety?.clones ?? []).map((c) => ({ clone: c, label: c, ambiguous: false }))),
-    ];
-    const recorded = (record?.clone ?? "").trim();
-    if (recorded && !list.some((p) => p.clone === recorded)) {
-      list.unshift({ clone: recorded, label: recorded, ambiguous: false });
+  // Selectable plantings for the chosen variety. Identical clone + rootstock
+  // pairs stay separate rows because each carries its own allocation id.
+  const plantingOptions = useMemo(() => {
+    const v = (variety?.name ?? "").trim().toLowerCase();
+    return v ? units.filter((u) => (u.variety ?? "").trim().toLowerCase() === v) : units;
+  }, [units, variety]);
+
+  // Editing: resolve the stored pick to its planting once the block config has
+  // loaded. The stored allocation id wins; otherwise the snapshots are used and
+  // an ambiguous pick simply stays "Planting not linked".
+  const resolvedForRecord = useRef(false);
+  useEffect(() => {
+    if (!editing || resolvedForRecord.current || !record || !units.length) return;
+    resolvedForRecord.current = true;
+    const match = matchAllocation(units, record.variety_name, record.clone, {
+      allocationId: record.variety_allocation_id ?? null,
+      rootstock: record.rootstock ?? null,
+    });
+    if (match.key) setPlantingKey(match.key);
+  }, [editing, record, units]);
+
+  // Nothing ambiguous to warn about any more — the allocation id is explicit.
+  const selectedUnit = useMemo(
+    () => plantingOptions.find((u) => u.key === plantingKey) ?? null,
+    [plantingOptions, plantingKey],
+  );
+  useEffect(() => {
+    if (plantingKey !== NOT_LINKED && !selectedUnit) setPlantingKey(NOT_LINKED);
+  }, [plantingKey, selectedUnit]);
+  useEffect(() => {
+    if (!editing && plantingKey === NOT_LINKED && plantingOptions.length === 1) {
+      setPlantingKey(plantingOptions[0].key);
     }
-    return list;
-  }, [variety, record]);
+  }, [editing, plantingKey, plantingOptions]);
+
+
 
 
   /** Display-only mirror of the server trigger (season-end year). */
@@ -529,7 +578,10 @@ function DetailedForm({
         varietyId: variety?.id ?? null,
         varietyKey: variety?.key ?? null,
         varietyName: variety?.name ?? null,
-        clone: clone === NO_CLONE ? null : clone,
+        // Snapshots stay attached to the pick; the allocation id is the link.
+        clone: selectedUnit?.cloneLabel ?? (editing ? record?.clone ?? null : null),
+        rootstock: selectedUnit?.rootstockLabel ?? (editing ? record?.rootstock ?? null : null),
+        varietyAllocationId: selectedUnit?.id ?? null,
         weightKg: weight,
         sugarValue: num(sugar),
         sugarUnit,
@@ -631,33 +683,34 @@ function DetailedForm({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>Clone / planting</Label>
-            {cloneOptions.length ? (
-              <Select value={clone} onValueChange={setClone}>
-                <SelectTrigger aria-label="Clone">
-                  <SelectValue placeholder="Select a clone" />
+            <Label>Planting</Label>
+            {plantingOptions.length ? (
+              <Select value={plantingKey} onValueChange={setPlantingKey}>
+                <SelectTrigger aria-label="Planting">
+                  <SelectValue placeholder="Select a planting" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_CLONE}>Not specified</SelectItem>
-                  {cloneOptions.map((c) => (
-                    <SelectItem key={c.clone} value={c.clone}>
-                      {c.label}
+                  <SelectItem value={NOT_LINKED}>Planting not linked</SelectItem>
+                  {plantingOptions.map((u) => (
+                    <SelectItem key={u.key} value={u.key}>
+                      {allocationOptionLabel(u)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
               <p className="text-xs text-muted-foreground">
-                No clone recorded for this variety in the block configuration.
+                No plantings configured for this variety in the block.
               </p>
             )}
-            {cloneOptions.some((c) => c.ambiguous) && (
+            {plantingKey === NOT_LINKED && plantingOptions.length > 1 && (
               <p className="text-xs text-muted-foreground">
-                Two plantings share this clone on different rootstocks — the pick records the clone
-                only, so it will show as unallocated in yield reporting.
+                Pick the exact planting so this harvest is attributed to one allocation — plantings
+                can share a clone and rootstock and are separated by allocated area.
               </p>
             )}
           </div>
+
         </div>
 
         <div className="grid grid-cols-2 gap-3">

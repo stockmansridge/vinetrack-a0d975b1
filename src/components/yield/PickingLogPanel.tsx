@@ -97,17 +97,21 @@ export default function PickingLogPanel({
 
   const plantingFor = (r: PickingRecord) => {
     const units = unitsByBlock.get((r.paddock_id ?? "").toLowerCase()) ?? [];
-    const match = matchAllocation(units, r.variety_name, r.clone);
+    const match = matchAllocation(units, r.variety_name, r.clone, {
+      allocationId: r.variety_allocation_id ?? null,
+      rootstock: r.rootstock ?? null,
+    });
     const unit = match.key ? units.find((u) => u.key === match.key) ?? null : null;
     return {
       label:
         plantingLabel({
           cloneLabel: r.clone ?? unit?.cloneLabel ?? null,
-          rootstockLabel: unit?.rootstockLabel ?? null,
+          rootstockLabel: r.rootstock ?? unit?.rootstockLabel ?? null,
         }) ?? null,
       ambiguous: match.reason === "ambiguous",
     };
   };
+
 
   const del = useMutation({
     mutationFn: (id: string) => softDeletePickingRecord(id),
@@ -299,7 +303,7 @@ export default function PickingLogPanel({
                 <TableCell className="text-xs text-muted-foreground">
                   {(() => {
                     const p = plantingFor(r);
-                    if (p.ambiguous) return <Badge variant="outline">Unallocated</Badge>;
+                    if (p.ambiguous) return <Badge variant="outline">Planting not linked</Badge>;
                     return p.label ?? "—";
                   })()}
                 </TableCell>
