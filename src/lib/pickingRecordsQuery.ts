@@ -112,6 +112,39 @@ export interface CreatePickingRecordInput {
 }
 
 /**
+ * Columns introduced by the allocation-identity contract. They are written
+ * whenever the backend has them and silently dropped (once, then retried)
+ * while a device is still talking to the pre-contract schema, so the portal
+ * never loses a pick because of a rollout ordering difference.
+ */
+const OPTIONAL_ALLOCATION_COLUMNS = ["variety_allocation_id", "rootstock"] as const;
+
+function isUnknownColumnError(error: any): boolean {
+  const code = String(error?.code ?? "");
+  const text = `${error?.message ?? ""} ${error?.details ?? ""}`;
+  if (code === "42703") return true;
+  if (code === "PGRST204" || /schema cache|could not find/i.test(text)) {
+    return OPTIONAL_ALLOCATION_COLUMNS.some((c) => text.includes(c));
+  }
+  return false;
+}
+
+async function writeWithOptionalColumns(
+  row: Record<string, unknown>,
+  run: (row: Record<string, unknown>) => Promise<{ data: any; error: any }>,
+): Promise<PickingRecord> {
+  const { data, error } = await run(row);
+  if (!error) return data as PickingRecord;
+  if (!isUnknownColumnError(error)) throw error;
+  const fallback = { ...row };
+  for (const c of OPTIONAL_ALLOCATION_COLUMNS) delete fallback[c];
+  const retry = await run(fallback);
+  if (retry.error) throw retry.error;
+  return retry.data as PickingRecord;
+}
+
+
+/**
  * Insert one pick. Every save is a NEW row — a Block + Variety + Vintage may
  * have many picks, and matching combinations must never overwrite each other.
  */
