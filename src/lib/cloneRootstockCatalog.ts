@@ -302,3 +302,24 @@ export function isLegacyFreeText(
 ): boolean {
   return !key && !!display && display.trim().length > 0;
 }
+
+/** Read-only label for an allocation's clone. Prefers the stored display
+ *  snapshot, falls back to the sentinel label, then to the catalogue key. */
+export function allocationCloneLabel(a: any): string | null {
+  const display = a?.clone ?? a?.clone_name ?? null;
+  if (display && String(display).trim()) return String(display).trim();
+  const key = a?.cloneKey ?? a?.clone_key ?? null;
+  if (!key) return null;
+  if (key === CLONE_MASS_SELECTION_KEY) return CLONE_MASS_SELECTION_LABEL;
+  return String(key).split(":").pop() ?? null;
+}
+
+/** Read-only label for an allocation's rootstock. */
+export function allocationRootstockLabel(a: any): string | null {
+  const display = a?.rootstock ?? a?.root_stock ?? null;
+  if (display && String(display).trim()) return String(display).trim();
+  const key = a?.rootstockKey ?? a?.rootstock_key ?? a?.root_stock_key ?? null;
+  if (!key) return null;
+  if (key === ROOTSTOCK_OWN_ROOTS_KEY) return ROOTSTOCK_OWN_ROOTS_LABEL;
+  return String(key).split(":").pop() ?? null;
+}
