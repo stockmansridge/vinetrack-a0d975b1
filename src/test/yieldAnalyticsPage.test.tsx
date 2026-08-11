@@ -101,12 +101,15 @@ describe("Yield Analytics page", () => {
     expect(screen.getAllByText(/Average price \/ tonne/i).length).toBeGreaterThan(0);
   });
 
-  it("defaults to the latest vintage and shows its detailed picking totals", async () => {
+  it("merges basic and detailed yield across vintages with area apportioned once", async () => {
     renderPage();
-    // 2026 detailed pick = 50 t (2025 basic record is outside the vintage).
-    await waitFor(() => expect(document.body.textContent).toContain('Total yield'));
-    console.log('BODY>>>', document.body.textContent?.slice(0, 900));
-    // The 2025 basic record is outside the default vintage.
-    expect(document.body.textContent).not.toMatch(/40(\.0+)?\s*t\b/);
+    await waitFor(() => expect(document.body.textContent).toContain("Total yield"));
+    const body = document.body.textContent ?? "";
+    // 40 t (2025 manual) + 50 t (2026 picking records) with the 10 ha block
+    // counted once per vintage.
+    expect(body).toContain("90 t");
+    expect(body).toContain("20 ha");
+    // Weighted price from the priced picking records only.
+    expect(body).toContain("$2,000");
   });
 });
