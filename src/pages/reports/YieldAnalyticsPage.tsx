@@ -1139,14 +1139,14 @@ export default function YieldAnalyticsPage() {
                         return (
                           <div style={tooltipStyle} className="p-2 space-y-0.5">
                             <div className="font-medium">{d.block}</div>
-                            {d.variety && <div className="text-muted-foreground">{d.variety}</div>}
+                            {d.variety && <div className="text-muted-foreground">Variety: {d.variety}</div>}
                             <div>Vintage: {vintageMode === "range" ? "range" : effectiveVintage ?? "—"}</div>
                             <div>Area: {areaFmt(d.areaHa)}</div>
                             <div>
-                              {num(d.x)} t/{rf.areaUnitLabel}
+                              Yield: {num(d.x)} t/{rf.areaUnitLabel}
                             </div>
-                            <div>{money(d.y)} /t</div>
-                            <div>Revenue/area: {moneyPerArea(d.revenuePerHa)}</div>
+                            <div>Sale price: {money(d.y)} /t</div>
+                            <div>Revenue / sold {rf.areaUnitLabel}: {moneyPerArea(d.revenuePerHa)}</div>
                           </div>
                         );
                       }}
@@ -1157,6 +1157,20 @@ export default function YieldAnalyticsPage() {
                         x={metricAxisValue(METRICS[1], propertyAvgTPerHa) ?? 0}
                         stroke="hsl(var(--muted-foreground))"
                         strokeDasharray="4 4"
+                        label={{ value: "Avg yield", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      />
+                    )}
+                    {totals.pricePerTonne != null && (
+                      <ReferenceLine
+                        y={totals.pricePerTonne}
+                        stroke="hsl(var(--muted-foreground))"
+                        strokeDasharray="4 4"
+                        label={{
+                          value: "Avg sale price",
+                          fontSize: 10,
+                          position: "insideTopRight",
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
                       />
                     )}
                   </ScatterChart>
@@ -1164,6 +1178,31 @@ export default function YieldAnalyticsPage() {
               </ChartCard>
             </div>
           </section>
+
+          {costAvailable && (
+            <section id="ya-economics" className="space-y-3 scroll-mt-24">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Production economics
+              </h2>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <ChartCard
+                  title={`Production cost / ${rf.areaUnitLabel} by block`}
+                  subtitle="All harvested fruit, sold and retained"
+                  empty={!blockGroups.some((g) => g.costPerHa != null)}
+                >
+                  {rankBars(blockGroups.filter((g) => g.costPerHa != null), metricOf("costPerHa"))}
+                </ChartCard>
+                <ChartCard
+                  title={`Grape-sale margin / sold ${rf.areaUnitLabel} by block`}
+                  subtitle="Sale revenue less the cost carried by sold fruit"
+                  empty={!blockGroups.some((g) => g.marginPerHa != null)}
+                >
+                  {rankBars(blockGroups.filter((g) => g.marginPerHa != null), metricOf("marginPerHa"))}
+                </ChartCard>
+              </div>
+            </section>
+          )}
+
 
           {/* Historical trends */}
           <section id="ya-trends" className="space-y-3 scroll-mt-24">
