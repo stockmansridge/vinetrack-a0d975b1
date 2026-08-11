@@ -1,6 +1,11 @@
-// Variety allocation editor — manages a list of { id, varietyKey, name, percent }
-// rows that get written to paddocks.variety_allocations. Pure controlled
-// component: parent owns state and persistence.
+// Variety allocation editor — manages a list of allocation rows written to
+// paddocks.variety_allocations. Pure controlled component: parent owns state
+// and persistence.
+//
+// Clone/rootstock follow the shared sql/182 catalogue contract: each row keeps
+// a stable identity key (`cloneKey` / `rootstockKey`, or the `mass_selection` /
+// `own_roots` sentinels) alongside the human-readable snapshot. Legacy free
+// text with no key is preserved verbatim.
 import { useMemo } from "react";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import VarietyPicker from "./VarietyPicker";
+import { ClonePicker, RootstockPicker } from "./CloneRootstockPickers";
+import { useVineyard } from "@/context/VineyardContext";
 
 export interface VarietyAllocationRow {
   id: string;
@@ -16,9 +23,12 @@ export interface VarietyAllocationRow {
   /** Vineyard catalogue row id, if the variety came from the picker. */
   varietyId?: string | null;
   percent: number;
-  /** Optional reference-only fields — mirror iOS shape. */
+  /** Display snapshots — mirror iOS shape. */
   clone?: string | null;
   rootstock?: string | null;
+  /** Catalogue identities / sentinels (sql/182). Null for legacy free text. */
+  cloneKey?: string | null;
+  rootstockKey?: string | null;
 }
 
 interface Props {
@@ -39,6 +49,8 @@ export const newAllocationRow = (): VarietyAllocationRow => ({
   percent: 100,
   clone: null,
   rootstock: null,
+  cloneKey: null,
+  rootstockKey: null,
 });
 
 export function totalPercent(rows: VarietyAllocationRow[]): number {
@@ -58,14 +70,17 @@ function cleanOptional(v: string | null | undefined): string | null {
 }
 
 /** Serialise editor rows into the JSON shape stored in paddocks.variety_allocations.
- *  Matches the iOS shape: { id, varietyKey, varietyId?, name, percent, clone?, rootstock? }.
- *  Blank clone/rootstock values are omitted (never written as empty strings). */
+ *  Matches the shared shape:
+ *  { id, varietyKey, varietyId?, name, percent, clone?, cloneKey?, rootstock?, rootstockKey? }.
+ *  Blank values are omitted (never written as empty strings). */
 export function serialiseAllocations(rows: VarietyAllocationRow[]) {
   return rows
     .filter((r) => r.varietyKey && r.name)
     .map((r) => {
       const clone = cleanOptional(r.clone);
       const rootstock = cleanOptional(r.rootstock);
+      const cloneKey = cleanOptional(r.cloneKey);
+      const rootstockKey = cleanOptional(r.rootstockKey);
       return {
         id: r.id,
         varietyKey: r.varietyKey!,
@@ -73,13 +88,15 @@ export function serialiseAllocations(rows: VarietyAllocationRow[]) {
         percent: r.percent,
         ...(r.varietyId ? { varietyId: r.varietyId } : {}),
         ...(clone !== null ? { clone } : {}),
+        ...(cloneKey !== null ? { cloneKey } : {}),
         ...(rootstock !== null ? { rootstock } : {}),
+        ...(rootstockKey !== null ? { rootstockKey } : {}),
       };
     });
 }
 
 /** Hydrate stored allocations into editor rows. Tolerant of legacy keys
- *  (variety_key / variety_name / root_stock). */
+ *  (variety_key / variety_name / root_stock / clone_key / rootstock_key). */
 export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -96,8 +113,11 @@ export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
       percent: typeof a.percent === "number" ? a.percent : 0,
       clone: cleanOptional(a.clone),
       rootstock: cleanOptional(a.rootstock ?? a.root_stock),
+      cloneKey: cleanOptional(a.cloneKey ?? a.clone_key),
+      rootstockKey: cleanOptional(a.rootstockKey ?? a.rootstock_key ?? a.root_stock_key),
     }));
 }
+
 
 export default function VarietyAllocationEditor({
   vineyardId,
