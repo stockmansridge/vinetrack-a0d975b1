@@ -393,7 +393,21 @@ export default function YieldReportsPage() {
       </Tabs>
 
 
-      <YieldSheet row={selected} vineyardId={selectedVineyardId} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
+      <YieldSheet
+        row={selected}
+        vineyardId={selectedVineyardId}
+        blocks={blocksQ.data ?? []}
+        open={!!selected}
+        onOpenChange={(o) => !o && setSelected(null)}
+        onDelete={(r) => del.mutate(r)}
+        deleting={del.isPending}
+      />
+
+      <RecordActualYieldDialog
+        vineyardId={selectedVineyardId}
+        open={recordOpen}
+        onOpenChange={setRecordOpen}
+      />
     </div>
   );
 }
@@ -410,33 +424,70 @@ function sortDate(r: AnyRow): string | null | undefined {
 function YieldSheet({
   row,
   vineyardId,
+  blocks,
   open,
   onOpenChange,
+  onDelete,
+  deleting,
 }: {
   row: AnyRow | null;
   vineyardId: string | null;
+  blocks: SessionBlockInfo[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onDelete: (row: AnyRow) => void;
+  deleting: boolean;
 }) {
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
+  const isHistorical = row?.__kind === "historical";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
-            {row?.__kind === "historical" ? "Historical yield" : "Estimation session"}
+            {isHistorical ? "Historical yield" : "Estimation session"}
             {row ? ` — ${fmtDate(sortDate(row))}` : ""}
           </SheetTitle>
         </SheetHeader>
         {row?.__kind === "historical" && (
           <HistoricalDetail row={row as HistoricalYieldRecord} vineyardId={vineyardId} />
         )}
-        {row?.__kind === "session" && <SessionDetail row={row as YieldEstimationSession} />}
+        {row?.__kind === "session" && (
+          <SessionDetail row={row as YieldEstimationSession} blocks={blocks} />
+        )}
+        {row && (
+          <div className="mt-6 border-t pt-4">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={deleting}>
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Delete {isHistorical ? "yield record" : "session"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete this {isHistorical ? "yield record" : "estimation session"}?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The record is archived (soft deleted) and removed from the portal and the mobile
+                    app. It is not permanently erased and can be restored by support if needed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onDelete(row)}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );
 }
+
 
 function HistoricalDetail({ row, vineyardId }: { row: HistoricalYieldRecord; vineyardId: string | null }) {
   const rf = useRegionFormatters();
