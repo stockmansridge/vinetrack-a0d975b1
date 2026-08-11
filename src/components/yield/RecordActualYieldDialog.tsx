@@ -31,10 +31,19 @@ import {
   resolvePaddockAllocations,
   useGrapeVarieties,
 } from "@/lib/varietyResolver";
+import {
+  allocationOptionLabel,
+  buildAllocationUnits,
+  matchAllocation,
+  type AllocationUnit,
+} from "@/lib/yieldAllocations";
 
 const HA_PER_AC = 0.40468564224;
 const VINTAGE_HISTORY_YEARS = 15;
 const NO_CLONE = "__none__";
+/** Sentinel for a pick that is deliberately not tied to a planting allocation. */
+const NOT_LINKED = "__not_linked__";
+
 
 /**
  * Season label derived from the vintage under the shared VineTrack season
