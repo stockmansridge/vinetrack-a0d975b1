@@ -63,6 +63,8 @@ import CostReportsPage from "./pages/reports/CostReportsPage";
 import RainfallReportsPage from "./pages/reports/RainfallReportsPage";
 import DocumentsPage from "./pages/reports/DocumentsPage";
 import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
+import YieldReportsComparisonPage from "./pages/reports/YieldReportsPage";
+import YieldCalculatorPage from "./pages/tools/YieldCalculatorPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import SatelliteMappingPage from "./pages/tools/SatelliteMappingPage";
@@ -191,6 +193,7 @@ const App = () => (
                     <Route path="/reports/rainfall" element={<RainfallReportsPage />} />
                     <Route path="/reports/documents" element={<DocumentsPage />} />
                     <Route path="/reports/growth-stage" element={<GrowthStageRecordsPage />} />
+                    <Route path="/reports/yield" element={<YieldReportsComparisonPage />} />
                     <Route path="/tools/irrigation" element={<IrrigationCalculatorPage />} />
                     <Route path="/tools/satellite-mapping" element={<SatelliteMappingPage />} />
                     <Route path="/tools/pruning-tracker" element={<PruningTrackerPage />} />
@@ -210,15 +213,7 @@ const App = () => (
                       <Route path="/reports/irrigation" element={<IrrigationReportsPage />} />
                     </Route>
 
-                    <Route
-                      path="/tools/yield-estimation"
-                      element={
-                        <ToolPlaceholder
-                          title="Yields"
-                          description="Forecasting, Sampling & Recording. Actual yield records are used by Cost Reports to calculate cost per tonne."
-                        />
-                      }
-                    />
+                    <Route path="/tools/yield-estimation" element={<YieldCalculatorPage />} />
                     <Route path="/tools/degree-days" element={<ToolPlaceholder title="Degree Days / BEDD" />} />
                     <Route path="/tools/seeding-mix" element={<ToolPlaceholder title="Seeding Mix Calculator" />} />
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
