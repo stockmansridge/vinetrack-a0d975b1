@@ -84,7 +84,10 @@ const mkYieldPerArea = (rf: RegionFormatters) => (tPerHa?: number | null, dp = 2
 type AnyRow = (YieldEstimationSession | HistoricalYieldRecord) & { __kind: "session" | "historical" };
 
 export default function YieldReportsPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
+  // Portal-side mirror of the existing VineTrack role model. The RPC/RLS remains
+  // the real security boundary — this only avoids showing an action that would fail.
+  const canManageYields = currentRole === "owner" || currentRole === "manager";
   const rf = useRegionFormatters();
   const fmtDate = mkFmtDate(rf);
   const areaVal = mkAreaVal(rf);
