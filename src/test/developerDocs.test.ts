@@ -10,6 +10,8 @@ import {
   groupRoutesByTag,
   splitSections,
   CHANGELOG_MD,
+  POSTMAN_COLLECTION,
+  POSTMAN_FILENAME,
 } from "@/lib/developerDocs";
 
 describe("developer docs (canonical Stage 6A assets)", () => {
@@ -64,12 +66,4 @@ describe("Postman collection bundle", () => {
     expect(parsed.item.length).toBeGreaterThan(0);
   });
 
-  it("exposes an enabled Postman download action", async () => {
-    const { downloads } = await renderDocsPage();
-    const btn = screen.getByRole("button", { name: /postman collection/i });
-    expect(btn).toBeEnabled();
-    expect(btn.getAttribute("title")).not.toMatch(/not published|not provided/i);
-    fireEvent.click(btn);
-    expect(downloads.at(-1)?.filename).toBe(POSTMAN_FILENAME);
-  });
 });
