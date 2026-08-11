@@ -172,6 +172,8 @@ export interface ActualYieldEntry {
   tonnes: number | null;
   areaHa?: number | null;
   source?: "basic" | "detailed";
+  /** Number of individual picks behind a detailed entry. */
+  pickCount?: number | null;
 }
 
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
@@ -200,6 +202,7 @@ export function detailedActualsFromTotals(totals: PickingYieldTotal[]): ActualYi
           ? Number(t.total_weight_kg) / 1000
           : null,
       source: "detailed" as const,
+      pickCount: t.pick_count != null ? Number(t.pick_count) : null,
     }));
 }
 
@@ -211,7 +214,10 @@ export function aggregatePickingRecords(records: PickingRecord[]): ActualYieldEn
     const k = pickingKey(r.paddock_id, r.variety_name, r.vintage);
     const cur = byKey.get(k);
     const tonnes = Number(r.weight_kg) / 1000;
-    if (cur) cur.tonnes = (cur.tonnes ?? 0) + tonnes;
+    if (cur) {
+      cur.tonnes = (cur.tonnes ?? 0) + tonnes;
+      cur.pickCount = (cur.pickCount ?? 0) + 1;
+    }
     else
       byKey.set(k, {
         blockId: r.paddock_id,
@@ -220,6 +226,7 @@ export function aggregatePickingRecords(records: PickingRecord[]): ActualYieldEn
         vintage: r.vintage ?? null,
         tonnes,
         source: "detailed",
+        pickCount: 1,
       });
   }
   return Array.from(byKey.values());
