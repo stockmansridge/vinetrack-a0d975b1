@@ -897,7 +897,7 @@ export default function YieldAnalyticsPage() {
           </nav>
 
           {/* KPIs */}
-          <div id="ya-kpis" className="grid gap-3 scroll-mt-24 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div id="ya-overview" className="grid gap-3 scroll-mt-24 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 
             <KpiCard
               label="Total yield"
