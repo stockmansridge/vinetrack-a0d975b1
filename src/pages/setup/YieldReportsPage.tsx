@@ -392,8 +392,8 @@ export default function YieldReportsPage() {
                       </TableCell>
                     ),
                     season: <TableCell>{isHist ? fmt(h.season ?? h.year) : "—"}</TableCell>,
-                    yield: <TableCell>{isHist ? fmtNum(h.total_yield_tonnes) : "—"}</TableCell>,
-                    area: <TableCell>{isHist ? areaVal(h.total_area_hectares) : "—"}</TableCell>,
+                    yield: <TableCell>{fmtNum(rowTonnes(r))}</TableCell>,
+                    area: <TableCell>{areaVal(rowAreaHa(r))}</TableCell>,
                     status: (
                       <TableCell>
                         {isHist
