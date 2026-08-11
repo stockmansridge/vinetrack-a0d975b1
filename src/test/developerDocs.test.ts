@@ -53,3 +53,23 @@ describe("developer docs (canonical Stage 6A assets)", () => {
     expect(/vt_live_(?!REPLACE|\.\.\.|…)[A-Za-z0-9]{10,}/.test(OPENAPI_YAML)).toBe(false);
   });
 });
+
+describe("Postman collection bundle", () => {
+  it("bundles the canonical Stage 6A collection verbatim", () => {
+    expect(POSTMAN_FILENAME).toBe("VineTrack-v1.postman_collection.json");
+    const parsed = JSON.parse(POSTMAN_COLLECTION);
+    expect(parsed.info.name).toBe("VineTrack API v1");
+    expect(parsed.info.schema).toContain("collection/v2.1.0");
+    expect(Array.isArray(parsed.item)).toBe(true);
+    expect(parsed.item.length).toBeGreaterThan(0);
+  });
+
+  it("exposes an enabled Postman download action", async () => {
+    const { downloads } = await renderDocsPage();
+    const btn = screen.getByRole("button", { name: /postman collection/i });
+    expect(btn).toBeEnabled();
+    expect(btn.getAttribute("title")).not.toMatch(/not published|not provided/i);
+    fireEvent.click(btn);
+    expect(downloads.at(-1)?.filename).toBe(POSTMAN_FILENAME);
+  });
+});
