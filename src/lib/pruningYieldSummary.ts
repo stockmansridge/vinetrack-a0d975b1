@@ -12,7 +12,7 @@ export interface BlockPrunedYieldTile {
 }
 
 export function buildBlockPrunedYieldTiles(
-  blocks: { id: string; name?: string | null; areaHa?: number | null }[],
+  blocks: { id: string; name?: string | null; areaHa?: number | null; vineCount?: number | null }[],
   settingsByBlock: Record<string, PruningYieldSettings>,
 ): BlockPrunedYieldTile[] {
   return blocks.map((b) => {
@@ -26,6 +26,13 @@ export function buildBlockPrunedYieldTiles(
         totalTonnes: null,
       };
     }
+    // vines_per_ha is nullable in the contract — derive from the block when unset.
+    const vinesPerHa =
+      s.vinesPerHa > 0
+        ? s.vinesPerHa
+        : b.vineCount && b.areaHa && b.areaHa > 0
+          ? b.vineCount / b.areaHa
+          : 0;
     const r = calculatePruningYield({
       method: s.pruneMethod,
       bunchesPerBud: s.bunchesPerBud,
@@ -33,7 +40,7 @@ export function buildBlockPrunedYieldTiles(
       spursPerVine: s.spursPerVine,
       budsPerCane: s.budsPerCane,
       canesPerVine: s.canesPerVine,
-      vinesPerHa: s.vinesPerHa,
+      vinesPerHa,
       bunchWeightGrams: s.bunchWeightGrams,
       areaHectares: b.areaHa ?? null,
     });
