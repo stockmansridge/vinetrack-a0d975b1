@@ -10,14 +10,17 @@ export const YIELD_ANALYTICS_COLUMNS = [
   "Hectares",
   "Tonnes",
   "Tonnes/ha",
-  "Avg $/tonne",
-  "Crop revenue",
-  "Revenue/ha",
+  "Disposition (inferred)",
+  "Sold tonnes",
+  "Retained tonnes",
+  "Sale $/tonne",
+  "Grape revenue",
+  "Revenue/sold ha",
   "Production cost",
   "Cost/ha",
   "Cost/tonne",
-  "Gross margin",
-  "Margin/ha",
+  "Grape-sale margin",
+  "Margin/sold ha",
   "Source",
 ] as const;
 
@@ -28,11 +31,15 @@ export function yieldAnalyticsRows(facts: YieldFact[]): string[][] {
   return facts.map((f) => {
     const tPerHa = f.areaHa && f.areaHa > 0 ? f.tonnes / f.areaHa : null;
     const price = f.pricedTonnes > 0 && f.revenue != null ? f.revenue / f.pricedTonnes : null;
-    const revPerHa = f.revenue != null && f.areaHa && f.areaHa > 0 ? f.revenue / f.areaHa : null;
+    // Sale metrics use the sold-fruit basis; cost metrics cover all fruit.
+    const soldFraction = f.tonnes > 0 ? Math.min(1, f.pricedTonnes / f.tonnes) : 0;
+    const soldArea = f.areaHa != null && f.areaHa > 0 ? f.areaHa * soldFraction : null;
+    const revPerHa = f.revenue != null && soldArea ? f.revenue / soldArea : null;
     const costPerHa = f.cost != null && f.areaHa && f.areaHa > 0 ? f.cost / f.areaHa : null;
     const costPerT = f.cost != null && f.tonnes > 0 ? f.cost / f.tonnes : null;
-    const margin = f.revenue != null && f.cost != null ? f.revenue - f.cost : null;
-    const marginPerHa = margin != null && f.areaHa && f.areaHa > 0 ? margin / f.areaHa : null;
+    const soldCost = f.cost != null ? f.cost * soldFraction : null;
+    const margin = f.revenue != null && soldCost != null ? f.revenue - soldCost : null;
+    const marginPerHa = margin != null && soldArea ? margin / soldArea : null;
     return [
       f.vintage != null ? String(f.vintage) : "",
       f.blockName ?? "",
@@ -40,6 +47,9 @@ export function yieldAnalyticsRows(facts: YieldFact[]): string[][] {
       n(f.areaHa),
       n(f.tonnes, 3),
       n(tPerHa),
+      f.disposition === "sold" ? "Sold" : f.disposition === "mixed" ? "Part sold" : "Internal / retained",
+      n(f.pricedTonnes, 3),
+      n(Math.max(0, f.tonnes - f.pricedTonnes), 3),
       n(price),
       n(f.revenue),
       n(revPerHa),
@@ -52,6 +62,7 @@ export function yieldAnalyticsRows(facts: YieldFact[]): string[][] {
     ];
   });
 }
+
 
 function csvEscape(v: string): string {
   return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
