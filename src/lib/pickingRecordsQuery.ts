@@ -34,7 +34,7 @@ export interface PickingRecord {
   variety_allocation_id?: string | null;
   /** Historical rootstock display snapshot (present once the contract ships). */
   rootstock?: string | null;
-
+  weight_kg: number;
   sugar_value: number | null;
   sugar_unit: SugarUnitValue | null;
   ph: number | null;
