@@ -26,7 +26,15 @@ export interface PickingRecord {
   variety_key: string | null;
   variety_name: string | null;
   clone: string | null;
-  weight_kg: number;
+  /**
+   * Authoritative planting identity — the stable `paddocks.variety_allocations[].id`
+   * chosen when the pick was recorded (contract: docs/picking-records-allocation-identity-contract.md).
+   * Nullable: legacy picks and ambiguous backfills stay unlinked rather than guessed.
+   */
+  variety_allocation_id?: string | null;
+  /** Historical rootstock display snapshot (present once the contract ships). */
+  rootstock?: string | null;
+
   sugar_value: number | null;
   sugar_unit: SugarUnitValue | null;
   ph: number | null;
