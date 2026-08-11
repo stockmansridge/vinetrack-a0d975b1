@@ -303,7 +303,18 @@ export default function YieldAnalyticsPage() {
 
   const metricOf = (key: MetricKey) => metricOptions.find((m) => m.key === key) ?? METRICS[0];
 
+  // Harvest disposition donut — inferred from whether a sale value is recorded.
+  const dispositionRows = useMemo(
+    () =>
+      [
+        { name: "Sold", value: totals.soldTonnes },
+        { name: "Retained / internal use", value: totals.retainedTonnes },
+      ].filter((r) => r.value > 1e-6),
+    [totals.soldTonnes, totals.retainedTonnes],
+  );
+
   // Donut becomes a ranked bar when there are too many varieties to read.
+
   const varietyPie = useMemo(() => {
     const rows = varietyGroups.filter((g) => g.tonnes > 0);
     if (rows.length <= 8) return { rows, mode: "pie" as const };
