@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
 import { PageHead } from "@/components/PageHead";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,20 +8,29 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PortalNotice } from "@/components/ui/PortalNotice";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { fetchYieldBlocks } from "@/lib/yieldReportsQuery";
 import {
   calculatePruningYield,
   PRUNING_YIELD_FORMULA_TEXT,
   type PruneMethod,
 } from "@/lib/pruningYieldFormula";
+import {
+  defaultSettingsForBlock,
+  fetchPruningYieldSettings,
+  savePruningYieldSettings,
+  type PruningYieldSettings,
+} from "@/lib/pruningYieldSettingsQuery";
+import { buildBlockPrunedYieldTiles } from "@/lib/pruningYieldSummary";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 
 const HA_PER_AC = 0.40468564224;
-const STORAGE_KEY = "vinetrack.pruningYieldCalculator.v1";
+/** Retired portal-only global saved state (replaced by shared per-block settings). */
+const LEGACY_STORAGE_KEY = "vinetrack.pruningYieldCalculator.v1";
 
-interface SavedSettings {
+interface FormState {
   method: PruneMethod;
   bunchesPerBud: string;
   budsPerSpur: string;
@@ -32,27 +41,6 @@ interface SavedSettings {
   bunchWeight: string;
 }
 
-const DEFAULTS: SavedSettings = {
-  method: "spur",
-  bunchesPerBud: "1.5",
-  budsPerSpur: "2",
-  spursPerVine: "6",
-  budsPerCane: "10",
-  canesPerVine: "4",
-  vinesPerHa: "",
-  bunchWeight: "120",
-};
-
-function loadSaved(): SavedSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<SavedSettings>) };
-  } catch {
-    return DEFAULTS;
-  }
-}
-
 const parse = (s: string) => {
   const n = Number(String(s).replace(",", ".").trim());
   return Number.isFinite(n) ? n : 0;
@@ -61,11 +49,37 @@ const parse = (s: string) => {
 const fmt = (v: number, dp = 2) =>
   v.toLocaleString(undefined, { maximumFractionDigits: dp, minimumFractionDigits: 0 });
 
+function toForm(s: PruningYieldSettings): FormState {
+  return {
+    method: s.pruneMethod,
+    bunchesPerBud: String(s.bunchesPerBud),
+    budsPerSpur: String(s.budsPerSpur),
+    spursPerVine: String(s.spursPerVine),
+    budsPerCane: String(s.budsPerCane),
+    canesPerVine: String(s.canesPerVine),
+    vinesPerHa: s.vinesPerHa ? String(s.vinesPerHa) : "",
+    bunchWeight: String(s.bunchWeightGrams),
+  };
+}
+
 export default function YieldCalculatorPage() {
-  const { selectedVineyardId } = useVineyard();
+  const { selectedVineyardId, currentRole } = useVineyard();
   const rf = useRegionFormatters();
-  const [s, setS] = useState<SavedSettings>(loadSaved);
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [blockId, setBlockId] = useState<string>("");
+  const [s, setS] = useState<FormState>(() =>
+    toForm(defaultSettingsForBlock(selectedVineyardId ?? "", null)),
+  );
+
+  // Legacy portal-only global saved state is no longer authoritative.
+  useEffect(() => {
+    try {
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const blocksQ = useQuery({
     queryKey: ["yield", "blocks", selectedVineyardId],
@@ -75,15 +89,32 @@ export default function YieldCalculatorPage() {
   const blocks = blocksQ.data ?? [];
   const block = useMemo(() => blocks.find((b) => b.id === blockId) ?? null, [blocks, blockId]);
 
-  // Seed vines/ha from the selected block when the user has not typed one.
-  useEffect(() => {
-    if (!block || s.vinesPerHa.trim() !== "") return;
-    if (block.vineCount && block.areaHa && block.areaHa > 0) {
-      setS((prev) => ({ ...prev, vinesPerHa: String(Math.round(block.vineCount! / block.areaHa!)) }));
-    }
-  }, [block, s.vinesPerHa]);
+  const settingsQ = useQuery({
+    queryKey: ["pruning-yield-settings", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPruningYieldSettings(selectedVineyardId!),
+  });
+  const settingsByBlock = settingsQ.data ?? {};
 
-  const set = (k: keyof SavedSettings, v: string) => setS((prev) => ({ ...prev, [k]: v }));
+  // Block switching: always reload every input from the shared saved record or
+  // the canonical defaults — never leak the previous block's values.
+  useEffect(() => {
+    if (!selectedVineyardId) return;
+    if (settingsQ.isLoading) return;
+    const saved = blockId ? settingsByBlock[blockId] : undefined;
+    setS(
+      toForm(
+        saved ??
+          defaultSettingsForBlock(
+            selectedVineyardId,
+            block ? { id: block.id, areaHa: block.areaHa, vineCount: block.vineCount } : null,
+          ),
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockId, selectedVineyardId, settingsQ.isLoading, settingsQ.dataUpdatedAt, block?.id]);
+
+  const set = (k: keyof FormState, v: string) => setS((prev) => ({ ...prev, [k]: v }));
 
   const result = useMemo(
     () =>
@@ -104,7 +135,44 @@ export default function YieldCalculatorPage() {
   const perArea = (tPerHa: number) =>
     `${fmt(rf.areaUnitLabel === "ac" ? tPerHa * HA_PER_AC : tPerHa)} t/${rf.areaUnitLabel}`;
 
-  const saveDefaults = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  const canEdit = currentRole === "owner" || currentRole === "manager";
+
+  const saveM = useMutation({
+    mutationFn: () =>
+      savePruningYieldSettings({
+        vineyardId: selectedVineyardId!,
+        paddockId: blockId,
+        pruneMethod: s.method,
+        bunchesPerBud: parse(s.bunchesPerBud),
+        budsPerSpur: parse(s.budsPerSpur),
+        spursPerVine: parse(s.spursPerVine),
+        budsPerCane: parse(s.budsPerCane),
+        canesPerVine: parse(s.canesPerVine),
+        vinesPerHa: parse(s.vinesPerHa),
+        bunchWeightGrams: parse(s.bunchWeight),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pruning-yield-settings", selectedVineyardId] });
+      toast({ title: "Block values saved", description: `Shared with the mobile apps for ${block?.name ?? "this block"}.` });
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not save", description: e?.message ?? "Unknown error", variant: "destructive" }),
+  });
+
+  const resetToDefaults = () =>
+    setS(
+      toForm(
+        defaultSettingsForBlock(
+          selectedVineyardId ?? "",
+          block ? { id: block.id, areaHa: block.areaHa, vineCount: block.vineCount } : null,
+        ),
+      ),
+    );
+
+  const tiles = useMemo(
+    () => buildBlockPrunedYieldTiles(blocks, settingsByBlock),
+    [blocks, settingsByBlock],
+  );
 
   return (
     <div className="space-y-4">
@@ -129,6 +197,47 @@ export default function YieldCalculatorPage() {
         description="This calculator does not save records. Use Yields to record sampling sessions and actual harvested tonnes."
       />
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Block Pruned Yield</CardTitle>
+          <CardDescription>
+            Calculated from each block&apos;s shared saved pruning assumptions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tiles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No blocks available.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {tiles.map((t) => (
+                <button
+                  key={t.blockId}
+                  type="button"
+                  data-testid={`pruned-yield-tile-${t.blockId}`}
+                  onClick={() => setBlockId(t.blockId)}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors hover:bg-accent",
+                    t.blockId === blockId ? "border-primary bg-primary/5" : "border-border",
+                  )}
+                >
+                  <div className="truncate text-sm font-medium">{t.blockName}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Pruned Yield
+                  </div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {t.hasSettings && t.totalTonnes != null
+                      ? `${fmt(t.totalTonnes)} t`
+                      : t.hasSettings
+                        ? `${fmt(t.tonnesPerHa ?? 0)} t/ha`
+                        : "Not set"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -137,7 +246,7 @@ export default function YieldCalculatorPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Block (optional)</Label>
+              <Label>Block</Label>
               <Select value={blockId} onValueChange={setBlockId}>
                 <SelectTrigger>
                   <SelectValue placeholder={blocks.length ? "Select a block" : "No blocks available"} />
@@ -154,18 +263,30 @@ export default function YieldCalculatorPage() {
                 <p className="text-xs text-muted-foreground">
                   Area: {block.areaHa ? rf.area(block.areaHa, 2) : "—"} · Vines:{" "}
                   {block.vineCount != null ? fmt(block.vineCount, 0) : "—"}
+                  {settingsByBlock[block.id] ? " · Shared values saved" : " · No saved values"}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
               <Label>Pruning method</Label>
-              <Tabs value={s.method} onValueChange={(v) => set("method", v as PruneMethod)}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="spur">Spur</TabsTrigger>
-                  <TabsTrigger value="cane">Cane</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="grid grid-cols-2 gap-2">
+                {(["spur", "cane"] as PruneMethod[]).map((m) => (
+                  <Button
+                    key={m}
+                    type="button"
+                    variant={s.method === m ? "default" : "outline"}
+                    aria-pressed={s.method === m}
+                    onClick={() => set("method", m)}
+                    className={cn(
+                      "w-full capitalize",
+                      s.method === m && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                    )}
+                  >
+                    {m}
+                  </Button>
+                ))}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {s.method === "spur"
                   ? "Spur pruning: short canes (spurs) left with a set number of buds each."
@@ -190,13 +311,20 @@ export default function YieldCalculatorPage() {
               <Field label="Bunch weight (g)" value={s.bunchWeight} onChange={(v) => set("bunchWeight", v)} />
             </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={saveDefaults}>
-                Save as my defaults
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => saveM.mutate()}
+                disabled={!blockId || !canEdit || saveM.isPending}
+              >
+                Save Block Values
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setS(DEFAULTS)}>
+              <Button variant="ghost" size="sm" onClick={resetToDefaults}>
                 Reset
               </Button>
+              <span className="text-xs text-muted-foreground">
+                Saves these pruning assumptions for this block.
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -213,7 +341,7 @@ export default function YieldCalculatorPage() {
             <Row label={`Yield per ${rf.areaUnitLabel}`} value={perArea(result.yieldTonnesPerHa)} strong />
             <Row
               label="Block total (t)"
-              value={result.totalTonnes != null ? fmt(result.totalTonnes) : "—"}
+              value={result.totalTonnes != null ? fmt(result.totalTonnes, 3) : "—"}
               strong
             />
             {result.totalTonnes == null && (
