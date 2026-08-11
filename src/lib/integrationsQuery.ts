@@ -836,3 +836,606 @@ export function formatDate(value: string | null | undefined): string {
     year: "numeric",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Stage 5B — Webhook management (SQL 5A RPC contract)
+// ---------------------------------------------------------------------------
+//
+// Every read/write goes through the integration_* webhook RPCs. The portal
+// never touches webhook_endpoints / webhook_deliveries / webhook_subscriptions
+// directly, never calls the service-role dispatcher RPCs
+// (integration_webhook_claim_deliveries, integration_webhook_get_endpoint_secret,
+// integration_webhook_record_attempt) and never reads a signing secret.
+// Plaintext signing secrets returned by create/rotate live ONLY in transient
+// component state — they are never written into the React Query cache.
+
+export type WebhookEndpointStatus = "active" | "paused" | "disabled" | string;
+export type WebhookDeliveryStatus =
+  | "pending"
+  | "delivering"
+  | "delivered"
+  | "failed"
+  | "cancelled"
+  | string;
+
+export interface WebhookEndpoint {
+  id: string;
+  name: string | null;
+  url: string | null;
+  status: WebhookEndpointStatus;
+  signing_secret_prefix: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  consecutive_failures: number;
+  paused_at: string | null;
+  disabled_at: string | null;
+  disabled_reason: string | null;
+  subscription_count: number | null;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  endpoint_id: string | null;
+  event_type: string;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  is_active: boolean;
+  created_at: string | null;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  public_id: string | null;
+  event_id: string | null;
+  event_type: string | null;
+  endpoint_id: string | null;
+  endpoint_name: string | null;
+  vineyard_id: string | null;
+  vineyard_name: string | null;
+  status: WebhookDeliveryStatus;
+  attempt_count: number;
+  next_attempt_at: string | null;
+  last_status_code: number | null;
+  last_error_code: string | null;
+  is_test: boolean;
+  replay_of: string | null;
+  replay_of_public_id: string | null;
+  api_version: string | null;
+  created_at: string | null;
+  delivered_at: string | null;
+  failed_at: string | null;
+  payload: unknown;
+  attempts: WebhookDeliveryAttempt[];
+}
+
+export interface WebhookDeliveryAttempt {
+  id: string;
+  attempt_number: number | null;
+  attempted_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  http_status: number | null;
+  error_category: string | null;
+  error_detail: string | null;
+}
+
+export const WEBHOOK_KEYS = {
+  endpoints: (clientId: string) =>
+    ["integrations", clientId, "webhooks"] as const,
+  endpoint: (clientId: string, endpointId: string) =>
+    ["integrations", clientId, "webhooks", endpointId] as const,
+  subscriptions: (clientId: string, endpointId: string) =>
+    ["integrations", clientId, "webhooks", endpointId, "subscriptions"] as const,
+  deliveries: (clientId: string) =>
+    ["integrations", clientId, "webhooks", "deliveries"] as const,
+  delivery: (clientId: string, deliveryId: string) =>
+    ["integrations", clientId, "webhooks", "delivery", deliveryId] as const,
+};
+
+// --- Event catalogue -------------------------------------------------------
+// Values are the exact backend identifiers from
+// public.integration_webhook_event_catalog. The catalogue table is also read at
+// runtime where RLS permits; this constant is the presentation fallback and the
+// source of the customer-facing grouping.
+
+export interface WebhookEventDefinition {
+  event: string;
+  module: string;
+  label: string;
+  description: string;
+  scope: string | null;
+  is_system?: boolean;
+}
+
+export const WEBHOOK_EVENT_CATALOG: WebhookEventDefinition[] = [
+  { event: "block.created", module: "structure", label: "Block created", description: "Sent when a block is added to a vineyard.", scope: "blocks:read" },
+  { event: "block.updated", module: "structure", label: "Block updated", description: "Sent when block details or boundaries change.", scope: "blocks:read" },
+  { event: "trip.created", module: "trips", label: "Trip created", description: "Sent when a field trip is created.", scope: "trips:read" },
+  { event: "trip.updated", module: "trips", label: "Trip updated", description: "Sent when a field trip is materially updated.", scope: "trips:read" },
+  { event: "trip.completed", module: "trips", label: "Trip completed", description: "Sent when a field trip is completed.", scope: "trips:read" },
+  { event: "spray_job.created", module: "sprays", label: "Spray job created", description: "Sent when a spray job is created.", scope: "sprays:read" },
+  { event: "spray_job.updated", module: "sprays", label: "Spray job updated", description: "Sent when a spray job is materially updated.", scope: "sprays:read" },
+  { event: "spray_job.completed", module: "sprays", label: "Spray job completed", description: "Sent when a spray job is completed.", scope: "sprays:read" },
+  { event: "fuel_log.created", module: "fuel", label: "Fuel log created", description: "Sent when a fuel log entry is recorded.", scope: "fuel:read" },
+  { event: "fuel_log.updated", module: "fuel", label: "Fuel log updated", description: "Sent when a fuel log entry is updated.", scope: "fuel:read" },
+  { event: "fuel_purchase.created", module: "fuel", label: "Fuel purchase recorded", description: "Sent when a fuel purchase is recorded.", scope: "fuel:read" },
+  { event: "work_task.created", module: "work", label: "Work task created", description: "Sent when a work task is created.", scope: "work_tasks:read" },
+  { event: "work_task.updated", module: "work", label: "Work task updated", description: "Sent when a work task is updated.", scope: "work_tasks:read" },
+  { event: "work_task.completed", module: "work", label: "Work task completed", description: "Sent when a work task is completed.", scope: "work_tasks:read" },
+  { event: "pruning_activity.created", module: "pruning", label: "Pruning activity created", description: "Sent when pruning work is recorded.", scope: "pruning:read" },
+  { event: "pruning_activity.updated", module: "pruning", label: "Pruning activity updated", description: "Sent when a pruning activity is updated.", scope: "pruning:read" },
+  { event: "irrigation_record.created", module: "irrigation", label: "Irrigation record created", description: "Sent when an irrigation record is created.", scope: "irrigation:read" },
+  { event: "irrigation_record.updated", module: "irrigation", label: "Irrigation record updated", description: "Sent when an irrigation record is updated.", scope: "irrigation:read" },
+  { event: "irrigation_record.completed", module: "irrigation", label: "Irrigation record completed", description: "Sent when an irrigation record is completed.", scope: "irrigation:read" },
+  { event: "growth_stage.recorded", module: "growth", label: "Growth stage recorded", description: "Sent when a growth stage observation is recorded.", scope: "growth_stages:read" },
+  { event: "yield_record.created", module: "yield", label: "Yield record created", description: "Sent when a yield record is created.", scope: "yield:read" },
+  { event: "yield_record.updated", module: "yield", label: "Yield record updated", description: "Sent when a yield record is updated.", scope: "yield:read" },
+  { event: "pin.created", module: "pins", label: "Pin created", description: "Sent when a pin, repair or observation is created.", scope: "pins:read" },
+  { event: "pin.updated", module: "pins", label: "Pin updated", description: "Sent when a pin is updated.", scope: "pins:read" },
+  { event: "pin.resolved", module: "pins", label: "Pin resolved", description: "Sent when a pin is resolved or completed.", scope: "pins:read" },
+];
+
+export const WEBHOOK_MODULE_LABELS: Record<string, string> = {
+  structure: "Vineyard structure",
+  trips: "Operational activity",
+  sprays: "Spraying",
+  fuel: "Fuel",
+  work: "Operational activity",
+  pruning: "Pruning",
+  irrigation: "Irrigation",
+  growth: "Growth",
+  yield: "Yield",
+  pins: "Pins",
+  system: "System",
+};
+
+const WEBHOOK_MODULE_ORDER = [
+  "structure",
+  "trips",
+  "work",
+  "sprays",
+  "fuel",
+  "pruning",
+  "irrigation",
+  "growth",
+  "yield",
+  "pins",
+];
+
+/** Customer-facing event label; falls back to a humanised identifier. */
+export function webhookEventLabel(event: string): string {
+  const def = WEBHOOK_EVENT_CATALOG.find((e) => e.event === event);
+  if (def) return def.label;
+  return titleise(event.replace(/[._]/g, " "));
+}
+
+export function webhookEventScope(event: string): string | null {
+  return WEBHOOK_EVENT_CATALOG.find((e) => e.event === event)?.scope ?? null;
+}
+
+/** Events grouped for the subscription picker, in a stable display order. */
+export function groupedWebhookEvents(): { group: string; events: WebhookEventDefinition[] }[] {
+  const groups: { group: string; events: WebhookEventDefinition[] }[] = [];
+  const seen = new Map<string, WebhookEventDefinition[]>();
+  const ordered = [...WEBHOOK_EVENT_CATALOG].sort(
+    (a, b) =>
+      WEBHOOK_MODULE_ORDER.indexOf(a.module) - WEBHOOK_MODULE_ORDER.indexOf(b.module),
+  );
+  for (const def of ordered) {
+    const label = WEBHOOK_MODULE_LABELS[def.module] ?? titleise(def.module);
+    if (!seen.has(label)) {
+      const list: WebhookEventDefinition[] = [];
+      seen.set(label, list);
+      groups.push({ group: label, events: list });
+    }
+    seen.get(label)!.push(def);
+  }
+  return groups;
+}
+
+// --- Normalisers -----------------------------------------------------------
+
+function normaliseEndpoint(row: Record<string, any>): WebhookEndpoint {
+  const status = String(
+    row.status ?? (row.disabled_at ? "disabled" : row.paused_at ? "paused" : "active"),
+  );
+  return {
+    id: String(row.id ?? row.endpoint_id ?? ""),
+    name: str(row.name ?? row.endpoint_name),
+    url: str(row.url ?? row.endpoint_url),
+    status,
+    signing_secret_prefix: str(row.signing_secret_prefix ?? row.secret_prefix),
+    created_at: str(row.created_at),
+    updated_at: str(row.updated_at),
+    last_success_at: str(row.last_success_at),
+    last_failure_at: str(row.last_failure_at),
+    consecutive_failures: num(row.consecutive_failures) ?? 0,
+    paused_at: str(row.paused_at),
+    disabled_at: str(row.disabled_at),
+    disabled_reason: str(row.disabled_reason),
+    subscription_count: num(
+      row.subscription_count ?? row.subscriptions_count ?? row.active_subscriptions,
+    ),
+  };
+}
+
+function normaliseSubscription(row: Record<string, any>): WebhookSubscription {
+  return {
+    id: String(row.id ?? row.subscription_id ?? ""),
+    endpoint_id: str(row.webhook_endpoint_id ?? row.endpoint_id),
+    event_type: String(row.event_type ?? row.event ?? ""),
+    vineyard_id: str(row.vineyard_id),
+    vineyard_name: str(row.vineyard_name),
+    is_active: row.is_active === undefined ? true : Boolean(row.is_active),
+    created_at: str(row.created_at),
+  };
+}
+
+function normaliseAttempt(row: Record<string, any>, i: number): WebhookDeliveryAttempt {
+  return {
+    id: String(row.id ?? `${row.attempt_number ?? i}`),
+    attempt_number: num(row.attempt_number) ?? i + 1,
+    attempted_at: str(row.attempted_at ?? row.created_at),
+    finished_at: str(row.finished_at),
+    duration_ms: num(row.duration_ms),
+    http_status: num(row.http_status ?? row.status_code),
+    error_category: str(row.error_category),
+    error_detail: str(row.error_detail ?? row.error_message),
+  };
+}
+
+export function normaliseDelivery(row: Record<string, any>): WebhookDelivery {
+  const attempts = Array.isArray(row.attempts)
+    ? (row.attempts as Record<string, any>[]).map(normaliseAttempt)
+    : [];
+  return {
+    id: String(row.id ?? row.delivery_id ?? ""),
+    public_id: str(row.public_id ?? row.delivery_public_id),
+    event_id: str(row.event_id ?? row.event_public_id),
+    event_type: str(row.event_type ?? row.event),
+    endpoint_id: str(row.endpoint_id ?? row.webhook_endpoint_id),
+    endpoint_name: str(row.endpoint_name),
+    vineyard_id: str(row.vineyard_id),
+    vineyard_name: str(row.vineyard_name),
+    status: String(row.status ?? "pending"),
+    attempt_count: num(row.attempt_count) ?? 0,
+    next_attempt_at: str(row.next_attempt_at),
+    last_status_code: num(row.last_status_code ?? row.http_status),
+    last_error_code: str(row.last_error_code ?? row.error_code),
+    is_test: Boolean(row.is_test),
+    replay_of: str(row.replay_of),
+    replay_of_public_id: str(row.replay_of_public_id),
+    api_version: str(row.api_version ?? row.event_api_version),
+    created_at: str(row.created_at),
+    delivered_at: str(row.delivered_at),
+    failed_at: str(row.failed_at),
+    payload: row.payload ?? row.event_payload ?? row.envelope ?? null,
+    attempts,
+  };
+}
+
+/** Customer-friendly delivery status. Pending with attempts = retry scheduled. */
+export function webhookDeliveryStatusLabel(d: {
+  status: string;
+  attempt_count: number;
+  next_attempt_at: string | null;
+}): string {
+  if (d.status === "pending" && d.attempt_count > 0) return "Retry scheduled";
+  switch (d.status) {
+    case "pending":
+      return "Pending";
+    case "delivering":
+      return "Delivering";
+    case "delivered":
+      return "Delivered";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return titleise(d.status);
+  }
+}
+
+export function webhookDeliveryTone(
+  status: string,
+): "success" | "warning" | "error" | "neutral" {
+  if (status === "delivered") return "success";
+  if (status === "failed") return "error";
+  if (status === "pending" || status === "delivering") return "warning";
+  return "neutral";
+}
+
+export function webhookEndpointStatusOf(e: WebhookEndpoint): WebhookEndpointStatus {
+  return e.status;
+}
+
+/** Basic client-side URL check. Backend validation remains authoritative. */
+export function isValidWebhookUrl(value: string): boolean {
+  try {
+    const u = new URL(value.trim());
+    return u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+// --- Reads -----------------------------------------------------------------
+
+export function useWebhookEndpoints(clientId: string | undefined) {
+  return useQuery({
+    queryKey: WEBHOOK_KEYS.endpoints(clientId ?? ""),
+    enabled: !!clientId,
+    queryFn: async () =>
+      asArray(
+        await rpc("integration_list_webhook_endpoints", { p_client_id: clientId }),
+      ).map(normaliseEndpoint),
+  });
+}
+
+export function useWebhookEndpoint(
+  clientId: string | undefined,
+  endpointId: string | undefined,
+) {
+  return useQuery({
+    queryKey: WEBHOOK_KEYS.endpoint(clientId ?? "", endpointId ?? ""),
+    enabled: !!clientId && !!endpointId,
+    queryFn: async () => {
+      const row = asArray(
+        await rpc("integration_get_webhook_endpoint", { p_endpoint_id: endpointId }),
+      )[0];
+      return row ? normaliseEndpoint(row) : null;
+    },
+  });
+}
+
+export function useWebhookSubscriptions(
+  clientId: string | undefined,
+  endpointId: string | undefined,
+) {
+  return useQuery({
+    queryKey: WEBHOOK_KEYS.subscriptions(clientId ?? "", endpointId ?? ""),
+    enabled: !!clientId && !!endpointId,
+    queryFn: async () =>
+      asArray(
+        await rpc("integration_list_webhook_subscriptions", {
+          p_endpoint_id: endpointId,
+        }),
+      ).map(normaliseSubscription),
+  });
+}
+
+export interface WebhookDeliveryFilters {
+  endpointId?: string | null;
+  eventType?: string | null;
+  status?: string | null;
+  vineyardId?: string | null;
+  from?: string | null;
+  to?: string | null;
+}
+
+export const WEBHOOK_DELIVERY_PAGE_SIZE = 50;
+
+export function webhookDeliveryRpcArgs(
+  clientId: string,
+  filters: WebhookDeliveryFilters,
+  cursor: ApiRequestCursor | null,
+  limit = WEBHOOK_DELIVERY_PAGE_SIZE,
+): Record<string, unknown> {
+  return {
+    p_client_id: clientId,
+    p_endpoint_id: filters.endpointId || null,
+    p_event_type: filters.eventType || null,
+    p_status: filters.status || null,
+    p_vineyard_id: filters.vineyardId || null,
+    p_from: filters.from || null,
+    p_to: filters.to || null,
+    p_limit: limit,
+    p_before_created_at: cursor?.created_at ?? null,
+    p_before_id: cursor?.id ?? null,
+  };
+}
+
+export function nextWebhookDeliveryCursor(
+  rows: WebhookDelivery[],
+  limit: number,
+): ApiRequestCursor | null {
+  if (rows.length < limit) return null;
+  const last = rows[rows.length - 1];
+  if (!last?.created_at || !last.id) return null;
+  return { created_at: last.created_at, id: last.id };
+}
+
+export function useWebhookDeliveries(
+  clientId: string | undefined,
+  filters: WebhookDeliveryFilters,
+  cursor: ApiRequestCursor | null,
+  limit = WEBHOOK_DELIVERY_PAGE_SIZE,
+) {
+  return useQuery({
+    queryKey: [...WEBHOOK_KEYS.deliveries(clientId ?? ""), filters, cursor, limit],
+    enabled: !!clientId,
+    queryFn: async () =>
+      asArray(
+        await rpc(
+          "integration_list_webhook_deliveries",
+          webhookDeliveryRpcArgs(clientId!, filters, cursor, limit),
+        ),
+      ).map(normaliseDelivery),
+  });
+}
+
+export function useWebhookDelivery(
+  clientId: string | undefined,
+  deliveryId: string | null,
+) {
+  return useQuery({
+    queryKey: WEBHOOK_KEYS.delivery(clientId ?? "", deliveryId ?? ""),
+    enabled: !!clientId && !!deliveryId,
+    queryFn: async () => {
+      const row = asArray(
+        await rpc("integration_get_webhook_delivery", { p_delivery_id: deliveryId }),
+      )[0];
+      return row ? normaliseDelivery(row) : null;
+    },
+  });
+}
+
+// --- Mutations -------------------------------------------------------------
+
+/** Extracts the one-time plaintext signing secret from an RPC response.
+ *  The caller must keep it in transient state only. */
+function extractSigningSecret(row: Record<string, any>): string | null {
+  return (
+    str(row.signing_secret) ??
+    str(row.secret) ??
+    str(row.plaintext_secret) ??
+    str(row.webhook_secret) ??
+    null
+  );
+}
+
+function useWebhookInvalidate(clientId: string) {
+  const qc = useQueryClient();
+  return (endpointId?: string) => {
+    qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.endpoints(clientId) });
+    if (endpointId) {
+      qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.endpoint(clientId, endpointId) });
+    }
+  };
+}
+
+export function useCreateWebhookEndpoint(clientId: string) {
+  const invalidate = useWebhookInvalidate(clientId);
+  return useMutation({
+    mutationFn: async (input: { name: string; url: string }) => {
+      const row = asArray(
+        await rpc("integration_create_webhook_endpoint", {
+          p_client_id: clientId,
+          p_url: input.url.trim(),
+          p_name: input.name.trim(),
+        }),
+      )[0] ?? {};
+      // The secret is returned to the caller only — never cached.
+      return { endpoint: normaliseEndpoint(row), secret: extractSigningSecret(row) };
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateWebhookEndpoint(clientId: string) {
+  const invalidate = useWebhookInvalidate(clientId);
+  return useMutation({
+    mutationFn: async (input: { endpointId: string; name: string; url: string }) =>
+      rpc("integration_update_webhook_endpoint", {
+        p_endpoint_id: input.endpointId,
+        p_url: input.url.trim(),
+        p_name: input.name.trim(),
+      }),
+    onSuccess: (_d, v) => invalidate(v.endpointId),
+  });
+}
+
+export function useSetWebhookEndpointStatus(clientId: string) {
+  const invalidate = useWebhookInvalidate(clientId);
+  return useMutation({
+    mutationFn: async (input: { endpointId: string; status: WebhookEndpointStatus }) =>
+      rpc("integration_set_webhook_endpoint_status", {
+        p_endpoint_id: input.endpointId,
+        p_status: input.status,
+      }),
+    onSuccess: (_d, v) => invalidate(v.endpointId),
+  });
+}
+
+export function useDeleteWebhookEndpoint(clientId: string) {
+  const invalidate = useWebhookInvalidate(clientId);
+  return useMutation({
+    mutationFn: async (endpointId: string) =>
+      rpc("integration_delete_webhook_endpoint", { p_endpoint_id: endpointId }),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useRotateWebhookSecret(clientId: string) {
+  const invalidate = useWebhookInvalidate(clientId);
+  return useMutation({
+    mutationFn: async (endpointId: string) => {
+      const row = asArray(
+        await rpc("integration_rotate_webhook_secret", { p_endpoint_id: endpointId }),
+      )[0] ?? {};
+      return { endpoint: normaliseEndpoint(row), secret: extractSigningSecret(row) };
+    },
+    onSuccess: (_d, endpointId) => invalidate(endpointId),
+  });
+}
+
+export function useSendTestWebhook(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (endpointId: string) => {
+      const row = asArray(
+        await rpc("integration_send_test_webhook", { p_endpoint_id: endpointId }),
+      )[0] ?? {};
+      return {
+        deliveryId: str(row.id ?? row.delivery_id),
+        publicId: str(row.public_id ?? row.delivery_public_id),
+      };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.deliveries(clientId) });
+      qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.endpoints(clientId) });
+    },
+  });
+}
+
+export function useCreateWebhookSubscription(clientId: string, endpointId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { eventType: string; vineyardId: string }) =>
+      rpc("integration_create_webhook_subscription", {
+        p_endpoint_id: endpointId,
+        p_event_type: input.eventType,
+        p_vineyard_id: input.vineyardId,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: WEBHOOK_KEYS.subscriptions(clientId, endpointId),
+      });
+      qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.endpoints(clientId) });
+    },
+  });
+}
+
+export function useDeleteWebhookSubscription(clientId: string, endpointId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (subscriptionId: string) =>
+      rpc("integration_delete_webhook_subscription", {
+        p_subscription_id: subscriptionId,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: WEBHOOK_KEYS.subscriptions(clientId, endpointId),
+      });
+      qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.endpoints(clientId) });
+    },
+  });
+}
+
+export function useReplayWebhookDelivery(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (deliveryId: string) => {
+      const row = asArray(
+        await rpc("integration_replay_webhook_delivery", { p_delivery_id: deliveryId }),
+      )[0] ?? {};
+      return { publicId: str(row.public_id), id: str(row.id) };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: WEBHOOK_KEYS.deliveries(clientId) });
+    },
+  });
+}
