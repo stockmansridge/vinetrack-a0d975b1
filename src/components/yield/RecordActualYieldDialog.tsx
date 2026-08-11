@@ -474,6 +474,7 @@ function DetailedForm({
 
   const selected = useMemo(() => blocks.find((b) => b.id === blockId) ?? null, [blocks, blockId]);
   const varieties = useBlockVarieties(selected, vineyardId);
+  const units = useBlockAllocationUnits(selected, vineyardId);
 
   // Auto-select the sole variety; reset when the block changes. Skipped on the
   // first pass when editing so the recorded snapshot is not overwritten.
@@ -484,7 +485,7 @@ function DetailedForm({
       return;
     }
     setVarietyName(varieties.length === 1 ? varieties[0].name : "");
-    setClone(NO_CLONE);
+    setPlantingKey(NOT_LINKED);
   }, [blockId, varieties.length]);
 
   // Varieties recorded before a block was reconfigured stay selectable — the
@@ -509,24 +510,43 @@ function DetailedForm({
     () => varietyOptions.find((v) => v.name === varietyName) ?? null,
     [varietyOptions, varietyName],
   );
-  useEffect(() => {
-    if (variety && variety.clones.length === 1 && clone === NO_CLONE) setClone(variety.clones[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variety]);
 
-  // The recorded clone stays selectable even when the block configuration has
-  // since changed — historical picks are snapshots.
-  const cloneOptions = useMemo<PlantingOption[]>(() => {
-    const list: PlantingOption[] = [
-      ...(variety?.plantings ??
-        (variety?.clones ?? []).map((c) => ({ clone: c, label: c, ambiguous: false }))),
-    ];
-    const recorded = (record?.clone ?? "").trim();
-    if (recorded && !list.some((p) => p.clone === recorded)) {
-      list.unshift({ clone: recorded, label: recorded, ambiguous: false });
+  // Selectable plantings for the chosen variety. Identical clone + rootstock
+  // pairs stay separate rows because each carries its own allocation id.
+  const plantingOptions = useMemo(() => {
+    const v = (variety?.name ?? "").trim().toLowerCase();
+    return v ? units.filter((u) => (u.variety ?? "").trim().toLowerCase() === v) : units;
+  }, [units, variety]);
+
+  // Editing: resolve the stored pick to its planting once the block config has
+  // loaded. The stored allocation id wins; otherwise the snapshots are used and
+  // an ambiguous pick simply stays "Planting not linked".
+  const resolvedForRecord = useRef(false);
+  useEffect(() => {
+    if (!editing || resolvedForRecord.current || !record || !units.length) return;
+    resolvedForRecord.current = true;
+    const match = matchAllocation(units, record.variety_name, record.clone, {
+      allocationId: record.variety_allocation_id ?? null,
+      rootstock: record.rootstock ?? null,
+    });
+    if (match.key) setPlantingKey(match.key);
+  }, [editing, record, units]);
+
+  // Nothing ambiguous to warn about any more — the allocation id is explicit.
+  const selectedUnit = useMemo(
+    () => plantingOptions.find((u) => u.key === plantingKey) ?? null,
+    [plantingOptions, plantingKey],
+  );
+  useEffect(() => {
+    if (plantingKey !== NOT_LINKED && !selectedUnit) setPlantingKey(NOT_LINKED);
+  }, [plantingKey, selectedUnit]);
+  useEffect(() => {
+    if (!editing && plantingKey === NOT_LINKED && plantingOptions.length === 1) {
+      setPlantingKey(plantingOptions[0].key);
     }
-    return list;
-  }, [variety, record]);
+  }, [editing, plantingKey, plantingOptions]);
+
+
 
 
   /** Display-only mirror of the server trigger (season-end year). */
