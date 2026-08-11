@@ -127,18 +127,22 @@ describe("Yields page", () => {
     await waitFor(() => expect(trigger.textContent).toContain("2026"));
   });
 
-  it("shows Overview cards with block, variety and estimated tonnes", async () => {
+  it("shows Overview cards with block, variety and the estimate as comparison", async () => {
     renderPage();
     // 1000 vines x 25 bunches/vine x 0.2 kg = 5 t estimated for the sole variety.
     await waitFor(() => expect(screen.getByText("Block A")).toBeInTheDocument());
     expect(screen.getByText("Shiraz")).toBeInTheDocument();
-    expect(screen.getByText(/Estimated: 5 t/)).toBeInTheDocument();
+    // Actual supersedes the estimate, which stays as secondary comparison text.
+    expect(screen.getAllByText(/Estimate 5 t/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Estimated: —/)).toBeNull();
   });
 
-  it("shows actual tonnes on the Overview where recorded", async () => {
+  it("leads with actual tonnes on the Overview where recorded", async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText(/Actual: 4 t/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("4 t").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("ACTUAL").length).toBeGreaterThan(0);
   });
+
 
   it("marks the active tab and renders inactive tabs distinctly", async () => {
     renderPage();

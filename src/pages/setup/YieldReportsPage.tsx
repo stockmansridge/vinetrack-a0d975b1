@@ -661,86 +661,153 @@ function YieldOverviewGrid({
       </Card>
     );
   }
+  const perArea = mkYieldPerArea(rf);
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         {vintage ? `Vintage ${vintage}` : "All vintages"} — estimated and actual tonnes by block and variety.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
-          <Card key={c.blockId} className="p-4 space-y-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="font-medium">{c.blockName}</div>
-              {c.areaHa != null && (
-                <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
-              )}
-            </div>
-            <div className="space-y-2">
-              {c.varieties.map((v, i) => (
-                <div
-                  key={v.allocationKey ?? `${v.variety ?? "none"}-${i}`}
-                  className="rounded-md border border-border/60 p-2 text-sm"
-                >
-                  <div className="text-foreground">{v.variety ?? "No variety configured"}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {plantingLabel(v) ?? "Clone / rootstock not recorded"}
+        {cards.map((c) => {
+          const head = headline(c.estimatedTonnes, c.actualTonnes);
+          return (
+            <Card key={c.blockId} className="p-4 space-y-2.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="font-medium leading-tight">{c.blockName}</div>
+                {c.areaHa != null && (
+                  <span className="text-xs text-muted-foreground">{rf.area(c.areaHa, 2)}</span>
+                )}
+              </div>
+
+              {head && (
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[26px] font-bold leading-none tabular-nums">
+                      {fmtNum(head.tonnes)} t
+                    </span>
+                    <Badge variant="outline" className="text-[10px] tracking-wide">
+                      {head.actual ? "ACTUAL" : "ESTIMATE"}
+                    </Badge>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Allocated area:{" "}
-                    {v.areaHa != null
-                      ? rf.area(v.areaHa, 2)
-                      : v.percent != null
-                      ? `${fmtNum(v.percent)}%`
-                      : "—"}
+                    {head.actual ? "Actual yield" : "Estimated yield"}
+                    {c.areaHa != null && head.tonnes != null
+                      ? ` · ${perArea(head.tonnes / c.areaHa)}`
+                      : ""}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Estimated: {v.estimatedTonnes == null ? "—" : `${fmtNum(v.estimatedTonnes)} t`}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Actual: {v.actualTonnes == null ? "—" : `${fmtNum(v.actualTonnes)} t`}
-                  </div>
-                  {v.actualTonnes != null && (
-                    <div className="text-xs text-muted-foreground">
-                      {actualSourceLabel(v.actualSource, v.actualPickCount)}
+                  {head.actual && c.estimatedTonnes != null && (
+                    <div className="text-xs text-muted-foreground tabular-nums">
+                      {varianceLabel(c.estimatedTonnes, head.tonnes)}
                     </div>
                   )}
                 </div>
-              ))}
-              {c.unallocated.map((u, i) => (
-                <div
-                  key={`not-linked-${i}`}
-                  className="rounded-md border border-dashed border-border p-2 text-sm"
-                >
-                  <div className="text-foreground">
-                    {u.variety ?? "No variety recorded"} — planting not linked
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    These picks are not linked to a specific planting allocation yet. Open the pick
-                    and assign the planting to include it at allocation level.
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    Actual: {fmtNum(u.actualTonnes)} t
-                  </div>
-                </div>
-              ))}
-              {(c.actualTonnes != null || c.estimatedTonnes != null) && (
-                <div className="flex items-baseline justify-between border-t pt-2 text-sm">
-                  <span className="text-muted-foreground text-xs">Block total</span>
-                  <span className="tabular-nums text-xs">
-                    Est {c.estimatedTonnes == null ? "—" : `${fmtNum(c.estimatedTonnes)} t`} · Actual{" "}
-                    {c.actualTonnes == null ? "—" : `${fmtNum(c.actualTonnes)} t`}
-                  </span>
-                </div>
               )}
-            </div>
 
-          </Card>
-        ))}
+              <div className="space-y-1.5">
+                {c.varieties.map((v, i) => {
+                  const h = headline(v.estimatedTonnes, v.actualTonnes);
+                  return (
+                    <div
+                      key={v.allocationKey ?? `${v.variety ?? "none"}-${i}`}
+                      className="rounded-md border border-border/60 px-2 py-1.5 text-sm"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-foreground">
+                            {v.variety ?? "No variety configured"}
+                          </div>
+                          {plantingLabel(v) && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {plantingLabel(v)}
+                            </div>
+                          )}
+                        </div>
+                        {h && (
+                          <div className="shrink-0 text-right">
+                            <div className="text-base font-semibold leading-none tabular-nums">
+                              {fmtNum(h.tonnes)} t
+                            </div>
+                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {h.actual ? "Actual" : "Estimate"}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {[
+                          v.areaHa != null
+                            ? rf.area(v.areaHa, 2)
+                            : v.percent != null
+                            ? `${fmtNum(v.percent)}%`
+                            : null,
+                          h && h.tonnes != null && v.areaHa
+                            ? perArea(h.tonnes / v.areaHa)
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                      {h?.actual && v.estimatedTonnes != null && (
+                        <div className="text-xs text-muted-foreground tabular-nums">
+                          {varianceLabel(v.estimatedTonnes, h.tonnes)}
+                        </div>
+                      )}
+                      {v.actualTonnes != null && (
+                        <div className="text-xs text-muted-foreground">
+                          {actualSourceLabel(v.actualSource, v.actualPickCount)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {c.unallocated.map((u, i) => (
+                  <div
+                    key={`not-linked-${i}`}
+                    className="rounded-md border border-dashed border-border px-2 py-1.5 text-sm"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="min-w-0 truncate text-foreground">
+                        {u.variety ?? "No variety recorded"} — planting not linked
+                      </div>
+                      <div className="shrink-0 text-base font-semibold tabular-nums">
+                        {fmtNum(u.actualTonnes)} t
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      These picks are not linked to a specific planting allocation yet. Open the pick
+                      and assign the planting to include it at allocation level.
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+/** Which number leads a card: actual harvest always supersedes the estimate. */
+export function headline(
+  estimated: number | null | undefined,
+  actual: number | null | undefined,
+): { tonnes: number; actual: boolean } | null {
+  if (actual != null) return { tonnes: Number(actual), actual: true };
+  if (estimated != null) return { tonnes: Number(estimated), actual: false };
+  return null;
+}
+
+/** Neutral estimate-vs-actual variance, e.g. "Estimate 6.40 t · +0.32 t (+5.0%)". */
+export function varianceLabel(estimated: number, actual: number): string {
+  const diff = actual - estimated;
+  const sign = diff >= 0 ? "+" : "−";
+  const abs = Math.abs(diff);
+  const pct = estimated !== 0 ? ` (${sign}${((abs / Math.abs(estimated)) * 100).toFixed(1)}%)` : "";
+  return `Estimate ${fmtNum(estimated)} t · ${sign}${fmtNum(abs)} t${pct}`;
+}
+
 
 function sortDate(r: AnyRow): string | null | undefined {
   if (r.__kind === "historical") {
