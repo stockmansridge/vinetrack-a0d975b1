@@ -60,9 +60,10 @@ import {
 } from "@/lib/pickingRecordsQuery";
 import {
   buildAllocationUnits,
+  buildPlantingGroups,
   matchAllocation,
   plantingLabel,
-  type AllocationUnit,
+  type PlantingGroup,
 } from "@/lib/yieldAllocations";
 import { useVintage } from "@/lib/useVintage";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
@@ -314,13 +315,17 @@ export default function YieldReportsPage() {
   const overviewCards = useMemo(() => {
     // Allocation units per block — each planting (variety + clone + rootstock)
     // is its own production unit so yield is never repeated across rows.
-    const unitsByBlock = new Map<string, AllocationUnit[]>();
+    const unitsByBlock = new Map<string, PlantingGroup[]>();
     const blocks = (blocksQ.data ?? []).map((b) => {
-      const units = buildAllocationUnits({
-        blockId: b.id,
-        areaHa: b.areaHa ?? null,
-        allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
-      }).filter((u) => u.variety != null);
+      // Production reporting unit = planting GROUP (variety + clone +
+      // rootstock), with member sections' hectares summed.
+      const units = buildPlantingGroups(
+        buildAllocationUnits({
+          blockId: b.id,
+          areaHa: b.areaHa ?? null,
+          allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
+        }),
+      ).filter((u) => u.variety != null);
       unitsByBlock.set(b.id.toLowerCase(), units);
       return {
         id: b.id,
@@ -334,6 +339,7 @@ export default function YieldReportsPage() {
           cloneLabel: u.cloneLabel,
           rootstockLabel: u.rootstockLabel,
           areaHa: u.areaHa,
+          sectionCount: u.sectionCount,
         })),
       };
     });

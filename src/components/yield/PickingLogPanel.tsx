@@ -30,7 +30,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { EditPickingRecordDialog } from "@/components/yield/RecordActualYieldDialog";
 import { fetchYieldBlocks } from "@/lib/yieldReportsQuery";
 import { buildVarietyMap, resolvePaddockAllocations, useGrapeVarieties } from "@/lib/varietyResolver";
-import { buildAllocationUnits, matchAllocation, plantingLabel } from "@/lib/yieldAllocations";
+import {
+  buildAllocationUnits,
+  buildPlantingGroups,
+  matchAllocation,
+  plantingLabel,
+} from "@/lib/yieldAllocations";
 import {
   fetchPickingRecords,
   softDeletePickingRecord,
@@ -81,15 +86,17 @@ export default function PickingLogPanel({
   const { data: grapeVarieties } = useGrapeVarieties(vineyardId);
   const varietyMap = useMemo(() => buildVarietyMap(grapeVarieties ?? []), [grapeVarieties]);
   const unitsByBlock = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof buildAllocationUnits>>();
+    const map = new Map<string, ReturnType<typeof buildPlantingGroups>>();
     for (const b of blocksQ.data ?? []) {
       map.set(
         b.id.toLowerCase(),
-        buildAllocationUnits({
-          blockId: b.id,
-          areaHa: b.areaHa ?? null,
-          allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
-        }),
+        buildPlantingGroups(
+          buildAllocationUnits({
+            blockId: b.id,
+            areaHa: b.areaHa ?? null,
+            allocations: resolvePaddockAllocations(b.varietyAllocations, varietyMap),
+          }),
+        ),
       );
     }
     return map;
