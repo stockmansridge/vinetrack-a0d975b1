@@ -21,9 +21,10 @@ export const DEVELOPER_GUIDE_MD = developerGuideRaw;
 export const WEBHOOK_GUIDE_MD = webhookGuideRaw;
 export const CHANGELOG_MD = changelogRaw;
 
-// The Stage 6A Postman collection is not bundled with the portal. When it is
-// added to docs/postman/ this flag flips and the download button activates.
-export const POSTMAN_COLLECTION: string | null = null;
+// Canonical Stage 6A Postman collection, bundled verbatim — never regenerated
+// or reshaped here.
+export const POSTMAN_COLLECTION: string = postmanCollectionRaw;
+export const POSTMAN_FILENAME = "VineTrack-v1.postman_collection.json";
 
 // ---------------------------------------------------------------------------
 // OpenAPI
