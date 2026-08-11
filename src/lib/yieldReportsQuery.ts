@@ -1,4 +1,11 @@
-// READ-ONLY query helper for yield reports. No writes.
+// Query helpers for yield reports.
+//
+// Reads are unchanged. Writes are limited to what the iOS backend already
+// exposes:
+//   - INSERT into historical_yield_records (Record Actual Yield)
+//   - soft_delete_yield_estimation_session(p_id)
+//   - soft_delete_historical_yield_record(p_id)
+// No schema changes are made from the portal.
 //
 // Schema (docs/supabase-schema.md §3.13):
 //   yield_estimation_sessions: payload jsonb (full session document),
@@ -14,6 +21,9 @@
 //   live inside `payload` / `block_results` JSONB. Therefore the only safe
 //   relationship is `vineyard_id`.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { deriveMetrics } from "@/lib/paddockGeometry";
+import type { SessionBlockInfo } from "@/lib/yieldSessionSummary";
+
 
 export interface YieldEstimationSession {
   id: string;
