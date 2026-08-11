@@ -401,7 +401,9 @@ export default function YieldReportsPage() {
         onOpenChange={(o) => !o && setSelected(null)}
         onDelete={(r) => del.mutate(r)}
         deleting={del.isPending}
+        canDelete={canManageYields}
       />
+
 
       <RecordActualYieldDialog
         vineyardId={selectedVineyardId}
