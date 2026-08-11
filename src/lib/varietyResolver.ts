@@ -9,6 +9,10 @@
 //   4. Otherwise: unresolved
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
+import {
+  allocationCloneLabel,
+  allocationRootstockLabel,
+} from "@/lib/cloneRootstockCatalog";
 
 export interface GrapeVariety {
   id: string;
@@ -286,8 +290,8 @@ export function resolveAllocation(
     id: alloc.id,
     name: name || null,
     percent: typeof alloc.percent === "number" ? alloc.percent : null,
-    clone: alloc.clone ?? null,
-    rootstock: alloc.rootstock ?? null,
+    clone: allocationCloneLabel(alloc),
+    rootstock: allocationRootstockLabel(alloc),
     plantingYear:
       typeof alloc.plantingYear === "number"
         ? alloc.plantingYear

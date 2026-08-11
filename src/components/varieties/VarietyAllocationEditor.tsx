@@ -1,6 +1,11 @@
-// Variety allocation editor — manages a list of { id, varietyKey, name, percent }
-// rows that get written to paddocks.variety_allocations. Pure controlled
-// component: parent owns state and persistence.
+// Variety allocation editor — manages a list of allocation rows written to
+// paddocks.variety_allocations. Pure controlled component: parent owns state
+// and persistence.
+//
+// Clone/rootstock follow the shared sql/182 catalogue contract: each row keeps
+// a stable identity key (`cloneKey` / `rootstockKey`, or the `mass_selection` /
+// `own_roots` sentinels) alongside the human-readable snapshot. Legacy free
+// text with no key is preserved verbatim.
 import { useMemo } from "react";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import VarietyPicker from "./VarietyPicker";
+import { ClonePicker, RootstockPicker } from "./CloneRootstockPickers";
+import { useVineyard } from "@/context/VineyardContext";
 
 export interface VarietyAllocationRow {
   id: string;
@@ -16,9 +23,12 @@ export interface VarietyAllocationRow {
   /** Vineyard catalogue row id, if the variety came from the picker. */
   varietyId?: string | null;
   percent: number;
-  /** Optional reference-only fields — mirror iOS shape. */
+  /** Display snapshots — mirror iOS shape. */
   clone?: string | null;
   rootstock?: string | null;
+  /** Catalogue identities / sentinels (sql/182). Null for legacy free text. */
+  cloneKey?: string | null;
+  rootstockKey?: string | null;
 }
 
 interface Props {
@@ -39,6 +49,8 @@ export const newAllocationRow = (): VarietyAllocationRow => ({
   percent: 100,
   clone: null,
   rootstock: null,
+  cloneKey: null,
+  rootstockKey: null,
 });
 
 export function totalPercent(rows: VarietyAllocationRow[]): number {
@@ -58,14 +70,17 @@ function cleanOptional(v: string | null | undefined): string | null {
 }
 
 /** Serialise editor rows into the JSON shape stored in paddocks.variety_allocations.
- *  Matches the iOS shape: { id, varietyKey, varietyId?, name, percent, clone?, rootstock? }.
- *  Blank clone/rootstock values are omitted (never written as empty strings). */
+ *  Matches the shared shape:
+ *  { id, varietyKey, varietyId?, name, percent, clone?, cloneKey?, rootstock?, rootstockKey? }.
+ *  Blank values are omitted (never written as empty strings). */
 export function serialiseAllocations(rows: VarietyAllocationRow[]) {
   return rows
     .filter((r) => r.varietyKey && r.name)
     .map((r) => {
       const clone = cleanOptional(r.clone);
       const rootstock = cleanOptional(r.rootstock);
+      const cloneKey = cleanOptional(r.cloneKey);
+      const rootstockKey = cleanOptional(r.rootstockKey);
       return {
         id: r.id,
         varietyKey: r.varietyKey!,
@@ -73,13 +88,15 @@ export function serialiseAllocations(rows: VarietyAllocationRow[]) {
         percent: r.percent,
         ...(r.varietyId ? { varietyId: r.varietyId } : {}),
         ...(clone !== null ? { clone } : {}),
+        ...(cloneKey !== null ? { cloneKey } : {}),
         ...(rootstock !== null ? { rootstock } : {}),
+        ...(rootstockKey !== null ? { rootstockKey } : {}),
       };
     });
 }
 
 /** Hydrate stored allocations into editor rows. Tolerant of legacy keys
- *  (variety_key / variety_name / root_stock). */
+ *  (variety_key / variety_name / root_stock / clone_key / rootstock_key). */
 export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -96,8 +113,11 @@ export function deserialiseAllocations(raw: any): VarietyAllocationRow[] {
       percent: typeof a.percent === "number" ? a.percent : 0,
       clone: cleanOptional(a.clone),
       rootstock: cleanOptional(a.rootstock ?? a.root_stock),
+      cloneKey: cleanOptional(a.cloneKey ?? a.clone_key),
+      rootstockKey: cleanOptional(a.rootstockKey ?? a.rootstock_key ?? a.root_stock_key),
     }));
 }
+
 
 export default function VarietyAllocationEditor({
   vineyardId,
@@ -107,9 +127,14 @@ export default function VarietyAllocationEditor({
 }: Props) {
   const total = useMemo(() => totalPercent(value), [value]);
   const totalOk = Math.abs(total - 100) < 0.01;
+  const { currentRole } = useVineyard();
+  // Only owners/managers may add custom catalogue entries (backend enforces
+  // the same rule via RLS; this just avoids offering a doomed action).
+  const canManageCatalogue = currentRole === "owner" || currentRole === "manager";
   // Note: the same variety may intentionally appear more than once on a block
   // (e.g. Pinot Noir split across two clones/rootstocks). We deliberately do
   // NOT filter out already-selected varieties from the picker.
+
 
   const update = (id: string, patch: Partial<VarietyAllocationRow>) => {
     onChange(value.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -152,13 +177,18 @@ export default function VarietyAllocationEditor({
                 value={row.varietyKey && row.name ? { varietyKey: row.varietyKey, name: row.name } : null}
                 excludeKeys={[]}
                 disabled={disabled}
-                onSelect={(v) =>
+                onSelect={(v) => {
+                  // Clones are variety-scoped: a variety change invalidates any
+                  // previously chosen clone (rootstock is variety-independent).
+                  const varietyChanged = v.varietyKey !== row.varietyKey;
                   update(row.id, {
                     varietyKey: v.varietyKey,
                     name: v.name,
                     varietyId: v.id ?? null,
-                  })
-                }
+                    ...(varietyChanged ? { cloneKey: null, clone: null } : {}),
+                  });
+                }}
+
               />
             </div>
             <div className="space-y-1">
@@ -189,30 +219,34 @@ export default function VarietyAllocationEditor({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-xs">Clone <span className="text-muted-foreground font-normal">(optional reference)</span></Label>
-              <Input
-                value={row.clone ?? ""}
-                placeholder="e.g. MV6"
-                onChange={(e) => update(row.id, { clone: e.target.value })}
-                onBlur={(e) =>
-                  update(row.id, { clone: e.target.value.trim() || null })
-                }
+              <Label className="text-xs">
+                Clone{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <ClonePicker
+                vineyardId={vineyardId}
+                varietyKey={row.varietyKey}
+                value={{ key: row.cloneKey ?? null, display: row.clone ?? null }}
                 disabled={disabled}
+                canCreate={canManageCatalogue}
+                onChange={(v) => update(row.id, { cloneKey: v.key, clone: v.display })}
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Rootstock <span className="text-muted-foreground font-normal">(optional reference)</span></Label>
-              <Input
-                value={row.rootstock ?? ""}
-                placeholder="e.g. 101-14"
-                onChange={(e) => update(row.id, { rootstock: e.target.value })}
-                onBlur={(e) =>
-                  update(row.id, { rootstock: e.target.value.trim() || null })
-                }
+              <Label className="text-xs">
+                Rootstock{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <RootstockPicker
+                vineyardId={vineyardId}
+                value={{ key: row.rootstockKey ?? null, display: row.rootstock ?? null }}
                 disabled={disabled}
+                canCreate={canManageCatalogue}
+                onChange={(v) => update(row.id, { rootstockKey: v.key, rootstock: v.display })}
               />
             </div>
           </div>
+
         </div>
       ))}
 
