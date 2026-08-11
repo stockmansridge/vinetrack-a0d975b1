@@ -348,6 +348,8 @@ export default function YieldReportsPage() {
       blockId: a.blockId,
       variety: a.variety,
       tonnes: a.tonnes,
+      source: a.source,
+      pickCount: a.pickCount ?? null,
     }));
 
     return buildYieldOverview({ blocks, estimatedByBlock, actuals });
@@ -596,6 +598,19 @@ export default function YieldReportsPage() {
   );
 }
 
+/** Where an Actual Yield total came from — detailed picks or a manual entry. */
+export function actualSourceLabel(
+  source: "basic" | "detailed" | null,
+  pickCount: number | null,
+): string {
+  if (source === "detailed") {
+    const n = pickCount ?? 0;
+    return `From ${n} picking record${n === 1 ? "" : "s"}`;
+  }
+  if (source === "basic") return "Manual actual yield";
+  return "";
+}
+
 function YieldOverviewGrid({
   cards,
   vintage,
@@ -633,9 +648,14 @@ function YieldOverviewGrid({
                     Estimated: {v.estimatedTonnes == null ? "—" : `${fmtNum(v.estimatedTonnes)} t`}
                   </div>
                   {v.actualTonnes != null && (
-                    <div className="text-xs text-muted-foreground">
-                      Actual: {fmtNum(v.actualTonnes)} t
-                    </div>
+                    <>
+                      <div className="text-xs text-muted-foreground">
+                        Actual: {fmtNum(v.actualTonnes)} t
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {actualSourceLabel(v.actualSource, v.actualPickCount)}
+                      </div>
+                    </>
                   )}
                 </div>
               ))}
