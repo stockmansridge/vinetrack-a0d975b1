@@ -194,16 +194,14 @@ export default function RecordActualYieldDialog({
         </DialogHeader>
 
         <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-          <TabsList className="border border-border bg-muted/70 shadow-sm">
+          <TabsList>
             <TabsTrigger
               value="basic"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               Basic
             </TabsTrigger>
             <TabsTrigger
               value="detailed"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               Detailed
             </TabsTrigger>

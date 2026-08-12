@@ -150,7 +150,7 @@ describe("Yields page", () => {
     const estimations = screen.getByRole("tab", { name: /Estimations/ });
     expect(overview.getAttribute("data-state")).toBe("active");
     expect(estimations.getAttribute("data-state")).toBe("inactive");
-    expect(overview.className).toContain("data-[state=active]:bg-background");
+    expect(overview.className).toContain("data-[state=active]:bg-primary");
   });
 
   it("shows estimated tonnes, area, block and variety in the records table", async () => {
