@@ -120,7 +120,7 @@ export const INTEGRATION_ERROR_MESSAGES: Record<string, string> = {
   invalid_scope: "That API permission is not available.",
   scope_not_found: "That API permission is not available.",
   write_scopes_not_available:
-    "Write permissions are not available — the VineTrack API is read-only.",
+    "That write permission is not yet available — no public write endpoint accepts it.",
   invalid_status: "That integration status change is not supported.",
   integration_revoked:
     "This integration has been revoked and can no longer be changed.",
@@ -637,8 +637,8 @@ export function useSetScope(clientId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { scope: string; granted: boolean }) => {
-      if (input.scope.endsWith(":write")) {
-        // Hard requirement: the public API is read-only in Stage 4.
+      if (isReservedWriteScope(input.scope)) {
+        // Only the five Stage 8 write scopes are grantable; the rest stay reserved.
         throw new Error("write_scopes_not_available");
       }
       return rpc(
