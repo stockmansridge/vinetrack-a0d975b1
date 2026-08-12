@@ -285,6 +285,36 @@ export function IntegrationPermissionsTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={!!pendingWrite}
+        onOpenChange={(open) => !open && setPendingWrite(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enable write access?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This integration will be able to create or modify supported VineTrack
+              records for vineyards it has access to
+              {pendingWrite ? ` (${scopeLabel(pendingWrite.scope)})` : ""}. VineTrack
+              validates every external write and records it as integration-created.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const row = pendingWrite;
+                setPendingWrite(null);
+                if (row) apply(row, true);
+              }}
+            >
+              Enable write access
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
