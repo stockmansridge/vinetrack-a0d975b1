@@ -491,12 +491,14 @@ export default function AdminUserActivityPage() {
       roles: (r) => (r.roles ?? []).length,
       account_created: (r) => (r.account_created_at ? new Date(r.account_created_at).getTime() : 0),
       last_login: (r) => (r.last_sign_in_at ? new Date(r.last_sign_in_at).getTime() : 0),
-      app: (r) => r.app_version ?? "",
-      platform: (r) => r.app_platform ?? "",
-      device: (r) => r.device_model ?? "",
-      os: (r) => r.os_version ?? "",
+      last_seen: (r) => (r.last_client_seen_at ? new Date(r.last_client_seen_at).getTime() : 0),
+      app_type: (r) => r.last_app_type ?? "",
+      app_version: (r) => r.last_app_version ?? "",
+      device: (r) => r.last_device_model ?? "",
+      os: (r) => osDisplay(r).toLowerCase(),
       status: (r) => r.status ?? "",
     },
+
     initial: { key: "last_login", direction: "desc" },
   });
 
