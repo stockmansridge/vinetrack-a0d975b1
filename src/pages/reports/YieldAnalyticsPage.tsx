@@ -66,7 +66,7 @@ import {
 } from "@/components/ui/table";
 
 import { extractHistoricalBlockRows, fetchYieldBlocks, fetchYieldReportsForVineyard } from "@/lib/yieldReportsQuery";
-import { fetchPickingYieldTotals } from "@/lib/pickingRecordsQuery";
+import { fetchPickingRecords, fetchPickingYieldTotals } from "@/lib/pickingRecordsQuery";
 import { fetchTripCostAllocationsForVineyard } from "@/lib/tripCostAllocationsQuery";
 import { usePruningActivity } from "@/lib/pruningActivityQuery";
 import { buildUnifiedCostDataset } from "@/lib/unifiedCostDataset";
@@ -174,6 +174,13 @@ export default function YieldAnalyticsPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchPickingYieldTotals(selectedVineyardId!),
   });
+  // Individual picks supply the sold/retained split behind Sale $/t. Only
+  // non-financial columns are used, so this is safe for every role.
+  const pickRecordsQ = useQuery({
+    queryKey: ["picking_records", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchPickingRecords(selectedVineyardId!),
+  });
   const tripCostQ = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
     enabled: !!selectedVineyardId && canSeeCosts,
@@ -204,6 +211,13 @@ export default function YieldAnalyticsPage() {
       buildYieldFacts({
         historicalRows: extractHistoricalBlockRows(reportsQ.data?.historical ?? []),
         pickingTotals: pickingQ.data ?? [],
+        pickingRecords: (pickRecordsQ.data ?? []).map((p) => ({
+          vintage: p.vintage,
+          paddock_id: p.paddock_id,
+          variety_name: p.variety_name,
+          weight_kg: p.weight_kg,
+          sold: p.sold,
+        })),
         blocks: (blocksQ.data ?? []).map((b) => ({
           id: b.id,
           name: b.name,
@@ -213,7 +227,7 @@ export default function YieldAnalyticsPage() {
 
         costRows,
       }),
-    [reportsQ.data?.historical, pickingQ.data, blocksQ.data, costRows],
+    [reportsQ.data?.historical, pickingQ.data, pickRecordsQ.data, blocksQ.data, costRows],
   );
 
   const costAvailable = canSeeCosts && allFacts.some((f) => f.cost != null && f.cost > 0);
