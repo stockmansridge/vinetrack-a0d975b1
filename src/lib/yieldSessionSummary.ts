@@ -291,14 +291,22 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     .map((b) => b.estimatedYieldTonnes)
     .filter((v): v is number => v != null);
 
+  const baseValues = blocks
+    .map((b) => b.baseEstimatedYieldTonnes)
+    .filter((v): v is number => v != null);
+
   return {
     season,
     notes,
     samplesPerHectare,
+    applyDamage,
+    routeSourceSessionId,
     blocks,
     totalAreaHa: areaValues.length ? areaValues.reduce((a, b) => a + b, 0) : null,
     totalEstTonnes: tonnesValues.length ? tonnesValues.reduce((a, b) => a + b, 0) : null,
+    totalBaseTonnes: baseValues.length ? baseValues.reduce((a, b) => a + b, 0) : null,
     hasAnySamples: blocks.some((b) => b.recordedCount > 0),
+
     missing: {
       sampleSites: blocks.every((b) => b.siteCount === 0),
       bunchWeight: blocks.some((b) => b.bunchWeightIsDefault),
