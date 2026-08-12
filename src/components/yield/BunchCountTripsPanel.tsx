@@ -4,7 +4,7 @@
 // is the latest completed trip per block (see `currentEstimatesByBlock`) — the
 // exact same rule Yield Reports uses, so the badge and the report can never
 // disagree. Drafts are history but never current.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,9 +130,8 @@ export default function BunchCountTripsPanel({
               const areaHa = t.summary.totalAreaHa;
               const source = t.routeSourceSessionId ? tripById.get(t.routeSourceSessionId) : null;
               return (
-                <>
+                <Fragment key={t.id}>
                   <TableRow
-                    key={t.id}
                     className="cursor-pointer"
                     data-testid={`trip-row-${t.id}`}
                     onClick={() => setExpanded(open ? null : t.id)}
@@ -180,7 +179,7 @@ export default function BunchCountTripsPanel({
                     </TableCell>
                   </TableRow>
                   {open && (
-                    <TableRow key={t.id + ":detail"} className="bg-muted/30 hover:bg-muted/30">
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell colSpan={10}>
                         <div className="space-y-2 py-1 text-xs">
                           <div className="flex flex-wrap gap-x-6 gap-y-1">
@@ -233,7 +232,7 @@ export default function BunchCountTripsPanel({
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </TableBody>
