@@ -41,6 +41,8 @@ import {
   softDeletePickingRecord,
   type PickingRecord,
 } from "@/lib/pickingRecordsQuery";
+import { usePickingFinancials } from "@/lib/pickingFinancials";
+
 
 const fmt = (v: number | null | undefined, dp = 2) =>
   v == null || !Number.isFinite(Number(v))
