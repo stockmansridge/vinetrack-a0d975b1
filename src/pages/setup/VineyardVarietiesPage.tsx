@@ -31,7 +31,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ClonesTab, RootstocksTab } from "@/components/varieties/CatalogueTabs";
 import { toast } from "@/hooks/use-toast";
+
 
 import {
   useVineyardGrapeVarieties,
