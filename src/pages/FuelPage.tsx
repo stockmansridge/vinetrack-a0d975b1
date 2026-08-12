@@ -21,7 +21,7 @@ export default function FuelPage() {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-4">
-        <TabsList className="border-2 border-border">
+        <TabsList>
           <TabsTrigger
             value="purchases"
             className="px-5 py-2 text-sm font-medium"

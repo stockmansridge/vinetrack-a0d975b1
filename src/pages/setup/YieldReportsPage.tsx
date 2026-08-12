@@ -465,7 +465,7 @@ export default function YieldReportsPage() {
       <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList className="border border-border">
+        <TabsList>
           <TabsTrigger
             value="overview"
           >

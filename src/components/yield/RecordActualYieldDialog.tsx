@@ -194,7 +194,7 @@ export default function RecordActualYieldDialog({
         </DialogHeader>
 
         <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-          <TabsList className="border border-border">
+          <TabsList>
             <TabsTrigger
               value="basic"
             >
