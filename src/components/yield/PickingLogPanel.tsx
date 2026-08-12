@@ -212,7 +212,7 @@ export default function PickingLogPanel({
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
             className="w-72"
-            placeholder="Block, variety, clone, buyer…"
+            placeholder={showMoney ? "Block, variety, clone, buyer…" : "Block, variety, clone…"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
