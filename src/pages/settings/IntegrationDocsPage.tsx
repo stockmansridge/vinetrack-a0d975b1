@@ -333,9 +333,10 @@ const data = await res.json();`}
                         {group.routes.map((route) => (
                           <TableRow key={`${route.method} ${route.path}`}>
                             <TableCell className="whitespace-nowrap">
-                              <code className="font-mono text-xs">
-                                {route.method} {route.path}
-                              </code>
+                              <div className="flex items-center gap-2">
+                                <MethodBadge method={route.method} />
+                                <code className="font-mono text-xs">{route.path}</code>
+                              </div>
                             </TableCell>
                             <TableCell>
                               {route.scope ? (
@@ -351,9 +352,25 @@ const data = await res.json();`}
                               {route.description && (
                                 <div className="text-xs">{route.description}</div>
                               )}
+                              {(route.requiresIdempotencyKey ||
+                                route.requiresExpectedUpdatedAt) && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {route.requiresIdempotencyKey && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      Idempotency-Key
+                                    </Badge>
+                                  )}
+                                  {route.requiresExpectedUpdatedAt && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      expected_updated_at
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
+
                       </TableBody>
                     </Table>
                   </div>
