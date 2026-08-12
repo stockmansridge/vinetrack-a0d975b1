@@ -1275,6 +1275,8 @@ export default function YieldAnalyticsPage() {
               </ChartCard>
             </div>
           </section>
+          )}
+
 
           {costAvailable && (
             <section id="ya-economics" className="space-y-3 scroll-mt-24">
