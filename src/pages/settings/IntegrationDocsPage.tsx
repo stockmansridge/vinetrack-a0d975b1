@@ -47,6 +47,24 @@ import {
 
 const API_BASE_URL = `${IOS_SUPABASE_URL}/functions/v1/vinetrack-api/v1`;
 
+const METHOD_STYLES: Record<string, string> = {
+  GET: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  POST: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
+  PATCH:
+    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+};
+
+function MethodBadge({ method }: { method: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`font-mono text-[10px] ${METHOD_STYLES[method] ?? "text-muted-foreground"}`}
+    >
+      {method}
+    </Badge>
+  );
+}
+
 function CodeBlock({ label, code }: { label: string; code: string }) {
   const [copied, setCopied] = useState(false);
   return (
