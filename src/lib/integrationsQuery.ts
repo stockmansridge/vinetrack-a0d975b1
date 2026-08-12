@@ -207,6 +207,7 @@ export const SCOPE_LABELS: Record<string, string> = {
 
 export function scopeLabel(scope: string): string {
   if (SCOPE_LABELS[scope]) return SCOPE_LABELS[scope];
+  if (WRITE_SCOPE_LABELS[scope]) return WRITE_SCOPE_LABELS[scope];
   const [resource, access] = scope.split(":");
   return `${titleise(resource ?? scope)} — ${titleise(access ?? "")}`.trim();
 }
@@ -226,10 +227,21 @@ export function isSensitiveScope(scope: string): boolean {
   return Object.prototype.hasOwnProperty.call(SENSITIVE_SCOPE_NOTES, scope);
 }
 
-/** The external API is read-only; write scopes exist in the catalog but cannot be granted. */
+/** Any `*:write` scope name (active or reserved). */
 export function isWriteScope(scope: string): boolean {
-  return scope.split(":")[1] === "write";
+  return isWriteScopeName(scope);
 }
+
+export {
+  isActiveWriteScope,
+  isReservedWriteScope,
+  ACTIVE_WRITE_SCOPE_LIST,
+  RESERVED_WRITE_SCOPE_LIST,
+  WRITE_SCOPE_DESCRIPTIONS,
+  grantedWriteResources,
+  writeResourceLabel,
+};
+
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "integration.created": "Integration created",
