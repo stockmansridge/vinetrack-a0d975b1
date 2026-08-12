@@ -182,11 +182,13 @@ function exportCsv(rows: UserActivityRow[]) {
     "roles",
     "account_created_at",
     "last_sign_in_at",
-    "app_platform",
-    "app_version",
-    "app_build",
-    "device_model",
-    "os_version",
+    "last_client_seen_at",
+    "last_app_type",
+    "last_app_version",
+    "last_app_build",
+    "last_device_model",
+    "last_os_name",
+    "last_os_version",
     "status",
   ];
   const lines = [headers.join(",")];
@@ -200,11 +202,13 @@ function exportCsv(rows: UserActivityRow[]) {
         (r.roles ?? []).join("; "),
         r.account_created_at ?? "",
         r.last_sign_in_at ?? "",
-        r.app_platform ?? "",
-        r.app_version ?? "",
-        r.app_build ?? "",
-        r.device_model ?? "",
-        r.os_version ?? "",
+        r.last_client_seen_at ?? "",
+        r.last_app_type ?? "",
+        r.last_app_version ?? "",
+        r.last_app_build ?? "",
+        r.last_device_model ?? "",
+        r.last_os_name ?? "",
+        r.last_os_version ?? "",
         r.status ?? "",
       ]
         .map(csvEscape)
@@ -219,6 +223,7 @@ function exportCsv(rows: UserActivityRow[]) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
 
 function SummaryCard({
   label,
