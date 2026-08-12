@@ -330,7 +330,7 @@ export const WRITE_SCOPES_SECTION = subsectionByHeadingPrefix(
   "Write scopes",
 );
 
-
+/** Trigger a client-side download of a text asset. No network call, no key. */
 export function downloadTextFile(filename: string, contents: string, mime: string) {
   const blob = new Blob([contents], { type: mime });
   const url = URL.createObjectURL(blob);
