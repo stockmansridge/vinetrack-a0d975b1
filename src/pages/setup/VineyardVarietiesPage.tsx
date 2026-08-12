@@ -31,7 +31,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ClonesTab, RootstocksTab } from "@/components/varieties/CatalogueTabs";
 import { toast } from "@/hooks/use-toast";
+
 
 import {
   useVineyardGrapeVarieties,
@@ -264,7 +267,16 @@ export default function VineyardVarietiesPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Vineyard grape varieties</h1>
       </div>
 
+      <Tabs defaultValue="varieties" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="varieties">Varieties</TabsTrigger>
+          <TabsTrigger value="clones">Clones</TabsTrigger>
+          <TabsTrigger value="rootstocks">Rootstocks</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="varieties" className="space-y-6">
       <Alert>
+
         <AlertDescription>
           Custom varieties added here are vineyard-wide and immediately available to every block.
           They also sync to iOS under the vineyard's grape variety settings.
@@ -465,6 +477,18 @@ export default function VineyardVarietiesPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="clones">
+          <ClonesTab />
+        </TabsContent>
+
+        <TabsContent value="rootstocks">
+          <RootstocksTab />
+        </TabsContent>
+      </Tabs>
+
+
 
       <AlertDialog
         open={!!pendingArchive}
