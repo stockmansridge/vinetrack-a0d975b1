@@ -25,6 +25,10 @@ import { IOS_SUPABASE_URL } from "@/integrations/ios-supabase/client";
 import { scopeLabel, SENSITIVE_SCOPE_NOTES } from "@/lib/integrationsQuery";
 import { DocsMarkdown } from "@/components/integrations/DocsMarkdown";
 import {
+  ACTIVE_WRITE_SCOPES,
+  WRITE_API_SECTION,
+  WRITE_ROUTES,
+  WRITE_SCOPES_SECTION,
   API_INFO,
   API_ROUTE_COUNT,
   API_ROUTES,
@@ -396,6 +400,55 @@ const data = await res.json();`}
               ))}
             </CardContent>
           </Card>
+
+          {WRITE_API_SECTION && (
+            <Card id="writing-data">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Writing data
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {WRITE_ROUTES.length} write routes
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {ACTIVE_WRITE_SCOPES.map((s) => (
+                    <Badge key={s} variant="outline" className="font-mono text-[10px]">
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+                <DocsMarkdown>{WRITE_API_SECTION.body}</DocsMarkdown>
+                <CodeBlock
+                  label="Create (idempotent)"
+                  code={`curl -X POST "${API_BASE_URL}/work-tasks" \\
+  -H "Authorization: Bearer <VT_API_KEY>" \\
+  -H "Idempotency-Key: 8f1c0f2e-4c1a-4c9f-9f0e-7a2d1b3c4d5e" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "vineyard_id": "<uuid>", "title": "Mow mid-rows" }'`}
+                />
+                <CodeBlock
+                  label="Update (optimistic concurrency)"
+                  code={`curl -X PATCH "${API_BASE_URL}/work-tasks/<id>" \\
+  -H "Authorization: Bearer <VT_API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "expected_updated_at": "2026-08-11T04:12:09.331Z", "status": "completed" }'`}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {WRITE_SCOPES_SECTION && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{WRITE_SCOPES_SECTION.heading}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocsMarkdown>{WRITE_SCOPES_SECTION.body}</DocsMarkdown>
+              </CardContent>
+            </Card>
+          )}
 
           {referenceSections.map((section) => (
             <Card key={section.heading}>
