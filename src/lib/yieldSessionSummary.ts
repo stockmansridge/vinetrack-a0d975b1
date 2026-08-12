@@ -53,6 +53,12 @@ export interface SessionBlockSummary {
   totalBunches: number | null;
   estimatedYieldKg: number | null;
   estimatedYieldTonnes: number | null;
+  /** Recorded observation, never mutated by damage (sql/187 §2). */
+  baseEstimatedYieldTonnes: number | null;
+  /** Base × the LIVE damage factor for the block. */
+  adjustedEstimatedYieldTonnes: number | null;
+  /** True when the displayed estimate includes the damage adjustment. */
+  damageApplied: boolean;
   notes: string | null;
 }
 
@@ -60,12 +66,22 @@ export interface SessionSummary {
   season: string | number | null;
   notes: string | null;
   samplesPerHectare: number | null;
+  /**
+   * sql/187 additive key. Absent on pre-187 sessions → `true`, so historical
+   * numbers are unchanged. Display rule: adjusted when true, base when false.
+   */
+  applyDamage: boolean;
+  /** sql/187 additive key: the trip whose route/sample sites were reused. */
+  routeSourceSessionId: string | null;
   blocks: SessionBlockSummary[];
   totalAreaHa: number | null;
   totalEstTonnes: number | null;
+  /** Undamaged total — always recoverable. */
+  totalBaseTonnes: number | null;
   hasAnySamples: boolean;
   missing: { sampleSites: boolean; bunchWeight: boolean; area: boolean; vines: boolean };
 }
+
 
 function pickFirst(obj: any, keys: string[]): any {
   if (!obj || typeof obj !== "object") return undefined;
@@ -139,6 +155,12 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
   const season = (pickFirst(p, ["season", "year", "vintage"]) as string | number | undefined) ?? null;
   const notes = (pickFirst(p, ["notes", "note", "comment"]) as string | undefined) ?? null;
   const samplesPerHectare = num(pickFirst(p, ["samplesPerHectare", "samples_per_hectare"]));
+  // sql/187 additive keys — tolerated on read and preserved on write-back.
+  const rawApplyDamage = p?.applyDamage ?? p?.apply_damage;
+  const applyDamage = rawApplyDamage == null ? true : !!rawApplyDamage;
+  const routeSourceSessionId =
+    (pickFirst(p, ["routeSourceSessionId", "route_source_session_id"]) as string | undefined) ?? null;
+
 
   const blockInfo = new Map<string, SessionBlockInfo>();
   for (const b of opts.blocks ?? []) blockInfo.set(String(b.id).toLowerCase(), b);
@@ -215,15 +237,26 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     const totalVines = info?.vineCount ?? null;
     const damageFactor = blockId && opts.damageFactor ? opts.damageFactor(blockId) : 1;
 
-    let est: { totalBunches: number; estimatedYieldKg: number; estimatedYieldTonnes: number } | null = null;
+    // The BASE estimate is always computed and kept — damage never mutates the
+    // recorded observation. The adjusted figure is derived live from the
+    // current damage factor and only *displayed* when applyDamage is true.
+    let base: { totalBunches: number; estimatedYieldKg: number; estimatedYieldTonnes: number } | null = null;
+    let adjusted: typeof base = null;
     if (avg != null && totalVines != null && totalVines > 0) {
-      est = blockEstimate({
+      base = blockEstimate({
+        totalVines,
+        averageBunchesPerVine: avg,
+        bunchWeightKg: weight,
+        damageFactor: 1,
+      });
+      adjusted = blockEstimate({
         totalVines,
         averageBunchesPerVine: avg,
         bunchWeightKg: weight,
         damageFactor,
       });
     }
+    const est = applyDamage ? adjusted : base;
 
     blocks.push({
       blockId,
@@ -243,9 +276,13 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
       totalBunches: est?.totalBunches ?? null,
       estimatedYieldKg: est?.estimatedYieldKg ?? null,
       estimatedYieldTonnes: est?.estimatedYieldTonnes ?? null,
+      baseEstimatedYieldTonnes: base?.estimatedYieldTonnes ?? null,
+      adjustedEstimatedYieldTonnes: adjusted?.estimatedYieldTonnes ?? null,
+      damageApplied: applyDamage && damageFactor !== 1,
       notes: g.notes,
     });
   }
+
 
   blocks.sort((a, b) => (a.blockName ?? "").localeCompare(b.blockName ?? ""));
 
@@ -254,14 +291,22 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     .map((b) => b.estimatedYieldTonnes)
     .filter((v): v is number => v != null);
 
+  const baseValues = blocks
+    .map((b) => b.baseEstimatedYieldTonnes)
+    .filter((v): v is number => v != null);
+
   return {
     season,
     notes,
     samplesPerHectare,
+    applyDamage,
+    routeSourceSessionId,
     blocks,
     totalAreaHa: areaValues.length ? areaValues.reduce((a, b) => a + b, 0) : null,
     totalEstTonnes: tonnesValues.length ? tonnesValues.reduce((a, b) => a + b, 0) : null,
+    totalBaseTonnes: baseValues.length ? baseValues.reduce((a, b) => a + b, 0) : null,
     hasAnySamples: blocks.some((b) => b.recordedCount > 0),
+
     missing: {
       sampleSites: blocks.every((b) => b.siteCount === 0),
       bunchWeight: blocks.some((b) => b.bunchWeightIsDefault),

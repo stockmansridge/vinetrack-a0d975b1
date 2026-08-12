@@ -41,6 +41,8 @@ import {
   softDeletePickingRecord,
   type PickingRecord,
 } from "@/lib/pickingRecordsQuery";
+import { usePickingFinancials } from "@/lib/pickingFinancials";
+
 
 const fmt = (v: number | null | undefined, dp = 2) =>
   v == null || !Number.isFinite(Number(v))
@@ -69,12 +71,19 @@ export default function PickingLogPanel({
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState<PickingRecord | null>(null);
   const [editing, setEditing] = useState<PickingRecord | null>(null);
+  // sql/187: commercial values live in the protected companion table and are
+  // only read by owner/manager. For every other role the columns are hidden
+  // entirely — never a masked $0.
+  const financials = usePickingFinancials(vineyardId);
+  const showMoney = financials.authorised;
+  const financialFor = (id: string) => financials.byId.get(id) ?? null;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["picking_records", vineyardId],
     enabled: !!vineyardId,
     queryFn: () => fetchPickingRecords(vineyardId!),
   });
+
 
   // Block allocations — used only to DISPLAY the planting a stored pick maps
   // to. Historical snapshots on the record itself are never rewritten.
@@ -143,14 +152,21 @@ export default function PickingLogPanel({
     if (vintage != null) list = list.filter((r) => Number(r.vintage) === vintage);
     const f = search.trim().toLowerCase();
     if (f) {
-      list = list.filter((r) =>
-        `${r.paddock_name ?? ""} ${r.variety_name ?? ""} ${r.clone ?? ""} ${r.purpose ?? ""} ${r.sold_to ?? ""}`
+      list = list.filter((r) => {
+        // The buyer is only searchable for readers authorised to see it.
+        const buyer = showMoney ? financialFor(r.id)?.sold_to ?? "" : "";
+        return `${r.paddock_name ?? ""} ${r.variety_name ?? ""} ${r.clone ?? ""} ${r.purpose ?? ""} ${buyer}`
           .toLowerCase()
-          .includes(f),
-      );
+          .includes(f);
+      });
     }
     return list;
-  }, [data, vintage, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, vintage, search, showMoney, financials.byId]);
+
+
+  // 12 base columns + optional money columns + optional actions column.
+  const colCount = 12 + (showMoney ? 3 : 0) + (canEdit || canDelete ? 1 : 0);
 
   const totalTonnes = rows.reduce((a, r) => a + (Number(r.weight_kg) || 0) / 1000, 0);
 
@@ -199,7 +215,7 @@ export default function PickingLogPanel({
           <div className="text-xs text-muted-foreground">Search</div>
           <Input
             className="w-72"
-            placeholder="Block, variety, clone, buyer…"
+            placeholder={showMoney ? "Block, variety, clone, buyer…" : "Block, variety, clone…"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -281,27 +297,31 @@ export default function PickingLogPanel({
               <TableHead className="text-right">TA</TableHead>
               <TableHead>Purpose</TableHead>
               <TableHead>Sold</TableHead>
+              {showMoney && <TableHead>Buyer</TableHead>}
+              {showMoney && <TableHead className="text-right">Price / tonne</TableHead>}
+              {showMoney && <TableHead className="text-right">Grape value</TableHead>}
+
               {(canEdit || canDelete) && <TableHead className="w-20 text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={13} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={colCount} className="py-6 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={13} className="py-6 text-center text-destructive">
+                <TableCell colSpan={colCount} className="py-6 text-center text-destructive">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={13} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={colCount} className="py-8 text-center text-muted-foreground">
                   No picks recorded for this vintage yet.
                 </TableCell>
               </TableRow>
@@ -331,22 +351,33 @@ export default function PickingLogPanel({
                 <TableCell className="text-right tabular-nums">{fmt(r.ta_g_l, 1)}</TableCell>
                 <TableCell>{r.purpose || "—"}</TableCell>
                 <TableCell>
-                  {r.sold ? (
-                    <div className="text-sm">
-                      <Badge variant="outline">Sold</Badge>
-                      {r.sold_to ? (
-                        <div className="text-xs text-muted-foreground">{r.sold_to}</div>
-                      ) : null}
-                      {r.grape_value != null ? (
-                        <div className="text-xs text-muted-foreground">
-                          {rf.currency(Number(r.grape_value))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    "—"
-                  )}
+                  {/* Operational status only — it carries no counterparty or money. */}
+                  {r.sold ? <Badge variant="outline">Sold</Badge> : "—"}
                 </TableCell>
+                {showMoney && (
+                  <TableCell className="text-sm">
+                    {!r.sold ? "—" : financialFor(r.id)?.sold_to || "Not recorded"}
+                  </TableCell>
+                )}
+                {showMoney && (
+                  <TableCell className="text-right tabular-nums">
+                    {!r.sold
+                      ? "—"
+                      : financialFor(r.id)?.price_per_tonne != null
+                      ? rf.currency(Number(financialFor(r.id)!.price_per_tonne))
+                      : "Not recorded"}
+                  </TableCell>
+                )}
+                {showMoney && (
+                  <TableCell className="text-right tabular-nums">
+                    {!r.sold
+                      ? "—"
+                      : financialFor(r.id)?.grape_value != null
+                      ? rf.currency(Number(financialFor(r.id)!.grape_value))
+                      : "Not recorded"}
+                  </TableCell>
+                )}
+
                 {(canEdit || canDelete) && (
                   <TableCell className="text-right whitespace-nowrap">
                     <TooltipProvider>
@@ -393,7 +424,7 @@ export default function PickingLogPanel({
                 <TableCell className="text-right font-semibold tabular-nums">
                   {fmt(totalTonnes)} t
                 </TableCell>
-                <TableCell colSpan={canEdit || canDelete ? 6 : 5} />
+                <TableCell colSpan={colCount - 7} />
               </TableRow>
             )}
           </TableBody>

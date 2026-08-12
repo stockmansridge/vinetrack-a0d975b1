@@ -36,9 +36,10 @@ const RECORD: PickingRecord = {
   ta_g_l: 6.1,
   purpose: "Estate wine",
   sold: true,
-  sold_to: "Big Winery",
-  price_per_tonne: 2000,
-  grape_value: 2400,
+  // sql/187 masks these on the base row for every reader.
+  sold_to: null,
+  price_per_tonne: null,
+  grape_value: null,
   notes: "Morning pick",
   created_at: null,
   updated_at: null,
@@ -96,6 +97,24 @@ vi.mock("@/lib/useRegionFormatters", () => ({
   }),
 }));
 
+// sql/187: buyer and price live in the protected companion table and are read
+// through usePickingFinancials. Owner/manager sees them; other roles do not.
+const financialsState = {
+  authorised: true,
+  byId: new Map<string, any>([
+    ["p1", { picking_record_id: "p1", sold_to: "Big Winery", price_per_tonne: 2000, grape_value: 2400 }],
+  ]),
+};
+vi.mock("@/lib/pickingFinancials", () => ({
+  usePickingFinancials: () => ({
+    canSee: financialsState.authorised,
+    authorised: financialsState.authorised,
+    byId: financialsState.byId,
+    isLoading: false,
+  }),
+  useCanSeePickingFinancials: () => financialsState.authorised,
+}));
+
 const toasts: any[] = [];
 vi.mock("@/hooks/use-toast", () => ({ toast: (t: any) => toasts.push(t) }));
 
@@ -127,6 +146,7 @@ describe("Picking record editing", () => {
     updatePickingRecord.mockClear();
     createPickingRecord.mockClear();
     updatePickingRecord.mockResolvedValue(RECORD);
+    financialsState.authorised = true;
     toasts.length = 0;
   });
 
@@ -213,7 +233,7 @@ describe("Picking record editing", () => {
 
   it("accepts sale details when an internal pick becomes sold", async () => {
     fetchPickingRecords.mockResolvedValueOnce([
-      { ...RECORD, sold: false, sold_to: null, price_per_tonne: null, grape_value: null },
+      { ...RECORD, sold: false },
     ]);
     renderPanel();
     await openEditor();
@@ -224,6 +244,25 @@ describe("Picking record editing", () => {
     expect(payload.sold).toBe(true);
     expect(payload.soldTo).toBe("New Buyer");
     expect(payload.pricePerTonne).toBe(1800);
+  });
+
+  it("hides buyer and price from a role without financial access", async () => {
+    financialsState.authorised = false;
+    renderPanel();
+    await openEditor();
+    expect(screen.queryByLabelText("Sold to")).toBeNull();
+    expect(screen.queryByLabelText("Price per tonne")).toBeNull();
+  });
+
+  it("never writes money for a role without financial access", async () => {
+    financialsState.authorised = false;
+    renderPanel();
+    await openEditor();
+    setValue("Weight (kg)", "1400");
+    const payload = await saveChanges();
+    expect(payload.soldTo).toBeNull();
+    expect(payload.pricePerTonne).toBeNull();
+    expect(payload.sold).toBe(true); // the operational flag is untouched
   });
 
   it("cancel changes nothing", async () => {

@@ -27,7 +27,41 @@ export const YIELD_ANALYTICS_COLUMNS = [
 const n = (v: number | null | undefined, dp = 2) =>
   v == null || !Number.isFinite(v) ? "" : Number(v).toFixed(dp);
 
-export function yieldAnalyticsRows(facts: YieldFact[]): string[][] {
+/**
+ * sql/187: grape-sale money is owner/manager only. The EXPORT ITSELF drops the
+ * protected columns — hiding table columns is not sufficient, so an
+ * unauthorised export contains no buyer, price, revenue or margin at all.
+ */
+export interface YieldExportOptions {
+  includeFinancials?: boolean;
+}
+
+/** Column indexes of grape-sale money inside the full column list. */
+const FINANCIAL_INDEXES = [
+  YIELD_ANALYTICS_COLUMNS.indexOf("Sale $/tonne"),
+  YIELD_ANALYTICS_COLUMNS.indexOf("Grape revenue"),
+  YIELD_ANALYTICS_COLUMNS.indexOf("Revenue/sold ha"),
+  YIELD_ANALYTICS_COLUMNS.indexOf("Grape-sale margin"),
+  YIELD_ANALYTICS_COLUMNS.indexOf("Margin/sold ha"),
+];
+
+const keepIndex = (i: number, includeFinancials: boolean) =>
+  includeFinancials || !FINANCIAL_INDEXES.includes(i);
+
+export function yieldAnalyticsColumns(opts: YieldExportOptions = {}): string[] {
+  const include = opts.includeFinancials !== false;
+  return YIELD_ANALYTICS_COLUMNS.filter((_, i) => keepIndex(i, include));
+}
+
+export function yieldAnalyticsRows(
+  facts: YieldFact[],
+  opts: YieldExportOptions = {},
+): string[][] {
+  const include = opts.includeFinancials !== false;
+  return yieldAnalyticsFullRows(facts).map((row) => row.filter((_, i) => keepIndex(i, include)));
+}
+
+function yieldAnalyticsFullRows(facts: YieldFact[]): string[][] {
   return facts.map((f) => {
     const tPerHa = f.areaHa && f.areaHa > 0 ? f.tonnes / f.areaHa : null;
     const price = f.pricedTonnes > 0 && f.revenue != null ? f.revenue / f.pricedTonnes : null;
@@ -68,10 +102,10 @@ function csvEscape(v: string): string {
   return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
-export function yieldAnalyticsCsv(facts: YieldFact[]): string {
+export function yieldAnalyticsCsv(facts: YieldFact[], opts: YieldExportOptions = {}): string {
   return [
-    YIELD_ANALYTICS_COLUMNS.join(","),
-    ...yieldAnalyticsRows(facts).map((r) => r.map(csvEscape).join(",")),
+    yieldAnalyticsColumns(opts).join(","),
+    ...yieldAnalyticsRows(facts, opts).map((r) => r.map(csvEscape).join(",")),
   ].join("\n");
 }
 
@@ -84,14 +118,22 @@ function download(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function downloadYieldAnalyticsCsv(facts: YieldFact[], filename = "yield-analytics.csv") {
-  download(new Blob([yieldAnalyticsCsv(facts)], { type: "text/csv;charset=utf-8" }), filename);
+export function downloadYieldAnalyticsCsv(
+  facts: YieldFact[],
+  filename = "yield-analytics.csv",
+  opts: YieldExportOptions = {},
+) {
+  download(new Blob([yieldAnalyticsCsv(facts, opts)], { type: "text/csv;charset=utf-8" }), filename);
 }
 
-export function downloadYieldAnalyticsXlsx(facts: YieldFact[], filename = "yield-analytics.xlsx") {
+export function downloadYieldAnalyticsXlsx(
+  facts: YieldFact[],
+  filename = "yield-analytics.xlsx",
+  opts: YieldExportOptions = {},
+) {
   const ws = XLSX.utils.aoa_to_sheet([
-    [...YIELD_ANALYTICS_COLUMNS],
-    ...yieldAnalyticsRows(facts),
+    yieldAnalyticsColumns(opts),
+    ...yieldAnalyticsRows(facts, opts),
   ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Yield Analytics");

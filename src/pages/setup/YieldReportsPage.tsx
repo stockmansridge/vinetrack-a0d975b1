@@ -51,6 +51,11 @@ import {
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
+import {
+  buildBunchCountTrips,
+  currentEstimatesByBlock,
+  currentTripIds,
+} from "@/lib/bunchCountTrips";
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import {
   aggregatePickingRecordsByPlanting,
@@ -274,6 +279,31 @@ export default function YieldReportsPage() {
     return map;
   }, [sessions, blocksQ.data]);
 
+  /** Every session as a Bunch Count Trip, newest first (sql/187). */
+  const trips = useMemo(
+    () =>
+      buildBunchCountTrips(sessions, {
+        blocks: blocksQ.data ?? [],
+        vintageOf: (iso) => {
+          const d = new Date(iso);
+          return Number.isNaN(d.getTime())
+            ? null
+            : vintageForDate(d, seasonStartMonth, seasonStartDay);
+        },
+      }),
+    [sessions, blocksQ.data, seasonStartMonth, seasonStartDay],
+  );
+
+  /** Latest completed trip per block for the selected vintage — never summed. */
+  const currentEstimates = useMemo(
+    () => currentEstimatesByBlock(trips, activeVintage === ANY ? null : Number(activeVintage)),
+    [trips, activeVintage],
+  );
+
+  /** Trips that currently supply at least one block's estimate. */
+  const liveTripIds = useMemo(() => currentTripIds(currentEstimates), [currentEstimates]);
+
+
   const rowTonnes = (r: AnyRow): number | null =>
     r.__kind === "historical"
       ? (r as HistoricalYieldRecord).total_yield_tonnes ?? null
@@ -360,15 +390,13 @@ export default function YieldReportsPage() {
       (r) => activeVintage === ANY || String(rowVintage(r) ?? "") === activeVintage,
     );
 
+    // sql/187: the CURRENT estimate for a block is the LATEST COMPLETED Bunch
+    // Count Trip that sampled it — never the sum of every trip, and never a
+    // draft. Older completed trips remain visible as history only.
     const estimatedByBlock = new Map<string, number>();
-    for (const r of vintageRows) {
-      if (r.__kind !== "session") continue;
-      const summary = sessionSummaries.get(r.id);
-      for (const b of summary?.blocks ?? []) {
-        if (!b.blockId || b.estimatedYieldTonnes == null) continue;
-        const k = b.blockId.toLowerCase();
-        estimatedByBlock.set(k, (estimatedByBlock.get(k) ?? 0) + b.estimatedYieldTonnes);
-      }
+    for (const [key, est] of currentEstimates) {
+      if (est.tonnes == null) continue;
+      estimatedByBlock.set(key, est.tonnes);
     }
 
     // Basic actual yield (historical_yield_records).
@@ -417,6 +445,8 @@ export default function YieldReportsPage() {
     activeVintage,
     rowVintage,
     sessionSummaries,
+    currentEstimates,
+
     pickingRecordsQ.data,
     pickingPlantingTotalsQ.data,
   ]);
@@ -611,13 +641,22 @@ export default function YieldReportsPage() {
                     area: <TableCell>{areaVal(rowAreaHa(r))}</TableCell>,
                     status: (
                       <TableCell>
-                        {isHist
-                          ? <Badge variant="secondary">Archived</Badge>
-                          : s.is_completed
-                          ? <Badge>Completed</Badge>
-                          : <Badge variant="outline">Open</Badge>}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {isHist
+                            ? <Badge variant="secondary">Archived</Badge>
+                            : s.is_completed
+                            ? <Badge>Completed</Badge>
+                            : <Badge variant="outline">Open</Badge>}
+                          {/* sql/187: the trip currently providing an estimate. */}
+                          {!isHist && liveTripIds.has(r.id) && (
+                            <Badge variant="outline" className="border-primary text-primary">
+                              Current estimate
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                     ),
+
                   };
                   return (
                     <TableRow key={r.__kind + ":" + r.id} className="cursor-pointer" onClick={() => setSelected(r)}>

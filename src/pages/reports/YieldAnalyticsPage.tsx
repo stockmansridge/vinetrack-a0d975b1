@@ -37,6 +37,7 @@ import {
 import { PageHead } from "@/components/PageHead";
 import { useVineyard } from "@/context/VineyardContext";
 import { useCanSeeCosts } from "@/lib/permissions";
+import { useCanSeePickingFinancials } from "@/lib/pickingFinancials";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import MultiSelect from "@/components/yield/analytics/MultiSelect";
@@ -126,6 +127,9 @@ export default function YieldAnalyticsPage() {
   const { selectedVineyardId } = useVineyard();
   const rf = useRegionFormatters();
   const canSeeCosts = useCanSeeCosts();
+  // sql/187: grape-sale money (price, revenue, margin) is owner/manager only.
+  // Unauthorised roles get no money KPI, chart, column or export cell at all.
+  const canSeeMoney = useCanSeePickingFinancials();
   const imperial = rf.areaUnitLabel === "ac";
 
   // --- unit-aware formatters -------------------------------------------------
@@ -213,7 +217,11 @@ export default function YieldAnalyticsPage() {
   );
 
   const costAvailable = canSeeCosts && allFacts.some((f) => f.cost != null && f.cost > 0);
-  const metricOptions = METRICS.filter((m) => !m.costOnly || costAvailable);
+  const metricOptions = METRICS.filter(
+    (m) =>
+      (!m.costOnly || costAvailable) &&
+      (canSeeMoney || (m.kind !== "money" && m.kind !== "moneyPerArea")),
+  );
 
   // --- filters ---------------------------------------------------------------
   const vintages = useMemo(
@@ -490,22 +498,30 @@ export default function YieldAnalyticsPage() {
       { key: "tonnes", label: "Tonnes" },
       { key: "tPerHa", label: `t/${rf.areaUnitLabel}` },
       { key: "disposition", label: "Disposition" },
-      { key: "price", label: "Sale $/t" },
-      { key: "revenue", label: "Grape revenue" },
-      { key: "revPerHa", label: `Revenue/sold ${rf.areaUnitLabel}` },
+      ...(canSeeMoney
+        ? [
+            { key: "price", label: "Sale $/t" },
+            { key: "revenue", label: "Grape revenue" },
+            { key: "revPerHa", label: `Revenue/sold ${rf.areaUnitLabel}` },
+          ]
+        : []),
       ...(costAvailable
         ? [
             { key: "cost", label: "Production cost" },
             { key: "costPerHa", label: `Cost/${rf.areaUnitLabel}` },
             { key: "costPerT", label: "Cost/t" },
-            { key: "margin", label: "Grape-sale margin" },
-            { key: "marginPerHa", label: `Margin/sold ${rf.areaUnitLabel}` },
+            ...(canSeeMoney
+              ? [
+                  { key: "margin", label: "Grape-sale margin" },
+                  { key: "marginPerHa", label: `Margin/sold ${rf.areaUnitLabel}` },
+                ]
+              : []),
           ]
         : []),
       { key: "source", label: "Source" },
 
     ],
-    [rf.areaUnitLabel, costAvailable],
+    [rf.areaUnitLabel, costAvailable, canSeeMoney],
   );
   const [hidden, setHidden] = useState<string[]>([]);
   const visibleColumns = allColumns.filter((c) => !hidden.includes(c.key));
@@ -752,10 +768,10 @@ export default function YieldAnalyticsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => downloadYieldAnalyticsCsv(facts)} disabled={!facts.length}>
+          <Button variant="outline" size="sm" onClick={() => downloadYieldAnalyticsCsv(facts, "yield-analytics.csv", { includeFinancials: canSeeMoney })} disabled={!facts.length}>
             <Download className="mr-1.5 h-4 w-4" /> CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadYieldAnalyticsXlsx(facts)} disabled={!facts.length}>
+          <Button variant="outline" size="sm" onClick={() => downloadYieldAnalyticsXlsx(facts, "yield-analytics.xlsx", { includeFinancials: canSeeMoney })} disabled={!facts.length}>
             <Download className="mr-1.5 h-4 w-4" /> Excel
           </Button>
         </div>
@@ -881,7 +897,7 @@ export default function YieldAnalyticsPage() {
             {[
               ["ya-overview", "Overview"],
               ["ya-productivity", "Productivity"],
-              ["ya-sales", "Grape sales"],
+              ...(canSeeMoney ? [["ya-sales", "Grape sales"]] : []),
               ["ya-economics", "Economics"],
               ["ya-trends", "Trends"],
               ["ya-data", "Data"],
@@ -917,6 +933,8 @@ export default function YieldAnalyticsPage() {
               current={totals.tonnesPerHa}
               prior={priorAvgTPerHa}
             />
+            {canSeeMoney && (
+              <>
             <KpiCard
               label="Average sale price / tonne"
               value={money(totals.pricePerTonne)}
@@ -938,6 +956,8 @@ export default function YieldAnalyticsPage() {
               prior={priorTotals?.revenuePerHa ?? null}
               hint={totals.revenuePerHa == null ? "No grape sale recorded" : "Sold-fruit area basis"}
             />
+              </>
+            )}
           </div>
 
           {/* Harvest disposition — sold vs internally retained fruit */}
@@ -1086,8 +1106,12 @@ export default function YieldAnalyticsPage() {
                                 <div>
                                   {perArea(g.tonnesPerHa)} t/{rf.areaUnitLabel}
                                 </div>
-                                <div>Avg sale price: {money(g.pricePerTonne)} /t</div>
-                                <div>Grape revenue: {money(g.revenue)}</div>
+                                {canSeeMoney && (
+                                  <>
+                                    <div>Avg sale price: {money(g.pricePerTonne)} /t</div>
+                                    <div>Grape revenue: {money(g.revenue)}</div>
+                                  </>
+                                )}
                               </div>
                             );
                           }}
@@ -1158,7 +1182,8 @@ export default function YieldAnalyticsPage() {
           </section>
 
 
-          {/* Grape sales — sold-fruit metrics only */}
+          {/* Grape sales — sold-fruit metrics only, owner/manager only */}
+          {canSeeMoney && (
           <section id="ya-sales" className="space-y-3 scroll-mt-24">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Grape sales
@@ -1250,6 +1275,8 @@ export default function YieldAnalyticsPage() {
               </ChartCard>
             </div>
           </section>
+          )}
+
 
           {costAvailable && (
             <section id="ya-economics" className="space-y-3 scroll-mt-24">
