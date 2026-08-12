@@ -175,8 +175,10 @@ export function buildYieldFacts({
     // Prefer measured sold tonnage; fall back to the coarse "any revenue means
     // the whole group was sold" heuristic only when picks are unavailable.
     const measuredSold = hasPickDetail ? Math.min(soldTonnesByKey.get(key) ?? 0, tonnes) : null;
+    // A group with revenue but no matching sold pick keeps the coarse fallback
+    // so revenue is never divided by zero tonnes.
     const pricedTonnes =
-      measuredSold != null ? measuredSold : hasRevenue ? tonnes : 0;
+      measuredSold != null && measuredSold > 0 ? measuredSold : hasRevenue ? tonnes : 0;
     push({
       vintage: t.vintage ?? null,
       blockId: t.paddock_id,
