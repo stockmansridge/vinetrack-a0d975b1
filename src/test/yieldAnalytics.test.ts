@@ -281,3 +281,62 @@ describe("pricing and cost integrity", () => {
     expect(contiguous.threeYearAverage).toBe(6);
   });
 });
+
+describe("Sale $/t denominator (sold tonnes only)", () => {
+  const rec = (over: Partial<{ vintage: number | null; paddock_id: string; variety_name: string; weight_kg: number; sold: boolean }>) => ({
+    vintage: 2025,
+    paddock_id: "b1",
+    variety_name: "Shiraz",
+    weight_kg: 1000,
+    sold: true,
+    ...over,
+  });
+
+  it("divides grape revenue by sold tonnes for a mixed-disposition planting", () => {
+    const facts = buildYieldFacts({
+      historicalRows: [],
+      pickingTotals: [pick({ actual_yield_tonnes: 10, total_grape_value: 9000 })],
+      blocks,
+      pickingRecords: [
+        rec({ weight_kg: 6000, sold: true }),
+        rec({ weight_kg: 4000, sold: false }),
+      ],
+    });
+    const f = facts[0];
+    expect(f.tonnes).toBe(10);
+    expect(f.pricedTonnes).toBe(6);
+    expect(f.disposition).toBe("mixed");
+    const agg = aggregate(facts);
+    expect(agg.soldTonnes).toBe(6);
+    expect(agg.retainedTonnes).toBe(4);
+    expect(agg.pricePerTonne).toBe(1500); // not 900
+  });
+
+  it("shows no sale price for a fully retained planting", () => {
+    const facts = buildYieldFacts({
+      historicalRows: [],
+      pickingTotals: [pick({ actual_yield_tonnes: 10, total_grape_value: null })],
+      blocks,
+      pickingRecords: [rec({ weight_kg: 10000, sold: false })],
+    });
+    expect(facts[0].pricedTonnes).toBe(0);
+    expect(facts[0].disposition).toBe("retained");
+    const agg = aggregate(facts);
+    expect(agg.pricePerTonne).toBeNull();
+    expect(agg.revenue).toBeNull();
+  });
+
+  it("exports the mixed row with the sold-tonnes sale price", async () => {
+    const { yieldAnalyticsCsv } = await import("@/lib/yieldAnalyticsExport");
+    const facts = buildYieldFacts({
+      historicalRows: [],
+      pickingTotals: [pick({ actual_yield_tonnes: 10, total_grape_value: 9000 })],
+      blocks,
+      pickingRecords: [rec({ weight_kg: 6000, sold: true }), rec({ weight_kg: 4000, sold: false })],
+    });
+    const csv = yieldAnalyticsCsv(facts);
+    const row = csv.split("\n")[1].split(",");
+    expect(row).toContain("1500.00");
+    expect(row).toContain("9000.00");
+  });
+});
