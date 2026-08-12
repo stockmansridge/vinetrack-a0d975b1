@@ -51,6 +51,11 @@ import {
   type HistoricalYieldRecord,
 } from "@/lib/yieldReportsQuery";
 import { buildYieldOverview, type OverviewBlockCard } from "@/lib/yieldOverview";
+import {
+  buildBunchCountTrips,
+  currentEstimatesByBlock,
+  currentTripIds,
+} from "@/lib/bunchCountTrips";
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
 import {
   aggregatePickingRecordsByPlanting,
@@ -360,15 +365,13 @@ export default function YieldReportsPage() {
       (r) => activeVintage === ANY || String(rowVintage(r) ?? "") === activeVintage,
     );
 
+    // sql/187: the CURRENT estimate for a block is the LATEST COMPLETED Bunch
+    // Count Trip that sampled it — never the sum of every trip, and never a
+    // draft. Older completed trips remain visible as history only.
     const estimatedByBlock = new Map<string, number>();
-    for (const r of vintageRows) {
-      if (r.__kind !== "session") continue;
-      const summary = sessionSummaries.get(r.id);
-      for (const b of summary?.blocks ?? []) {
-        if (!b.blockId || b.estimatedYieldTonnes == null) continue;
-        const k = b.blockId.toLowerCase();
-        estimatedByBlock.set(k, (estimatedByBlock.get(k) ?? 0) + b.estimatedYieldTonnes);
-      }
+    for (const [key, est] of currentEstimates) {
+      if (est.tonnes == null) continue;
+      estimatedByBlock.set(key, est.tonnes);
     }
 
     // Basic actual yield (historical_yield_records).
