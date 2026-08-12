@@ -71,12 +71,19 @@ export default function PickingLogPanel({
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState<PickingRecord | null>(null);
   const [editing, setEditing] = useState<PickingRecord | null>(null);
+  // sql/187: commercial values live in the protected companion table and are
+  // only read by owner/manager. For every other role the columns are hidden
+  // entirely — never a masked $0.
+  const financials = usePickingFinancials(vineyardId);
+  const showMoney = financials.authorised;
+  const financialFor = (id: string) => financials.byId.get(id) ?? null;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["picking_records", vineyardId],
     enabled: !!vineyardId,
     queryFn: () => fetchPickingRecords(vineyardId!),
   });
+
 
   // Block allocations — used only to DISPLAY the planting a stored pick maps
   // to. Historical snapshots on the record itself are never rewritten.
