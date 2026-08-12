@@ -77,11 +77,13 @@ type ActivitySortKey =
   | "roles"
   | "account_created"
   | "last_login"
-  | "app"
-  | "platform"
+  | "last_seen"
+  | "app_type"
+  | "app_version"
   | "device"
   | "os"
   | "status";
+
 
 type LastLoginFilter =
   | "all"
