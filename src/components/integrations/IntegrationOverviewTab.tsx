@@ -204,7 +204,19 @@ export function IntegrationOverviewTab({
           <CardTitle className="text-base">Health &amp; access</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Environment" value="Live (read-only API)" />
+          <Field
+            label="Environment"
+            value={
+              writeResources.length > 0
+                ? "Live (read + controlled writes)"
+                : "Live (read-only)"
+            }
+          />
+          <Field
+            label="Write scopes granted"
+            value={writeResources.length > 0 ? writeResources.length : "None"}
+          />
+
           <Field
             label="Last API activity"
             value={client.last_request_at ? formatDateTime(client.last_request_at) : "—"}
