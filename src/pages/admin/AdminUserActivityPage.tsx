@@ -129,10 +129,32 @@ async function fetchUserActivity(): Promise<UserActivityRow[]> {
 }
 
 function appVersionDisplay(r: UserActivityRow): string {
-  if (!r.app_version && !r.app_build) return "Unknown";
-  if (r.app_version && r.app_build) return `${r.app_version} (${r.app_build})`;
-  return r.app_version ?? r.app_build ?? "Unknown";
+  if (!r.last_app_version && !r.last_app_build) return "Not recorded";
+  if (r.last_app_version && r.last_app_build)
+    return `${r.last_app_version} (${r.last_app_build})`;
+  return r.last_app_version ?? r.last_app_build ?? "Not recorded";
 }
+
+function osDisplay(r: UserActivityRow): string {
+  if (!r.last_os_name && !r.last_os_version) return "Not recorded";
+  if (r.last_os_name && r.last_os_version)
+    return `${r.last_os_name} ${r.last_os_version}`;
+  return r.last_os_name ?? r.last_os_version ?? "Not recorded";
+}
+
+function lastSeenDisplay(r: UserActivityRow): React.ReactNode {
+  if (!r.last_client_seen_at)
+    return <span className="text-muted-foreground">Not recorded</span>;
+  return (
+    <div>
+      <div>{formatDate(r.last_client_seen_at)}</div>
+      <div className="text-xs text-muted-foreground">
+        {formatRelative(r.last_client_seen_at)}
+      </div>
+    </div>
+  );
+}
+
 
 function isWithin(iso: string | null, days: number): boolean {
   if (!iso) return false;
