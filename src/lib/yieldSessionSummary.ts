@@ -155,6 +155,12 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
   const season = (pickFirst(p, ["season", "year", "vintage"]) as string | number | undefined) ?? null;
   const notes = (pickFirst(p, ["notes", "note", "comment"]) as string | undefined) ?? null;
   const samplesPerHectare = num(pickFirst(p, ["samplesPerHectare", "samples_per_hectare"]));
+  // sql/187 additive keys — tolerated on read and preserved on write-back.
+  const rawApplyDamage = p?.applyDamage ?? p?.apply_damage;
+  const applyDamage = rawApplyDamage == null ? true : !!rawApplyDamage;
+  const routeSourceSessionId =
+    (pickFirst(p, ["routeSourceSessionId", "route_source_session_id"]) as string | undefined) ?? null;
+
 
   const blockInfo = new Map<string, SessionBlockInfo>();
   for (const b of opts.blocks ?? []) blockInfo.set(String(b.id).toLowerCase(), b);
