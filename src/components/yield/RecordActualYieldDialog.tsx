@@ -465,8 +465,22 @@ function DetailedForm({
   const [ta, setTa] = useState(str(record?.ta_g_l));
   const [purpose, setPurpose] = useState(record?.purpose ?? "");
   const [sold, setSold] = useState(!!record?.sold);
-  const [soldTo, setSoldTo] = useState(record?.sold_to ?? "");
-  const [pricePerTonne, setPricePerTonne] = useState(str(record?.price_per_tonne));
+  // sql/187: the base row's sold_to / price_per_tonne are masked NULL for every
+  // reader. Money is prefilled from the protected companion contract and only
+  // for owner/manager; other roles never see or write these fields.
+  const financials = usePickingFinancials(vineyardId);
+  const showMoney = financials.authorised;
+  const [soldTo, setSoldTo] = useState("");
+  const [pricePerTonne, setPricePerTonne] = useState("");
+  const financialsApplied = useRef(false);
+  useEffect(() => {
+    if (!editing || !record || !showMoney || financialsApplied.current) return;
+    const f = financials.byId.get(record.id);
+    if (!f) return;
+    financialsApplied.current = true;
+    setSoldTo(f.sold_to ?? "");
+    setPricePerTonne(f.price_per_tonne == null ? "" : String(f.price_per_tonne));
+  }, [editing, record, showMoney, financials.byId]);
   const [notes, setNotes] = useState(record?.notes ?? "");
 
   useEffect(() => {
@@ -599,8 +613,12 @@ function DetailedForm({
         taGL: num(ta),
         purpose,
         sold,
-        soldTo: sold ? soldTo : null,
-        pricePerTonne: sold ? num(pricePerTonne) : null,
+        // The trigger routes money into the companion table. The FULL financial
+        // state is always sent together so an authorised edit is never a
+        // partial write; a role without money access sends both as null, which
+        // the trigger treats as a no-op and therefore preserves what is stored.
+        soldTo: sold && showMoney ? soldTo : null,
+        pricePerTonne: sold && showMoney ? num(pricePerTonne) : null,
         notes,
       };
       // Editing updates the SAME row (never an insert), so totals recompute
@@ -769,7 +787,7 @@ function DetailedForm({
           <Switch id="pk-sold" checked={sold} onCheckedChange={setSold} aria-label="Sold" />
         </div>
 
-        {sold && (
+        {sold && showMoney && (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="pk-soldto">Sold to</Label>
