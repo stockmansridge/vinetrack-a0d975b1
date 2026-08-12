@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lock, ShieldAlert } from "lucide-react";
+import { Lock, PencilLine, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,13 @@ import {
   useSetScope,
   type IntegrationScopeRow,
 } from "@/lib/integrationsQuery";
+import {
+  WRITE_SCOPE_DESCRIPTIONS,
+  grantedWriteResources,
+  isActiveWriteScope,
+  isReservedWriteScope,
+  isWriteScopeName,
+} from "@/lib/integrationWriteScopes";
 import { IntegrationEmptyState } from "./IntegrationEmptyState";
 
 function groupScopes(rows: IntegrationScopeRow[]) {
@@ -43,6 +50,7 @@ function groupScopes(rows: IntegrationScopeRow[]) {
   if (other.length) groups.push({ id: "other", label: "Other", modules: [], rows: other });
   return groups.filter((g) => g.rows.length > 0);
 }
+
 
 export function IntegrationPermissionsTab({
   clientId,
