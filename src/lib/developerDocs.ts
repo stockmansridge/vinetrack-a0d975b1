@@ -55,6 +55,12 @@ export interface ApiRoute {
   description: string;
   scope: string | null;
   hasPathParam: boolean;
+  /** True when the operation declares the Idempotency-Key header (all POST writes). */
+  requiresIdempotencyKey: boolean;
+  /** True when the operation requires expected_updated_at (all PATCH writes). */
+  requiresExpectedUpdatedAt: boolean;
+  /** Documented response status codes, in ascending order. */
+  statusCodes: string[];
 }
 
 function extractScope(description: string): string | null {
@@ -75,6 +81,8 @@ export const API_ROUTES: ApiRoute[] = Object.entries(spec.paths ?? {})
       .filter(([method]) => ["get", "post", "put", "patch", "delete"].includes(method))
       .map(([method, op]) => {
         const description = (op?.description ?? "").trim();
+        const params = JSON.stringify(op?.parameters ?? []);
+        const responses = (op as { responses?: Record<string, unknown> })?.responses ?? {};
         return {
           method: method.toUpperCase(),
           path,
@@ -83,12 +91,51 @@ export const API_ROUTES: ApiRoute[] = Object.entries(spec.paths ?? {})
           description,
           scope: extractScope(description),
           hasPathParam: path.includes("{"),
+          requiresIdempotencyKey:
+            /idempotencyKey|Idempotency-Key/i.test(params) ||
+            /Idempotency-Key/i.test(description),
+          requiresExpectedUpdatedAt: /expected_updated_at/i.test(
+            description + JSON.stringify((op as Record<string, unknown>)?.requestBody ?? {}),
+          ),
+          statusCodes: Object.keys(responses)
+            .filter((code) => /^\d{3}$/.test(code))
+            .sort(),
         };
       }),
   )
   .sort((a, b) => a.path.localeCompare(b.path));
 
 export const API_ROUTE_COUNT = API_ROUTES.length;
+
+/** Every non-GET route the canonical spec publishes (Stage 8 writes). */
+export const WRITE_ROUTES: ApiRoute[] = API_ROUTES.filter((r) => r.method !== "GET");
+
+/** HTTP methods present in the canonical spec (GET/POST/PATCH in Stage 8). */
+export const API_METHODS: string[] = [...new Set(API_ROUTES.map((r) => r.method))].sort();
+
+/** The spec must never publish a DELETE route. */
+export const HAS_DELETE_ROUTE = API_ROUTES.some((r) => r.method === "DELETE");
+
+/**
+ * Write scopes that are actually usable — derived from the canonical OpenAPI
+ * write routes, never hand-listed, so a spec change cannot silently drift.
+ */
+export const ACTIVE_WRITE_SCOPES: string[] = [
+  ...new Set(WRITE_ROUTES.map((r) => r.scope).filter((s): s is string => Boolean(s))),
+].sort();
+
+/**
+ * Reserved write scopes documented as unavailable in §4 of the developer
+ * guide. They exist in the backend catalogue but no public route accepts them.
+ */
+export const RESERVED_WRITE_SCOPES: string[] = [
+  "trips:write",
+  "sprays:write",
+  "pruning:write",
+  "equipment:write",
+  "pins:write",
+].filter((s) => !ACTIVE_WRITE_SCOPES.includes(s));
+
 
 export const API_TAG_ORDER: string[] = (spec.tags ?? [])
   .map((t) => t?.name)
