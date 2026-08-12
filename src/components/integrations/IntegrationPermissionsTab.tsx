@@ -67,6 +67,7 @@ export function IntegrationPermissionsTab({
   const [pendingSensitive, setPendingSensitive] = useState<IntegrationScopeRow | null>(
     null,
   );
+  const [pendingWrite, setPendingWrite] = useState<IntegrationScopeRow | null>(null);
   const [busyScope, setBusyScope] = useState<string | null>(null);
 
   const apply = async (row: IntegrationScopeRow, granted: boolean) => {
@@ -83,7 +84,12 @@ export function IntegrationPermissionsTab({
   };
 
   const onToggle = (row: IntegrationScopeRow, next: boolean) => {
-    if (row.access === "write") return;
+    // Reserved write scopes are never grantable — the backend rejects them too.
+    if (isReservedWriteScope(row.scope)) return;
+    if (next && isActiveWriteScope(row.scope)) {
+      setPendingWrite(row);
+      return;
+    }
     if (next && row.is_sensitive) {
       setPendingSensitive(row);
       return;
@@ -115,15 +121,28 @@ export function IntegrationPermissionsTab({
 
   const grantedCount = rows.filter((r) => r.granted).length;
   const groups = groupScopes(rows);
+  const grantedWrites = grantedWriteResources(
+    rows.filter((r) => r.granted).map((r) => r.scope),
+  );
 
   return (
     <div className="space-y-4">
-      <PortalNotice
-        variant="info"
-        title="The VineTrack external API is read-only"
-        description="Write permissions exist in the backend catalogue for future use but cannot be granted."
-        compact
-      />
+      {grantedWrites.length > 0 ? (
+        <PortalNotice
+          variant="warning"
+          title="Write access enabled"
+          description={`This integration can create or modify selected VineTrack operational records. Write access: ${grantedWrites.join(", ")}.`}
+          compact
+        />
+      ) : (
+        <PortalNotice
+          variant="info"
+          title="Read-only unless a write permission is granted"
+          description="Five VineTrack resources accept controlled external writes. All other write permissions remain reserved and cannot be granted."
+          compact
+        />
+      )}
+
 
       {!catalogAvailable && (
         <PortalNotice
