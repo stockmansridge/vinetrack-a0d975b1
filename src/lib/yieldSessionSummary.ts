@@ -231,15 +231,26 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
     const totalVines = info?.vineCount ?? null;
     const damageFactor = blockId && opts.damageFactor ? opts.damageFactor(blockId) : 1;
 
-    let est: { totalBunches: number; estimatedYieldKg: number; estimatedYieldTonnes: number } | null = null;
+    // The BASE estimate is always computed and kept — damage never mutates the
+    // recorded observation. The adjusted figure is derived live from the
+    // current damage factor and only *displayed* when applyDamage is true.
+    let base: { totalBunches: number; estimatedYieldKg: number; estimatedYieldTonnes: number } | null = null;
+    let adjusted: typeof base = null;
     if (avg != null && totalVines != null && totalVines > 0) {
-      est = blockEstimate({
+      base = blockEstimate({
+        totalVines,
+        averageBunchesPerVine: avg,
+        bunchWeightKg: weight,
+        damageFactor: 1,
+      });
+      adjusted = blockEstimate({
         totalVines,
         averageBunchesPerVine: avg,
         bunchWeightKg: weight,
         damageFactor,
       });
     }
+    const est = applyDamage ? adjusted : base;
 
     blocks.push({
       blockId,
@@ -259,9 +270,13 @@ export function summariseYieldSession(payload: any, opts: SummariseOptions = {})
       totalBunches: est?.totalBunches ?? null,
       estimatedYieldKg: est?.estimatedYieldKg ?? null,
       estimatedYieldTonnes: est?.estimatedYieldTonnes ?? null,
+      baseEstimatedYieldTonnes: base?.estimatedYieldTonnes ?? null,
+      adjustedEstimatedYieldTonnes: adjusted?.estimatedYieldTonnes ?? null,
+      damageApplied: applyDamage && damageFactor !== 1,
       notes: g.notes,
     });
   }
+
 
   blocks.sort((a, b) => (a.blockName ?? "").localeCompare(b.blockName ?? ""));
 
