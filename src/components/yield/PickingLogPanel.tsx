@@ -152,14 +152,18 @@ export default function PickingLogPanel({
     if (vintage != null) list = list.filter((r) => Number(r.vintage) === vintage);
     const f = search.trim().toLowerCase();
     if (f) {
-      list = list.filter((r) =>
-        `${r.paddock_name ?? ""} ${r.variety_name ?? ""} ${r.clone ?? ""} ${r.purpose ?? ""} ${r.sold_to ?? ""}`
+      list = list.filter((r) => {
+        // The buyer is only searchable for readers authorised to see it.
+        const buyer = showMoney ? financialFor(r.id)?.sold_to ?? "" : "";
+        return `${r.paddock_name ?? ""} ${r.variety_name ?? ""} ${r.clone ?? ""} ${r.purpose ?? ""} ${buyer}`
           .toLowerCase()
-          .includes(f),
-      );
+          .includes(f);
+      });
     }
     return list;
-  }, [data, vintage, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, vintage, search, showMoney, financials.byId]);
+
 
   const totalTonnes = rows.reduce((a, r) => a + (Number(r.weight_kg) || 0) / 1000, 0);
 
