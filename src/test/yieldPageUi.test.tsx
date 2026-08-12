@@ -104,7 +104,7 @@ function renderPage() {
 }
 
 const openEstimations = async () => {
-  const tab = await screen.findByRole("tab", { name: /Estimations/ });
+  const tab = await screen.findByRole("tab", { name: /Bunch Count Trips/ });
   fireEvent.mouseDown(tab);
   fireEvent.click(tab);
   await waitFor(() => expect(tab.getAttribute("data-state")).toBe("active"));
@@ -147,25 +147,27 @@ describe("Yields page", () => {
   it("marks the active tab and renders inactive tabs distinctly", async () => {
     renderPage();
     const overview = await screen.findByRole("tab", { name: "Overview" });
-    const estimations = screen.getByRole("tab", { name: /Estimations/ });
+    const estimations = screen.getByRole("tab", { name: /Bunch Count Trips/ });
     expect(overview.getAttribute("data-state")).toBe("active");
     expect(estimations.getAttribute("data-state")).toBe("inactive");
     expect(overview.className).toContain("data-[state=active]:bg-primary");
   });
 
-  it("shows estimated tonnes, area, block and variety in the records table", async () => {
+  it("shows estimated tonnes and block detail in the Bunch Count Trips history", async () => {
     renderPage();
     await openEstimations();
-    await waitFor(() => expect(screen.getByText("5")).toBeInTheDocument());
-    expect(screen.getByText(/2(\.00)?\s*ha/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Block A").length).toBeGreaterThan(0);
+    const row = await screen.findByTestId("trip-row-s1");
+    expect(row.textContent).toContain("5");
+    expect(screen.getAllByText("CURRENT ESTIMATE").length).toBeGreaterThan(0);
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.getByText(/Block A/)).toBeInTheDocument());
   });
 
   it("shows the delete action to owners and managers", async () => {
     renderPage();
     await openEstimations();
-    const row = await screen.findByText("Estimation");
-    fireEvent.click(row);
+    fireEvent.click(await screen.findByTestId("trip-row-s1"));
+    fireEvent.click(await screen.findByRole("button", { name: /view full trip detail/i }));
     expect(await screen.findByRole("button", { name: /delete session/i })).toBeInTheDocument();
   });
 
@@ -173,8 +175,8 @@ describe("Yields page", () => {
     role = "member";
     renderPage();
     await openEstimations();
-    const row = await screen.findByText("Estimation");
-    fireEvent.click(row);
+    fireEvent.click(await screen.findByTestId("trip-row-s1"));
+    fireEvent.click(await screen.findByRole("button", { name: /view full trip detail/i }));
     await screen.findByRole("dialog");
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
   });
