@@ -57,6 +57,8 @@ import {
   currentTripIds,
 } from "@/lib/bunchCountTrips";
 import PickingLogPanel from "@/components/yield/PickingLogPanel";
+import BunchCountSamplingCard from "@/components/yield/BunchCountSamplingCard";
+import BunchCountTripsPanel from "@/components/yield/BunchCountTripsPanel";
 import {
   aggregatePickingRecordsByPlanting,
   detailedActualsFromPlantingTotals,
@@ -303,6 +305,15 @@ export default function YieldReportsPage() {
   /** Trips that currently supply at least one block's estimate. */
   const liveTripIds = useMemo(() => currentTripIds(currentEstimates), [currentEstimates]);
 
+  /** History list for the selected vintage — drafts included, never current. */
+  const visibleTrips = useMemo(
+    () =>
+      activeVintage === ANY
+        ? trips
+        : trips.filter((t) => String(t.vintage ?? "") === activeVintage),
+    [trips, activeVintage],
+  );
+
 
   const rowTonnes = (r: AnyRow): number | null =>
     r.__kind === "historical"
@@ -504,7 +515,7 @@ export default function YieldReportsPage() {
           <TabsTrigger
             value="sessions"
           >
-            Estimations ({sessions.length})
+            Bunch Count Trips ({sessions.length})
           </TabsTrigger>
           <TabsTrigger
             value="historical"
@@ -519,7 +530,7 @@ export default function YieldReportsPage() {
         </TabsList>
 
         <div className="flex flex-wrap items-end gap-2 mt-4">
-          {tab !== "overview" && tab !== "picking" && (
+          {tab === "historical" && (
             <>
               <div className="space-y-1">
                 <div className="text-xs text-muted-foreground">From</div>
@@ -541,7 +552,7 @@ export default function YieldReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          {tab !== "overview" && tab !== "picking" && (
+          {tab === "historical" && (
             <>
               <div className="space-y-1">
                 <div className="text-xs text-muted-foreground">Completion</div>
@@ -579,7 +590,22 @@ export default function YieldReportsPage() {
           <YieldOverviewGrid cards={overviewCards} vintage={activeVintage === ANY ? null : activeVintage} />
         </TabsContent>
 
-        {(["sessions", "historical"] as const).map((t) => (
+        <TabsContent value="sessions" className="mt-4 space-y-3">
+          <BunchCountSamplingCard vineyardId={selectedVineyardId} role={currentRole} />
+          <BunchCountTripsPanel
+            trips={visibleTrips}
+            currentEstimates={currentEstimates}
+            liveTripIds={liveTripIds}
+            loading={isLoading}
+            error={error ? (error as Error).message : null}
+            onOpenTrip={(id) => {
+              const s = sessions.find((x) => x.id === id);
+              if (s) setSelected({ ...s, __kind: "session" });
+            }}
+          />
+        </TabsContent>
+
+        {(["historical"] as const).map((t) => (
         <TabsContent key={t} value={t} className="mt-4">
           <div className="flex justify-end mb-2">
             <ColumnSettingsMenu onReset={yReset} />
