@@ -67,12 +67,15 @@ export function IntegrationOverviewTab({
   vineyardCount,
   scopeCount,
   apiKeys,
+  grantedScopes,
 }: {
   client: IntegrationClient;
   canManage: boolean;
   vineyardCount: number | null;
   scopeCount: number | null;
   apiKeys: IntegrationApiKey[] | undefined;
+  /** Currently granted scope names — the only source for write-access display. */
+  grantedScopes?: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(client.name);
