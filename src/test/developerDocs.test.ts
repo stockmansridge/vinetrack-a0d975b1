@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  ACTIVE_WRITE_SCOPES,
+  WRITE_ROUTES,
   API_ROUTES,
   API_ROUTE_COUNT,
   DOC_SCOPES,
@@ -17,9 +19,21 @@ import {
 describe("developer docs (canonical Stage 6A assets)", () => {
   it("parses the OpenAPI spec into routes", () => {
     expect(API_ROUTE_COUNT).toBeGreaterThan(20);
-    expect(API_ROUTES.every((r) => r.method === "GET")).toBe(true);
+    expect(API_ROUTES.every((r) => ["GET", "POST", "PATCH"].includes(r.method))).toBe(true);
     expect(API_ROUTES.some((r) => r.path === "/v1/me")).toBe(true);
   });
+
+  it("exposes Stage 8 controlled write routes", () => {
+    expect(WRITE_ROUTES.length).toBeGreaterThan(0);
+    expect(WRITE_ROUTES.every((r) => r.method !== "GET")).toBe(true);
+    expect(WRITE_ROUTES.filter((r) => r.method === "POST").every((r) => r.requiresIdempotencyKey)).toBe(true);
+    expect(
+      WRITE_ROUTES.filter((r) => r.method === "PATCH").every((r) => r.requiresExpectedUpdatedAt),
+    ).toBe(true);
+    expect(ACTIVE_WRITE_SCOPES.length).toBe(5);
+    expect(ACTIVE_WRITE_SCOPES.every((s) => s.endsWith(":write"))).toBe(true);
+  });
+
 
   it("derives required scopes from route descriptions", () => {
     const vineyards = API_ROUTES.find((r) => r.path === "/v1/vineyards");

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lock, ShieldAlert } from "lucide-react";
+import { Lock, PencilLine, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,13 @@ import {
   useSetScope,
   type IntegrationScopeRow,
 } from "@/lib/integrationsQuery";
+import {
+  WRITE_SCOPE_DESCRIPTIONS,
+  grantedWriteResources,
+  isActiveWriteScope,
+  isReservedWriteScope,
+  isWriteScopeName,
+} from "@/lib/integrationWriteScopes";
 import { IntegrationEmptyState } from "./IntegrationEmptyState";
 
 function groupScopes(rows: IntegrationScopeRow[]) {
@@ -43,6 +50,7 @@ function groupScopes(rows: IntegrationScopeRow[]) {
   if (other.length) groups.push({ id: "other", label: "Other", modules: [], rows: other });
   return groups.filter((g) => g.rows.length > 0);
 }
+
 
 export function IntegrationPermissionsTab({
   clientId,
@@ -59,6 +67,7 @@ export function IntegrationPermissionsTab({
   const [pendingSensitive, setPendingSensitive] = useState<IntegrationScopeRow | null>(
     null,
   );
+  const [pendingWrite, setPendingWrite] = useState<IntegrationScopeRow | null>(null);
   const [busyScope, setBusyScope] = useState<string | null>(null);
 
   const apply = async (row: IntegrationScopeRow, granted: boolean) => {
@@ -75,7 +84,12 @@ export function IntegrationPermissionsTab({
   };
 
   const onToggle = (row: IntegrationScopeRow, next: boolean) => {
-    if (row.access === "write") return;
+    // Reserved write scopes are never grantable — the backend rejects them too.
+    if (isReservedWriteScope(row.scope)) return;
+    if (next && isActiveWriteScope(row.scope)) {
+      setPendingWrite(row);
+      return;
+    }
     if (next && row.is_sensitive) {
       setPendingSensitive(row);
       return;
@@ -107,15 +121,28 @@ export function IntegrationPermissionsTab({
 
   const grantedCount = rows.filter((r) => r.granted).length;
   const groups = groupScopes(rows);
+  const grantedWrites = grantedWriteResources(
+    rows.filter((r) => r.granted).map((r) => r.scope),
+  );
 
   return (
     <div className="space-y-4">
-      <PortalNotice
-        variant="info"
-        title="The VineTrack external API is read-only"
-        description="Write permissions exist in the backend catalogue for future use but cannot be granted."
-        compact
-      />
+      {grantedWrites.length > 0 ? (
+        <PortalNotice
+          variant="warning"
+          title="Write access enabled"
+          description={`This integration can create or modify selected VineTrack operational records. Write access: ${grantedWrites.join(", ")}.`}
+          compact
+        />
+      ) : (
+        <PortalNotice
+          variant="info"
+          title="Read-only unless a write permission is granted"
+          description="Five VineTrack resources accept controlled external writes. All other write permissions remain reserved and cannot be granted."
+          compact
+        />
+      )}
+
 
       {!catalogAvailable && (
         <PortalNotice
@@ -150,7 +177,9 @@ export function IntegrationPermissionsTab({
             </CardHeader>
             <CardContent className="divide-y">
               {group.rows.map((row) => {
-                const isWrite = row.access === "write";
+                const writeScope = isWriteScopeName(row.scope);
+                const activeWrite = isActiveWriteScope(row.scope);
+                const reservedWrite = writeScope && !activeWrite;
                 return (
                   <div
                     key={row.scope}
@@ -180,22 +209,34 @@ export function IntegrationPermissionsTab({
                             Sensitive access
                           </Badge>
                         )}
-                        {isWrite && (
+                        {activeWrite && (
+                          <Badge
+                            variant="outline"
+                            className="border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                          >
+                            <PencilLine className="mr-1 h-3 w-3" />
+                            Write access
+                          </Badge>
+                        )}
+                        {reservedWrite && (
                           <Badge variant="outline" className="text-muted-foreground">
                             Not yet available
                           </Badge>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {SENSITIVE_SCOPE_NOTES[row.scope] ??
+                        {WRITE_SCOPE_DESCRIPTIONS[row.scope] ??
+                          SENSITIVE_SCOPE_NOTES[row.scope] ??
                           row.description ??
-                          `Read ${titleise(row.module)} data for granted vineyards.`}
+                          (writeScope
+                            ? `No public write endpoint accepts ${row.scope} yet.`
+                            : `Read ${titleise(row.module)} data for granted vineyards.`)}
                       </p>
                     </div>
                     <Switch
                       checked={row.granted}
                       disabled={
-                        !canManage || isWrite || disabled || busyScope === row.scope
+                        !canManage || reservedWrite || disabled || busyScope === row.scope
                       }
                       aria-label={scopeLabel(row.scope)}
                       onCheckedChange={(next) => onToggle(row, next)}
@@ -203,6 +244,7 @@ export function IntegrationPermissionsTab({
                   </div>
                 );
               })}
+
             </CardContent>
           </Card>
         ))
@@ -239,6 +281,36 @@ export function IntegrationPermissionsTab({
               }}
             >
               Grant permission
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!pendingWrite}
+        onOpenChange={(open) => !open && setPendingWrite(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enable write access?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This integration will be able to create or modify supported VineTrack
+              records for vineyards it has access to
+              {pendingWrite ? ` (${scopeLabel(pendingWrite.scope)})` : ""}. VineTrack
+              validates every external write and records it as integration-created.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const row = pendingWrite;
+                setPendingWrite(null);
+                if (row) apply(row, true);
+              }}
+            >
+              Enable write access
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

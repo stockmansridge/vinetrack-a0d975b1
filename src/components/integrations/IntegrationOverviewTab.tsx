@@ -17,6 +17,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { IntegrationStatusBadge } from "./IntegrationStatusBadge";
+import { PortalNotice } from "@/components/ui/PortalNotice";
+import { grantedWriteResources } from "@/lib/integrationWriteScopes";
 import {
   formatDate,
   formatDateTime,
@@ -67,12 +69,15 @@ export function IntegrationOverviewTab({
   vineyardCount,
   scopeCount,
   apiKeys,
+  grantedScopes,
 }: {
   client: IntegrationClient;
   canManage: boolean;
   vineyardCount: number | null;
   scopeCount: number | null;
   apiKeys: IntegrationApiKey[] | undefined;
+  /** Currently granted scope names — the only source for write-access display. */
+  grantedScopes?: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(client.name);
@@ -90,6 +95,7 @@ export function IntegrationOverviewTab({
 
   const activeKeys = apiKeys?.filter((k) => !k.revoked_at).length ?? null;
   const revoked = client.status === "revoked";
+  const writeResources = grantedWriteResources(grantedScopes ?? []);
 
   const save = async () => {
     try {
@@ -121,6 +127,14 @@ export function IntegrationOverviewTab({
 
   return (
     <div className="space-y-4">
+      {writeResources.length > 0 && (
+        <PortalNotice
+          variant="warning"
+          title="Write access enabled"
+          description={`This integration can create or modify selected VineTrack operational records. Write access (${writeResources.length}): ${writeResources.join(", ")}.`}
+        />
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Details</CardTitle>
@@ -190,7 +204,19 @@ export function IntegrationOverviewTab({
           <CardTitle className="text-base">Health &amp; access</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Environment" value="Live (read-only API)" />
+          <Field
+            label="Environment"
+            value={
+              writeResources.length > 0
+                ? "Live (read + controlled writes)"
+                : "Live (read-only)"
+            }
+          />
+          <Field
+            label="Write scopes granted"
+            value={writeResources.length > 0 ? writeResources.length : "None"}
+          />
+
           <Field
             label="Last API activity"
             value={client.last_request_at ? formatDateTime(client.last_request_at) : "—"}

@@ -13,6 +13,17 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
+import {
+  ACTIVE_WRITE_SCOPE_LIST,
+  RESERVED_WRITE_SCOPE_LIST,
+  WRITE_SCOPE_DESCRIPTIONS,
+  WRITE_SCOPE_LABELS,
+  grantedWriteResources,
+  isActiveWriteScope,
+  isReservedWriteScope,
+  isWriteScopeName,
+  writeResourceLabel,
+} from "@/lib/integrationWriteScopes";
 
 // ---------------------------------------------------------------------------
 // Types (defensive — RPC payload shapes are normalised, never assumed)
@@ -109,7 +120,7 @@ export const INTEGRATION_ERROR_MESSAGES: Record<string, string> = {
   invalid_scope: "That API permission is not available.",
   scope_not_found: "That API permission is not available.",
   write_scopes_not_available:
-    "Write permissions are not available — the VineTrack API is read-only.",
+    "That write permission is not yet available — no public write endpoint accepts it.",
   invalid_status: "That integration status change is not supported.",
   integration_revoked:
     "This integration has been revoked and can no longer be changed.",
@@ -207,6 +218,7 @@ export const SCOPE_LABELS: Record<string, string> = {
 
 export function scopeLabel(scope: string): string {
   if (SCOPE_LABELS[scope]) return SCOPE_LABELS[scope];
+  if (WRITE_SCOPE_LABELS[scope]) return WRITE_SCOPE_LABELS[scope];
   const [resource, access] = scope.split(":");
   return `${titleise(resource ?? scope)} — ${titleise(access ?? "")}`.trim();
 }
@@ -226,10 +238,21 @@ export function isSensitiveScope(scope: string): boolean {
   return Object.prototype.hasOwnProperty.call(SENSITIVE_SCOPE_NOTES, scope);
 }
 
-/** The external API is read-only; write scopes exist in the catalog but cannot be granted. */
+/** Any `*:write` scope name (active or reserved). */
 export function isWriteScope(scope: string): boolean {
-  return scope.split(":")[1] === "write";
+  return isWriteScopeName(scope);
 }
+
+export {
+  isActiveWriteScope,
+  isReservedWriteScope,
+  ACTIVE_WRITE_SCOPE_LIST,
+  RESERVED_WRITE_SCOPE_LIST,
+  WRITE_SCOPE_DESCRIPTIONS,
+  grantedWriteResources,
+  writeResourceLabel,
+};
+
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "integration.created": "Integration created",
@@ -614,8 +637,8 @@ export function useSetScope(clientId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { scope: string; granted: boolean }) => {
-      if (input.scope.endsWith(":write")) {
-        // Hard requirement: the public API is read-only in Stage 4.
+      if (isReservedWriteScope(input.scope)) {
+        // Only the five Stage 8 write scopes are grantable; the rest stay reserved.
         throw new Error("write_scopes_not_available");
       }
       return rpc(

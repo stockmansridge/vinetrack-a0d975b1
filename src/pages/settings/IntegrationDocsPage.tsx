@@ -25,6 +25,10 @@ import { IOS_SUPABASE_URL } from "@/integrations/ios-supabase/client";
 import { scopeLabel, SENSITIVE_SCOPE_NOTES } from "@/lib/integrationsQuery";
 import { DocsMarkdown } from "@/components/integrations/DocsMarkdown";
 import {
+  ACTIVE_WRITE_SCOPES,
+  WRITE_API_SECTION,
+  WRITE_ROUTES,
+  WRITE_SCOPES_SECTION,
   API_INFO,
   API_ROUTE_COUNT,
   API_ROUTES,
@@ -46,6 +50,24 @@ import {
 } from "@/lib/developerDocs";
 
 const API_BASE_URL = `${IOS_SUPABASE_URL}/functions/v1/vinetrack-api/v1`;
+
+const METHOD_STYLES: Record<string, string> = {
+  GET: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  POST: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
+  PATCH:
+    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+};
+
+function MethodBadge({ method }: { method: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`font-mono text-[10px] ${METHOD_STYLES[method] ?? "text-muted-foreground"}`}
+    >
+      {method}
+    </Badge>
+  );
+}
 
 function CodeBlock({ label, code }: { label: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -186,10 +208,11 @@ export default function IntegrationDocsPage() {
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
               Onboarding, REST API reference, webhook events and change history for
-              the VineTrack {API_INFO.version} integration platform. The API is
-              read-only and scoped to the vineyards and permissions granted to each
-              integration.
+              the VineTrack {API_INFO.version} integration platform. Reads cover the
+              whole catalogue; writes are limited to the resources explicitly enabled
+              for each integration and scoped to its granted vineyards.
             </p>
+
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -221,9 +244,10 @@ export default function IntegrationDocsPage() {
 
       <PortalNotice
         variant="info"
-        title="Read-only API"
-        description="Only GET requests are supported. There are no public write endpoints in v1. Webhooks notify you that something changed; the read API remains the authority on what it now looks like."
+        title="Reads are open, writes are controlled"
+        description="Every resource is readable with a GET. Controlled external writes (POST / PATCH) are available for Work Tasks, Fuel, Irrigation, Growth Stages and Yield only, require an explicitly granted write permission, and enforce idempotency on create and optimistic concurrency on update."
       />
+
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="API routes" value={API_ROUTE_COUNT} />
@@ -331,9 +355,10 @@ const data = await res.json();`}
                         {group.routes.map((route) => (
                           <TableRow key={`${route.method} ${route.path}`}>
                             <TableCell className="whitespace-nowrap">
-                              <code className="font-mono text-xs">
-                                {route.method} {route.path}
-                              </code>
+                              <div className="flex items-center gap-2">
+                                <MethodBadge method={route.method} />
+                                <code className="font-mono text-xs">{route.path}</code>
+                              </div>
                             </TableCell>
                             <TableCell>
                               {route.scope ? (
@@ -349,9 +374,25 @@ const data = await res.json();`}
                               {route.description && (
                                 <div className="text-xs">{route.description}</div>
                               )}
+                              {(route.requiresIdempotencyKey ||
+                                route.requiresExpectedUpdatedAt) && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {route.requiresIdempotencyKey && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      Idempotency-Key
+                                    </Badge>
+                                  )}
+                                  {route.requiresExpectedUpdatedAt && (
+                                    <Badge variant="outline" className="text-[10px]">
+                                      expected_updated_at
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
+
                       </TableBody>
                     </Table>
                   </div>
@@ -359,6 +400,55 @@ const data = await res.json();`}
               ))}
             </CardContent>
           </Card>
+
+          {WRITE_API_SECTION && (
+            <Card id="writing-data">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Writing data
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {WRITE_ROUTES.length} write routes
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {ACTIVE_WRITE_SCOPES.map((s) => (
+                    <Badge key={s} variant="outline" className="font-mono text-[10px]">
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+                <DocsMarkdown>{WRITE_API_SECTION.body}</DocsMarkdown>
+                <CodeBlock
+                  label="Create (idempotent)"
+                  code={`curl -X POST "${API_BASE_URL}/work-tasks" \\
+  -H "Authorization: Bearer <VT_API_KEY>" \\
+  -H "Idempotency-Key: 8f1c0f2e-4c1a-4c9f-9f0e-7a2d1b3c4d5e" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "vineyard_id": "<uuid>", "title": "Mow mid-rows" }'`}
+                />
+                <CodeBlock
+                  label="Update (optimistic concurrency)"
+                  code={`curl -X PATCH "${API_BASE_URL}/work-tasks/<id>" \\
+  -H "Authorization: Bearer <VT_API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "expected_updated_at": "2026-08-11T04:12:09.331Z", "status": "completed" }'`}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {WRITE_SCOPES_SECTION && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{WRITE_SCOPES_SECTION.heading}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocsMarkdown>{WRITE_SCOPES_SECTION.body}</DocsMarkdown>
+              </CardContent>
+            </Card>
+          )}
 
           {referenceSections.map((section) => (
             <Card key={section.heading}>

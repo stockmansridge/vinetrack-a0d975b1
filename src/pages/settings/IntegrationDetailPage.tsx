@@ -126,6 +126,7 @@ export default function IntegrationDetailPage() {
             scopeCount={
               scopes.isLoading ? null : scopes.rows.filter((s) => s.granted).length
             }
+            grantedScopes={scopes.rows.filter((s) => s.granted).map((s) => s.scope)}
             apiKeys={keys.data}
           />
         </TabsContent>
