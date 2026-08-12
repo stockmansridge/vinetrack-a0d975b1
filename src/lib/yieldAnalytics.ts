@@ -69,12 +69,31 @@ export function factKey(f: { vintage: number | null; blockId: string | null; var
   return `${f.vintage ?? ""}|${norm(f.blockId)}|${norm(f.variety)}`;
 }
 
+/**
+ * Minimal shape of a picking record used to split sold vs retained tonnage.
+ * Only non-financial columns are read (`sold`, weight, identity) so this works
+ * for every role under the sql/187 financial-privacy contract.
+ */
+export interface AnalyticsPickingSoldRow {
+  vintage: number | null;
+  paddock_id: string | null;
+  variety_name: string | null;
+  weight_kg: number | null;
+  sold: boolean | null;
+}
+
 export interface BuildFactsArgs {
   historicalRows: HistoricalBlockRow[];
   pickingTotals: PickingYieldTotal[];
   blocks: AnalyticsBlockInfo[];
   costRows?: AnalyticsCostRow[];
+  /**
+   * Individual picks. When supplied, sold tonnes are derived ONLY from picks
+   * flagged `sold`, so Sale $/t never divides grape revenue by retained fruit.
+   */
+  pickingRecords?: AnalyticsPickingSoldRow[];
 }
+
 
 /**
  * Build the canonical analytics fact table.
