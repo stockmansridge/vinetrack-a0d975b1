@@ -165,6 +165,9 @@ export default function PickingLogPanel({
   }, [data, vintage, search, showMoney, financials.byId]);
 
 
+  // 12 base columns + optional money columns + optional actions column.
+  const colCount = 12 + (showMoney ? 3 : 0) + (canEdit || canDelete ? 1 : 0);
+
   const totalTonnes = rows.reduce((a, r) => a + (Number(r.weight_kg) || 0) / 1000, 0);
 
   // Vintage totals grouped by Block + Variety (client-side view of the same
@@ -304,21 +307,21 @@ export default function PickingLogPanel({
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={13} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={colCount} className="py-6 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             )}
             {error && (
               <TableRow>
-                <TableCell colSpan={13} className="py-6 text-center text-destructive">
+                <TableCell colSpan={colCount} className="py-6 text-center text-destructive">
                   {(error as Error).message}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={13} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={colCount} className="py-8 text-center text-muted-foreground">
                   No picks recorded for this vintage yet.
                 </TableCell>
               </TableRow>
@@ -421,7 +424,7 @@ export default function PickingLogPanel({
                 <TableCell className="text-right font-semibold tabular-nums">
                   {fmt(totalTonnes)} t
                 </TableCell>
-                <TableCell colSpan={canEdit || canDelete ? 6 : 5} />
+                <TableCell colSpan={colCount - 7} />
               </TableRow>
             )}
           </TableBody>
