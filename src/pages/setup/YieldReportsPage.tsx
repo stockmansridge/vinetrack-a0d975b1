@@ -445,6 +445,8 @@ export default function YieldReportsPage() {
     activeVintage,
     rowVintage,
     sessionSummaries,
+    currentEstimates,
+
     pickingRecordsQ.data,
     pickingPlantingTotalsQ.data,
   ]);
