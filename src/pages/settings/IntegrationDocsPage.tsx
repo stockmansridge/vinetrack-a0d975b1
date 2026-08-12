@@ -186,10 +186,11 @@ export default function IntegrationDocsPage() {
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
               Onboarding, REST API reference, webhook events and change history for
-              the VineTrack {API_INFO.version} integration platform. The API is
-              read-only and scoped to the vineyards and permissions granted to each
-              integration.
+              the VineTrack {API_INFO.version} integration platform. Reads cover the
+              whole catalogue; writes are limited to the resources explicitly enabled
+              for each integration and scoped to its granted vineyards.
             </p>
+
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -221,9 +222,10 @@ export default function IntegrationDocsPage() {
 
       <PortalNotice
         variant="info"
-        title="Read-only API"
-        description="Only GET requests are supported. There are no public write endpoints in v1. Webhooks notify you that something changed; the read API remains the authority on what it now looks like."
+        title="Reads are open, writes are controlled"
+        description="Every resource is readable with a GET. Controlled external writes (POST / PATCH) are available for Work Tasks, Fuel, Irrigation, Growth Stages and Yield only, require an explicitly granted write permission, and enforce idempotency on create and optimistic concurrency on update."
       />
+
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="API routes" value={API_ROUTE_COUNT} />
