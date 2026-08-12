@@ -465,28 +465,24 @@ export default function YieldReportsPage() {
       <YieldDamageAdjustmentPanel vineyardId={selectedVineyardId} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList className="border border-border bg-muted/70 shadow-sm">
+        <TabsList className="border border-border">
           <TabsTrigger
             value="overview"
-            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
           >
             Overview
           </TabsTrigger>
           <TabsTrigger
             value="sessions"
-            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
           >
             Estimations ({sessions.length})
           </TabsTrigger>
           <TabsTrigger
             value="historical"
-            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
           >
             Actual Yields ({historical.length})
           </TabsTrigger>
           <TabsTrigger
             value="picking"
-            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow data-[state=active]:border data-[state=active]:border-border"
           >
             Picking Log
           </TabsTrigger>
