@@ -24,13 +24,13 @@ export default function FuelPage() {
         <TabsList>
           <TabsTrigger
             value="purchases"
-            className="px-5 py-2 text-sm font-medium"
+            
           >
             Purchases
           </TabsTrigger>
           <TabsTrigger
             value="machine"
-            className="px-5 py-2 text-sm font-medium"
+            
           >
             Machine Logs
           </TabsTrigger>

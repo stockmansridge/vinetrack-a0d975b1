@@ -347,7 +347,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1 rounded-lg border border-border">
+        <TabsList className="flex flex-wrap">
           <TabsTrigger value="overview" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />
             Overview
