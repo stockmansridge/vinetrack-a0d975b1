@@ -177,7 +177,9 @@ export function IntegrationPermissionsTab({
             </CardHeader>
             <CardContent className="divide-y">
               {group.rows.map((row) => {
-                const isWrite = row.access === "write";
+                const writeScope = isWriteScopeName(row.scope);
+                const activeWrite = isActiveWriteScope(row.scope);
+                const reservedWrite = writeScope && !activeWrite;
                 return (
                   <div
                     key={row.scope}
@@ -207,22 +209,34 @@ export function IntegrationPermissionsTab({
                             Sensitive access
                           </Badge>
                         )}
-                        {isWrite && (
+                        {activeWrite && (
+                          <Badge
+                            variant="outline"
+                            className="border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                          >
+                            <PencilLine className="mr-1 h-3 w-3" />
+                            Write access
+                          </Badge>
+                        )}
+                        {reservedWrite && (
                           <Badge variant="outline" className="text-muted-foreground">
                             Not yet available
                           </Badge>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {SENSITIVE_SCOPE_NOTES[row.scope] ??
+                        {WRITE_SCOPE_DESCRIPTIONS[row.scope] ??
+                          SENSITIVE_SCOPE_NOTES[row.scope] ??
                           row.description ??
-                          `Read ${titleise(row.module)} data for granted vineyards.`}
+                          (writeScope
+                            ? `No public write endpoint accepts ${row.scope} yet.`
+                            : `Read ${titleise(row.module)} data for granted vineyards.`)}
                       </p>
                     </div>
                     <Switch
                       checked={row.granted}
                       disabled={
-                        !canManage || isWrite || disabled || busyScope === row.scope
+                        !canManage || reservedWrite || disabled || busyScope === row.scope
                       }
                       aria-label={scopeLabel(row.scope)}
                       onCheckedChange={(next) => onToggle(row, next)}
@@ -230,6 +244,7 @@ export function IntegrationPermissionsTab({
                   </div>
                 );
               })}
+
             </CardContent>
           </Card>
         ))
