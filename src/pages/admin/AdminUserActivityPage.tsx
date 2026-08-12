@@ -43,13 +43,23 @@ interface UserActivityRow {
   vineyard_ids: string[] | null;
   vineyard_names: string[] | null;
   roles: string[] | null;
+  /** Legacy support-request telemetry. Kept for compatibility but not displayed. */
   app_platform: string | null;
   app_version: string | null;
   app_build: string | null;
   device_model: string | null;
   os_version: string | null;
+  /** Current client telemetry (preferred). */
+  last_app_type: string | null;
+  last_app_version: string | null;
+  last_app_build: string | null;
+  last_os_name: string | null;
+  last_os_version: string | null;
+  last_device_model: string | null;
+  last_client_seen_at: string | null;
   status: string | null;
 }
+
 
 interface ActivityColumn {
   key: ActivitySortKey;
@@ -67,11 +77,13 @@ type ActivitySortKey =
   | "roles"
   | "account_created"
   | "last_login"
-  | "app"
-  | "platform"
+  | "last_seen"
+  | "app_type"
+  | "app_version"
   | "device"
   | "os"
   | "status";
+
 
 type LastLoginFilter =
   | "all"
@@ -117,10 +129,32 @@ async function fetchUserActivity(): Promise<UserActivityRow[]> {
 }
 
 function appVersionDisplay(r: UserActivityRow): string {
-  if (!r.app_version && !r.app_build) return "Unknown";
-  if (r.app_version && r.app_build) return `${r.app_version} (${r.app_build})`;
-  return r.app_version ?? r.app_build ?? "Unknown";
+  if (!r.last_app_version && !r.last_app_build) return "Not recorded";
+  if (r.last_app_version && r.last_app_build)
+    return `${r.last_app_version} (${r.last_app_build})`;
+  return r.last_app_version ?? r.last_app_build ?? "Not recorded";
 }
+
+function osDisplay(r: UserActivityRow): string {
+  if (!r.last_os_name && !r.last_os_version) return "Not recorded";
+  if (r.last_os_name && r.last_os_version)
+    return `${r.last_os_name} ${r.last_os_version}`;
+  return r.last_os_name ?? r.last_os_version ?? "Not recorded";
+}
+
+function lastSeenDisplay(r: UserActivityRow): React.ReactNode {
+  if (!r.last_client_seen_at)
+    return <span className="text-muted-foreground">Not recorded</span>;
+  return (
+    <div>
+      <div>{formatDate(r.last_client_seen_at)}</div>
+      <div className="text-xs text-muted-foreground">
+        {formatRelative(r.last_client_seen_at)}
+      </div>
+    </div>
+  );
+}
+
 
 function isWithin(iso: string | null, days: number): boolean {
   if (!iso) return false;
@@ -148,11 +182,13 @@ function exportCsv(rows: UserActivityRow[]) {
     "roles",
     "account_created_at",
     "last_sign_in_at",
-    "app_platform",
-    "app_version",
-    "app_build",
-    "device_model",
-    "os_version",
+    "last_client_seen_at",
+    "last_app_type",
+    "last_app_version",
+    "last_app_build",
+    "last_device_model",
+    "last_os_name",
+    "last_os_version",
     "status",
   ];
   const lines = [headers.join(",")];
@@ -166,11 +202,13 @@ function exportCsv(rows: UserActivityRow[]) {
         (r.roles ?? []).join("; "),
         r.account_created_at ?? "",
         r.last_sign_in_at ?? "",
-        r.app_platform ?? "",
-        r.app_version ?? "",
-        r.app_build ?? "",
-        r.device_model ?? "",
-        r.os_version ?? "",
+        r.last_client_seen_at ?? "",
+        r.last_app_type ?? "",
+        r.last_app_version ?? "",
+        r.last_app_build ?? "",
+        r.last_device_model ?? "",
+        r.last_os_name ?? "",
+        r.last_os_version ?? "",
         r.status ?? "",
       ]
         .map(csvEscape)
@@ -185,6 +223,7 @@ function exportCsv(rows: UserActivityRow[]) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
 
 function SummaryCard({
   label,
@@ -283,33 +322,41 @@ const ACTIVITY_COLUMNS: ActivityColumn[] = [
       ),
   },
   {
-    key: "app",
-    label: "App",
+    key: "last_seen",
+    label: "Last seen",
+    className: "whitespace-nowrap",
+    sortable: true,
+    render: (r) => lastSeenDisplay(r),
+  },
+  {
+    key: "app_type",
+    label: "App type",
+    className: "whitespace-nowrap",
+    sortable: true,
+    render: (r) => r.last_app_type ?? "Not recorded",
+  },
+  {
+    key: "app_version",
+    label: "App version",
     className: "whitespace-nowrap",
     sortable: true,
     render: (r) => appVersionDisplay(r),
-  },
-  {
-    key: "platform",
-    label: "Platform",
-    className: "whitespace-nowrap",
-    sortable: true,
-    render: (r) => r.app_platform || "Unknown",
   },
   {
     key: "device",
     label: "Device",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => r.device_model || "Unknown",
+    render: (r) => r.last_device_model ?? "Not recorded",
   },
   {
     key: "os",
     label: "OS",
     className: "whitespace-nowrap",
     sortable: true,
-    render: (r) => r.os_version || "Unknown",
+    render: (r) => osDisplay(r),
   },
+
   {
     key: "status",
     label: "Status",
@@ -444,12 +491,14 @@ export default function AdminUserActivityPage() {
       roles: (r) => (r.roles ?? []).length,
       account_created: (r) => (r.account_created_at ? new Date(r.account_created_at).getTime() : 0),
       last_login: (r) => (r.last_sign_in_at ? new Date(r.last_sign_in_at).getTime() : 0),
-      app: (r) => r.app_version ?? "",
-      platform: (r) => r.app_platform ?? "",
-      device: (r) => r.device_model ?? "",
-      os: (r) => r.os_version ?? "",
+      last_seen: (r) => (r.last_client_seen_at ? new Date(r.last_client_seen_at).getTime() : 0),
+      app_type: (r) => r.last_app_type ?? "",
+      app_version: (r) => r.last_app_version ?? "",
+      device: (r) => r.last_device_model ?? "",
+      os: (r) => osDisplay(r).toLowerCase(),
       status: (r) => r.status ?? "",
     },
+
     initial: { key: "last_login", direction: "desc" },
   });
 
