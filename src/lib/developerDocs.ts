@@ -284,7 +284,53 @@ export function sectionsByHeadingPrefix(
     .filter((s): s is MarkdownSection => Boolean(s));
 }
 
-/** Trigger a client-side download of a text asset. No network call, no key. */
+/** Split a markdown document into its level-3 subsections, in document order. */
+export function splitSubsections(markdown: string): MarkdownSection[] {
+  const lines = markdown.split("\n");
+  const sections: MarkdownSection[] = [];
+  let heading: string | null = null;
+  let buffer: string[] = [];
+  let inFence = false;
+
+  const flush = () => {
+    if (heading !== null) sections.push({ heading, body: buffer.join("\n").trim() });
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    if (line.trimStart().startsWith("```")) inFence = !inFence;
+    if (!inFence && (line.startsWith("### ") || line.startsWith("## "))) {
+      flush();
+      heading = line.startsWith("### ") ? line.slice(4).trim() : null;
+      continue;
+    }
+    if (heading !== null) buffer.push(line);
+  }
+  flush();
+  return sections;
+}
+
+export function subsectionByHeadingPrefix(
+  markdown: string,
+  prefix: string,
+): MarkdownSection | null {
+  return (
+    splitSubsections(markdown).find((s) =>
+      s.heading.toLowerCase().startsWith(prefix.toLowerCase()),
+    ) ?? null
+  );
+}
+
+/** Canonical "Writing data" content — Stage 8 write API section of the guide. */
+export const WRITE_API_SECTION = subsectionByHeadingPrefix(DEVELOPER_GUIDE_MD, "6b.");
+
+/** Canonical write-scope table (§4 "Write scopes (Stage 8)"). */
+export const WRITE_SCOPES_SECTION = subsectionByHeadingPrefix(
+  DEVELOPER_GUIDE_MD,
+  "Write scopes",
+);
+
+
 export function downloadTextFile(filename: string, contents: string, mime: string) {
   const blob = new Blob([contents], { type: mime });
   const url = URL.createObjectURL(blob);
