@@ -17,6 +17,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { IntegrationStatusBadge } from "./IntegrationStatusBadge";
+import { PortalNotice } from "@/components/ui/PortalNotice";
+import { grantedWriteResources } from "@/lib/integrationWriteScopes";
 import {
   formatDate,
   formatDateTime,
@@ -93,6 +95,7 @@ export function IntegrationOverviewTab({
 
   const activeKeys = apiKeys?.filter((k) => !k.revoked_at).length ?? null;
   const revoked = client.status === "revoked";
+  const writeResources = grantedWriteResources(grantedScopes ?? []);
 
   const save = async () => {
     try {
