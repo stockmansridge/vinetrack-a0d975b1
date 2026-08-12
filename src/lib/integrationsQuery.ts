@@ -13,6 +13,17 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
+import {
+  ACTIVE_WRITE_SCOPE_LIST,
+  RESERVED_WRITE_SCOPE_LIST,
+  WRITE_SCOPE_DESCRIPTIONS,
+  WRITE_SCOPE_LABELS,
+  grantedWriteResources,
+  isActiveWriteScope,
+  isReservedWriteScope,
+  isWriteScopeName,
+  writeResourceLabel,
+} from "@/lib/integrationWriteScopes";
 
 // ---------------------------------------------------------------------------
 // Types (defensive — RPC payload shapes are normalised, never assumed)
