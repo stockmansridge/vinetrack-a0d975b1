@@ -641,13 +641,22 @@ export default function YieldReportsPage() {
                     area: <TableCell>{areaVal(rowAreaHa(r))}</TableCell>,
                     status: (
                       <TableCell>
-                        {isHist
-                          ? <Badge variant="secondary">Archived</Badge>
-                          : s.is_completed
-                          ? <Badge>Completed</Badge>
-                          : <Badge variant="outline">Open</Badge>}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {isHist
+                            ? <Badge variant="secondary">Archived</Badge>
+                            : s.is_completed
+                            ? <Badge>Completed</Badge>
+                            : <Badge variant="outline">Open</Badge>}
+                          {/* sql/187: the trip currently providing an estimate. */}
+                          {!isHist && liveTripIds.has(r.id) && (
+                            <Badge variant="outline" className="border-primary text-primary">
+                              Current estimate
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                     ),
+
                   };
                   return (
                     <TableRow key={r.__kind + ":" + r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
