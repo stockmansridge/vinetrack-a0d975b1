@@ -108,6 +108,7 @@ export function buildYieldFacts({
   pickingTotals,
   blocks,
   costRows = [],
+  pickingRecords = [],
 }: BuildFactsArgs): YieldFact[] {
   const blockById = new Map(blocks.map((b) => [norm(b.id), b]));
 
@@ -140,6 +141,24 @@ export function buildYieldFacts({
     if (r.pickCount != null) cur.pickCount = (cur.pickCount ?? 0) + r.pickCount;
   };
 
+  // 0) Sold tonnes per vintage × block × variety, derived from individual picks
+  //    flagged `sold`. This is the ONLY correct denominator for Sale $/t when a
+  //    planting has both sold and retained fruit. `sold` is not a protected
+  //    financial column, so this works for every role (sql/187).
+  const soldTonnesByKey = new Map<string, number>();
+  for (const p of pickingRecords) {
+    if (!p.paddock_id || p.sold !== true) continue;
+    const kg = num(p.weight_kg);
+    if (kg == null || kg <= 0) continue;
+    const k = factKey({
+      vintage: p.vintage ?? null,
+      blockId: p.paddock_id,
+      variety: p.variety_name?.trim() || null,
+    });
+    soldTonnesByKey.set(k, (soldTonnesByKey.get(k) ?? 0) + kg / 1000);
+  }
+  const hasPickDetail = soldTonnesByKey.size > 0 || pickingRecords.length > 0;
+
   // 1) Detailed picking totals (authoritative where present).
   for (const t of pickingTotals) {
     if (!t.paddock_id) continue;
@@ -147,19 +166,31 @@ export function buildYieldFacts({
       num(t.actual_yield_tonnes) ?? (num(t.total_weight_kg) != null ? num(t.total_weight_kg)! / 1000 : null);
     if (tonnes == null) continue;
     const revenue = num(t.total_grape_value);
+    const hasRevenue = revenue != null && revenue > 0;
+    const key = factKey({
+      vintage: t.vintage ?? null,
+      blockId: t.paddock_id,
+      variety: t.variety_name?.trim() || null,
+    });
+    // Prefer measured sold tonnage; fall back to the coarse "any revenue means
+    // the whole group was sold" heuristic only when picks are unavailable.
+    const measuredSold = hasPickDetail ? Math.min(soldTonnesByKey.get(key) ?? 0, tonnes) : null;
+    const pricedTonnes =
+      measuredSold != null ? measuredSold : hasRevenue ? tonnes : 0;
     push({
       vintage: t.vintage ?? null,
       blockId: t.paddock_id,
       blockName: t.paddock_name?.trim() || blockById.get(norm(t.paddock_id))?.name || "Unnamed block",
       variety: t.variety_name?.trim() || null,
       tonnes,
-      revenue: revenue != null && revenue > 0 ? revenue : null,
-      pricedTonnes: revenue != null && revenue > 0 ? tonnes : 0,
+      revenue: hasRevenue ? revenue : null,
+      pricedTonnes,
       recordedAreaHa: null,
       source: "detailed",
       pickCount: num(t.pick_count),
     });
   }
+
 
   const detailedExact = new Set(Array.from(bucket.keys()));
   const detailedBlockVintage = new Set(
