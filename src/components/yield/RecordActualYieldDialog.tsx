@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { fetchYieldBlocks, recordActualYield, type YieldBlockInfo } from "@/lib/yieldReportsQuery";
+import { usePickingFinancials } from "@/lib/pickingFinancials";
 import {
   createPickingRecord,
   updatePickingRecord,
@@ -629,6 +630,8 @@ function DetailedForm({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["picking_records"] });
       qc.invalidateQueries({ queryKey: ["picking_yield_totals"] });
+      qc.invalidateQueries({ queryKey: ["picking_yield_planting_totals"] });
+      qc.invalidateQueries({ queryKey: ["picking_record_financials"] });
       qc.invalidateQueries({ queryKey: ["yield_reports"] });
       if (editing) {
         toast({ title: "Picking record updated" });
