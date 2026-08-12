@@ -474,6 +474,18 @@ export default function VineyardVarietiesPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="clones">
+          <ClonesTab />
+        </TabsContent>
+
+        <TabsContent value="rootstocks">
+          <RootstocksTab />
+        </TabsContent>
+      </Tabs>
+
+
 
       <AlertDialog
         open={!!pendingArchive}
