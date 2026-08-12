@@ -127,6 +127,14 @@ export function IntegrationOverviewTab({
 
   return (
     <div className="space-y-4">
+      {writeResources.length > 0 && (
+        <PortalNotice
+          variant="warning"
+          title="Write access enabled"
+          description={`This integration can create or modify selected VineTrack operational records. Write access (${writeResources.length}): ${writeResources.join(", ")}.`}
+        />
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Details</CardTitle>
