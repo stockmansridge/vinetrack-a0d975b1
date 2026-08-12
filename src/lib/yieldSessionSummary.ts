@@ -53,6 +53,12 @@ export interface SessionBlockSummary {
   totalBunches: number | null;
   estimatedYieldKg: number | null;
   estimatedYieldTonnes: number | null;
+  /** Recorded observation, never mutated by damage (sql/187 §2). */
+  baseEstimatedYieldTonnes: number | null;
+  /** Base × the LIVE damage factor for the block. */
+  adjustedEstimatedYieldTonnes: number | null;
+  /** True when the displayed estimate includes the damage adjustment. */
+  damageApplied: boolean;
   notes: string | null;
 }
 
@@ -60,12 +66,22 @@ export interface SessionSummary {
   season: string | number | null;
   notes: string | null;
   samplesPerHectare: number | null;
+  /**
+   * sql/187 additive key. Absent on pre-187 sessions → `true`, so historical
+   * numbers are unchanged. Display rule: adjusted when true, base when false.
+   */
+  applyDamage: boolean;
+  /** sql/187 additive key: the trip whose route/sample sites were reused. */
+  routeSourceSessionId: string | null;
   blocks: SessionBlockSummary[];
   totalAreaHa: number | null;
   totalEstTonnes: number | null;
+  /** Undamaged total — always recoverable. */
+  totalBaseTonnes: number | null;
   hasAnySamples: boolean;
   missing: { sampleSites: boolean; bunchWeight: boolean; area: boolean; vines: boolean };
 }
+
 
 function pickFirst(obj: any, keys: string[]): any {
   if (!obj || typeof obj !== "object") return undefined;
