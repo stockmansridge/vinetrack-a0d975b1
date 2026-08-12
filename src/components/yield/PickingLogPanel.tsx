@@ -348,22 +348,33 @@ export default function PickingLogPanel({
                 <TableCell className="text-right tabular-nums">{fmt(r.ta_g_l, 1)}</TableCell>
                 <TableCell>{r.purpose || "—"}</TableCell>
                 <TableCell>
-                  {r.sold ? (
-                    <div className="text-sm">
-                      <Badge variant="outline">Sold</Badge>
-                      {r.sold_to ? (
-                        <div className="text-xs text-muted-foreground">{r.sold_to}</div>
-                      ) : null}
-                      {r.grape_value != null ? (
-                        <div className="text-xs text-muted-foreground">
-                          {rf.currency(Number(r.grape_value))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    "—"
-                  )}
+                  {/* Operational status only — it carries no counterparty or money. */}
+                  {r.sold ? <Badge variant="outline">Sold</Badge> : "—"}
                 </TableCell>
+                {showMoney && (
+                  <TableCell className="text-sm">
+                    {!r.sold ? "—" : financialFor(r.id)?.sold_to || "Not recorded"}
+                  </TableCell>
+                )}
+                {showMoney && (
+                  <TableCell className="text-right tabular-nums">
+                    {!r.sold
+                      ? "—"
+                      : financialFor(r.id)?.price_per_tonne != null
+                      ? rf.currency(Number(financialFor(r.id)!.price_per_tonne))
+                      : "Not recorded"}
+                  </TableCell>
+                )}
+                {showMoney && (
+                  <TableCell className="text-right tabular-nums">
+                    {!r.sold
+                      ? "—"
+                      : financialFor(r.id)?.grape_value != null
+                      ? rf.currency(Number(financialFor(r.id)!.grape_value))
+                      : "Not recorded"}
+                  </TableCell>
+                )}
+
                 {(canEdit || canDelete) && (
                   <TableCell className="text-right whitespace-nowrap">
                     <TooltipProvider>
