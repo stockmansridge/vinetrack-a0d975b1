@@ -43,13 +43,23 @@ interface UserActivityRow {
   vineyard_ids: string[] | null;
   vineyard_names: string[] | null;
   roles: string[] | null;
+  /** Legacy support-request telemetry. Kept for compatibility but not displayed. */
   app_platform: string | null;
   app_version: string | null;
   app_build: string | null;
   device_model: string | null;
   os_version: string | null;
+  /** Current client telemetry (preferred). */
+  last_app_type: string | null;
+  last_app_version: string | null;
+  last_app_build: string | null;
+  last_os_name: string | null;
+  last_os_version: string | null;
+  last_device_model: string | null;
+  last_client_seen_at: string | null;
   status: string | null;
 }
+
 
 interface ActivityColumn {
   key: ActivitySortKey;
