@@ -279,6 +279,31 @@ export default function YieldReportsPage() {
     return map;
   }, [sessions, blocksQ.data]);
 
+  /** Every session as a Bunch Count Trip, newest first (sql/187). */
+  const trips = useMemo(
+    () =>
+      buildBunchCountTrips(sessions, {
+        blocks: blocksQ.data ?? [],
+        vintageOf: (iso) => {
+          const d = new Date(iso);
+          return Number.isNaN(d.getTime())
+            ? null
+            : vintageForDate(d, seasonStartMonth, seasonStartDay);
+        },
+      }),
+    [sessions, blocksQ.data, seasonStartMonth, seasonStartDay],
+  );
+
+  /** Latest completed trip per block for the selected vintage — never summed. */
+  const currentEstimates = useMemo(
+    () => currentEstimatesByBlock(trips, activeVintage === ANY ? null : Number(activeVintage)),
+    [trips, activeVintage],
+  );
+
+  /** Trips that currently supply at least one block's estimate. */
+  const liveTripIds = useMemo(() => currentTripIds(currentEstimates), [currentEstimates]);
+
+
   const rowTonnes = (r: AnyRow): number | null =>
     r.__kind === "historical"
       ? (r as HistoricalYieldRecord).total_yield_tonnes ?? null
