@@ -294,6 +294,10 @@ export default function PickingLogPanel({
               <TableHead className="text-right">TA</TableHead>
               <TableHead>Purpose</TableHead>
               <TableHead>Sold</TableHead>
+              {showMoney && <TableHead>Buyer</TableHead>}
+              {showMoney && <TableHead className="text-right">Price / tonne</TableHead>}
+              {showMoney && <TableHead className="text-right">Grape value</TableHead>}
+
               {(canEdit || canDelete) && <TableHead className="w-20 text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
