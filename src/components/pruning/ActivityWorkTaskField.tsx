@@ -43,6 +43,8 @@ import {
   type BlockAllocationDraft, type PruningActivityDraft,
 } from "@/lib/pruningActivityContract";
 import { formatDate } from "@/lib/dateFormat";
+import { supabase } from "@/integrations/ios-supabase/client";
+import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
 import WorkTaskLabourFields, {
   elapsedHoursBetween, emptyLabourValue, labourTotals, labourTypeName, useLabourTypes,
   type LabourFieldsValue,
