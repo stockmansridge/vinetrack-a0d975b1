@@ -3,7 +3,8 @@
 // Read-only. Reuses the same roll-up formula already implemented in the
 // Work Task drawer (WorkTasksPage → WorkTaskSummarySection):
 //
-//   manualLabourCost  = Σ work_task_labour_lines.total_cost
+//   manualLabourCost  = canonical task labour cost (SQL 188): piece-rate
+//                       snapshot total, otherwise Σ work_task_labour_lines.total_cost
 //   manualLabourHours = Σ work_task_labour_lines.total_hours
 //   machineCharge     = Σ work_task_machine_lines.total_machine_cost
 //   machineFuel       = Σ work_task_machine_lines.fuel_cost
@@ -19,6 +20,7 @@
 // are untouched.
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { taskLabourCost } from "@/lib/pieceRateCosting";
 import { format } from "date-fns";
 import {
   Download, Info, Search, AlertTriangle, ChevronDown, ChevronRight,
@@ -478,7 +480,10 @@ export default function WorkTaskReportsPage() {
         if (sum > 0) totalAreaHa = sum;
       }
 
-      const manualLabourCost = labour.reduce((s, l) => s + num(l.total_cost), 0);
+      // Canonical labour cost (SQL 188): piece-rate tasks read their snapshot
+      // total; every other task sums its labour lines. Never both.
+      const labourLineCost = labour.reduce((s, l) => s + num(l.total_cost), 0);
+      const manualLabourCost = taskLabourCost(task as any, labourLineCost) ?? 0;
       const labourHours = labour.reduce((s, l) => s + num(l.total_hours), 0);
       const machineCharge = machine.reduce((s, l) => s + num(l.total_machine_cost), 0);
       const machineFuel = machine.reduce((s, l) => s + num(l.fuel_cost), 0);

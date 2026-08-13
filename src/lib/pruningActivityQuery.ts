@@ -11,13 +11,15 @@
 //    entry by SQL 119 — never derived from entry_date on the client.
 //  - Reversed entries have `deleted_at` set. They are fetched so the report
 //    can optionally show them, but are excluded by default.
-//  - Costs come from work_task_labour_lines of the linked Work Task. No
-//    costing is invented client-side.
+//  - Costs come from the canonical task labour cost helper (SQL 188):
+//    piece_rate tasks use work_tasks.piece_rate_total_cost, all other tasks
+//    sum work_task_labour_lines.total_cost. The two are NEVER added.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { parseVarietyAllocations } from "@/lib/paddockGeometry";
 import type { PruningEntry } from "@/lib/pruningQuery";
 import { allocateActivityShares } from "@/lib/pruningActivityAllocation";
+import { taskLabourCost } from "@/lib/pieceRateCosting";
 
 export interface PruningActivityRow {
   id: string;
@@ -166,7 +168,13 @@ function readPlatform(row: any): string | null {
 
 interface PaddockLite { id: string; name: string | null; variety_allocations: any }
 interface SegmentLite { pruning_entry_id: string | null; row_number: number; segment_number: number }
-interface TaskLite { id: string; task_type: string | null; description: string | null; status: string | null }
+interface TaskLite {
+  id: string; task_type: string | null; description: string | null; status: string | null;
+  costing_method?: string | null;
+  piece_rate_per_vine?: number | string | null;
+  piece_vine_count?: number | null;
+  piece_rate_total_cost?: number | string | null;
+}
 interface LabourLite { work_task_id: string; total_hours: number | null; total_cost: number | null }
 
 /** A report row before the parent-activity allocation pass runs. */
@@ -312,7 +320,7 @@ export function usePruningActivity(vineyardId: string | null) {
             .eq("vineyard_id", vid),
           supabase.from("paddocks").select("id, name, variety_allocations")
             .eq("vineyard_id", vid).is("deleted_at", null),
-          supabase.from("work_tasks").select("id, task_type, description, status")
+          supabase.from("work_tasks").select("id, task_type, description, status, costing_method, piece_rate_per_vine, piece_vine_count, piece_rate_total_cost")
             .eq("vineyard_id", vid).is("deleted_at", null),
           supabase.from("work_task_labour_lines")
             .select("work_task_id, total_hours, total_cost")
@@ -374,7 +382,12 @@ export function usePruningActivity(vineyardId: string | null) {
 
         const task = e.work_task_id ? taskById.get(e.work_task_id) ?? null : null;
         const taskLabour = e.work_task_id ? labourByTask.get(e.work_task_id) ?? null : null;
-        const labourCost = isSkipped ? null : taskLabour ? taskLabour.cost : null;
+        // Canonical task labour cost (SQL 188): piece-rate snapshot OR labour
+        // lines — never the sum of both.
+        const canonicalCost = task
+          ? taskLabourCost(task, taskLabour ? taskLabour.cost : null)
+          : null;
+        const labourCost = isSkipped ? null : canonicalCost;
         const rateHours = labourHours && labourHours > 0
           ? labourHours
           : taskLabour && taskLabour.hours > 0 ? taskLabour.hours : null;
