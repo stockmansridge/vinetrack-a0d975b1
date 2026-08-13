@@ -313,7 +313,9 @@ export function AppSidebar() {
         {renderGroup(
           "Setup",
           visible(
-            irrigation.can_manage_irrigation_setup ? [...setup, ...irrigationSetup] : setup,
+            irrigation.can_manage_irrigation_setup
+              ? setup
+              : setup.filter((i) => i.url !== "/irrigation/setup"),
           ),
           false,
         )}
