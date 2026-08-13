@@ -71,6 +71,7 @@ import {
   type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
+import { useEffectiveLabourCosts, resolveEffectiveLabourCost } from "@/lib/effectiveLabourCost";
 import {
   costingMethodLabel, costPerHectare, resolveCostingMethod, taskLabourCost,
 } from "@/lib/pieceRateCosting";
@@ -286,6 +287,9 @@ export default function WorkTasksPage() {
     enabled: !!selectedVineyardId,
     queryFn: () => fetchLabourLinesForVineyard(selectedVineyardId!),
   });
+
+  // SQL 189 — shared effective Work Task labour cost.
+  const effectiveCostByTask = useEffectiveLabourCosts(selectedVineyardId).data ?? new Map();
 
   const { data: taskPaddocks = [] } = useQuery({
     queryKey: ["work_task_paddocks", selectedVineyardId],
@@ -1116,6 +1120,7 @@ function WorkTaskDrawer({
     localMachineLines.forEach((line) => byId.set(line.id, line));
     return Array.from(byId.values());
   }, [machineLines, localMachineLines]);
+  const drawerEffectiveCost = useEffectiveLabourCosts(vineyardId).data?.get(task?.id ?? "") ?? null;
   const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const taskCostingMethod = resolveCostingMethod(task);
