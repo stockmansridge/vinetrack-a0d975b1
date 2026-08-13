@@ -72,6 +72,9 @@ import {
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
 import {
+  costingMethodLabel, costPerHectare, resolveCostingMethod, taskLabourCost,
+} from "@/lib/pieceRateCosting";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -1332,6 +1335,37 @@ function WorkTaskDrawer({
                 <div className="text-xs text-muted-foreground">
                   Save the task first, then add manual machine work.
                 </div>
+              </Section>
+            )}
+            {!isNew && task && isPieceRateTask && (
+              <Section title="Piece Rate costing">
+                <Field label="Costing method" value={costingMethodLabel(taskCostingMethod)} />
+                <Field
+                  label="Rate"
+                  value={task.piece_rate_per_vine != null ? `${money(Number(task.piece_rate_per_vine))} / vine` : "—"}
+                />
+                <Field
+                  label="Vines (snapshot)"
+                  value={task.piece_vine_count != null ? Number(task.piece_vine_count).toLocaleString() : "—"}
+                />
+                <Field
+                  label="Labour cost"
+                  value={task.piece_rate_total_cost != null ? money(Number(task.piece_rate_total_cost)) : "—"}
+                />
+                <Field
+                  label="Cost / ha"
+                  value={(() => {
+                    const c = costPerHectare(
+                      task.piece_rate_total_cost != null ? Number(task.piece_rate_total_cost) : null,
+                      areaNum,
+                    );
+                    return c != null ? money(c) : "—";
+                  })()}
+                />
+                <p className="text-xs text-muted-foreground pt-1">
+                  Historical snapshot saved with this job. Hours below are operational history only and do
+                  not affect the labour cost. Piece Rate is set from the Pruning Tracker.
+                </p>
               </Section>
             )}
             {!isNew && task && (
