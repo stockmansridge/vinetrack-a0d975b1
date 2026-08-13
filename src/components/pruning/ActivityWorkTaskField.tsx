@@ -29,12 +29,17 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import {
   createLabourLine, createWorkTask, fetchLabourLinesForTask, fetchWorkTaskById,
+  fetchPieceRateRowsForTask, syncWorkTaskPieceRateRows,
   fetchWorkTaskPaddocksForVineyard, fetchWorkTasksForVineyard, syncWorkTaskPaddocks,
   type WorkTask, type WorkTaskLabourLine,
 } from "@/lib/workTasksQuery";
 import { usePruningActivities } from "@/lib/pruningActivityApi";
 import {
-  activityTotals, allocationQuarterCount, allocationRowSummary,
+  COSTING_METHOD_HOURLY, COSTING_METHOD_PIECE_RATE, costPerHectare,
+  pieceRateTotalCost, resolveCostingMethod, type CostingMethod,
+} from "@/lib/pieceRateCosting";
+import {
+  activityTotals, allocationQuarterCount, allocationRowSummary, draftPieceRateRows,
   type BlockAllocationDraft, type PruningActivityDraft,
 } from "@/lib/pruningActivityContract";
 import { formatDate } from "@/lib/dateFormat";
@@ -182,7 +187,37 @@ export default function ActivityWorkTaskField({
             )}
           </div>
 
-          {/* Read-only labour summary — editing happens on the Work Task. */}
+          {/* SQL 188: a piece-rate task is costed from its saved snapshot —
+              labour lines are operational history only and are NEVER added. */}
+          {resolveCostingMethod(linked) === "piece_rate" ? (
+            <div className="rounded border bg-background/60 px-3 py-2 text-xs space-y-0.5 tabular-nums">
+              <div>
+                <span className="text-muted-foreground">Costing method: </span>
+                <b className="text-foreground">Piece Rate</b>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Rate: </span>
+                <b className="text-foreground">
+                  {linked?.piece_rate_per_vine != null ? `${money(Number(linked.piece_rate_per_vine))} / vine` : "—"}
+                </b>
+                <span className="text-muted-foreground"> · Vines (snapshot): </span>
+                <b className="text-foreground">
+                  {linked?.piece_vine_count != null ? Number(linked.piece_vine_count).toLocaleString() : "—"}
+                </b>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Labour cost: </span>
+                <b className="text-foreground">
+                  {linked?.piece_rate_total_cost != null ? money(Number(linked.piece_rate_total_cost)) : "—"}
+                </b>
+              </div>
+              {labour.totalHours != null && (
+                <div className="text-muted-foreground">
+                  Hours worked: {labour.totalHours.toFixed(2)} — operational history only, not costed.
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="rounded border bg-background/60 px-3 py-2 text-xs space-y-0.5 tabular-nums">
             {labourQ.isLoading ? (
               <span className="text-muted-foreground">Loading labour…</span>
@@ -219,6 +254,7 @@ export default function ActivityWorkTaskField({
               </>
             )}
           </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" asChild>
