@@ -389,12 +389,20 @@ export function usePruningActivity(vineyardId: string | null) {
 
         const task = e.work_task_id ? taskById.get(e.work_task_id) ?? null : null;
         const taskLabour = e.work_task_id ? labourByTask.get(e.work_task_id) ?? null : null;
-        // Canonical task labour cost (SQL 188): piece-rate snapshot OR labour
-        // lines — never the sum of both.
-        const canonicalCost = task
-          ? taskLabourCost(task, taskLabour ? taskLabour.cost : null)
+        // Canonical task labour cost (SQL 189): backend effective cost when the
+        // view is available, otherwise the identical local SQL 188 rule.
+        const backendCost = e.work_task_id ? effectiveCosts.get(e.work_task_id) ?? null : null;
+        const resolved = task || backendCost
+          ? resolveEffectiveLabourCost(task, taskLabour ? taskLabour.cost : null, backendCost)
           : null;
+        const canonicalCost = resolved?.cost ?? null;
         const labourCost = isSkipped ? null : canonicalCost;
+        const labourCostSource: LabourCostSource | null = isSkipped
+          ? null
+          : resolved?.source ?? null;
+        const pieceVineSnapshot = resolved?.pieceRatePerVine != null
+          ? resolved.pieceVineCount
+          : resolved?.costingMethod === "piece_rate" ? resolved?.pieceVineCount ?? null : null;
         const rateHours = labourHours && labourHours > 0
           ? labourHours
           : taskLabour && taskLabour.hours > 0 ? taskLabour.hours : null;
