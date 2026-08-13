@@ -446,8 +446,18 @@ export default function PruningActivityDialog({
               </>)}
             </div>
 
-            {/* Labour hours, rate and cost belong to the linked Work Task — the
-                activity mirrors them read-only and never owns a second source. */}
+            {/* SQL 190 — labour belongs to the activity. The linked Work Task
+                card below stays a read-only mirror. */}
+            {!skipped && (
+              <PruningLabourLinesEditor
+                vineyardId={vineyardId}
+                value={labourLines}
+                onChange={setLabourLines}
+                workDate={draft.entryDate}
+                disabled={busy}
+              />
+            )}
+
             {!skipped && (
               <ActivityWorkTaskField
                 vineyardId={vineyardId}
@@ -466,6 +476,8 @@ export default function PruningActivityDialog({
                 disabled={busy}
               />
             )}
+
+
 
 
 
