@@ -32,7 +32,7 @@
 //   the raw JSON object and return a shallow copy with only the one key
 //   changed.
 
-import { rowLengthMeters, type PaddockRow } from "./paddockGeometry";
+import { parseRows, rowLengthMeters, type PaddockRow } from "./paddockGeometry";
 
 /** The raw, untouched JSON object exactly as stored in paddocks.rows. */
 export type RawPaddockRow = Record<string, any>;
@@ -86,6 +86,20 @@ export function withVineCountOverride(row: RawPaddockRow, value: number | null):
 }
 
 /**
+ * Length in metres of ANY row shape — canonical iOS (`startPoint`/`endPoint`),
+ * legacy (`start`/`end`, `points`) or an explicit `length_m`. Uses the single
+ * canonical geometry pipeline (parseRows + rowLengthMeters) so there is only
+ * ever one distance implementation in the portal.
+ */
+export function rawRowLengthMeters(row: RawPaddockRow | PaddockRow): number {
+  const direct = rowLengthMeters(row as PaddockRow);
+  if (isFiniteNum(direct) && direct > 0) return direct;
+  const [normalised] = parseRows([row]);
+  if (!normalised) return 0;
+  return rowLengthMeters(normalised);
+}
+
+/**
  * Calculated (automatic) vine estimate for a single row.
  * SQL 188: round(rowLength / vineSpacing). Returns null when it cannot be
  * derived (no geometry or no vine spacing).
@@ -99,7 +113,7 @@ export function calculatedRowVineCount(
   if (!isFiniteNum(spacing) || spacing <= 0) return null;
   const len = isFiniteNum(lengthOverrideM) && lengthOverrideM! > 0
     ? Number(lengthOverrideM)
-    : rowLengthMeters(row as PaddockRow);
+    : rawRowLengthMeters(row);
   if (!isFiniteNum(len) || len <= 0) return null;
   return Math.round(len / spacing);
 }
