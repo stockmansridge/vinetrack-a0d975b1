@@ -127,24 +127,19 @@ const reportsAdmin: NavItem[] = [
 
 // "Setup" — vineyard configuration
 const setup: NavItem[] = [
-  { title: "Team", url: "/team", icon: Users },
-  { title: "Billing", url: "/billing", icon: DollarSign },
+  { title: "Region & Units", url: "/setup/region-units", icon: Globe2 },
   { title: "Vineyard Settings", url: "/setup/vineyard", icon: Grape },
   { title: "Vineyard Location", url: "/setup/vineyard-location", icon: MapPin },
-  { title: "Region & Units", url: "/setup/region-units", icon: Globe2 },
-  { title: "Growing Season", url: "/setup/operational-preferences", icon: Sprout },
   { title: "Blocks", url: "/setup/paddocks", icon: Map },
+  { title: "Growing Season", url: "/setup/operational-preferences", icon: Sprout },
   { title: "Grape Varieties", url: "/setup/grape-varieties", icon: Grape },
   { title: "Chemicals", url: "/setup/chemicals", icon: Beaker },
-  { title: "Worker Types", url: "/setup/operator-categories", icon: UserCog },
   { title: "Saved Inputs", url: "/setup/saved-inputs", icon: Sprout },
   { title: "Weather Settings", url: "/setup/weather", icon: Cloud },
-];
-
-// Setup entries that depend on the Irrigation Records module
-const irrigationSetup: NavItem[] = [
   { title: "Irrigation Setup", url: "/irrigation/setup", icon: Droplet },
-
+  { title: "Team", url: "/team", icon: Users },
+  { title: "Worker Types", url: "/setup/operator-categories", icon: UserCog },
+  { title: "Billing", url: "/billing", icon: DollarSign },
 ];
 
 
