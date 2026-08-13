@@ -166,6 +166,12 @@ export default function PruningActivityDialog({
   // Client uuid, generated once per dialog instance so a retry is idempotent.
   const [newId] = useState(() => crypto.randomUUID());
 
+  // SQL 190 — the activity owns its labour lines.
+  const labourQ = usePruningActivityLabourLines(open && isEdit ? activityId : null);
+  const [labourLines, setLabourLines] = useState<PruningLabourLineDraft[]>([]);
+  const labourCategories = useLabourTypes(open ? vineyardId : null).data ?? [];
+
+
 
   const loaded = detailQ.data ?? null;
 
