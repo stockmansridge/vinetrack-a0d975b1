@@ -523,7 +523,12 @@ export function usePruningActivity(vineyardId: string | null) {
         } satisfies BaseActivityRow;
       });
 
-      return applyActivityAllocations(baseRows);
+      const labourSummaries = new Map<string, PruningLabourSummary>();
+      activityLabourLines.forEach((lines, activityId) => {
+        labourSummaries.set(activityId, summarisePruningLabourLines(lines));
+      });
+
+      return applyActivityAllocations(baseRows, labourSummaries);
     },
 
   });
