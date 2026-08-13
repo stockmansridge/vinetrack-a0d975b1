@@ -32,7 +32,7 @@
 //   the raw JSON object and return a shallow copy with only the one key
 //   changed.
 
-import { rowLengthMeters, type PaddockRow } from "./paddockGeometry";
+import { parseRows, rowLengthMeters, type PaddockRow } from "./paddockGeometry";
 
 /** The raw, untouched JSON object exactly as stored in paddocks.rows. */
 export type RawPaddockRow = Record<string, any>;
