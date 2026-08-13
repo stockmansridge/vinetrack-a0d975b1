@@ -198,6 +198,13 @@ export default function PruningActivityDialog({
 
   }, [open, isEdit, loaded]);
 
+  // Server labour lines replace the editor state whenever they (re)load.
+  useEffect(() => {
+    if (!open || !isEdit || !labourQ.data) return;
+    setLabourLines(labourDraftsFromLines(labourQ.data));
+  }, [open, isEdit, labourQ.data]);
+
+
   /** Quarters already owned by THIS activity — they must stay selectable. */
   const ownedByActivity = useMemo(() => {
     const map: Record<string, Set<string>> = {};
