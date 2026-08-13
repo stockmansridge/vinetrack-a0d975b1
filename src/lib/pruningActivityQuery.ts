@@ -471,6 +471,10 @@ export function usePruningActivity(vineyardId: string | null) {
             (e as any).activity_description ?? (e as any).title ?? null,
 
           labourCost,
+          labourCostSource,
+          costingMethod: resolved?.costingMethod ?? null,
+          pieceRatePerVine: resolved?.pieceRatePerVine ?? null,
+          pieceVineCount: pieceVineSnapshot ?? null,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",
           createdById: e.created_by ?? null,
