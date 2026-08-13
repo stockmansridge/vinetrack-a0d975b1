@@ -70,8 +70,9 @@ export default function RowVineCountOverrides({
         })}
       </div>
       <p className="px-3 py-2 text-xs text-muted-foreground border-t">
-        Whole positive numbers only. Leave blank to use the calculated estimate. Overrides are shared with the
-        VineTrack mobile apps.
+        {!(Number(vineSpacingM) > 0)
+          ? "Set vine spacing in block details to calculate vines."
+          : "Whole positive numbers only. Leave blank to use the calculated estimate. Overrides are shared with the VineTrack mobile apps."}
       </p>
     </div>
   );
