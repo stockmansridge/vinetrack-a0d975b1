@@ -25,6 +25,10 @@ import {
   resolveEffectiveLabourCost,
   type LabourCostSource,
 } from "@/lib/effectiveLabourCost";
+import {
+  fetchVineyardPruningLabourLines, resolvePruningActivityLabour,
+  summarisePruningLabourLines, type PruningLabourSummary,
+} from "@/lib/pruningActivityLabour";
 
 export interface PruningActivityRow {
   id: string;
