@@ -71,6 +71,7 @@ import {
   type WorkTaskPaddock,
   type UpsertLabourLineInput,
 } from "@/lib/workTasksQuery";
+import { useEffectiveLabourCosts, resolveEffectiveLabourCost } from "@/lib/effectiveLabourCost";
 import {
   costingMethodLabel, costPerHectare, resolveCostingMethod, taskLabourCost,
 } from "@/lib/pieceRateCosting";
@@ -287,6 +288,9 @@ export default function WorkTasksPage() {
     queryFn: () => fetchLabourLinesForVineyard(selectedVineyardId!),
   });
 
+  // SQL 189 — shared effective Work Task labour cost.
+  const effectiveCostByTask = useEffectiveLabourCosts(selectedVineyardId).data ?? new Map();
+
   const { data: taskPaddocks = [] } = useQuery({
     queryKey: ["work_task_paddocks", selectedVineyardId],
     enabled: !!selectedVineyardId,
@@ -413,7 +417,7 @@ export default function WorkTasksPage() {
   }, [labourLines]);
 
   const totalsByTask = useMemo(() => {
-    const m = new Map<string, { hours: number; cost: number; missingRate: boolean; workerTypes: Set<string> }>();
+    const m = new Map<string, { hours: number; cost: number; costKnown?: boolean; missingRate: boolean; workerTypes: Set<string> }>();
     labourLines.forEach((l) => {
       const t = m.get(l.work_task_id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
       t.hours += Number(l.total_hours ?? 0) || 0;
@@ -422,18 +426,24 @@ export default function WorkTasksPage() {
       if (l.worker_type) t.workerTypes.add(l.worker_type);
       m.set(l.work_task_id, t);
     });
-    // SQL 188: for a piece-rate task the labour cost IS the saved snapshot
-    // total. Labour-line hours stay visible (operational history) but their
-    // cost is never used, and never summed with the piece-rate total.
+    // SQL 189: the backend defines the effective labour cost of every task.
+    // Piece-rate tasks read their saved snapshot total; hourly/legacy tasks
+    // read their rated labour lines. The two are never summed.
     tasks.forEach((t) => {
-      if (resolveCostingMethod(t) !== "piece_rate") return;
       const cur = m.get(t.id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
-      cur.cost = Number(t.piece_rate_total_cost ?? 0) || 0;
-      cur.missingRate = false;
+      const hadLines = m.has(t.id);
+      const resolved = resolveEffectiveLabourCost(
+        t as any,
+        hadLines ? cur.cost : null,
+        effectiveCostByTask.get(t.id) ?? null,
+      );
+      cur.cost = resolved.cost ?? 0;
+      cur.costKnown = resolved.cost != null;
+      if (resolved.costingMethod === "piece_rate") cur.missingRate = false;
       m.set(t.id, cur);
     });
     return m;
-  }, [labourLines, tasks]);
+  }, [labourLines, tasks, effectiveCostByTask]);
 
   const taskTypes = useMemo(() => {
     const s = new Set<string>();
@@ -1110,13 +1120,20 @@ function WorkTaskDrawer({
     localMachineLines.forEach((line) => byId.set(line.id, line));
     return Array.from(byId.values());
   }, [machineLines, localMachineLines]);
+  const drawerEffectiveCost = useEffectiveLabourCosts(vineyardId).data?.get(task?.id ?? "") ?? null;
   const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
   const taskCostingMethod = resolveCostingMethod(task);
   const isPieceRateTask = taskCostingMethod === "piece_rate";
   const labourLineCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
-  // Exactly one labour total applies — see src/lib/pieceRateCosting.ts.
-  const totalCost = taskLabourCost(task ?? null, labourLineCost) ?? 0;
+  // Exactly one labour total applies — SQL 189 is the source of truth.
+  const resolvedTaskLabour = resolveEffectiveLabourCost(
+    task ?? null,
+    visibleLines.length ? labourLineCost : null,
+    drawerEffectiveCost ?? null,
+  );
+  const totalCostRaw = resolvedTaskLabour.cost;
+  const totalCost = totalCostRaw ?? 0;
   const missingRate = !isPieceRateTask
     && visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
   const areaNum = totalAreaHa > 0 ? totalAreaHa : null;
@@ -1228,7 +1245,7 @@ function WorkTaskDrawer({
                 Task created. Add labour and machine resources below before closing.
               </div>
             )}
-            {savedTaskId && visibleLines.length === 0 && displayedMachineLines.length === 0 && (
+            {savedTaskId && !isPieceRateTask && visibleLines.length === 0 && displayedMachineLines.length === 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 No labour or machine resources have been added to this task.
               </div>
@@ -1258,7 +1275,8 @@ function WorkTaskDrawer({
               <Field label="Total labour hours" value={num(totalHours)} />
               {drawerCanSeeCosts && (
                 <Field label="Total estimated cost" value={
-                  totalCost ? money(totalCost) : missingRate ? "Add rates to estimate cost" : "—"
+                  totalCostRaw != null ? money(totalCostRaw)
+                    : missingRate ? "Add rates to estimate cost" : "—"
                 } />
               )}
               <Field label="Area" value={areaNum == null ? "—" : rf.area(areaNum)} />
@@ -2548,6 +2566,9 @@ function WorkTaskSummarySection({
   canSeeCosts: boolean;
   money: (n: number) => string;
 }) {
+  // SQL 189 effective labour cost for this task (backend source of truth).
+  const effectiveCost = useEffectiveLabourCosts(task?.vineyard_id ?? null)
+    .data?.get(task?.id ?? "") ?? null;
   const summary = useMemo(() => {
     const num = (v: unknown) => {
       const n = Number(v);
@@ -2557,9 +2578,11 @@ function WorkTaskSummarySection({
     const visibleLabour = labourLines.filter((l) => !l.deleted_at);
     // SQL 188: piece-rate tasks cost from the saved snapshot; labour-line cost
     // is ignored so there is never a second competing labour total.
-    const manualLabourCost = taskLabourCost(
-      task, visibleLabour.reduce((s, l) => s + num(l.total_cost), 0),
-    ) ?? 0;
+    const manualLabourCost = resolveEffectiveLabourCost(
+      task,
+      visibleLabour.length ? visibleLabour.reduce((s, l) => s + num(l.total_cost), 0) : null,
+      effectiveCost ?? null,
+    ).cost ?? 0;
     const manualLabourHours = visibleLabour.reduce((s, l) => s + num(l.total_hours), 0);
 
     const visibleMachine = machineLines.filter((l) => !l.deleted_at);
@@ -2613,7 +2636,7 @@ function WorkTaskSummarySection({
       total,
       overlapRisk,
     };
-  }, [task, labourLines, machineLines, linkedTrips, allocByTripId]);
+  }, [task, labourLines, machineLines, linkedTrips, allocByTripId, effectiveCost]);
 
   return (
     <Section title="Work Task summary">

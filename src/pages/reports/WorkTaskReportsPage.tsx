@@ -21,6 +21,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { taskLabourCost } from "@/lib/pieceRateCosting";
+import { useEffectiveLabourCosts, resolveEffectiveLabourCost, type LabourCostSource } from "@/lib/effectiveLabourCost";
 import { format } from "date-fns";
 import {
   Download, Info, Search, AlertTriangle, ChevronDown, ChevronRight,
@@ -152,6 +153,12 @@ interface TaskRow {
   machineEntries: number;
   linkedTripCount: number;
   manualLabourCost: number;
+  /** SQL 189 effective labour cost; null = no known cost (never $0.00). */
+  manualLabourCostRaw: number | null;
+  labourCostSource: LabourCostSource;
+  costingMethod: "hourly" | "piece_rate";
+  pieceRatePerVine: number | null;
+  pieceVineCount: number | null;
   machineCharge: number;
   machineFuel: number;
   manualMachineTotal: number;
@@ -330,6 +337,9 @@ export default function WorkTaskReportsPage() {
     queryFn: () => fetchTripsForVineyard(selectedVineyardId!, paddockIds),
     enabled: enabled && paddocksQ.isSuccess,
   });
+  // SQL 189 — shared effective Work Task labour cost.
+  const effectiveCostQ = useEffectiveLabourCosts(selectedVineyardId ?? null);
+  const effectiveCostByTask = effectiveCostQ.data ?? new Map();
   const allocQ = useQuery({
     queryKey: ["trip_cost_allocations", selectedVineyardId],
     queryFn: () => fetchTripCostAllocationsForVineyard(selectedVineyardId!),
@@ -483,7 +493,14 @@ export default function WorkTaskReportsPage() {
       // Canonical labour cost (SQL 188): piece-rate tasks read their snapshot
       // total; every other task sums its labour lines. Never both.
       const labourLineCost = labour.reduce((s, l) => s + num(l.total_cost), 0);
-      const manualLabourCost = taskLabourCost(task as any, labourLineCost) ?? 0;
+      const resolvedLabour = resolveEffectiveLabourCost(
+        task as any,
+        labour.length ? labourLineCost : null,
+        effectiveCostByTask.get(task.id) ?? null,
+      );
+      // Null = "no known cost" (SQL 189). Totals treat it as 0, the cell shows "—".
+      const manualLabourCostRaw = resolvedLabour.cost;
+      const manualLabourCost = manualLabourCostRaw ?? 0;
       const labourHours = labour.reduce((s, l) => s + num(l.total_hours), 0);
       const machineCharge = machine.reduce((s, l) => s + num(l.total_machine_cost), 0);
       const machineFuel = machine.reduce((s, l) => s + num(l.fuel_cost), 0);
@@ -518,6 +535,11 @@ export default function WorkTaskReportsPage() {
         machineEntries: machine.length,
         linkedTripCount: trips.length,
         manualLabourCost,
+        manualLabourCostRaw,
+        labourCostSource: resolvedLabour.source,
+        costingMethod: resolvedLabour.costingMethod,
+        pieceRatePerVine: resolvedLabour.pieceRatePerVine,
+        pieceVineCount: resolvedLabour.pieceVineCount,
         machineCharge,
         machineFuel,
         manualMachineTotal,
@@ -532,7 +554,7 @@ export default function WorkTaskReportsPage() {
         trips,
       };
     });
-  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById, paddockAreaById]);
+  }, [tasksQ.data, labourByTask, machineByTask, paddocksByTask, tripsByTask, allocByTripId, paddockNameById, paddockAreaById, effectiveCostByTask]);
 
   const taskTypeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -678,7 +700,9 @@ export default function WorkTaskReportsPage() {
       "Warning",
     ];
     const costCols = [
-      "Manual labour cost", "Machine charge", "Machine fuel",
+      "Manual labour cost", "Costing method", "Labour cost source",
+      "Piece rate per vine", "Vine snapshot", "Cost per vine",
+      "Machine charge", "Machine fuel",
       "Linked GPS trip cost", "Total cost",
       "cost_per_area", "cost_per_area_unit",
     ];
@@ -700,8 +724,17 @@ export default function WorkTaskReportsPage() {
         r.totalAreaHa == null ? "" : areaUnit,
         r.hasWarning ? "Review" : "",
       ];
+      const costPerVine = r.manualLabourCostRaw != null && r.pieceVineCount
+        ? r.manualLabourCostRaw / r.pieceVineCount
+        : null;
       const costs = canSeeCosts ? [
-        r.manualLabourCost.toFixed(2),
+        // SQL 189: blank (not 0.00) when there is no known labour cost.
+        r.manualLabourCostRaw == null ? "" : r.manualLabourCostRaw.toFixed(2),
+        r.costingMethod === "piece_rate" ? "Piece Rate" : "Hourly",
+        r.labourCostSource ?? "",
+        r.pieceRatePerVine == null ? "" : r.pieceRatePerVine.toFixed(4),
+        r.pieceVineCount == null ? "" : String(r.pieceVineCount),
+        costPerVine == null ? "" : costPerVine.toFixed(4),
         r.machineCharge.toFixed(2),
         r.machineFuel.toFixed(2),
         r.linkedTripTotal.toFixed(2),
@@ -743,7 +776,7 @@ export default function WorkTaskReportsPage() {
       case "machineHours": return r.machineHours.toFixed(2);
       case "linkedTrips": return String(r.linkedTripCount);
       case "machineEntries": return String(r.machineEntries);
-      case "manualLabour": return money(r.manualLabourCost);
+      case "manualLabour": return r.manualLabourCostRaw == null ? "—" : money(r.manualLabourCostRaw);
       case "machineCharge": return money(r.machineCharge);
       case "machineFuel": return money(r.machineFuel);
       case "linkedTripCost": return money(r.linkedTripTotal);
@@ -950,7 +983,7 @@ export default function WorkTaskReportsPage() {
       ];
       if (canSeeCosts) {
         base.push(
-          Number(r.manualLabourCost.toFixed(2)),
+          r.manualLabourCostRaw == null ? "" : Number(r.manualLabourCostRaw.toFixed(2)),
           Number(r.machineCharge.toFixed(2)),
           Number(r.machineFuel.toFixed(2)),
           Number(r.linkedTripTotal.toFixed(2)),

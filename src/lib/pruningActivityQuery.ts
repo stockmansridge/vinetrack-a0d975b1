@@ -20,6 +20,11 @@ import { parseVarietyAllocations } from "@/lib/paddockGeometry";
 import type { PruningEntry } from "@/lib/pruningQuery";
 import { allocateActivityShares } from "@/lib/pruningActivityAllocation";
 import { taskLabourCost } from "@/lib/pieceRateCosting";
+import {
+  fetchEffectiveLabourCosts,
+  resolveEffectiveLabourCost,
+  type LabourCostSource,
+} from "@/lib/effectiveLabourCost";
 
 export interface PruningActivityRow {
   id: string;
@@ -70,6 +75,14 @@ export interface PruningActivityRow {
   /** Title/description stored on the parent pruning activity, when present. */
   activityTitle: string | null;
   labourCost: number | null;    // null when there is no linked Work Task
+  /** SQL 189 labour_cost_source for the linked Work Task, when known. */
+  labourCostSource?: LabourCostSource | null;
+  /** SQL 188/189 costing method of the linked Work Task. */
+  costingMethod?: "hourly" | "piece_rate" | null;
+  /** Historical piece-rate snapshot rate, never recomputed from live rows. */
+  pieceRatePerVine?: number | null;
+  /** Historical piece-rate snapshot vine count. */
+  pieceVineCount?: number | null;
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
 
@@ -309,7 +322,7 @@ export function usePruningActivity(vineyardId: string | null) {
     enabled: !!vineyardId,
     queryFn: async (): Promise<PruningActivityRow[]> => {
       const vid = vineyardId!;
-      const [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes] =
+      const [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes, effectiveCosts] =
         await Promise.all([
           supabase.from("pruning_entries").select("*").eq("vineyard_id", vid)
             .order("entry_date", { ascending: false }),
@@ -325,6 +338,8 @@ export function usePruningActivity(vineyardId: string | null) {
           supabase.from("work_task_labour_lines")
             .select("work_task_id, total_hours, total_cost")
             .eq("vineyard_id", vid).is("deleted_at", null),
+          // SQL 189: backend-defined effective labour cost per Work Task.
+          fetchEffectiveLabourCosts(vid),
         ]);
 
       for (const res of [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes]) {
@@ -382,12 +397,20 @@ export function usePruningActivity(vineyardId: string | null) {
 
         const task = e.work_task_id ? taskById.get(e.work_task_id) ?? null : null;
         const taskLabour = e.work_task_id ? labourByTask.get(e.work_task_id) ?? null : null;
-        // Canonical task labour cost (SQL 188): piece-rate snapshot OR labour
-        // lines — never the sum of both.
-        const canonicalCost = task
-          ? taskLabourCost(task, taskLabour ? taskLabour.cost : null)
+        // Canonical task labour cost (SQL 189): backend effective cost when the
+        // view is available, otherwise the identical local SQL 188 rule.
+        const backendCost = e.work_task_id ? effectiveCosts.get(e.work_task_id) ?? null : null;
+        const resolved = task || backendCost
+          ? resolveEffectiveLabourCost(task, taskLabour ? taskLabour.cost : null, backendCost)
           : null;
+        const canonicalCost = resolved?.cost ?? null;
         const labourCost = isSkipped ? null : canonicalCost;
+        const labourCostSource: LabourCostSource | null = isSkipped
+          ? null
+          : resolved?.source ?? null;
+        const pieceVineSnapshot = resolved?.pieceRatePerVine != null
+          ? resolved.pieceVineCount
+          : resolved?.costingMethod === "piece_rate" ? resolved?.pieceVineCount ?? null : null;
         const rateHours = labourHours && labourHours > 0
           ? labourHours
           : taskLabour && taskLabour.hours > 0 ? taskLabour.hours : null;
@@ -456,6 +479,10 @@ export function usePruningActivity(vineyardId: string | null) {
             (e as any).activity_description ?? (e as any).title ?? null,
 
           labourCost,
+          labourCostSource,
+          costingMethod: resolved?.costingMethod ?? null,
+          pieceRatePerVine: resolved?.pieceRatePerVine ?? null,
+          pieceVineCount: pieceVineSnapshot ?? null,
           hourlyRate: labourCost != null && rateHours ? labourCost / rateHours : null,
           notes: e.notes ?? "",
           createdById: e.created_by ?? null,
