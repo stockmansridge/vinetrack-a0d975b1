@@ -700,7 +700,9 @@ export default function WorkTaskReportsPage() {
       "Warning",
     ];
     const costCols = [
-      "Manual labour cost", "Machine charge", "Machine fuel",
+      "Manual labour cost", "Costing method", "Labour cost source",
+      "Piece rate per vine", "Vine snapshot", "Cost per vine",
+      "Machine charge", "Machine fuel",
       "Linked GPS trip cost", "Total cost",
       "cost_per_area", "cost_per_area_unit",
     ];
@@ -765,7 +767,7 @@ export default function WorkTaskReportsPage() {
       case "machineHours": return r.machineHours.toFixed(2);
       case "linkedTrips": return String(r.linkedTripCount);
       case "machineEntries": return String(r.machineEntries);
-      case "manualLabour": return money(r.manualLabourCost);
+      case "manualLabour": return r.manualLabourCostRaw == null ? "—" : money(r.manualLabourCostRaw);
       case "machineCharge": return money(r.machineCharge);
       case "machineFuel": return money(r.machineFuel);
       case "linkedTripCost": return money(r.linkedTripTotal);
