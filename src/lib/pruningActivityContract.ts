@@ -22,6 +22,12 @@ export interface AllocationQuarter {
   rowLabel: string;
   /** Vines represented by this single quarter (row vines / 4). */
   vines?: number;
+  /**
+   * SQL 188: the same quarter share computed from the row's EFFECTIVE vine
+   * count (rows[].vineCountOverride ?? calculated). Used only to derive the
+   * piece-rate quantity; pruning progress keeps using `vines`.
+   */
+  effVines?: number;
 }
 
 export interface BlockAllocationDraft {
@@ -177,3 +183,36 @@ export function buildActivityPayload(draft: PruningActivityDraft, vineyardId: st
  * path for every visible "New Pruning Activity" action and for editing.
  */
 export const PRUNING_ACTIVITY_CONTRACT_READY = true;
+
+
+/**
+ * SQL 188 piece-rate quantity for an allocation, per row.
+ * The quantity is the effective vine count of the quarters actually selected
+ * (a fully selected row therefore contributes its whole effective count).
+ */
+export function allocationPieceRateRows(a: BlockAllocationDraft) {
+  const byRow = new Map<number, { paddock_row_id: string | null; row_number: number; vines: number }>();
+  for (const q of Object.values(a.quarters)) {
+    const prev = byRow.get(q.rowNumber);
+    const add = q.effVines ?? q.vines ?? 0;
+    if (prev) prev.vines += add;
+    else byRow.set(q.rowNumber, {
+      paddock_row_id: q.paddockRowId ?? null,
+      row_number: q.rowNumber,
+      vines: add,
+    });
+  }
+  return Array.from(byRow.values())
+    .sort((x, y) => x.row_number - y.row_number)
+    .map((r) => ({
+      paddock_id: a.paddockId,
+      paddock_row_id: r.paddock_row_id,
+      row_number: r.row_number,
+      vine_count: Math.max(0, Math.round(r.vines)),
+    }));
+}
+
+/** Piece-rate snapshot rows across every block in the draft. */
+export function draftPieceRateRows(draft: PruningActivityDraft) {
+  return Object.values(draft.allocations).flatMap(allocationPieceRateRows);
+}
