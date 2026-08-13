@@ -184,6 +184,19 @@ export async function fetchWorkTaskById(id: string): Promise<WorkTask | null> {
   return (data ?? null) as WorkTask | null;
 }
 
+/** Bulk read used by history views that need SQL 188 costing fields. */
+export async function fetchWorkTasksByIds(ids: string[]): Promise<WorkTask[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!unique.length) return [];
+  const { data, error } = await supabase
+    .from("work_tasks")
+    .select("*")
+    .in("id", unique)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (data ?? []) as WorkTask[];
+}
+
 export async function fetchLabourLinesForTask(workTaskId: string): Promise<WorkTaskLabourLine[]> {
   const { data, error } = await supabase
     .from("work_task_labour_lines")
