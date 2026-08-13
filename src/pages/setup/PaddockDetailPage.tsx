@@ -34,6 +34,16 @@ import {
   polygonCentroid,
 } from "@/lib/paddockGeometry";
 import {
+  parseRawRows,
+  mergeGeneratedGeometry,
+  withVineCountOverride,
+  readVineCountOverride,
+  parseVineCountOverrideInput,
+  sumEffectiveRowVineCounts,
+  type RawPaddockRow,
+} from "@/lib/paddockRowVines";
+import RowVineCountOverrides from "@/components/paddocks/RowVineCountOverrides";
+import {
   generateRows,
   toCanonicalPolygon,
   type GeneratedRow,
@@ -212,6 +222,29 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
 
   const [saving, setSaving] = useState(false);
 
+  // ---- SQL 188: per-row manual vine-count overrides -----------------------
+  // The stored JSON is kept verbatim so ids, geometry and any property added
+  // later by the mobile apps survive a portal save untouched.
+  const storedRawRows: RawPaddockRow[] = useMemo(() => parseRawRows(paddock.rows), [paddock]);
+  const [rowOverrides, setRowOverrides] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const r of parseRawRows(paddock.rows)) {
+      const n = Number(r?.number);
+      const v = readVineCountOverride(r);
+      init[String(Number.isFinite(n) ? n : "")] = v != null ? String(v) : "";
+    }
+    return init;
+  });
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    for (const r of storedRawRows) {
+      const n = Number(r?.number);
+      const v = readVineCountOverride(r);
+      init[String(Number.isFinite(n) ? n : "")] = v != null ? String(v) : "";
+    }
+    setRowOverrides(init);
+  }, [storedRawRows]);
+
   // Live derived rows (used by Rows tab preview).
   const generatedRows: GeneratedRow[] = useMemo(() => {
     const dir = Number(rowDirection);
@@ -230,6 +263,37 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
       rowNumberAscending,
     });
   }, [polygon, rowDirection, rowWidth, rowOffset, rowsCount, rowStartNumber, rowNumberAscending]);
+
+  /**
+   * The exact rows array written to the database: generated geometry merged
+   * ONTO the stored rows (identity + unknown keys preserved), with the manual
+   * vine-count overrides applied.
+   */
+  const rowsToSave: RawPaddockRow[] = useMemo(() => {
+    const merged = mergeGeneratedGeometry(storedRawRows, generatedRows as unknown as RawPaddockRow[]);
+    return merged.map((r) => {
+      const key = String(Number(r?.number));
+      const raw = rowOverrides[key];
+      if (raw === undefined) return r; // untouched — keep whatever is stored
+      const parsed = parseVineCountOverrideInput(raw);
+      if (!parsed.ok) return r;
+      return withVineCountOverride(r, parsed.value);
+    });
+  }, [storedRawRows, generatedRows, rowOverrides]);
+
+  const rowOverrideError = useMemo(
+    () => Object.values(rowOverrides).some((v) => !parseVineCountOverrideInput(v).ok),
+    [rowOverrides],
+  );
+
+  const effectiveRowVineTotal = useMemo(
+    () => sumEffectiveRowVineCounts(
+      rowsToSave,
+      Number(vineSpacing) > 0 ? Number(vineSpacing) : null,
+      Number(rowLengthOverride) > 0 ? Number(rowLengthOverride) : null,
+    ),
+    [rowsToSave, vineSpacing, rowLengthOverride],
+  );
 
   const liveAreaHa = useMemo(() => polygonAreaHectares(polygon), [polygon]);
 
@@ -257,7 +321,7 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
     // Regenerate rows against the new boundary using current row params.
     await save({
       polygon_points: toCanonicalPolygon(polygon),
-      rows: generatedRows,
+      rows: rowsToSave,
     });
   };
 
@@ -265,8 +329,11 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
     if (generatedRows.length === 0) {
       return toast({ title: "No rows generated", description: "Check direction/width/count.", variant: "destructive" });
     }
+    if (rowOverrideError) {
+      return toast({ title: "Invalid vine override", description: "Use whole positive numbers, or leave blank.", variant: "destructive" });
+    }
     await save({
-      rows: generatedRows,
+      rows: rowsToSave,
       row_direction: Number(rowDirection),
       row_width: Number(rowWidth),
       row_offset: Number(rowOffset) || 0,
@@ -504,10 +571,14 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
                     })()}
                   />
                   <Metric label="Total row length" value={`${fmt(metrics.totalRowLengthM, 0)} m`} />
+                  <Metric
+                    label="Vines from rows (effective)"
+                    value={effectiveRowVineTotal > 0 ? effectiveRowVineTotal.toLocaleString() : "—"}
+                  />
                 </div>
                 {canEdit && (
                   <div className="flex justify-end pt-2">
-                    <Button onClick={onSaveRows} disabled={saving || generatedRows.length === 0} className="gap-1">
+                    <Button onClick={onSaveRows} disabled={saving || rowOverrideError || generatedRows.length === 0} className="gap-1">
                       <Save className="h-4 w-4" /> Save rows
                     </Button>
                   </div>
@@ -515,6 +586,33 @@ function PaddockEditor({ paddock, canEdit, vineyardId, userId, onSaved, onDelete
               </CardContent>
             </Card>
           </div>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-base">Vine counts per row</CardTitle>
+              <CardDescription>
+                Optional manual vine count for a single row. Blank uses the calculated estimate
+                (row length ÷ vine spacing). Shared with iOS and Android.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RowVineCountOverrides
+                rows={rowsToSave}
+                vineSpacingM={Number(vineSpacing) > 0 ? Number(vineSpacing) : null}
+                rowLengthOverrideM={Number(rowLengthOverride) > 0 ? Number(rowLengthOverride) : null}
+                values={rowOverrides}
+                onChange={setRowOverrides}
+                disabled={!canEdit}
+              />
+              {canEdit && (
+                <div className="flex justify-end pt-3">
+                  <Button onClick={onSaveRows} disabled={saving || rowOverrideError} className="gap-1">
+                    <Save className="h-4 w-4" /> Save rows
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Varieties */}

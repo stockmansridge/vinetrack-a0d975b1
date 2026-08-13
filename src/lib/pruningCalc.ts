@@ -30,6 +30,7 @@
 import type { PruningEntry, PruningRowSegment, PruningSeason } from "./pruningQuery";
 import type { PaddockRow } from "./paddockGeometry";
 import { deriveMetrics, rowLengthMeters } from "./paddockGeometry";
+import { readVineCountOverride } from "./paddockRowVines";
 
 export interface RowIdentity {
   paddockRowId: string | null; // stable when configured
@@ -39,6 +40,14 @@ export interface RowIdentity {
   lengthM: number;
   /** Float — proportional share of the paddock's authoritative vine total. */
   estimatedVines: number;
+  /** SQL 188: rows[].vineCountOverride when present, else null. */
+  vineCountOverride?: number | null;
+  /**
+   * SQL 188 effective vine count for row-driven work (pruning piece rate):
+   * vineCountOverride ?? the proportional estimate above. Existing pruning
+   * progress maths deliberately keeps using `estimatedVines`.
+   */
+  effectiveVines: number;
 }
 
 /** Return the canonical list of rows for a paddock, preserving stored
@@ -68,6 +77,7 @@ export function buildRowIdentities(
             ? paddockVineTotal * (lengthM / totalLen)
             : paddockVineTotal / paddockRows.length;
         }
+        const override = readVineCountOverride(r);
         return {
           paddockRowId: r.id ?? null,
           rowNumber,
@@ -75,6 +85,8 @@ export function buildRowIdentities(
           order: idx,
           lengthM,
           estimatedVines: vines,
+          vineCountOverride: override,
+          effectiveVines: override ?? vines,
         } as RowIdentity;
       })
       .sort((a, b) => a.order - b.order);
@@ -90,6 +102,8 @@ export function buildRowIdentities(
     order: i,
     lengthM: 0,
     estimatedVines: vinesPerRow,
+    vineCountOverride: null,
+    effectiveVines: vinesPerRow,
   }));
 }
 

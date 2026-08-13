@@ -4,6 +4,24 @@
 // through the same client used elsewhere. RLS on the iOS project is the
 // source of truth for permissions.
 import { supabase } from "@/integrations/ios-supabase/client";
+import type { CostingMethod } from "@/lib/pieceRateCosting";
+
+/**
+ * SQL 188 costing columns. Only emitted when the caller explicitly supplies a
+ * costing method, so every existing hourly write stays byte-for-byte the same
+ * and legacy tasks are never touched.
+ */
+function pieceRatePayload(input: UpsertWorkTaskInput): Record<string, any> {
+  if (input.costing_method == null) return {};
+  if (input.costing_method === "piece_rate") {
+    return {
+      costing_method: "piece_rate",
+      piece_rate_per_vine: input.piece_rate_per_vine ?? null,
+      piece_vine_count: input.piece_vine_count ?? null,
+    };
+  }
+  return { costing_method: "hourly" };
+}
 
 export interface WorkTask {
   id: string;
@@ -28,6 +46,14 @@ export interface WorkTask {
    *  cost lines (labour, machinery, trips) report under this value —
    *  never derive vintage from year(date) on the client. */
   vintage_year?: number | null;
+  /** SQL 188 — 'hourly' (default/legacy) | 'piece_rate'. The ONLY switch. */
+  costing_method?: string | null;
+  /** SQL 188 — agreed $/vine, numeric(12,4). */
+  piece_rate_per_vine?: number | string | null;
+  /** SQL 188 — HISTORICAL snapshot of the costed vine quantity. */
+  piece_vine_count?: number | null;
+  /** SQL 188 — generated: round(piece_vine_count * piece_rate_per_vine, 2). */
+  piece_rate_total_cost?: number | string | null;
   created_at?: string | null;
   updated_at?: string | null;
   client_updated_at?: string | null;
@@ -158,6 +184,19 @@ export async function fetchWorkTaskById(id: string): Promise<WorkTask | null> {
   return (data ?? null) as WorkTask | null;
 }
 
+/** Bulk read used by history views that need SQL 188 costing fields. */
+export async function fetchWorkTasksByIds(ids: string[]): Promise<WorkTask[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!unique.length) return [];
+  const { data, error } = await supabase
+    .from("work_tasks")
+    .select("*")
+    .in("id", unique)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (data ?? []) as WorkTask[];
+}
+
 export async function fetchLabourLinesForTask(workTaskId: string): Promise<WorkTaskLabourLine[]> {
   const { data, error } = await supabase
     .from("work_task_labour_lines")
@@ -191,6 +230,10 @@ export interface UpsertWorkTaskInput {
   is_finalized?: boolean | null;
   user_id?: string | null;
   current_sync_version?: number | null;
+  /** SQL 188 — omit to leave the task's existing costing untouched. */
+  costing_method?: CostingMethod | null;
+  piece_rate_per_vine?: number | null;
+  piece_vine_count?: number | null;
 }
 
 export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTask> {
@@ -217,6 +260,7 @@ export async function createWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     sync_version: 1,
     created_by: input.user_id ?? null,
     updated_by: input.user_id ?? null,
+    ...pieceRatePayload(input),
   };
   const query = input.id
     ? supabase.from("work_tasks").upsert(payload, { onConflict: "id" })
@@ -246,6 +290,7 @@ export async function updateWorkTask(input: UpsertWorkTaskInput): Promise<WorkTa
     client_updated_at: nowIso(),
     sync_version: nextVersion,
     updated_by: input.user_id ?? null,
+    ...pieceRatePayload(input),
   };
   const { data, error } = await supabase
     .from("work_tasks")
@@ -293,6 +338,7 @@ export async function createLabourLine(input: UpsertLabourLineInput): Promise<Wo
     sync_version: 1,
     created_by: input.user_id ?? null,
     updated_by: input.user_id ?? null,
+    ...pieceRatePayload(input),
   };
   const query = input.id
     ? supabase.from("work_task_labour_lines").upsert(payload, { onConflict: "id" })
@@ -566,5 +612,131 @@ async function assertWorkTaskGone(workTaskId: string): Promise<void> {
     throw new Error(
       "You don't have permission to delete this work task on this vineyard.",
     );
+  }
+}
+
+
+// ------------------- SQL 188: piece-rate row snapshot -------------------
+
+/**
+ * public.work_task_piece_rate_rows — the WRITE-ONCE per-row commercial
+ * snapshot behind a piece-rate task. It is NOT a row-selection system:
+ * selection stays in pruning_row_segments. These values must never be
+ * recalculated from paddocks.rows after the job is saved.
+ */
+export interface WorkTaskPieceRateRow {
+  id: string;
+  work_task_id: string;
+  vineyard_id: string;
+  paddock_id: string;
+  paddock_row_id?: string | null;
+  row_number?: number | null;
+  vine_count: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+  client_updated_at?: string | null;
+  sync_version?: number | null;
+  deleted_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+}
+
+export async function fetchPieceRateRowsForTask(
+  workTaskId: string,
+): Promise<WorkTaskPieceRateRow[]> {
+  const { data, error } = await supabase
+    .from("work_task_piece_rate_rows")
+    .select("*")
+    .eq("work_task_id", workTaskId)
+    .is("deleted_at", null)
+    .order("row_number", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as WorkTaskPieceRateRow[];
+}
+
+export interface PieceRateRowInput {
+  paddock_id: string;
+  paddock_row_id: string | null;
+  row_number: number | null;
+  vine_count: number;
+}
+
+const snapshotKey = (r: { paddock_id: string; paddock_row_id: string | null; row_number: number | null }) =>
+  `${r.paddock_id}|${r.paddock_row_id ?? `#${r.row_number ?? ""}`}`;
+
+/**
+ * Reconcile the snapshot rows for a task to the supplied set. Only called as
+ * part of an EXPLICIT create/save of a piece-rate job — never on render.
+ * Removed rows are soft-deleted through the SQL 188 RPC (UPDATE fallback).
+ */
+export async function syncWorkTaskPieceRateRows(params: {
+  workTaskId: string;
+  vineyardId: string;
+  rows: PieceRateRowInput[];
+  existing: WorkTaskPieceRateRow[];
+  userId?: string | null;
+}): Promise<void> {
+  const { workTaskId, vineyardId, rows, existing, userId } = params;
+  const desired = new Map(rows.map((r) => [snapshotKey(r), r]));
+  const existingByKey = new Map(
+    existing.map((r) => [snapshotKey({
+      paddock_id: r.paddock_id,
+      paddock_row_id: r.paddock_row_id ?? null,
+      row_number: r.row_number ?? null,
+    }), r]),
+  );
+
+  for (const [key, row] of existingByKey) {
+    if (desired.has(key)) continue;
+    const rpc = await supabase.rpc("soft_delete_work_task_piece_rate_row", { p_id: row.id });
+    if (rpc.error) {
+      const { error } = await supabase
+        .from("work_task_piece_rate_rows")
+        .update({
+          deleted_at: nowIso(),
+          client_updated_at: nowIso(),
+          sync_version: (row.sync_version ?? 0) + 1,
+          updated_by: userId ?? null,
+        })
+        .eq("id", row.id);
+      if (error) throw error;
+    }
+  }
+
+  const inserts: any[] = [];
+  for (const [key, r] of desired) {
+    const prev = existingByKey.get(key);
+    if (prev) {
+      if (Number(prev.vine_count ?? 0) !== Number(r.vine_count)) {
+        const { error } = await supabase
+          .from("work_task_piece_rate_rows")
+          .update({
+            vine_count: r.vine_count,
+            client_updated_at: nowIso(),
+            sync_version: (prev.sync_version ?? 0) + 1,
+            updated_by: userId ?? null,
+          })
+          .eq("id", prev.id);
+        if (error) throw error;
+      }
+      continue;
+    }
+    inserts.push({
+      work_task_id: workTaskId,
+      vineyard_id: vineyardId,
+      paddock_id: r.paddock_id,
+      paddock_row_id: r.paddock_row_id,
+      row_number: r.row_number,
+      vine_count: r.vine_count,
+      deleted_at: null,
+      client_updated_at: nowIso(),
+      sync_version: 1,
+      created_by: userId ?? null,
+      updated_by: userId ?? null,
+    });
+  }
+  if (inserts.length) {
+    const { error } = await supabase.from("work_task_piece_rate_rows").insert(inserts);
+    if (error) throw error;
   }
 }

@@ -51,6 +51,10 @@ export type PaddockRow = {
   end?: LatLng;
   points?: LatLng[];
   length_m?: number;
+  /** SQL 188: OPTIONAL manual per-row vine count. Absent = use calculated. */
+  vineCountOverride?: number;
+  /** The untouched stored JSON object — used for lossless round-trip saves. */
+  raw?: Record<string, any>;
 };
 
 export function parseRows(raw: any): PaddockRow[] {
@@ -80,6 +84,11 @@ export function parseRows(raw: any): PaddockRow[] {
     if (Array.isArray(r.points)) row.points = parsePolygonPoints(r.points);
     if (isFiniteNum(r.length_m)) row.length_m = r.length_m;
     else if (isFiniteNum(r.length)) row.length_m = r.length;
+    // SQL 188 per-row manual vine count. Only a positive whole number counts.
+    if (isFiniteNum(r.vineCountOverride) && Number.isInteger(r.vineCountOverride) && r.vineCountOverride > 0) {
+      row.vineCountOverride = r.vineCountOverride;
+    }
+    row.raw = r;
     if (row.start || row.end || (row.points && row.points.length) || row.length_m) {
       out.push(row);
     }

@@ -29,15 +29,22 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import {
   createLabourLine, createWorkTask, fetchLabourLinesForTask, fetchWorkTaskById,
+  fetchPieceRateRowsForTask, syncWorkTaskPieceRateRows,
   fetchWorkTaskPaddocksForVineyard, fetchWorkTasksForVineyard, syncWorkTaskPaddocks,
   type WorkTask, type WorkTaskLabourLine,
 } from "@/lib/workTasksQuery";
 import { usePruningActivities } from "@/lib/pruningActivityApi";
 import {
-  activityTotals, allocationQuarterCount, allocationRowSummary,
+  COSTING_METHOD_HOURLY, COSTING_METHOD_PIECE_RATE, costPerHectare,
+  pieceRateTotalCost, resolveCostingMethod, type CostingMethod,
+} from "@/lib/pieceRateCosting";
+import {
+  activityTotals, allocationQuarterCount, allocationRowSummary, draftPieceRateRows,
   type BlockAllocationDraft, type PruningActivityDraft,
 } from "@/lib/pruningActivityContract";
 import { formatDate } from "@/lib/dateFormat";
+import { supabase } from "@/integrations/ios-supabase/client";
+import { parsePolygonPoints, polygonAreaHectares } from "@/lib/paddockGeometry";
 import WorkTaskLabourFields, {
   elapsedHoursBetween, emptyLabourValue, labourTotals, labourTypeName, useLabourTypes,
   type LabourFieldsValue,
@@ -182,7 +189,37 @@ export default function ActivityWorkTaskField({
             )}
           </div>
 
-          {/* Read-only labour summary — editing happens on the Work Task. */}
+          {/* SQL 188: a piece-rate task is costed from its saved snapshot —
+              labour lines are operational history only and are NEVER added. */}
+          {resolveCostingMethod(linked) === "piece_rate" ? (
+            <div className="rounded border bg-background/60 px-3 py-2 text-xs space-y-0.5 tabular-nums">
+              <div>
+                <span className="text-muted-foreground">Costing method: </span>
+                <b className="text-foreground">Piece Rate</b>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Rate: </span>
+                <b className="text-foreground">
+                  {linked?.piece_rate_per_vine != null ? `${money(Number(linked.piece_rate_per_vine))} / vine` : "—"}
+                </b>
+                <span className="text-muted-foreground"> · Vines (snapshot): </span>
+                <b className="text-foreground">
+                  {linked?.piece_vine_count != null ? Number(linked.piece_vine_count).toLocaleString() : "—"}
+                </b>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Labour cost: </span>
+                <b className="text-foreground">
+                  {linked?.piece_rate_total_cost != null ? money(Number(linked.piece_rate_total_cost)) : "—"}
+                </b>
+              </div>
+              {labour.totalHours != null && (
+                <div className="text-muted-foreground">
+                  Hours worked: {labour.totalHours.toFixed(2)} — operational history only, not costed.
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="rounded border bg-background/60 px-3 py-2 text-xs space-y-0.5 tabular-nums">
             {labourQ.isLoading ? (
               <span className="text-muted-foreground">Loading labour…</span>
@@ -219,6 +256,7 @@ export default function ActivityWorkTaskField({
               </>
             )}
           </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" asChild>
@@ -327,6 +365,37 @@ function CreateWorkTaskDialog({
   const [saving, setSaving] = useState(false);
   const [seeded, setSeeded] = useState(false);
 
+  // SQL 188 — costing method. Default is ALWAYS hourly (contract default).
+  const [costingMethod, setCostingMethod] = useState<CostingMethod>(COSTING_METHOD_HOURLY);
+  const [ratePerVine, setRatePerVine] = useState("");
+
+  // Piece-rate quantity comes from the rows selected on THIS draft, using each
+  // row's effective vine count (rows[].vineCountOverride ?? calculated).
+  const pieceRows = useMemo(() => draftPieceRateRows(draft), [draft]);
+  const pieceVineCount = useMemo(
+    () => pieceRows.reduce((n, r) => n + r.vine_count, 0),
+    [pieceRows],
+  );
+  const rateNum = ratePerVine.trim() === "" ? null : Number(ratePerVine);
+  const pieceCost = pieceRateTotalCost(pieceVineCount, Number.isFinite(rateNum as number) ? rateNum : null);
+
+  // Area of the selected blocks, for cost / ha only.
+  const areaQ = useQuery({
+    queryKey: ["pruning-activity", "piece-rate-area", vineyardId, Object.keys(draft.allocations).sort().join(",")],
+    enabled: open && costingMethod === "piece_rate" && Object.keys(draft.allocations).length > 0,
+    queryFn: async () => {
+      const ids = Object.keys(draft.allocations);
+      const { data, error } = await supabase
+        .from("paddocks").select("id, polygon_points").in("id", ids);
+      if (error) throw error;
+      return (data ?? []).reduce(
+        (sum, p: any) => sum + (polygonAreaHectares(parsePolygonPoints(p.polygon_points)) ?? 0), 0,
+      );
+    },
+  });
+  const pieceCostPerHa = costPerHectare(pieceCost, areaQ.data ?? null);
+  const isPieceRate = costingMethod === COSTING_METHOD_PIECE_RATE;
+
   // Re-seed the prefill each time the dialog opens; the pruning draft itself
   // is never touched.
   if (open && !seeded) {
@@ -335,6 +404,8 @@ function CreateWorkTaskDialog({
     setWorker(draft.worker);
     setNotes(defaultNotes);
     setLabour(defaultLabour());
+    setCostingMethod(COSTING_METHOD_HOURLY);
+    setRatePerVine("");
     setSeeded(true);
   }
   if (!open && seeded) setSeeded(false);
@@ -348,6 +419,15 @@ function CreateWorkTaskDialog({
       "Create the Work Task and use its labour from now on? The existing labour stays " +
       "untouched unless the task is created successfully.",
     )) return;
+
+    if (isPieceRate && !(rateNum != null && Number.isFinite(rateNum) && rateNum > 0)) {
+      toast.error("Enter a rate per vine.");
+      return;
+    }
+    if (isPieceRate && pieceVineCount <= 0) {
+      toast.error("Select rows before costing at a piece rate.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -368,7 +448,22 @@ function CreateWorkTaskDialog({
         duration_hours: calc.totalHours ?? 0,
         is_finalized: status === "completed",
         user_id: userId,
+        // SQL 188 — explicit on every pruning task so legacy reads stay safe.
+        costing_method: costingMethod,
+        piece_rate_per_vine: isPieceRate ? rateNum : null,
+        piece_vine_count: isPieceRate ? pieceVineCount : null,
       });
+
+      // Write-once commercial snapshot of the costed rows.
+      if (isPieceRate && pieceRows.length) {
+        await syncWorkTaskPieceRateRows({
+          workTaskId: task.id,
+          vineyardId,
+          rows: pieceRows,
+          existing: await fetchPieceRateRowsForTask(task.id),
+          userId,
+        });
+      }
 
       if (allocs.length) {
         const existing = (await fetchWorkTaskPaddocksForVineyard(vineyardId))
@@ -447,6 +542,39 @@ function CreateWorkTaskDialog({
             <Input id="wt-worker" value={worker} onChange={(e) => setWorker(e.target.value)} />
           </div>
 
+          <div className="space-y-1">
+            <Label>Costing method</Label>
+            <Select value={costingMethod} onValueChange={(v) => setCostingMethod(v as CostingMethod)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={COSTING_METHOD_HOURLY}>Hourly</SelectItem>
+                <SelectItem value={COSTING_METHOD_PIECE_RATE}>Piece Rate</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isPieceRate && (
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="wt-rate-vine">Rate / vine</Label>
+                <Input id="wt-rate-vine" type="number" step="0.0001" min="0" placeholder="1.27"
+                  value={ratePerVine} disabled={saving}
+                  onChange={(e) => setRatePerVine(e.target.value)} />
+              </div>
+              <div className="rounded bg-muted/40 px-3 py-2 text-sm space-y-0.5 tabular-nums">
+                <div className="text-muted-foreground text-xs">Piece Rate</div>
+                <div>Rows selected: <b>{pieceRows.length}</b></div>
+                <div>Vines: <b>{pieceVineCount.toLocaleString()}</b></div>
+                <div>Estimated cost: <b>{pieceCost != null ? money(pieceCost) : "—"}</b></div>
+                <div>Cost / ha: <b>{pieceCostPerHa != null ? money(pieceCostPerHa) : "—"}</b></div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The vine count is saved with the task as a snapshot. Later changes to vineyard rows
+                will not change this job's cost.
+              </p>
+            </div>
+          )}
+
           <WorkTaskLabourFields
             categories={categories}
             money={money}
@@ -454,6 +582,12 @@ function CreateWorkTaskDialog({
             onChange={setLabour}
             disabled={saving}
           />
+          {isPieceRate && (
+            <p className="text-xs text-muted-foreground">
+              Hours worked (optional). Recorded for operational history only — Piece Rate cost is based
+              on vines completed.
+            </p>
+          )}
           {elapsed != null && (
             <p className="text-xs text-muted-foreground">
               Hours per person prefilled from Start → Finish ({elapsed} h elapsed, overnight aware).

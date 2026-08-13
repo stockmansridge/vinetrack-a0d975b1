@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { Undo2, Link2, MoreHorizontal, Pencil, ExternalLink } from "lucide-react";
 import type { PruningEntry, PruningRowSegment } from "@/lib/pruningQuery";
 import { useReversePruningEntry } from "@/lib/pruningQuery";
-import { hardDeleteWorkTask } from "@/lib/workTasksQuery";
+import { hardDeleteWorkTask, fetchWorkTasksByIds } from "@/lib/workTasksQuery";
+import { useQuery } from "@tanstack/react-query";
+import { costingMethodLabel, resolveCostingMethod } from "@/lib/pieceRateCosting";
 import { formatDate } from "@/lib/dateFormat";
 import EditPruningDialog from "@/components/pruning/EditPruningDialog";
 import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
@@ -32,6 +34,18 @@ export default function ActivityHistory({
   seasonId, entries, canReverse, canEdit, vineyardId, identities, allSegments, paddockName,
 }: Props) {
   const reverse = useReversePruningEntry(seasonId);
+
+  // SQL 188 — linked Work Tasks, so piece-rate jobs show their SAVED snapshot
+  // cost here. Nothing is recalculated from today's vineyard rows.
+  const taskIds = entries.map((e) => e.work_task_id).filter(Boolean) as string[];
+  const tasksQ = useQuery({
+    queryKey: ["pruning-history", "work-tasks", seasonId, taskIds.sort().join(",")],
+    enabled: taskIds.length > 0,
+    queryFn: () => fetchWorkTasksByIds(taskIds),
+  });
+  const taskById = new Map((tasksQ.data ?? []).map((t) => [t.id, t]));
+  const money = (n: number) =>
+    n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 2 });
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
 
   // Entries that can be opened in the editor, in the order they are listed.
@@ -110,6 +124,27 @@ export default function ActivityHistory({
                         : `${" · ~"}${(e.estimated_vines_completed ?? 0).toLocaleString()} vines${e.labour_hours ? ` · ${Number(e.labour_hours).toFixed(1)} hrs` : ""}`}
                       {e.vintage_year ? ` · Vintage ${e.vintage_year}` : ""}
                     </div>
+                    {(() => {
+                      const t = e.work_task_id ? taskById.get(e.work_task_id) : null;
+                      if (!t || resolveCostingMethod(t) !== "piece_rate") return null;
+                      return (
+                        <div className="text-sm text-muted-foreground mt-1 tabular-nums">
+                          Costing method: <b className="text-foreground">{costingMethodLabel("piece_rate")}</b>
+                          {" · Rate: "}
+                          <b className="text-foreground">
+                            {t.piece_rate_per_vine != null ? `${money(Number(t.piece_rate_per_vine))} / vine` : "—"}
+                          </b>
+                          {" · Vines: "}
+                          <b className="text-foreground">
+                            {t.piece_vine_count != null ? Number(t.piece_vine_count).toLocaleString() : "—"}
+                          </b>
+                          {" · Labour cost: "}
+                          <b className="text-foreground">
+                            {t.piece_rate_total_cost != null ? money(Number(t.piece_rate_total_cost)) : "—"}
+                          </b>
+                        </div>
+                      );
+                    })()}
                     {e.notes && <div className="text-sm mt-1 whitespace-pre-wrap">{e.notes}</div>}
                     {e.updated_at && e.updated_at !== e.created_at && (
                       <div className="text-xs text-muted-foreground mt-1">Last edited {formatDate(e.updated_at.slice(0, 10))}</div>
