@@ -188,8 +188,10 @@ export default function PruningActivityDialog({
       setStartInput("");
       setFinishInput("");
       setSkipped(false);
+      setLabourLines([]);
       skipEntryIds.current = {};
     }
+
     setConfirmSkip(false);
     setConflicts([]);
     setSaveError(null);
