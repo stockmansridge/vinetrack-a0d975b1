@@ -242,7 +242,11 @@ export function resolveActivityLabel(members: BaseActivityRow[]): {
  * totals are attached to every allocation but flagged so the report renders
  * them once only (on the primary allocation).
  */
-export function applyActivityAllocations(baseRows: BaseActivityRow[]): PruningActivityRow[] {
+export function applyActivityAllocations(
+  baseRows: BaseActivityRow[],
+  /** SQL 190: the activity's own labour lines, summarised, keyed by activity id. */
+  activityLabour?: Map<string, PruningLabourSummary> | null,
+): PruningActivityRow[] {
   const groups = new Map<string, BaseActivityRow[]>();
   baseRows.forEach((r) => {
     const key = r.activityId ?? `entry:${r.id}`;
@@ -263,19 +267,34 @@ export function applyActivityAllocations(baseRows: BaseActivityRow[]): PruningAc
     // The parent activity carries the labour; on SQL 166 activities only one
     // allocation row stores it, so summing recovers the parent total and stays
     // correct for legacy single-entry rows.
-    const activityHours = ordered.some((r) => r.labourHours != null)
+    const legacyHours = ordered.some((r) => r.labourHours != null)
       ? ordered.reduce((s, r) => s + (r.labourHours ?? 0), 0)
       : null;
     const costRows = ordered.filter((r) => r.labourCost != null);
     // A single Work Task shared by every allocation must not be counted twice.
     const seenTasks = new Set<string>();
-    let activityCost: number | null = null;
+    let taskCost: number | null = null;
     costRows.forEach((r) => {
       const key = r.workTaskId ?? `row:${r.id}`;
       if (seenTasks.has(key)) return;
       seenTasks.add(key);
-      activityCost = (activityCost ?? 0) + (r.labourCost ?? 0);
+      taskCost = (taskCost ?? 0) + (r.labourCost ?? 0);
     });
+
+    // SQL 190 precedence: piece-rate snapshot > activity labour lines >
+    // linked hourly Work Task lines > legacy scalar activity labour.
+    const skippedGroup = ordered.every((r) => r.isSkipped);
+    const lines = ordered[0]?.activityId ? activityLabour?.get(ordered[0].activityId) ?? null : null;
+    const resolvedLabour = skippedGroup
+      ? { cost: null as number | null, hours: null as number | null }
+      : resolvePruningActivityLabour({
+          activityLines: lines,
+          isPieceRate: ordered.some((r) => r.costingMethod === "piece_rate"),
+          taskCost,
+          legacyHours,
+        });
+    const activityHours = resolvedLabour.hours;
+    const activityCost = resolvedLabour.cost;
 
     const split = allocateActivityShares(
       ordered.map((r) => ({
@@ -287,6 +306,7 @@ export function applyActivityAllocations(baseRows: BaseActivityRow[]): PruningAc
       activityHours,
       activityCost,
     );
+
     const splitById = new Map(split.map((s) => [s.id, s]));
     const { activityLabel, activityLabelKind } = resolveActivityLabel(ordered);
 
