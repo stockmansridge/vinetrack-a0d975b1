@@ -309,7 +309,7 @@ export function usePruningActivity(vineyardId: string | null) {
     enabled: !!vineyardId,
     queryFn: async (): Promise<PruningActivityRow[]> => {
       const vid = vineyardId!;
-      const [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes] =
+      const [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes, effectiveCosts] =
         await Promise.all([
           supabase.from("pruning_entries").select("*").eq("vineyard_id", vid)
             .order("entry_date", { ascending: false }),
@@ -325,6 +325,8 @@ export function usePruningActivity(vineyardId: string | null) {
           supabase.from("work_task_labour_lines")
             .select("work_task_id, total_hours, total_cost")
             .eq("vineyard_id", vid).is("deleted_at", null),
+          // SQL 189: backend-defined effective labour cost per Work Task.
+          fetchEffectiveLabourCosts(vid),
         ]);
 
       for (const res of [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes]) {
