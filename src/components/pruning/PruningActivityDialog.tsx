@@ -28,6 +28,10 @@ import {
 
 import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocationEditor";
 import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
+import PruningLabourLinesEditor, {
+  labourDraftsFromLines, labourPayloadFromDrafts, type PruningLabourLineDraft,
+} from "@/components/pruning/PruningLabourLinesEditor";
+import { useLabourTypes } from "@/components/work-tasks/WorkTaskLabourFields";
 
 import {
   activityTotals, allocationKey, allocationQuarterCount, allocationSegments,
@@ -37,9 +41,13 @@ import {
   usePruningActivityDetail, useSavePruningActivity,
   type ActivitySaveConflict, type PruningActivity,
 } from "@/lib/pruningActivityApi";
+import {
+  savePruningActivityLabourLines, usePruningActivityLabourLines,
+} from "@/lib/pruningActivityLabour";
 import { ensurePruningSeasonId, recordSkippedPruningEntry } from "@/lib/pruningQuery";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { formatDate } from "@/lib/dateFormat";
+
 
 
 const METHODS = ["spur", "cane", "mechanical", "minimal"];
@@ -158,6 +166,12 @@ export default function PruningActivityDialog({
   // Client uuid, generated once per dialog instance so a retry is idempotent.
   const [newId] = useState(() => crypto.randomUUID());
 
+  // SQL 190 — the activity owns its labour lines.
+  const labourQ = usePruningActivityLabourLines(open && isEdit ? activityId : null);
+  const [labourLines, setLabourLines] = useState<PruningLabourLineDraft[]>([]);
+  const labourCategories = useLabourTypes(open ? vineyardId : null).data ?? [];
+
+
 
   const loaded = detailQ.data ?? null;
 
@@ -174,13 +188,22 @@ export default function PruningActivityDialog({
       setStartInput("");
       setFinishInput("");
       setSkipped(false);
+      setLabourLines([]);
       skipEntryIds.current = {};
     }
+
     setConfirmSkip(false);
     setConflicts([]);
     setSaveError(null);
 
   }, [open, isEdit, loaded]);
+
+  // Server labour lines replace the editor state whenever they (re)load.
+  useEffect(() => {
+    if (!open || !isEdit || !labourQ.data) return;
+    setLabourLines(labourDraftsFromLines(labourQ.data));
+  }, [open, isEdit, labourQ.data]);
+
 
   /** Quarters already owned by THIS activity — they must stay selectable. */
   const ownedByActivity = useMemo(() => {
@@ -294,6 +317,15 @@ export default function PruningActivityDialog({
       }
       if (result.conflicts.length) setConflicts(result.conflicts);
 
+      // SQL 190 — labour lines are saved against the activity in one full
+      // replace. Never partial: omitted lines are removed by the backend.
+      const savedId = result.activity?.id ?? activityId ?? newId;
+      await savePruningActivityLabourLines(
+        savedId,
+        labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
+      );
+      await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+
       // Canonical server state replaces the editor state.
       if (result.activity) {
         setDraft(draftFromActivity(result.activity));
@@ -308,6 +340,7 @@ export default function PruningActivityDialog({
           : undefined,
       );
       if (!result.conflicts.length) onOpenChange(false);
+
     } catch (e: any) {
       setSaveError(e?.message ?? String(e));
     }
@@ -413,8 +446,18 @@ export default function PruningActivityDialog({
               </>)}
             </div>
 
-            {/* Labour hours, rate and cost belong to the linked Work Task — the
-                activity mirrors them read-only and never owns a second source. */}
+            {/* SQL 190 — labour belongs to the activity. The linked Work Task
+                card below stays a read-only mirror. */}
+            {!skipped && (
+              <PruningLabourLinesEditor
+                vineyardId={vineyardId}
+                value={labourLines}
+                onChange={setLabourLines}
+                workDate={draft.entryDate}
+                disabled={busy}
+              />
+            )}
+
             {!skipped && (
               <ActivityWorkTaskField
                 vineyardId={vineyardId}
@@ -433,6 +476,8 @@ export default function PruningActivityDialog({
                 disabled={busy}
               />
             )}
+
+
 
 
 
