@@ -419,8 +419,18 @@ export default function WorkTasksPage() {
       if (l.worker_type) t.workerTypes.add(l.worker_type);
       m.set(l.work_task_id, t);
     });
+    // SQL 188: for a piece-rate task the labour cost IS the saved snapshot
+    // total. Labour-line hours stay visible (operational history) but their
+    // cost is never used, and never summed with the piece-rate total.
+    tasks.forEach((t) => {
+      if (resolveCostingMethod(t) !== "piece_rate") return;
+      const cur = m.get(t.id) ?? { hours: 0, cost: 0, missingRate: false, workerTypes: new Set<string>() };
+      cur.cost = Number(t.piece_rate_total_cost ?? 0) || 0;
+      cur.missingRate = false;
+      m.set(t.id, cur);
+    });
     return m;
-  }, [labourLines]);
+  }, [labourLines, tasks]);
 
   const taskTypes = useMemo(() => {
     const s = new Set<string>();
@@ -1099,8 +1109,13 @@ function WorkTaskDrawer({
   }, [machineLines, localMachineLines]);
   const visibleLines = displayedLabourLines.filter((l) => !l.deleted_at);
   const totalHours = visibleLines.reduce((s, l) => s + (Number(l.total_hours ?? 0) || 0), 0);
-  const totalCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
-  const missingRate = visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
+  const taskCostingMethod = resolveCostingMethod(task);
+  const isPieceRateTask = taskCostingMethod === "piece_rate";
+  const labourLineCost = visibleLines.reduce((s, l) => s + (l.total_cost == null ? 0 : Number(l.total_cost) || 0), 0);
+  // Exactly one labour total applies — see src/lib/pieceRateCosting.ts.
+  const totalCost = taskLabourCost(task ?? null, labourLineCost) ?? 0;
+  const missingRate = !isPieceRateTask
+    && visibleLines.some((l) => l.total_cost == null && l.worker_count && l.hours_per_worker);
   const areaNum = totalAreaHa > 0 ? totalAreaHa : null;
   const costPerHa = areaNum && totalCost ? totalCost / areaNum : null;
 
@@ -1321,6 +1336,7 @@ function WorkTaskDrawer({
             )}
             {!isNew && task && (
               <WorkTaskSummarySection
+                task={task}
                 labourLines={visibleLines}
                 machineLines={displayedMachineLines}
                 linkedTrips={linkedTrips}
@@ -2482,6 +2498,7 @@ function LinkedTripsSection({
 // fallback notice. Nothing is written back to the database.
 // ============================================================================
 function WorkTaskSummarySection({
+  task,
   labourLines,
   machineLines,
   linkedTrips,
@@ -2489,6 +2506,7 @@ function WorkTaskSummarySection({
   canSeeCosts,
   money,
 }: {
+  task: WorkTask | null;
   labourLines: WorkTaskLabourLine[];
   machineLines: WorkTaskMachineLine[];
   linkedTrips: Trip[];
@@ -2503,7 +2521,11 @@ function WorkTaskSummarySection({
     };
 
     const visibleLabour = labourLines.filter((l) => !l.deleted_at);
-    const manualLabourCost = visibleLabour.reduce((s, l) => s + num(l.total_cost), 0);
+    // SQL 188: piece-rate tasks cost from the saved snapshot; labour-line cost
+    // is ignored so there is never a second competing labour total.
+    const manualLabourCost = taskLabourCost(
+      task, visibleLabour.reduce((s, l) => s + num(l.total_cost), 0),
+    ) ?? 0;
     const manualLabourHours = visibleLabour.reduce((s, l) => s + num(l.total_hours), 0);
 
     const visibleMachine = machineLines.filter((l) => !l.deleted_at);
@@ -2557,7 +2579,7 @@ function WorkTaskSummarySection({
       total,
       overlapRisk,
     };
-  }, [labourLines, machineLines, linkedTrips, allocByTripId]);
+  }, [task, labourLines, machineLines, linkedTrips, allocByTripId]);
 
   return (
     <Section title="Work Task summary">
