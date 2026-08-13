@@ -20,6 +20,11 @@ import { parseVarietyAllocations } from "@/lib/paddockGeometry";
 import type { PruningEntry } from "@/lib/pruningQuery";
 import { allocateActivityShares } from "@/lib/pruningActivityAllocation";
 import { taskLabourCost } from "@/lib/pieceRateCosting";
+import {
+  fetchEffectiveLabourCosts,
+  resolveEffectiveLabourCost,
+  type LabourCostSource,
+} from "@/lib/effectiveLabourCost";
 
 export interface PruningActivityRow {
   id: string;
