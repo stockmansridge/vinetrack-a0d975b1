@@ -2566,6 +2566,9 @@ function WorkTaskSummarySection({
   canSeeCosts: boolean;
   money: (n: number) => string;
 }) {
+  // SQL 189 effective labour cost for this task (backend source of truth).
+  const effectiveCost = useEffectiveLabourCosts(task?.vineyard_id ?? null)
+    .data?.get(task?.id ?? "") ?? null;
   const summary = useMemo(() => {
     const num = (v: unknown) => {
       const n = Number(v);
