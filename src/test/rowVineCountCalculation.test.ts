@@ -11,7 +11,7 @@ import {
 // Realistic vineyard geometry: a north-south row of ~250 m at lat -34.28.
 const LAT = -34.2833;
 const LNG = 140.6;
-const metresToDegLat = (m: number) => m / 110574;
+const metresToDegLat = (m: number) => m / ((6378137 * Math.PI) / 180);
 
 function iosRow(number: number, lengthM: number, extra: Record<string, any> = {}): RawPaddockRow {
   return {
