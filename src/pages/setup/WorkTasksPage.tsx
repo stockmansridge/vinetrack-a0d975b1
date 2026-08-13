@@ -2575,9 +2575,11 @@ function WorkTaskSummarySection({
     const visibleLabour = labourLines.filter((l) => !l.deleted_at);
     // SQL 188: piece-rate tasks cost from the saved snapshot; labour-line cost
     // is ignored so there is never a second competing labour total.
-    const manualLabourCost = taskLabourCost(
-      task, visibleLabour.reduce((s, l) => s + num(l.total_cost), 0),
-    ) ?? 0;
+    const manualLabourCost = resolveEffectiveLabourCost(
+      task,
+      visibleLabour.length ? visibleLabour.reduce((s, l) => s + num(l.total_cost), 0) : null,
+      effectiveCost ?? null,
+    ).cost ?? 0;
     const manualLabourHours = visibleLabour.reduce((s, l) => s + num(l.total_hours), 0);
 
     const visibleMachine = machineLines.filter((l) => !l.deleted_at);
