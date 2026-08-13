@@ -983,7 +983,7 @@ export default function WorkTaskReportsPage() {
       ];
       if (canSeeCosts) {
         base.push(
-          Number(r.manualLabourCost.toFixed(2)),
+          r.manualLabourCostRaw == null ? "" : Number(r.manualLabourCostRaw.toFixed(2)),
           Number(r.machineCharge.toFixed(2)),
           Number(r.machineFuel.toFixed(2)),
           Number(r.linkedTripTotal.toFixed(2)),
