@@ -317,6 +317,15 @@ export default function PruningActivityDialog({
       }
       if (result.conflicts.length) setConflicts(result.conflicts);
 
+      // SQL 190 — labour lines are saved against the activity in one full
+      // replace. Never partial: omitted lines are removed by the backend.
+      const savedId = result.activity?.id ?? activityId ?? newId;
+      await savePruningActivityLabourLines(
+        savedId,
+        labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
+      );
+      await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+
       // Canonical server state replaces the editor state.
       if (result.activity) {
         setDraft(draftFromActivity(result.activity));
@@ -331,6 +340,7 @@ export default function PruningActivityDialog({
           : undefined,
       );
       if (!result.conflicts.length) onOpenChange(false);
+
     } catch (e: any) {
       setSaveError(e?.message ?? String(e));
     }
