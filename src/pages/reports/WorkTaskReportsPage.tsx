@@ -153,6 +153,12 @@ interface TaskRow {
   machineEntries: number;
   linkedTripCount: number;
   manualLabourCost: number;
+  /** SQL 189 effective labour cost; null = no known cost (never $0.00). */
+  manualLabourCostRaw: number | null;
+  labourCostSource: LabourCostSource;
+  costingMethod: "hourly" | "piece_rate";
+  pieceRatePerVine: number | null;
+  pieceVineCount: number | null;
   machineCharge: number;
   machineFuel: number;
   manualMachineTotal: number;
