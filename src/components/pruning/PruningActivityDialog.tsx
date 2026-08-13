@@ -28,6 +28,10 @@ import {
 
 import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocationEditor";
 import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
+import PruningLabourLinesEditor, {
+  labourDraftsFromLines, labourPayloadFromDrafts, type PruningLabourLineDraft,
+} from "@/components/pruning/PruningLabourLinesEditor";
+import { useLabourTypes } from "@/components/work-tasks/WorkTaskLabourFields";
 
 import {
   activityTotals, allocationKey, allocationQuarterCount, allocationSegments,
@@ -37,9 +41,13 @@ import {
   usePruningActivityDetail, useSavePruningActivity,
   type ActivitySaveConflict, type PruningActivity,
 } from "@/lib/pruningActivityApi";
+import {
+  savePruningActivityLabourLines, usePruningActivityLabourLines,
+} from "@/lib/pruningActivityLabour";
 import { ensurePruningSeasonId, recordSkippedPruningEntry } from "@/lib/pruningQuery";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { formatDate } from "@/lib/dateFormat";
+
 
 
 const METHODS = ["spur", "cane", "mechanical", "minimal"];
