@@ -724,8 +724,17 @@ export default function WorkTaskReportsPage() {
         r.totalAreaHa == null ? "" : areaUnit,
         r.hasWarning ? "Review" : "",
       ];
+      const costPerVine = r.manualLabourCostRaw != null && r.pieceVineCount
+        ? r.manualLabourCostRaw / r.pieceVineCount
+        : null;
       const costs = canSeeCosts ? [
-        r.manualLabourCost.toFixed(2),
+        // SQL 189: blank (not 0.00) when there is no known labour cost.
+        r.manualLabourCostRaw == null ? "" : r.manualLabourCostRaw.toFixed(2),
+        r.costingMethod === "piece_rate" ? "Piece Rate" : "Hourly",
+        r.labourCostSource ?? "",
+        r.pieceRatePerVine == null ? "" : r.pieceRatePerVine.toFixed(4),
+        r.pieceVineCount == null ? "" : String(r.pieceVineCount),
+        costPerVine == null ? "" : costPerVine.toFixed(4),
         r.machineCharge.toFixed(2),
         r.machineFuel.toFixed(2),
         r.linkedTripTotal.toFixed(2),
