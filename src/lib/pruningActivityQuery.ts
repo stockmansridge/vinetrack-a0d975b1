@@ -76,13 +76,13 @@ export interface PruningActivityRow {
   activityTitle: string | null;
   labourCost: number | null;    // null when there is no linked Work Task
   /** SQL 189 labour_cost_source for the linked Work Task, when known. */
-  labourCostSource: LabourCostSource | null;
+  labourCostSource?: LabourCostSource | null;
   /** SQL 188/189 costing method of the linked Work Task. */
-  costingMethod: "hourly" | "piece_rate" | null;
+  costingMethod?: "hourly" | "piece_rate" | null;
   /** Historical piece-rate snapshot rate, never recomputed from live rows. */
-  pieceRatePerVine: number | null;
+  pieceRatePerVine?: number | null;
   /** Historical piece-rate snapshot vine count. */
-  pieceVineCount: number | null;
+  pieceVineCount?: number | null;
   hourlyRate: number | null;    // labour cost / labour hours
   notes: string;
 
