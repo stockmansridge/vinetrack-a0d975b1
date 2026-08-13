@@ -2636,7 +2636,7 @@ function WorkTaskSummarySection({
       total,
       overlapRisk,
     };
-  }, [task, labourLines, machineLines, linkedTrips, allocByTripId]);
+  }, [task, labourLines, machineLines, linkedTrips, allocByTripId, effectiveCost]);
 
   return (
     <Section title="Work Task summary">
