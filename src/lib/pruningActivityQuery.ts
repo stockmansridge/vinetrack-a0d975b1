@@ -346,7 +346,10 @@ export function usePruningActivity(vineyardId: string | null) {
     enabled: !!vineyardId,
     queryFn: async (): Promise<PruningActivityRow[]> => {
       const vid = vineyardId!;
-      const [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes, effectiveCosts] =
+      const [
+        entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes,
+        effectiveCosts, activityLabourLines,
+      ] =
         await Promise.all([
           supabase.from("pruning_entries").select("*").eq("vineyard_id", vid)
             .order("entry_date", { ascending: false }),
