@@ -364,6 +364,9 @@ export function usePruningActivity(vineyardId: string | null) {
             .eq("vineyard_id", vid).is("deleted_at", null),
           // SQL 189: backend-defined effective labour cost per Work Task.
           fetchEffectiveLabourCosts(vid),
+          // SQL 190: labour lines owned by the pruning activities themselves.
+          fetchVineyardPruningLabourLines(vid),
+
         ]);
 
       for (const res of [entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes]) {
