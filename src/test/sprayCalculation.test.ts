@@ -2,23 +2,32 @@ import { describe, it, expect } from "vitest";
 import {
   fromLegacySprayJob,
   normaliseApplicationMode,
+  normaliseOperationType,
   normaliseCarrierBasis,
+  normaliseCarrierBasisPreference,
   normaliseProductRateBasis,
   legacyTargetCompat,
   buildCandidateApplication,
   emptySprayApplication,
+  persistedHeadTarget,
+  APPLICATION_MODES,
+  CARRIER_BASES,
+  PRODUCT_RATE_BASES,
+  OPERATION_TYPE_TO_MODE,
   type SprayProductLine,
 } from "@/lib/sprayApplicationDomain";
 import {
   resolveBlockGeometry,
   buildApplicationGeometry,
   resolveApplicationGeometry,
+  normaliseGeometrySource,
 } from "@/lib/sprayApplicationGeometry";
 import {
   calculateCarrier,
   calculateProducts,
   calculateTanks,
   calculateSprayApplication,
+  concentrationFactorFrom,
   validateRate,
 } from "@/lib/sprayCalculation";
 import { readApplicationBlocks, resolveRecordedBlockNames } from "@/lib/sprayRecordAttribution";
@@ -44,12 +53,15 @@ const mappedBlock = {
   rows: Array.from({ length: 20 }, (_, i) => ({ number: i + 1, length: 250 })),
 };
 
+/** Rork mandatory fixture: 10 ha gross, 2.5 m spacing. */
+const bandedBlock = { id: "b-banded", name: "Banded", area_ha: 10, row_width: 2.5 };
+
 const line = (over: Partial<SprayProductLine> = {}): SprayProductLine => ({
   savedChemicalId: "chem-1",
   productName: "Product A",
   rate: 1,
   unit: "L",
-  rateBasis: "per_hectare",
+  rateBasis: "whole_block_area",
   activityGroups: [],
   verificationStatus: "verified",
   ...over,
@@ -57,18 +69,49 @@ const line = (over: Partial<SprayProductLine> = {}): SprayProductLine => ({
 
 /* ------------------------------------------------------------ vocabulary */
 
-describe("spray vocabulary", () => {
-  it("maps legacy operation labels to canonical modes", () => {
-    expect(normaliseApplicationMode("Foliar Spray")).toBe("foliar");
-    expect(normaliseApplicationMode("banded")).toBe("banded");
-    expect(normaliseApplicationMode("Something odd")).toBeNull();
+describe("spray vocabulary (Rork-confirmed raw values)", () => {
+  it("has exactly two application modes", () => {
+    expect(APPLICATION_MODES).toEqual(["whole_block", "banded"]);
   });
 
-  it("normalises carrier and rate bases including legacy spellings", () => {
-    expect(normaliseCarrierBasis("L/100m")).toBe("litres_per_100m");
-    expect(normaliseCarrierBasis("litres_per_hectare")).toBe("litres_per_hectare");
+  it("maps legacy operation types to the canonical mode", () => {
+    expect(normaliseApplicationMode("Foliar Spray")).toBe("whole_block");
+    expect(normaliseApplicationMode("Spreader")).toBe("whole_block");
+    expect(normaliseApplicationMode("Banded Spray")).toBe("banded");
+    expect(OPERATION_TYPE_TO_MODE.foliar).toBe("whole_block");
+    expect(OPERATION_TYPE_TO_MODE.spreader).toBe("whole_block");
+    expect(OPERATION_TYPE_TO_MODE.banded).toBe("banded");
+    expect(normaliseApplicationMode("Something odd")).toBeNull();
+    expect(normaliseOperationType("Foliar Spray")).toBe("foliar");
+  });
+
+  it("uses l_per_ha / l_per_100m carrier raws and tolerates legacy spellings", () => {
+    expect(CARRIER_BASES).toEqual(["l_per_ha", "l_per_100m"]);
+    expect(normaliseCarrierBasis("L/100m")).toBe("l_per_100m");
+    expect(normaliseCarrierBasis("litres_per_hectare")).toBe("l_per_ha");
+    expect(normaliseCarrierBasis("litres_per_100m")).toBe("l_per_100m");
+    // "either" is a vineyard preference only, never an application basis.
+    expect(normaliseCarrierBasis("either")).toBeNull();
+    expect(normaliseCarrierBasisPreference("either")).toBe("either");
+  });
+
+  it("has the four canonical product rate bases", () => {
+    expect(PRODUCT_RATE_BASES).toEqual([
+      "whole_block_area",
+      "treated_area",
+      "per_100_litres",
+      "per_100_metres",
+    ]);
     expect(normaliseProductRateBasis("per_100L")).toBe("per_100_litres");
-    expect(normaliseProductRateBasis("per_hectare")).toBe("per_hectare");
+    expect(normaliseProductRateBasis("per_100m")).toBe("per_100_metres");
+    expect(normaliseProductRateBasis("per_hectare")).toBe("whole_block_area");
+    expect(normaliseProductRateBasis("per_treated_hectare")).toBe("treated_area");
+  });
+
+  it("keeps head target foliar-only", () => {
+    expect(persistedHeadTarget("foliar", "bunch_line")).toBe("bunch_line");
+    expect(persistedHeadTarget("banded", "bunch_line")).toBeNull();
+    expect(persistedHeadTarget("spreader", "full_canopy")).toBeNull();
   });
 
   it("only maps free-text targets it can prove", () => {
@@ -84,37 +127,47 @@ describe("block geometry precedence", () => {
     const g = resolveBlockGeometry({
       paddock: mappedBlock,
       override: { canonicalRowLengthMetres: 4000, rowSpacingMetres: 2.5 },
-      mode: "foliar",
+      mode: "whole_block",
     });
     expect(g.canonicalRowLengthMetres).toBe(4000);
     expect(g.rowSpacingMetres).toBe(2.5);
     expect(g.geometrySource).toBe("operator_override");
+    expect(g.geometryQuality).toBe("authoritative");
   });
 
   it("uses mapped rows when no override exists", () => {
-    const g = resolveBlockGeometry({ paddock: mappedBlock, mode: "foliar" });
+    const g = resolveBlockGeometry({ paddock: mappedBlock, mode: "whole_block" });
     expect(g.canonicalRowLengthMetres).toBe(5000);
     expect(g.rowCount).toBe(20);
     expect(g.geometrySource).toBe("mapped_rows");
+    expect(g.treatedAreaMethod).toBe("whole_block");
   });
 
-  it("derives row length from area and spacing as a last resort", () => {
-    const g = resolveBlockGeometry({ paddock: derivedBlock, mode: "foliar" });
-    expect(g.geometrySource).toBe("derived_area_spacing");
+  it("uses the canonical derived_from_area_and_spacing raw value", () => {
+    const g = resolveBlockGeometry({ paddock: derivedBlock, mode: "whole_block" });
+    expect(g.geometrySource).toBe("derived_from_area_and_spacing");
     expect(g.canonicalRowLengthMetres).toBeCloseTo((10 * 10000) / 3, 6);
-    expect(g.geometryQuality).toBe("partial");
+    expect(g.geometryQuality).toBe("derived");
   });
 
-  it("reports incomplete geometry instead of guessing", () => {
-    const g = resolveBlockGeometry({ paddock: { id: "x", name: "Bare" }, mode: "foliar" });
-    expect(g.geometrySource).toBe("incomplete");
+  it("reports an unavailable geometry source, not 'incomplete'", () => {
+    const g = resolveBlockGeometry({ paddock: { id: "x", name: "Bare" }, mode: "whole_block" });
+    expect(g.geometrySource).toBe("unavailable");
     expect(g.geometryQuality).toBe("incomplete");
+    expect(g.treatedAreaMethod).toBe("unavailable");
     expect(g.issues).toContain("missing_gross_area");
   });
 
-  it("treats the whole block for foliar and the band only for banded", () => {
-    const foliar = resolveBlockGeometry({ paddock: mappedBlock, mode: "foliar" });
-    expect(foliar.treatedAreaHa).toBeCloseTo(1.5, 6);
+  it("read-tolerates the deprecated stored_row_length source and legacy spellings", () => {
+    expect(normaliseGeometrySource("stored_row_length")).toBe("operator_override");
+    expect(normaliseGeometrySource("derived_area_spacing")).toBe("derived_from_area_and_spacing");
+    expect(normaliseGeometrySource("incomplete")).toBe("unavailable");
+    expect(normaliseGeometrySource("mapped_rows")).toBe("mapped_rows");
+  });
+
+  it("treats the whole block for whole_block mode and the band only for banded", () => {
+    const whole = resolveBlockGeometry({ paddock: mappedBlock, mode: "whole_block" });
+    expect(whole.treatedAreaHa).toBeCloseTo(1.5, 6);
     const banded = resolveBlockGeometry({
       paddock: mappedBlock,
       mode: "banded",
@@ -122,6 +175,17 @@ describe("block geometry precedence", () => {
     });
     // 5000 m of row × 1 m band = 5000 m² = 0.5 ha
     expect(banded.treatedAreaHa).toBeCloseTo(0.5, 6);
+    expect(banded.treatedAreaMethod).toBe("canonical_row_length");
+  });
+
+  it("falls back to area × band ÷ spacing when the row length is itself derived", () => {
+    const g = resolveBlockGeometry({
+      paddock: bandedBlock,
+      mode: "banded",
+      totalTreatedBandWidthMetres: 1,
+    });
+    expect(g.treatedAreaHa).toBeCloseTo(4, 6); // 10 ha × 1 / 2.5
+    expect(g.treatedAreaMethod).toBe("area_and_spacing_fallback");
   });
 
   it("flags banded applications with no band width", () => {
@@ -130,24 +194,64 @@ describe("block geometry precedence", () => {
     expect(g.treatedAreaHa).toBeNull();
   });
 
-  it("aggregates mixed row spacing with a warning", () => {
-    const a = resolveBlockGeometry({ paddock: mappedBlock, mode: "foliar" });
+  it("does not average mixed row spacing", () => {
+    const a = resolveBlockGeometry({ paddock: mappedBlock, mode: "whole_block" });
     const b = resolveBlockGeometry({
       paddock: { ...derivedBlock, row_width: 2 },
-      mode: "foliar",
+      mode: "whole_block",
     });
     const agg = buildApplicationGeometry([a, b]);
     expect(agg.uniformRowSpacing).toBe(false);
+    expect(agg.rowSpacingMetres).toBeNull();
     expect(agg.issues).toContain("mixed_row_spacing");
     expect(agg.grossAreaHa).toBeCloseTo(11.5, 6);
-    expect(agg.geometrySource).toBe("derived_area_spacing");
+    expect(agg.geometrySource).toBe("derived_from_area_and_spacing");
+  });
+
+  it("treats spacings within the 1 mm tolerance as uniform", () => {
+    const a = resolveBlockGeometry({ paddock: { ...derivedBlock, id: "a", row_width: 2.5 }, mode: "whole_block" });
+    const b = resolveBlockGeometry({ paddock: { ...derivedBlock, id: "b", row_width: 2.5005 }, mode: "whole_block" });
+    const agg = buildApplicationGeometry([a, b]);
+    expect(agg.uniformRowSpacing).toBe(true);
+    expect(agg.rowSpacingMetres).toBeCloseTo(2.5, 6);
+  });
+
+  it("never returns a partial treated-area sum when one block is unresolved", () => {
+    const a = resolveBlockGeometry({
+      paddock: bandedBlock,
+      mode: "banded",
+      totalTreatedBandWidthMetres: 1,
+    });
+    const b = resolveBlockGeometry({ paddock: { id: "bare" }, mode: "banded", totalTreatedBandWidthMetres: 1 });
+    const agg = buildApplicationGeometry([a, b]);
+    expect(a.treatedAreaHa).toBeCloseTo(4, 6);
+    expect(agg.treatedAreaHa).toBeNull();
+    expect(agg.treatedAreaMethod).toBe("unavailable");
+    expect(agg.issues).toContain("incomplete_block_geometry");
+    expect(agg.geometryQuality).toBe("incomplete");
+  });
+
+  it("uses area_and_spacing_fallback as the aggregate method for mixed banded blocks", () => {
+    const canonical = resolveBlockGeometry({
+      paddock: mappedBlock,
+      mode: "banded",
+      totalTreatedBandWidthMetres: 1,
+    });
+    const fallback = resolveBlockGeometry({
+      paddock: bandedBlock,
+      mode: "banded",
+      totalTreatedBandWidthMetres: 1,
+    });
+    const agg = buildApplicationGeometry([canonical, fallback]);
+    expect(agg.treatedAreaMethod).toBe("area_and_spacing_fallback");
+    expect(agg.treatedAreaHa).toBeCloseTo(4.5, 6);
   });
 
   it("resolves a whole application from paddock rows", () => {
     const agg = resolveApplicationGeometry({
       paddocks: [mappedBlock, derivedBlock],
       blockIds: ["b-mapped"],
-      mode: "foliar",
+      mode: "whole_block",
     });
     expect(agg.blocks).toHaveLength(1);
     expect(agg.treatedAreaHa).toBeCloseTo(1.5, 6);
@@ -158,14 +262,14 @@ describe("block geometry precedence", () => {
 
 describe("carrier volume", () => {
   const geometry = buildApplicationGeometry([
-    resolveBlockGeometry({ paddock: mappedBlock, mode: "foliar" }),
+    resolveBlockGeometry({ paddock: mappedBlock, mode: "whole_block" }),
   ]);
 
   it("computes total litres from L/ha", () => {
     const c = calculateCarrier({
       geometry,
-      mode: "foliar",
-      carrier: { basis: "litres_per_hectare", litresPerHectare: 400 },
+      mode: "whole_block",
+      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
     });
     expect(c.totalCarrierLitres).toBeCloseTo(600, 6); // 400 × 1.5 ha
     expect(c.litresPer100m).toBeCloseTo(12, 6); // 400 × 3 / 100
@@ -174,51 +278,168 @@ describe("carrier volume", () => {
   it("computes total litres from L/100 m and derives L/ha", () => {
     const c = calculateCarrier({
       geometry,
-      mode: "foliar",
-      carrier: { basis: "litres_per_100m", appliedLitresPer100m: 12 },
+      mode: "whole_block",
+      carrier: { basis: "l_per_100m", appliedLitresPer100m: 12 },
     });
     expect(c.totalCarrierLitres).toBeCloseTo(600, 6); // 5000 m / 100 × 12
     expect(c.litresPerHectare).toBeCloseTo(400, 6); // 12 × 100 / 3
   });
 
-  it("derives the concentration factor from dilute ÷ applied", () => {
-    const c = calculateCarrier({
-      geometry,
-      mode: "foliar",
-      carrier: { basis: "litres_per_100m", appliedLitresPer100m: 5, diluteLitresPer100m: 20 },
-    });
-    expect(c.concentrationFactor).toBeCloseTo(4, 6);
-  });
-
-  it("applies a banded L/ha rate to the treated hectares", () => {
-    const banded = buildApplicationGeometry([
-      resolveBlockGeometry({ paddock: mappedBlock, mode: "banded", totalTreatedBandWidthMetres: 1 }),
+  it("derives no equivalent L/ha when row spacings differ", () => {
+    const mixed = buildApplicationGeometry([
+      resolveBlockGeometry({ paddock: { ...derivedBlock, id: "a", row_width: 2.5 }, mode: "whole_block" }),
+      resolveBlockGeometry({ paddock: { ...derivedBlock, id: "b", row_width: 3 }, mode: "whole_block" }),
     ]);
     const c = calculateCarrier({
-      geometry: banded,
-      mode: "banded",
-      carrier: { basis: "litres_per_hectare", litresPerHectare: 400 },
+      geometry: mixed,
+      mode: "whole_block",
+      carrier: { basis: "l_per_100m", appliedLitresPer100m: 10 },
     });
-    expect(c.totalCarrierLitres).toBeCloseTo(200, 6); // 400 × 0.5 ha
+    expect(c.totalCarrierLitres).not.toBeNull();
+    expect(c.litresPerHectare).toBeNull();
+    expect(c.diagnostics.map((d) => d.code)).toContain("cannot_derive_litres_per_hectare");
   });
 
-  it("does not require a carrier for spreader applications", () => {
-    const c = calculateCarrier({ geometry, mode: "spreader", carrier: { basis: null } });
+  it("uses the confirmed L/100 m → L/ha equivalence", () => {
+    const uniform = buildApplicationGeometry([
+      resolveBlockGeometry({ paddock: bandedBlock, mode: "whole_block" }),
+    ]);
+    const c = calculateCarrier({
+      geometry: uniform,
+      mode: "whole_block",
+      carrier: { basis: "l_per_100m", appliedLitresPer100m: 10 },
+    });
+    expect(c.litresPerHectare).toBeCloseTo(400, 6); // 10 × 100 / 2.5
+  });
+
+  it("leaves the carrier incomplete when L/100 m has no row length (no L/ha fallback)", () => {
+    const noRows = buildApplicationGeometry([
+      resolveBlockGeometry({ paddock: { id: "x", area_ha: 5 }, mode: "whole_block" }),
+    ]);
+    const c = calculateCarrier({
+      geometry: noRows,
+      mode: "whole_block",
+      carrier: { basis: "l_per_100m", appliedLitresPer100m: 10, litresPerHectare: 400 },
+    });
+    expect(c.totalCarrierLitres).toBeNull();
+    expect(c.diagnostics.map((d) => d.code)).toContain("incomplete_geometry_for_carrier");
+  });
+
+  it("floors the concentration factor at 1", () => {
+    expect(concentrationFactorFrom(40, 20)).toBeCloseTo(2, 6);
+    expect(concentrationFactorFrom(10, 20)).toBeCloseTo(1, 6);
+    const c = calculateCarrier({
+      geometry,
+      mode: "whole_block",
+      carrier: { basis: "l_per_100m", appliedLitresPer100m: 20, diluteLitresPer100m: 40 },
+    });
+    expect(c.concentrationFactor).toBeCloseTo(2, 6);
+    expect(c.concentrationFactorSource).toBe("derived");
+    const inverse = calculateCarrier({
+      geometry,
+      mode: "whole_block",
+      carrier: { basis: "l_per_100m", appliedLitresPer100m: 20, diluteLitresPer100m: 10 },
+    });
+    expect(inverse.concentrationFactor).toBe(1);
+  });
+
+  it("supports a concentration factor in L/ha mode", () => {
+    const c = calculateCarrier({
+      geometry,
+      mode: "whole_block",
+      carrier: { basis: "l_per_ha", litresPerHectare: 400, diluteLitresPerHectare: 1000 },
+    });
+    expect(c.concentrationFactor).toBeCloseTo(2.5, 6);
+  });
+
+  it("treats a persisted concentration factor as authoritative history", () => {
+    const c = calculateCarrier({
+      geometry,
+      mode: "whole_block",
+      carrier: {
+        basis: "l_per_100m",
+        appliedLitresPer100m: 20,
+        diluteLitresPer100m: 100, // would derive 5
+        concentrationFactor: 2,
+      },
+    });
+    expect(c.concentrationFactor).toBe(2);
+    expect(c.concentrationFactorSource).toBe("persisted");
+  });
+
+  it("does not require a carrier for spreader operations", () => {
+    const c = calculateCarrier({
+      geometry,
+      mode: "whole_block",
+      operationType: "spreader",
+      carrier: { basis: null },
+    });
     expect(c.totalCarrierLitres).toBeNull();
     expect(c.diagnostics.every((d) => d.severity !== "error")).toBe(true);
   });
 
   it("refuses to compute when geometry is incomplete", () => {
     const bare = buildApplicationGeometry([
-      resolveBlockGeometry({ paddock: { id: "x" }, mode: "foliar" }),
+      resolveBlockGeometry({ paddock: { id: "x" }, mode: "whole_block" }),
     ]);
     const c = calculateCarrier({
       geometry: bare,
-      mode: "foliar",
-      carrier: { basis: "litres_per_hectare", litresPerHectare: 400 },
+      mode: "whole_block",
+      carrier: { basis: "l_per_ha", litresPerHectare: 400 },
     });
     expect(c.totalCarrierLitres).toBeNull();
     expect(c.diagnostics.map((d) => d.code)).toContain("incomplete_geometry_for_carrier");
+  });
+});
+
+/* ------------------------------- banded gross-carrier mandatory fixture */
+
+describe("banded L/ha carrier uses gross hectares (Rork mandatory fixture)", () => {
+  const geometry = buildApplicationGeometry([
+    resolveBlockGeometry({ paddock: bandedBlock, mode: "banded", totalTreatedBandWidthMetres: 1 }),
+  ]);
+  const carrier = calculateCarrier({
+    geometry,
+    mode: "banded",
+    carrier: { basis: "l_per_ha", litresPerHectare: 400 },
+  });
+
+  it("resolves 10 ha gross and 4 ha treated", () => {
+    expect(geometry.grossAreaHa).toBeCloseTo(10, 6);
+    expect(geometry.treatedAreaHa).toBeCloseTo(4, 6);
+  });
+
+  it("bills the carrier on gross hectares — 4,000 L, not 1,600 L", () => {
+    expect(carrier.carrierAreaHa).toBeCloseTo(10, 6);
+    expect(carrier.totalCarrierLitres).toBeCloseTo(4000, 6);
+  });
+
+  it("keeps treated-area products on treated hectares — 10 L Kelp", () => {
+    const [kelp] = calculateProducts({
+      products: [line({ productName: "Kelp", rate: 2.5, unit: "L", rateBasis: "treated_area" })],
+      geometry,
+      carrier,
+    });
+    expect(kelp.totalQuantity).toBeCloseTo(10, 6);
+    expect(kelp.multiplierKind).toBe("treated_hectares");
+  });
+
+  it("coexists with mixed product bases in the same application", () => {
+    const [a, b, c] = calculateProducts({
+      products: [
+        line({ productName: "A", rate: 2.5, unit: "L", rateBasis: "treated_area" }),
+        line({ productName: "B", rate: 50, unit: "mL", rateBasis: "per_100_litres" }),
+        line({ productName: "C", rate: 100, unit: "mL", rateBasis: "per_100_metres" }),
+      ],
+      geometry,
+      carrier,
+    });
+    expect(a.totalQuantity).toBeCloseTo(10, 6); // 2.5 × 4 treated ha
+    expect(b.totalQuantity).toBeCloseTo(2000, 6); // 50 × 4000 / 100
+    // 10 ha ÷ 2.5 m spacing = 40,000 m of row → 400 × 100 mL
+    expect(c.multiplier).toBeCloseTo(400, 6);
+    expect(c.totalQuantity).toBeCloseTo(40000, 6);
+    expect(c.multiplierKind).toBe("hundred_metres");
   });
 });
 
@@ -231,12 +452,12 @@ describe("product quantities", () => {
   const carrier = calculateCarrier({
     geometry,
     mode: "banded",
-    carrier: { basis: "litres_per_hectare", litresPerHectare: 400 },
+    carrier: { basis: "l_per_ha", litresPerHectare: 400 },
   });
 
-  it("keeps gross and treated hectares distinct", () => {
+  it("keeps whole-block and treated hectares distinct", () => {
     const [gross, treated] = calculateProducts({
-      products: [line({ rate: 2 }), line({ rate: 2, rateBasis: "per_treated_hectare" })],
+      products: [line({ rate: 2 }), line({ rate: 2, rateBasis: "treated_area" })],
       geometry,
       carrier,
     });
@@ -250,11 +471,39 @@ describe("product quantities", () => {
       geometry,
       carrier,
     });
-    expect(p.totalQuantity).toBeCloseTo(500, 6); // 200 L / 100 × 250
+    // Carrier is 400 L/ha × 1.5 gross ha = 600 L
+    expect(p.totalQuantity).toBeCloseTo(1500, 6);
+  });
+
+  it("computes per-100 m rates from the canonical row length", () => {
+    const [p] = calculateProducts({
+      products: [line({ rate: 100, unit: "mL", rateBasis: "per_100_metres" })],
+      geometry,
+      carrier,
+    });
+    expect(p.totalQuantity).toBeCloseTo(5000, 6); // 5000 m / 100 × 100 mL
+  });
+
+  it("errors when a per-100 m rate has no canonical row length", () => {
+    const noRows = buildApplicationGeometry([
+      resolveBlockGeometry({ paddock: { id: "x", area_ha: 5 }, mode: "whole_block" }),
+    ]);
+    const [p] = calculateProducts({
+      products: [line({ rateBasis: "per_100_metres" })],
+      geometry: noRows,
+      carrier,
+    });
+    expect(p.totalQuantity).toBeNull();
+    expect(p.diagnostics.map((d) => d.code)).toContain("per_100m_needs_row_length");
   });
 
   it("errors when a per-100 L rate has no carrier volume", () => {
-    const noCarrier = calculateCarrier({ geometry, mode: "spreader", carrier: { basis: null } });
+    const noCarrier = calculateCarrier({
+      geometry,
+      mode: "whole_block",
+      operationType: "spreader",
+      carrier: { basis: null },
+    });
     const [p] = calculateProducts({
       products: [line({ rateBasis: "per_100_litres" })],
       geometry,
@@ -277,7 +526,19 @@ describe("product quantities", () => {
 describe("tank splitting", () => {
   it("splits full tanks plus a partial and conserves product totals", () => {
     const products = [
-      { index: 0, savedChemicalId: null, productName: "A", rate: 1, unit: "L", rateBasis: "per_hectare" as const, totalQuantity: 10, multiplier: 10, multiplierKind: "gross_hectares" as const, rateValidation: "unable_to_validate" as const, diagnostics: [] },
+      {
+        index: 0,
+        savedChemicalId: null,
+        productName: "A",
+        rate: 1,
+        unit: "L",
+        rateBasis: "whole_block_area" as const,
+        totalQuantity: 10,
+        multiplier: 10,
+        multiplierKind: "whole_block_hectares" as const,
+        rateValidation: "unable_to_validate" as const,
+        diagnostics: [],
+      },
     ];
     const t = calculateTanks({ totalCarrierLitres: 2500, tankCapacityLitres: 1000, products });
     expect(t.fullTanks).toBe(2);
@@ -314,14 +575,67 @@ describe("legacy spray job adapter", () => {
       } as any,
       { paddockIds: ["b-mapped"] },
     );
-    expect(app.mode).toBe("foliar");
+    expect(app.mode).toBe("whole_block");
+    expect(app.operationType).toBe("foliar");
     expect(app.targets).toEqual(["powdery_mildew"]);
-    expect(app.carrier.basis).toBe("litres_per_hectare");
-    expect(app.products[0].rateBasis).toBe("per_hectare");
+    expect(app.carrier.basis).toBe("l_per_ha");
+    expect(app.products[0].rateBasis).toBe("whole_block_area");
     expect(app.products[0].unit).toBe("L");
     expect(app.products[1].rateBasis).toBe("per_100_litres");
     expect(app.compatibilityNotes.some((n) => n.includes("not linked"))).toBe(true);
     expect(app.blockIds).toEqual(["b-mapped"]);
+  });
+
+  it("maps a spreader job to whole_block and keeps the operation type", () => {
+    const app = fromLegacySprayJob({ id: "j3", operation_type: "Spreader" } as any);
+    expect(app.mode).toBe("whole_block");
+    expect(app.operationType).toBe("spreader");
+    expect(app.headTarget).toBeNull();
+  });
+
+  it("defaults an absent product rate basis to whole_block_area", () => {
+    const app = fromLegacySprayJob({
+      id: "j4",
+      operation_type: "Banded Spray",
+      chemical_lines: [{ name: "Legacy", rate: 2, unit: "L" }],
+    } as any);
+    expect(app.mode).toBe("banded");
+    expect(app.products[0].rateBasis).toBe("whole_block_area");
+  });
+
+  it("drops a foliar head target when the operation is banded", () => {
+    const app = fromLegacySprayJob({
+      id: "j5",
+      operation_type: "Banded Spray",
+      spray_head_target: "bunch_line",
+    } as any);
+    expect(app.headTarget).toBeNull();
+  });
+
+  it("distinguishes unknown targets (null) from an explicitly empty array", () => {
+    expect(fromLegacySprayJob({ id: "a" } as any).targets).toBeNull();
+    expect(fromLegacySprayJob({ id: "b", targets: [] } as any).targets).toEqual([]);
+  });
+
+  it("keeps a stored concentration factor rather than re-deriving it", () => {
+    const app = fromLegacySprayJob({
+      id: "j6",
+      operation_type: "Foliar Spray",
+      carrier_volume_basis: "l_per_100m",
+      applied_litres_per_100m: 20,
+      dilute_litres_per_100m: 100,
+      concentration_factor: 2,
+    } as any);
+    expect(app.carrier.concentrationFactor).toBe(2);
+    const c = calculateCarrier({
+      geometry: buildApplicationGeometry([
+        resolveBlockGeometry({ paddock: mappedBlock, mode: "whole_block" }),
+      ]),
+      mode: "whole_block",
+      carrier: app.carrier,
+    });
+    expect(c.concentrationFactor).toBe(2);
+    expect(c.concentrationFactorSource).toBe("persisted");
   });
 
   it("prefers persisted structured columns over legacy ones", () => {
@@ -340,19 +654,30 @@ describe("legacy spray job adapter", () => {
       {},
     );
     expect(app.mode).toBe("banded");
+    expect(app.operationType).toBe("foliar");
     expect(app.targets).toEqual(["botrytis"]);
-    expect(app.carrier.basis).toBe("litres_per_100m");
-    expect(app.headTarget).toBe("bunch_line");
+    expect(app.carrier.basis).toBe("l_per_100m");
+    expect(app.headTarget).toBe("bunch_line"); // operation type is still foliar
     expect(app.totalTreatedBandWidthMetres).toBe(1);
   });
 
-  it("builds a resistance candidate without evaluating anything", () => {
+  it("keeps Lovable templates block-free", () => {
+    const app = fromLegacySprayJob({ id: "t1", is_template: true, operation_type: "Foliar Spray" } as any);
+    expect(app.blockIds).toEqual([]);
+    expect(app.compatibilityNotes.some((n) => n.includes("Templates do not carry blocks"))).toBe(true);
+  });
+
+  it("builds a resistance candidate that keeps mode and operation type distinct", () => {
     const app = emptySprayApplication();
+    app.mode = "whole_block";
+    app.operationType = "spreader";
     app.targets = ["botrytis"];
     app.products = [line({ activityGroups: [{ scheme: "frac", code: "11" }] })];
-    const candidate = buildCandidateApplication(app, "complete");
+    const candidate = buildCandidateApplication(app, "authoritative");
+    expect(candidate.mode).toBe("whole_block");
+    expect(candidate.operationType).toBe("spreader");
     expect(candidate.products[0].activityGroups[0].code).toBe("11");
-    expect(candidate.geometryQuality).toBe("complete");
+    expect(candidate.geometryQuality).toBe("authoritative");
   });
 });
 
@@ -361,8 +686,9 @@ describe("legacy spray job adapter", () => {
 describe("full calculation", () => {
   it("blocks recording while errors remain and clears once complete", () => {
     const app = emptySprayApplication();
-    app.mode = "foliar";
-    app.carrier = { basis: "litres_per_hectare", litresPerHectare: 400 };
+    app.mode = "whole_block";
+    app.operationType = "foliar";
+    app.carrier = { basis: "l_per_ha", litresPerHectare: 400 };
     app.products = [line({ rate: 1.2 })];
     app.tankCapacityLitres = 400;
 
@@ -375,7 +701,7 @@ describe("full calculation", () => {
     const ok = calculateSprayApplication({
       application: app,
       geometry: buildApplicationGeometry([
-        resolveBlockGeometry({ paddock: mappedBlock, mode: "foliar" }),
+        resolveBlockGeometry({ paddock: mappedBlock, mode: "whole_block" }),
       ]),
     });
     expect(ok.canRecord).toBe(true);
@@ -405,6 +731,7 @@ describe("chemical snapshots", () => {
 
   it("captures only at record time", () => {
     expect(shouldCaptureSnapshot("planning")).toBe(false);
+    expect(shouldCaptureSnapshot("proposed")).toBe(false);
     expect(shouldCaptureSnapshot("recording")).toBe(true);
   });
 
@@ -449,6 +776,15 @@ describe("chemical snapshots", () => {
     const newer = buildChemicalSnapshot(toChemicalIntelligence({ ...structuredRow, name: "Renamed" }));
     expect(preserveExistingSnapshot(snap, newer)?.product_name).toBe("Example Duo Fungicide");
     expect(readChemicalSnapshot("nonsense")).toBeNull();
+  });
+
+  it("does not attach a snapshot to planned chemical lines", () => {
+    const app = fromLegacySprayJob({
+      id: "j7",
+      operation_type: "Foliar Spray",
+      chemical_lines: [{ savedChemicalId: "chem-1", name: "Product A", rate: 1, unit: "L/ha" }],
+    } as any);
+    expect((app.products[0] as any).chemicalSnapshot).toBeUndefined();
   });
 });
 
