@@ -3,7 +3,7 @@
 // The operator edits the DRAFT; the canonical encoder derives every stored
 // column. Verification status is previewed live from the evidence actually
 // present, so the UI can never promise a confidence the data doesn't support.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ import {
   withSource,
 } from "@/lib/chemicalIntelligenceWrite";
 import { VERIFICATION_LABEL } from "@/lib/chemicalIntelligence";
+import { ChemicalReverifyDialog } from "@/components/chemicals/ChemicalReverifyDialog";
 
 const STATUS_CLASS: Record<string, string> = {
   verified: "border-transparent bg-primary/15 text-primary",
