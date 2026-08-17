@@ -32,7 +32,10 @@ import {
 } from "@/lib/savedChemicalsQuery";
 import { PRODUCT_CATEGORIES, matchCategory, parseRestrictions, composeRestrictions } from "@/lib/chemicalCategories";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2 } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Check, ChevronsUpDown, ExternalLink, FileText, Globe, Trash2, Info } from "lucide-react";
+import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { VerificationBadge, ActivityGroupSummary } from "@/components/chemicals/ChemicalIntelligenceBadges";
+import { ChemicalIntelligenceDialog } from "@/components/chemicals/ChemicalIntelligenceDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -52,9 +55,9 @@ import { DraggableHeaderCell } from "@/components/table/DraggableHeaderCell";
 import { ColumnSettingsMenu } from "@/components/table/ColumnSettingsMenu";
 import { formatDate } from "@/lib/dateFormat";
 
-type ChemColId = "name" | "active_ingredient" | "group" | "use" | "rate" | "manufacturer" | "label" | "cost";
+type ChemColId = "name" | "active_ingredient" | "groups" | "verification" | "group" | "use" | "rate" | "manufacturer" | "label" | "cost";
 const CHEM_DEFAULT_COLUMNS: ChemColId[] = [
-  "name", "active_ingredient", "group", "use", "rate", "manufacturer", "label", "cost",
+  "name", "active_ingredient", "groups", "verification", "group", "use", "rate", "manufacturer", "label", "cost",
 ];
 
 const ANY = "__any__";
@@ -105,6 +108,7 @@ export default function SavedChemicalsPage() {
   const [confirmArchive, setConfirmArchive] = useState<SavedChemical | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<SavedChemical | null>(null);
   const [confirmHardDelete, setConfirmHardDelete] = useState<SavedChemical | null>(null);
+  const [detailRow, setDetailRow] = useState<SavedChemical | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["saved_chemicals", selectedVineyardId, "active"],
@@ -290,6 +294,8 @@ export default function SavedChemicalsPage() {
     switch (id) {
       case "name": return <SortableTableHead active={chemSortDir("name")} onSort={() => chemToggle("name")}><DraggableHeaderCell columnId="name" onDropColumn={moveChemColumn}>Name</DraggableHeaderCell></SortableTableHead>;
       case "active_ingredient": return <SortableTableHead active={chemSortDir("active_ingredient")} onSort={() => chemToggle("active_ingredient")}><DraggableHeaderCell columnId="active_ingredient" onDropColumn={moveChemColumn}>Active ingredient</DraggableHeaderCell></SortableTableHead>;
+      case "groups": return <TableHead><DraggableHeaderCell columnId="groups" onDropColumn={moveChemColumn}>Activity groups</DraggableHeaderCell></TableHead>;
+      case "verification": return <TableHead><DraggableHeaderCell columnId="verification" onDropColumn={moveChemColumn}>Verification</DraggableHeaderCell></TableHead>;
       case "group": return <SortableTableHead active={chemSortDir("group")} onSort={() => chemToggle("group")}><DraggableHeaderCell columnId="group" onDropColumn={moveChemColumn}>Group</DraggableHeaderCell></SortableTableHead>;
       case "use": return <SortableTableHead active={chemSortDir("use")} onSort={() => chemToggle("use")}><DraggableHeaderCell columnId="use" onDropColumn={moveChemColumn}>Use</DraggableHeaderCell></SortableTableHead>;
       case "rate": return <SortableTableHead active={chemSortDir("rate")} onSort={() => chemToggle("rate")}><DraggableHeaderCell columnId="rate" onDropColumn={moveChemColumn}>Default rate</DraggableHeaderCell></SortableTableHead>;
@@ -303,6 +309,8 @@ export default function SavedChemicalsPage() {
     switch (id) {
       case "name": return <TableCell key="name" className="font-medium">{fmt(c.name)}</TableCell>;
       case "active_ingredient": return <TableCell key="active_ingredient">{fmt(c.active_ingredient)}</TableCell>;
+      case "groups": return <TableCell key="groups"><ActivityGroupSummary chem={toChemicalIntelligence(c)} /></TableCell>;
+      case "verification": return <TableCell key="verification"><VerificationBadge status={toChemicalIntelligence(c).verification.status} /></TableCell>;
       case "group": return <TableCell key="group">{c.chemical_group ? <Badge variant="secondary">{c.chemical_group}</Badge> : "—"}</TableCell>;
       case "use": return <TableCell key="use">{fmt(c.use)}</TableCell>;
       case "rate": return <TableCell key="rate">{c.rate_per_ha == null ? "—" : `${c.rate_per_ha}${c.unit ? ` ${displayUnitText(c.unit)}` : ""}`}</TableCell>;
@@ -497,19 +505,19 @@ export default function SavedChemicalsPage() {
                   {visibleChemColumns.map((id) => (
                     <React.Fragment key={id}>{renderChemHeader(id)}</React.Fragment>
                   ))}
-                  {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
+                  <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <TableRow><TableCell colSpan={visibleChemColumns.length + (canEdit ? 1 : 0)} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleChemColumns.length + 1} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
                 )}
                 {error && (
-                  <TableRow><TableCell colSpan={visibleChemColumns.length + (canEdit ? 1 : 0)} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleChemColumns.length + 1} className="text-center text-destructive py-6">{(error as Error).message}</TableCell></TableRow>
                 )}
                 {!isLoading && !error && sortedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleChemColumns.length + (canEdit ? 1 : 0)} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={visibleChemColumns.length + 1} className="text-center text-muted-foreground py-8">
                       No chemicals found for this vineyard.
                     </TableCell>
                   </TableRow>
@@ -519,8 +527,12 @@ export default function SavedChemicalsPage() {
                     {visibleChemColumns.map((id) => (
                       <React.Fragment key={id}>{renderChemCell(id, c)}</React.Fragment>
                     ))}
-                    {canEdit && (
-                      <TableCell className="text-right">
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="ghost" onClick={() => setDetailRow(c)} title="Chemical intelligence">
+                        <Info className="h-3.5 w-3.5" />
+                      </Button>
+                      {canEdit && (
+                      <>
                         <Button size="sm" variant="ghost" onClick={() => setEditing(c)} title="Edit">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -536,8 +548,9 @@ export default function SavedChemicalsPage() {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </TableCell>
-                    )}
+                      </>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -568,7 +581,7 @@ export default function SavedChemicalsPage() {
                   <SortableTableHead active={arcSortDir("active_ingredient")} onSort={() => arcToggle("active_ingredient")}>Active ingredient</SortableTableHead>
                   <SortableTableHead active={arcSortDir("manufacturer")} onSort={() => arcToggle("manufacturer")}>Manufacturer</SortableTableHead>
                   <SortableTableHead active={arcSortDir("archived")} onSort={() => arcToggle("archived")}>Archived</SortableTableHead>
-                  {canEdit && <TableHead className="w-32 text-right">Actions</TableHead>}
+                  <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -621,6 +634,8 @@ export default function SavedChemicalsPage() {
           setEditing(null);
         }}
       />
+
+      <ChemicalIntelligenceDialog row={detailRow} open={!!detailRow} onOpenChange={(o) => !o && setDetailRow(null)} />
 
       <AlertDialog open={!!confirmArchive} onOpenChange={(o) => !o && setConfirmArchive(null)}>
         <AlertDialogContent>

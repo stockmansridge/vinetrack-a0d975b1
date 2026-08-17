@@ -19,6 +19,8 @@ import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/Che
 import { useVineyard } from "@/context/VineyardContext";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
+import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { ActivityGroupSummary, VerificationBadge } from "@/components/chemicals/ChemicalIntelligenceBadges";
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
   inferProductType, defaultUnitFor, unitsFor,
   RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
@@ -188,11 +190,18 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
                       {c.rate_per_ha != null ? `${c.rate_per_ha}${c.unit ? ` ${c.unit}` : ""}` : ""}
                     </div>
                   </div>
+                  {/* Stage 2A: read-only SQL 194 intelligence via the shared adapter.
+                      Spray Job persistence and rate maths are unchanged. */}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <ActivityGroupSummary chem={toChemicalIntelligence(c)} />
+                    <VerificationBadge status={toChemicalIntelligence(c).verification.status} />
+                  </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {[c.active_ingredient, c.chemical_group, c.use, c.problem]
+                    {[c.active_ingredient, c.use, c.problem]
                       .filter(Boolean)
                       .join(" • ")}
                   </div>
+
                 </button>
               ))}
             </div>

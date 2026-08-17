@@ -17,12 +17,13 @@
 // No schema, RLS or RPC changes are made from the portal — RLS remains the
 // security boundary for who may read/write a vineyard's settings.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { revisionWrite, serverRevisionOf, RevisionConflictError } from "@/lib/revisionWrite";
 import type { PruneMethod } from "@/lib/pruningYieldFormula";
 
 export const PRUNING_YIELD_SETTINGS_TABLE = "pruning_yield_settings";
 
 export const PRUNING_YIELD_SETTINGS_COLUMNS =
-  "id, vineyard_id, paddock_id, prune_method, bunches_per_bud, buds_per_spur, spurs_per_vine, buds_per_cane, canes_per_vine, vines_per_ha, bunch_weight_grams, created_at, updated_at, deleted_at";
+  "id, vineyard_id, paddock_id, prune_method, bunches_per_bud, buds_per_spur, spurs_per_vine, buds_per_cane, canes_per_vine, vines_per_ha, bunch_weight_grams, created_at, updated_at, deleted_at, server_revision";
 
 export interface PruningYieldSettings {
   id?: string;
@@ -37,6 +38,8 @@ export interface PruningYieldSettings {
   vinesPerHa: number;
   bunchWeightGrams: number;
   updatedAt?: string | null;
+  /** SQL 198: exact server revision as loaded. Never derived from a clock. */
+  serverRevision?: number | null;
 }
 
 /** Canonical calculator defaults (shared with iOS/Android). */
@@ -70,6 +73,7 @@ export function mapSettingsRow(row: any): PruningYieldSettings {
     vinesPerHa: num(row.vines_per_ha, PRUNING_YIELD_DEFAULTS.vinesPerHa),
     bunchWeightGrams: num(row.bunch_weight_grams, PRUNING_YIELD_DEFAULTS.bunchWeightGrams),
     updatedAt: row.updated_at ?? null,
+    serverRevision: serverRevisionOf(row),
   };
 }
 
@@ -101,14 +105,11 @@ export async function savePruningYieldSettings(
   if (!input.vineyardId || !input.paddockId) {
     throw new Error("A block must be selected before saving pruning settings.");
   }
-  // Canonical write (docs/pruning-yield-settings-contract.md §"How to write"):
-  // UPSERT on the block key `(vineyard_id, paddock_id)` with
-  // resolution=merge-duplicates — never a plain insert, never keyed on `id`.
-  // A client `id` is minted for the insert case; concurrent clients converge on
-  // the first row and the returned representation is authoritative. The upsert
-  // also resurrects a soft-deleted row for the block.
-  const payload = {
-    id: crypto.randomUUID(),
+  // SQL 198 revision concurrency. `client_updated_at` is still written (it
+  // retains change/resurrection semantics) but no longer decides staleness:
+  // `base_revision` is the exact `server_revision` that was loaded, and the
+  // server owns revision advancement.
+  const fields = {
     vineyard_id: input.vineyardId,
     paddock_id: input.paddockId,
     prune_method: input.pruneMethod,
@@ -123,22 +124,49 @@ export async function savePruningYieldSettings(
     client_updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (supabase as any)
-    .from(PRUNING_YIELD_SETTINGS_TABLE)
-    .upsert(payload, { onConflict: "vineyard_id,paddock_id" })
-    .select(PRUNING_YIELD_SETTINGS_COLUMNS)
-    .maybeSingle();
-  if (error) throw error;
-  // SQL 185 stale-write contract: an EMPTY representation means a newer
-  // client_updated_at already won. That is not an error and must never be
-  // retried — re-read the authoritative row and return it.
-  if (!data) {
+  const refetch = async () => {
     const all = await fetchPruningYieldSettings(input.vineyardId);
-    const current = all[input.paddockId];
-    if (current) return current;
-    throw new Error("Settings were updated on another device. Reload and try again.");
+    return all[input.paddockId] ?? null;
+  };
+
+  const baseRevision =
+    typeof input.serverRevision === "number" ? input.serverRevision : null;
+
+  // Existing row: versioned UPDATE keyed on the block, requesting the
+  // authoritative representation back.
+  if (input.id && baseRevision !== null) {
+    const row = await revisionWrite<any>({
+      payload: fields,
+      baseRevision,
+      refetch: async () => (await refetch()) as any,
+      run: (payload) =>
+        (supabase as any)
+          .from(PRUNING_YIELD_SETTINGS_TABLE)
+          .update(payload)
+          .eq("id", input.id)
+          .select(PRUNING_YIELD_SETTINGS_COLUMNS)
+          .maybeSingle(),
+    });
+    return mapSettingsRow(row);
   }
-  return mapSettingsRow(data);
+
+  // New row (or a row loaded before revisions were retained): creation
+  // semantics — no base_revision. The block key upsert also resurrects a
+  // soft-deleted row.
+  const row = await revisionWrite<any>({
+    payload: { id: input.id ?? crypto.randomUUID(), ...fields },
+    baseRevision: null,
+    run: (payload) =>
+      (supabase as any)
+        .from(PRUNING_YIELD_SETTINGS_TABLE)
+        .upsert(payload, { onConflict: "vineyard_id,paddock_id" })
+        .select(PRUNING_YIELD_SETTINGS_COLUMNS)
+        .maybeSingle(),
+  }).catch(async (err) => {
+    if (err instanceof RevisionConflictError) throw err;
+    throw err;
+  });
+  return mapSettingsRow(row);
 }
 
 
