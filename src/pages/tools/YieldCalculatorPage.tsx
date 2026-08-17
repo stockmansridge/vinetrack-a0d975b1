@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import { useToast } from "@/hooks/use-toast";
+import { RevisionConflictError, REVISION_CONFLICT_MESSAGE } from "@/lib/revisionWrite";
+import { Button as UIButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchYieldBlocks } from "@/lib/yieldReportsQuery";
 import {
@@ -69,6 +71,7 @@ export default function YieldCalculatorPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [blockId, setBlockId] = useState<string>("");
+  const [conflict, setConflict] = useState<PruningYieldSettings | null>(null);
   const [s, setS] = useState<FormState>(() =>
     toForm(defaultSettingsForBlock(selectedVineyardId ?? "", null)),
   );
@@ -220,6 +223,24 @@ export default function YieldCalculatorPage() {
         title="Planning estimate only"
         description="This calculator does not save records. Use Yields to record sampling sessions and actual harvested tonnes."
       />
+
+      {conflict !== null && (
+        <div
+          data-testid="pruning-yield-revision-conflict"
+          className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm"
+        >
+          <div className="font-medium">Saved elsewhere</div>
+          <p className="text-muted-foreground">{REVISION_CONFLICT_MESSAGE}</p>
+          <div className="mt-2 flex gap-2">
+            <UIButton size="sm" variant="outline" onClick={applyLatestFromServer}>
+              Reload latest
+            </UIButton>
+            <UIButton size="sm" variant="ghost" onClick={() => setConflict(null)}>
+              Continue reviewing my edits
+            </UIButton>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
