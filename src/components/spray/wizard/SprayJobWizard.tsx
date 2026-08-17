@@ -29,7 +29,7 @@ import {
 } from "@/lib/sprayJobsQuery";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { toChemicalIntelligence, type ChemicalIntelligence } from "@/lib/chemicalIntelligence";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/ios-supabase/client";
 import { ApplicationStep } from "./ApplicationStep";
 import { BlocksStep } from "./BlocksStep";
 import { TargetStep } from "./TargetStep";
