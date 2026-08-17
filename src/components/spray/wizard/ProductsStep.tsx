@@ -108,7 +108,7 @@ function ProductRow({
 }: {
   index: number;
   line: SprayProductLine;
-  result: (typeof import("@/lib/sprayCalculation"))["calculateProducts"] extends never ? never : any;
+  result: any;
   chemicals: ChemicalIntelligence[];
   intelligenceById: Map<string, ChemicalIntelligence>;
   canEdit: boolean;
