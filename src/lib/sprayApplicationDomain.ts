@@ -1,9 +1,10 @@
 // Stage 3A — canonical Spray Application domain model.
 //
-// One vocabulary for the whole portal: application mode, structured targets,
-// head target, carrier basis and per-product rate basis. Display labels are
-// NEVER identity — every stored value here is a stable raw string that matches
-// the Rork/backend contract (sql/191–195).
+// One vocabulary for the whole portal: application mode, operation type,
+// structured targets, head target, carrier basis and per-product rate basis.
+// Display labels are NEVER identity — every stored value here is a stable raw
+// string that matches the Rork-verified backend contract (sql/191–195, iOS and
+// Android).
 //
 // This module is additive. Legacy spray_jobs / templates keep loading through
 // `fromLegacySprayJob`, which never fabricates facts it cannot prove: an
@@ -20,16 +21,32 @@ export type { SprayTarget };
 
 /* ------------------------------------------------------- application mode */
 
-export type ApplicationMode = "foliar" | "banded" | "spreader";
-export const APPLICATION_MODES: ApplicationMode[] = ["foliar", "banded", "spreader"];
+/**
+ * `spray_jobs.application_mode` — the confirmed contract has exactly two
+ * values. `foliar` and `spreader` are NOT application modes; they live on
+ * `operation_type` (below) and both map to `whole_block`.
+ */
+export type ApplicationMode = "whole_block" | "banded";
+export const APPLICATION_MODES: ApplicationMode[] = ["whole_block", "banded"];
 export const APPLICATION_MODE_LABEL: Record<ApplicationMode, string> = {
-  foliar: "Foliar",
+  whole_block: "Whole block",
   banded: "Banded",
-  spreader: "Spreader",
 };
 
-/** Legacy `spray_jobs.operation_type` display labels → canonical raw mode. */
-const LEGACY_OPERATION_TYPE: Record<string, ApplicationMode> = {
+/**
+ * `spray_jobs.operation_type` — the legacy display vocabulary is retained in
+ * persistence because it still distinguishes Foliar from Spreader for product
+ * and UI semantics (and for Resistance Check context).
+ */
+export type OperationType = "foliar" | "spreader" | "banded";
+export const OPERATION_TYPES: OperationType[] = ["foliar", "spreader", "banded"];
+export const OPERATION_TYPE_LABEL: Record<OperationType, string> = {
+  foliar: "Foliar Spray",
+  spreader: "Spreader",
+  banded: "Banded Spray",
+};
+
+const OPERATION_TYPE_ALIAS: Record<string, OperationType> = {
   "foliar spray": "foliar",
   foliar: "foliar",
   "banded spray": "banded",
@@ -40,11 +57,25 @@ const LEGACY_OPERATION_TYPE: Record<string, ApplicationMode> = {
   fertiliser: "spreader",
 };
 
-export function normaliseApplicationMode(value: unknown): ApplicationMode | null {
+export function normaliseOperationType(value: unknown): OperationType | null {
   const raw = String(value ?? "").trim().toLowerCase();
   if (!raw) return null;
+  return OPERATION_TYPE_ALIAS[raw] ?? null;
+}
+
+/** Confirmed mapping: Foliar → whole_block, Spreader → whole_block, Banded → banded. */
+export const OPERATION_TYPE_TO_MODE: Record<OperationType, ApplicationMode> = {
+  foliar: "whole_block",
+  spreader: "whole_block",
+  banded: "banded",
+};
+
+export function normaliseApplicationMode(value: unknown): ApplicationMode | null {
+  const raw = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!raw) return null;
   if ((APPLICATION_MODES as string[]).includes(raw)) return raw as ApplicationMode;
-  return LEGACY_OPERATION_TYPE[raw] ?? null;
+  const op = normaliseOperationType(String(value ?? "").trim().toLowerCase());
+  return op ? OPERATION_TYPE_TO_MODE[op] : null;
 }
 
 /* ------------------------------------------------------------- targets */
@@ -112,43 +143,79 @@ export function normaliseHeadTarget(value: unknown): HeadTarget | null {
   return (HEAD_TARGETS as string[]).includes(raw) ? (raw as HeadTarget) : null;
 }
 
+/** Head target is foliar-only: Banded Spray and Spreader must persist NULL. */
+export const headTargetAllowed = (operationType: OperationType | null): boolean =>
+  operationType === "foliar";
+
+/**
+ * Persisted `spray_head_target` for an operation type. Never carries an old
+ * foliar head target through when the operation type changes.
+ */
+export function persistedHeadTarget(
+  operationType: OperationType | null,
+  headTarget: HeadTarget | null,
+): HeadTarget | null {
+  return headTargetAllowed(operationType) ? headTarget : null;
+}
+
 /* -------------------------------------------------------- carrier basis */
 
-export type CarrierBasis = "litres_per_hectare" | "litres_per_100m";
-export const CARRIER_BASES: CarrierBasis[] = ["litres_per_hectare", "litres_per_100m"];
+/** Persisted `spray_jobs.carrier_volume_basis`. */
+export type CarrierBasis = "l_per_ha" | "l_per_100m";
+export const CARRIER_BASES: CarrierBasis[] = ["l_per_ha", "l_per_100m"];
 export const CARRIER_BASIS_LABEL: Record<CarrierBasis, string> = {
-  litres_per_hectare: "L/ha",
-  litres_per_100m: "L/100 m of row",
+  l_per_ha: "L/ha",
+  l_per_100m: "L/100 m of row",
 };
+
+/**
+ * Vineyard-level preference (`vineyards.spray_carrier_volume_basis`) may also
+ * be `either`. That is a preference, never an application carrier basis.
+ */
+export type CarrierBasisPreference = CarrierBasis | "either";
 
 export function normaliseCarrierBasis(value: unknown): CarrierBasis | null {
   const raw = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   if (!raw) return null;
   if ((CARRIER_BASES as string[]).includes(raw)) return raw as CarrierBasis;
-  if (raw === "l_per_ha" || raw === "l/ha" || raw === "per_hectare") return "litres_per_hectare";
-  if (raw === "l_per_100m" || raw === "l/100m" || raw === "per_100m") return "litres_per_100m";
+  if (raw === "litres_per_hectare" || raw === "l/ha" || raw === "per_hectare" || raw === "per_ha")
+    return "l_per_ha";
+  if (raw === "litres_per_100m" || raw === "l/100m" || raw === "per_100m") return "l_per_100m";
   return null;
+}
+
+export function normaliseCarrierBasisPreference(value: unknown): CarrierBasisPreference | null {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "either") return "either";
+  return normaliseCarrierBasis(value);
 }
 
 /* --------------------------------------------------- product rate basis */
 
 /**
  * Product label basis, deliberately independent of the carrier basis.
- *  - `per_hectare`          → gross / whole-block hectares (legacy meaning of
- *                             `per_hectare`; never re-read as treated area).
- *  - `per_treated_hectare`  → treated hectares (banded band area).
- *  - `per_100_litres`       → per 100 L of carrier volume.
+ *  - `whole_block_area` → gross / whole-block hectares (also the meaning of an
+ *                         absent legacy rate basis).
+ *  - `treated_area`     → treated hectares (banded band area).
+ *  - `per_100_litres`   → per 100 L of carrier volume.
+ *  - `per_100_metres`   → per 100 m of canonical row length.
  */
-export type ProductRateBasis = "per_hectare" | "per_treated_hectare" | "per_100_litres";
+export type ProductRateBasis =
+  | "whole_block_area"
+  | "treated_area"
+  | "per_100_litres"
+  | "per_100_metres";
 export const PRODUCT_RATE_BASES: ProductRateBasis[] = [
-  "per_hectare",
-  "per_treated_hectare",
+  "whole_block_area",
+  "treated_area",
   "per_100_litres",
+  "per_100_metres",
 ];
 export const PRODUCT_RATE_BASIS_LABEL: Record<ProductRateBasis, string> = {
-  per_hectare: "Per hectare (whole block)",
-  per_treated_hectare: "Per treated hectare",
+  whole_block_area: "Per hectare (whole block)",
+  treated_area: "Per treated hectare",
   per_100_litres: "Per 100 L carrier",
+  per_100_metres: "Per 100 m of row",
 };
 
 export function normaliseProductRateBasis(value: unknown): ProductRateBasis | null {
@@ -156,8 +223,9 @@ export function normaliseProductRateBasis(value: unknown): ProductRateBasis | nu
   if (!raw) return null;
   if ((PRODUCT_RATE_BASES as string[]).includes(raw)) return raw as ProductRateBasis;
   if (raw === "per_100l" || raw === "per_100_l" || raw === "per100l") return "per_100_litres";
-  if (raw === "per_ha") return "per_hectare";
-  if (raw === "per_treated_ha" || raw === "treated_area") return "per_treated_hectare";
+  if (raw === "per_100_m" || raw === "per_100m" || raw === "per100m") return "per_100_metres";
+  if (raw === "per_hectare" || raw === "per_ha" || raw === "gross_area") return "whole_block_area";
+  if (raw === "per_treated_hectare" || raw === "per_treated_ha") return "treated_area";
   return null;
 }
 
@@ -199,11 +267,16 @@ export interface SprayGeometryOverride {
 export interface SprayCarrierInput {
   basis: CarrierBasis | null;
   litresPerHectare?: number | null;
+  /** Dilute / runoff reference in L/ha, when the author works in L/ha. */
+  diluteLitresPerHectare?: number | null;
   /** Applied (actual) L/100 m — `spray_jobs.applied_litres_per_100m`. */
   appliedLitresPer100m?: number | null;
   /** Dilute / runoff L/100 m — `spray_jobs.dilute_litres_per_100m`. */
   diluteLitresPer100m?: number | null;
-  /** Persisted `concentration_factor` when the author supplied one. */
+  /**
+   * Persisted `concentration_factor`. When present on an existing job/record it
+   * is authoritative history and is never silently re-derived.
+   */
   concentrationFactor?: number | null;
 }
 
@@ -214,9 +287,15 @@ export interface SprayApplication {
   name: string | null;
   plannedDate: string | null;
   status: string | null;
+  /** Persisted `application_mode` — whole_block | banded. */
   mode: ApplicationMode | null;
-  /** Structured targets (`spray_jobs.targets text[]`). */
-  targets: SprayTarget[];
+  /** Persisted `operation_type` — retained alongside the mode. */
+  operationType: OperationType | null;
+  /**
+   * Structured targets (`spray_jobs.targets text[]`).
+   * `null` = never recorded / unknown. `[]` = explicitly no targets.
+   */
+  targets: SprayTarget[] | null;
   /** Legacy single free-text target, kept as compatibility context only. */
   legacyTargetText: string | null;
   headTarget: HeadTarget | null;
@@ -245,7 +324,8 @@ export const emptySprayApplication = (): SprayApplication => ({
   plannedDate: null,
   status: null,
   mode: null,
-  targets: [],
+  operationType: null,
+  targets: null,
   legacyTargetText: null,
   headTarget: null,
   growthStageCode: null,
@@ -274,22 +354,25 @@ const positive = (v: unknown): number | null => {
 
 /* ------------------------------------------------ legacy job → domain */
 
-/** Strip a "/ha" or "/100L" suffix from a legacy composed unit string. */
+/** Strip a "/ha", "/100L" or "/100m" suffix from a legacy composed unit string. */
 function chemUnitOnly(unit: string | null | undefined): string | null {
   if (!unit) return null;
-  const stripped = unit.replace(/\s*\/\s*(ha|100\s*l|100litre|100 litres)\b/i, "").trim();
+  const stripped = unit
+    .replace(/\s*\/\s*(ha|100\s*l|100litre|100 litres|100\s*m|100m)\b/i, "")
+    .trim();
   return stripped || unit;
 }
 
-function legacyLineBasis(line: SprayJobChemicalLine): ProductRateBasis | null {
+/** Absent rate basis on a legacy line means whole-block hectares. */
+function legacyLineBasis(line: SprayJobChemicalLine): ProductRateBasis {
   const explicit = normaliseProductRateBasis(line.rate_basis);
   if (explicit) return explicit;
   const u = (line.unit ?? "").toLowerCase().replace(/\s+/g, "");
   if (u.includes("/100l")) return "per_100_litres";
-  if (u.includes("/ha")) return "per_hectare";
+  if (u.includes("/100m")) return "per_100_metres";
+  if (u.includes("/ha")) return "whole_block_area";
   if (line.ratePer100L != null) return "per_100_litres";
-  if (line.ratePerHa != null) return "per_hectare";
-  return null;
+  return "whole_block_area";
 }
 
 export interface LegacyAdapterOptions {
@@ -323,16 +406,23 @@ export function fromLegacySprayJob(
   app.plannedDate = job.planned_date ?? null;
   app.status = job.status ?? null;
 
-  app.mode = normaliseApplicationMode(job.application_mode) ?? normaliseApplicationMode(job.operation_type);
+  app.operationType = normaliseOperationType(job.operation_type);
+  app.mode =
+    normaliseApplicationMode(job.application_mode) ??
+    (app.operationType ? OPERATION_TYPE_TO_MODE[app.operationType] : null);
   if (!app.mode && (job.operation_type || job.application_mode)) {
-    notes.push(`Unrecognised application mode "${job.application_mode ?? job.operation_type}" — left unset.`);
+    notes.push(
+      `Unrecognised application mode "${job.application_mode ?? job.operation_type}" — left unset.`,
+    );
   }
 
-  const structuredTargets = Array.isArray(job.targets)
+  const hasTargetsColumn = Array.isArray(job.targets);
+  const structuredTargets = hasTargetsColumn
     ? (job.targets.map(normaliseSprayTarget).filter(Boolean) as SprayTarget[])
     : [];
   app.legacyTargetText = job.target ?? null;
-  if (structuredTargets.length) {
+  if (hasTargetsColumn) {
+    // An explicitly empty array is a recorded fact and stays empty.
     app.targets = structuredTargets;
   } else if (job.target) {
     const compat = legacyTargetCompat(job.target);
@@ -340,7 +430,11 @@ export function fromLegacySprayJob(
     else notes.push(`Legacy target "${job.target}" has no safe structured mapping — kept as free text.`);
   }
 
-  app.headTarget = normaliseHeadTarget(job.spray_head_target);
+  // Head target is foliar-only; it is never carried through for banded/spreader.
+  app.headTarget = persistedHeadTarget(app.operationType, normaliseHeadTarget(job.spray_head_target));
+  if (job.spray_head_target && app.headTarget == null && app.operationType) {
+    notes.push("Head target is foliar-only — dropped for this operation type.");
+  }
   app.growthStageCode = job.growth_stage_code ?? null;
   app.tractorId = job.tractor_id ?? null;
   app.equipmentId = job.equipment_id ?? null;
@@ -365,8 +459,9 @@ export function fromLegacySprayJob(
   const persistedBasis = normaliseCarrierBasis(job.carrier_volume_basis);
   const legacyLPerHa = positive(job.spray_rate_per_ha);
   app.carrier = {
-    basis: persistedBasis ?? (legacyLPerHa != null ? "litres_per_hectare" : null),
+    basis: persistedBasis ?? (legacyLPerHa != null ? "l_per_ha" : null),
     litresPerHectare: legacyLPerHa,
+    diluteLitresPerHectare: positive(job.dilute_litres_per_hectare),
     appliedLitresPer100m: positive(job.applied_litres_per_100m),
     diluteLitresPer100m: positive(job.dilute_litres_per_100m),
     concentrationFactor: positive(job.concentration_factor),
@@ -379,7 +474,6 @@ export function fromLegacySprayJob(
     const id = (line.savedChemicalId ?? line.chemical_id ?? null) || null;
     const intel = id ? opts.intelligenceById?.get(id) ?? null : null;
     const basis = legacyLineBasis(line);
-    if (!basis) notes.push(`Product "${line.name ?? "unnamed"}" has no resolvable rate basis.`);
     if (!id) notes.push(`Product "${line.name ?? "unnamed"}" is not linked to a saved chemical.`);
     return {
       savedChemicalId: id,
@@ -417,14 +511,17 @@ export function fromLegacySprayJob(
 
 /**
  * The clean object Stage 3B / Resistance Check will consume. Stage 3A only
- * assembles the facts — it evaluates nothing.
+ * assembles the facts — it evaluates nothing. `mode` and `operationType` are
+ * both carried: whole_block is NOT a synonym for Foliar, and the resistance
+ * engine may need the operation context.
  */
 export interface CandidateApplication {
   vineyardId: string | null;
   date: string | null;
   blockIds: string[];
-  targets: SprayTarget[];
+  targets: SprayTarget[] | null;
   mode: ApplicationMode | null;
+  operationType: OperationType | null;
   headTarget: HeadTarget | null;
   products: {
     savedChemicalId: string | null;
@@ -443,8 +540,9 @@ export function buildCandidateApplication(
     vineyardId: app.vineyardId,
     date: app.plannedDate,
     blockIds: [...app.blockIds],
-    targets: [...app.targets],
+    targets: app.targets ? [...app.targets] : null,
     mode: app.mode,
+    operationType: app.operationType,
     headTarget: app.headTarget,
     products: app.products.map((p) => ({
       savedChemicalId: p.savedChemicalId,
