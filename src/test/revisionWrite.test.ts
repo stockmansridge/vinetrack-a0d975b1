@@ -10,7 +10,7 @@ const ok = (row: any) => async () => ({ data: row, error: null });
 
 describe("SQL 198 revision write helper", () => {
   it("sends base_revision as the loaded server_revision (never +1)", async () => {
-    const run = vi.fn(ok({ id: "a", server_revision: 8 }));
+    const run = vi.fn(ok({ id: "a", server_revision: 8 }) as (p: Record<string, unknown>) => Promise<{ data: any; error: null }>);
     await revisionWrite({ run, payload: { name: "x" }, baseRevision: 7 });
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toMatchObject({ name: "x", base_revision: 7 });
@@ -26,7 +26,7 @@ describe("SQL 198 revision write helper", () => {
   });
 
   it("omits base_revision for a new row", async () => {
-    const run = vi.fn(ok({ id: "a", server_revision: 1 }));
+    const run = vi.fn(ok({ id: "a", server_revision: 1 }) as (p: Record<string, unknown>) => Promise<{ data: any; error: null }>);
     await revisionWrite({ run, payload: { name: "x" }, baseRevision: null });
     expect(run.mock.calls[0][0]).not.toHaveProperty("base_revision");
   });
@@ -93,7 +93,7 @@ describe("SQL 198 revision write helper", () => {
   });
 
   it("ignores the browser clock entirely — only revisions decide staleness", async () => {
-    const run = vi.fn(ok({ id: "a", server_revision: 6 }));
+    const run = vi.fn(ok({ id: "a", server_revision: 6 }) as (p: Record<string, unknown>) => Promise<{ data: any; error: null }>);
     const skewed = new Date(Date.now() - 86_400_000).toISOString();
     await revisionWrite({
       run,

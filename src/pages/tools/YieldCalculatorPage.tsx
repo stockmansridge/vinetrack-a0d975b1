@@ -24,7 +24,6 @@ import {
   fetchPruningYieldSettings,
   savePruningYieldSettings,
   type PruningYieldSettings,
-  type PruningYieldSettings,
 } from "@/lib/pruningYieldSettingsQuery";
 import { buildBlockPrunedYieldTiles } from "@/lib/pruningYieldSummary";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
