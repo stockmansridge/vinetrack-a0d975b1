@@ -8,6 +8,7 @@
 import type {
   ApplicationMode,
   CarrierBasis,
+  OperationType,
   SprayApplication,
   SprayProductLine,
 } from "@/lib/sprayApplicationDomain";
@@ -38,49 +39,52 @@ export interface CarrierResult {
   litresPerHectare: number | null;
   /** Effective L/100 m, derived when the basis is L/ha. */
   litresPer100m: number | null;
-  /** Dilute ÷ applied, when both are known. */
+  /** max(1, dilute ÷ applied), or the persisted value when one exists. */
   concentrationFactor: number | null;
-  /** The hectares the carrier rate was applied to. */
+  concentrationFactorSource: "persisted" | "derived" | null;
+  /**
+   * The hectares the carrier rate was applied to. For an L/ha carrier this is
+   * ALWAYS the gross application hectares — including banded applications.
+   */
   carrierAreaHa: number | null;
   diagnostics: SprayDiagnostic[];
 }
 
-/**
- * For banded applications an L/ha carrier rate is applied to the treated
- * (band) hectares. Callers may override while the mobile semantics are being
- * confirmed with Rork.
- */
-export type BandedCarrierArea = "treated" | "gross";
+/** CF is floored at 1: applied volume above the dilute reference never dilutes. */
+export function concentrationFactorFrom(
+  dilute: number | null | undefined,
+  applied: number | null | undefined,
+): number | null {
+  const d = pos(dilute);
+  const a = pos(applied);
+  if (d == null || a == null) return null;
+  return Math.max(1, d / a);
+}
 
 export function calculateCarrier(args: {
   geometry: ApplicationGeometry;
   mode: ApplicationMode | null;
+  operationType?: OperationType | null;
   carrier: SprayApplication["carrier"];
-  bandedCarrierArea?: BandedCarrierArea;
 }): CarrierResult {
   const { geometry, mode, carrier } = args;
   const diagnostics: SprayDiagnostic[] = [];
   const basis = carrier.basis;
 
-  const grossAreaHa = geometry.grossAreaHa;
-  const treatedAreaHa = geometry.treatedAreaHa;
-  const carrierAreaHa =
-    mode === "banded"
-      ? (args.bandedCarrierArea ?? "treated") === "gross"
-        ? grossAreaHa
-        : treatedAreaHa
-      : treatedAreaHa ?? grossAreaHa;
+  // Carrier hectares are gross hectares. Treated hectares belong to products.
+  const carrierAreaHa = geometry.grossAreaHa;
 
   const applied100m = pos(carrier.appliedLitresPer100m);
   const dilute100m = pos(carrier.diluteLitresPer100m);
   const lPerHa = pos(carrier.litresPerHectare);
+  const diluteLPerHa = pos(carrier.diluteLitresPerHectare);
 
   let totalCarrierLitres: number | null = null;
   let litresPerHectare: number | null = null;
   let litresPer100m: number | null = null;
 
   if (!basis) {
-    if (mode === "spreader") {
+    if (args.operationType === "spreader") {
       diagnostics.push({
         code: "spreader_no_carrier",
         severity: "info",
@@ -93,7 +97,7 @@ export function calculateCarrier(args: {
         message: "Carrier volume basis is not set.",
       });
     }
-  } else if (basis === "litres_per_hectare") {
+  } else if (basis === "l_per_ha") {
     if (lPerHa == null) {
       diagnostics.push({
         code: "missing_carrier_rate",
@@ -108,13 +112,14 @@ export function calculateCarrier(args: {
       });
     } else {
       litresPerHectare = lPerHa;
+      // Gross hectares — banded included, per the confirmed Rork contract.
       totalCarrierLitres = lPerHa * carrierAreaHa;
-      if (geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
+      if (geometry.uniformRowSpacing && geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
         litresPer100m = (lPerHa * geometry.rowSpacingMetres) / 100;
       }
     }
   } else {
-    // litres_per_100m
+    // l_per_100m — never falls back to an L/ha calculation.
     const rate100m = applied100m ?? dilute100m;
     if (rate100m == null) {
       diagnostics.push({
@@ -131,29 +136,33 @@ export function calculateCarrier(args: {
     } else {
       litresPer100m = rate100m;
       totalCarrierLitres = (geometry.canonicalRowLengthMetres / 100) * rate100m;
-      if (geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
+      if (geometry.uniformRowSpacing && geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
+        // L/ha = L/100 m × 100 ÷ row spacing.
         litresPerHectare = (rate100m * 100) / geometry.rowSpacingMetres;
-      } else if (carrierAreaHa != null && carrierAreaHa > 0) {
-        litresPerHectare = totalCarrierLitres / carrierAreaHa;
       } else {
         diagnostics.push({
           code: "cannot_derive_litres_per_hectare",
           severity: "warning",
-          message: "Row spacing unknown — the equivalent L/ha cannot be derived.",
+          message: geometry.uniformRowSpacing
+            ? "Row spacing unknown — the equivalent L/ha cannot be derived."
+            : "Blocks have different row spacings — the equivalent L/ha cannot be derived.",
         });
       }
     }
   }
 
+  // Concentration factor: a persisted value is authoritative history.
   let concentrationFactor = pos(carrier.concentrationFactor);
-  if (dilute100m != null && applied100m != null && applied100m > 0) {
-    concentrationFactor = dilute100m / applied100m;
-    if (concentrationFactor < 1) {
-      diagnostics.push({
-        code: "concentration_factor_below_one",
-        severity: "warning",
-        message: "Applied volume exceeds the dilute volume — check the entered rates.",
-      });
+  let concentrationFactorSource: CarrierResult["concentrationFactorSource"] =
+    concentrationFactor != null ? "persisted" : null;
+  if (concentrationFactor == null) {
+    const derived =
+      basis === "l_per_ha"
+        ? concentrationFactorFrom(diluteLPerHa, lPerHa)
+        : concentrationFactorFrom(dilute100m, applied100m);
+    if (derived != null) {
+      concentrationFactor = derived;
+      concentrationFactorSource = "derived";
     }
   }
 
@@ -163,6 +172,7 @@ export function calculateCarrier(args: {
     litresPerHectare,
     litresPer100m,
     concentrationFactor,
+    concentrationFactorSource,
     carrierAreaHa,
     diagnostics,
   };
@@ -181,9 +191,14 @@ export interface ProductResult {
   rateBasis: SprayProductLine["rateBasis"];
   /** Total product for the whole application, in the line's unit. */
   totalQuantity: number | null;
-  /** The multiplier the rate was applied to (ha or 100 L units). */
+  /** The multiplier the rate was applied to (ha, 100 L or 100 m units). */
   multiplier: number | null;
-  multiplierKind: "gross_hectares" | "treated_hectares" | "hundred_litres" | null;
+  multiplierKind:
+    | "whole_block_hectares"
+    | "treated_hectares"
+    | "hundred_litres"
+    | "hundred_metres"
+    | null;
   rateValidation: RateValidation;
   diagnostics: SprayDiagnostic[];
 }
@@ -218,12 +233,26 @@ export function calculateProducts(args: {
         message: `Rate basis is not set for ${line.productName ?? "this product"}.`,
         productIndex: index,
       });
-    } else if (line.rateBasis === "per_hectare") {
-      multiplierKind = "gross_hectares";
+    } else if (line.rateBasis === "whole_block_area") {
+      multiplierKind = "whole_block_hectares";
       multiplier = geometry.grossAreaHa;
-    } else if (line.rateBasis === "per_treated_hectare") {
+    } else if (line.rateBasis === "treated_area") {
       multiplierKind = "treated_hectares";
       multiplier = geometry.treatedAreaHa;
+    } else if (line.rateBasis === "per_100_metres") {
+      multiplierKind = "hundred_metres";
+      multiplier =
+        geometry.canonicalRowLengthMetres != null
+          ? geometry.canonicalRowLengthMetres / 100
+          : null;
+      if (multiplier == null) {
+        diagnostics.push({
+          code: "per_100m_needs_row_length",
+          severity: "error",
+          message: `${line.productName ?? "Product"} is rated per 100 m but the canonical row length is unknown.`,
+          productIndex: index,
+        });
+      }
     } else {
       multiplierKind = "hundred_litres";
       multiplier =
@@ -246,7 +275,12 @@ export function calculateProducts(args: {
         productIndex: index,
       });
     }
-    if (multiplier == null && line.rateBasis && line.rateBasis !== "per_100_litres") {
+    if (
+      multiplier == null &&
+      line.rateBasis &&
+      line.rateBasis !== "per_100_litres" &&
+      line.rateBasis !== "per_100_metres"
+    ) {
       diagnostics.push({
         code: "incomplete_geometry_for_product",
         severity: "error",
@@ -405,14 +439,13 @@ export interface SprayCalculationResult {
 export function calculateSprayApplication(args: {
   application: SprayApplication;
   geometry: ApplicationGeometry;
-  bandedCarrierArea?: BandedCarrierArea;
 }): SprayCalculationResult {
   const { application, geometry } = args;
   const carrier = calculateCarrier({
     geometry,
     mode: application.mode,
+    operationType: application.operationType,
     carrier: application.carrier,
-    bandedCarrierArea: args.bandedCarrierArea,
   });
   const products = calculateProducts({ products: application.products, geometry, carrier });
   const tanks = calculateTanks({
@@ -463,7 +496,8 @@ const GEOMETRY_ISSUE_MESSAGE: Record<string, string> = {
   missing_row_length: "One or more blocks have no row length.",
   missing_treated_area: "Treated area could not be established.",
   missing_band_width: "Banded application requires a total treated band width.",
-  mixed_row_spacing: "Selected blocks have different row spacings — an area-weighted spacing was used.",
+  incomplete_block_geometry: "One or more selected blocks have incomplete geometry.",
+  mixed_row_spacing: "Selected blocks have different row spacings — no equivalent L/ha is derived.",
 };
 
 /* ------------------------------------------------------------ rounding */
