@@ -258,7 +258,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
       </Tabs>
 
       {editing && selectedVineyardId && (
-        <SprayJobSheet
+        <SprayJobWizard
           open={true}
           onOpenChange={(o) => !o && setEditing(null)}
           vineyardId={selectedVineyardId}
@@ -266,6 +266,16 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           isTemplate={editing.isTemplate}
           canEdit={canEdit}
           lookups={lookups}
+          linkedRecords={
+            editing.job && !editing.job.is_template ? (
+              <LinkedRecordsSection
+                jobId={editing.job.id}
+                job={editing.job}
+                vineyardId={selectedVineyardId}
+                canEdit={canEdit}
+              />
+            ) : null
+          }
         />
       )}
     </div>
