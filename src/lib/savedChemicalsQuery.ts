@@ -113,6 +113,13 @@ export interface SavedChemicalInput {
     currency?: string | null;
     unit?: string | null;
   } | null;
+  /**
+   * SQL 194 structured Chemical Intelligence, already encoded by
+   * `encodeChemicalIntelligenceForWrite`. Callers must NEVER hand-build these
+   * columns. An empty/omitted object leaves existing intelligence untouched so
+   * a commercial-only edit can't blank a verified record.
+   */
+  intelligence?: EncodedChemicalIntelligence | null;
 }
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
