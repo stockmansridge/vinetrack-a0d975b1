@@ -792,6 +792,7 @@ function ChemicalEditor({
         const hydrated = draftFromRow(initial as any);
         setIntel(hydrated);
         setIntelBase(hydrated);
+        setUpgraded(false);
       } else {
         setForm(EMPTY);
         setRateStr("");
@@ -805,6 +806,7 @@ function ChemicalEditor({
         setRestNotes("");
         setIntel(emptyDraft());
         setIntelBase(emptyDraft());
+        setUpgraded(false);
       }
     }
   }, [open, initial]);
