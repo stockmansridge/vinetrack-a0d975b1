@@ -12,6 +12,7 @@
 //   (these typically live inside `restrictions` free text).
 import { supabase } from "@/integrations/ios-supabase/client";
 import { iosUnitFromAny } from "@/lib/rateBasis";
+import type { EncodedChemicalIntelligence } from "@/lib/chemicalIntelligenceWrite";
 
 export interface SavedChemical {
   id: string;
@@ -197,6 +198,15 @@ function sanitize(input: SavedChemicalInput) {
     purchase.currency = String(purchase.currency ?? "AUD").trim() || "AUD";
     purchase.unit = iosUnitFromAny(purchase.unit ?? out.unit ?? "Litres");
     out.purchase = Object.keys(purchase).length ? purchase : null;
+  }
+
+  // SQL 194 columns are produced by the canonical encoder only. When it
+  // returns nothing there is no structured intelligence to write, so the
+  // existing (possibly verified) columns are deliberately left alone. The
+  // derived legacy projections win over any free-text the form still holds.
+  const intelligence = input.intelligence;
+  if (intelligence && Object.keys(intelligence).length > 0) {
+    Object.assign(out, intelligence);
   }
 
   return out;
