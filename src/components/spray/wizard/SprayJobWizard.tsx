@@ -53,14 +53,19 @@ const STEPS = [
   { key: "review", label: "Review" },
 ] as const;
 
+/**
+ * Optional vineyard-level default for the carrier volume basis. The column is
+ * not present in every deployment, so a failure here is treated as "no
+ * preference" rather than an error.
+ */
 async function fetchCarrierBasisPreference(vineyardId: string): Promise<string | null> {
-  const res = await supabase
+  const res = await (supabase as any)
     .from("vineyards")
     .select("spray_carrier_volume_basis")
     .eq("id", vineyardId)
     .maybeSingle();
   if (res.error) return null;
-  return ((res.data as any)?.spray_carrier_volume_basis as string | null) ?? null;
+  return (res.data?.spray_carrier_volume_basis as string | null) ?? null;
 }
 
 export function SprayJobWizard({
