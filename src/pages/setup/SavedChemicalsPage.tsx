@@ -40,6 +40,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { ChemicalIntelligenceEditor } from "@/components/chemicals/ChemicalIntelligenceEditor";
+import {
+  type ChemicalIntelligenceDraft,
+  activityGroupReferenceSource,
+  draftFromRow,
+  emptyDraft,
+  encodeChemicalIntelligenceForWrite,
+  reconcileEditedDraft,
+  hasStructuredIntelligence,
+  parseLegacyActiveIngredient,
+  suggestActivityGroup,
+  withSource,
+} from "@/lib/chemicalIntelligenceWrite";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCanSeeCosts } from "@/lib/permissions";
 import {
@@ -724,6 +737,10 @@ function ChemicalEditor({
   const [whp, setWhp] = useState("");
   const [rei, setRei] = useState("");
   const [restNotes, setRestNotes] = useState("");
+  // SQL 194 structured intelligence. `intelBase` is the untouched rehydrated
+  // record so a manual edit can invalidate only the evidence it affects.
+  const [intel, setIntel] = useState<ChemicalIntelligenceDraft>(emptyDraft());
+  const [intelBase, setIntelBase] = useState<ChemicalIntelligenceDraft>(emptyDraft());
 
   // Computed cost per base unit from pack size + pack price.
   const computedCost = useMemo(() => {
@@ -768,6 +785,9 @@ function ChemicalEditor({
         setWhp(p.whpDays);
         setRei(p.reiHours);
         setRestNotes(p.rest);
+        const hydrated = draftFromRow(initial as any);
+        setIntel(hydrated);
+        setIntelBase(hydrated);
       } else {
         setForm(EMPTY);
         setRateStr("");
@@ -779,6 +799,8 @@ function ChemicalEditor({
         setWhp("");
         setRei("");
         setRestNotes("");
+        setIntel(emptyDraft());
+        setIntelBase(emptyDraft());
       }
     }
   }, [open, initial]);
@@ -796,8 +818,13 @@ function ChemicalEditor({
         }
       }
       const restrictions = composeRestrictions({ whpDays: whp, reiHours: rei, rest: restNotes });
+      // Re-resolve trust before encoding: a hand-edited critical value can no
+      // longer lean on the evidence that certified the previous value.
+      const reconciled = reconcileEditedDraft(intelBase, intel);
+      const encoded = encodeChemicalIntelligenceForWrite(reconciled);
       const payload: SavedChemicalInput = {
         ...form,
+        intelligence: encoded,
         rate_per_ha: rateNum,
         restrictions,
         purchase: canSeeCosts && costNum != null
@@ -864,6 +891,41 @@ function ChemicalEditor({
       label_url: s.label_url && /^https?:\/\//i.test(s.label_url) ? s.label_url : (p.label_url ?? ""),
       product_url: s.product_url && /^https?:\/\//i.test(s.product_url) ? s.product_url : (p.product_url ?? ""),
     }));
+    // Seed structured chemistry from the AI suggestion. AI is never
+    // authoritative: identity is recorded as ai_interpretation and only the
+    // built-in FRAC/HRAC/IRAC table may supply an authoritative group.
+    setIntel((prev) => {
+      if (hasStructuredIntelligence(prev)) return prev;
+      const actives = parseLegacyActiveIngredient(
+        s.active_ingredient ?? form.active_ingredient ?? "",
+        "ai_interpretation",
+      ).map((a) => {
+        const group = suggestActivityGroup(a.name);
+        return group
+          ? { ...a, activity_group: group, group_source: "authoritative_classification" as const }
+          : a;
+      });
+      if (!actives.length) return prev;
+      let sources = withSource(prev.sources, {
+        kind: "ai_interpretation",
+        name: "VineTrack AI chemical lookup",
+        reference: s.label_url ?? undefined,
+        retrieved_at: new Date().toISOString(),
+      });
+      if (actives.some((a) => a.group_source === "authoritative_classification")) {
+        sources = withSource(sources, activityGroupReferenceSource());
+      }
+      return {
+        ...prev,
+        actives,
+        sources,
+        registration: {
+          ...prev.registration,
+          registered_product_name: prev.registration.registered_product_name ?? s.name ?? undefined,
+        },
+        claimedStatus: "partially_verified",
+      };
+    });
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
     if (s.whp_days) setWhp(s.whp_days);
     if (s.rei_hours) setRei(s.rei_hours);
@@ -907,6 +969,7 @@ function ChemicalEditor({
               <Input value={form.chemical_group ?? ""} onChange={(e) => set("chemical_group", e.target.value)} placeholder="e.g. Group 3, DMI" />
             </Field>
           </div>
+          <ChemicalIntelligenceEditor draft={intel} onChange={setIntel} />
           <Field label="Supplier / manufacturer">
             <Input value={form.manufacturer ?? ""} onChange={(e) => set("manufacturer", e.target.value)} />
           </Field>
