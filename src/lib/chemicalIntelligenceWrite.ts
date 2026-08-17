@@ -890,3 +890,65 @@ export function reconcileEditedDraft(
     verifiedAt: null,
   };
 }
+
+/* --------------------------------------------------- assisted entry helpers */
+
+/**
+ * Best-effort split of a legacy / AI free-text active ingredient string into
+ * structured actives, e.g. "Tebuconazole 100 g/L + Azoxystrobin 200 g/L".
+ * Nothing is invented: unparsed text becomes the active's name only.
+ * The caller decides the provenance — this never claims authority.
+ */
+export function parseLegacyActiveIngredient(
+  text: string | null | undefined,
+  identitySource: DataSourceKind = "manual_entry",
+): WriteActiveIngredient[] {
+  const raw = (text ?? "").trim();
+  if (!raw) return [];
+  return raw
+    .split(/\s*[+/;]\s*|\s+and\s+/i)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const m = part.match(/^(.*?)[\s,]+([\d.]+)\s*(g\/L|g\/kg|%\s*w\/w|%\s*w\/v|CFU\/g)\s*$/i);
+      const name = (m ? m[1] : part).replace(/[,\s]+$/, "").trim();
+      return clean({
+        name,
+        concentration: m ? finiteOrUndef(m[2]) : undefined,
+        concentration_unit: m ? normaliseConcentrationUnit(m[3]) : undefined,
+        identity_source: identitySource,
+      }) as WriteActiveIngredient;
+    })
+    .filter((a) => !!a.name);
+}
+
+/**
+ * Suggest the authoritative activity group for an active. Used to pre-fill the
+ * editor — the operator can always override, and an override that disagrees
+ * with the reference becomes a recorded conflict rather than a silent change.
+ */
+export function suggestActivityGroup(name: string): WriteActivityGroup | undefined {
+  const ref = lookupActivityGroup(name);
+  if (!ref) return undefined;
+  return clean({
+    scheme: ref.scheme,
+    code: normaliseGroupCode(ref.code),
+    common_name: ref.common_name,
+  }) as WriteActivityGroup;
+}
+
+/** The citation for the built-in FRAC/HRAC/IRAC reference table. */
+export const activityGroupReferenceSource = (): WriteDataSource => ({
+  kind: "authoritative_classification",
+  name: ACTIVITY_GROUP_REFERENCE_NAME,
+  retrieved_at: new Date().toISOString(),
+});
+
+/** Add a source, de-duplicated on kind + name. */
+export function withSource(
+  sources: WriteDataSource[],
+  source: WriteDataSource,
+): WriteDataSource[] {
+  const exists = sources.some((s) => s.kind === source.kind && s.name.trim() === source.name.trim());
+  return exists ? sources : [...sources, source];
+}
