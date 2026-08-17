@@ -64,23 +64,26 @@ describe("savePruningYieldSettings", () => {
     ).rejects.toThrow();
   });
 
-  it("treats an empty representation as a stale write and re-reads without retrying", async () => {
+  it("never treats an empty representation as a successful versioned write", async () => {
+    // SQL 198: a 2xx with no returned row is not authoritative — the portal
+    // must surface it instead of silently discarding the user's edit.
     upsertRow = null;
     upsert.mockClear();
-    const res = await savePruningYieldSettings({
-      vineyardId: "v1",
-      paddockId: "p1",
-      pruneMethod: "spur",
-      bunchesPerBud: 1.5,
-      budsPerSpur: 2,
-      spursPerVine: 6,
-      budsPerCane: 10,
-      canesPerVine: 4,
-      vinesPerHa: 2000,
-      bunchWeightGrams: 120,
-    } as any);
+    await expect(
+      savePruningYieldSettings({
+        vineyardId: "v1",
+        paddockId: "p1",
+        pruneMethod: "spur",
+        bunchesPerBud: 1.5,
+        budsPerSpur: 2,
+        spursPerVine: 6,
+        budsPerCane: 10,
+        canesPerVine: 4,
+        vinesPerHa: 2000,
+        bunchWeightGrams: 120,
+      } as any),
+    ).rejects.toThrow();
     expect(upsert).toHaveBeenCalledTimes(1); // never retried
-    expect(res.pruneMethod).toBe("cane");    // server value wins
     upsertRow = { id: "r1", vineyard_id: "v1", paddock_id: "p1" };
   });
 });
