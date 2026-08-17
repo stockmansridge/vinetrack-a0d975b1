@@ -953,23 +953,77 @@ function ChemicalEditor({
           <Field label="Product name *">
             <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
           </Field>
-          <Field label="Active ingredient">
-            <Input value={form.active_ingredient ?? ""} onChange={(e) => set("active_ingredient", e.target.value)} />
+          <Field label="Product type / category">
+            <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
+              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectContent>
+                {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+              </SelectContent>
+            </Select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Product type / category">
-              <Select value={form.use ?? ""} onValueChange={(v) => set("use", v)}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  {PRODUCT_CATEGORIES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Chemical group (optional)">
-              <Input value={form.chemical_group ?? ""} onChange={(e) => set("chemical_group", e.target.value)} placeholder="e.g. Group 3, DMI" />
-            </Field>
-          </div>
-          <ChemicalIntelligenceEditor draft={intel} onChange={setIntel} />
+
+          {/* Legacy authoritative chemistry is read-only: active ingredient and
+              chemical group are derived from structured Chemical Intelligence. */}
+          {(form.active_ingredient || form.chemical_group) && (
+            <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1 text-[11px]">
+              <div className="font-medium text-xs">
+                {showIntelEditor ? "Derived legacy fields (read-only)" : "Legacy record (read-only)"}
+              </div>
+              <div className="text-muted-foreground">
+                Active ingredient: {form.active_ingredient || "—"}
+              </div>
+              <div className="text-muted-foreground">
+                Chemical group: {form.chemical_group || "—"}
+              </div>
+              <p className="text-muted-foreground">
+                {showIntelEditor
+                  ? "These text fields are generated from the structured chemistry below and are kept for mobile compatibility."
+                  : "This chemical has not been upgraded to structured Chemical Intelligence yet. The original text is preserved exactly until you upgrade it."}
+              </p>
+            </div>
+          )}
+
+          {!showIntelEditor && (
+            <div className="rounded-md border border-border/60 p-3 space-y-2">
+              <p className="text-[11px] text-muted-foreground">
+                Upgrade this chemical to structured chemistry so resistance grouping,
+                registered uses and verification work across the portal and mobile apps.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    // Seed the draft from the preserved legacy text as an
+                    // operator interpretation — never as verified evidence.
+                    setIntel((prev) => ({
+                      ...prev,
+                      actives: prev.actives.length
+                        ? prev.actives
+                        : parseLegacyActiveIngredient(form.active_ingredient ?? "", "legacy_record"),
+                    }));
+                    setUpgraded(true);
+                  }}
+                >
+                  Upgrade to structured chemistry
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setUpgraded(true)}>
+                  Start from scratch
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {showIntelEditor && (
+            <ChemicalIntelligenceEditor
+              draft={intel}
+              onChange={setIntel}
+              productName={form.name ?? ""}
+              country={currentCountry}
+            />
+          )}
+
           <Field label="Supplier / manufacturer">
             <Input value={form.manufacturer ?? ""} onChange={(e) => set("manufacturer", e.target.value)} />
           </Field>
