@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PortalNotice } from "@/components/ui/PortalNotice";
 import { useToast } from "@/hooks/use-toast";
+import { RevisionConflictError, REVISION_CONFLICT_MESSAGE } from "@/lib/revisionWrite";
+import { Button as UIButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchYieldBlocks } from "@/lib/yieldReportsQuery";
 import {
@@ -68,6 +70,7 @@ export default function YieldCalculatorPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [blockId, setBlockId] = useState<string>("");
+  const [conflict, setConflict] = useState<PruningYieldSettings | null>(null);
   const [s, setS] = useState<FormState>(() =>
     toForm(defaultSettingsForBlock(selectedVineyardId ?? "", null)),
   );
@@ -145,6 +148,9 @@ export default function YieldCalculatorPage() {
   const saveM = useMutation({
     mutationFn: () =>
       savePruningYieldSettings({
+        // SQL 198: send the exact revision we loaded — never a clock value.
+        id: blockId ? settingsByBlock[blockId]?.id : undefined,
+        serverRevision: blockId ? settingsByBlock[blockId]?.serverRevision ?? null : null,
         vineyardId: selectedVineyardId!,
         paddockId: blockId,
         pruneMethod: s.method,
@@ -157,12 +163,27 @@ export default function YieldCalculatorPage() {
         bunchWeightGrams: parse(s.bunchWeight),
       }),
     onSuccess: () => {
+      setConflict(null);
       qc.invalidateQueries({ queryKey: ["pruning-yield-settings", selectedVineyardId] });
       toast({ title: "Block values saved", description: `Shared with the mobile apps for ${block?.name ?? "this block"}.` });
     },
-    onError: (e: any) =>
-      toast({ title: "Could not save", description: e?.message ?? "Unknown error", variant: "destructive" }),
+    onError: (e: any) => {
+      // A genuine SQL 198 revision conflict never discards the form, never
+      // retries and never counts as a successful save. Any other error
+      // (401/403, 5xx, 23505 unique_violation) keeps its own identity.
+      if (e instanceof RevisionConflictError) {
+        setConflict((e.latest as PruningYieldSettings | null) ?? null);
+        return;
+      }
+      toast({ title: "Could not save", description: e?.message ?? "Unknown error", variant: "destructive" });
+    },
   });
+
+  const applyLatestFromServer = () => {
+    if (conflict) setS(toForm(conflict));
+    setConflict(null);
+    qc.invalidateQueries({ queryKey: ["pruning-yield-settings", selectedVineyardId] });
+  };
 
   const resetToDefaults = () =>
     setS(
@@ -201,6 +222,24 @@ export default function YieldCalculatorPage() {
         title="Planning estimate only"
         description="This calculator does not save records. Use Yields to record sampling sessions and actual harvested tonnes."
       />
+
+      {conflict !== null && (
+        <div
+          data-testid="pruning-yield-revision-conflict"
+          className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm"
+        >
+          <div className="font-medium">Saved elsewhere</div>
+          <p className="text-muted-foreground">{REVISION_CONFLICT_MESSAGE}</p>
+          <div className="mt-2 flex gap-2">
+            <UIButton size="sm" variant="outline" onClick={applyLatestFromServer}>
+              Reload latest
+            </UIButton>
+            <UIButton size="sm" variant="ghost" onClick={() => setConflict(null)}>
+              Continue reviewing my edits
+            </UIButton>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

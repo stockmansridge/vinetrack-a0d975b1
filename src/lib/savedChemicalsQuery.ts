@@ -39,6 +39,27 @@ export interface SavedChemical {
   updated_by?: string | null;
   client_updated_at?: string | null;
   sync_version?: number | null;
+  // --- SQL 194 Chemical Intelligence (read-only in Stage 2A) ---
+  active_ingredients?: any;
+  activity_groups?: string[] | null;
+  activity_group_scheme?: string | null;
+  registration_country?: string | null;
+  registration_scheme?: string | null;
+  registration_number?: string | null;
+  registrant?: string | null;
+  registered_product_name?: string | null;
+  label_reference?: string | null;
+  label_version?: string | null;
+  verification_status?: string | null;
+  verification_sources?: any;
+  verification_conflicts?: any;
+  verification_unresolved_fields?: any;
+  verified_at?: string | null;
+  registered_uses?: any;
+  label_rate_bases?: string[] | null;
+  intelligence_schema_version?: number | null;
+  pack_size?: string | null;
+
 }
 
 export interface SavedChemicalsQueryResult {
