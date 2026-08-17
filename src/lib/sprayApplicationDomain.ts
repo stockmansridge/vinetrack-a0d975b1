@@ -365,6 +365,9 @@ function chemUnitOnly(unit: string | null | undefined): string | null {
 
 /** Absent rate basis on a legacy line means whole-block hectares. */
 function legacyLineBasis(line: SprayJobChemicalLine): ProductRateBasis {
+  // Stage 3B canonical basis wins when the operator has deliberately saved one.
+  const canonical = normaliseProductRateBasis((line as any).product_rate_basis);
+  if (canonical) return canonical;
   const explicit = normaliseProductRateBasis(line.rate_basis);
   if (explicit) return explicit;
   const u = (line.unit ?? "").toLowerCase().replace(/\s+/g, "");
