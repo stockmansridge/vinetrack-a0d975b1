@@ -74,14 +74,14 @@ export function buildChemicalSnapshot(
     ? chem.actives.map((a) => {
         const out: ChemicalSnapshotActive = { name: a.name ?? "" };
         if (a.concentration != null) out.concentration = a.concentration;
-        if (a.concentrationUnit) out.concentration_unit = a.concentrationUnit;
-        if (a.activityGroup?.code) {
+        if (a.unit) out.concentration_unit = a.unit;
+        if (a.group?.code) {
           out.activity_group = {
-            scheme: schemeOut(a.activityGroup.scheme),
-            code: a.activityGroup.code,
-            ...(a.activityGroup.commonName ? { common_name: a.activityGroup.commonName } : {}),
+            scheme: schemeOut(a.group.scheme),
+            code: a.group.code,
           };
         }
+
         return out;
       })
     : [];
