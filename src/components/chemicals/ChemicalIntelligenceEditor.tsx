@@ -4,7 +4,7 @@
 // column. Verification status is previewed live from the evidence actually
 // present, so the UI can never promise a confidence the data doesn't support.
 import { useMemo } from "react";
-import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,8 @@ import {
   reconcileConflicts,
   resolveVerificationStatus,
   suggestActivityGroup,
+  activityGroupReferenceSource,
+  withSource,
 } from "@/lib/chemicalIntelligenceWrite";
 import { VERIFICATION_LABEL } from "@/lib/chemicalIntelligence";
 
@@ -111,7 +113,30 @@ export function ChemicalIntelligenceEditor({
             management — the legacy text fields are generated from this.
           </p>
         </div>
-        <Badge className={STATUS_CLASS[preview.status]}>{VERIFICATION_LABEL[preview.status]}</Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            disabled={disabled || draft.actives.length === 0}
+            onClick={() => {
+              // Re-verify against the built-in classification: fills in missing
+              // groups and re-detects disagreements. Operator values are kept.
+              let sources = draft.sources;
+              const actives = draft.actives.map((a) => {
+                const s = suggestActivityGroup(a.name);
+                if (!s || a.activity_group?.code) return a;
+                sources = withSource(sources, activityGroupReferenceSource());
+                return { ...a, activity_group: s, group_source: "authoritative_classification" as const };
+              });
+              onChange({ ...draft, actives, sources, conflicts: reconcileConflicts({ ...draft, actives }) });
+            }}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" /> Re-verify
+          </Button>
+          <Badge className={STATUS_CLASS[preview.status]}>{VERIFICATION_LABEL[preview.status]}</Badge>
+        </div>
       </div>
 
       {preview.conflicts.length > 0 && (

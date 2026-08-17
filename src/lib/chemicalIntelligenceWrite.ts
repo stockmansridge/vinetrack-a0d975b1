@@ -906,7 +906,7 @@ export function parseLegacyActiveIngredient(
   const raw = (text ?? "").trim();
   if (!raw) return [];
   return raw
-    .split(/\s*[+/;]\s*|\s+and\s+/i)
+    .split(/\s*[+;]\s*|\s+and\s+/i)
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => {
