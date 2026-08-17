@@ -65,11 +65,17 @@ export function ChemicalIntelligenceEditor({
   draft,
   onChange,
   disabled,
+  productName,
+  country,
 }: {
   draft: ChemicalIntelligenceDraft;
   onChange: (next: ChemicalIntelligenceDraft) => void;
   disabled?: boolean;
+  /** Product name used to resolve the re-verification identity. */
+  productName?: string | null;
+  country?: string | null;
 }) {
+  const [reverifyOpen, setReverifyOpen] = useState(false);
   const preview = useMemo(() => {
     const withConflicts = { ...draft, conflicts: reconcileConflicts(draft) };
     return {
@@ -119,25 +125,24 @@ export function ChemicalIntelligenceEditor({
             size="sm"
             variant="outline"
             className="gap-1"
-            disabled={disabled || draft.actives.length === 0}
-            onClick={() => {
-              // Re-verify against the built-in classification: fills in missing
-              // groups and re-detects disagreements. Operator values are kept.
-              let sources = draft.sources;
-              const actives = draft.actives.map((a) => {
-                const s = suggestActivityGroup(a.name);
-                if (!s || a.activity_group?.code) return a;
-                sources = withSource(sources, activityGroupReferenceSource());
-                return { ...a, activity_group: s, group_source: "authoritative_classification" as const };
-              });
-              onChange({ ...draft, actives, sources, conflicts: reconcileConflicts({ ...draft, actives }) });
-            }}
+            disabled={disabled}
+            onClick={() => setReverifyOpen(true)}
           >
             <ShieldCheck className="h-3.5 w-3.5" /> Re-verify
           </Button>
           <Badge className={STATUS_CLASS[preview.status]}>{VERIFICATION_LABEL[preview.status]}</Badge>
         </div>
       </div>
+
+      <ChemicalReverifyDialog
+        open={reverifyOpen}
+        onOpenChange={setReverifyOpen}
+        draft={draft}
+        productName={productName}
+        country={country}
+        onAccept={onChange}
+      />
+
 
       {preview.conflicts.length > 0 && (
         <div className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-[11px]">
