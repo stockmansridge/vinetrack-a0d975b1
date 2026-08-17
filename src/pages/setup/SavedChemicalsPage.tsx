@@ -741,6 +741,10 @@ function ChemicalEditor({
   // record so a manual edit can invalidate only the evidence it affects.
   const [intel, setIntel] = useState<ChemicalIntelligenceDraft>(emptyDraft());
   const [intelBase, setIntelBase] = useState<ChemicalIntelligenceDraft>(emptyDraft());
+  // Legacy-only records keep their text untouched until the operator opts in.
+  const [upgraded, setUpgraded] = useState(false);
+  const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
+
 
   // Computed cost per base unit from pack size + pack price.
   const computedCost = useMemo(() => {
