@@ -65,10 +65,25 @@ export interface SprayJob {
   vsp_canopy_density?: string | null;
   row_spacing_metres?: number | null;
   concentration_factor?: number | null;
+  /* --- sql/193–195 spray application columns (read model, Stage 3A) --- */
+  application_mode?: string | null;
+  targets?: string[] | null;
+  spray_head_target?: string | null;
+  carrier_volume_basis?: string | null;
+  applied_litres_per_100m?: number | null;
+  dilute_litres_per_100m?: number | null;
+  band_width_total_metres?: number | null;
+  gross_area_ha?: number | null;
+  treated_area_ha?: number | null;
+  canonical_row_length_metres?: number | null;
+  geometry_source?: string | null;
+  geometry_quality?: string | null;
+  revision?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
 }
+
 
 export interface SprayJobPaddock {
   spray_job_id: string;
