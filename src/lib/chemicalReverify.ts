@@ -305,7 +305,7 @@ export function proposedDraftFromCandidate(
   identity: ReverifyIdentity,
 ): ChemicalIntelligenceDraft {
   let usedReference = false;
-  const parsed = parseLegacyActiveIngredient(candidate.active_ingredient ?? "", "label_extraction");
+  const parsed = parseLegacyActiveIngredient(candidate.active_ingredient ?? "", "ai_interpretation");
   const priorByName = new Map(before.actives.map((a) => [a.name.trim().toLowerCase(), a]));
 
   const actives: WriteActiveIngredient[] = (parsed.length ? parsed : before.actives).map((a) => {
