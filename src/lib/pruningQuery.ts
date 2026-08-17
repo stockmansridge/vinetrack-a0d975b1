@@ -166,14 +166,32 @@ export function useUpsertPruningSeason(vineyardId: string) {
         : await resolvePruningSeasonId(input.vineyard_id, input.paddock_id, input.season_year);
 
       if (resolved.existed) {
-        const { data, error } = await supabase
+        // SQL 198: send the exact server_revision that was loaded as
+        // base_revision and require the authoritative representation back.
+        const { data: current, error: readError } = await supabase
           .from("pruning_seasons")
-          .update(payload)
-          .eq("id", resolved.id)
           .select("*")
+          .eq("id", resolved.id)
           .maybeSingle();
-        if (error) throw error;
-        return data as PruningSeason;
+        if (readError) throw readError;
+        const baseRevision = serverRevisionOf(current);
+        const row = await revisionWrite<any>({
+          payload,
+          baseRevision,
+          refetch: async () => {
+            const { data } = await supabase
+              .from("pruning_seasons").select("*").eq("id", resolved.id).maybeSingle();
+            return data;
+          },
+          run: (finalPayload) =>
+            (supabase as any)
+              .from("pruning_seasons")
+              .update(finalPayload)
+              .eq("id", resolved.id)
+              .select("*")
+              .maybeSingle(),
+        });
+        return row as PruningSeason;
       }
       const { data, error } = await supabase
         .from("pruning_seasons")

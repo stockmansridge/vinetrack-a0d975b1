@@ -17,7 +17,7 @@
 // No schema, RLS or RPC changes are made from the portal — RLS remains the
 // security boundary for who may read/write a vineyard's settings.
 import { supabase } from "@/integrations/ios-supabase/client";
-import { revisionWrite, serverRevisionOf, RevisionConflictError } from "@/lib/revisionWrite";
+import { revisionWrite, serverRevisionOf } from "@/lib/revisionWrite";
 import type { PruneMethod } from "@/lib/pruningYieldFormula";
 
 export const PRUNING_YIELD_SETTINGS_TABLE = "pruning_yield_settings";
@@ -162,9 +162,6 @@ export async function savePruningYieldSettings(
         .upsert(payload, { onConflict: "vineyard_id,paddock_id" })
         .select(PRUNING_YIELD_SETTINGS_COLUMNS)
         .maybeSingle(),
-  }).catch(async (err) => {
-    if (err instanceof RevisionConflictError) throw err;
-    throw err;
   });
   return mapSettingsRow(row);
 }
