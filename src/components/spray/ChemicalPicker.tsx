@@ -19,13 +19,14 @@ import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/Che
 import { useVineyard } from "@/context/VineyardContext";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
-import { ActivityGroupSummary, VerificationBadge } from "@/components/chemicals/ChemicalIntelligenceBadges";
   inferRateBasis, composeUnit, chemUnitOnly, normaliseUnit,
   inferProductType, defaultUnitFor, unitsFor,
   RATE_BASIS_LABEL, PRODUCT_TYPE_LABEL,
   type RateBasis, type ProductType, type ChemUnit,
 } from "@/lib/rateBasis";
+import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { ActivityGroupSummary, VerificationBadge } from "@/components/chemicals/ChemicalIntelligenceBadges";
+
 
 interface Props {
   open: boolean;
