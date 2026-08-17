@@ -60,6 +60,7 @@ import { computeTankMix, fmtAmount, chemUnitOnly } from "@/lib/sprayTankMix";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { inferRateBasis, composeUnit, displayUnitText, normaliseUnit, RATE_BASIS_LABEL, type RateBasis } from "@/lib/rateBasis";
 import { formatDate } from "@/lib/dateFormat";
+import { SprayJobWizard } from "@/components/spray/wizard/SprayJobWizard";
 
 const fmtDate = (v?: string | null) => {
   if (!v) return "—";
