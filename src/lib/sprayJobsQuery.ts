@@ -30,6 +30,18 @@ export interface SprayJobChemicalLine {
    * ("per_100_litres"); persistence always uses the long form.
    */
   rate_basis?: "per_hectare" | "per_100L" | "per_100_litres" | null;
+  /**
+   * Stage 3B canonical product rate basis (whole_block_area | treated_area |
+   * per_100_litres | per_100_metres). Stored alongside — never instead of —
+   * the iOS-compatible `rate_basis`, which only knows two values. JSON column,
+   * so no schema change is required.
+   */
+  product_rate_basis?:
+    | "whole_block_area"
+    | "treated_area"
+    | "per_100_litres"
+    | "per_100_metres"
+    | null;
   /** iOS legacy numeric fields. Filled automatically on save. */
   ratePerHa?: number | null;
   ratePer100L?: number | null;
@@ -143,6 +155,19 @@ export interface SprayJobInput {
   vsp_canopy_density?: string | null;
   row_spacing_metres?: number | null;
   concentration_factor?: number | null;
+  /* --- sql/193–195 spray application columns (Stage 3B write model) --- */
+  application_mode?: string | null;
+  targets?: string[] | null;
+  spray_head_target?: string | null;
+  carrier_volume_basis?: string | null;
+  applied_litres_per_100m?: number | null;
+  dilute_litres_per_100m?: number | null;
+  band_width_total_metres?: number | null;
+  gross_area_ha?: number | null;
+  treated_area_ha?: number | null;
+  canonical_row_length_metres?: number | null;
+  geometry_source?: string | null;
+  geometry_quality?: string | null;
 }
 
 /**

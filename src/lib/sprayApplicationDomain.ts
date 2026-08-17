@@ -298,6 +298,8 @@ export interface SprayApplication {
   targets: SprayTarget[] | null;
   /** Legacy single free-text target, kept as compatibility context only. */
   legacyTargetText: string | null;
+  /** Optional explanatory note for the structured `other` target. */
+  otherTargetNote: string | null;
   headTarget: HeadTarget | null;
   growthStageCode: string | null;
   tractorId: string | null;
@@ -327,6 +329,7 @@ export const emptySprayApplication = (): SprayApplication => ({
   operationType: null,
   targets: null,
   legacyTargetText: null,
+  otherTargetNote: null,
   headTarget: null,
   growthStageCode: null,
   tractorId: null,
@@ -365,6 +368,9 @@ function chemUnitOnly(unit: string | null | undefined): string | null {
 
 /** Absent rate basis on a legacy line means whole-block hectares. */
 function legacyLineBasis(line: SprayJobChemicalLine): ProductRateBasis {
+  // Stage 3B canonical basis wins when the operator has deliberately saved one.
+  const canonical = normaliseProductRateBasis((line as any).product_rate_basis);
+  if (canonical) return canonical;
   const explicit = normaliseProductRateBasis(line.rate_basis);
   if (explicit) return explicit;
   const u = (line.unit ?? "").toLowerCase().replace(/\s+/g, "");
