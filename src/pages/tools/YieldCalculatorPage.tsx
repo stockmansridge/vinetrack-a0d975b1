@@ -22,6 +22,7 @@ import {
   fetchPruningYieldSettings,
   savePruningYieldSettings,
   type PruningYieldSettings,
+  type PruningYieldSettings,
 } from "@/lib/pruningYieldSettingsQuery";
 import { buildBlockPrunedYieldTiles } from "@/lib/pruningYieldSummary";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
@@ -145,6 +146,9 @@ export default function YieldCalculatorPage() {
   const saveM = useMutation({
     mutationFn: () =>
       savePruningYieldSettings({
+        // SQL 198: send the exact revision we loaded — never a clock value.
+        id: blockId ? settingsByBlock[blockId]?.id : undefined,
+        serverRevision: blockId ? settingsByBlock[blockId]?.serverRevision ?? null : null,
         vineyardId: selectedVineyardId!,
         paddockId: blockId,
         pruneMethod: s.method,
@@ -157,12 +161,27 @@ export default function YieldCalculatorPage() {
         bunchWeightGrams: parse(s.bunchWeight),
       }),
     onSuccess: () => {
+      setConflict(null);
       qc.invalidateQueries({ queryKey: ["pruning-yield-settings", selectedVineyardId] });
       toast({ title: "Block values saved", description: `Shared with the mobile apps for ${block?.name ?? "this block"}.` });
     },
-    onError: (e: any) =>
-      toast({ title: "Could not save", description: e?.message ?? "Unknown error", variant: "destructive" }),
+    onError: (e: any) => {
+      // A genuine SQL 198 revision conflict never discards the form, never
+      // retries and never counts as a successful save. Any other error
+      // (401/403, 5xx, 23505 unique_violation) keeps its own identity.
+      if (e instanceof RevisionConflictError) {
+        setConflict((e.latest as PruningYieldSettings | null) ?? null);
+        return;
+      }
+      toast({ title: "Could not save", description: e?.message ?? "Unknown error", variant: "destructive" });
+    },
   });
+
+  const applyLatestFromServer = () => {
+    if (conflict) setS(toForm(conflict));
+    setConflict(null);
+    qc.invalidateQueries({ queryKey: ["pruning-yield-settings", selectedVineyardId] });
+  };
 
   const resetToDefaults = () =>
     setS(
