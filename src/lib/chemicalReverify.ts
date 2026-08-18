@@ -464,14 +464,15 @@ export function proposedDraftFromCandidate(
     }
   }
 
-
   const proposed: ChemicalIntelligenceDraft = {
     ...before,
     actives,
     registration,
     registeredUses,
-    sources: candidateSources(before.sources, candidate, usedReference),
+    unresolvedFields: Array.from(unresolved),
+    sources: candidateSources(before.sources, candidate, usedReference, labelEvidenced),
   };
+
   proposed.conflicts = reconcileConflicts(proposed);
   return proposed;
 }
