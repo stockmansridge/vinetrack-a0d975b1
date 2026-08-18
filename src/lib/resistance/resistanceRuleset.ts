@@ -61,13 +61,27 @@ export function diseaseFromSprayTargetRaw(raw: string | null | undefined): Resis
  */
 const GROUP_ALIASES: Record<string, string> = { U8: "50" };
 
+/**
+ * Codes from a NON-fungicide scheme are namespaced, never folded into the
+ * fungicide numbering. HRAC Group 9 (glyphosate) and FRAC Group 9 are
+ * different chemistry that happen to share a numeral; letting a herbicide
+ * consume a fungicide's seasonal allowance — or break a consecutive run — is a
+ * wrong answer in both directions.
+ */
+export const SCHEME_PREFIXED = ["HRAC", "IRAC"] as const;
+
 export function normaliseGroupCode(raw: string | null | undefined): string | null {
   let text = (raw ?? "").trim().toUpperCase();
   if (!text) return null;
-  for (const prefix of ["FRAC", "GROUP", "HRAC", "IRAC"]) {
-    if (text.startsWith(prefix)) text = text.slice(prefix.length).trim();
+  let scheme: string | null = null;
+  for (const prefix of ["FRAC", "GROUP", ...SCHEME_PREFIXED]) {
+    if (text.startsWith(prefix)) {
+      if ((SCHEME_PREFIXED as readonly string[]).includes(prefix)) scheme = prefix;
+      text = text.slice(prefix.length).trim();
+      break;
+    }
   }
-  text = text.replace(/^[:\s]+|[:\s]+$/g, "").trim();
+  text = text.replace(/^[:\-\s]+|[:\s]+$/g, "").trim();
   const open = text.indexOf("(");
   if (open >= 0) text = text.slice(0, open).trim();
   // Labels spell the same code several ways: "M 3", "M03", "M 03". Collapse
@@ -76,8 +90,14 @@ export function normaliseGroupCode(raw: string | null | undefined): string | nul
   const parts = /^([A-Z]*)0*(\d+)$/.exec(text);
   if (parts) text = `${parts[1]}${parts[2]}`;
   if (!text) return null;
+  if (scheme) return `${scheme}:${text}`;
   return GROUP_ALIASES[text] ?? text;
 }
+
+/** True when a code belongs to a scheme the fungicide strategies do not cover. */
+export const isNonFungicideCode = (code: string): boolean =>
+  (SCHEME_PREFIXED as readonly string[]).some((s) => code.startsWith(`${s}:`));
+
 
 /** Numeric groups ascending, then alphanumeric codes ("U6") after them. */
 export function groupCodeIsOrderedBefore(lhs: string, rhs: string): boolean {

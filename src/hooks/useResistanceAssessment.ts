@@ -17,7 +17,10 @@ import {
 } from "@/lib/resistance/resistanceRuleset";
 import {
   evaluateResistance,
+  statusRequiresAcknowledgement,
+  worstEvaluationStatus,
   type ResistanceEvaluation,
+  type ResistanceEvaluationStatus,
 } from "@/lib/resistance";
 import {
   makeSeasonCalendar,
@@ -49,6 +52,10 @@ export interface ResistanceAssessment {
   blocks: ResistanceBlockAssessment[];
   /** Recorded sprays that could bear on this assessment but have no block. */
   unresolvedByDisease: Record<string, UnresolvedBlockApplication[]>;
+  /** Worst block/disease result — never an average. Null before results. */
+  overallStatus: ResistanceEvaluationStatus | null;
+  /** Exceeded or unable-to-assess must be accepted before saving. */
+  requiresAcknowledgement: boolean;
   /** True when a strategy exists for this vineyard's jurisdiction. */
   supported: boolean;
   jurisdictionLabelCode: string;
@@ -126,7 +133,14 @@ export function useResistanceAssessment(args: {
         : [];
     }
 
+    const overallStatus = worstEvaluationStatus(
+      blockAssessments.flatMap((b) => b.evaluations.map((e) => e.status)),
+    );
+
     return {
+      overallStatus,
+      requiresAcknowledgement:
+        !historyQ.isLoading && statusRequiresAcknowledgement(overallStatus),
       isLoading: historyQ.isLoading,
       error: (historyQ.error as Error | null) ?? null,
       season,
