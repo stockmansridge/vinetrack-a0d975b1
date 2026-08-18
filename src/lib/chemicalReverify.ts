@@ -282,7 +282,37 @@ export interface ReverifyResult {
 const normName = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** Does the retrieved candidate plausibly describe the same product? */
+/**
+ * Generic descriptors that never distinguish one registered formulation from
+ * another. Everything else — "forte", "duo", "500SC", "gold" — DOES.
+ */
+const GENERIC_NAME_TOKENS = new Set([
+  "fungicide",
+  "insecticide",
+  "herbicide",
+  "miticide",
+  "acaricide",
+  "product",
+  "brand",
+]);
+
+/** Distinguishing token sequence for a product name (® / ™ / case stripped). */
+export function productNameTokens(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[®™]/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t && !GENERIC_NAME_TOKENS.has(t));
+}
+
+/**
+ * Does the retrieved candidate describe the SAME registered product?
+ *
+ * Substring matching is unsafe here: "Custodia" is a substring of
+ * "Custodia Forte", which is a different formulation with different active
+ * concentrations. Names must match token-for-token once generic descriptors
+ * (®, "Fungicide", …) are removed; anything else is a review, not a match.
+ */
 export function candidateMatchesIdentity(
   identity: ReverifyIdentity,
   candidate: ReverifyCandidate,
@@ -292,11 +322,15 @@ export function candidateMatchesIdentity(
       normName(identity.registrationNumber) === normName(candidate.registration_number)
     );
   }
-  const want = normName(identity.query);
-  const got = normName(candidate.registered_product_name ?? candidate.product_name);
-  if (!want || !got) return false;
-  return want.includes(got) || got.includes(want);
+  const wantRaw = identity.registrationNumber
+    ? identity.query.replace(identity.registrationNumber, " ")
+    : identity.query;
+  const want = productNameTokens(wantRaw);
+  const got = productNameTokens(candidate.registered_product_name ?? candidate.product_name);
+  if (!want.length || !got.length) return false;
+  return want.join(" ") === got.join(" ");
 }
+
 
 const lookupSourceName = "VineTrack chemical lookup";
 
