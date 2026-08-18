@@ -480,3 +480,36 @@ describe("findings stay explainable", () => {
     for (const r of result.ruleResults) expect(Object.keys(r)).not.toContain("score");
   });
 });
+
+/* ------------------------------------------------------- no persistence */
+
+describe("no verdict is ever persisted", () => {
+  it("the saved spray job payload carries no resistance verdict, score or evaluation", async () => {
+    const { emptySprayApplication } = await import("@/lib/sprayApplicationDomain");
+    const { resolveApplicationGeometry } = await import("@/lib/sprayApplicationGeometry");
+    const { calculateSprayApplication } = await import("@/lib/sprayCalculation");
+    const { toSprayJobInput } = await import("@/lib/sprayApplicationSave");
+
+    const application = {
+      ...emptySprayApplication(),
+      vineyardId: "v1",
+      name: "Test",
+      blockIds: ["A"],
+      targets: ["powdery_mildew"],
+    } as any;
+    const geometry = resolveApplicationGeometry({
+      paddocks: [{ id: "A", name: "Block A", area_ha: 10, row_width: 2.5 }],
+      blockIds: ["A"],
+      mode: application.mode,
+      override: application.geometryOverride,
+      totalTreatedBandWidthMetres: application.totalTreatedBandWidthMetres,
+    });
+    const calculation = calculateSprayApplication({ application, geometry });
+    const { input } = toSprayJobInput({ application, geometry, calculation });
+
+    const serialised = JSON.stringify(input).toLowerCase();
+    for (const token of ["resistance", "verdict", "croplife", "compliance_status", "score"]) {
+      expect(serialised.includes(token), token).toBe(false);
+    }
+  });
+});
