@@ -399,47 +399,71 @@ export function proposedDraftFromCandidate(
   if (labelRef) registration.label_reference = labelRef;
   if (candidate.label_version?.trim()) registration.label_version = candidate.label_version.trim();
 
-  // Registered uses: merge the retrieved use into the matching existing one.
+  // ---------------------------------------------------------------- uses
+  // Label-derived facts (registered uses, rates, WHP, re-entry) may ONLY be
+  // promoted when the lookup actually resolved the registered product AND its
+  // label. An AI summary that merely matched a product name is a candidate for
+  // review, never authoritative label data.
+  const labelEvidenced = !!labelRef && !!registration.number;
+  const unresolved = new Set(before.unresolvedFields);
+
+  const rawUses: ReverifyCandidateUse[] = candidate.registered_uses?.length
+    ? candidate.registered_uses
+    : candidate.target ||
+        candidate.rate_per_unit != null ||
+        candidate.rate_min != null ||
+        candidate.rate_max != null ||
+        candidate.withholding_period_days != null ||
+        candidate.withholding_period_text ||
+        candidate.re_entry_period_hours != null ||
+        candidate.re_entry_period_text
+      ? [
+          {
+            crop: candidate.crop,
+            target: candidate.target,
+            rate_per_unit: candidate.rate_per_unit,
+            rate_min: candidate.rate_min,
+            rate_max: candidate.rate_max,
+            rate_unit: candidate.rate_unit,
+            rate_basis: candidate.rate_basis,
+            withholding_period_days: candidate.withholding_period_days,
+            withholding_period_text: candidate.withholding_period_text,
+            re_entry_period_hours: candidate.re_entry_period_hours,
+            re_entry_period_text: candidate.re_entry_period_text,
+          },
+        ]
+      : [];
+
   let registeredUses = before.registeredUses;
-  const hasUseInfo =
-    candidate.target ||
-    candidate.rate_per_unit != null ||
-    candidate.rate_min != null ||
-    candidate.rate_max != null ||
-    candidate.withholding_period_days != null ||
-    candidate.re_entry_period_hours != null;
-  if (hasUseInfo) {
-    const incoming: WriteRegisteredUse = {
-      crop: (candidate.crop ?? "Grapevines").trim(),
-      target_raw: (candidate.target ?? "").trim(),
-      rates: [
-        {
-          label: "",
-          basis: normaliseLabelRateBasis(candidate.rate_basis),
-          unit: (candidate.rate_unit ?? "L/ha").trim(),
-          value: candidate.rate_per_unit ?? undefined,
-          min_value: candidate.rate_min ?? undefined,
-          max_value: candidate.rate_max ?? undefined,
-        },
-      ],
-      withholding_period_days: candidate.withholding_period_days ?? undefined,
-      re_entry_period_hours: candidate.re_entry_period_hours ?? undefined,
-    };
-    const idx = registeredUses.findIndex((u) => useKey(u) === useKey(incoming));
-    registeredUses =
-      idx >= 0
-        ? registeredUses.map((u, i) =>
-            i === idx
-              ? {
-                  ...u,
-                  rates: incoming.rates,
-                  withholding_period_days: incoming.withholding_period_days ?? u.withholding_period_days,
-                  re_entry_period_hours: incoming.re_entry_period_hours ?? u.re_entry_period_hours,
-                }
-              : u,
-          )
-        : [...registeredUses, incoming];
+  if (rawUses.length && !labelEvidenced) {
+    // No authoritative label → keep the stored uses untouched and record what
+    // still needs matching. Nothing AI-derived becomes registered data.
+    unresolved.add("registered_uses");
+    if (!labelRef) unresolved.add("label_reference");
+    if (!registration.number) unresolved.add("registration_number");
+  } else if (rawUses.length) {
+    for (const raw of rawUses) {
+      for (const incoming of expandCandidateUse(raw, unresolved)) {
+        const idx = registeredUses.findIndex((u) => useKey(u) === useKey(incoming));
+        registeredUses =
+          idx >= 0
+            ? registeredUses.map((u, i) =>
+                i === idx
+                  ? {
+                      ...u,
+                      rates: incoming.rates.length ? incoming.rates : u.rates,
+                      withholding_period_days:
+                        incoming.withholding_period_days ?? u.withholding_period_days,
+                      re_entry_period_hours:
+                        incoming.re_entry_period_hours ?? u.re_entry_period_hours,
+                    }
+                  : u,
+              )
+            : [...registeredUses, incoming];
+      }
+    }
   }
+
 
   const proposed: ChemicalIntelligenceDraft = {
     ...before,
