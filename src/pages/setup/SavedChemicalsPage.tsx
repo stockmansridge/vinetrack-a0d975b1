@@ -758,6 +758,20 @@ function ChemicalEditor({
   const [masterUpdateOpen, setMasterUpdateOpen] = useState(false);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
 
+  // Linked Master record — used only for revision-drift detection. The saved
+  // chemical's own columns remain the source of truth for display.
+  const masterQ = useQuery({
+    queryKey: ["master-chemical", masterLink?.id ?? null],
+    enabled: open && !!masterLink?.id,
+    staleTime: 60_000,
+    queryFn: () => fetchMasterChemical(masterLink!.id),
+  });
+  const masterRow = masterQ.data ?? null;
+  const masterUpdate = masterUpdateAvailable(
+    { master_chemical_id: masterLink?.id, master_source_revision: masterLink?.revision },
+    masterRow,
+  );
+
 
   // Computed cost per base unit from pack size + pack price.
   const computedCost = useMemo(() => {
@@ -1008,6 +1022,46 @@ function ChemicalEditor({
               }))}
             onApply={applySuggestion}
           />
+          {masterLink && (
+            <div
+              className={`rounded-md border p-2 text-xs ${
+                masterUpdate ? "border-warning/50 bg-warning/10" : "border-primary/30 bg-primary/5"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">
+                  {masterUpdate ? MASTER_UPDATE_MESSAGE : MASTER_CURRENT_MESSAGE}
+                </span>
+                {masterUpdate && masterRow && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => setMasterUpdateOpen(true)}>
+                    Review update
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1 text-muted-foreground">
+                Linked to the VineTrack Master Catalogue (revision {masterLink.revision ?? "—"}).
+                Catalogue updates are only applied when you accept them.
+              </p>
+            </div>
+          )}
+          {masterRow && (
+            <MasterUpdateDialog
+              open={masterUpdateOpen}
+              onOpenChange={setMasterUpdateOpen}
+              current={intel}
+              master={masterRow}
+              onAccept={(next, revision) => {
+                setIntel(next);
+                setIntelBase(next);
+                setUpgraded(true);
+                setMasterLink((prev) => (prev ? { ...prev, revision } : prev));
+                toast({
+                  title: "Verified update applied",
+                  description: "Save the chemical to keep these changes.",
+                });
+              }}
+            />
+          )}
           <Field label="Product name *">
             <Input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} />
           </Field>
