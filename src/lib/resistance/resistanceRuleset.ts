@@ -407,7 +407,7 @@ export function currentRuleset(
         !isSuperseded(r),
     )
     .reduce<ResistanceRuleset | null>(
-      (best, r) => (best == null || best.validFromEpochMs < r.validFromEpochMs ? r : best),
+      (best, r) => (best == null || best.validFromEpochMs <= r.validFromEpochMs ? r : best),
       null,
     );
 }
@@ -429,7 +429,7 @@ export function rulesetInForce(
         r.validFromEpochMs <= atEpochMs,
     )
     .reduce<ResistanceRuleset | null>(
-      (best, r) => (best == null || best.validFromEpochMs < r.validFromEpochMs ? r : best),
+      (best, r) => (best == null || best.validFromEpochMs <= r.validFromEpochMs ? r : best),
       null,
     );
 }
