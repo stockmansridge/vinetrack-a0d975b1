@@ -528,8 +528,8 @@ describe("Stage 3B — chemical intelligence integration", () => {
   });
 
   it("does not freeze a chemical snapshot when planning a job or a template", () => {
-    const job = run(foliar()).input as Record<string, unknown>;
-    const tpl = run({ ...foliar(), isTemplate: true }).input as Record<string, unknown>;
+    const job = run(foliar()).input as unknown as Record<string, unknown>;
+    const tpl = run({ ...foliar(), isTemplate: true }).input as unknown as Record<string, unknown>;
     for (const payload of [job, tpl]) {
       expect(Object.keys(payload).some((k) => /snapshot/i.test(k))).toBe(false);
       expect((payload.chemical_lines as any[])[0]).not.toHaveProperty("chemicalSnapshot");
@@ -547,7 +547,7 @@ describe("Stage 3B — resistance seam only", () => {
       products: [product({ activityGroups: [{ scheme: "frac", code: "3" }], verificationStatus: "verified" })],
     });
     const { geometry } = run(app);
-    const candidate = buildCandidateApplication(app, geometry.geometryQuality) as Record<string, unknown>;
+    const candidate = buildCandidateApplication(app, geometry.geometryQuality) as unknown as Record<string, unknown>;
 
     expect(candidate.blockIds).toEqual(["A", "B"]);
     expect(candidate.targets).toEqual(["powdery_mildew", "botrytis"]);
