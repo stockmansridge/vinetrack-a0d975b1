@@ -60,6 +60,11 @@ export interface SavedChemical {
   label_rate_bases?: string[] | null;
   intelligence_schema_version?: number | null;
   pack_size?: string | null;
+  // --- SQL 199 Master Chemical Catalogue link (read + write) ---
+  /** Which Master catalogue product this saved chemical was copied from. */
+  master_chemical_id?: string | null;
+  /** Which Master revision (catalogue_version) supplied the current copy. */
+  master_source_revision?: number | null;
 
 }
 
@@ -121,12 +126,19 @@ export interface SavedChemicalInput {
    * a commercial-only edit can't blank a verified record.
    */
   intelligence?: EncodedChemicalIntelligence | null;
+  /**
+   * SQL 199 Master Catalogue link. Written only when the operator chose a
+   * Master product (or accepted a Master update). Never fuzzy-linked.
+   */
+  master_chemical_id?: string | null;
+  master_source_revision?: number | null;
 }
 
 const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "name", "active_ingredient", "chemical_group", "use", "manufacturer",
   "crop", "problem", "rate_per_ha", "unit", "restrictions", "notes",
   "label_url", "product_url", "purchase",
+  "master_chemical_id", "master_source_revision",
 ];
 
 function sanitize(input: SavedChemicalInput) {
@@ -152,6 +164,12 @@ function sanitize(input: SavedChemicalInput) {
   if (out.unit == null || out.unit === "") {
     out.unit = "Litres";
   }
+  // Master link columns are nullable — keep null as null, never "".
+  if (out.master_chemical_id === "") out.master_chemical_id = null;
+  if (out.master_source_revision === "" || out.master_source_revision == null) {
+    if ("master_source_revision" in out) out.master_source_revision = null;
+  }
+
   // Sanitise URL fields — only http(s) URLs are saved; anything else becomes
   // empty string so iOS sees a consistent value. `label_url` is reserved for
   // the official product label / SDS PDF / regulator page. `product_url` is
