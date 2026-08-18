@@ -6,6 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
+  matchMasterByIdentity,
+  searchApprovedMasterChemicals,
+  parseMasterLookupEnvelope,
+  isTrustedMasterEnvelope,
+  fetchMasterChemical,
+  type MasterChemicalRow,
+} from "@/lib/masterChemicals";
+import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
+import { normaliseCountry } from "@/lib/chemicalIntelligenceWrite";
+import {
   inferProductType,
   inferRateBasis,
   normaliseUnit,
@@ -37,6 +47,12 @@ export interface AppliedSuggestion {
   sds_url?: string;
   /** Set when the user selected an existing library match instead of a new lookup row. */
   existing_chemical_id?: string;
+  /**
+   * Set when the operator chose an APPROVED VineTrack Master Chemical. The
+   * consumer copies its SQL 194 structured intelligence verbatim and records
+   * the Master link + revision. Never set for AI candidates.
+   */
+  master?: MasterChemicalRow;
 }
 
 interface RawCandidate {
@@ -91,8 +107,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
+  const [masterResult, setMasterResult] = useState<MasterChemicalRow | null>(null);
   const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
-  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" } | null>(null);
+  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" | "master" } | null>(null);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
 
   async function preserveAppliedCandidate(candidate: RawCandidate | ExistingLibraryItem, fallbackName?: string) {
@@ -149,6 +166,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     }
     setError(null);
     setCandidates(null);
+    setMasterResult(null);
     setExistingMatches([]);
     setApplied(null);
     setResultsCollapsed(false);
@@ -162,6 +180,24 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       return qn.length >= 3 && haystack.includes(qn);
     });
     setExistingMatches(matches);
+
+    // ---- Master-first: the VineTrack Master Catalogue is searched BEFORE any
+    // AI lookup. An approved exact match is canonical and is never sent back
+    // through AI. Similar names ("Custodia Forte") never match by substring.
+    try {
+      const rows = await searchApprovedMasterChemicals(
+        q,
+        normaliseCountry(country) ?? null,
+      );
+      const exact = matchMasterByIdentity(rows, { productName: q });
+      if (exact) {
+        setMasterResult(exact);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn("[master-chemicals] lookup unavailable, falling through", e);
+    }
 
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
@@ -177,6 +213,18 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             ? serverMsg
             : "Chemical lookup failed. Please try again, or add the chemical manually.",
         );
+      }
+      // Consume the Rork Master response envelope when the backend supplied
+      // one (match_source / master_chemical_id / master_revision / …).
+      const envelope = parseMasterLookupEnvelope(data);
+      if (isTrustedMasterEnvelope(envelope)) {
+        const row =
+          envelope.master ??
+          (envelope.masterChemicalId ? await fetchMasterChemical(envelope.masterChemicalId) : null);
+        if (row) {
+          setMasterResult(row);
+          return;
+        }
       }
       const list: RawCandidate[] = Array.isArray(data?.candidates)
         ? data.candidates
@@ -232,6 +280,21 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     });
     void preserveAppliedCandidate(c, finalName);
     setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
+    setResultsCollapsed(true);
+  }
+
+  function applyMaster(row: MasterChemicalRow) {
+    const finalName = row.registered_product_name?.trim() || name.trim();
+    onApply({
+      name: finalName,
+      manufacturer: row.registrant ?? undefined,
+      label_url:
+        row.label_reference && /^https?:\/\//i.test(row.label_reference)
+          ? row.label_reference
+          : undefined,
+      master: row,
+    });
+    setApplied({ name: finalName, manufacturer: row.registrant ?? undefined, source: "master" });
     setResultsCollapsed(true);
   }
 
@@ -320,6 +383,22 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               Change product
             </button>
           ) : null}
+        </div>
+      )}
+
+      {!resultsCollapsed && masterResult && (
+        <div className="space-y-1">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            VineTrack Master Catalogue
+          </div>
+          <MasterChemicalCard master={masterResult} onApply={() => applyMaster(masterResult)} />
+          <button
+            type="button"
+            onClick={applyManual}
+            className="text-[11px] underline text-primary hover:text-primary/80"
+          >
+            Not the right product? Enter manually
+          </button>
         </div>
       )}
 
