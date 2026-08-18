@@ -894,8 +894,39 @@ export function reconcileEditedDraft(
 /* --------------------------------------------------- assisted entry helpers */
 
 /**
+ * Concentration units understood when splitting free-text actives. The pattern
+ * is used as an alternation inside larger regexes — `g/L` and `CFU/g` contain a
+ * slash, which is exactly why `/` is NOT a separator character.
+ */
+const CONC_UNIT_PATTERN = "g\\s*\\/\\s*L|g\\s*\\/\\s*kg|%\\s*w\\s*\\/\\s*w|%\\s*w\\s*\\/\\s*v|CFU\\s*\\/\\s*g";
+
+/**
+ * Separators that can join multiple actives in label / AI free text:
+ * `+`, `;`, `,`, `&`, `·`, or the word "and". `/` is deliberately excluded so
+ * concentration units (g/L, g/kg, CFU/g, % w/w) are never split.
+ */
+const ACTIVE_SEPARATOR = /\s*(?:[+;,&·]|\band\b)\s*/i;
+
+const DIGIT_COMMA = "\u0000"; // placeholder protecting "1,000 g/L"
+
+/** Split free text into candidate active-ingredient fragments. */
+export function splitActiveIngredientText(text: string | null | undefined): string[] {
+  const raw = (text ?? "").trim();
+  if (!raw) return [];
+  return raw
+    .replace(/(\d)\s*,\s*(\d{3}\b)/g, `$1${DIGIT_COMMA}$2`)
+    .split(ACTIVE_SEPARATOR)
+    .map((p) => p.split(DIGIT_COMMA).join(",").trim().replace(/^[,;+&·\s]+|[,;+&·\s]+$/g, ""))
+    .filter(Boolean);
+}
+
+const numOrUndef = (v: string | undefined): number | undefined =>
+  v == null ? undefined : finiteOrUndef(v.replace(/,/g, ""));
+
+/**
  * Best-effort split of a legacy / AI free-text active ingredient string into
- * structured actives, e.g. "Tebuconazole 100 g/L + Azoxystrobin 200 g/L".
+ * structured actives, e.g. "Tebuconazole 100 g/L + Azoxystrobin 200 g/L" or
+ * "Azoxystrobin 120 g/L, Tebuconazole 200 g/L".
  * Nothing is invented: unparsed text becomes the active's name only.
  * The caller decides the provenance — this never claims authority.
  */
@@ -903,24 +934,31 @@ export function parseLegacyActiveIngredient(
   text: string | null | undefined,
   identitySource: DataSourceKind = "manual_entry",
 ): WriteActiveIngredient[] {
-  const raw = (text ?? "").trim();
-  if (!raw) return [];
-  return raw
-    .split(/\s*[+;]\s*|\s+and\s+/i)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const m = part.match(/^(.*?)[\s,]+([\d.]+)\s*(g\/L|g\/kg|%\s*w\/w|%\s*w\/v|CFU\/g)\s*$/i);
-      const name = (m ? m[1] : part).replace(/[,\s]+$/, "").trim();
-      return clean({
+  const trailing = new RegExp(`^(.*?)[\\s,]+([\\d.,]+)\\s*(${CONC_UNIT_PATTERN})\\s*$`, "i");
+  const leading = new RegExp(`^([\\d.,]+)\\s*(${CONC_UNIT_PATTERN})\\s+(.*)$`, "i");
+  const out: WriteActiveIngredient[] = [];
+  const seen = new Set<string>();
+
+  for (const part of splitActiveIngredientText(text)) {
+    const t = part.match(trailing);
+    const l = t ? null : part.match(leading);
+    const name = (t ? t[1] : l ? l[3] : part).replace(/[,\s]+$/, "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(
+      clean({
         name,
-        concentration: m ? finiteOrUndef(m[2]) : undefined,
-        concentration_unit: m ? normaliseConcentrationUnit(m[3]) : undefined,
+        concentration: t ? numOrUndef(t[2]) : l ? numOrUndef(l[1]) : undefined,
+        concentration_unit: normaliseConcentrationUnit(t ? t[3] : l ? l[2] : undefined),
         identity_source: identitySource,
-      }) as WriteActiveIngredient;
-    })
-    .filter((a) => !!a.name);
+      }) as WriteActiveIngredient,
+    );
+  }
+  return out;
 }
+
 
 /**
  * Suggest the authoritative activity group for an active. Used to pre-fill the
