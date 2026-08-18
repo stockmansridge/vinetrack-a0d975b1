@@ -40,6 +40,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { MasterUpdateDialog } from "@/components/chemicals/MasterUpdateDialog";
+import {
+  fetchMasterChemical,
+  masterChemicalDraft,
+  masterRevision,
+  masterUpdateAvailable,
+  MASTER_CURRENT_MESSAGE,
+  MASTER_UPDATE_MESSAGE,
+} from "@/lib/masterChemicals";
 import { ChemicalIntelligenceEditor } from "@/components/chemicals/ChemicalIntelligenceEditor";
 import {
   type ChemicalIntelligenceDraft,
@@ -743,6 +752,10 @@ function ChemicalEditor({
   const [intelBase, setIntelBase] = useState<ChemicalIntelligenceDraft>(emptyDraft());
   // Legacy-only records keep their text untouched until the operator opts in.
   const [upgraded, setUpgraded] = useState(false);
+  // SQL 199 Master Catalogue link. Written only when the operator picked a
+  // Master product or accepted a Master update — never inferred by name.
+  const [masterLink, setMasterLink] = useState<{ id: string; revision: number | null } | null>(null);
+  const [masterUpdateOpen, setMasterUpdateOpen] = useState(false);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
 
 
@@ -793,6 +806,17 @@ function ChemicalEditor({
         setIntel(hydrated);
         setIntelBase(hydrated);
         setUpgraded(false);
+        setMasterLink(
+          (initial as any).master_chemical_id
+            ? {
+                id: (initial as any).master_chemical_id as string,
+                revision:
+                  (initial as any).master_source_revision == null
+                    ? null
+                    : Number((initial as any).master_source_revision),
+              }
+            : null,
+        );
       } else {
         setForm(EMPTY);
         setRateStr("");
@@ -807,7 +831,9 @@ function ChemicalEditor({
         setIntel(emptyDraft());
         setIntelBase(emptyDraft());
         setUpgraded(false);
+        setMasterLink(null);
       }
+      setMasterUpdateOpen(false);
     }
   }, [open, initial]);
 
@@ -831,6 +857,8 @@ function ChemicalEditor({
       const payload: SavedChemicalInput = {
         ...form,
         intelligence: encoded,
+        master_chemical_id: masterLink?.id ?? null,
+        master_source_revision: masterLink?.revision ?? null,
         rate_per_ha: rateNum,
         restrictions,
         purchase: canSeeCosts && costNum != null
@@ -878,6 +906,26 @@ function ChemicalEditor({
     setForm((p) => ({ ...p, [k]: v }));
 
   const applySuggestion = (s: AppliedSuggestion) => {
+    // ---- Master Catalogue result: copy the verified SQL 194 intelligence
+    // verbatim and record the link + revision. It is never re-derived from
+    // free text and never sent back through AI.
+    if (s.master) {
+      const draft = masterChemicalDraft(s.master);
+      setIntel(draft);
+      setIntelBase(draft);
+      setUpgraded(true);
+      setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
+      setForm((p) => ({
+        ...p,
+        name: s.master!.registered_product_name?.trim() || s.name || p.name || "",
+        manufacturer: s.master!.registrant ?? p.manufacturer ?? "",
+        label_url:
+          s.master!.label_reference && /^https?:\/\//i.test(s.master!.label_reference)
+            ? s.master!.label_reference
+            : (p.label_url ?? ""),
+      }));
+      return;
+    }
     // Compose unit text from product type + chem unit + basis when AI gives
     // structured fields; fall back to whatever rate_unit string was returned.
     const basis = s.rate_basis ?? inferRateBasis(s.rate_unit);
