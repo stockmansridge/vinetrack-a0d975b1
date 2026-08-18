@@ -77,6 +77,7 @@ export function resolveReverifyIdentity(
       country: ctry,
       registrationScheme: reg.scheme,
       registrationNumber: number,
+      productName: registered || name || undefined,
       description: `${reg.scheme ? reg.scheme.toUpperCase() : "Registration"} ${number}${ctry ? ` (${ctry})` : ""}`,
     };
   }
@@ -84,6 +85,7 @@ export function resolveReverifyIdentity(
     return {
       kind: "registered_product",
       query: registered,
+      productName: registered,
       country: ctry,
       description: `Registered product “${registered}”${ctry ? ` (${ctry})` : ""}`,
     };
@@ -92,6 +94,7 @@ export function resolveReverifyIdentity(
     return {
       kind: "product_registrant",
       query: `${name} ${registrant}`,
+      productName: name,
       country: ctry,
       description: `${name} — ${registrant}${ctry ? ` (${ctry})` : ""}`,
     };
@@ -100,6 +103,7 @@ export function resolveReverifyIdentity(
     return {
       kind: "product_name",
       query: name,
+      productName: name,
       country: ctry,
       description: `Product name “${name}”`,
     };
@@ -325,9 +329,7 @@ export function candidateMatchesIdentity(
       normName(identity.registrationNumber) === normName(candidate.registration_number)
     );
   }
-  const wantRaw = identity.registrationNumber
-    ? identity.query.replace(identity.registrationNumber, " ")
-    : identity.query;
+  const wantRaw = identity.productName ?? identity.query;
   const want = productNameTokens(wantRaw);
   const got = productNameTokens(candidate.registered_product_name ?? candidate.product_name);
   if (!want.length || !got.length) return false;
