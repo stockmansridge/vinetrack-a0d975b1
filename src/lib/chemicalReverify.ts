@@ -44,6 +44,9 @@ export interface ReverifyIdentity {
   country?: string;
   registrationScheme?: RegistrationScheme;
   registrationNumber?: string;
+  /** The product name alone (no registrant / number noise) for name matching. */
+  productName?: string;
+
   /** Human sentence describing what identity is being re-verified. */
   description: string;
 }
@@ -74,6 +77,7 @@ export function resolveReverifyIdentity(
       country: ctry,
       registrationScheme: reg.scheme,
       registrationNumber: number,
+      productName: registered || name || undefined,
       description: `${reg.scheme ? reg.scheme.toUpperCase() : "Registration"} ${number}${ctry ? ` (${ctry})` : ""}`,
     };
   }
@@ -81,6 +85,7 @@ export function resolveReverifyIdentity(
     return {
       kind: "registered_product",
       query: registered,
+      productName: registered,
       country: ctry,
       description: `Registered product “${registered}”${ctry ? ` (${ctry})` : ""}`,
     };
@@ -89,6 +94,7 @@ export function resolveReverifyIdentity(
     return {
       kind: "product_registrant",
       query: `${name} ${registrant}`,
+      productName: name,
       country: ctry,
       description: `${name} — ${registrant}${ctry ? ` (${ctry})` : ""}`,
     };
@@ -97,6 +103,7 @@ export function resolveReverifyIdentity(
     return {
       kind: "product_name",
       query: name,
+      productName: name,
       country: ctry,
       description: `Product name “${name}”`,
     };
@@ -105,6 +112,22 @@ export function resolveReverifyIdentity(
 }
 
 /* --------------------------------------------------------------- lookup */
+
+/** One authoritative registered use as printed on the resolved label. */
+export interface ReverifyCandidateUse {
+  crop?: string | null;
+  target?: string | null;
+  rate_per_unit?: number | null;
+  rate_min?: number | null;
+  rate_max?: number | null;
+  rate_unit?: string | null;
+  rate_basis?: string | null;
+  withholding_period_days?: number | null;
+  withholding_period_text?: string | null;
+  re_entry_period_hours?: number | null;
+  re_entry_period_text?: string | null;
+  restrictions?: string | null;
+}
 
 /** Authoritative-ish candidate returned by the lookup service. */
 export interface ReverifyCandidate {
@@ -127,10 +150,15 @@ export interface ReverifyCandidate {
   rate_unit?: string | null;
   rate_basis?: string | null;
   withholding_period_days?: number | null;
+  withholding_period_text?: string | null;
   re_entry_period_hours?: number | null;
+  re_entry_period_text?: string | null;
+  /** Per-use label rows, when the lookup resolved the actual label. */
+  registered_uses?: ReverifyCandidateUse[] | null;
 }
 
 export type ReverifyLookup = (identity: ReverifyIdentity) => Promise<ReverifyCandidate[]>;
+
 
 /* ----------------------------------------------------------------- diff */
 
@@ -261,7 +289,37 @@ export interface ReverifyResult {
 const normName = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** Does the retrieved candidate plausibly describe the same product? */
+/**
+ * Generic descriptors that never distinguish one registered formulation from
+ * another. Everything else — "forte", "duo", "500SC", "gold" — DOES.
+ */
+const GENERIC_NAME_TOKENS = new Set([
+  "fungicide",
+  "insecticide",
+  "herbicide",
+  "miticide",
+  "acaricide",
+  "product",
+  "brand",
+]);
+
+/** Distinguishing token sequence for a product name (® / ™ / case stripped). */
+export function productNameTokens(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[®™]/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t && !GENERIC_NAME_TOKENS.has(t));
+}
+
+/**
+ * Does the retrieved candidate describe the SAME registered product?
+ *
+ * Substring matching is unsafe here: "Custodia" is a substring of
+ * "Custodia Forte", which is a different formulation with different active
+ * concentrations. Names must match token-for-token once generic descriptors
+ * (®, "Fungicide", …) are removed; anything else is a review, not a match.
+ */
 export function candidateMatchesIdentity(
   identity: ReverifyIdentity,
   candidate: ReverifyCandidate,
@@ -271,11 +329,13 @@ export function candidateMatchesIdentity(
       normName(identity.registrationNumber) === normName(candidate.registration_number)
     );
   }
-  const want = normName(identity.query);
-  const got = normName(candidate.registered_product_name ?? candidate.product_name);
-  if (!want || !got) return false;
-  return want.includes(got) || got.includes(want);
+  const wantRaw = identity.productName ?? identity.query;
+  const want = productNameTokens(wantRaw);
+  const got = productNameTokens(candidate.registered_product_name ?? candidate.product_name);
+  if (!want.length || !got.length) return false;
+  return want.join(" ") === got.join(" ");
 }
+
 
 const lookupSourceName = "VineTrack chemical lookup";
 
@@ -283,20 +343,145 @@ function candidateSources(
   base: WriteDataSource[],
   candidate: ReverifyCandidate,
   usedReference: boolean,
+  labelEvidenced = false,
 ): WriteDataSource[] {
   const now = new Date().toISOString();
+  const ref = candidate.label_reference ?? candidate.label_url ?? undefined;
   let sources = withSource(base, {
     // Lookup/AI extraction is assistance only — never authoritative.
     kind: "ai_interpretation",
     name: lookupSourceName,
-    reference: candidate.label_reference ?? candidate.label_url ?? undefined,
+    reference: ref,
     retrieved_at: now,
   }).map((s) =>
-    s.name === lookupSourceName ? { ...s, retrieved_at: now, reference: candidate.label_reference ?? candidate.label_url ?? s.reference } : s,
+    s.name === lookupSourceName ? { ...s, retrieved_at: now, reference: ref ?? s.reference } : s,
   );
   if (usedReference) sources = withSource(sources, activityGroupReferenceSource());
+  if (labelEvidenced && ref) {
+    sources = withSource(sources, {
+      kind: "manufacturer_label",
+      name: "Registered product label",
+      reference: ref,
+      retrieved_at: now,
+    });
+  }
   return sources;
 }
+
+/* ------------------------------------------------- label period parsing */
+
+const WORD_NUMBERS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+
+const readNumber = (token: string): number | undefined => {
+  const n = Number(token);
+  if (Number.isFinite(n)) return n;
+  return WORD_NUMBERS[token.toLowerCase()];
+};
+
+/**
+ * Parse a label withholding period into DAYS. "Four weeks" is 28 days — never
+ * 14 — and anything that is not an explicit duration returns undefined so the
+ * caller can flag it unresolved instead of inventing a number.
+ */
+export function parseWithholdingDays(text: string | null | undefined): number | undefined {
+  const raw = (text ?? "").trim().toLowerCase();
+  if (!raw) return undefined;
+  const m = raw.match(/(\d+(?:\.\d+)?|[a-z]+)\s*(day|days|week|weeks|month|months)\b/);
+  if (!m) return undefined;
+  const n = readNumber(m[1]);
+  if (n == null) return undefined;
+  const mult = m[2].startsWith("day") ? 1 : m[2].startsWith("week") ? 7 : 30;
+  return Math.round(n * mult);
+}
+
+/**
+ * Parse a re-entry interval into HOURS. Instructions such as "until the spray
+ * has dried" are NOT a duration and must never be fabricated into 24 hours.
+ */
+export function parseReEntryHours(text: string | null | undefined): number | undefined {
+  const raw = (text ?? "").trim().toLowerCase();
+  if (!raw) return undefined;
+  const m = raw.match(/(\d+(?:\.\d+)?|[a-z]+)\s*(hour|hours|hrs|hr|day|days)\b/);
+  if (!m) return undefined;
+  const n = readNumber(m[1]);
+  if (n == null) return undefined;
+  return Math.round(m[2].startsWith("d") ? n * 24 : n);
+}
+
+/* ------------------------------------------------------- use expansion */
+
+const TARGET_SPLIT = /\s*(?:,|;|\band\b|\/|\+|&)\s*/i;
+
+/** Split a composite target string ("Powdery mildew, Downy mildew") into parts. */
+export function splitRegisteredTargets(text: string | null | undefined): string[] {
+  const raw = (text ?? "").trim();
+  if (!raw) return [];
+  return raw
+    .split(TARGET_SPLIT)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Turn one authoritative label row into independent structured uses. Where a
+ * single row lists several targets, each target becomes its own use and the
+ * shared rate is NOT copied across them — the per-target rate is unresolved
+ * until the label is read properly.
+ */
+function expandCandidateUse(
+  raw: ReverifyCandidateUse,
+  unresolved: Set<string>,
+): WriteRegisteredUse[] {
+  const targets = splitRegisteredTargets(raw.target);
+  const crop = (raw.crop ?? "Grapevines").trim();
+
+  const hasRateValue =
+    raw.rate_per_unit != null || raw.rate_min != null || raw.rate_max != null;
+  const unit = (raw.rate_unit ?? "").trim();
+  if (hasRateValue && !unit) unresolved.add("registered_uses.rates");
+
+  const whp =
+    raw.withholding_period_days ?? parseWithholdingDays(raw.withholding_period_text);
+  if (whp == null && raw.withholding_period_text) {
+    unresolved.add("registered_uses.withholding_period_days");
+  }
+  const rei = raw.re_entry_period_hours ?? parseReEntryHours(raw.re_entry_period_text);
+  if (rei == null && raw.re_entry_period_text) {
+    unresolved.add("registered_uses.re_entry_period_hours");
+  }
+
+  // One rate cannot describe several targets.
+  const shareRate = targets.length <= 1;
+  if (!shareRate && hasRateValue) unresolved.add("registered_uses.rates");
+
+  const rates: WriteLabelRate[] =
+    shareRate && hasRateValue && unit
+      ? [
+          {
+            label: "",
+            basis: normaliseLabelRateBasis(raw.rate_basis),
+            unit,
+            value: raw.rate_per_unit ?? undefined,
+            min_value: raw.rate_min ?? undefined,
+            max_value: raw.rate_max ?? undefined,
+          },
+        ]
+      : [];
+
+  const list = targets.length ? targets : [""];
+  return list.map((target) => ({
+    crop,
+    target_raw: target,
+    rates,
+    withholding_period_days: whp ?? undefined,
+    re_entry_period_hours: rei ?? undefined,
+    restrictions: (raw.restrictions ?? "").trim() || undefined,
+  }));
+}
+
 
 /** Build the proposed structured draft from a retrieved candidate. */
 export function proposedDraftFromCandidate(
@@ -339,46 +524,69 @@ export function proposedDraftFromCandidate(
   if (labelRef) registration.label_reference = labelRef;
   if (candidate.label_version?.trim()) registration.label_version = candidate.label_version.trim();
 
-  // Registered uses: merge the retrieved use into the matching existing one.
+  // ---------------------------------------------------------------- uses
+  // Label-derived facts (registered uses, rates, WHP, re-entry) may ONLY be
+  // promoted when the lookup actually resolved the registered product AND its
+  // label. An AI summary that merely matched a product name is a candidate for
+  // review, never authoritative label data.
+  const labelEvidenced = !!labelRef && !!registration.number;
+  const unresolved = new Set(before.unresolvedFields);
+
+  const rawUses: ReverifyCandidateUse[] = candidate.registered_uses?.length
+    ? candidate.registered_uses
+    : candidate.target ||
+        candidate.rate_per_unit != null ||
+        candidate.rate_min != null ||
+        candidate.rate_max != null ||
+        candidate.withholding_period_days != null ||
+        candidate.withholding_period_text ||
+        candidate.re_entry_period_hours != null ||
+        candidate.re_entry_period_text
+      ? [
+          {
+            crop: candidate.crop,
+            target: candidate.target,
+            rate_per_unit: candidate.rate_per_unit,
+            rate_min: candidate.rate_min,
+            rate_max: candidate.rate_max,
+            rate_unit: candidate.rate_unit,
+            rate_basis: candidate.rate_basis,
+            withholding_period_days: candidate.withholding_period_days,
+            withholding_period_text: candidate.withholding_period_text,
+            re_entry_period_hours: candidate.re_entry_period_hours,
+            re_entry_period_text: candidate.re_entry_period_text,
+          },
+        ]
+      : [];
+
   let registeredUses = before.registeredUses;
-  const hasUseInfo =
-    candidate.target ||
-    candidate.rate_per_unit != null ||
-    candidate.rate_min != null ||
-    candidate.rate_max != null ||
-    candidate.withholding_period_days != null ||
-    candidate.re_entry_period_hours != null;
-  if (hasUseInfo) {
-    const incoming: WriteRegisteredUse = {
-      crop: (candidate.crop ?? "Grapevines").trim(),
-      target_raw: (candidate.target ?? "").trim(),
-      rates: [
-        {
-          label: "",
-          basis: normaliseLabelRateBasis(candidate.rate_basis),
-          unit: (candidate.rate_unit ?? "L/ha").trim(),
-          value: candidate.rate_per_unit ?? undefined,
-          min_value: candidate.rate_min ?? undefined,
-          max_value: candidate.rate_max ?? undefined,
-        },
-      ],
-      withholding_period_days: candidate.withholding_period_days ?? undefined,
-      re_entry_period_hours: candidate.re_entry_period_hours ?? undefined,
-    };
-    const idx = registeredUses.findIndex((u) => useKey(u) === useKey(incoming));
-    registeredUses =
-      idx >= 0
-        ? registeredUses.map((u, i) =>
-            i === idx
-              ? {
-                  ...u,
-                  rates: incoming.rates,
-                  withholding_period_days: incoming.withholding_period_days ?? u.withholding_period_days,
-                  re_entry_period_hours: incoming.re_entry_period_hours ?? u.re_entry_period_hours,
-                }
-              : u,
-          )
-        : [...registeredUses, incoming];
+  if (rawUses.length && !labelEvidenced) {
+    // No authoritative label → keep the stored uses untouched and record what
+    // still needs matching. Nothing AI-derived becomes registered data.
+    unresolved.add("registered_uses");
+    if (!labelRef) unresolved.add("label_reference");
+    if (!registration.number) unresolved.add("registration_number");
+  } else if (rawUses.length) {
+    for (const raw of rawUses) {
+      for (const incoming of expandCandidateUse(raw, unresolved)) {
+        const idx = registeredUses.findIndex((u) => useKey(u) === useKey(incoming));
+        registeredUses =
+          idx >= 0
+            ? registeredUses.map((u, i) =>
+                i === idx
+                  ? {
+                      ...u,
+                      rates: incoming.rates.length ? incoming.rates : u.rates,
+                      withholding_period_days:
+                        incoming.withholding_period_days ?? u.withholding_period_days,
+                      re_entry_period_hours:
+                        incoming.re_entry_period_hours ?? u.re_entry_period_hours,
+                    }
+                  : u,
+              )
+            : [...registeredUses, incoming];
+      }
+    }
   }
 
   const proposed: ChemicalIntelligenceDraft = {
@@ -386,8 +594,10 @@ export function proposedDraftFromCandidate(
     actives,
     registration,
     registeredUses,
-    sources: candidateSources(before.sources, candidate, usedReference),
+    unresolvedFields: Array.from(unresolved),
+    sources: candidateSources(before.sources, candidate, usedReference, labelEvidenced),
   };
+
   proposed.conflicts = reconcileConflicts(proposed);
   return proposed;
 }

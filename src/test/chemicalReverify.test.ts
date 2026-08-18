@@ -68,13 +68,30 @@ describe("re-verify outcomes", () => {
     const r = await reverifyChemical({
       draft: verified,
       productName: "Acme Teb 430SC",
-      lookup: async () => [{ ...match, active_ingredient: "Tebuconazole 500 g/L", withholding_period_days: 30, target: "Powdery mildew" }],
+      // Label-derived use data only promotes when the label was resolved.
+      lookup: async () => [{
+        ...match,
+        active_ingredient: "Tebuconazole 500 g/L",
+        withholding_period_days: 30,
+        target: "Powdery mildew",
+        label_reference: "https://portal.apvma.gov.au/labels/12345",
+      }],
     });
     expect(r.outcome).toBe("updated");
     expect(r.diff.some((d) => d.section === "chemistry" && /concentration/.test(d.label))).toBe(true);
     expect(r.diff.some((d) => d.section === "uses")).toBe(true);
     // input untouched
     expect(verified.actives[0].concentration).toBe(430);
+  });
+
+  it("never promotes rates/WHP/REI when no authoritative label was resolved", async () => {
+    const r = await reverifyChemical({
+      draft: verified,
+      productName: "Acme Teb 430SC",
+      lookup: async () => [{ ...match, withholding_period_days: 30, target: "Powdery mildew", rate_per_unit: 2, rate_unit: "L/ha" }],
+    });
+    expect(r.proposed?.registeredUses ?? []).toEqual([]);
+    expect(r.proposed?.unresolvedFields).toContain("registered_uses");
   });
 
   it("fails safely on lookup errors and keeps the existing verification", async () => {

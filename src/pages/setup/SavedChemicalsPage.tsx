@@ -921,16 +921,20 @@ function ChemicalEditor({
       if (actives.some((a) => a.group_source === "authoritative_classification")) {
         sources = withSource(sources, activityGroupReferenceSource());
       }
+      // AI cannot certify registration identity or label evidence. Both stay
+      // empty and are recorded as unresolved until a re-verify resolves the
+      // actual registered product and its label.
+      const unresolved = new Set(prev.unresolvedFields);
+      unresolved.add("registration_number");
+      unresolved.add("label_reference");
       return {
         ...prev,
         actives,
         sources,
-        registration: {
-          ...prev.registration,
-          registered_product_name: prev.registration.registered_product_name ?? s.name ?? undefined,
-        },
-        claimedStatus: "partially_verified",
+        unresolvedFields: Array.from(unresolved),
+        claimedStatus: "unverified",
       };
+
     });
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
     if (s.whp_days) setWhp(s.whp_days);
