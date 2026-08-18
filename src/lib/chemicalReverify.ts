@@ -106,6 +106,22 @@ export function resolveReverifyIdentity(
 
 /* --------------------------------------------------------------- lookup */
 
+/** One authoritative registered use as printed on the resolved label. */
+export interface ReverifyCandidateUse {
+  crop?: string | null;
+  target?: string | null;
+  rate_per_unit?: number | null;
+  rate_min?: number | null;
+  rate_max?: number | null;
+  rate_unit?: string | null;
+  rate_basis?: string | null;
+  withholding_period_days?: number | null;
+  withholding_period_text?: string | null;
+  re_entry_period_hours?: number | null;
+  re_entry_period_text?: string | null;
+  restrictions?: string | null;
+}
+
 /** Authoritative-ish candidate returned by the lookup service. */
 export interface ReverifyCandidate {
   product_name?: string | null;
@@ -127,10 +143,15 @@ export interface ReverifyCandidate {
   rate_unit?: string | null;
   rate_basis?: string | null;
   withholding_period_days?: number | null;
+  withholding_period_text?: string | null;
   re_entry_period_hours?: number | null;
+  re_entry_period_text?: string | null;
+  /** Per-use label rows, when the lookup resolved the actual label. */
+  registered_uses?: ReverifyCandidateUse[] | null;
 }
 
 export type ReverifyLookup = (identity: ReverifyIdentity) => Promise<ReverifyCandidate[]>;
+
 
 /* ----------------------------------------------------------------- diff */
 
