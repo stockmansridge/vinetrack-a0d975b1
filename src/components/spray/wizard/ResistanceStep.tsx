@@ -17,10 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { activityGroupSummary } from "@/lib/chemicalIntelligence";
 import { useResistanceAssessment } from "@/hooks/useResistanceAssessment";
-import {
-  DISEASE_LABEL,
-  SPRAY_TARGET_LABEL_FALLBACK,
-} from "./resistanceStepLabels";
+import { DISEASE_LABEL } from "@/lib/resistance/resistanceRuleset";
 import {
   evaluationFindings,
   type ResistanceEvaluation,
