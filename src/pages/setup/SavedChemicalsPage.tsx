@@ -939,7 +939,7 @@ function ChemicalEditor({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-full sm:w-[35%] sm:max-w-[35%] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{initial ? "Edit chemical" : "New chemical"}</SheetTitle>
         </SheetHeader>
