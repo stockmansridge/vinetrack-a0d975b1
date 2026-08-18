@@ -343,20 +343,145 @@ function candidateSources(
   base: WriteDataSource[],
   candidate: ReverifyCandidate,
   usedReference: boolean,
+  labelEvidenced = false,
 ): WriteDataSource[] {
   const now = new Date().toISOString();
+  const ref = candidate.label_reference ?? candidate.label_url ?? undefined;
   let sources = withSource(base, {
     // Lookup/AI extraction is assistance only — never authoritative.
     kind: "ai_interpretation",
     name: lookupSourceName,
-    reference: candidate.label_reference ?? candidate.label_url ?? undefined,
+    reference: ref,
     retrieved_at: now,
   }).map((s) =>
-    s.name === lookupSourceName ? { ...s, retrieved_at: now, reference: candidate.label_reference ?? candidate.label_url ?? s.reference } : s,
+    s.name === lookupSourceName ? { ...s, retrieved_at: now, reference: ref ?? s.reference } : s,
   );
   if (usedReference) sources = withSource(sources, activityGroupReferenceSource());
+  if (labelEvidenced && ref) {
+    sources = withSource(sources, {
+      kind: "manufacturer_label",
+      name: "Registered product label",
+      reference: ref,
+      retrieved_at: now,
+    });
+  }
   return sources;
 }
+
+/* ------------------------------------------------- label period parsing */
+
+const WORD_NUMBERS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+
+const readNumber = (token: string): number | undefined => {
+  const n = Number(token);
+  if (Number.isFinite(n)) return n;
+  return WORD_NUMBERS[token.toLowerCase()];
+};
+
+/**
+ * Parse a label withholding period into DAYS. "Four weeks" is 28 days — never
+ * 14 — and anything that is not an explicit duration returns undefined so the
+ * caller can flag it unresolved instead of inventing a number.
+ */
+export function parseWithholdingDays(text: string | null | undefined): number | undefined {
+  const raw = (text ?? "").trim().toLowerCase();
+  if (!raw) return undefined;
+  const m = raw.match(/(\d+(?:\.\d+)?|[a-z]+)\s*(day|days|week|weeks|month|months)\b/);
+  if (!m) return undefined;
+  const n = readNumber(m[1]);
+  if (n == null) return undefined;
+  const mult = m[2].startsWith("day") ? 1 : m[2].startsWith("week") ? 7 : 30;
+  return Math.round(n * mult);
+}
+
+/**
+ * Parse a re-entry interval into HOURS. Instructions such as "until the spray
+ * has dried" are NOT a duration and must never be fabricated into 24 hours.
+ */
+export function parseReEntryHours(text: string | null | undefined): number | undefined {
+  const raw = (text ?? "").trim().toLowerCase();
+  if (!raw) return undefined;
+  const m = raw.match(/(\d+(?:\.\d+)?|[a-z]+)\s*(hour|hours|hrs|hr|day|days)\b/);
+  if (!m) return undefined;
+  const n = readNumber(m[1]);
+  if (n == null) return undefined;
+  return Math.round(m[2].startsWith("d") ? n * 24 : n);
+}
+
+/* ------------------------------------------------------- use expansion */
+
+const TARGET_SPLIT = /\s*(?:,|;|\band\b|\/|\+|&)\s*/i;
+
+/** Split a composite target string ("Powdery mildew, Downy mildew") into parts. */
+export function splitRegisteredTargets(text: string | null | undefined): string[] {
+  const raw = (text ?? "").trim();
+  if (!raw) return [];
+  return raw
+    .split(TARGET_SPLIT)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Turn one authoritative label row into independent structured uses. Where a
+ * single row lists several targets, each target becomes its own use and the
+ * shared rate is NOT copied across them — the per-target rate is unresolved
+ * until the label is read properly.
+ */
+function expandCandidateUse(
+  raw: ReverifyCandidateUse,
+  unresolved: Set<string>,
+): WriteRegisteredUse[] {
+  const targets = splitRegisteredTargets(raw.target);
+  const crop = (raw.crop ?? "Grapevines").trim();
+
+  const hasRateValue =
+    raw.rate_per_unit != null || raw.rate_min != null || raw.rate_max != null;
+  const unit = (raw.rate_unit ?? "").trim();
+  if (hasRateValue && !unit) unresolved.add("registered_uses.rates");
+
+  const whp =
+    raw.withholding_period_days ?? parseWithholdingDays(raw.withholding_period_text);
+  if (whp == null && raw.withholding_period_text) {
+    unresolved.add("registered_uses.withholding_period_days");
+  }
+  const rei = raw.re_entry_period_hours ?? parseReEntryHours(raw.re_entry_period_text);
+  if (rei == null && raw.re_entry_period_text) {
+    unresolved.add("registered_uses.re_entry_period_hours");
+  }
+
+  // One rate cannot describe several targets.
+  const shareRate = targets.length <= 1;
+  if (!shareRate && hasRateValue) unresolved.add("registered_uses.rates");
+
+  const rates: WriteLabelRate[] =
+    shareRate && hasRateValue && unit
+      ? [
+          {
+            label: "",
+            basis: normaliseLabelRateBasis(raw.rate_basis),
+            unit,
+            value: raw.rate_per_unit ?? undefined,
+            min_value: raw.rate_min ?? undefined,
+            max_value: raw.rate_max ?? undefined,
+          },
+        ]
+      : [];
+
+  const list = targets.length ? targets : [""];
+  return list.map((target) => ({
+    crop,
+    target_raw: target,
+    rates,
+    withholding_period_days: whp ?? undefined,
+    re_entry_period_hours: rei ?? undefined,
+    restrictions: (raw.restrictions ?? "").trim() || undefined,
+  }));
+}
+
 
 /** Build the proposed structured draft from a retrieved candidate. */
 export function proposedDraftFromCandidate(
