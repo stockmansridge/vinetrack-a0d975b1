@@ -38,6 +38,8 @@ import { EquipmentStep } from "./EquipmentStep";
 import { CarrierStep } from "./CarrierStep";
 import { ProductsStep } from "./ProductsStep";
 import { ResistanceStep } from "./ResistanceStep";
+import { ResistanceAcknowledgement } from "./ResistanceAcknowledgement";
+import { useResistanceAssessment } from "@/hooks/useResistanceAssessment";
 import { ReviewStep } from "./ReviewStep";
 import type { StepProps, WizardLookups } from "./types";
 
@@ -177,6 +179,21 @@ export function SprayJobWizard({
     [app, calc],
   );
 
+  // The verdict is recomputed here from CURRENT history and the ruleset in
+  // force; it is never read back from the saved job.
+  const resistance = useResistanceAssessment({
+    enabled: open && hydrated && !app.isTemplate,
+    vineyardId,
+    application: app,
+    intelligenceById,
+    blocks: (lookups.paddocks ?? []).map((p: any) => ({ id: p.id, name: p.name })),
+  });
+  const [resistanceAck, setResistanceAck] = useState(false);
+  useEffect(() => {
+    setResistanceAck(false);
+  }, [resistance.overallStatus]);
+  const resistanceBlocksSave = resistance.requiresAcknowledgement && !resistanceAck;
+
   const patch = (p: Partial<SprayApplication>) => setApp((a) => ({ ...a, ...p }));
   const update = (fn: (a: SprayApplication) => SprayApplication) => setApp(fn);
 
@@ -227,7 +244,24 @@ export function SprayJobWizard({
       case "products": return <ProductsStep {...stepProps} />;
       case "resistance": return <ResistanceStep {...stepProps} />;
       case "review":
-        return <ReviewStep {...stepProps} extra={editing && !app.isTemplate ? linkedRecords : null} />;
+        return (
+          <ReviewStep
+            {...stepProps}
+            extra={editing && !app.isTemplate ? linkedRecords : null}
+            resistance={
+              <ResistanceAcknowledgement
+                status={resistance.overallStatus}
+                lines={resistance.blocks.flatMap((b) =>
+                  b.evaluations.map((e) => `${b.blockName}: ${e.summary}`),
+                )}
+                requiresAcknowledgement={resistance.requiresAcknowledgement}
+                acknowledged={resistanceAck}
+                onAcknowledgedChange={setResistanceAck}
+                disabled={!canEdit}
+              />
+            }
+          />
+        );
       default: return null;
     }
   };
@@ -276,6 +310,15 @@ export function SprayJobWizard({
         </div>
 
         <div className="space-y-2 border-t p-3">
+          {gate.canSave && resistanceBlocksSave && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span>
+                The resistance check needs acknowledging on the Review step before this
+                application can be saved.
+              </span>
+            </div>
+          )}
           {!gate.canSave && gate.blockingReasons.length > 0 && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
@@ -315,7 +358,7 @@ export function SprayJobWizard({
               <Button
                 type="button"
                 size="sm"
-                disabled={!canEdit || !gate.canSave || saveMut.isPending}
+                disabled={!canEdit || !gate.canSave || resistanceBlocksSave || saveMut.isPending}
                 onClick={() => saveMut.mutate()}
               >
                 {saveMut.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}

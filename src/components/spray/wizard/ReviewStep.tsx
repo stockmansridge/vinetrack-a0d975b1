@@ -26,12 +26,14 @@ export function ReviewStep({
   calc,
   lookups,
   extra,
-}: StepProps & { extra?: ReactNode }) {
+  resistance,
+}: StepProps & { extra?: ReactNode; resistance?: ReactNode }) {
   const groups = groupDiagnostics(calc.diagnostics);
   const blockNames = app.blockIds.map((id) => lookups.maps.paddocks.get(id) ?? "Block");
 
   return (
     <div className="space-y-6">
+      {resistance}
       <section className="grid gap-3 sm:grid-cols-2">
         <Card title="Application">
           <Row label="Name" value={app.name || "—"} />

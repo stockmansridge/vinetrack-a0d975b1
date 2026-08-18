@@ -34,8 +34,17 @@ export function candidateProductLines(
   return app.products.map((line, index) => {
     const intel = line.savedChemicalId ? intelligenceById.get(line.savedChemicalId) ?? null : null;
     const structuredGroups = intel?.structured ? intel.activityGroups : [];
+    // Scheme is carried through, not discarded: an HRAC or IRAC code must
+    // never be read as the fungicide group with the same numeral.
     const codes = (structuredGroups.length ? structuredGroups : line.activityGroups ?? [])
-      .map((g) => g.code)
+      .filter((g) => g.scheme !== "NA")
+      .map((g) =>
+        g.code
+          ? g.scheme === "HRAC" || g.scheme === "IRAC"
+            ? `${g.scheme} ${g.code}`
+            : g.code
+          : null,
+      )
       .filter((c): c is string => !!c);
 
     let availability: ChemicalIntelligenceAvailability = "unavailable";

@@ -151,3 +151,41 @@ export const evaluationHasCandidate = (e: ResistanceEvaluation): boolean =>
  */
 export const evaluationIsCleanResult = (e: ResistanceEvaluation): boolean =>
   e.status === "compliant" && e.evidenceQuality === "high";
+
+/* --------------------------------------------------- overall aggregation */
+
+/**
+ * Ordering used to reduce many block/disease evaluations to ONE headline.
+ * Aggregation is worst-case, never an average: a rotation that exceeds the
+ * strategy on one block out of five is an exceeded rotation, and averaging it
+ * away is precisely the false clean result this engine exists to prevent.
+ */
+export const EVALUATION_STATUS_RANK: Record<ResistanceEvaluationStatus, number> = {
+  strategy_exceeded: 6,
+  unable_to_fully_assess: 5,
+  limit_reached: 4,
+  approaching_limit: 3,
+  compliant: 2,
+  not_applicable: 1,
+  unsupported_ruleset: 0,
+};
+
+export function worstEvaluationStatus(
+  statuses: ResistanceEvaluationStatus[],
+): ResistanceEvaluationStatus | null {
+  let worst: ResistanceEvaluationStatus | null = null;
+  for (const s of statuses) {
+    if (worst == null || EVALUATION_STATUS_RANK[s] > EVALUATION_STATUS_RANK[worst]) worst = s;
+  }
+  return worst;
+}
+
+/**
+ * A result the operator must consciously accept before the job can be saved.
+ * Acknowledgement is a UI act only — nothing about it is written to the
+ * database, because a stored verdict would go stale the moment the history or
+ * the published strategy changes.
+ */
+export const statusRequiresAcknowledgement = (
+  s: ResistanceEvaluationStatus | null,
+): boolean => s === "strategy_exceeded" || s === "unable_to_fully_assess";
