@@ -105,6 +105,7 @@ import AdminSupportRequestsPage from "./pages/admin/AdminSupportRequestsPage";
 import AdminUserActivityPage from "./pages/admin/AdminUserActivityPage";
 import EmailDiagnosticsPage from "./pages/admin/EmailDiagnosticsPage";
 import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
+import MasterCataloguePage from "./pages/admin/MasterCataloguePage";
 import AdminIntegrationDetailPage from "./pages/admin/AdminIntegrationDetailPage";
 import BillingPage from "./pages/BillingPage";
 import AccountBillingPage from "./pages/account/BillingPage";
@@ -235,6 +236,7 @@ const App = () => (
                     </Route>
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                    <Route path="/admin/master-catalogue" element={<MasterCataloguePage />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
                     <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />
                     <Route path="/admin/vineyards" element={<AdminVineyardsPage />} />
