@@ -17,10 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { activityGroupSummary } from "@/lib/chemicalIntelligence";
 import { useResistanceAssessment } from "@/hooks/useResistanceAssessment";
-import {
-  DISEASE_LABEL,
-  SPRAY_TARGET_LABEL_FALLBACK,
-} from "./resistanceStepLabels";
+import { DISEASE_LABEL } from "@/lib/resistance/resistanceRuleset";
 import {
   evaluationFindings,
   type ResistanceEvaluation,
@@ -257,7 +254,7 @@ export function ResistanceStep({ app, intelligenceById, vineyardId, lookups }: S
               className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
             >
               <span className="truncate">
-                {line.productName ?? SPRAY_TARGET_LABEL_FALLBACK}
+                {line.productName ?? "Product not set"}
               </span>
               {summary || fallback ? (
                 <Badge variant="outline">{summary || fallback}</Badge>

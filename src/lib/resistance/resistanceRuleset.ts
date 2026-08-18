@@ -70,6 +70,11 @@ export function normaliseGroupCode(raw: string | null | undefined): string | nul
   text = text.replace(/^[:\s]+|[:\s]+$/g, "").trim();
   const open = text.indexOf("(");
   if (open >= 0) text = text.slice(0, open).trim();
+  // Labels spell the same code several ways: "M 3", "M03", "M 03". Collapse
+  // internal spacing and leading zeros so they are one group, not three.
+  text = text.replace(/\s+/g, "");
+  const parts = /^([A-Z]*)0*(\d+)$/.exec(text);
+  if (parts) text = `${parts[1]}${parts[2]}`;
   if (!text) return null;
   return GROUP_ALIASES[text] ?? text;
 }
