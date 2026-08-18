@@ -12,6 +12,7 @@ import {
   normaliseGroupCode,
   rulesetInForce,
   currentRuleset,
+  RESISTANCE_REGISTRY,
   evaluationFindings,
   evaluationBreaches,
   type ResistanceApplicationEvent,
@@ -78,21 +79,21 @@ describe("group code normalisation", () => {
 describe("ruleset resolution", () => {
   it("has an in-force 2026 strategy for AU grapes, both diseases", () => {
     for (const disease of ["powdery_mildew", "downy_mildew"] as const) {
-      const rs = currentRuleset("AU", "grape", disease);
+      const rs = currentRuleset(RESISTANCE_REGISTRY, "AU", "grape", disease);
       expect(rs, disease).toBeTruthy();
       expect(rs!.rules.length).toBeGreaterThan(0);
     }
   });
 
   it("returns no ruleset for an unsupported jurisdiction rather than falling back to AU", () => {
-    expect(currentRuleset("NZ" as any, "grape", "powdery_mildew")).toBeFalsy();
+    expect(currentRuleset(RESISTANCE_REGISTRY, "NZ" as any, "grape", "powdery_mildew")).toBeFalsy();
   });
 
   it("treats a strategy as in force on its effective instant (inclusive)", () => {
-    const rs = currentRuleset("AU", "grape", "powdery_mildew")!;
-    expect(rulesetInForce("AU", "grape", "powdery_mildew", rs.effectiveFromEpochMs)).toBeTruthy();
+    const rs = currentRuleset(RESISTANCE_REGISTRY, "AU", "grape", "powdery_mildew")!;
+    expect(rulesetInForce(RESISTANCE_REGISTRY, "AU", "grape", "powdery_mildew", rs.validFromEpochMs)).toBeTruthy();
     expect(
-      rulesetInForce("AU", "grape", "powdery_mildew", rs.effectiveFromEpochMs - 1),
+      rulesetInForce(RESISTANCE_REGISTRY, "AU", "grape", "powdery_mildew", rs.validFromEpochMs - 1),
     ).toBeFalsy();
   });
 });
