@@ -44,6 +44,9 @@ export interface ReverifyIdentity {
   country?: string;
   registrationScheme?: RegistrationScheme;
   registrationNumber?: string;
+  /** The product name alone (no registrant / number noise) for name matching. */
+  productName?: string;
+
   /** Human sentence describing what identity is being re-verified. */
   description: string;
 }
