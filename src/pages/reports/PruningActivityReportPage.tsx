@@ -757,8 +757,6 @@ export default function PruningActivityReportPage() {
       case "vinesPerHour":
         return <span className="font-medium">{avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}</span>;
       case "cost": return <span className="font-semibold">{money(totals.cost)}</span>;
-      case "activityHours": return <span className="font-medium">{totals.activityHours.toFixed(2)}</span>;
-      case "activityCost": return <span className="font-semibold">{money(totals.activityCost)}</span>;
       default: return null;
     }
   };
