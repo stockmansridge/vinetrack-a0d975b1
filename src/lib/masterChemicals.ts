@@ -209,12 +209,15 @@ export function matchMasterByIdentity(
   opts: { identityKey?: string | null; productName?: string | null; country?: string | null },
 ): MasterChemicalRow | null {
   // Jurisdiction gate first (contract §3/§16): country filtering does NOT
-  // replace identity protection — both are required.
+  // replace identity protection — both are required. Without a resolved
+  // vineyard country the match fails closed.
   const wantCountry = vineyardCountryCode(opts.country);
-  const eligible = rows.filter(
-    (r) => !opts.country || masterEligibleForVineyard(r.registration_country, wantCountry),
+  if (!wantCountry) return null;
+  const eligible = rows.filter((r) =>
+    masterEligibleForVineyard(r.registration_country, wantCountry),
   );
   const approved = eligible.filter(isApprovedMaster);
+
   const key = normKey(opts.identityKey);
   if (key) {
     const byKey = approved.filter((r) => normKey(r.registration_identity_key) === key);
