@@ -696,24 +696,6 @@ export default function PruningActivityReportPage() {
       case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
       case "rate": return money(r.hourlyRate);
       case "cost": return money(r.allocatedCost);
-      case "activityHours":
-        return r.isPrimaryAllocation && r.activityHours != null ? (
-          <span>
-            {r.activityHours.toFixed(2)}
-            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-              Activity total
-            </span>
-          </span>
-        ) : <span className="text-muted-foreground text-xs">—</span>;
-      case "activityCost":
-        return r.isPrimaryAllocation && r.activityCost != null ? (
-          <span className="font-medium">
-            {money(r.activityCost)}
-            <span className="block text-[10px] uppercase tracking-wide font-normal text-muted-foreground">
-              Activity total
-            </span>
-          </span>
-        ) : <span className="text-muted-foreground text-xs">—</span>;
 
       case "task":
         if (r.workTaskId && !r.workTaskMissing) {
