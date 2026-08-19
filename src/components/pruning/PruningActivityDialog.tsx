@@ -204,6 +204,12 @@ export default function PruningActivityDialog({
     setLabourLines(labourDraftsFromLines(labourQ.data));
   }, [open, isEdit, labourQ.data]);
 
+  // The labour editor is a FULL REPLACE on save. Until the server rows have
+  // loaded, the editor state is not the user's intent — it is just an empty
+  // placeholder — so saving it would silently delete recorded labour history.
+  const labourReady = !isEdit || labourQ.isSuccess;
+
+
 
   /** Quarters already owned by THIS activity — they must stay selectable. */
   const ownedByActivity = useMemo(() => {
@@ -244,7 +250,7 @@ export default function PruningActivityDialog({
   const totals = activityTotals(draft);
   const busy = save.isPending || savingSkip;
   const canSave =
-    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || !!loaded);
+    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || (!!loaded && labourReady));
 
   /** SQL 168: one skipped entry per block, presented as a single save. */
   const handleSkippedSave = async () => {
@@ -319,12 +325,17 @@ export default function PruningActivityDialog({
 
       // SQL 190 — labour lines are saved against the activity in one full
       // replace. Never partial: omitted lines are removed by the backend.
+      // Skip entirely when editing an activity whose lines never loaded:
+      // sending [] there would wipe existing labour history.
       const savedId = result.activity?.id ?? activityId ?? newId;
-      await savePruningActivityLabourLines(
-        savedId,
-        labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
-      );
-      await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+      if (labourReady) {
+        await savePruningActivityLabourLines(
+          savedId,
+          labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
+        );
+        await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+      }
+
 
       // Canonical server state replaces the editor state.
       if (result.activity) {
