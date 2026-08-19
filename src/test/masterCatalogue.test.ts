@@ -91,11 +91,11 @@ describe("master catalogue — identity and trust", () => {
 
   it("matches exactly and never by substring", () => {
     const rows = [CUSTODIA, CUSTODIA_FORTE];
-    expect(matchMasterByIdentity(rows, { productName: "Custodia 320 SC" })?.id).toBe("m-custodia");
-    expect(matchMasterByIdentity(rows, { productName: "Custodia Forte" })?.id).toBe(
+    expect(matchMasterByIdentity(rows, { productName: "Custodia 320 SC", country: "AU" })?.id).toBe("m-custodia");
+    expect(matchMasterByIdentity(rows, { productName: "Custodia Forte", country: "AU" })?.id).toBe(
       "m-custodia-forte",
     );
-    expect(matchMasterByIdentity(rows, { productName: "Custodia" })).toBeNull();
+    expect(matchMasterByIdentity(rows, { productName: "Custodia", country: "AU" })).toBeNull();
   });
 
   it("prefers the registration identity key when supplied", () => {
@@ -103,6 +103,7 @@ describe("master catalogue — identity and trust", () => {
       matchMasterByIdentity([CUSTODIA, CUSTODIA_FORTE], {
         identityKey: "au:apvma:66541 ",
         productName: "Custodia Forte",
+        country: "AU",
       })?.id,
     ).toBe("m-custodia");
   });
@@ -110,7 +111,7 @@ describe("master catalogue — identity and trust", () => {
   it("never matches candidate or retired records", () => {
     const candidate = { ...CUSTODIA, review_status: "candidate" };
     expect(isApprovedMaster(candidate)).toBe(false);
-    expect(matchMasterByIdentity([candidate], { productName: "Custodia 320 SC" })).toBeNull();
+    expect(matchMasterByIdentity([candidate], { productName: "Custodia 320 SC", country: "AU" })).toBeNull();
     expect(
       matchMasterByIdentity([{ ...CUSTODIA, review_status: "retired" }], {
         productName: "Custodia 320 SC",
@@ -186,8 +187,22 @@ describe("revision drift", () => {
 });
 
 describe("approval readiness (UI guidance only)", () => {
-  it("passes a complete Custodia record", () => {
-    expect(approvalReadiness(CUSTODIA)).toEqual({ ready: true, reasons: [] });
+  it("passes a Custodia record with no outstanding evidence gaps", () => {
+    expect(
+      approvalReadiness({ ...CUSTODIA, verification_unresolved_fields: [] }),
+    ).toEqual({ ready: true, reasons: [] });
+  });
+
+  it("blocks approval while label facts remain unresolved", () => {
+    const r = approvalReadiness(CUSTODIA);
+    expect(r.ready).toBe(false);
+    expect(r.reasons.join(" ")).toContain("registered_uses.rates");
+  });
+
+  it("is country-scoped: an AU master never matches an NZ vineyard", () => {
+    expect(
+      matchMasterByIdentity([CUSTODIA], { productName: "Custodia 320 SC", country: "NZ" }),
+    ).toBeNull();
   });
 
   it("flags missing evidence", () => {
