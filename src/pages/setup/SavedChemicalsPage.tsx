@@ -771,6 +771,13 @@ function ChemicalEditor({
     { master_chemical_id: masterLink?.id, master_source_revision: masterLink?.revision },
     masterRow,
   );
+  // A linked Master record is also checked against the vineyard country: an AU
+  // Master revision is never "current verified information" for an NZ vineyard.
+  const masterJurisdiction = jurisdictionSuitability(
+    masterRow?.registration_country,
+    currentCountry,
+  );
+
 
 
   // Computed cost per base unit from pack size + pack price.
