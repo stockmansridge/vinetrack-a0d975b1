@@ -40,6 +40,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
+import { countryLabel, jurisdictionSuitability } from "@/lib/chemicalJurisdiction";
+
 import { MasterUpdateDialog } from "@/components/chemicals/MasterUpdateDialog";
 import {
   fetchMasterChemical,
