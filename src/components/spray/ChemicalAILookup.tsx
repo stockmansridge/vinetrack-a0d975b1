@@ -137,7 +137,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       await supabase.functions.invoke("chemical-ai-lookup", {
         body: {
           product_name: queryName,
-          country: country ?? null,
+          country: countryCode,
           mark_applied: true,
           applied_candidate: {
             product_name: productName,
