@@ -37,7 +37,7 @@ export function vineyardCountryCode(value: unknown): string | null {
 }
 
 /** Human country name for messaging; falls back to the ISO code. */
-export function countryLabel(code: string | null | undefined): string {
+export function countryLabel(code: unknown): string {
   const c = vineyardCountryCode(code);
   if (!c) return "unknown";
   return COUNTRY_NAMES[c] ?? c;
