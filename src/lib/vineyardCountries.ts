@@ -111,6 +111,17 @@ export const VINEYARD_COUNTRY_ALIASES: Record<string, string> = {
   "oriental republic of uruguay": "UY",
   "mexico (united mexican states)": "MX",
   "méxico": "MX",
+  brasil: "BR",
+  "federative republic of brazil": "BR",
+  "people's republic of china": "CN",
+  prc: "CN",
+  bharat: "IN",
+  "republic of india": "IN",
+  "state of israel": "IL",
+  yisrael: "IL",
+  nippon: "JP",
+  nihon: "JP",
+
 };
 
 const NAME_INDEX: Record<string, string> = (() => {
