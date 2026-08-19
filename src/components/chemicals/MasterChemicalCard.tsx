@@ -13,18 +13,24 @@ import {
   masterRevision,
   type MasterChemicalRow,
 } from "@/lib/masterChemicals";
+import { countryLabel, vineyardCountryCode } from "@/lib/chemicalJurisdiction";
+import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 
 export function MasterChemicalCard({
   master,
   onApply,
   applyLabel = "Use this verified chemical",
   dense,
+  vineyardCountry,
 }: {
   master: MasterChemicalRow;
   onApply?: () => void;
   applyLabel?: string;
   dense?: boolean;
+  /** Current vineyard country. Pass it to surface jurisdiction mismatches. */
+  vineyardCountry?: string | null;
 }) {
+
   const draft = masterChemicalDraft(master);
   const identity = masterIdentityKey(master);
   const revision = masterRevision(master);
