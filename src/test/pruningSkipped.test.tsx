@@ -26,8 +26,8 @@ vi.mock("@/lib/pruningQuery", () => ({
   ensurePruningSeasonId: vi.fn(async () => "season-1"),
 }));
 vi.mock("@/hooks/useTeamLookup", () => ({ useTeamLookup: () => ({ resolve: () => null }) }));
-vi.mock("@/components/pruning/ActivityWorkTaskField", () => ({
-  default: () => <div>Work Task</div>,
+vi.mock("@/components/pruning/PruningWorkTasksSection", () => ({
+  default: () => <div>Work Tasks</div>,
 }));
 
 // Stand-in for the real allocation editor: the row/quarter controls stay in
