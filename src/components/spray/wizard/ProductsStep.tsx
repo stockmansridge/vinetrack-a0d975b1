@@ -26,6 +26,9 @@ import {
   type ChemicalIntelligence,
 } from "@/lib/chemicalIntelligence";
 import type { StepProps } from "./types";
+import { useVineyard } from "@/context/VineyardContext";
+import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
+import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
 const UNITS = ["L", "mL", "kg", "g"];
 
@@ -116,7 +119,12 @@ function ProductRow({
   onRemove: () => void;
 }) {
   const [showUses, setShowUses] = useState(false);
+  const { currentCountry } = useVineyard();
   const intel = line.savedChemicalId ? intelligenceById.get(line.savedChemicalId) ?? null : null;
+  // Label authority follows the vineyard, not the product record.
+  const labelAuthoritative = labelFactsAuthoritative(
+    jurisdictionSuitability(intel?.product.country, currentCountry),
+  );
   const groups = intel ? activityGroupSummary(intel) : null;
   const validation = result?.rateValidation ?? "unable_to_validate";
   const tone = RATE_VALIDATION_TONE[validation as keyof typeof RATE_VALIDATION_TONE];
@@ -226,7 +234,7 @@ function ProductRow({
       {/* Foreign label facts stay visible but are never authoritative here. */}
       {intel && (
         <JurisdictionNoticeBanner
-          registrationCountry={intel.registration.country}
+          registrationCountry={intel.product.country}
           vineyardCountry={currentCountry}
           dense
         />
@@ -250,7 +258,7 @@ function ProductRow({
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowUses((v) => !v)}>
             {showUses ? "Hide" : "Show"} registered uses ({intel.registeredUses.length})
             {!labelAuthoritative
-              ? ` — ${countryLabel(intel.registration.country)} label`
+              ? ` — ${countryLabel(intel.product.country)} label`
               : ""}
           </Button>
           {showUses && (
@@ -277,7 +285,7 @@ function ProductRow({
             {labelAuthoritative
               ? "Selecting a use fills the label range for guidance only — the rate stays yours to choose."
               : `These uses, rates, withholding and re-entry come from the ${countryLabel(
-                  intel.registration.country,
+                  intel.product.country,
                 )} label and are not authoritative for this vineyard.`}
           </p>
         </div>
