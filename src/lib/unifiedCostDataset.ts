@@ -235,6 +235,8 @@ export function buildUnifiedCostDataset({
     if (seen.has(row.dedup_key)) continue;
     seen.add(row.dedup_key);
     if (p.workTaskId) linkedWorkTaskIds.add(p.workTaskId);
+    // SQL 200: every Work Task linked to the activity is already costed here.
+    (p.linkedWorkTaskIds ?? []).forEach((id) => linkedWorkTaskIds.add(id));
     rows.push(row);
   }
 

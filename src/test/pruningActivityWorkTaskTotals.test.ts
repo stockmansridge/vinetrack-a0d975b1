@@ -42,6 +42,42 @@ describe("aggregateLinkedWorkTasks", () => {
   });
 });
 
+describe("SQL 200 regression fixture — Task A + Task B", () => {
+  const totals = aggregateLinkedWorkTasks([
+    task({ taskId: "A", hours: 14, labourCost: 490, totalCost: 490 }),
+    task({ taskId: "B", hours: 8, labourCost: 320, totalCost: 320 }),
+  ]);
+
+  it("activity = 2 Work Tasks · 22 h · $810", () => {
+    expect(totals.taskCount).toBe(2);
+    expect(totals.hours).toBe(22);
+    expect(totals.cost).toBe(810);
+  });
+
+  it("counts $810 exactly once across the activity's block rows", () => {
+    const rows = applyActivityAllocations(
+      [
+        row({ id: "a", rowEquivalents: 3, vines: 300, labourHours: 99, labourCost: 9999 }),
+        row({ id: "b", rowEquivalents: 1, vines: 100, createdAt: "2026-07-01T08:05:00Z" }),
+      ],
+      null,
+      new Map([["act-1", totals]]),
+      new Map([["act-1", ["A", "B"]]]),
+    );
+    expect(rows.reduce((s, r) => s + (r.allocatedCost ?? 0), 0)).toBeCloseTo(810, 10);
+    expect(rows.reduce((s, r) => s + r.allocatedHours, 0)).toBeCloseTo(22, 10);
+    // Legacy activity labour ($9,999) must never reach the totals.
+    rows.forEach((r) => {
+      expect(r.activityCost).toBe(810);
+      expect(r.activityHours).toBe(22);
+      expect(r.linkedWorkTaskIds).toEqual(["A", "B"]);
+    });
+    // 75 / 25 canonical row-equivalent share.
+    expect(rows.find((r) => r.id === "a")!.allocatedCost).toBeCloseTo(607.5, 2);
+    expect(rows.find((r) => r.id === "b")!.allocatedCost).toBeCloseTo(202.5, 2);
+  });
+});
+
 describe("report rows use linked Work Task totals", () => {
   it("splits task hours and cost across blocks and ignores legacy labour", () => {
     const totals = aggregateLinkedWorkTasks([task({ hours: 10, totalCost: 350 })]);

@@ -122,6 +122,8 @@ export interface PruningActivityRow {
   activityHours: number | null;
   /** Parent activity labour cost (same on every allocation of the activity). */
   activityCost: number | null;
+  /** SQL 200 — Work Tasks whose cost is already counted by this activity. */
+  linkedWorkTaskIds?: string[];
   /** Meaningful, user-facing label for the activity — never an identifier. */
   activityLabel: string;
   /** Where activityLabel came from, so the UI can badge it. */
@@ -256,6 +258,8 @@ export function applyActivityAllocations(
   activityLabour?: Map<string, PruningLabourSummary> | null,
   /** SQL 200: totals of the Work Tasks linked to each activity. */
   activityWorkTasks?: Map<string, WorkTaskAggregate> | null,
+  /** SQL 200: activity id -> linked Work Task ids (cost dedupe). */
+  activityTaskIds?: Map<string, string[]> | null,
 ): PruningActivityRow[] {
   const groups = new Map<string, BaseActivityRow[]>();
   baseRows.forEach((r) => {
@@ -315,6 +319,8 @@ export function applyActivityAllocations(
       );
       const splitByIdT = new Map(splitT.map((x) => [x.id, x]));
       const labelT = resolveActivityLabel(ordered);
+      const linkedIds = ordered[0]?.activityId
+        ? activityTaskIds?.get(ordered[0].activityId) ?? [] : [];
       ordered.forEach((r, i) => {
         const x = splitByIdT.get(r.id);
         const allocHours = x?.hours ?? 0;
@@ -335,6 +341,7 @@ export function applyActivityAllocations(
           hourlyRate: allocCost != null && allocHours > 0 ? allocCost / allocHours : null,
           activityHours: activityHoursT,
           activityCost: activityCostT,
+          linkedWorkTaskIds: linkedIds,
         });
       });
       return;
@@ -609,7 +616,7 @@ export function usePruningActivity(vineyardId: string | null) {
         if (summaries.length) workTaskTotals.set(actId, aggregateLinkedWorkTasks(summaries));
       });
 
-      return applyActivityAllocations(baseRows, labourSummaries, workTaskTotals);
+      return applyActivityAllocations(baseRows, labourSummaries, workTaskTotals, workTaskLinks);
     },
 
   });
