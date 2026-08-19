@@ -111,7 +111,11 @@ function normalise(s: string | null | undefined): string {
 }
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
+  // Jurisdiction is the selected vineyard's country. There is no locale,
+  // browser or IP fallback — when it is missing, lookup is blocked.
+  const countryCode = vineyardCountryCode(country);
   const [name, setName] = useState(initialName);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
