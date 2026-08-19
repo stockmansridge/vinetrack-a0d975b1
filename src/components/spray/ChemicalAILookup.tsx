@@ -421,7 +421,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
             VineTrack Master Catalogue
           </div>
-          <MasterChemicalCard master={masterResult} onApply={() => applyMaster(masterResult)} />
+          <MasterChemicalCard master={masterResult} vineyardCountry={countryCode} onApply={() => applyMaster(masterResult)} />
           <button
             type="button"
             onClick={applyManual}
