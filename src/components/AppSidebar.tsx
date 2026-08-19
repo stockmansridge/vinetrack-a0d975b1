@@ -150,6 +150,7 @@ const tools: NavItem[] = [
 
 // Available to all vineyard roles; listed last in the Tools group.
 const toolsGeneral: NavItem[] = [
+  { title: "Resistance Planner", url: "/tools/resistance-planner", icon: ShieldCheck },
   { title: "Pruning Yield Calculator", url: "/tools/yield-estimation", icon: Grape },
 ];
 

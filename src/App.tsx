@@ -66,6 +66,7 @@ import GrowthStageRecordsPage from "./pages/reports/GrowthStageRecordsPage";
 import YieldReportsComparisonPage from "./pages/reports/YieldReportsPage";
 import YieldAnalyticsPage from "./pages/reports/YieldAnalyticsPage";
 import YieldCalculatorPage from "./pages/tools/YieldCalculatorPage";
+import ResistancePlannerPage from "./pages/tools/ResistancePlannerPage";
 import ToolPlaceholder from "./pages/tools/ToolPlaceholder";
 import IrrigationCalculatorPage from "./pages/tools/IrrigationCalculatorPage";
 import SatelliteMappingPage from "./pages/tools/SatelliteMappingPage";
@@ -220,6 +221,7 @@ const App = () => (
                     </Route>
 
                     <Route path="/tools/yield-estimation" element={<YieldCalculatorPage />} />
+                    <Route path="/tools/resistance-planner" element={<ResistancePlannerPage />} />
                     <Route path="/tools/degree-days" element={<ToolPlaceholder title="Degree Days / BEDD" />} />
                     <Route path="/tools/seeding-mix" element={<ToolPlaceholder title="Seeding Mix Calculator" />} />
                     <Route path="/tools/block-row" element={<ToolPlaceholder title="Block / Row Calculator" />} />
