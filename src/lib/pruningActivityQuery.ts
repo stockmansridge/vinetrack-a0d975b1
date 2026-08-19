@@ -409,7 +409,7 @@ export function usePruningActivity(vineyardId: string | null) {
       const vid = vineyardId!;
       const [
         entriesRes, segmentsRes, seasonsRes, paddocksRes, tasksRes, labourRes,
-        effectiveCosts, activityLabourLines,
+        effectiveCosts, activityLabourLines, workTaskLinks,
       ] =
         await Promise.all([
           supabase.from("pruning_entries").select("*").eq("vineyard_id", vid)
@@ -430,6 +430,8 @@ export function usePruningActivity(vineyardId: string | null) {
           fetchEffectiveLabourCosts(vid),
           // SQL 190: labour lines owned by the pruning activities themselves.
           fetchVineyardPruningLabourLines(vid),
+          // SQL 200: activity id -> linked Work Task ids.
+          fetchWorkTaskLinksForVineyard(vid),
 
         ]);
 
@@ -589,7 +591,25 @@ export function usePruningActivity(vineyardId: string | null) {
         labourSummaries.set(activityId, summarisePruningLabourLines(lines));
       });
 
-      return applyActivityAllocations(baseRows, labourSummaries);
+      // SQL 200 — activity totals are the sum of their linked Work Tasks.
+      const workTaskTotals = new Map<string, WorkTaskAggregate>();
+      workTaskLinks.forEach((taskIds, actId) => {
+        const summaries = taskIds.map((tid) => {
+          const t = taskById.get(tid) ?? null;
+          const l = labourByTask.get(tid) ?? null;
+          return summariseLinkedWorkTask(
+            t as any,
+            l ? [{
+              id: tid, total_hours: l.hours, total_cost: l.cost, deleted_at: null,
+            } as any] : [],
+            effectiveCosts.get(tid) ?? null,
+            tid,
+          );
+        }).filter((x) => !!x.task);
+        if (summaries.length) workTaskTotals.set(actId, aggregateLinkedWorkTasks(summaries));
+      });
+
+      return applyActivityAllocations(baseRows, labourSummaries, workTaskTotals);
     },
 
   });
