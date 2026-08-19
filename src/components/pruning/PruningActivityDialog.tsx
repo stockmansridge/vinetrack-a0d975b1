@@ -27,11 +27,7 @@ import {
 } from "@/components/ui/select";
 
 import MultiBlockAllocationEditor from "@/components/pruning/MultiBlockAllocationEditor";
-import ActivityWorkTaskField from "@/components/pruning/ActivityWorkTaskField";
-import PruningLabourLinesEditor, {
-  labourDraftsFromLines, labourPayloadFromDrafts, type PruningLabourLineDraft,
-} from "@/components/pruning/PruningLabourLinesEditor";
-import { useLabourTypes } from "@/components/work-tasks/WorkTaskLabourFields";
+import PruningWorkTasksSection from "@/components/pruning/PruningWorkTasksSection";
 
 import {
   activityTotals, allocationKey, allocationQuarterCount, allocationSegments,
@@ -41,9 +37,7 @@ import {
   usePruningActivityDetail, useSavePruningActivity,
   type ActivitySaveConflict, type PruningActivity,
 } from "@/lib/pruningActivityApi";
-import {
-  savePruningActivityLabourLines, usePruningActivityLabourLines,
-} from "@/lib/pruningActivityLabour";
+import { linkWorkTaskToActivity } from "@/lib/pruningActivityWorkTasks";
 import { ensurePruningSeasonId, recordSkippedPruningEntry } from "@/lib/pruningQuery";
 import { useTeamLookup } from "@/hooks/useTeamLookup";
 import { formatDate } from "@/lib/dateFormat";
@@ -166,10 +160,9 @@ export default function PruningActivityDialog({
   // Client uuid, generated once per dialog instance so a retry is idempotent.
   const [newId] = useState(() => crypto.randomUUID());
 
-  // SQL 190 — the activity owns its labour lines.
-  const labourQ = usePruningActivityLabourLines(open && isEdit ? activityId : null);
-  const [labourLines, setLabourLines] = useState<PruningLabourLineDraft[]>([]);
-  const labourCategories = useLabourTypes(open ? vineyardId : null).data ?? [];
+  // SQL 200 — labour lives ONLY in Work Tasks. Tasks created before the
+  // activity exists are linked immediately after the first successful save.
+  const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([]);
 
 
 
@@ -188,7 +181,7 @@ export default function PruningActivityDialog({
       setStartInput("");
       setFinishInput("");
       setSkipped(false);
-      setLabourLines([]);
+      setPendingTaskIds([]);
       skipEntryIds.current = {};
     }
 
@@ -198,16 +191,6 @@ export default function PruningActivityDialog({
 
   }, [open, isEdit, loaded]);
 
-  // Server labour lines replace the editor state whenever they (re)load.
-  useEffect(() => {
-    if (!open || !isEdit || !labourQ.data) return;
-    setLabourLines(labourDraftsFromLines(labourQ.data));
-  }, [open, isEdit, labourQ.data]);
-
-  // The labour editor is a FULL REPLACE on save. Until the server rows have
-  // loaded, the editor state is not the user's intent — it is just an empty
-  // placeholder — so saving it would silently delete recorded labour history.
-  const labourReady = !isEdit || labourQ.isSuccess;
 
 
 
@@ -250,7 +233,7 @@ export default function PruningActivityDialog({
   const totals = activityTotals(draft);
   const busy = save.isPending || savingSkip;
   const canSave =
-    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || (!!loaded && labourReady));
+    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || !!loaded);
 
   /** SQL 168: one skipped entry per block, presented as a single save. */
   const handleSkippedSave = async () => {
@@ -323,17 +306,15 @@ export default function PruningActivityDialog({
       }
       if (result.conflicts.length) setConflicts(result.conflicts);
 
-      // SQL 190 — labour lines are saved against the activity in one full
-      // replace. Never partial: omitted lines are removed by the backend.
-      // Skip entirely when editing an activity whose lines never loaded:
-      // sending [] there would wipe existing labour history.
+      // SQL 200 — the activity never writes labour. Work Tasks created before
+      // the activity existed are linked now, via work_tasks.pruning_activity_id.
       const savedId = result.activity?.id ?? activityId ?? newId;
-      if (labourReady) {
-        await savePruningActivityLabourLines(
-          savedId,
-          labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
-        );
-        await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+      if (pendingTaskIds.length) {
+        for (const taskId of pendingTaskIds) {
+          try { await linkWorkTaskToActivity(taskId, savedId); } catch { /* reported below */ }
+        }
+        setPendingTaskIds([]);
+        await qc.invalidateQueries({ queryKey: ["pruning", "activity-work-tasks"] });
       }
 
 
@@ -367,8 +348,8 @@ export default function PruningActivityDialog({
                 {isEdit ? "Edit pruning activity" : "New pruning activity"}
               </DialogTitle>
               <DialogDescription>
-                One activity can cover several blocks. Labour, times, worker, method and
-                notes belong to the activity and are counted once.
+                One activity can cover several blocks. Labour and cost live in the
+                linked Work Tasks; times, worker, method and notes describe the work.
               </DialogDescription>
             </div>
             {(onPrev || onNext) && (
@@ -457,41 +438,24 @@ export default function PruningActivityDialog({
               </>)}
             </div>
 
-            {/* SQL 190 — labour belongs to the activity. The linked Work Task
-                card below stays a read-only mirror. */}
+            {/* SQL 200 — Work Tasks are the ONLY labour/cost surface. */}
             {!skipped && (
-              <PruningLabourLinesEditor
+              <PruningWorkTasksSection
                 vineyardId={vineyardId}
-                value={labourLines}
-                onChange={setLabourLines}
-                workDate={draft.entryDate}
-                disabled={busy}
-              />
-            )}
-
-            {!skipped && (
-              <ActivityWorkTaskField
-                vineyardId={vineyardId}
-                draft={draft}
                 activityId={activityId}
-                value={draft.workTaskId}
+                legacyTaskId={draft.workTaskId}
+                draft={draft}
                 startTime={startInput}
                 finishTime={finishInput}
-                legacyLabourHours={draft.workTaskId ? null : draft.labourHours}
-                legacyHourlyRate={draft.workTaskId ? null : draft.hourlyRate}
-                onChange={(taskId) => setDraft((d) => ({ ...d, workTaskId: taskId }))}
-                onLabourResolved={({ hours, rate }) => setDraft((d) =>
-                  d.labourHours === hours && d.hourlyRate === rate
-                    ? d
-                    : { ...d, labourHours: hours, hourlyRate: rate })}
+                legacyLabourHours={draft.labourHours}
+                legacyHourlyRate={draft.hourlyRate}
+                pendingTaskIds={pendingTaskIds}
+                onPendingLink={(id) => setPendingTaskIds((ids) =>
+                  ids.includes(id) ? ids : [...ids, id])}
+                onLegacyTaskCleared={() => setDraft((d) => ({ ...d, workTaskId: null }))}
                 disabled={busy}
               />
             )}
-
-
-
-
-
 
             <div className="space-y-1">
               <Label htmlFor="pa-notes">Notes</Label>
