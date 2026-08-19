@@ -204,6 +204,12 @@ export default function PruningActivityDialog({
     setLabourLines(labourDraftsFromLines(labourQ.data));
   }, [open, isEdit, labourQ.data]);
 
+  // The labour editor is a FULL REPLACE on save. Until the server rows have
+  // loaded, the editor state is not the user's intent — it is just an empty
+  // placeholder — so saving it would silently delete recorded labour history.
+  const labourReady = !isEdit || labourQ.isSuccess;
+
+
 
   /** Quarters already owned by THIS activity — they must stay selectable. */
   const ownedByActivity = useMemo(() => {
