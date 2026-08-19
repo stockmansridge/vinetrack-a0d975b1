@@ -105,9 +105,9 @@ describe("jurisdiction suitability", () => {
 
 describe("Master catalogue is country-scoped", () => {
   it("matches an AU master only for an AU vineyard", () => {
-    expect(matchMasterByIdentity([AU_MASTER], "Custodia 320 SC", "AU")).toBeTruthy();
-    expect(matchMasterByIdentity([AU_MASTER], "Custodia 320 SC", "NZ")).toBeNull();
-    expect(matchMasterByIdentity([AU_MASTER], "Custodia 320 SC", null)).toBeNull();
+    expect(matchMasterByIdentity([AU_MASTER], { productName: "Custodia 320 SC", country: "AU" })).toBeTruthy();
+    expect(matchMasterByIdentity([AU_MASTER], { productName: "Custodia 320 SC", country: "NZ" })).toBeNull();
+    expect(matchMasterByIdentity([AU_MASTER], { productName: "Custodia 320 SC", country: null })).toBeNull();
   });
 
   it("never treats a foreign master as eligible", () => {
