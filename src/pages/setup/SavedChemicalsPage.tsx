@@ -1022,6 +1022,12 @@ function ChemicalEditor({
               }))}
             onApply={applySuggestion}
           />
+          {/* Jurisdiction suitability is computed, never stored. Chemistry is
+              kept; only label authority changes. */}
+          <JurisdictionNoticeBanner
+            registrationCountry={intel.registration.country}
+            vineyardCountry={currentCountry}
+          />
           {masterLink && (
             <div
               className={`rounded-md border p-2 text-xs ${
@@ -1030,7 +1036,11 @@ function ChemicalEditor({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">
-                  {masterUpdate ? MASTER_UPDATE_MESSAGE : MASTER_CURRENT_MESSAGE}
+                  {masterUpdate
+                    ? MASTER_UPDATE_MESSAGE
+                    : masterJurisdiction === "compatible"
+                    ? MASTER_CURRENT_MESSAGE
+                    : `Current ${countryLabel(masterRow?.registration_country)} Master information`}
                 </span>
                 {masterUpdate && masterRow && (
                   <Button type="button" size="sm" variant="outline" onClick={() => setMasterUpdateOpen(true)}>
@@ -1042,8 +1052,16 @@ function ChemicalEditor({
                 Linked to the VineTrack Master Catalogue (revision {masterLink.revision ?? "—"}).
                 Catalogue updates are only applied when you accept them.
               </p>
+              {masterRow && masterJurisdiction === "mismatch" && (
+                <p className="mt-1 text-muted-foreground">
+                  This is the applicable registration for{" "}
+                  {countryLabel(masterRow.registration_country)}, not for the current
+                  vineyard ({countryLabel(currentCountry)}).
+                </p>
+              )}
             </div>
           )}
+
           {masterRow && (
             <MasterUpdateDialog
               open={masterUpdateOpen}
