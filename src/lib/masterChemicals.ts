@@ -36,6 +36,11 @@ import {
   type ChemicalIntelligenceDraft,
 } from "@/lib/chemicalIntelligenceWrite";
 import { productNameTokens } from "@/lib/chemicalReverify";
+import {
+  masterEligibleForVineyard,
+  vineyardCountryCode,
+} from "@/lib/chemicalJurisdiction";
+
 
 /* ------------------------------------------------------------------ types */
 
