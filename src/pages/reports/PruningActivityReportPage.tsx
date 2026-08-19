@@ -551,8 +551,6 @@ export default function PruningActivityReportPage() {
         case "hours": return totals.hours.toFixed(2);
         case "vinesPerHour": return avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0);
         case "cost": return money(totals.cost);
-        case "activityHours": return totals.activityHours.toFixed(2);
-        case "activityCost": return money(totals.activityCost);
         default: return "";
       }
     };
