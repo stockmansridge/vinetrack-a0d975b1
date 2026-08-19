@@ -316,6 +316,14 @@ export function applyActivityAllocations(
 
     ordered.forEach((r, i) => {
       const s = splitById.get(r.id);
+      const allocHours = s?.hours ?? 0;
+      const allocCost = activityCost == null ? null : s?.cost ?? 0;
+      // Row-level productivity/cost must always use THIS block's allocated
+      // share — never the whole activity's labour, which would understate
+      // vines/hr on every allocation of a multi-block activity.
+      const vinesPerHour = allocHours > 0 ? r.vines / allocHours : null;
+      const rowEqPerHour = allocHours > 0 ? r.rowEquivalents / allocHours : null;
+      const hourlyRate = allocCost != null && allocHours > 0 ? allocCost / allocHours : null;
       byId.set(r.id, {
         ...r,
         activityLabel,
@@ -326,8 +334,11 @@ export function applyActivityAllocations(
 
         isPrimaryAllocation: i === 0,
         allocationShare: s?.share ?? 1,
-        allocatedHours: s?.hours ?? 0,
-        allocatedCost: activityCost == null ? null : s?.cost ?? 0,
+        allocatedHours: allocHours,
+        allocatedCost: allocCost,
+        vinesPerHour,
+        rowEqPerHour,
+        hourlyRate,
         activityHours,
         activityCost,
       });

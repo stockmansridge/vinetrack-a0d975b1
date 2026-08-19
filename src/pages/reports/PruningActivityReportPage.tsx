@@ -61,7 +61,7 @@ const UNASSIGNED = "__unassigned__";
 type SortKey =
   | "date" | "activity" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
   | "rows" | "quarters" | "rowEq" | "vines" | "share" | "hours" | "start" | "finish"
-  | "duration" | "vinesPerHour" | "rate" | "cost" | "activityHours" | "activityCost"
+  | "duration" | "vinesPerHour" | "rate" | "cost"
   | "task" | "taskStatus"
   | "createdBy" | "created" | "updated" | "status";
 
@@ -80,15 +80,13 @@ const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolea
   { key: "rowEq", label: "Row eq.", align: "right" },
   { key: "vines", label: "Vines", align: "right" },
   { key: "share", label: "Share", align: "right" },
-  { key: "hours", label: "Allocated hrs", align: "right" },
+  { key: "hours", label: "Labour hrs", align: "right" },
   { key: "start", label: "Start" },
   { key: "finish", label: "Finish" },
   { key: "duration", label: "Duration", align: "right" },
   { key: "vinesPerHour", label: "Vines / hr", align: "right" },
   { key: "rate", label: "Rate / hr", align: "right", cost: true },
-  { key: "cost", label: "Allocated labour cost", align: "right", cost: true },
-  { key: "activityHours", label: "Activity total hrs", align: "right" },
-  { key: "activityCost", label: "Activity total cost", align: "right", cost: true },
+  { key: "cost", label: "Labour cost", align: "right", cost: true },
   { key: "task", label: "Work task" },
   { key: "taskStatus", label: "Task status" },
   { key: "createdBy", label: "Created by" },
@@ -305,8 +303,6 @@ export default function PruningActivityReportPage() {
       vinesPerHour: (r: PruningActivityRow) => r.vinesPerHour,
       rate: (r: PruningActivityRow) => r.hourlyRate,
       cost: (r: PruningActivityRow) => r.allocatedCost,
-      activityHours: (r: PruningActivityRow) => r.activityHours,
-      activityCost: (r: PruningActivityRow) => r.activityCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
       taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
       createdBy: (r: PruningActivityRow) => resolveUser(r.createdById) ?? "",
@@ -533,12 +529,6 @@ export default function PruningActivityReportPage() {
         case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
         case "rate": return money(r.hourlyRate);
         case "cost": return money(r.allocatedCost);
-        case "activityHours":
-          return r.isPrimaryAllocation && r.activityHours != null
-            ? `${r.activityHours.toFixed(2)} (activity total)` : "";
-        case "activityCost":
-          return r.isPrimaryAllocation && r.activityCost != null
-            ? `${money(r.activityCost)} (activity total)` : "";
         case "task": return r.workTaskLabel ?? "—";
         case "taskStatus": return r.workTaskStatus ?? "—";
         case "createdBy": return resolveUser(r.createdById) ?? "—";
@@ -559,8 +549,6 @@ export default function PruningActivityReportPage() {
         case "hours": return totals.hours.toFixed(2);
         case "vinesPerHour": return avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0);
         case "cost": return money(totals.cost);
-        case "activityHours": return totals.activityHours.toFixed(2);
-        case "activityCost": return money(totals.activityCost);
         default: return "";
       }
     };
@@ -653,6 +641,12 @@ export default function PruningActivityReportPage() {
                 {fmt.blockLabel.toLowerCase()} {r.allocationIndex} of {r.activityBlockCount}
               </span>
             )}
+            {r.activityBlockCount > 1 && r.isPrimaryAllocation && (r.activityHours != null || r.activityCost != null) && (
+              <span className="text-[11px] text-muted-foreground">
+                Activity total: {r.activityHours != null ? `${r.activityHours.toFixed(2)} h` : "—"}
+                {canSeeCosts && r.activityCost != null ? ` · ${money(r.activityCost)}` : ""}
+              </span>
+            )}
           </div>
         );
 
@@ -704,24 +698,6 @@ export default function PruningActivityReportPage() {
       case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
       case "rate": return money(r.hourlyRate);
       case "cost": return money(r.allocatedCost);
-      case "activityHours":
-        return r.isPrimaryAllocation && r.activityHours != null ? (
-          <span>
-            {r.activityHours.toFixed(2)}
-            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-              Activity total
-            </span>
-          </span>
-        ) : <span className="text-muted-foreground text-xs">—</span>;
-      case "activityCost":
-        return r.isPrimaryAllocation && r.activityCost != null ? (
-          <span className="font-medium">
-            {money(r.activityCost)}
-            <span className="block text-[10px] uppercase tracking-wide font-normal text-muted-foreground">
-              Activity total
-            </span>
-          </span>
-        ) : <span className="text-muted-foreground text-xs">—</span>;
 
       case "task":
         if (r.workTaskId && !r.workTaskMissing) {
@@ -765,8 +741,6 @@ export default function PruningActivityReportPage() {
       case "vinesPerHour":
         return <span className="font-medium">{avgVinesPerHour == null ? "—" : avgVinesPerHour.toFixed(0)}</span>;
       case "cost": return <span className="font-semibold">{money(totals.cost)}</span>;
-      case "activityHours": return <span className="font-medium">{totals.activityHours.toFixed(2)}</span>;
-      case "activityCost": return <span className="font-semibold">{money(totals.activityCost)}</span>;
       default: return null;
     }
   };
