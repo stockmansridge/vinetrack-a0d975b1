@@ -42,7 +42,7 @@ The in-app `ChemicalIntelligence` aggregate (with nested `registration` / `verif
 | `active_ingredients` | `jsonb` | Array of **ActiveIngredient** (section 4.1). Source of truth for chemistry. |
 | `activity_groups` | `text[]` | **Derived.** Bare group codes, e.g. `{'3','11'}` — one entry per group, **never** `{'3 + 11'}`. Always rewritten from `active_ingredients` on every structured write (section 6). |
 | `activity_group_scheme` | `text` | **Derived.** Scheme of the first canonical group. CHECK: `frac`, `hrac`, `irac`, `not_applicable`, or NULL. |
-| `registration_country` | `text` | ISO-2 country code, uppercase (`AU`, `NZ`). |
+| `registration_country` | `text` | ISO-2 country code, uppercase (`AU`, `NZ`). Vineyard countries are the canonical 30-country set in [vineyard-country-contract.md](./vineyard-country-contract.md). |
 | `registration_scheme` | `text` | CHECK: `apvma`, `acvm`, `nz_epa`, `other`, or NULL. |
 | `registration_number` | `text` | Register's product number, verbatim. |
 | `registrant` | `text` | Registrant of record. |
