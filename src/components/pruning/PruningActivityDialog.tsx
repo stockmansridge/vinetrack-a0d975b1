@@ -250,7 +250,7 @@ export default function PruningActivityDialog({
   const totals = activityTotals(draft);
   const busy = save.isPending || savingSkip;
   const canSave =
-    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || !!loaded);
+    !!draft.entryDate && totals.quarters > 0 && !busy && (!isEdit || (!!loaded && labourReady));
 
   /** SQL 168: one skipped entry per block, presented as a single save. */
   const handleSkippedSave = async () => {
