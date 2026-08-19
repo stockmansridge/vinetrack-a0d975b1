@@ -12,35 +12,21 @@
 // (registered uses, rates, WHP, re-entry, restrictions) stop being
 // authoritative for the current vineyard.
 import { normaliseCountry } from "@/lib/chemicalIntelligenceWrite";
+import { VINEYARD_COUNTRY_NAME } from "@/lib/vineyardCountries";
 
 export type JurisdictionSuitability = "compatible" | "mismatch" | "unknown";
-
-const COUNTRY_NAMES: Record<string, string> = {
-  AU: "Australia",
-  NZ: "New Zealand",
-  GB: "United Kingdom",
-  US: "United States",
-  ZA: "South Africa",
-  FR: "France",
-  IT: "Italy",
-  ES: "Spain",
-  DE: "Germany",
-  CL: "Chile",
-  AR: "Argentina",
-  CA: "Canada",
-};
 
 /** ISO-2 code for the selected vineyard, or null when it cannot be resolved. */
 export function vineyardCountryCode(value: unknown): string | null {
   const code = normaliseCountry(value);
-  return code && /^[A-Z]{2}$/.test(code) ? code : null;
+  return code ?? null;
 }
 
 /** Human country name for messaging; falls back to the ISO code. */
 export function countryLabel(code: unknown): string {
   const c = vineyardCountryCode(code);
   if (!c) return "unknown";
-  return COUNTRY_NAMES[c] ?? c;
+  return VINEYARD_COUNTRY_NAME[c] ?? c;
 }
 
 /**
