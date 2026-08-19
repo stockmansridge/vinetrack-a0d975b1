@@ -35,6 +35,9 @@ import {
 } from "@/lib/workTasksQuery";
 import { usePruningActivities } from "@/lib/pruningActivityApi";
 import {
+  fetchWorkTaskLinksForVineyard, linkWorkTaskToActivity,
+} from "@/lib/pruningActivityWorkTasks";
+import {
   COSTING_METHOD_HOURLY, COSTING_METHOD_PIECE_RATE, costPerHectare,
   pieceRateTotalCost, resolveCostingMethod, type CostingMethod,
 } from "@/lib/pieceRateCosting";
@@ -90,12 +93,14 @@ export interface ResolvedTaskLabour {
 // ------------------------------------------------------------------ create
 
 export function CreateWorkTaskDialog({
-  open, onOpenChange, vineyardId, draft, startTime, finishTime,
+  open, onOpenChange, vineyardId, activityId = null, draft, startTime, finishTime,
   legacyLabourHours, legacyHourlyRate, userId, onCreated,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   vineyardId: string;
+  /** SQL 200 — link the new task to this activity (when it already exists). */
+  activityId?: string | null;
   draft: PruningActivityDraft;
   startTime: string;
   finishTime: string;
@@ -272,7 +277,14 @@ export function CreateWorkTaskDialog({
         resolved = { hours: canonical.totalHours, rate: canonical.rate };
       }
 
-      toast.success("Work Task created and linked to this activity.");
+      // SQL 200 — the Work Task points at the activity, not the other way round.
+      if (activityId) await linkWorkTaskToActivity(task.id, activityId);
+
+      toast.success(
+        activityId
+          ? "Work Task created and linked to this activity."
+          : "Work Task created. It links to this activity when you save.",
+      );
       onCreated(task.id, resolved);
     } catch (e: any) {
       toast.error(`Couldn't create the Work Task: ${e?.message ?? e}`);
@@ -411,6 +423,11 @@ export function PickWorkTaskDialog({
     queryFn: async () => (await fetchWorkTasksForVineyard(vineyardId, [])).tasks,
   });
   const activitiesQ = usePruningActivities(open ? vineyardId : null, false);
+  const linksQ = useQuery({
+    queryKey: ["pruning", "work-task-links", vineyardId],
+    enabled: open && !!vineyardId,
+    queryFn: () => fetchWorkTaskLinksForVineyard(vineyardId),
+  });
 
   /** work_task_id -> owning activity id, for tasks owned by ANOTHER activity. */
   const takenBy = useMemo(() => {
@@ -418,8 +435,15 @@ export function PickWorkTaskDialog({
     (activitiesQ.data ?? []).forEach((a) => {
       if (a.workTaskId && !a.isReversed && a.id !== activityId) m.set(a.workTaskId, a.id);
     });
+    // SQL 200 links win: a task owned by another activity can't be re-linked.
+    (linksQ.data ?? new Map<string, string[]>()).forEach((taskIds, actId) => {
+      taskIds.forEach((tid) => {
+        if (actId === activityId) m.delete(tid);
+        else m.set(tid, actId);
+      });
+    });
     return m;
-  }, [activitiesQ.data, activityId]);
+  }, [activitiesQ.data, linksQ.data, activityId]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
