@@ -26,6 +26,10 @@ import {
   type LabourCostSource,
 } from "@/lib/effectiveLabourCost";
 import {
+  aggregateLinkedWorkTasks, fetchWorkTaskLinksForVineyard, summariseLinkedWorkTask,
+  type WorkTaskAggregate,
+} from "@/lib/pruningActivityWorkTasks";
+import {
   fetchVineyardPruningLabourLines, resolvePruningActivityLabour,
   summarisePruningLabourLines, type PruningLabourSummary,
 } from "@/lib/pruningActivityLabour";
@@ -248,8 +252,10 @@ export function resolveActivityLabel(members: BaseActivityRow[]): {
  */
 export function applyActivityAllocations(
   baseRows: BaseActivityRow[],
-  /** SQL 190: the activity's own labour lines, summarised, keyed by activity id. */
+  /** SQL 190 (legacy): the activity's own labour lines, keyed by activity id. */
   activityLabour?: Map<string, PruningLabourSummary> | null,
+  /** SQL 200: totals of the Work Tasks linked to each activity. */
+  activityWorkTasks?: Map<string, WorkTaskAggregate> | null,
 ): PruningActivityRow[] {
   const groups = new Map<string, BaseActivityRow[]>();
   baseRows.forEach((r) => {
@@ -289,6 +295,50 @@ export function applyActivityAllocations(
     // linked hourly Work Task lines > legacy scalar activity labour.
     const skippedGroup = ordered.every((r) => r.isSkipped);
     const lines = ordered[0]?.activityId ? activityLabour?.get(ordered[0].activityId) ?? null : null;
+    // SQL 200: when the activity has linked Work Tasks they ARE the labour and
+    // cost authority — activity-owned and legacy labour are ignored entirely.
+    const linkedTasks = ordered[0]?.activityId
+      ? activityWorkTasks?.get(ordered[0].activityId) ?? null
+      : null;
+    if (!skippedGroup && linkedTasks && linkedTasks.taskCount > 0) {
+      const activityHoursT = linkedTasks.hours;
+      const activityCostT = linkedTasks.cost;
+      const splitT = allocateActivityShares(
+        ordered.map((r) => ({
+          id: r.id,
+          rowEquivalents: r.rowEquivalents,
+          serverShare: (r.entry as any)?.allocation_share_of_row_equivalents ?? null,
+          serverHours: null,
+        })),
+        activityHoursT,
+        activityCostT,
+      );
+      const splitByIdT = new Map(splitT.map((x) => [x.id, x]));
+      const labelT = resolveActivityLabel(ordered);
+      ordered.forEach((r, i) => {
+        const x = splitByIdT.get(r.id);
+        const allocHours = x?.hours ?? 0;
+        const allocCost = activityCostT == null ? null : x?.cost ?? 0;
+        byId.set(r.id, {
+          ...r,
+          activityLabel: labelT.activityLabel,
+          activityLabelKind: labelT.activityLabelKind,
+          groupKey,
+          activityBlockCount: ordered.length,
+          allocationIndex: i + 1,
+          isPrimaryAllocation: i === 0,
+          allocationShare: x?.share ?? 1,
+          allocatedHours: allocHours,
+          allocatedCost: allocCost,
+          vinesPerHour: allocHours > 0 ? r.vines / allocHours : null,
+          rowEqPerHour: allocHours > 0 ? r.rowEquivalents / allocHours : null,
+          hourlyRate: allocCost != null && allocHours > 0 ? allocCost / allocHours : null,
+          activityHours: activityHoursT,
+          activityCost: activityCostT,
+        });
+      });
+      return;
+    }
     const resolvedLabour = skippedGroup
       ? { cost: null as number | null, hours: null as number | null }
       : resolvePruningActivityLabour({
