@@ -46,13 +46,21 @@ export function MasterChemicalCard({
           <Badge className="gap-1 border-transparent bg-primary/15 text-primary text-[10px]">
             <BadgeCheck className="h-3 w-3" /> VineTrack verified
           </Badge>
-          {master.registration_country && (
-            <Badge variant="secondary" className="text-[10px]">
-              {master.registration_country}
-            </Badge>
-          )}
+          <Badge variant="secondary" className="text-[10px]">
+            {countryLabel(master.registration_country) === "unknown"
+              ? "Country unknown"
+              : `${vineyardCountryCode(master.registration_country)} · ${countryLabel(master.registration_country)}`}
+          </Badge>
         </div>
       </div>
+
+      {vineyardCountry !== undefined && (
+        <JurisdictionNoticeBanner
+          registrationCountry={master.registration_country}
+          vineyardCountry={vineyardCountry}
+        />
+      )}
+
 
       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
         <span className="text-muted-foreground">Actives</span>
