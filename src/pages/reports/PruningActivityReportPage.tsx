@@ -641,6 +641,12 @@ export default function PruningActivityReportPage() {
                 {fmt.blockLabel.toLowerCase()} {r.allocationIndex} of {r.activityBlockCount}
               </span>
             )}
+            {r.activityBlockCount > 1 && r.isPrimaryAllocation && (r.activityHours != null || r.activityCost != null) && (
+              <span className="text-[11px] text-muted-foreground">
+                Activity total: {r.activityHours != null ? `${r.activityHours.toFixed(2)} h` : "—"}
+                {canSeeCosts && r.activityCost != null ? ` · ${money(r.activityCost)}` : ""}
+              </span>
+            )}
           </div>
         );
 
