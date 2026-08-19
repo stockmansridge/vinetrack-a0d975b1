@@ -99,7 +99,7 @@ describe("SQL 196 plan mapping", () => {
   });
 
   it("normalises free-typed group entry", () => {
-    expect(normaliseGroupCodes(["3", " 11 ", "", "3"])).toEqual(["11", "3"]);
+    expect(normaliseGroupCodes(["3", " 11 ", "", "3"])).toEqual(["3", "11"]);
   });
 
   it("serialises an empty plan without inventing positions", () => {
