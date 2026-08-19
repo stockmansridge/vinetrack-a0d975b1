@@ -300,3 +300,53 @@ export function planValidationIssues(plan: ResistancePlan): string[] {
   }
   return issues;
 }
+
+/* ------------------------------------------------------- plan lifecycle */
+
+/** A blank, unsaved plan. `id` is empty until the server assigns one. */
+export function emptyPlan(args: {
+  vineyardId: string;
+  seasonId: string;
+  disease: ResistanceDisease | string;
+  jurisdiction: string | null;
+}): ResistancePlan {
+  return {
+    id: "",
+    vineyardId: args.vineyardId,
+    seasonId: args.seasonId,
+    disease: args.disease,
+    jurisdiction: args.jurisdiction,
+    crop: "grape",
+    blockIds: [],
+    positions: [],
+    notes: null,
+    rulesetId: null,
+    rulesetVersion: null,
+    createdAt: null,
+    updatedAt: null,
+    createdBy: null,
+    updatedBy: null,
+    deletedAt: null,
+    clientUpdatedAt: null,
+    serverRevision: null,
+  };
+}
+
+/**
+ * Copy of a plan's INTENT only. A duplicate gets a fresh identity: no plan ID,
+ * fresh stable position IDs and no revision metadata to be stale against.
+ */
+export function duplicatePlan(plan: ResistancePlan): ResistancePlan {
+  return {
+    ...plan,
+    id: "",
+    positions: plan.positions.map((p) => ({ ...p, id: newPositionId() })),
+    createdAt: null,
+    updatedAt: null,
+    createdBy: null,
+    updatedBy: null,
+    deletedAt: null,
+    clientUpdatedAt: null,
+    serverRevision: null,
+  };
+}
