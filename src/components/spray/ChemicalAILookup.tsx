@@ -16,6 +16,14 @@ import {
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import { normaliseCountry } from "@/lib/chemicalIntelligenceWrite";
 import {
+  countryLabel,
+  jurisdictionSuitability,
+  masterEligibleForVineyard,
+  vineyardCountryCode,
+  MISSING_VINEYARD_COUNTRY_MESSAGE,
+} from "@/lib/chemicalJurisdiction";
+
+import {
   inferProductType,
   inferRateBasis,
   normaliseUnit,
