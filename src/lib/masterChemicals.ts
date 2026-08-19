@@ -281,25 +281,35 @@ export const MASTER_CURRENT_MESSAGE = "Chemical information is current";
 const TABLE = "master_chemicals";
 const VERSIONS = "master_chemical_versions";
 
-/** Trusted (approved-only) Master search used by the normal lookup path. */
+/**
+ * Trusted (approved-only) Master search used by the normal lookup path.
+ *
+ * Jurisdiction first: the vineyard's country is a REQUIRED filter applied in
+ * the query itself. Without a vineyard country the search fails closed and
+ * returns nothing — the portal never searches all Master products and then
+ * checks the country afterwards.
+ */
 export async function searchApprovedMasterChemicals(
   query: string,
   country?: string | null,
 ): Promise<MasterChemicalRow[]> {
   const q = (query ?? "").trim();
-  if (q.length < 2) return [];
-  let sel = (supabase as any)
+  const c = vineyardCountryCode(country);
+  if (q.length < 2 || !c) return [];
+  const { data, error } = await (supabase as any)
     .from(TABLE)
     .select("*")
     .eq("review_status", "approved")
+    .eq("registration_country", c)
     .ilike("registered_product_name", `%${q}%`)
     .limit(25);
-  const c = str(country);
-  if (c && /^[A-Za-z]{2}$/.test(c)) sel = sel.eq("registration_country", c.toUpperCase());
-  const { data, error } = await sel;
   if (error) throw error;
-  return (data ?? []) as MasterChemicalRow[];
+  // Defensive: never serve a row the backend did not scope to this country.
+  return ((data ?? []) as MasterChemicalRow[]).filter((r) =>
+    masterEligibleForVineyard(r.registration_country, c),
+  );
 }
+
 
 export async function fetchMasterChemical(id: string): Promise<MasterChemicalRow | null> {
   const { data, error } = await (supabase as any)
