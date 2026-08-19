@@ -192,7 +192,7 @@ export async function fetchWorkTasksForActivity(
   }
 
   if (legacyTaskId && !out.has(legacyTaskId)) {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("work_tasks").select("*").eq("id", legacyTaskId).is("deleted_at", null).maybeSingle();
     if (data) out.set((data as any).id, data as unknown as WorkTask);
   }
@@ -233,7 +233,7 @@ export function useActivityWorkTasks(
 export async function fetchWorkTaskLinksForVineyard(
   vineyardId: string,
 ): Promise<Map<string, string[]>> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("work_tasks")
     .select(`id, ${WORK_TASK_ACTIVITY_COLUMN}`)
     .eq("vineyard_id", vineyardId)
@@ -258,18 +258,18 @@ export async function linkWorkTaskToActivity(
   workTaskId: string,
   activityId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from("work_tasks")
-    .update({ [WORK_TASK_ACTIVITY_COLUMN]: activityId, client_updated_at: new Date().toISOString() } as any)
+    .update({ [WORK_TASK_ACTIVITY_COLUMN]: activityId, client_updated_at: new Date().toISOString() })
     .eq("id", workTaskId);
   if (error) throw error;
 }
 
 /** Unlink — the Work Task itself is left completely intact. */
 export async function unlinkWorkTaskFromActivity(workTaskId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from("work_tasks")
-    .update({ [WORK_TASK_ACTIVITY_COLUMN]: null, client_updated_at: new Date().toISOString() } as any)
+    .update({ [WORK_TASK_ACTIVITY_COLUMN]: null, client_updated_at: new Date().toISOString() })
     .eq("id", workTaskId);
   if (error) throw error;
 }
