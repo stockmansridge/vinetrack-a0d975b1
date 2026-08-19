@@ -48,18 +48,23 @@ const CUSTODIA: MasterChemicalRow = {
       identity_source: "authoritative_register",
     },
   ],
+  // Real product: no invented rate / WHP / REI values live in this fixture.
+  // Generic numeric behaviour is tested with a fictional chemical instead.
   registered_uses: [
     {
       crop: "Grapevines",
       target_raw: "Powdery mildew",
-      rates: [{ label: "500 mL/ha", basis: "per_ha", value: 500, unit: "mL" }],
-      withholding_period_days: 30,
-      re_entry_period_hours: 24,
+      rates: [],
     },
   ],
-  verification_unresolved_fields: [],
+  verification_unresolved_fields: [
+    "registered_uses.rates",
+    "registered_uses.withholding_period_days",
+    "registered_uses.re_entry_period_hours",
+  ],
   verification_conflicts: [],
 };
+
 
 const CUSTODIA_FORTE: MasterChemicalRow = {
   ...CUSTODIA,
