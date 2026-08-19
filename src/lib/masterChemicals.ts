@@ -201,9 +201,15 @@ const normKey = (s: string | null | undefined) =>
  */
 export function matchMasterByIdentity(
   rows: MasterChemicalRow[],
-  opts: { identityKey?: string | null; productName?: string | null },
+  opts: { identityKey?: string | null; productName?: string | null; country?: string | null },
 ): MasterChemicalRow | null {
-  const approved = rows.filter(isApprovedMaster);
+  // Jurisdiction gate first (contract §3/§16): country filtering does NOT
+  // replace identity protection — both are required.
+  const wantCountry = vineyardCountryCode(opts.country);
+  const eligible = rows.filter(
+    (r) => !opts.country || masterEligibleForVineyard(r.registration_country, wantCountry),
+  );
+  const approved = eligible.filter(isApprovedMaster);
   const key = normKey(opts.identityKey);
   if (key) {
     const byKey = approved.filter((r) => normKey(r.registration_identity_key) === key);
@@ -217,6 +223,7 @@ export function matchMasterByIdentity(
   );
   return byName.length === 1 ? byName[0] : null;
 }
+
 
 /** Registration identity key of a Master row, derived when not stored. */
 export function masterIdentityKey(row: MasterChemicalRow): string | null {
