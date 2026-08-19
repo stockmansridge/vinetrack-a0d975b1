@@ -10,3 +10,5 @@ export * from "./resistanceEngine";
 export * from "./resistanceEventSource";
 export * from "./resistanceCandidate";
 export * from "./resistanceHistoryQuery";
+export * from "./resistancePlanEvents";
+
