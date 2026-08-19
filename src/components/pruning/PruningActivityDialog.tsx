@@ -325,12 +325,17 @@ export default function PruningActivityDialog({
 
       // SQL 190 — labour lines are saved against the activity in one full
       // replace. Never partial: omitted lines are removed by the backend.
+      // Skip entirely when editing an activity whose lines never loaded:
+      // sending [] there would wipe existing labour history.
       const savedId = result.activity?.id ?? activityId ?? newId;
-      await savePruningActivityLabourLines(
-        savedId,
-        labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
-      );
-      await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+      if (labourReady) {
+        await savePruningActivityLabourLines(
+          savedId,
+          labourPayloadFromDrafts(labourLines, labourCategories as any, draft.worker),
+        );
+        await qc.invalidateQueries({ queryKey: ["pruning", "activity-labour-lines", savedId] });
+      }
+
 
       // Canonical server state replaces the editor state.
       if (result.activity) {
