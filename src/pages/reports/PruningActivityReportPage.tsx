@@ -531,12 +531,6 @@ export default function PruningActivityReportPage() {
         case "vinesPerHour": return r.vinesPerHour == null ? "—" : r.vinesPerHour.toFixed(0);
         case "rate": return money(r.hourlyRate);
         case "cost": return money(r.allocatedCost);
-        case "activityHours":
-          return r.isPrimaryAllocation && r.activityHours != null
-            ? `${r.activityHours.toFixed(2)} (activity total)` : "";
-        case "activityCost":
-          return r.isPrimaryAllocation && r.activityCost != null
-            ? `${money(r.activityCost)} (activity total)` : "";
         case "task": return r.workTaskLabel ?? "—";
         case "taskStatus": return r.workTaskStatus ?? "—";
         case "createdBy": return resolveUser(r.createdById) ?? "—";
