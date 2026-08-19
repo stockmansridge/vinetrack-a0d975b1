@@ -303,8 +303,6 @@ export default function PruningActivityReportPage() {
       vinesPerHour: (r: PruningActivityRow) => r.vinesPerHour,
       rate: (r: PruningActivityRow) => r.hourlyRate,
       cost: (r: PruningActivityRow) => r.allocatedCost,
-      activityHours: (r: PruningActivityRow) => r.activityHours,
-      activityCost: (r: PruningActivityRow) => r.activityCost,
       task: (r: PruningActivityRow) => r.workTaskLabel,
       taskStatus: (r: PruningActivityRow) => r.workTaskStatus,
       createdBy: (r: PruningActivityRow) => resolveUser(r.createdById) ?? "",
