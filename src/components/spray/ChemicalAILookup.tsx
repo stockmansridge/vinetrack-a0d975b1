@@ -14,7 +14,6 @@ import {
   type MasterChemicalRow,
 } from "@/lib/masterChemicals";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
-import { normaliseCountry } from "@/lib/chemicalIntelligenceWrite";
 import {
   countryLabel,
   jurisdictionSuitability,
@@ -154,7 +153,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             target: "target" in candidate ? candidate.target ?? null : null,
             notes: "notes" in candidate ? candidate.notes ?? null : null,
             safety_note: "safety_note" in candidate ? candidate.safety_note ?? null : null,
-            country: "country" in candidate ? candidate.country ?? country ?? null : country ?? null,
+            country: "country" in candidate ? candidate.country ?? countryCode : countryCode,
             country_confirmed: "country_confirmed" in candidate ? candidate.country_confirmed ?? null : null,
             confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
             source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
@@ -465,7 +464,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Lookup results ({candidates.length}) for "{name.trim()}"
-              {country ? ` · ${country}` : ""}
+              {countryCode ? ` · ${countryLabel(countryCode)}` : ""}
             </div>
             <button
               type="button"
