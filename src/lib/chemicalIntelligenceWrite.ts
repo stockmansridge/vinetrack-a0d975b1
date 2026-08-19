@@ -241,17 +241,51 @@ const intOrUndef = (v: unknown): number | undefined => {
   return n == null ? undefined : Math.round(n);
 };
 
-/** ISO-2 uppercase, tolerating a country name for the two markets we serve. */
+/**
+ * ISO-2 uppercase country, per the shared Rork jurisdiction contract.
+ * Aliases (UK → GB, USA → US, …) are resolved before the bare two-letter path
+ * so "UK" never survives as a pseudo ISO code.
+ */
+const COUNTRY_ALIASES: Record<string, string> = {
+  uk: "GB",
+  gb: "GB",
+  "united kingdom": "GB",
+  "great britain": "GB",
+  england: "GB",
+  scotland: "GB",
+  wales: "GB",
+  usa: "US",
+  "united states": "US",
+  "united states of america": "US",
+  aus: "AU",
+  australia: "AU",
+  nz: "NZ",
+  nzl: "NZ",
+  "new zealand": "NZ",
+  aotearoa: "NZ",
+  "south africa": "ZA",
+  france: "FR",
+  italy: "IT",
+  spain: "ES",
+  germany: "DE",
+  chile: "CL",
+  argentina: "AR",
+  canada: "CA",
+};
+
 export function normaliseCountry(value: unknown): string | undefined {
   const raw = trimOrUndef(value);
   if (!raw) return undefined;
-  if (/^[a-z]{2}$/i.test(raw)) return raw.toUpperCase();
   const lower = raw.toLowerCase();
+  const alias = COUNTRY_ALIASES[lower];
+  if (alias) return alias;
+  if (/^[a-z]{2}$/i.test(raw)) return raw.toUpperCase();
   if (lower.startsWith("austral")) return "AU";
-  if (lower.startsWith("new zealand") || lower === "nz") return "NZ";
+  if (lower.startsWith("new zealand")) return "NZ";
   if (lower.startsWith("united states")) return "US";
   return raw.toUpperCase().slice(0, 2);
 }
+
 
 export function normaliseWriteScheme(value: unknown): WriteScheme {
   const s = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
