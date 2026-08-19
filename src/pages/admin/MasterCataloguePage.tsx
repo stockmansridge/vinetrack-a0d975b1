@@ -32,6 +32,7 @@ import {
   type MasterChemicalRow,
   type MasterReviewStatus,
 } from "@/lib/masterChemicals";
+import { countryLabel, vineyardCountryCode } from "@/lib/chemicalJurisdiction";
 
 const QK = ["admin", "master-chemicals"] as const;
 
@@ -132,8 +133,14 @@ function RowCard({ row, onOpen }: { row: MasterChemicalRow; onOpen: () => void }
           <div className="text-xs text-muted-foreground">
             {row.registrant?.trim() || "Registrant unknown"} · {masterIdentityKey(row) ?? "no registration"}
           </div>
+          <div className="text-[11px] text-muted-foreground">
+            {countryLabel(row.registration_country)} registration
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
+          <Badge className="border-transparent bg-primary/15 text-primary text-[10px]">
+            {vineyardCountryCode(row.registration_country) ?? "No country"}
+          </Badge>
           <Badge variant="secondary" className="text-[10px]">
             rev {masterRevision(row) ?? "—"}
           </Badge>
@@ -203,9 +210,17 @@ function ReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{row.registered_product_name?.trim() || "Master chemical"}</DialogTitle>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {row.registered_product_name?.trim() || "Master chemical"}
+            <Badge className="border-transparent bg-primary/15 text-primary text-[11px]">
+              {vineyardCountryCode(row.registration_country) ?? "No country"} ·{" "}
+              {masterIdentityKey(row) ?? "no registration"}
+            </Badge>
+          </DialogTitle>
           <DialogDescription>
             Current status: {MASTER_REVIEW_STATUS_LABEL[(current as MasterReviewStatus) ?? "candidate"] ?? current}.
+            Approval applies to the {countryLabel(row.registration_country)} registration only —
+            it does not make this product verified in other jurisdictions.
             Approval and retirement are enforced by the VineTrack backend.
           </DialogDescription>
         </DialogHeader>
@@ -227,7 +242,7 @@ function ReviewDialog({
           {draft.registeredUses.length > 0 && (
             <div className="rounded-md border border-border/60">
               <div className="border-b border-border/60 px-3 py-1.5 text-xs font-semibold">
-                Registered uses ({draft.registeredUses.length})
+                {countryLabel(row.registration_country)} registered uses ({draft.registeredUses.length})
               </div>
               <div className="divide-y divide-border/60 text-xs">
                 {draft.registeredUses.map((u, i) => (
@@ -256,7 +271,10 @@ function ReviewDialog({
               ) : (
                 (versions.data ?? []).map((v) => (
                   <div key={v.id} className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span>rev {v.catalogue_version ?? "—"}</span>
+                    <span>
+                      {vineyardCountryCode(row.registration_country) ?? "??"} · rev{" "}
+                      {v.catalogue_version ?? "—"}
+                    </span>
                     <span className="text-muted-foreground">
                       {v.change_reason || "—"} · {v.changed_at?.slice(0, 10) ?? "—"}
                     </span>
@@ -285,7 +303,8 @@ function ReviewDialog({
           )}
           {current !== "approved" && (
             <Button disabled={mut.isPending} onClick={() => mut.mutate("approved")}>
-              <BadgeCheck className="h-4 w-4 mr-1" /> Approve
+              <BadgeCheck className="h-4 w-4 mr-1" /> Approve{" "}
+              {vineyardCountryCode(row.registration_country) ?? ""}
             </Button>
           )}
         </DialogFooter>

@@ -28,6 +28,12 @@ import {
   suggestActivityGroup,
   withSource,
 } from "@/lib/chemicalIntelligenceWrite";
+import {
+  jurisdictionMismatchMessage,
+  jurisdictionSuitability,
+  jurisdictionVerifyPrompt,
+  type JurisdictionSuitability,
+} from "@/lib/chemicalJurisdiction";
 
 /* -------------------------------------------------------------- identity */
 
@@ -284,6 +290,12 @@ export interface ReverifyResult {
   /** Only present for "current" (refreshed evidence) and "updated" (proposal). */
   proposed?: ChemicalIntelligenceDraft;
   diff: ReverifyDiffEntry[];
+  /**
+   * Relationship between the re-verified registration and the CURRENT
+   * vineyard. A confirmed foreign registration is never "verified for this
+   * vineyard" — see contract §9.
+   */
+  jurisdiction?: JurisdictionSuitability;
 }
 
 const normName = (s: string | null | undefined) =>
@@ -511,8 +523,13 @@ export function proposedDraftFromCandidate(
   });
 
   const registration = { ...before.registration };
+  const priorCountry = normaliseCountry(before.registration.country);
   const country = normaliseCountry(candidate.country) ?? normaliseCountry(identity.country);
-  if (country) registration.country = country;
+  // Never silently re-key a chemical to another country's product. A stored
+  // registration country wins; a differing candidate country is recorded as
+  // unresolved instead of overwriting the identity.
+  const countryConflict = !!priorCountry && !!country && priorCountry !== country;
+  if (country && !priorCountry) registration.country = country;
   const scheme = normaliseRegistrationScheme(candidate.registration_scheme);
   if (scheme) registration.scheme = scheme;
   if (candidate.registration_number?.trim()) registration.number = candidate.registration_number.trim();
@@ -529,8 +546,9 @@ export function proposedDraftFromCandidate(
   // promoted when the lookup actually resolved the registered product AND its
   // label. An AI summary that merely matched a product name is a candidate for
   // review, never authoritative label data.
-  const labelEvidenced = !!labelRef && !!registration.number;
+  const labelEvidenced = !!labelRef && !!registration.number && !countryConflict;
   const unresolved = new Set(before.unresolvedFields);
+  if (countryConflict) unresolved.add("registration_country");
 
   const rawUses: ReverifyCandidateUse[] = candidate.registered_uses?.length
     ? candidate.registered_uses
@@ -610,9 +628,12 @@ export async function reverifyChemical(args: {
   draft: ChemicalIntelligenceDraft;
   productName?: string | null;
   country?: string | null;
+  /** Current vineyard country. Defaults to `country` when not supplied. */
+  vineyardCountry?: string | null;
   lookup: ReverifyLookup;
 }): Promise<ReverifyResult> {
   const { draft, productName, country, lookup } = args;
+  const vineyardCountry = args.vineyardCountry ?? country ?? null;
   const identity = resolveReverifyIdentity(draft, productName, country);
   if (!identity) {
     return {
@@ -659,42 +680,62 @@ export async function reverifyChemical(args: {
 
   const proposed = proposedDraftFromCandidate(draft, match, identity);
   const diff = diffChemicalDrafts(draft, proposed);
+  // Jurisdiction is judged against the VINEYARD. Confirming an Australian
+  // product identity never means "verified for this (New Zealand) vineyard".
+  const jurisdiction = jurisdictionSuitability(proposed.registration.country, vineyardCountry);
+  const foreign = jurisdiction !== "compatible";
+  const foreignNote = foreign
+    ? ` ${jurisdictionMismatchMessage(proposed.registration.country, vineyardCountry)}. ${jurisdictionVerifyPrompt(vineyardCountry)}`
+    : "";
 
   if (proposed.conflicts.length > 0) {
     return {
       outcome: "needs_review",
       title: "Needs review",
-      detail: "The retrieved information conflicts with the stored record. Review the differences before accepting.",
+      detail:
+        "The retrieved information conflicts with the stored record. Review the differences before accepting." +
+        foreignNote,
       identity,
       proposed,
       diff,
+      jurisdiction,
     };
   }
 
   if (!diff.length) {
     // No-change path: refresh evidence only, then re-resolve status normally.
     const refreshed: ChemicalIntelligenceDraft = { ...proposed };
-    const status = resolveVerificationStatus(refreshed);
+    const status = foreign ? "unverified" : resolveVerificationStatus(refreshed);
     refreshed.verifiedAt =
       status === "verified" || status === "partially_verified"
         ? new Date().toISOString()
         : refreshed.verifiedAt ?? null;
     return {
       outcome: "current",
-      title: "Chemical information is current",
-      detail: `No meaningful structured differences against ${identity.description}. Evidence timestamps refreshed.`,
+      title: foreign
+        ? "Product identity confirmed — not verified for this vineyard"
+        : "Chemical information is current",
+      detail:
+        `No meaningful structured differences against ${identity.description}. Evidence timestamps refreshed.` +
+        foreignNote,
       identity,
       proposed: refreshed,
       diff: [],
+      jurisdiction,
     };
   }
 
   return {
     outcome: "updated",
-    title: "Updated information found",
-    detail: `Authoritative information for ${identity.description} differs from the stored record. Review before accepting — nothing has been changed.`,
+    title: foreign
+      ? "Updated information found — not verified for this vineyard"
+      : "Updated information found",
+    detail:
+      `Information for ${identity.description} differs from the stored record. Review before accepting — nothing has been changed.` +
+      foreignNote,
     identity,
     proposed,
     diff,
+    jurisdiction,
   };
 }

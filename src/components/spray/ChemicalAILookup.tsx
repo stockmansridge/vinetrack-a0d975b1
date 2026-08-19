@@ -14,7 +14,14 @@ import {
   type MasterChemicalRow,
 } from "@/lib/masterChemicals";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
-import { normaliseCountry } from "@/lib/chemicalIntelligenceWrite";
+import {
+  countryLabel,
+  jurisdictionSuitability,
+  masterEligibleForVineyard,
+  vineyardCountryCode,
+  MISSING_VINEYARD_COUNTRY_MESSAGE,
+} from "@/lib/chemicalJurisdiction";
+
 import {
   inferProductType,
   inferRateBasis,
@@ -103,7 +110,11 @@ function normalise(s: string | null | undefined): string {
 }
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
+  // Jurisdiction is the selected vineyard's country. There is no locale,
+  // browser or IP fallback — when it is missing, lookup is blocked.
+  const countryCode = vineyardCountryCode(country);
   const [name, setName] = useState(initialName);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
@@ -125,7 +136,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       await supabase.functions.invoke("chemical-ai-lookup", {
         body: {
           product_name: queryName,
-          country: country ?? null,
+          country: countryCode,
           mark_applied: true,
           applied_candidate: {
             product_name: productName,
@@ -142,7 +153,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             target: "target" in candidate ? candidate.target ?? null : null,
             notes: "notes" in candidate ? candidate.notes ?? null : null,
             safety_note: "safety_note" in candidate ? candidate.safety_note ?? null : null,
-            country: "country" in candidate ? candidate.country ?? country ?? null : country ?? null,
+            country: "country" in candidate ? candidate.country ?? countryCode : countryCode,
             country_confirmed: "country_confirmed" in candidate ? candidate.country_confirmed ?? null : null,
             confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
             source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
@@ -164,6 +175,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       setError("Enter a product name to look up.");
       return;
     }
+    // Fail closed: jurisdiction comes from the vineyard, never from a locale.
+    if (!countryCode) {
+      setError(MISSING_VINEYARD_COUNTRY_MESSAGE);
+      return;
+    }
     setError(null);
     setCandidates(null);
     setMasterResult(null);
@@ -181,15 +197,12 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     });
     setExistingMatches(matches);
 
-    // ---- Master-first: the VineTrack Master Catalogue is searched BEFORE any
-    // AI lookup. An approved exact match is canonical and is never sent back
-    // through AI. Similar names ("Custodia Forte") never match by substring.
+    // ---- Master-first, country-first: only approved Master records
+    // registered in THIS vineyard's country are eligible. Similar names
+    // ("Custodia Forte") never match by substring.
     try {
-      const rows = await searchApprovedMasterChemicals(
-        q,
-        normaliseCountry(country) ?? null,
-      );
-      const exact = matchMasterByIdentity(rows, { productName: q });
+      const rows = await searchApprovedMasterChemicals(q, countryCode);
+      const exact = matchMasterByIdentity(rows, { productName: q, country: countryCode });
       if (exact) {
         setMasterResult(exact);
         setLoading(false);
@@ -201,7 +214,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
-        body: { product_name: q, country: country ?? null },
+        body: { product_name: q, country: countryCode, country_code: countryCode },
       });
       if (fnErr) {
         // Surface server-side error payload when available; otherwise show a
@@ -221,18 +234,26 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         const row =
           envelope.master ??
           (envelope.masterChemicalId ? await fetchMasterChemical(envelope.masterChemicalId) : null);
-        if (row) {
+        // The backend enforces jurisdiction; the portal must not weaken it —
+        // a cross-country Master row is discarded, never displayed as verified.
+        if (row && masterEligibleForVineyard(row.registration_country, countryCode)) {
           setMasterResult(row);
           return;
         }
       }
-      const list: RawCandidate[] = Array.isArray(data?.candidates)
+      const list: RawCandidate[] = (Array.isArray(data?.candidates)
         ? data.candidates
         : data?.suggestion
         ? [data.suggestion]
-        : [];
+        : []
+      ).filter(
+        (c: RawCandidate) =>
+          jurisdictionSuitability(c.country, countryCode) !== "mismatch",
+      );
       if (!list.length) {
-        throw new Error("No matches returned. Try a different spelling, or add the chemical manually.");
+        throw new Error(
+          `No ${countryLabel(countryCode)} product matched. Try a different spelling, or add the chemical manually.`,
+        );
       }
       setCandidates(list);
     } catch (e: any) {
@@ -242,6 +263,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       setLoading(false);
     }
   }
+
 
   function applyCandidate(c: RawCandidate) {
     const cat = matchCategory(c.category) ?? (c.category as ProductCategory | undefined);
@@ -321,20 +343,27 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-medium">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          AI Lookup {country ? `(${country} labels)` : "(country not set)"}
+          {countryCode
+            ? `Chemical lookup — ${countryLabel(countryCode)} labels`
+            : "Chemical lookup — vineyard country not set"}
         </div>
-        {!country && (
-          <span className="text-[10px] text-muted-foreground italic">
-            Set vineyard country to improve results
-          </span>
+        {countryCode && (
+          <Badge variant="outline" className="text-[10px]">{countryCode}</Badge>
         )}
       </div>
+      {!countryCode && (
+        <div className="flex items-start gap-1.5 rounded border border-warning/50 bg-warning/10 p-2 text-[11px]">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{MISSING_VINEYARD_COUNTRY_MESSAGE}</span>
+        </div>
+      )}
       <div className="flex gap-2">
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Product name e.g. Thiovit Jet, Flint, Ridomil…"
           className="h-9 text-sm"
+          disabled={!countryCode}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -342,7 +371,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             }
           }}
         />
-        <Button type="button" size="sm" onClick={runLookup} disabled={loading}>
+        <Button type="button" size="sm" onClick={runLookup} disabled={loading || !countryCode}>
           {loading ? (
             <>
               <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -353,6 +382,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           )}
         </Button>
       </div>
+
 
       {error && (
         <div className="flex items-start gap-1.5 text-xs text-destructive">
@@ -391,7 +421,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
             VineTrack Master Catalogue
           </div>
-          <MasterChemicalCard master={masterResult} onApply={() => applyMaster(masterResult)} />
+          <MasterChemicalCard master={masterResult} vineyardCountry={countryCode} onApply={() => applyMaster(masterResult)} />
           <button
             type="button"
             onClick={applyManual}
@@ -434,7 +464,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Lookup results ({candidates.length}) for "{name.trim()}"
-              {country ? ` · ${country}` : ""}
+              {countryCode ? ` · ${countryLabel(countryCode)}` : ""}
             </div>
             <button
               type="button"

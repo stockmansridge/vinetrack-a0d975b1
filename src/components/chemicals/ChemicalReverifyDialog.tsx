@@ -23,12 +23,21 @@ import {
   resolveReverifyIdentity,
   reverifyChemical,
 } from "@/lib/chemicalReverify";
+import {
+  vineyardCountryCode,
+  MISSING_VINEYARD_COUNTRY_MESSAGE,
+} from "@/lib/chemicalJurisdiction";
+import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 
 const SECTIONS: ReverifySection[] = ["chemistry", "registration", "uses"];
 
 async function defaultLookup(identity: ReverifyIdentity): Promise<ReverifyCandidate[]> {
   const { data, error } = await supabase.functions.invoke("chemical-ai-lookup", {
-    body: { product_name: identity.query, country: identity.country ?? null },
+    body: {
+      product_name: identity.query,
+      country: identity.country ?? null,
+      country_code: identity.country ?? null,
+    },
   });
   if (error) {
     const serverMsg = (data as any)?.error;
@@ -69,11 +78,20 @@ export function ChemicalReverifyDialog({
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ReverifyResult | null>(null);
   const identity = resolveReverifyIdentity(draft, productName, country);
+  // `country` is the selected vineyard's country — the only jurisdiction
+  // authority. Without it, re-verify fails closed.
+  const vineyardCountry = vineyardCountryCode(country);
 
   const run = async () => {
     setRunning(true);
     setResult(null);
-    const r = await reverifyChemical({ draft, productName, country, lookup });
+    const r = await reverifyChemical({
+      draft,
+      productName,
+      country,
+      vineyardCountry,
+      lookup,
+    });
     setResult(r);
     setRunning(false);
   };
@@ -93,6 +111,15 @@ export function ChemicalReverifyDialog({
         </DialogHeader>
 
         <div className="space-y-3 text-sm">
+          {!vineyardCountry && (
+            <div className="rounded-md border border-warning/50 bg-warning/10 p-2 text-xs">
+              {MISSING_VINEYARD_COUNTRY_MESSAGE}
+            </div>
+          )}
+          <JurisdictionNoticeBanner
+            registrationCountry={draft.registration.country}
+            vineyardCountry={country}
+          />
           <div className="rounded-md border border-border/60 p-3">
             <div className="text-xs text-muted-foreground">Identity used</div>
             <div className="font-medium">
@@ -142,7 +169,7 @@ export function ChemicalReverifyDialog({
 
         <DialogFooter className="gap-2">
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button type="button" variant="outline" disabled={!identity || running} onClick={run}>
+          <Button type="button" variant="outline" disabled={!identity || running || !vineyardCountry} onClick={run}>
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
             {result ? "Run again" : "Re-verify"}
           </Button>

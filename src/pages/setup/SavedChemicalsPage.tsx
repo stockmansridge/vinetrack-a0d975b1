@@ -40,6 +40,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { ChemicalAILookup, type AppliedSuggestion } from "@/components/spray/ChemicalAILookup";
+import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
+import { countryLabel, jurisdictionSuitability } from "@/lib/chemicalJurisdiction";
+
 import { MasterUpdateDialog } from "@/components/chemicals/MasterUpdateDialog";
 import {
   fetchMasterChemical,
@@ -771,6 +774,13 @@ function ChemicalEditor({
     { master_chemical_id: masterLink?.id, master_source_revision: masterLink?.revision },
     masterRow,
   );
+  // A linked Master record is also checked against the vineyard country: an AU
+  // Master revision is never "current verified information" for an NZ vineyard.
+  const masterJurisdiction = jurisdictionSuitability(
+    masterRow?.registration_country,
+    currentCountry,
+  );
+
 
 
   // Computed cost per base unit from pack size + pack price.
@@ -1022,6 +1032,12 @@ function ChemicalEditor({
               }))}
             onApply={applySuggestion}
           />
+          {/* Jurisdiction suitability is computed, never stored. Chemistry is
+              kept; only label authority changes. */}
+          <JurisdictionNoticeBanner
+            registrationCountry={intel.registration.country}
+            vineyardCountry={currentCountry}
+          />
           {masterLink && (
             <div
               className={`rounded-md border p-2 text-xs ${
@@ -1030,7 +1046,11 @@ function ChemicalEditor({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">
-                  {masterUpdate ? MASTER_UPDATE_MESSAGE : MASTER_CURRENT_MESSAGE}
+                  {masterUpdate
+                    ? MASTER_UPDATE_MESSAGE
+                    : masterJurisdiction === "compatible"
+                    ? MASTER_CURRENT_MESSAGE
+                    : `Current ${countryLabel(masterRow?.registration_country)} Master information`}
                 </span>
                 {masterUpdate && masterRow && (
                   <Button type="button" size="sm" variant="outline" onClick={() => setMasterUpdateOpen(true)}>
@@ -1042,8 +1062,16 @@ function ChemicalEditor({
                 Linked to the VineTrack Master Catalogue (revision {masterLink.revision ?? "—"}).
                 Catalogue updates are only applied when you accept them.
               </p>
+              {masterRow && masterJurisdiction === "mismatch" && (
+                <p className="mt-1 text-muted-foreground">
+                  This is the applicable registration for{" "}
+                  {countryLabel(masterRow.registration_country)}, not for the current
+                  vineyard ({countryLabel(currentCountry)}).
+                </p>
+              )}
             </div>
           )}
+
           {masterRow && (
             <MasterUpdateDialog
               open={masterUpdateOpen}

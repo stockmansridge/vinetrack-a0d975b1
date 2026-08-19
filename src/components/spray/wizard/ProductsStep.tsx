@@ -26,6 +26,9 @@ import {
   type ChemicalIntelligence,
 } from "@/lib/chemicalIntelligence";
 import type { StepProps } from "./types";
+import { useVineyard } from "@/context/VineyardContext";
+import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
+import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
 const UNITS = ["L", "mL", "kg", "g"];
 
@@ -116,7 +119,12 @@ function ProductRow({
   onRemove: () => void;
 }) {
   const [showUses, setShowUses] = useState(false);
+  const { currentCountry } = useVineyard();
   const intel = line.savedChemicalId ? intelligenceById.get(line.savedChemicalId) ?? null : null;
+  // Label authority follows the vineyard, not the product record.
+  const labelAuthoritative = labelFactsAuthoritative(
+    jurisdictionSuitability(intel?.product.country, currentCountry),
+  );
   const groups = intel ? activityGroupSummary(intel) : null;
   const validation = result?.rateValidation ?? "unable_to_validate";
   const tone = RATE_VALIDATION_TONE[validation as keyof typeof RATE_VALIDATION_TONE];
@@ -223,6 +231,15 @@ function ProductRow({
         </div>
       </div>
 
+      {/* Foreign label facts stay visible but are never authoritative here. */}
+      {intel && (
+        <JurisdictionNoticeBanner
+          registrationCountry={intel.product.country}
+          vineyardCountry={currentCountry}
+          dense
+        />
+      )}
+
       {(line.labelMinRate != null || line.labelMaxRate != null) && (
         <div className="text-xs text-muted-foreground">
           Label rate:{" "}
@@ -232,6 +249,7 @@ function ProductRow({
             unit: line.labelRateUnit ?? null,
             basis: null,
           }) ?? "—"}
+          {!labelAuthoritative && intel ? " (foreign label — not authoritative here)" : ""}
         </div>
       )}
 
@@ -239,6 +257,9 @@ function ProductRow({
         <div className="space-y-1">
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowUses((v) => !v)}>
             {showUses ? "Hide" : "Show"} registered uses ({intel.registeredUses.length})
+            {!labelAuthoritative
+              ? ` — ${countryLabel(intel.product.country)} label`
+              : ""}
           </Button>
           {showUses && (
             <div className="divide-y rounded-md border text-xs">
@@ -261,10 +282,15 @@ function ProductRow({
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">
-            Selecting a use fills the label range for guidance only — the rate stays yours to choose.
+            {labelAuthoritative
+              ? "Selecting a use fills the label range for guidance only — the rate stays yours to choose."
+              : `These uses, rates, withholding and re-entry come from the ${countryLabel(
+                  intel.product.country,
+                )} label and are not authoritative for this vineyard.`}
           </p>
         </div>
       )}
+
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
         <span>
