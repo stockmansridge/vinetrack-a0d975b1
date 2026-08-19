@@ -61,7 +61,7 @@ const UNASSIGNED = "__unassigned__";
 type SortKey =
   | "date" | "activity" | "season" | "vintage" | "block" | "variety" | "worker" | "method"
   | "rows" | "quarters" | "rowEq" | "vines" | "share" | "hours" | "start" | "finish"
-  | "duration" | "vinesPerHour" | "rate" | "cost" | "activityHours" | "activityCost"
+  | "duration" | "vinesPerHour" | "rate" | "cost"
   | "task" | "taskStatus"
   | "createdBy" | "created" | "updated" | "status";
 
@@ -80,15 +80,13 @@ const COLUMN_DEFS: { key: SortKey; label: string; align?: "right"; cost?: boolea
   { key: "rowEq", label: "Row eq.", align: "right" },
   { key: "vines", label: "Vines", align: "right" },
   { key: "share", label: "Share", align: "right" },
-  { key: "hours", label: "Allocated hrs", align: "right" },
+  { key: "hours", label: "Labour hrs", align: "right" },
   { key: "start", label: "Start" },
   { key: "finish", label: "Finish" },
   { key: "duration", label: "Duration", align: "right" },
   { key: "vinesPerHour", label: "Vines / hr", align: "right" },
   { key: "rate", label: "Rate / hr", align: "right", cost: true },
-  { key: "cost", label: "Allocated labour cost", align: "right", cost: true },
-  { key: "activityHours", label: "Activity total hrs", align: "right" },
-  { key: "activityCost", label: "Activity total cost", align: "right", cost: true },
+  { key: "cost", label: "Labour cost", align: "right", cost: true },
   { key: "task", label: "Work task" },
   { key: "taskStatus", label: "Task status" },
   { key: "createdBy", label: "Created by" },
