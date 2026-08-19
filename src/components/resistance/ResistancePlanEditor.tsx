@@ -51,7 +51,7 @@ import { useResistancePlanAssessment } from "@/hooks/useResistancePlanAssessment
 import { ResistanceEvaluationCard, STATUS_LABEL } from "./ResistanceEvaluationCard";
 import { DISEASE_LABEL, type ResistanceDisease } from "@/lib/resistance/resistanceRuleset";
 import { makeSeasonCalendar, seasonForEpochMs, seasonIdForStartYear } from "@/lib/resistance/resistanceSeason";
-import { fmtDate } from "@/lib/dateFormat";
+import { formatDate } from "@/lib/dateFormat";
 
 const DISEASES: ResistanceDisease[] = ["powdery_mildew", "downy_mildew"];
 
@@ -408,7 +408,7 @@ export function ResistancePlanEditor({
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">Completed spray</Badge>
-                    <span className="font-medium">{fmtDate(new Date(e.appliedAtEpochMs))}</span>
+                    <span className="font-medium">{formatDate(new Date(e.appliedAtEpochMs))}</span>
                     <span className="text-muted-foreground">
                       {blocks.find((b) => b.id === e.blockId)?.name ?? e.blockId}
                     </span>
