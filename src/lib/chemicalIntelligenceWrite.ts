@@ -230,6 +230,8 @@ const trimOrUndef = (v: unknown): string | undefined => {
   return s === "" ? undefined : s;
 };
 
+import { resolveVineyardCountry } from "@/lib/vineyardCountries";
+
 const finiteOrUndef = (v: unknown): number | undefined => {
   if (v === "" || v == null) return undefined;
   const n = typeof v === "number" ? v : Number(v);
@@ -246,46 +248,11 @@ const intOrUndef = (v: unknown): number | undefined => {
  * Aliases (UK → GB, USA → US, …) are resolved before the bare two-letter path
  * so "UK" never survives as a pseudo ISO code.
  */
-const COUNTRY_ALIASES: Record<string, string> = {
-  uk: "GB",
-  gb: "GB",
-  "united kingdom": "GB",
-  "great britain": "GB",
-  england: "GB",
-  scotland: "GB",
-  wales: "GB",
-  usa: "US",
-  "united states": "US",
-  "united states of america": "US",
-  aus: "AU",
-  australia: "AU",
-  nz: "NZ",
-  nzl: "NZ",
-  "new zealand": "NZ",
-  aotearoa: "NZ",
-  "south africa": "ZA",
-  france: "FR",
-  italy: "IT",
-  spain: "ES",
-  germany: "DE",
-  chile: "CL",
-  argentina: "AR",
-  canada: "CA",
-};
-
 export function normaliseCountry(value: unknown): string | undefined {
-  const raw = trimOrUndef(value);
-  if (!raw) return undefined;
-  const lower = raw.toLowerCase();
-  const alias = COUNTRY_ALIASES[lower];
-  if (alias) return alias;
-  if (/^[a-z]{2}$/i.test(raw)) return raw.toUpperCase();
-  if (lower.startsWith("austral")) return "AU";
-  if (lower.startsWith("new zealand")) return "NZ";
-  if (lower.startsWith("united states")) return "US";
-  // Never guess: truncating an unrecognised country name to two letters
-  // invents a jurisdiction ("Somewhere" -> "SO").
-  return undefined;
+  // The supported set is the shared VineTrack vineyard-country contract
+  // (25 countries, identical on iOS/Android). Anything outside it — including
+  // an unrecognised two-letter string — is unresolved, never guessed.
+  return resolveVineyardCountry(value);
 }
 
 
