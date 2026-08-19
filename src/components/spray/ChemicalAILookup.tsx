@@ -164,6 +164,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       setError("Enter a product name to look up.");
       return;
     }
+    // Fail closed: jurisdiction comes from the vineyard, never from a locale.
+    if (!countryCode) {
+      setError(MISSING_VINEYARD_COUNTRY_MESSAGE);
+      return;
+    }
     setError(null);
     setCandidates(null);
     setMasterResult(null);
@@ -181,15 +186,12 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     });
     setExistingMatches(matches);
 
-    // ---- Master-first: the VineTrack Master Catalogue is searched BEFORE any
-    // AI lookup. An approved exact match is canonical and is never sent back
-    // through AI. Similar names ("Custodia Forte") never match by substring.
+    // ---- Master-first, country-first: only approved Master records
+    // registered in THIS vineyard's country are eligible. Similar names
+    // ("Custodia Forte") never match by substring.
     try {
-      const rows = await searchApprovedMasterChemicals(
-        q,
-        normaliseCountry(country) ?? null,
-      );
-      const exact = matchMasterByIdentity(rows, { productName: q });
+      const rows = await searchApprovedMasterChemicals(q, countryCode);
+      const exact = matchMasterByIdentity(rows, { productName: q, country: countryCode });
       if (exact) {
         setMasterResult(exact);
         setLoading(false);
@@ -201,7 +203,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
-        body: { product_name: q, country: country ?? null },
+        body: { product_name: q, country: countryCode, country_code: countryCode },
       });
       if (fnErr) {
         // Surface server-side error payload when available; otherwise show a
@@ -221,18 +223,26 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         const row =
           envelope.master ??
           (envelope.masterChemicalId ? await fetchMasterChemical(envelope.masterChemicalId) : null);
-        if (row) {
+        // The backend enforces jurisdiction; the portal must not weaken it —
+        // a cross-country Master row is discarded, never displayed as verified.
+        if (row && masterEligibleForVineyard(row.registration_country, countryCode)) {
           setMasterResult(row);
           return;
         }
       }
-      const list: RawCandidate[] = Array.isArray(data?.candidates)
+      const list: RawCandidate[] = (Array.isArray(data?.candidates)
         ? data.candidates
         : data?.suggestion
         ? [data.suggestion]
-        : [];
+        : []
+      ).filter(
+        (c: RawCandidate) =>
+          jurisdictionSuitability(c.country, countryCode) !== "mismatch",
+      );
       if (!list.length) {
-        throw new Error("No matches returned. Try a different spelling, or add the chemical manually.");
+        throw new Error(
+          `No ${countryLabel(countryCode)} product matched. Try a different spelling, or add the chemical manually.`,
+        );
       }
       setCandidates(list);
     } catch (e: any) {
@@ -242,6 +252,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       setLoading(false);
     }
   }
+
 
   function applyCandidate(c: RawCandidate) {
     const cat = matchCategory(c.category) ?? (c.category as ProductCategory | undefined);
