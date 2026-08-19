@@ -344,20 +344,27 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-medium">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          AI Lookup {country ? `(${country} labels)` : "(country not set)"}
+          {countryCode
+            ? `Chemical lookup — ${countryLabel(countryCode)} labels`
+            : "Chemical lookup — vineyard country not set"}
         </div>
-        {!country && (
-          <span className="text-[10px] text-muted-foreground italic">
-            Set vineyard country to improve results
-          </span>
+        {countryCode && (
+          <Badge variant="outline" className="text-[10px]">{countryCode}</Badge>
         )}
       </div>
+      {!countryCode && (
+        <div className="flex items-start gap-1.5 rounded border border-warning/50 bg-warning/10 p-2 text-[11px]">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{MISSING_VINEYARD_COUNTRY_MESSAGE}</span>
+        </div>
+      )}
       <div className="flex gap-2">
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Product name e.g. Thiovit Jet, Flint, Ridomil…"
           className="h-9 text-sm"
+          disabled={!countryCode}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -365,7 +372,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
             }
           }}
         />
-        <Button type="button" size="sm" onClick={runLookup} disabled={loading}>
+        <Button type="button" size="sm" onClick={runLookup} disabled={loading || !countryCode}>
           {loading ? (
             <>
               <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -376,6 +383,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           )}
         </Button>
       </div>
+
 
       {error && (
         <div className="flex items-start gap-1.5 text-xs text-destructive">
