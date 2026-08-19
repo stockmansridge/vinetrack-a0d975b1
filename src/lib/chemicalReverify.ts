@@ -284,6 +284,12 @@ export interface ReverifyResult {
   /** Only present for "current" (refreshed evidence) and "updated" (proposal). */
   proposed?: ChemicalIntelligenceDraft;
   diff: ReverifyDiffEntry[];
+  /**
+   * Relationship between the re-verified registration and the CURRENT
+   * vineyard. A confirmed foreign registration is never "verified for this
+   * vineyard" — see contract §9.
+   */
+  jurisdiction?: JurisdictionSuitability;
 }
 
 const normName = (s: string | null | undefined) =>
@@ -511,8 +517,13 @@ export function proposedDraftFromCandidate(
   });
 
   const registration = { ...before.registration };
+  const priorCountry = normaliseCountry(before.registration.country);
   const country = normaliseCountry(candidate.country) ?? normaliseCountry(identity.country);
-  if (country) registration.country = country;
+  // Never silently re-key a chemical to another country's product. A stored
+  // registration country wins; a differing candidate country is recorded as
+  // unresolved instead of overwriting the identity.
+  const countryConflict = !!priorCountry && !!country && priorCountry !== country;
+  if (country && !priorCountry) registration.country = country;
   const scheme = normaliseRegistrationScheme(candidate.registration_scheme);
   if (scheme) registration.scheme = scheme;
   if (candidate.registration_number?.trim()) registration.number = candidate.registration_number.trim();
@@ -529,8 +540,9 @@ export function proposedDraftFromCandidate(
   // promoted when the lookup actually resolved the registered product AND its
   // label. An AI summary that merely matched a product name is a candidate for
   // review, never authoritative label data.
-  const labelEvidenced = !!labelRef && !!registration.number;
+  const labelEvidenced = !!labelRef && !!registration.number && !countryConflict;
   const unresolved = new Set(before.unresolvedFields);
+  if (countryConflict) unresolved.add("registration_country");
 
   const rawUses: ReverifyCandidateUse[] = candidate.registered_uses?.length
     ? candidate.registered_uses
