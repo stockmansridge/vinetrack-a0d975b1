@@ -283,7 +283,9 @@ export function normaliseCountry(value: unknown): string | undefined {
   if (lower.startsWith("austral")) return "AU";
   if (lower.startsWith("new zealand")) return "NZ";
   if (lower.startsWith("united states")) return "US";
-  return raw.toUpperCase().slice(0, 2);
+  // Never guess: truncating an unrecognised country name to two letters
+  // invents a jurisdiction ("Somewhere" -> "SO").
+  return undefined;
 }
 
 
