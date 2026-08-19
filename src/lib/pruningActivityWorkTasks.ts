@@ -182,10 +182,10 @@ export async function fetchWorkTasksForActivity(
   const out = new Map<string, WorkTask>();
 
   if (activityId) {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("work_tasks")
       .select("*")
-      .eq(WORK_TASK_ACTIVITY_COLUMN as any, activityId)
+      .eq(WORK_TASK_ACTIVITY_COLUMN, activityId)
       .is("deleted_at", null);
     if (error) throw error;
     ((data ?? []) as unknown as WorkTask[]).forEach((t) => out.set(t.id, t));
