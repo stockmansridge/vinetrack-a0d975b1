@@ -28,11 +28,12 @@ import {
 export function CoreSetupChecklist({
   statuses,
   progress,
-  checkStatuses,
+  checksByGroup,
 }: {
   statuses?: Record<string, SetupStatus>;
   progress?: Record<string, string>;
-  checkStatuses?: Record<string, SetupStatus>;
+  /** Live resolver checks per group id — rendered with real status icons. */
+  checksByGroup?: Record<string, SetupCheckResult[]>;
 }) {
   const groups = coreSetupGroups();
   return (
@@ -43,7 +44,7 @@ export function CoreSetupChecklist({
           group={group}
           status={statuses?.[group.id] ?? "not_checked"}
           progress={progress?.[group.id]}
-          checkStatuses={checkStatuses}
+          checks={checksByGroup?.[group.id]}
         />
       ))}
     </div>
@@ -54,12 +55,12 @@ function CoreSetupSummaryCard({
   group,
   status,
   progress,
-  checkStatuses,
+  checks,
 }: {
   group: CoreSetupGroup;
   status: SetupStatus;
   progress?: string;
-  checkStatuses?: Record<string, SetupStatus>;
+  checks?: SetupCheckResult[];
 }) {
   const [open, setOpen] = useState(false);
   const { Icon, tone } = guideVisual(group.visualKey);
