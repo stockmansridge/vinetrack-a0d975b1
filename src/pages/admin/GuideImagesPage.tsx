@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { AdminGate, AdminPageHeader } from "./_shared";
+import { GuideImageCoverage } from "@/components/guide/GuideImageCoverage";
+
 import {
   focusToObjectPosition,
   guideImageGroups,
@@ -59,6 +61,8 @@ export default function GuideImagesPage() {
           subtitle="Imagery used by How VineTrack Works — landing page, area guides and workflow screenshots."
         />
         <div className="space-y-6">
+          <GuideImageCoverage />
+
           {groups.map((group) => (
             <section key={group.group} className="space-y-3">
               <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -151,7 +155,7 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
 
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold">{slot.label}</h2>
+            <h3 className="text-base font-semibold">{slot.label}</h3>
             <Badge variant="secondary" className="font-mono text-[11px]">
               {slot.key}
             </Badge>

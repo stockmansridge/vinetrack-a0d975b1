@@ -492,7 +492,7 @@ export const HOW_VINETRACK_WORKS_CATALOGUE: HowVineTrackWorksItem[] = [
     section: "operational_tools",
     title: "Growth Stage Records",
     shortDescription:
-      "E-L phenology observations with reference imagery and PDF export. Recorded in the field, reported in the portal.",
+      "E-L phenology observations with reference imagery. Recorded in the field, reviewed and exported in the portal.",
     platforms: ALL,
     webRoute: "/reports/growth-stage",
     mobileFeatureKey: "growth_stages",
@@ -707,7 +707,7 @@ export const HOW_VINETRACK_WORKS_CATALOGUE: HowVineTrackWorksItem[] = [
     section: "reports_management",
     title: "Documents & Exports",
     shortDescription:
-      "Central launcher for PDF and CSV exports across trips, spray, pruning, growth stage and rainfall.",
+      "Central launcher for the reports and exports the portal supports — trips, spray, costs, work tasks, pruning, growth stage and rainfall.",
     platforms: ALL,
     webRoute: "/reports/documents",
     availability: "available",

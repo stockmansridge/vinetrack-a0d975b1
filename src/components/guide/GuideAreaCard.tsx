@@ -68,7 +68,12 @@ export function GuideAreaCard({
   return (
     <Link
       to={to}
-      aria-label={area.title}
+      aria-label={
+        setup
+          ? `${index + 1}. ${area.title} — core setup: ${setup.label}. Learn more`
+          : `${index + 1}. ${area.title}. Learn more`
+      }
+
       className={cn(
         "group block rounded-[10px] border border-border bg-card py-2 pl-3 pr-2.5 transition-colors",
         "hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

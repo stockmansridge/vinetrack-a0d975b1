@@ -29,8 +29,9 @@ export function OperationalToolGuideView({ guide }: { guide: OperationalToolGuid
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[13px]">
         <Link
           to="/dashboard/how-vinetrack-works"
-          className="font-semibold text-primary hover:underline"
+          className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
         >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
           How VineTrack Works
         </Link>
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden />
