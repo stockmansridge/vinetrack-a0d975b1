@@ -189,23 +189,10 @@ function AreaDetail({
   items: HowVineTrackWorksItem[];
 }) {
   if (area.detailKind === "setup") {
-    return (
-      <section className="space-y-4">
-        <SectionHeading
-          title="Setup areas"
-          description="Open any area to see the individual checks behind it. Stage 3 will attach live setup health here."
-        />
-        <ExpandableSection
-          id="setup-usage"
-          moreLabel="Show platform usage overview"
-          lessLabel="Hide platform usage overview"
-          preview={<CoreSetupChecklist />}
-        >
-          <SetupOverview />
-        </ExpandableSection>
-      </section>
-    );
+    return <SetupAreaDetail />;
   }
+
+
 
   if (area.detailKind === "operational_tools") {
     const mapItems = guideItemsForSection("maps_intelligence");
