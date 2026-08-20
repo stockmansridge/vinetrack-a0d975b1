@@ -2,6 +2,9 @@ import { Navigate, useParams, Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { GuideVisualSlot } from "@/components/guide/GuideVisualSlot";
+import { GuidePageShell } from "@/components/guide/GuidePageShell";
+import { useGuideImage } from "@/lib/guide/guideImageStore";
+import { focusToObjectPosition, type GuideImageKey } from "@/lib/guide/guideImages";
 import { GuideGrid } from "@/components/guide/GuideSection";
 import { FeatureCard } from "@/components/guide/FeatureCard";
 import { CoreSetupChecklist } from "@/components/guide/CoreSetupChecklist";
@@ -48,9 +51,11 @@ export default function GuideAreaPage() {
   const items = guideAreaItems(area);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-8 p-4 sm:p-6 lg:p-8">
-      <Breadcrumb title={area.title} />
-      <AreaHero area={area} items={items} />
+    <GuidePageShell className="space-y-6">
+      <div className="space-y-2.5">
+        <Breadcrumb title={area.title} />
+        <AreaHero area={area} items={items} />
+      </div>
 
       {area.workflow && area.workflow.length > 0 && (
         <section className="space-y-3">
@@ -93,7 +98,7 @@ export default function GuideAreaPage() {
           Back to How VineTrack Works
         </Link>
       </div>
-    </div>
+    </GuidePageShell>
   );
 }
 
@@ -124,6 +129,8 @@ function AreaHero({
     new Set(items.flatMap((i) => i.platforms)),
   ) as GuidePlatform[];
   const primary = items.find((i) => i.webRoute);
+  // Same uploaded image key as the landing row — one upload feeds both.
+  const uploaded = useGuideImage(area.id as GuideImageKey);
 
   return (
     <Card className="overflow-hidden">
@@ -162,8 +169,9 @@ function AreaHero({
         </div>
         <GuideVisualSlot
           visualKey={area.visualKey}
-          imageSrc={area.imageSrc}
+          imageSrc={uploaded.url ?? area.imageSrc}
           imageAlt={area.imageAlt}
+          objectPosition={focusToObjectPosition(uploaded.focus)}
           aspect="aspect-[16/9] lg:aspect-auto"
           iconClassName="h-12 w-12"
           className="order-first min-h-[180px] lg:order-last lg:min-h-[260px]"

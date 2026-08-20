@@ -5,6 +5,8 @@ import { GuideVisualSlot } from "./GuideVisualSlot";
 import { SetupStatusPill, type SetupStatus } from "./SetupCard";
 import { guideVisual } from "./guideVisuals";
 import { guideAreaRoute, type GuideArea } from "@/lib/guide/guideAreas";
+import { useGuideImage } from "@/lib/guide/guideImageStore";
+import { focusToObjectPosition, type GuideImageKey } from "@/lib/guide/guideImages";
 
 /**
  * Compact landing row — one per major VineTrack area (Stage 2.8 density pass).
@@ -32,6 +34,8 @@ export function GuideAreaCard({
 }) {
   const { Icon } = guideVisual(area.visualKey);
   const to = guideAreaRoute(area);
+  // One uploaded image per area key feeds both this row and the drill-down hero.
+  const uploaded = useGuideImage(area.id as GuideImageKey);
 
   return (
     <Link
@@ -76,22 +80,25 @@ export function GuideAreaCard({
           </p>
         </div>
 
-        {/* Status + action (compact column) */}
-        <div className="flex flex-wrap items-center gap-1.5 lg:w-full lg:flex-col lg:items-start">
+        {/* Fixed action column — identical geometry on EVERY row (Stage 2.9).
+            Status/count sits directly above the CTA and never shifts it. */}
+        <div className="flex flex-wrap items-center gap-1.5 lg:h-full lg:w-full lg:flex-col lg:flex-nowrap lg:items-start lg:justify-center lg:gap-[5px]">
           {area.showsSetupStatus && (
             <>
               <SetupStatusPill status={setupStatus} />
               {setupCaption && (
-                <span className="text-[11.5px] text-muted-foreground">{setupCaption}</span>
+                <span className="text-[11.5px] leading-none text-muted-foreground">
+                  {setupCaption}
+                </span>
               )}
             </>
           )}
           {area.metaLabel && (
-            <span className="text-[11.5px] font-medium text-muted-foreground">
+            <span className="text-[11.5px] font-medium leading-none text-muted-foreground">
               {area.metaLabel}
             </span>
           )}
-          <span className="inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-md border border-primary/30 bg-primary/[0.06] px-2.5 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/10">
+          <span className="inline-flex h-[30px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-primary/30 bg-primary/[0.06] px-2.5 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/10">
             {area.actionLabel}
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
@@ -100,8 +107,9 @@ export function GuideAreaCard({
         {/* Image — always right on desktop, nearly filling the row */}
         <GuideVisualSlot
           visualKey={area.visualKey}
-          imageSrc={area.imageSrc}
+          imageSrc={uploaded.url ?? area.imageSrc}
           imageAlt={area.imageAlt}
+          objectPosition={focusToObjectPosition(uploaded.focus)}
           aspect=""
           subtle
           className="order-last h-[84px] w-full rounded-[7px]"
