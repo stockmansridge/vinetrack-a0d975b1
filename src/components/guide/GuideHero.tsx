@@ -1,6 +1,8 @@
 import { Lock, CircleDashed } from "lucide-react";
 import { GuideVisualSlot } from "./GuideVisualSlot";
 import { SetupStatusPill, type SetupStatus } from "./SetupCard";
+import { useGuideImage } from "@/lib/guide/guideImageStore";
+import { focusToObjectPosition } from "@/lib/guide/guideImages";
 
 /**
  * Guide hero — one broad, image-led dashboard banner (Stage 2.8).
