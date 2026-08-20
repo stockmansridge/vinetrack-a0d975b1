@@ -38,6 +38,11 @@ import {
   type WriteRegisteredUse,
   type WriteVerificationStatus,
 } from "@/lib/chemicalIntelligenceWrite";
+import {
+  selectRates,
+  withholdingDisplay,
+  type LookupRateView,
+} from "@/lib/chemicalLabelRates";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import { vineyardCountryCode, countryLabel } from "@/lib/chemicalJurisdiction";
 import {
@@ -699,6 +704,7 @@ export function parseChemicalLookup(
   }
 
   const use = primaryUse(uses);
+  const rateSelection = selectRates(use);
   if (use && !use.rates.length) unresolved.add("registered_uses.rates");
   if (use && use.withholding_period_days == null) unresolved.add("withholding_period_days");
   if (use && use.re_entry_period_hours == null) unresolved.add("re_entry_period_hours");
@@ -765,9 +771,22 @@ export function parseChemicalLookup(
     labelReference,
     labelVersion,
     withholdingDays: use?.withholding_period_days,
+    withholdingText: withholdingDisplay(
+      use?.withholding_period_days,
+      [use?.restrictions, ...(use?.rates ?? []).map((r) => r.raw_text)]
+        .filter(Boolean)
+        .join("\n"),
+    ),
     reEntryHours: use?.re_entry_period_hours,
     restrictions: use?.restrictions,
     target: use?.target_raw || undefined,
+    rates: rateSelection.all.length ? rateSelection.all : undefined,
+    ratePer100L: rateSelection.per100L,
+    ratePerHectare: rateSelection.perHectare,
+    rateReferenceOnly: rateSelection.referenceOnly.length
+      ? rateSelection.referenceOnly
+      : undefined,
+    rateText: rateSelection.text,
   };
 
   return {
