@@ -540,7 +540,7 @@ function JobsTable({
   }, [columnDefs]);
   const { sorted, getSortDirection, toggleSort } = useSortableTable<SprayJob, string>(rows, {
     accessors: accessorMap,
-    initial: { key: mode === "planned" ? "planned" : "updated", direction: "desc" },
+    initial: mode === "archived" ? { key: "updated", direction: "desc" } : { key: "growth", direction: "asc" },
   });
   const defaultColOrder = useMemo(() => columnDefs.map((c) => c.key), [columnDefs]);
   const { order: sjOrder, moveColumn: sjMove, reset: sjReset } = useColumnOrder(
