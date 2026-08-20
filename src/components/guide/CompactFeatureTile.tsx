@@ -25,6 +25,9 @@ export function CompactFeatureTile({
   className?: string;
 }) {
   const { Icon, tone } = guideVisual(item.visualKey);
+  const viewer = useGuideViewer();
+  const internalLabels = showsDevelopmentLabels(viewer);
+  const to = guideActionDecision(item.webRoute, viewer).show ? item.webRoute : undefined;
   const body = (
     <>
       <span
