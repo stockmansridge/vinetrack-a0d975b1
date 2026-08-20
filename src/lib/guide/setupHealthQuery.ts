@@ -204,12 +204,13 @@ async function fetchPreferences(vineyardId: string) {
   const monthLabel =
     MONTHS.find((m) => m.value === s.season_start_month)?.label ??
     String(s.season_start_month);
+  const configured = s.configured ?? null;
   return {
-    seasonConfigured: s.configured,
+    seasonConfigured: s.configured ?? null,
     seasonDetail:
-      s.configured === null
+      configured === null
         ? undefined
-        : s.configured
+        : configured
           ? `Season starts ${s.season_start_day} ${monthLabel}`
           : `No saved preference — showing default ${s.season_start_day} ${monthLabel}`,
   };

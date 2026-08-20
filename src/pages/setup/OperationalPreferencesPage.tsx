@@ -89,6 +89,11 @@ export default function OperationalPreferencesPage() {
     !!q.data &&
     (q.data.season_start_month !== month || q.data.season_start_day !== day);
 
+  // Stage 5C.1 — when nothing is persisted yet the form is showing valid
+  // defaults. Saving those defaults must be possible without forcing a fake
+  // value change; once a preference exists, Save stays disabled while clean.
+  const needsInitialSave = !!q.data && q.data.configured === false;
+
   // Warn on browser navigation / refresh while there are unsaved edits.
   useEffect(() => {
     if (!dirty) return;
@@ -279,11 +284,23 @@ export default function OperationalPreferencesPage() {
               </div>
             </Card>
 
+            {needsInitialSave && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                No season preference is saved for this vineyard yet — the values
+                above are VineTrack defaults. Save them to confirm, or choose your
+                own season start first.
+              </div>
+            )}
+
             {canEdit && (
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button
                   onClick={() => save.mutate()}
-                  disabled={save.isPending || !dirty || !isValidSeason(month, day)}
+                  disabled={
+                    save.isPending ||
+                    (!dirty && !needsInitialSave) ||
+                    !isValidSeason(month, day)
+                  }
                 >
                   {save.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
