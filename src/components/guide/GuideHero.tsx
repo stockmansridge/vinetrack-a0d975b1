@@ -19,13 +19,12 @@ import { focusToObjectPosition } from "@/lib/guide/guideImages";
 export function GuideHero({
   imageSrc,
   imageAlt = "VineTrack across the vineyard, mobile apps and management portal",
-  coreSetupStatus = "not_checked",
-  coreSetupCaption,
+  setup,
 }: {
   imageSrc?: string;
   imageAlt?: string;
-  coreSetupStatus?: SetupStatus;
-  coreSetupCaption?: string;
+  /** Stage 3.2 — single authoritative overall Setup presentation. */
+  setup?: SetupPresentation;
 }) {
   const uploaded = useGuideImage("hero");
   return (
