@@ -38,6 +38,11 @@ import {
   type WriteRegisteredUse,
   type WriteVerificationStatus,
 } from "@/lib/chemicalIntelligenceWrite";
+import {
+  selectRates,
+  withholdingDisplay,
+  type LookupRateView,
+} from "@/lib/chemicalLabelRates";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import { vineyardCountryCode, countryLabel } from "@/lib/chemicalJurisdiction";
 import {
@@ -385,10 +390,21 @@ export interface CanonicalChemicalFields {
   labelVersion?: string;
   /** Only when the label actually stated it. */
   withholdingDays?: number;
+  /** LD-2 presentation: "Not required when used as directed" for a stated 0. */
+  withholdingText?: string;
   reEntryHours?: number;
   restrictions?: string;
   target?: string;
+  /** LD-2 authoritative label rates for the primary (grape) use. */
+  rates?: LookupRateView[];
+  ratePer100L?: LookupRateView;
+  ratePerHectare?: LookupRateView;
+  /** Reference-only rows (basis "other") — display, never applied. */
+  rateReferenceOnly?: LookupRateView[];
+  /** Combined display text for the usable rates. */
+  rateText?: string;
 }
+
 
 export interface ChemicalLookupResult {
   matchSource: LookupMatchSource;
@@ -488,43 +504,86 @@ function decodeRates(raw: any): WriteLabelRate[] {
   return asArray(raw)
     .map((r) => {
       if (!r || typeof r !== "object") return null;
-      const unit = s(r.unit);
+      const unit = s(r.unit) ?? "";
       const value = num(r.value ?? r.rate_per_unit);
       const min = num(r.min_value ?? r.rate_min);
       const max = num(r.max_value ?? r.rate_max);
-      if (!unit || (value == null && min == null && max == null)) return null;
+      const rawText = s(r.raw_text);
+      const basis = normaliseLabelRateBasis(r.basis ?? r.rate_basis);
+      // A row with no number is only kept when the label stated something we
+      // can show as reference text (basis "other"). It never fills a field.
+      if (value == null && min == null && max == null && !rawText) return null;
+      if ((value == null && min == null && max == null) || !unit) {
+        return {
+          label: s(r.label) ?? "",
+          basis: "other",
+          unit,
+          raw_text: rawText,
+        } as WriteLabelRate;
+      }
       return {
         label: s(r.label) ?? "",
-        basis: normaliseLabelRateBasis(r.basis ?? r.rate_basis),
+        basis,
         unit,
         value,
         min_value: min,
         max_value: max,
-        raw_text: s(r.raw_text),
+        raw_text: rawText,
       } as WriteLabelRate;
     })
     .filter((r): r is WriteLabelRate => !!r);
 }
 
-function decodeUses(raw: any[]): WriteRegisteredUse[] {
+/**
+ * Per-use provenance gate. LD-2 attaches evidence per registered use
+ * (`use.provenance.rates`, `.withholding_period`, …). That is authoritative
+ * for THAT use — a top-level `field_provenance.label_rates` must never be
+ * assumed to cover a use that stated no rate evidence of its own.
+ */
+function useFieldAllowed(gate: FieldGate, use: any, key: string, topKey: string): boolean {
+  const prov = use?.provenance;
+  if (prov && typeof prov === "object" && key in prov) {
+    return isAuthoritativeProvenance(normaliseFieldProvenance((prov as any)[key]));
+  }
+  const top = gate.map[topKey];
+  if (top != null) return isAuthoritativeProvenance(top);
+  // No per-use and no top-level evidence key: the use itself was already
+  // gated through `registered_uses`.
+  return true;
+}
+
+function decodeUses(raw: any[], gate: FieldGate): WriteRegisteredUse[] {
   return raw
     .map((u) => {
       if (!u || typeof u !== "object") return null;
       const crop = s(u.crop) ?? "";
       const target = s(u.target_raw ?? u.target) ?? "";
       if (!crop && !target) return null;
+      const rates = useFieldAllowed(gate, u, "rates", "label_rates")
+        ? decodeRates(u.rates)
+        : [];
+      const whp = useFieldAllowed(gate, u, "withholding_period", "withholding_periods")
+        ? num(u.withholding_period_days)
+        : undefined;
+      const rei = useFieldAllowed(gate, u, "re_entry", "re_entry")
+        ? num(u.re_entry_period_hours)
+        : undefined;
+      const restrictions = useFieldAllowed(gate, u, "restrictions", "restrictions")
+        ? s(u.restrictions)
+        : undefined;
       return {
         crop,
         target_raw: target,
-        rates: decodeRates(u.rates),
+        rates,
         // Never inferred from free text here: the resolver is the authority.
-        withholding_period_days: num(u.withholding_period_days),
-        re_entry_period_hours: num(u.re_entry_period_hours),
-        restrictions: s(u.restrictions),
+        withholding_period_days: whp,
+        re_entry_period_hours: rei,
+        restrictions,
       } as WriteRegisteredUse;
     })
     .filter((u): u is WriteRegisteredUse => !!u);
 }
+
 
 function decodeConflicts(raw: any[]): WriteConflict[] {
   return raw
@@ -630,7 +689,7 @@ export function parseChemicalLookup(
     asArray(p.active_ingredients ?? p.actives),
     gate,
   );
-  const uses = gated(gate, "registered_uses", decodeUses(asArray(p.registered_uses))) ?? [];
+  const uses = gated(gate, "registered_uses", decodeUses(asArray(p.registered_uses), gate)) ?? [];
   const conflicts = decodeConflicts(asArray(p.verification_conflicts ?? root.conflicts));
 
   const unresolved = new Set<string>(
@@ -645,6 +704,7 @@ export function parseChemicalLookup(
   }
 
   const use = primaryUse(uses);
+  const rateSelection = selectRates(use);
   if (use && !use.rates.length) unresolved.add("registered_uses.rates");
   if (use && use.withholding_period_days == null) unresolved.add("withholding_period_days");
   if (use && use.re_entry_period_hours == null) unresolved.add("re_entry_period_hours");
@@ -711,9 +771,22 @@ export function parseChemicalLookup(
     labelReference,
     labelVersion,
     withholdingDays: use?.withholding_period_days,
+    withholdingText: withholdingDisplay(
+      use?.withholding_period_days,
+      [use?.restrictions, ...(use?.rates ?? []).map((r) => r.raw_text)]
+        .filter(Boolean)
+        .join("\n"),
+    ),
     reEntryHours: use?.re_entry_period_hours,
     restrictions: use?.restrictions,
     target: use?.target_raw || undefined,
+    rates: rateSelection.all.length ? rateSelection.all : undefined,
+    ratePer100L: rateSelection.per100L,
+    ratePerHectare: rateSelection.perHectare,
+    rateReferenceOnly: rateSelection.referenceOnly.length
+      ? rateSelection.referenceOnly
+      : undefined,
+    rateText: rateSelection.text,
   };
 
   return {

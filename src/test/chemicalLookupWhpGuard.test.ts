@@ -68,8 +68,13 @@ describe("Prosaro 420 SC — WHP must stay unresolved", () => {
 
   it("never lifts the legacy/AI 35-day value into a canonical field", () => {
     expect(r.aiSuggestion?.withholdingText).toContain("35");
-    expect(JSON.stringify(r.fields)).not.toContain("35");
+    // The WHP fields specifically must stay empty (label rates are unrelated).
+    expect(r.fields.withholdingDays).toBeUndefined();
+    expect(r.fields.withholdingText).toBeUndefined();
+    expect(r.fields.reEntryHours).toBeUndefined();
+    expect(r.draft!.registeredUses.some((u) => u.withholding_period_days != null)).toBe(false);
   });
+
 
   it("stays blank even when a legacy suggestion carries a WHP alongside it", () => {
     // Simulates the SavedChemicals apply path: the resolved branch is terminal,

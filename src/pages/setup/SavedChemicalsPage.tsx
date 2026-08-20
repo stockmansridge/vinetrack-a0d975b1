@@ -951,6 +951,10 @@ function ChemicalEditor({
       if (s.master) {
         setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
       }
+      // LD-2 authoritative label rate. Only a single-value per-100 L or
+      // per-hectare rate may fill the numeric field; ranges keep their min/max
+      // (shown on the card) and basis "other" is reference text only.
+      const rate = r.fields.ratePer100L ?? r.fields.ratePerHectare;
       setForm((p) => ({
         ...p,
         name: r.fields.name ?? s.name ?? p.name ?? "",
@@ -959,11 +963,13 @@ function ChemicalEditor({
         active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
         problem: r.fields.target ?? p.problem ?? "",
+        unit: rate?.composedUnit ?? p.unit ?? "",
         label_url:
           r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
             ? r.fields.labelReference
             : (p.label_url ?? ""),
       }));
+      setRateStr(rate?.autoFillValue != null ? String(rate.autoFillValue) : "");
       // Label-backed only. When the structured response does not return a
       // WHP / REI with authoritative provenance the field is CLEARED, so a
       // stale or AI-sourced number can never survive an authoritative apply.
@@ -971,6 +977,7 @@ function ChemicalEditor({
       setRei(r.fields.reEntryHours != null ? String(r.fields.reEntryHours) : "");
       setRestNotes(r.fields.restrictions ?? "");
       return;
+
     }
 
 
