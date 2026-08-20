@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GuideVisualSlot } from "./GuideVisualSlot";
-import { type SetupStatus } from "./SetupCard";
+import { SetupPresentationPill } from "./SetupPresentationPill";
+import { setupPresentationMeta, type SetupPresentation } from "@/lib/guide/setupPresentation";
 import { guideVisual } from "./guideVisuals";
 import { guideAreaRoute, type GuideArea } from "@/lib/guide/guideAreas";
 import { useGuideImage } from "@/lib/guide/guideImageStore";
@@ -25,67 +26,44 @@ import { focusToObjectPosition, type GuideImageKey } from "@/lib/guide/guideImag
  * `neutral` are reachable today — Stage 3 will map real setup health onto
  * `complete` / `recommended`. No completion is inferred here.
  */
-export type GuideStepTone = "incomplete" | "complete" | "recommended" | "neutral";
+/**
+ * Stage 3.2 — step circle variants.
+ *
+ * Only step 1 (Setup) carries a semantic state: green = required setup
+ * complete, red = required action, neutral = unknown/loading. Every other step
+ * is a neutral educational sequence number and is NEVER status-coloured.
+ */
+export type GuideStepTone = "incomplete" | "complete" | "neutral" | "sequence";
 
 const STEP_TONE: Record<GuideStepTone, string> = {
   incomplete: "border-destructive bg-destructive text-destructive-foreground",
   complete: "border-emerald-600 bg-emerald-600 text-white",
-  recommended: "border-amber-500 bg-amber-500 text-white",
   neutral: "border-border bg-muted text-muted-foreground",
+  sequence: "border-border bg-muted/60 text-foreground/80",
 };
-
-/** Compact landing-row status pill — pale red while unresolved. */
-export function GuideRowStatusPill({ status }: { status: SetupStatus }) {
-  const tone =
-    status === "complete"
-      ? { dot: "bg-emerald-600", cls: "border-emerald-600/30 bg-emerald-600/10 text-emerald-800 dark:text-emerald-400", label: "Complete" }
-      : status === "recommended"
-        ? { dot: "bg-amber-500", cls: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400", label: "Recommended" }
-        : status === "not_applicable"
-          ? { dot: "bg-muted-foreground/50", cls: "border-border bg-muted text-muted-foreground", label: "Not applicable" }
-          : {
-              dot: "bg-destructive",
-              cls: "border-destructive/25 bg-destructive/[0.07] text-destructive",
-              label: status === "action_required" ? "Action required" : "Not checked yet",
-            };
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none",
-        tone.cls,
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} aria-hidden />
-      {tone.label}
-    </span>
-  );
-}
 
 export function GuideAreaCard({
   area,
   index,
-  setupStatus = "not_checked",
-  setupCaption,
+  setup,
 }: {
   area: GuideArea;
   index: number;
-  setupStatus?: SetupStatus;
-  /** Stage 3 slot: "6 of 7 setup areas complete" / "2 actions required". */
-  setupCaption?: string;
+  /** Live overall Setup presentation — supplied for the Setup row only. */
+  setup?: SetupPresentation;
 }) {
   const { Icon } = guideVisual(area.visualKey);
   const to = guideAreaRoute(area);
   // One uploaded image per area key feeds both this row and the drill-down hero.
   const uploaded = useGuideImage(area.id as GuideImageKey);
-  // No live health data yet (Stage 3): every step is unresolved → red.
-  const stepTone: GuideStepTone =
-    setupStatus === "complete"
+  // Only the Setup row consumes live health; all other rows stay neutral.
+  const stepTone: GuideStepTone = !setup
+    ? "sequence"
+    : setup.state === "complete"
       ? "complete"
-      : setupStatus === "recommended"
-        ? "recommended"
-        : setupStatus === "not_applicable"
-          ? "neutral"
-          : "incomplete";
+      : setup.state === "action_required"
+        ? "incomplete"
+        : "neutral";
 
   return (
     <Link
@@ -139,12 +117,12 @@ export function GuideAreaCard({
         {/* Fixed action column — identical geometry on EVERY row (Stage 2.9).
             Status/count sits directly above the CTA and never shifts it. */}
         <div className="flex flex-wrap items-center gap-1.5 lg:h-full lg:w-full lg:flex-col lg:flex-nowrap lg:items-start lg:justify-center lg:gap-[5px]">
-          {area.showsSetupStatus && (
+          {setup && (
             <>
-              <GuideRowStatusPill status={setupStatus} />
-              {setupCaption && (
+              <SetupPresentationPill presentation={setup} />
+              {setupPresentationMeta(setup) && (
                 <span className="text-[11.5px] leading-none text-muted-foreground">
-                  {setupCaption}
+                  {setupPresentationMeta(setup)}
                 </span>
               )}
             </>
