@@ -23,10 +23,13 @@ import { evaluateSaveGate, hydrateDraft } from "@/lib/sprayApplicationDraft";
 import { toSprayJobInput } from "@/lib/sprayApplicationSave";
 import {
   createSprayJob,
+  fetchLinkedSprayRecords,
   fetchSprayJobPaddockIds,
   updateSprayJob,
   type SprayJob,
 } from "@/lib/sprayJobsQuery";
+import type { SprayJobPlanProvenance } from "@/lib/resistance/sprayJobPlanLink";
+import { ResistancePlanContextCard } from "./ResistancePlanContextCard";
 import { fetchSavedChemicalsForVineyard } from "@/lib/savedChemicalsQuery";
 import { toChemicalIntelligence, type ChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import { supabase } from "@/integrations/ios-supabase/client";
@@ -79,6 +82,8 @@ export function SprayJobWizard({
   canEdit,
   lookups,
   linkedRecords,
+  planProvenance,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -89,6 +94,13 @@ export function SprayJobWizard({
   lookups: WizardLookups;
   /** Rendered at the bottom of Review for saved, non-template jobs. */
   linkedRecords?: ReactNode;
+  /**
+   * SQL 201 provenance to freeze on a NEW job created from a Resistance Plan
+   * position. Ignored for templates and for existing jobs (whose provenance
+   * is already frozen on the row).
+   */
+  planProvenance?: SprayJobPlanProvenance | null;
+  onCreated?: (job: SprayJob) => void;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -152,10 +164,19 @@ export function SprayJobWizard({
     if (!job) {
       const pref = normaliseCarrierBasisPreference(carrierPreference);
       if (pref && pref !== "either") draft.carrier = { ...draft.carrier, basis: pref };
+      if (planProvenance && !draft.isTemplate) draft.planProvenance = planProvenance;
     }
     setApp(draft);
     setHydrated(true);
-  }, [open, hydrated, job, paddockIds, chemicalsResult, intelligenceById, carrierPreference, vineyardId, isTemplate]);
+  }, [open, hydrated, job, paddockIds, chemicalsResult, intelligenceById, carrierPreference, vineyardId, isTemplate, planProvenance]);
+
+  // Completion freezes provenance server-side (SQL 201); reflect that here.
+  const { data: linkedRecordRows } = useQuery({
+    queryKey: ["spray_records_linked", job?.id],
+    enabled: open && !!job?.id,
+    queryFn: () => fetchLinkedSprayRecords(job!.id),
+  });
+  const provenanceFrozen = (linkedRecordRows?.length ?? 0) > 0;
 
   const geometry = useMemo(
     () =>
@@ -204,10 +225,21 @@ export function SprayJobWizard({
         geometry,
         calculation: calc,
       });
-      if (editing) return updateSprayJob(job!.id, input, blocks);
+      if (editing) {
+        // Provenance is frozen once a live record references the job — never
+        // re-send those columns, so the backend rule is respected, not fought.
+        if (provenanceFrozen) {
+          delete (input as any).resistance_plan_id;
+          delete (input as any).resistance_position_id;
+          delete (input as any).resistance_position_snapshot;
+          delete (input as any).resistance_plan_source_revision;
+        }
+        return updateSprayJob(job!.id, input, blocks);
+      }
       return createSprayJob(input, blocks);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      if (!editing && saved) onCreated?.(saved as SprayJob);
       toast({ title: editing ? "Saved" : app.isTemplate ? "Template created" : "Spray job created" });
       qc.invalidateQueries({ queryKey: ["spray_jobs"] });
       qc.invalidateQueries({ queryKey: ["spray_job_paddocks"] });
@@ -303,7 +335,22 @@ export function SprayJobWizard({
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading application…
                 </div>
               ) : (
-                renderStep()
+                <div className="space-y-4">
+                  {!app.isTemplate && app.planProvenance && (
+                    <ResistancePlanContextCard
+                      provenance={app.planProvenance}
+                      jobId={job?.id ?? null}
+                      vineyardId={vineyardId}
+                      executedGroups={app.products.flatMap((l) =>
+                        l.activityGroups.map((g) => g.code),
+                      )}
+                      executedBlockIds={app.blockIds}
+                      executedTargets={app.targets}
+                      frozen={provenanceFrozen}
+                    />
+                  )}
+                  {renderStep()}
+                </div>
               )}
             </div>
           </ScrollArea>
