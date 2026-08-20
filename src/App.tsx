@@ -130,6 +130,19 @@ const App = () => (
               <Route path="/signup" element={<SignUp />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/no-access" element={<NoAccess />} />
+              {/* TEMP-STAGE28-PREVIEW */}
+              <Route
+                path="/__guide-preview"
+                element={
+                  <div className="flex min-h-screen bg-background">
+                    <div className="w-64 shrink-0 border-r border-border bg-card" />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="h-14 shrink-0 border-b border-border bg-card" id="temp-header" />
+                      <div className="flex-1"><HowVineTrackWorksPage /></div>
+                    </div>
+                  </div>
+                }
+              />
               <Route path="/unsubscribe" element={<UnsubscribePage />} />
               <Route element={<RequireAuth />}>
                 <Route path="/onboarding" element={<Onboarding />} />
