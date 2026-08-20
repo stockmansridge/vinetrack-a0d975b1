@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { guideVisual } from "./guideVisuals";
 
@@ -28,6 +29,7 @@ export function GuideVisualSlot({
   caption,
   subtle = false,
   placeholderLabel,
+  objectPosition = "center center",
 }: {
   visualKey?: string;
   imageSrc?: string;
@@ -40,9 +42,13 @@ export function GuideVisualSlot({
   /** Restrained image-shaped placeholder instead of a big centred icon. */
   subtle?: boolean;
   placeholderLabel?: string;
+  /** CSS object-position; images always crop with object-fit: cover. */
+  objectPosition?: string;
 }) {
   const visual = guideVisual(visualKey);
-  const src = imageSrc ?? visual.imageSrc;
+  const requested = imageSrc ?? visual.imageSrc;
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const src = requested && requested !== failed ? requested : undefined;
   const { Icon, tone } = visual;
 
   return (
