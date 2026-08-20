@@ -7,7 +7,7 @@
 // rules stay authoritative — a refusal is surfaced, never worked around.
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, History, Search, ShieldOff } from "lucide-react";
+import { AlertTriangle, BadgeCheck, History, Loader2, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty } from "./_shared";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
+import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel";
+import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
+import { refreshFromApvma } from "@/lib/masterChemicalImport";
 import {
   approvalReadiness,
   fetchMasterVersions,
@@ -54,6 +57,7 @@ function CatalogueBody() {
   const [status, setStatus] = useState<MasterReviewStatus>("candidate");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<MasterChemicalRow | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const q = useQuery({
     queryKey: [...QK, status],
@@ -82,14 +86,19 @@ function CatalogueBody() {
           <TabsTrigger value="retired">Retired</TabsTrigger>
         </TabsList>
 
-        <div className="relative mt-3 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Search product, registrant or registration number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="relative max-w-sm flex-1 min-w-[220px]">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder="Search product, registrant or registration number"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Download className="h-4 w-4 mr-1" /> Import from APVMA
+          </Button>
         </div>
 
         <TabsContent value={status} className="mt-3">
@@ -108,6 +117,13 @@ function CatalogueBody() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ApvmaImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        invalidateKey={QK}
+        onReview={(row) => setSelected(row)}
+      />
 
       {selected && (
         <ReviewDialog
@@ -195,6 +211,20 @@ function ReviewDialog({
     queryFn: () => fetchMasterVersions(row.id),
   });
 
+  const refresh = useMutation({
+    mutationFn: () => refreshFromApvma(row),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: QK });
+      toast({
+        title: res.outcome === "updated" ? "Refreshed from APVMA" : "Nothing changed",
+        description: res.message,
+        variant: res.outcome === "identity_mismatch" ? "destructive" : undefined,
+      });
+    },
+    onError: (e: any) =>
+      toast({ title: "Refresh failed", description: e?.message ?? String(e), variant: "destructive" }),
+  });
+
   const mut = useMutation({
     mutationFn: (status: MasterReviewStatus) => setMasterReviewStatus(row.id, status, notes),
     onSuccess: (_d, status) => {
@@ -227,6 +257,8 @@ function ReviewDialog({
 
         <div className="space-y-3 text-sm">
           <MasterChemicalCard master={row} />
+
+          <MasterEvidencePanel row={row} />
 
           {!readiness.ready && (
             <div className="rounded-md border border-warning/50 bg-warning/10 p-2 text-xs">
@@ -292,6 +324,18 @@ function ReviewDialog({
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button
+            variant="outline"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate()}
+          >
+            {refresh.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-1" />
+            )}
+            Refresh from APVMA
+          </Button>
           {current !== "retired" && (
             <Button
               variant="outline"
