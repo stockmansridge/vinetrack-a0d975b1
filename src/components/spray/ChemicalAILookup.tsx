@@ -267,62 +267,8 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
     );
     setLoading(false);
-    return;
-
-    /* eslint-disable no-unreachable */
-
-
-    try {
-      const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
-        body: { product_name: q, country: countryCode, country_code: countryCode },
-      });
-      if (fnErr) {
-        // Surface server-side error payload when available; otherwise show a
-        // friendly fallback. The technical detail is still logged.
-        console.error("[chemical-ai-lookup] invoke failed", fnErr, data);
-        const serverMsg = (data as any)?.error;
-        throw new Error(
-          typeof serverMsg === "string" && serverMsg
-            ? serverMsg
-            : "Chemical lookup failed. Please try again, or add the chemical manually.",
-        );
-      }
-      // Consume the Rork Master response envelope when the backend supplied
-      // one (match_source / master_chemical_id / master_revision / …).
-      const envelope = parseMasterLookupEnvelope(data);
-      if (isTrustedMasterEnvelope(envelope)) {
-        const row =
-          envelope.master ??
-          (envelope.masterChemicalId ? await fetchMasterChemical(envelope.masterChemicalId) : null);
-        // The backend enforces jurisdiction; the portal must not weaken it —
-        // a cross-country Master row is discarded, never displayed as verified.
-        if (row && masterEligibleForVineyard(row.registration_country, countryCode)) {
-          setMasterResult(row);
-          return;
-        }
-      }
-      const list: RawCandidate[] = (Array.isArray(data?.candidates)
-        ? data.candidates
-        : data?.suggestion
-        ? [data.suggestion]
-        : []
-      ).filter(
-        (c: RawCandidate) =>
-          jurisdictionSuitability(c.country, countryCode) !== "mismatch",
-      );
-      if (!list.length) {
-        throw new Error(
-          `No ${countryLabel(countryCode)} product matched. Try a different spelling, or add the chemical manually.`,
-        );
-      }
-      setCandidates(list);
-    } catch (e: any) {
-      console.error("[chemical-ai-lookup] error", e);
-      setError(e?.message ?? "Chemical lookup failed. Please try again, or add the chemical manually.");
-    } finally {
-      setLoading(false);
-    }
   }
+
 
 
   function applyCandidate(c: RawCandidate) {
