@@ -61,12 +61,20 @@ export const AUTHORITATIVE_MATCH_SOURCES: LookupMatchSource[] = ["master", "auth
 export function normaliseLookupMatchSource(value: unknown): LookupMatchSource {
   const s = String(value ?? "").trim().toLowerCase();
   if (s === "master") return "master";
-  if (s === "authoritative" || s === "official" || s === "official_register") return "authoritative";
+  if (
+    s === "authoritative" ||
+    s === "authoritative_candidate" ||
+    s === "official" ||
+    s === "official_register" ||
+    s === "register_match"
+  )
+    return "authoritative";
   if (s === "ai_candidate" || s === "ai" || s === "candidate" || s === "ai_suggestion")
     return "ai_candidate";
   if (s === "ambiguous" || s === "multiple" || s === "multiple_matches") return "ambiguous";
   return "unresolved";
 }
+
 
 export const isAuthoritativeMatch = (m: LookupMatchSource): boolean =>
   AUTHORITATIVE_MATCH_SOURCES.includes(m);
@@ -171,13 +179,24 @@ export function parseLookupJurisdiction(
       : null;
   const raw =
     block && typeof block === "object"
-      ? (block.country_code ?? block.country ?? block.iso2 ?? null)
+      ? (block.resolved_country_code ??
+        block.country_code ??
+        block.resolved_country_name ??
+        block.country ??
+        block.iso2 ??
+        block.requested_country ??
+        null)
       : block;
   const country = vineyardCountryCode(raw);
   const scheme =
     block && typeof block === "object"
-      ? (String(block.registration_scheme ?? block.scheme ?? "").trim().toLowerCase() || undefined)
+      ? (String(
+          block.registration_scheme ?? block.register_adapter ?? block.scheme ?? "",
+        )
+          .trim()
+          .toLowerCase() || undefined)
       : undefined;
+
 
   if (!country) {
     return {
@@ -300,10 +319,55 @@ function productBlock(payload: any): Record<string, any> {
   if (!payload || typeof payload !== "object") return {};
   const nested =
     payload.product ?? payload.resolved ?? payload.chemical ?? payload.master ?? null;
-  return nested && typeof nested === "object"
-    ? { ...(payload as Record<string, any>), ...(nested as Record<string, any>) }
-    : (payload as Record<string, any>);
+  const base: Record<string, any> =
+    nested && typeof nested === "object"
+      ? { ...(payload as Record<string, any>), ...(nested as Record<string, any>) }
+      : { ...(payload as Record<string, any>) };
+
+  // Production envelope keeps registration identity in a nested block. Flatten
+  // it so the canonical readers below see the same keys either way.
+  const reg = base.registration;
+  if (reg && typeof reg === "object") {
+    base.registration_number = base.registration_number ?? reg.registration_number ?? reg.number;
+    base.registrant = base.registrant ?? reg.registrant;
+    base.registration_scheme = base.registration_scheme ?? reg.scheme ?? reg.registration_scheme;
+    base.registration_country =
+      base.registration_country ?? reg.country_code ?? reg.country;
+    base.registered_product_name =
+      base.registered_product_name ?? reg.registered_product_name;
+    base.label_reference = base.label_reference ?? reg.label_reference;
+    base.label_version = base.label_version ?? reg.label_version;
+  }
+
+  // Verification lives in its own block on the production envelope.
+  const ver = base.verification;
+  if (ver && typeof ver === "object") {
+    base.verification_status = base.verification_status ?? ver.status;
+    base.verification_sources = base.verification_sources ?? ver.sources;
+    base.verification_conflicts = base.verification_conflicts ?? ver.conflicts;
+    base.verification_unresolved_fields =
+      base.verification_unresolved_fields ?? ver.unresolved_fields;
+  }
+  return base;
 }
+
+/**
+ * Provenance keys differ slightly between the documented contract and the
+ * deployed envelope (`registration` covers the whole identity block,
+ * `product_category` is the category). Alias them so gating still applies.
+ */
+function withProvenanceAliases(map: FieldProvenanceMap): FieldProvenanceMap {
+  const out: FieldProvenanceMap = { ...map };
+  const alias = (target: string, from: string) => {
+    if (out[target] == null && out[from] != null) out[target] = out[from];
+  };
+  alias("registration_number", "registration");
+  alias("registrant", "registration");
+  alias("registration_country", "registration");
+  alias("category", "product_category");
+  return out;
+}
+
 
 /* --------------------------------------------------------------- result */
 
@@ -523,7 +587,10 @@ export function parseChemicalLookup(
   const matchSource = normaliseLookupMatchSource(root.match_source ?? root.matchSource);
   const jurisdiction = parseLookupJurisdiction(root, vineyardCountry);
   const aiSuggestion = parseAiSuggestion(root);
-  const { present, map } = parseFieldProvenance(root.field_provenance ?? root.fieldProvenance);
+  const parsedProvenance = parseFieldProvenance(root.field_provenance ?? root.fieldProvenance);
+  const present = parsedProvenance.present;
+  const map = withProvenanceAliases(parsedProvenance.map);
+
   const envelope = parseMasterLookupEnvelope(root);
   const master =
     normaliseMatchSource(root.match_source ?? root.matchSource) === "master"
