@@ -13,6 +13,8 @@ import { useReversePruningEntry } from "@/lib/pruningQuery";
 import { hardDeleteWorkTask, fetchWorkTasksByIds } from "@/lib/workTasksQuery";
 import { useQuery } from "@tanstack/react-query";
 import { costingMethodLabel, resolveCostingMethod } from "@/lib/pieceRateCosting";
+import { useActivityWorkTaskAggregates } from "@/lib/pruningActivityWorkTasks";
+
 import { formatDate } from "@/lib/dateFormat";
 import EditPruningDialog from "@/components/pruning/EditPruningDialog";
 import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
@@ -44,6 +46,14 @@ export default function ActivityHistory({
     queryFn: () => fetchWorkTasksByIds(taskIds),
   });
   const taskById = new Map((tasksQ.data ?? []).map((t) => [t.id, t]));
+
+  // SQL 200 — Work Tasks now link to the parent ACTIVITY, so history rows must
+  // read their hours/cost from those links, not only the legacy work_task_id.
+  const activityAggQ = useActivityWorkTaskAggregates(
+    entries.map((e) => e.pruning_activity_id).filter(Boolean) as string[],
+  );
+  const aggByActivity = activityAggQ.data ?? new Map();
+
   const money = (n: number) =>
     n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 2 });
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
@@ -102,6 +112,9 @@ export default function ActivityHistory({
               // SQL 168: skipped entries record progress only — no worker,
               // labour, cost, method or Work Task.
               const isSkipped = e.is_skipped === true;
+              const agg = e.pruning_activity_id ? aggByActivity.get(e.pruning_activity_id) : null;
+              const linkedCount = agg?.taskCount ?? 0;
+              const hasTask = linkedCount > 0 || !!e.work_task_id;
               return (
                 <li key={e.id} className="p-4 flex items-start justify-between gap-4">
 
@@ -111,8 +124,11 @@ export default function ActivityHistory({
                       {isSkipped
                         ? <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300">Skipped</Badge>
                         : <Badge variant="secondary">{e.pruning_method}</Badge>}
-                      {e.work_task_id && (
-                        <Badge variant="outline" className="gap-1"><Link2 className="h-3 w-3" /> Work Task</Badge>
+                      {hasTask && (
+                        <Badge variant="outline" className="gap-1">
+                          <Link2 className="h-3 w-3" />
+                          {linkedCount > 1 ? `${linkedCount} Work Tasks` : "Work Task"}
+                        </Badge>
                       )}
                       {isReversed && <Badge variant="destructive">Reversed</Badge>}
                       <span className="text-sm text-muted-foreground">{isSkipped ? "—" : (e.worker_or_crew || "—")}</span>
@@ -121,9 +137,19 @@ export default function ActivityHistory({
                       {Number(e.row_equivalents_completed).toFixed(2)} row eq.
                       {isSkipped
                         ? " · Vines — · Labour hours — · Cost —"
-                        : `${" · ~"}${(e.estimated_vines_completed ?? 0).toLocaleString()} vines${e.labour_hours ? ` · ${Number(e.labour_hours).toFixed(1)} hrs` : ""}`}
+                        : `${" · ~"}${(e.estimated_vines_completed ?? 0).toLocaleString()} vines${
+                            linkedCount > 0
+                              ? ` · ${agg?.hours != null ? `${agg.hours.toFixed(2)} hrs` : "— hrs"} · ${agg?.cost != null ? money(agg.cost) : "—"}`
+                              : e.labour_hours ? ` · ${Number(e.labour_hours).toFixed(1)} hrs` : ""
+                          }`}
                       {e.vintage_year ? ` · Vintage ${e.vintage_year}` : ""}
                     </div>
+                    {linkedCount > 0 && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Activity total from {linkedCount} linked Work Task{linkedCount === 1 ? "" : "s"}.
+                      </div>
+                    )}
+
                     {(() => {
                       const t = e.work_task_id ? taskById.get(e.work_task_id) : null;
                       if (!t || resolveCostingMethod(t) !== "piece_rate") return null;
