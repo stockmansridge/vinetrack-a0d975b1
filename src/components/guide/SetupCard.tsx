@@ -81,6 +81,42 @@ export function SetupStatusPill({
   );
 }
 
+const STATUS_ICON_TONE: Record<SetupStatus, string> = {
+  complete: "text-emerald-600 dark:text-emerald-400",
+  action_required: "text-destructive",
+  recommended: "text-amber-600 dark:text-amber-400",
+  not_applicable: "text-muted-foreground/70",
+  not_checked: "text-muted-foreground/70",
+};
+
+/**
+ * Semantic status icon for a single live setup-health check.
+ * Neutral (unknown / not applicable) uses a solid muted minus — never a
+ * dotted placeholder, which reads as "unchecked".
+ */
+export function SetupStatusIcon({
+  status,
+  className,
+}: {
+  status: SetupStatus;
+  className?: string;
+}) {
+  const Icon =
+    status === "complete"
+      ? CheckCircle2
+      : status === "action_required"
+        ? AlertTriangle
+        : status === "recommended"
+          ? CircleAlert
+          : MinusCircle;
+  return (
+    <Icon
+      aria-hidden
+      className={cn("h-3.5 w-3.5 shrink-0", STATUS_ICON_TONE[status], className)}
+    />
+  );
+}
+
 export function SetupCard({
   item,
   status = "not_checked",
