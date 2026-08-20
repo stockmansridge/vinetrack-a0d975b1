@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { CircleDashed, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { SetupStatusPill } from "./SetupCard";
 
 interface OverviewTile {
