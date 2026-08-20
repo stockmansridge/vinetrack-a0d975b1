@@ -189,7 +189,19 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
               <ImageIcon className="h-6 w-6 opacity-60" aria-hidden />
-              <span className="text-xs">No custom image — placeholder in use</span>
+              <span className="text-xs">No custom image — drag an image here or use Upload</span>
+            </div>
+          )}
+
+          {dragOver && !busy && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary/15 text-xs font-semibold text-primary">
+              Drop image to upload
+            </div>
+          )}
+          {upload.isPending && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-xs font-medium">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Uploading…
             </div>
           )}
         </div>
