@@ -54,10 +54,10 @@ import {
 export default function GuideAreaPage() {
   const { area: slug } = useParams<{ area: string }>();
   const area = guideAreaBySlug(slug);
+  const viewer = useGuideViewer();
 
   if (!area) return <Navigate to="/dashboard/how-vinetrack-works" replace />;
 
-  const viewer = useGuideViewer();
   const items = visibleGuideItems(guideAreaItems(area), viewer);
   // Stage 4A: the four field workflows use the shared visual guide structure.
   const workflow = guideWorkflow(area.id);
