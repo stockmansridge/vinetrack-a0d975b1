@@ -276,15 +276,25 @@ export function GuideStepEditor({
           </div>
 
           <div>
-            <Label className="mb-1.5 block">Image</Label>
-            <GuideStepImageUploader
-              sectionKey={sectionKey}
-              stepId={step.id}
-              image={step.image}
-              fallbackUrl={fallbackImageUrl}
-              onChange={(next) => set({ image: next })}
-            />
+            <Label className="mb-1.5 block">
+              {step.imageKey ? "Step screenshot (guide image)" : "Step screenshot"}
+            </Label>
+            {step.imageKey ? (
+              // This step uses an existing Guide Image key, so it is managed
+              // through the same slot the public guide already resolves —
+              // uploads here replace that exact image, not a copy.
+              <GuideImageKeyEditor imageKey={step.imageKey} />
+            ) : (
+              <GuideStepImageUploader
+                sectionKey={sectionKey}
+                stepId={step.id}
+                image={step.image}
+                fallbackUrl={fallbackImageUrl}
+                onChange={(next) => set({ image: next })}
+              />
+            )}
           </div>
+
         </div>
       )}
 
