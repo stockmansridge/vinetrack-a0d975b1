@@ -269,11 +269,5 @@ export function bootstrapGuideContent(raw: unknown): {
     if (JSON.stringify(filled) !== JSON.stringify(parsed)) changed = true;
     map[key] = filled;
   }
-
-  // Never drop unknown keys someone else may have written.
-  for (const [key, value] of Object.entries(stored)) {
-    if (map[key] || !value) continue;
-    changed = changed || false;
-  }
   return { map, changed };
 }
