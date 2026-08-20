@@ -141,11 +141,15 @@ export default function PruningWorkTasksSection({
       )}
 
       {pendingTaskIds.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {pendingTaskIds.length} Work Task{pendingTaskIds.length === 1 ? "" : "s"} will be linked
-          when you save this activity.
-        </p>
+        <div className="flex items-start gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-medium text-foreground">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span>
+            {pendingTaskIds.length} Work Task{pendingTaskIds.length === 1 ? " has" : "s have"} been
+            created and will be linked when you save this activity.
+          </span>
+        </div>
       )}
+
 
       {tasks.map((t) => (
         <div key={t.taskId} className="space-y-2 rounded border bg-muted/20 p-3 text-sm">
