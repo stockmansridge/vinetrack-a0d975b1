@@ -106,7 +106,7 @@ export const GUIDE_AREAS: GuideArea[] = [
     actionLabel: "Learn how Pins work",
     visualKey: "area.pins",
     imageAlt: "Vineyard rows with location pins recorded on a phone",
-    imagePosition: "left",
+    imagePosition: "right",
     itemIds: ["field.pins", "field.maintenance_fuel"],
     detailKind: "features",
     workflow: [
@@ -153,7 +153,7 @@ export const GUIDE_AREAS: GuideArea[] = [
     actionLabel: "Learn the spray workflow",
     visualKey: "area.sprays",
     imageAlt: "Sprayer working in a vineyard alongside the spray planning portal",
-    imagePosition: "left",
+    imagePosition: "right",
     itemIds: ["field.spray_planner", "field.spray_jobs", "field.spray_trips"],
     detailKind: "features",
     workflow: [
@@ -199,7 +199,7 @@ export const GUIDE_AREAS: GuideArea[] = [
     actionLabel: "Explore Operational Tools",
     visualKey: "area.tools",
     imageAlt: "Grid of VineTrack operational tools",
-    imagePosition: "left",
+    imagePosition: "right",
     itemIds: SHARED_OPERATIONAL_TOOL_IDS.map((k) => `tools.${k}`),
     detailKind: "operational_tools",
     metaLabel: `${SHARED_OPERATIONAL_TOOL_IDS.length} vineyard tools`,
@@ -241,7 +241,7 @@ export const GUIDE_AREAS: GuideArea[] = [
     actionLabel: "See how the platforms connect",
     visualKey: "area.platforms",
     imageAlt: "iPhone, Android phone and laptop running VineTrack",
-    imagePosition: "left",
+    imagePosition: "right",
     itemIds: [
       "platform.ios",
       "platform.android",
@@ -252,6 +252,15 @@ export const GUIDE_AREAS: GuideArea[] = [
     detailKind: "platforms",
   },
 ];
+
+/**
+ * Landing-page sequence (Stage 2.7): seven rows. "Across Devices" keeps its
+ * drill-down route but is no longer a full-sized landing row — platform detail
+ * is introduced in the hero and explored inside the deeper guides.
+ */
+export const LANDING_GUIDE_AREAS: GuideArea[] = GUIDE_AREAS.filter(
+  (a) => a.id !== "platforms",
+);
 
 export function guideAreaBySlug(slug?: string): GuideArea | undefined {
   return GUIDE_AREAS.find((a) => a.slug === slug);
