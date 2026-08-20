@@ -126,9 +126,6 @@ const App = () => (
         <AuthProvider>
           <VineyardProvider>
             <Routes>
-              <Route path="/__preview/guide" element={<HowVineTrackWorksPage />} />
-              <Route path="/__preview/guide/:area" element={<GuideAreaPage />} />
-              <Route path="/__preview/guide-images" element={<GuideImagesPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/signup" element={<SignUp />} />
