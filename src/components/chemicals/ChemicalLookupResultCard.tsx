@@ -153,6 +153,21 @@ export function ChemicalLookupResultCard({
 
         </div>
 
+        {fields.rateReferenceOnly?.length ? (
+          <div className="rounded border border-dashed border-muted-foreground/40 bg-muted/40 p-1.5 text-[11px] space-y-0.5">
+            <div className="font-medium">Label rate text — reference only</div>
+            {fields.rateReferenceOnly.map((r, i) => (
+              <p key={i} className="text-muted-foreground">
+                {r.text}
+              </p>
+            ))}
+            <p className="italic text-muted-foreground">
+              Not a structured rate, so it has not been applied to any field.
+            </p>
+          </div>
+        ) : null}
+
+
         {result.conflicts.length > 0 && (
           <div className="rounded border border-destructive/40 bg-destructive/10 p-1.5 text-[11px]">
             <span className="font-medium">
