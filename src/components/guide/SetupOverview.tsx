@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { CircleDashed, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { SetupStatusPill } from "./SetupCard";
 
 interface OverviewTile {
@@ -41,7 +41,6 @@ export function SetupOverview() {
           <Card key={t.key} className="flex flex-col gap-3 p-4">
             <div className="flex items-start justify-between gap-2">
               <p className="text-[13px] font-semibold text-foreground">{t.label}</p>
-              <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground/60" />
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-semibold tracking-tight text-muted-foreground/50">

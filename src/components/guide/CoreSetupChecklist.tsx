@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, CircleDashed } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { SetupStatusPill, type SetupStatus } from "./SetupCard";
+import { SetupStatusIcon, SetupStatusPill, type SetupStatus } from "./SetupCard";
+import type { SetupCheckResult } from "@/lib/guide/setupHealth";
 import { PlatformBadges } from "./PlatformBadges";
 import { ImportanceBadge } from "./GuideBadges";
 import { guideVisual } from "./guideVisuals";
@@ -27,11 +28,12 @@ import {
 export function CoreSetupChecklist({
   statuses,
   progress,
-  checkStatuses,
+  checksByGroup,
 }: {
   statuses?: Record<string, SetupStatus>;
   progress?: Record<string, string>;
-  checkStatuses?: Record<string, SetupStatus>;
+  /** Live resolver checks per group id — rendered with real status icons. */
+  checksByGroup?: Record<string, SetupCheckResult[]>;
 }) {
   const groups = coreSetupGroups();
   return (
@@ -42,7 +44,7 @@ export function CoreSetupChecklist({
           group={group}
           status={statuses?.[group.id] ?? "not_checked"}
           progress={progress?.[group.id]}
-          checkStatuses={checkStatuses}
+          checks={checksByGroup?.[group.id]}
         />
       ))}
     </div>
@@ -53,12 +55,12 @@ function CoreSetupSummaryCard({
   group,
   status,
   progress,
-  checkStatuses,
+  checks,
 }: {
   group: CoreSetupGroup;
   status: SetupStatus;
   progress?: string;
-  checkStatuses?: Record<string, SetupStatus>;
+  checks?: SetupCheckResult[];
 }) {
   const [open, setOpen] = useState(false);
   const { Icon, tone } = guideVisual(group.visualKey);
@@ -139,26 +141,36 @@ function CoreSetupSummaryCard({
               </p>
               {item.subItems && item.subItems.length > 0 && (
                 <ul className="grid gap-1 sm:grid-cols-2">
-                  {item.subItems.map((s) => {
-                    const st = checkStatuses?.[`${item.id}:${s}`];
-                    return (
-                      <li
-                        key={s}
-                        className="flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1 text-[12px] text-muted-foreground"
-                      >
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <CircleDashed className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                          <span className="truncate">{s}</span>
-                        </span>
-                        {st && <SetupStatusPill status={st} />}
-                      </li>
-                    );
-                  })}
+                  {item.subItems.map((s) => (
+                    <li
+                      key={s}
+                      className="truncate rounded-md bg-card px-2 py-1 text-[12px] text-muted-foreground"
+                    >
+                      {s}
+                    </li>
+                  ))}
                 </ul>
               )}
               <PlatformBadges platforms={item.platforms} />
             </div>
           ))}
+
+          {checks && checks.length > 0 && (
+            <ul className="space-y-1 border-t border-border/70 pt-3">
+              {checks.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1 text-[12px] text-muted-foreground"
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <SetupStatusIcon status={c.status} />
+                    <span className="truncate text-foreground">{c.label}</span>
+                  </span>
+                  <SetupStatusPill status={c.status} />
+                </li>
+              ))}
+            </ul>
+          )}
           {route && (
             <Link
               to={route}

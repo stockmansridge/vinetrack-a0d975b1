@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, AlertTriangle, CircleAlert, CheckCircle2, MinusCircle, CircleDashed } from "lucide-react";
+import { ArrowRight, AlertTriangle, CircleAlert, CheckCircle2, MinusCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { PlatformBadges } from "./PlatformBadges";
@@ -53,7 +53,7 @@ const STATUS_META: Record<
   },
   not_checked: {
     label: "Not checked yet",
-    Icon: CircleDashed,
+    Icon: MinusCircle,
     badge: "border-border bg-muted text-muted-foreground",
     stripe: "bg-muted-foreground/25",
   },
@@ -78,6 +78,42 @@ export function SetupStatusPill({
       <meta.Icon className="h-3 w-3" />
       {meta.label}
     </span>
+  );
+}
+
+const STATUS_ICON_TONE: Record<SetupStatus, string> = {
+  complete: "text-emerald-600 dark:text-emerald-400",
+  action_required: "text-destructive",
+  recommended: "text-amber-600 dark:text-amber-400",
+  not_applicable: "text-muted-foreground/70",
+  not_checked: "text-muted-foreground/70",
+};
+
+/**
+ * Semantic status icon for a single live setup-health check.
+ * Neutral (unknown / not applicable) uses a solid muted minus — never a
+ * dotted placeholder, which reads as "unchecked".
+ */
+export function SetupStatusIcon({
+  status,
+  className,
+}: {
+  status: SetupStatus;
+  className?: string;
+}) {
+  const Icon =
+    status === "complete"
+      ? CheckCircle2
+      : status === "action_required"
+        ? AlertTriangle
+        : status === "recommended"
+          ? CircleAlert
+          : MinusCircle;
+  return (
+    <Icon
+      aria-hidden
+      className={cn("h-3.5 w-3.5 shrink-0", STATUS_ICON_TONE[status], className)}
+    />
   );
 }
 
@@ -122,9 +158,8 @@ export function SetupCard({
       {item.subItems && item.subItems.length > 0 && (
         <ul className="grid gap-1 rounded-md bg-muted/50 p-3 text-[12.5px] text-muted-foreground sm:grid-cols-2">
           {item.subItems.map((s) => (
-            <li key={s} className="flex items-center gap-2">
-              <CircleDashed className="h-3.5 w-3.5 shrink-0 opacity-60" />
-              <span className="truncate">{s}</span>
+            <li key={s} className="truncate">
+              {s}
             </li>
           ))}
         </ul>

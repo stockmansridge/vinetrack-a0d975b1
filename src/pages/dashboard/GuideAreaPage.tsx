@@ -293,6 +293,9 @@ function SetupAreaDetail() {
           <CoreSetupChecklist
             statuses={summary.groupStatuses}
             progress={summary.groupProgress}
+            checksByGroup={Object.fromEntries(
+              summary.groups.map((g) => [g.id, g.checks]),
+            )}
           />
         }
       >
