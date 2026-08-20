@@ -12,6 +12,7 @@ import {
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
 import { ChemicalLookupResultCard } from "@/components/chemicals/ChemicalLookupResultCard";
+import { buildStructuredLookupBody } from "@/lib/chemicalLookupRequest";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
   matchMasterByIdentity,
@@ -228,25 +229,19 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       console.warn("[master-chemicals] lookup unavailable, falling through", e);
     }
 
-    // ---- Upgraded resolver (`chemical-info-lookup`). Its envelope is the
-    // single source for jurisdiction, provenance and match status. Canonical
-    // fields are only ever taken from its structured response.
+    // ---- Upgraded resolver (`chemical-info-lookup`) on the shared VineTrack
+    // production backend. Its envelope is the single source for jurisdiction,
+    // provenance and match status. Canonical fields are only ever taken from
+    // its structured response. A failure here is NOT permission to populate
+    // canonical fields from the legacy AI function.
     try {
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
-        {
-          body: {
-            product_name: q,
-            country: countryCode,
-            country_code: countryCode,
-            structured: true,
-          },
-        },
+        { body: buildStructuredLookupBody(q, countryCode) },
       );
       // Only a payload that actually speaks the upgraded contract is treated
       // as a resolver result. A legacy AI-shaped body (no match_source /
-      // jurisdiction / field_provenance) falls through instead of being
-      // presented as a structured answer.
+      // jurisdiction / field_provenance) is a resolver failure.
       if (!infoErr && isStructuredLookupEnvelope(data)) {
         const result = parseChemicalLookup(data, countryCode);
         // A cross-country label is never presented as authoritative here.
@@ -256,64 +251,25 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           setLoading(false);
           return;
         }
+        setError(
+          `The label returned is not registered in ${countryLabel(countryCode)}. Add the chemical manually.`,
+        );
+        setLoading(false);
+        return;
       }
-
-      if (infoErr) console.warn("[chemical-info-lookup] unavailable, falling through", infoErr);
+      console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
     } catch (e) {
-      console.warn("[chemical-info-lookup] failed, falling through", e);
+      console.warn("[chemical-info-lookup] failed", e);
     }
 
-    try {
-      const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
-        body: { product_name: q, country: countryCode, country_code: countryCode },
-      });
-      if (fnErr) {
-        // Surface server-side error payload when available; otherwise show a
-        // friendly fallback. The technical detail is still logged.
-        console.error("[chemical-ai-lookup] invoke failed", fnErr, data);
-        const serverMsg = (data as any)?.error;
-        throw new Error(
-          typeof serverMsg === "string" && serverMsg
-            ? serverMsg
-            : "Chemical lookup failed. Please try again, or add the chemical manually.",
-        );
-      }
-      // Consume the Rork Master response envelope when the backend supplied
-      // one (match_source / master_chemical_id / master_revision / …).
-      const envelope = parseMasterLookupEnvelope(data);
-      if (isTrustedMasterEnvelope(envelope)) {
-        const row =
-          envelope.master ??
-          (envelope.masterChemicalId ? await fetchMasterChemical(envelope.masterChemicalId) : null);
-        // The backend enforces jurisdiction; the portal must not weaken it —
-        // a cross-country Master row is discarded, never displayed as verified.
-        if (row && masterEligibleForVineyard(row.registration_country, countryCode)) {
-          setMasterResult(row);
-          return;
-        }
-      }
-      const list: RawCandidate[] = (Array.isArray(data?.candidates)
-        ? data.candidates
-        : data?.suggestion
-        ? [data.suggestion]
-        : []
-      ).filter(
-        (c: RawCandidate) =>
-          jurisdictionSuitability(c.country, countryCode) !== "mismatch",
-      );
-      if (!list.length) {
-        throw new Error(
-          `No ${countryLabel(countryCode)} product matched. Try a different spelling, or add the chemical manually.`,
-        );
-      }
-      setCandidates(list);
-    } catch (e: any) {
-      console.error("[chemical-ai-lookup] error", e);
-      setError(e?.message ?? "Chemical lookup failed. Please try again, or add the chemical manually.");
-    } finally {
-      setLoading(false);
-    }
+    // Resolver unavailable: fail closed. No canonical data may come from the
+    // legacy AI function.
+    setError(
+      "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
+    );
+    setLoading(false);
   }
+
 
 
   function applyCandidate(c: RawCandidate) {
