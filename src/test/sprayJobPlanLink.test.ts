@@ -28,7 +28,7 @@ const position = (groups: string[], id = "pos-1"): ResistancePlanPosition =>
   parsePositions([{ id, sequence: 1, groups, target: "powdery_mildew" }])[0];
 
 const plan = (positions: ResistancePlanPosition[], overrides: Partial<ResistancePlan> = {}): ResistancePlan => ({
-  ...emptyPlan({ vineyardId: "v1", seasonId: "2026-27", disease: "powdery_mildew" }),
+  ...emptyPlan({ vineyardId: "v1", seasonId: "2026-27", disease: "powdery_mildew", jurisdiction: "AU" }),
   id: "plan-1",
   blockIds: ["a", "b"],
   positions,
