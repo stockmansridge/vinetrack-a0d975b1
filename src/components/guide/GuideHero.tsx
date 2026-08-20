@@ -3,15 +3,15 @@ import { GuideVisualSlot } from "./GuideVisualSlot";
 import { SetupStatusPill, type SetupStatus } from "./SetupCard";
 
 /**
- * Guide hero — one image-led banner (Stage 2.7).
+ * Guide hero — one broad, image-led dashboard banner (Stage 2.8).
  *
  * The photograph/composition (vineyard, tractor, phone + portal screenshots)
- * fills the whole banner via the `hero.platforms` visual key; the left side
- * carries a soft surface fade so the text stays readable. It must never read as
- * "a text card plus a coloured panel".
+ * fills the whole banner via the `hero.platforms` visual key, right-biased, with
+ * a white-to-transparent fade under the copy. It must never read as "a text card
+ * plus a coloured panel", and it spans exactly the same width as the rows below.
  *
  * The readiness area is Stage 3-ready: shared status pill plus an optional
- * caption. Stage 2.7 shows "Not checked yet" and NEVER a percentage.
+ * caption. Stage 2.8 shows "Not checked yet" and NEVER a percentage.
  */
 export function GuideHero({
   imageSrc,
@@ -25,47 +25,47 @@ export function GuideHero({
   coreSetupCaption?: string;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-[11px] border border-border bg-card">
-      {/* Full-bleed hero visual */}
+    <section className="relative w-full overflow-hidden rounded-[10px] border border-border bg-card">
+      {/* Full-bleed hero visual, right-biased */}
       <div className="absolute inset-0">
         <GuideVisualSlot
           visualKey="hero.platforms"
           imageSrc={imageSrc}
           imageAlt={imageAlt}
           aspect=""
-          iconClassName="h-10 w-10"
-          className="h-full"
+          subtle
+          className="h-full [&>img]:object-right"
         />
       </div>
 
-      {/* Soft fade so hero copy stays readable over photography */}
+      {/* Left-to-right fade so hero copy stays readable over photography */}
       <div
-        className="absolute inset-0 bg-gradient-to-r from-card via-card/95 to-card/10"
+        className="absolute inset-0 bg-gradient-to-r from-card from-30% via-card/85 via-60% to-transparent"
         aria-hidden
       />
 
-      <div className="relative flex min-h-[268px] flex-col justify-center gap-3 p-6 sm:p-8 lg:max-w-[62%]">
+      <div className="relative flex h-[218px] flex-col justify-center gap-2 px-7 py-6 lg:max-w-[64%]">
         <span className="inline-flex w-fit items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           <Lock className="h-3 w-3" />
           Internal preview
         </span>
 
-        <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground sm:text-[36px]">
+        <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-foreground sm:text-[32px]">
           How VineTrack Works
         </h1>
-        <p className="max-w-xl text-[14.5px] leading-relaxed text-muted-foreground">
+        <p className="max-w-2xl text-[13.5px] leading-[1.45] text-muted-foreground">
           VineTrack brings your vineyard operations together across the vineyard, the
           iPhone and Android apps, and the management portal. Start with the essentials,
           then follow the workflows that plan, record and explain your vineyard.
         </p>
 
         {/* Setup readiness — reserved for live Core Setup health in Stage 3. */}
-        <div className="mt-1 inline-flex w-fit flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card/90 px-3.5 py-2">
-          <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden />
-          <p className="text-[13px] font-semibold text-foreground">Core setup</p>
+        <div className="inline-flex w-fit flex-wrap items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5">
+          <CircleDashed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+          <p className="text-[12.5px] font-semibold text-foreground">Core setup</p>
           <SetupStatusPill status={coreSetupStatus} />
           {coreSetupCaption && (
-            <span className="text-[12.5px] text-muted-foreground">{coreSetupCaption}</span>
+            <span className="text-[12px] text-muted-foreground">{coreSetupCaption}</span>
           )}
         </div>
       </div>

@@ -8,7 +8,12 @@ import { guideVisual } from "./guideVisuals";
  * Image resolution order:
  *   1. an explicit `imageSrc` passed by the caller,
  *   2. `imageSrc` registered against the `visualKey` in guideVisuals.ts,
- *   3. a safe branded placeholder built from the visual key's icon + tone.
+ *   3. a placeholder.
+ *
+ * Placeholder modes:
+ *   - default: icon + optional caption (used by drill-down surfaces),
+ *   - `subtle`: a restrained image-shaped surface — very light green/grey, subtle
+ *     border, no oversized centred icon (used on the landing page, Stage 2.8).
  *
  * This keeps image imports out of the pages: the visual mapping decides what a
  * given area should show, so the future image library only touches one file.
@@ -21,6 +26,8 @@ export function GuideVisualSlot({
   className,
   iconClassName = "h-10 w-10",
   caption,
+  subtle = false,
+  placeholderLabel,
 }: {
   visualKey?: string;
   imageSrc?: string;
@@ -30,6 +37,9 @@ export function GuideVisualSlot({
   className?: string;
   iconClassName?: string;
   caption?: string;
+  /** Restrained image-shaped placeholder instead of a big centred icon. */
+  subtle?: boolean;
+  placeholderLabel?: string;
 }) {
   const visual = guideVisual(visualKey);
   const src = imageSrc ?? visual.imageSrc;
@@ -38,9 +48,11 @@ export function GuideVisualSlot({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden bg-gradient-to-br",
+        "relative w-full overflow-hidden",
+        !src && subtle
+          ? "border border-border bg-muted/30"
+          : cn("bg-gradient-to-br", tone),
         aspect,
-        tone,
         className,
       )}
       data-visual-key={visualKey}
@@ -52,6 +64,18 @@ export function GuideVisualSlot({
           loading="lazy"
           className="h-full w-full object-cover"
         />
+      ) : subtle ? (
+        <div
+          className="flex h-full w-full items-end justify-end p-1.5"
+          role="img"
+          aria-label={imageAlt}
+        >
+          {placeholderLabel && (
+            <span className="text-[10px] font-medium text-muted-foreground/60">
+              {placeholderLabel}
+            </span>
+          )}
+        </div>
       ) : (
         <div
           className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center"
