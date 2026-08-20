@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { GuideStepImageUploader } from "@/components/admin/guide/GuideStepImageUploader";
+import { GuideImageKeyEditor } from "@/components/admin/guide/GuideImageSlotEditor";
 import {
   GUIDE_PLATFORM_LABELS,
   type GuideContentStep,
@@ -149,7 +150,10 @@ export function GuideStepEditor({
       </div>
 
       {open && (
-        <div className="mt-3 grid gap-4 border-t border-border pt-3 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className={cn(
+            "mt-3 grid gap-4 border-t border-border pt-3",
+            step.imageKey ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_300px]",
+          )}>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor={`heading-${step.id}`}>Step heading</Label>
