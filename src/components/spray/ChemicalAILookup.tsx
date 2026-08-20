@@ -242,15 +242,21 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           },
         },
       );
-      if (!infoErr && data && typeof data === "object") {
+      // Only a payload that actually speaks the upgraded contract is treated
+      // as a resolver result. A legacy AI-shaped body (no match_source /
+      // jurisdiction / field_provenance) falls through instead of being
+      // presented as a structured answer.
+      if (!infoErr && isStructuredLookupEnvelope(data)) {
         const result = parseChemicalLookup(data, countryCode);
         // A cross-country label is never presented as authoritative here.
         if (result.jurisdiction.status !== "mismatch") {
+          // Terminal: the structured result owns the outcome of this lookup.
           setResolved(result);
           setLoading(false);
           return;
         }
       }
+
       if (infoErr) console.warn("[chemical-info-lookup] unavailable, falling through", infoErr);
     } catch (e) {
       console.warn("[chemical-info-lookup] failed, falling through", e);
