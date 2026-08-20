@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision, showsDevelopmentLabels } from "@/lib/guide/guideAccess";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlatformBadges } from "./PlatformBadges";
@@ -40,14 +42,14 @@ export function CompactFeatureTile({
           <span className="text-[13.5px] font-semibold leading-tight text-foreground">
             {item.title}
           </span>
-          <AvailabilityBadge availability={item.availability} />
+          {internalLabels && <AvailabilityBadge availability={item.availability} />}
         </span>
         <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
           {item.shortDescription}
         </span>
         {showPlatforms && <PlatformBadges platforms={item.platforms} className="mt-1.5" />}
       </span>
-      {item.webRoute && (
+      {to && (
         <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden />
       )}
     </>
@@ -55,14 +57,14 @@ export function CompactFeatureTile({
 
   const shell = cn(
     "flex items-start gap-3 rounded-xl border border-border/70 bg-card p-3 transition-colors",
-    item.webRoute && "hover:border-primary/40 hover:bg-accent/40",
+    to && "hover:border-primary/40 hover:bg-accent/40",
     item.availability !== "available" && "border-dashed",
     className,
   );
 
-  if (item.webRoute) {
+  if (to) {
     return (
-      <Link to={item.webRoute} className={shell}>
+      <Link to={to} className={shell}>
         {body}
       </Link>
     );
