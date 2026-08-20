@@ -62,9 +62,12 @@ const STATUS_META: Record<
 export function SetupStatusPill({
   status,
   className,
+  label,
 }: {
   status: SetupStatus;
   className?: string;
+  /** Optional customer-facing override, e.g. "Configured" for optional items. */
+  label?: string;
 }) {
   const meta = STATUS_META[status];
   return (
@@ -76,7 +79,7 @@ export function SetupStatusPill({
       )}
     >
       <meta.Icon className="h-3 w-3" />
-      {meta.label}
+      {label ?? meta.label}
     </span>
   );
 }
