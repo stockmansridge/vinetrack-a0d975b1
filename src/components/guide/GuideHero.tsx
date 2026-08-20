@@ -26,17 +26,19 @@ export function GuideHero({
   coreSetupStatus?: SetupStatus;
   coreSetupCaption?: string;
 }) {
+  const uploaded = useGuideImage("hero");
   return (
     <section className="relative w-full overflow-hidden rounded-[10px] border border-border bg-card">
       {/* Full-bleed hero visual, right-biased */}
       <div className="absolute inset-0">
         <GuideVisualSlot
           visualKey="hero.platforms"
-          imageSrc={imageSrc}
+          imageSrc={uploaded.url ?? imageSrc}
           imageAlt={imageAlt}
+          objectPosition={focusToObjectPosition(uploaded.focus ?? "right")}
           aspect=""
           subtle
-          className="h-full [&>img]:object-right"
+          className="h-full"
         />
       </div>
 
