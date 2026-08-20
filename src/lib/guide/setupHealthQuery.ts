@@ -1,8 +1,9 @@
-// Stage 3 — live Core Setup health facts for How VineTrack Works.
+// Stage 3 / 3.1 — live Core Setup health facts for How VineTrack Works.
 //
 // Read-only. Every fetch is best-effort: a failing source degrades that one
-// check to "not checked" rather than breaking the page. All data comes from
-// the shared VineTrack (iOS) Supabase project through existing contracts.
+// check to "not checked" rather than breaking the page or reporting a false
+// failure. All data comes from the shared VineTrack (iOS) Supabase project
+// through existing contracts. No new SQL, schema or RPCs.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { fetchWeatherStatusForVineyard } from "@/lib/weatherStatusQuery";
@@ -19,6 +20,11 @@ const ok = <T,>(r: PromiseSettledResult<T>): T | null =>
 
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
+const num = (v: unknown): number | null => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 async function countRows(table: string, vineyardId: string, soft = true): Promise<number> {
   let q = (supabase as any)
     .from(table)
@@ -33,11 +39,28 @@ async function countRows(table: string, vineyardId: string, soft = true): Promis
   return count ?? 0;
 }
 
+/** Enrichment: does every planting allocation name a clone or a rootstock? */
+function allocationsHaveDetail(raw: unknown): boolean {
+  const list = arr(raw) as any[];
+  if (list.length === 0) return false;
+  return list.every((a) => {
+    const clone = a?.clone ?? a?.clone_name ?? a?.cloneId ?? a?.clone_id;
+    const rootstock = a?.rootstock ?? a?.rootstock_name ?? a?.rootstockId ?? a?.rootstock_id;
+    return !!String(clone ?? "").trim() || !!String(rootstock ?? "").trim();
+  });
+}
+
+/**
+ * Canonical block set: paddocks for THIS vineyard with `deleted_at is null`
+ * — the same filter used across the portal and by
+ * `get_irrigation_setup_status`. Archived/deleted blocks never enter coverage.
+ */
 async function fetchBlocks(vineyardId: string): Promise<SetupBlockFact[]> {
   const base = "id, name, polygon_points, rows, variety_allocations, deleted_at";
+  const irrigationCols = "is_irrigated, flow_per_emitter, emitter_spacing";
   let res = await (supabase as any)
     .from("paddocks")
-    .select(`${base}, is_irrigated`)
+    .select(`${base}, ${irrigationCols}`)
     .eq("vineyard_id", vineyardId)
     .is("deleted_at", null);
   if (res.error) {
@@ -52,9 +75,16 @@ async function fetchBlocks(vineyardId: string): Promise<SetupBlockFact[]> {
     id: String(p.id),
     name: p.name ?? null,
     hasBoundary: arr(p.polygon_points).length >= 3,
+    // Row setup = at least one persisted row entry. Row direction, spacing and
+    // geometry are NOT separate requirements (see Stage 3.1 §6).
     hasRows: arr(p.rows).length > 0,
     hasPlanting: arr(p.variety_allocations).length > 0,
-    isIrrigated: p.is_irrigated === true,
+    hasPlantingDetail: allocationsHaveDetail(p.variety_allocations),
+    // Same derivation as src/lib/blockDiagnostics.ts.
+    isIrrigated:
+      p.is_irrigated === true ||
+      (num(p.flow_per_emitter) ?? 0) > 0 ||
+      (num(p.emitter_spacing) ?? 0) > 0,
   }));
 }
 
@@ -86,6 +116,11 @@ async function fetchEquipment(vineyardId: string) {
   };
 }
 
+/**
+ * Spray facts. Applicability comes ONLY from vineyard-scoped operational
+ * evidence (spray jobs + spray records); catalogue chemicals and stored
+ * sprayers are configuration, not proof of use.
+ */
 async function fetchSpray(vineyardId: string) {
   const [chemicals, equipment, records, jobs] = await Promise.allSettled([
     countRows("saved_chemicals", vineyardId),
@@ -95,14 +130,29 @@ async function fetchSpray(vineyardId: string) {
   ]);
   const chem = ok(chemicals);
   const eq = ok(equipment);
-  if (chem === null && eq === null) throw new Error("spray facts unavailable");
+  const rec = ok(records);
+  const job = ok(jobs);
+  if (rec === null && job === null) throw new Error("spray usage evidence unavailable");
   return {
     chemicals: chem ?? 0,
     sprayEquipment: eq ?? 0,
-    usageEvidence: (ok(records) ?? 0) + (ok(jobs) ?? 0),
+    operationalEvidence: (rec ?? 0) + (job ?? 0),
+    evidenceDetail: `spray_jobs ${job ?? 0} + spray_records ${rec ?? 0}`,
   };
 }
 
+/**
+ * Irrigation facts.
+ *
+ * `get_irrigation_setup_status` (SQL 125) is the established CONFIGURATION
+ * aggregate: it is vineyard-scoped, calls `_irrigation_require_access` first
+ * (so a permission problem raises an error → unknown, never a failure) and
+ * reports systems/valves/allocations. It does NOT decide whether irrigation
+ * applies — it never reads `is_irrigated`.
+ *
+ * Applicability therefore stays on the Stage 1 contract: any active block
+ * flagged/derived as irrigated, or any active system/valve already configured.
+ */
 async function fetchIrrigation(vineyardId: string, blocks: SetupBlockFact[] | null) {
   const { data, error } = await (supabase as any).rpc("get_irrigation_setup_status", {
     p_vineyard_id: vineyardId,
@@ -111,13 +161,31 @@ async function fetchIrrigation(vineyardId: string, blocks: SetupBlockFact[] | nu
   const req = (data as any)?.required ?? {};
   const systems = Number(req.active_system_count ?? 0);
   const valves = Number(req.active_valve_count ?? 0);
-  const irrigatedBlocks = (blocks ?? []).some((b) => b.isIrrigated);
+  const irrigatedBlocks = (blocks ?? []).filter((b) => b.isIrrigated).length;
+  const applicable = irrigatedBlocks > 0 || systems > 0 || valves > 0;
   return {
-    applicable: irrigatedBlocks || systems > 0 || valves > 0,
+    applicable,
+    applicabilityReason: applicable
+      ? `irrigated blocks ${irrigatedBlocks}, systems ${systems}, valves ${valves}`
+      : "no irrigated blocks, systems or valves",
     systemsOk: req.systems_ok === true,
     valvesOk: req.valves_ok === true,
     allocationsOk: req.allocations_ok === true,
   };
+}
+
+/**
+ * Weather: configuration only. `get_vineyard_weather_integration` returns the
+ * stored (non-secret) integration row. Provider outages, failed test calls and
+ * missing observations never change this — they are not read here at all.
+ * If BOTH provider reads error we return null (unknown), never "unconfigured".
+ */
+async function fetchWeather(vineyardId: string) {
+  const s = await fetchWeatherStatusForVineyard(vineyardId);
+  if (s.davis.error && s.wunderground.error) {
+    throw new Error("weather configuration unavailable");
+  }
+  return { anyConfigured: s.anyConfigured };
 }
 
 export async function fetchSetupHealthFacts(vineyardId: string): Promise<SetupHealthFacts> {
@@ -139,10 +207,7 @@ export async function fetchSetupHealthFacts(vineyardId: string): Promise<SetupHe
           typeof data.latitude === "number" && typeof data.longitude === "number",
       };
     })(),
-    (async () => {
-      const s = await fetchWeatherStatusForVineyard(vineyardId);
-      return { anyConfigured: s.anyConfigured };
-    })(),
+    fetchWeather(vineyardId),
     fetchEquipment(vineyardId),
     fetchTeam(vineyardId),
     fetchSpray(vineyardId),
