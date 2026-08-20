@@ -106,6 +106,7 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [broken, setBroken] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const upload = useUploadGuideImage();
   const setFocus = useSetGuideImageFocus();
