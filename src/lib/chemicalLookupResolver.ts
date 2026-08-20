@@ -673,7 +673,7 @@ export function parseChemicalLookup(
     asArray(p.active_ingredients ?? p.actives),
     gate,
   );
-  const uses = gated(gate, "registered_uses", decodeUses(asArray(p.registered_uses))) ?? [];
+  const uses = gated(gate, "registered_uses", decodeUses(asArray(p.registered_uses), gate)) ?? [];
   const conflicts = decodeConflicts(asArray(p.verification_conflicts ?? root.conflicts));
 
   const unresolved = new Set<string>(
