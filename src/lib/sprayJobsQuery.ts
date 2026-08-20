@@ -90,7 +90,13 @@ export interface SprayJob {
   canonical_row_length_metres?: number | null;
   geometry_source?: string | null;
   geometry_quality?: string | null;
+  /* --- sql/201 resistance plan provenance (frozen once completed) --- */
+  resistance_plan_id?: string | null;
+  resistance_position_id?: string | null;
+  resistance_position_snapshot?: any | null;
+  resistance_plan_source_revision?: number | null;
   revision?: number | null;
+
   created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
