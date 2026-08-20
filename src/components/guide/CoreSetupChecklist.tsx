@@ -13,6 +13,13 @@ import {
   coreSetupGroups,
   type CoreSetupGroup,
 } from "@/lib/guide/coreSetupGroups";
+import {
+  hasIndividualSetupActions,
+  setupDetailActions,
+  setupGroupAction,
+} from "@/lib/guide/setupDetailActions";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { setupActionDecision } from "@/lib/guide/guideAccess";
 
 /**
  * Compact Core Setup checklist with progressive disclosure.
