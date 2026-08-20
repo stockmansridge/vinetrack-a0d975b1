@@ -228,25 +228,19 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       console.warn("[master-chemicals] lookup unavailable, falling through", e);
     }
 
-    // ---- Upgraded resolver (`chemical-info-lookup`). Its envelope is the
-    // single source for jurisdiction, provenance and match status. Canonical
-    // fields are only ever taken from its structured response.
+    // ---- Upgraded resolver (`chemical-info-lookup`) on the shared VineTrack
+    // production backend. Its envelope is the single source for jurisdiction,
+    // provenance and match status. Canonical fields are only ever taken from
+    // its structured response. A failure here is NOT permission to populate
+    // canonical fields from the legacy AI function.
     try {
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
-        {
-          body: {
-            product_name: q,
-            country: countryCode,
-            country_code: countryCode,
-            structured: true,
-          },
-        },
+        { body: buildStructuredLookupBody(q, countryCode) },
       );
       // Only a payload that actually speaks the upgraded contract is treated
       // as a resolver result. A legacy AI-shaped body (no match_source /
-      // jurisdiction / field_provenance) falls through instead of being
-      // presented as a structured answer.
+      // jurisdiction / field_provenance) is a resolver failure.
       if (!infoErr && isStructuredLookupEnvelope(data)) {
         const result = parseChemicalLookup(data, countryCode);
         // A cross-country label is never presented as authoritative here.
@@ -256,12 +250,27 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           setLoading(false);
           return;
         }
+        setError(
+          `The label returned is not registered in ${countryLabel(countryCode)}. Add the chemical manually.`,
+        );
+        setLoading(false);
+        return;
       }
-
-      if (infoErr) console.warn("[chemical-info-lookup] unavailable, falling through", infoErr);
+      console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
     } catch (e) {
-      console.warn("[chemical-info-lookup] failed, falling through", e);
+      console.warn("[chemical-info-lookup] failed", e);
     }
+
+    // Resolver unavailable: fail closed. No canonical data may come from the
+    // legacy AI function.
+    setError(
+      "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
+    );
+    setLoading(false);
+    return;
+
+    /* eslint-disable no-unreachable */
+
 
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("chemical-ai-lookup", {
