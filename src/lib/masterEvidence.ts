@@ -258,20 +258,31 @@ export function masterEvidenceFields(row: MasterChemicalRow): EvidenceField[] {
       .filter((b, i, arr) => b && arr.indexOf(b) === i)
       .join(", ") || undefined,
   );
-  const whp = uses.map((u) => u.withholding_period_days).filter((v) => v != null);
+  // A single distinct value must read as "28 days", not "28–28 days".
+  const span = (values: number[], unit: string): string | null => {
+    if (!values.length) return null;
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    return lo === hi ? `${lo} ${unit}` : `${lo}–${hi} ${unit}`;
+  };
+  const whp = uses
+    .map((u) => u.withholding_period_days)
+    .filter((v): v is number => v != null);
   push(
     "withholding_period_days",
     "Withholding period",
     "uses",
-    whp.length ? `${Math.min(...(whp as number[]))}–${Math.max(...(whp as number[]))} days` : null,
+    span(whp, "days"),
     labelLevel === "official_label" ? "official_label" : "ai_interpretation",
   );
-  const rei = uses.map((u) => u.re_entry_period_hours).filter((v) => v != null);
+  const rei = uses
+    .map((u) => u.re_entry_period_hours)
+    .filter((v): v is number => v != null);
   push(
     "re_entry_period_hours",
     "Re-entry period",
     "uses",
-    rei.length ? `${Math.min(...(rei as number[]))}–${Math.max(...(rei as number[]))} hours` : null,
+    span(rei, "hours"),
     labelLevel === "official_label" ? "official_label" : "ai_interpretation",
   );
 
