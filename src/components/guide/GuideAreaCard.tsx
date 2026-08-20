@@ -5,6 +5,8 @@ import { GuideVisualSlot } from "./GuideVisualSlot";
 import { SetupStatusPill, type SetupStatus } from "./SetupCard";
 import { guideVisual } from "./guideVisuals";
 import { guideAreaRoute, type GuideArea } from "@/lib/guide/guideAreas";
+import { useGuideImage } from "@/lib/guide/guideImageStore";
+import { focusToObjectPosition, type GuideImageKey } from "@/lib/guide/guideImages";
 
 /**
  * Compact landing row — one per major VineTrack area (Stage 2.8 density pass).
