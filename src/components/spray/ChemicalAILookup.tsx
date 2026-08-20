@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import {
   parseChemicalLookup,
+  isStructuredLookupEnvelope,
   lookupJurisdictionHeadline,
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
