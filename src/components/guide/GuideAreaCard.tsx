@@ -77,6 +77,15 @@ export function GuideAreaCard({
   const to = guideAreaRoute(area);
   // One uploaded image per area key feeds both this row and the drill-down hero.
   const uploaded = useGuideImage(area.id as GuideImageKey);
+  // No live health data yet (Stage 3): every step is unresolved → red.
+  const stepTone: GuideStepTone =
+    setupStatus === "complete"
+      ? "complete"
+      : setupStatus === "recommended"
+        ? "recommended"
+        : setupStatus === "not_applicable"
+          ? "neutral"
+          : "incomplete";
 
   return (
     <Link
