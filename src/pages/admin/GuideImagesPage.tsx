@@ -1,5 +1,11 @@
 import { useRef, useState } from "react";
-import { Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,8 +22,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import {
-  GUIDE_IMAGE_SLOTS,
   focusToObjectPosition,
+  guideImageGroups,
   validateGuideImageFile,
   type GuideImageFocus,
   type GuideImageKey,
@@ -34,30 +40,56 @@ import {
 /**
  * System Admin → Guide Images.
  *
- * Runtime content management for the eight How VineTrack Works image slots.
+ * Runtime content management for every How VineTrack Works image slot.
  * One upload per stable key feeds BOTH the landing row and that area's
- * drill-down hero — admins never upload the same image twice.
+ * drill-down hero — admins never upload the same image twice. Stage 4A adds
+ * per-step workflow screenshots, grouped under their guide area and collapsed
+ * by default so the page stays manageable.
  *
  * Access is the existing authoritative System Admin gate (AdminGate +
  * useIsSystemAdmin). No separate role mechanism is introduced here.
  */
 export default function GuideImagesPage() {
+  const groups = guideImageGroups();
   return (
     <AdminGate>
       <div className="p-4 sm:p-6">
         <AdminPageHeader
           title="Guide Images"
-          subtitle="Imagery used by How VineTrack Works — landing page and area guides."
+          subtitle="Imagery used by How VineTrack Works — landing page, area guides and workflow screenshots."
         />
-        <div className="space-y-3">
-          {GUIDE_IMAGE_SLOTS.map((slot) => (
-            <SlotRow key={slot.key} slot={slot} />
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.group} className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {group.groupLabel}
+              </h2>
+              {group.primary.map((slot) => (
+                <SlotRow key={slot.key} slot={slot} />
+              ))}
+              {group.workflow.length > 0 && (
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <ChevronDown className="mr-1.5 h-4 w-4" />
+                      Workflow images ({group.workflow.length})
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 pt-3">
+                    {group.workflow.map((slot) => (
+                      <SlotRow key={slot.key} slot={slot} />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </section>
           ))}
         </div>
       </div>
     </AdminGate>
   );
 }
+
 
 function SlotRow({ slot }: { slot: GuideImageSlot }) {
   const { toast } = useToast();
@@ -106,7 +138,7 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
               alt={`${slot.label} guide image`}
               style={{ objectPosition: focusToObjectPosition(focus) }}
               onError={() => setBroken(true)}
-              className="h-full w-full object-cover"
+              className={slot.kind === "screenshot" ? "h-full w-full object-contain p-1" : "h-full w-full object-cover"}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
@@ -126,7 +158,10 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
           <p className="text-sm text-muted-foreground">{slot.usage}</p>
           <p className="text-xs text-muted-foreground">
             Recommended: {slot.guidance} Minimum recommended width {slot.minWidth}px. JPEG, PNG
-            or WebP, up to 10 MB. Images crop with object-fit: cover — they are never stretched.
+            or WebP, up to 10 MB.{" "}
+            {slot.kind === "screenshot"
+              ? "Screenshots are shown whole (contain) — nothing is cropped away."
+              : "Photos crop with object-fit: cover — they are never stretched."}
           </p>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
