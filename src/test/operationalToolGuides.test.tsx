@@ -7,7 +7,7 @@ import {
   OPERATIONAL_TOOL_GUIDES,
   operationalToolGuide,
   operationalToolGuides,
-  operationalToolRoute,
+  operationalToolGuideRoute,
   operationalToolCatalogueItem,
   OPERATIONAL_TOOLS_ROUTE,
 } from "@/lib/guide/operationalToolGuides";
@@ -17,7 +17,7 @@ import {
 } from "@/lib/guide/howVineTrackWorksCatalogue";
 import { GUIDE_IMAGE_SLOTS, guideImageGroups } from "@/lib/guide/guideImages";
 import OperationalToolGuidePage from "@/pages/dashboard/OperationalToolGuidePage";
-import { SETUP_HEALTH_CHECKS } from "@/lib/guide/setupHealth";
+import { EMPTY_SETUP_FACTS, deriveSetupHealth } from "@/lib/guide/setupHealth";
 
 function renderToolRoute(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -57,7 +57,7 @@ describe("Stage 4B — operational tool guide catalogue", () => {
 
   it("builds tool routes under the operational tools catalogue route", () => {
     for (const guide of operationalToolGuides()) {
-      expect(operationalToolRoute(guide.toolId)).toBe(
+      expect(operationalToolGuideRoute(guide.toolId)).toBe(
         `${OPERATIONAL_TOOLS_ROUTE}/${guide.toolId}`,
       );
     }
@@ -133,7 +133,7 @@ describe("Stage 4B — tool guide route", () => {
 
 describe("Stage 4B — no impact on Core Setup health", () => {
   it("adds no setup health checks and no completion scoring", () => {
-    const ids = SETUP_HEALTH_CHECKS.map((c) => c.id);
+    const ids = deriveSetupHealth(EMPTY_SETUP_FACTS).checks.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.some((id) => id.startsWith("tool."))).toBe(false);
     expect(ids.some((id) => id.startsWith("guide."))).toBe(false);
