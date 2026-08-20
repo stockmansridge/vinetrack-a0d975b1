@@ -1,7 +1,7 @@
 import { Lock, CircleDashed } from "lucide-react";
 import { GuideVisualSlot } from "./GuideVisualSlot";
-import { type SetupStatus } from "./SetupCard";
-import { GuideRowStatusPill } from "./GuideAreaCard";
+import { SetupPresentationPill } from "./SetupPresentationPill";
+import type { SetupPresentation } from "@/lib/guide/setupPresentation";
 import { useGuideImage } from "@/lib/guide/guideImageStore";
 import { focusToObjectPosition } from "@/lib/guide/guideImages";
 
