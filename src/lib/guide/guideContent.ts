@@ -58,6 +58,45 @@ export const GUIDE_PLATFORM_LABELS = [
   "Web / iOS / Android",
 ] as const;
 
+/**
+ * Canonical defaults for the three areas whose drill-down pages render their
+ * own structured content (live setup health, the tool catalogue, the reports
+ * guide). The copy below is the copy those pages already display — it is
+ * imported from the same modules, never re-typed — so admins can see and edit
+ * it here. They default to `enabled: false` because these pages do not render
+ * a step list today; enabling a row publishes it without any redesign.
+ */
+function structuredSteps(areaId: string): GuideContentStep[] | undefined {
+  if (areaId === "setup") {
+    return coreSetupGroups().map((g, i) => ({
+      id: `setup.${g.id}`,
+      heading: g.title,
+      body: g.summary,
+      enabled: false,
+      ...(i === -1 ? {} : {}),
+    }));
+  }
+  if (areaId === "operational-tools") {
+    return operationalToolGuides().map((g) => ({
+      id: `operational-tools.${g.toolId}`,
+      heading: operationalToolCatalogueItem(g)?.title ?? g.toolId,
+      body: g.purpose,
+      imageKey: g.imageKey,
+      enabled: false,
+    }));
+  }
+  if (areaId === "reports") {
+    return REPORT_CATEGORIES.map((c) => ({
+      id: `reports.${c.itemId}`,
+      heading: c.title,
+      body: c.body,
+      imageKey: c.imageKey,
+      enabled: false,
+    }));
+  }
+  return undefined;
+}
+
 function defaultSteps(area: GuideArea): GuideContentStep[] {
   const workflow = guideWorkflow(area.id);
   if (workflow) {
@@ -71,6 +110,8 @@ function defaultSteps(area: GuideArea): GuideContentStep[] {
       enabled: true,
     }));
   }
+  const structured = structuredSteps(area.id);
+  if (structured) return structured;
   return (area.workflow ?? []).map((s, i) => ({
     id: `${area.id}.${i + 1}`,
     heading: s.label,
@@ -88,6 +129,8 @@ export function defaultGuideSection(area: GuideArea): GuideContentSection {
     intro: workflow?.intro ?? area.detailIntro,
     steps: defaultSteps(area),
     enabled: true,
+    /** Landing row + drill-down hero image slot (existing Guide Images key). */
+    imageKey: area.id as GuideImageKey,
   };
 }
 
@@ -97,6 +140,7 @@ export function defaultGuideContent(): GuideContentMap {
   for (const area of LANDING_GUIDE_AREAS) out[area.id] = defaultGuideSection(area);
   return out;
 }
+
 
 export function manageableGuideAreas(): GuideArea[] {
   return LANDING_GUIDE_AREAS;
