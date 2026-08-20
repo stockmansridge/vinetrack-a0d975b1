@@ -1,19 +1,27 @@
-// Stage 3 — authoritative Core Setup health resolver (pure, no I/O).
+// Stage 3 / 3.1 — authoritative Core Setup health resolver (pure, no I/O).
 //
 // The resolver turns a snapshot of setup *facts* (fetched elsewhere) into the
 // status model the How VineTrack Works guide renders. Rules that matter:
 //
 //  • Readiness % = completed applicable REQUIRED checks / applicable REQUIRED
-//    checks. Recommended and optional checks NEVER move the percentage.
+//    checks that were READABLE. Recommended, optional, not-applicable and
+//    unreadable checks NEVER move the percentage.
 //  • Conditional areas (Spray, Irrigation) are only applicable when there is
-//    real usage evidence; otherwise they are "not applicable" and excluded
-//    from both numerator and denominator.
-//  • Anything we could not resolve stays `not_checked` — we never guess.
+//    real vineyard-scoped OPERATIONAL evidence; otherwise they are "not
+//    applicable" and excluded from both numerator and denominator.
+//  • Anything we could not resolve stays `not_checked` — we never guess, and
+//    an unreadable source is never rendered as a failure.
 //  • Partial block completion is reported honestly ("11 of 14 blocks").
+//  • One missing thing = one penalty. Sub-fields of the same requirement
+//    (row geometry / direction / spacing) are never counted separately, and
+//    enrichment (clone, rootstock, equipment) is recommended only.
 
 import type { SetupStatus } from "@/components/guide/SetupCard";
 
 export type SetupCheckImportance = "required" | "recommended" | "optional";
+
+/** Why a source could not be used — surfaced in the admin diagnostics panel. */
+export type SetupSourceState = "ok" | "unreadable";
 
 export interface SetupCheckResult {
   id: string;
@@ -28,6 +36,12 @@ export interface SetupCheckResult {
   applicable: boolean;
   /** True when this check is part of the readiness percentage. */
   countsTowardReadiness: boolean;
+  /** Diagnostics only — the data source behind the check. */
+  source: string;
+  /** Diagnostics only — whether the source could be read. */
+  sourceState: SetupSourceState;
+  /** Diagnostics only — e.g. "spray jobs/records = 0". */
+  applicabilityReason?: string;
 }
 
 export interface SetupGroupHealth {
@@ -72,6 +86,8 @@ export interface SetupBlockFact {
   hasBoundary: boolean;
   hasRows: boolean;
   hasPlanting: boolean;
+  /** Enrichment only: every planting allocation names a clone or rootstock. */
+  hasPlantingDetail: boolean;
   isIrrigated: boolean;
 }
 
@@ -80,13 +96,22 @@ export interface SetupHealthFacts {
   resolved: boolean;
   vineyard: { name: string | null; hasLocation: boolean } | null;
   blocks: SetupBlockFact[] | null;
+  /** null = could not read the integration RPCs (never "not configured"). */
   weather: { anyConfigured: boolean } | null;
   equipment: { tractors: number; machines: number; sprayEquipment: number; other: number } | null;
   team: { members: number; owners: number } | null;
-  spray: { chemicals: number; sprayEquipment: number; usageEvidence: number } | null;
+  spray: {
+    chemicals: number;
+    sprayEquipment: number;
+    /** Vineyard-scoped operational evidence: spray jobs + spray records. */
+    operationalEvidence: number;
+    /** Diagnostics text, e.g. "spray_jobs 2 + spray_records 14". */
+    evidenceDetail?: string;
+  } | null;
   irrigation: {
-    /** Any evidence the vineyard irrigates (blocks flagged, systems, valves). */
+    /** Physical applicability: any irrigated block, system or valve. */
     applicable: boolean;
+    applicabilityReason?: string;
     systemsOk: boolean;
     valvesOk: boolean;
     allocationsOk: boolean;
@@ -110,14 +135,23 @@ export const EMPTY_SETUP_FACTS: SetupHealthFacts = {
 // Resolver
 // ---------------------------------------------------------------------------
 
+interface CheckOutcome {
+  done: boolean | null;
+  applicable?: boolean;
+  detail?: string;
+  reason?: string;
+}
+
 interface CheckSpec {
   id: string;
   groupId: string;
   label: string;
   importance: SetupCheckImportance;
   route?: string;
-  /** null → unresolved, "n/a" → not applicable. */
-  evaluate: () => { done: boolean | null; applicable?: boolean; detail?: string };
+  /** Data source, for the diagnostics panel only. */
+  source: string;
+  /** null → unresolved/unreadable, applicable:false → not applicable. */
+  evaluate: () => CheckOutcome;
 }
 
 const pct = (done: number, total: number) => (total === 0 ? null : Math.round((done / total) * 100));
@@ -126,7 +160,7 @@ function coverage(
   blocks: SetupBlockFact[] | null,
   pick: (b: SetupBlockFact) => boolean,
   noun: string,
-): { done: boolean | null; applicable?: boolean; detail?: string } {
+): CheckOutcome {
   if (!blocks) return { done: null };
   if (blocks.length === 0) return { done: false, detail: `No blocks created yet` };
   const covered = blocks.filter(pick).length;
@@ -146,6 +180,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Vineyard profile",
       importance: "required",
       route: "/setup/vineyard",
+      source: "vineyards.name",
       evaluate: () =>
         facts.vineyard === null
           ? { done: null }
@@ -157,6 +192,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Vineyard location",
       importance: "required",
       route: "/setup/vineyard-location",
+      source: "vineyards.latitude / longitude",
       evaluate: () =>
         facts.vineyard === null ? { done: null } : { done: facts.vineyard.hasLocation },
     },
@@ -166,6 +202,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Blocks created",
       importance: "required",
       route: "/setup/paddocks",
+      source: "paddocks (deleted_at is null)",
       evaluate: () =>
         b === null ? { done: null } : { done: b.length > 0, detail: `${b.length} blocks` },
     },
@@ -175,15 +212,17 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Mapped boundaries",
       importance: "required",
       route: "/setup/paddocks",
+      source: "paddocks.polygon_points (≥ 3 points)",
       evaluate: () => coverage(b, (x) => x.hasBoundary, "mapped"),
     },
     {
       id: "vineyard.rows",
       groupId: "vineyard",
-      label: "Row configuration",
+      label: "Row setup",
       importance: "required",
       route: "/setup/paddocks",
-      evaluate: () => coverage(b, (x) => x.hasRows, "have rows"),
+      source: "paddocks.rows (array length > 0)",
+      evaluate: () => coverage(b, (x) => x.hasRows, "have row setup"),
     },
     {
       id: "vineyard.planting",
@@ -191,7 +230,26 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Planting & varieties",
       importance: "required",
       route: "/setup/grape-varieties",
-      evaluate: () => coverage(b, (x) => x.hasPlanting, "have varieties"),
+      source: "paddocks.variety_allocations (array length > 0)",
+      evaluate: () => coverage(b, (x) => x.hasPlanting, "have planting information"),
+    },
+    {
+      id: "vineyard.planting_detail",
+      groupId: "vineyard",
+      label: "Clone & rootstock detail",
+      importance: "recommended",
+      route: "/setup/grape-varieties",
+      source: "paddocks.variety_allocations[].clone / rootstock",
+      evaluate: () => {
+        if (!b) return { done: null };
+        const planted = b.filter((x) => x.hasPlanting);
+        if (planted.length === 0) return { done: null, applicable: false, reason: "no planted blocks" };
+        const covered = planted.filter((x) => x.hasPlantingDetail).length;
+        return {
+          done: covered === planted.length,
+          detail: `${covered} of ${planted.length} planted blocks record clone or rootstock`,
+        };
+      },
     },
     {
       id: "weather.source",
@@ -199,6 +257,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Weather source connected",
       importance: "required",
       route: "/setup/weather",
+      source: "get_vineyard_weather_integration (configuration only)",
       evaluate: () =>
         facts.weather === null ? { done: null } : { done: facts.weather.anyConfigured },
     },
@@ -208,6 +267,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Equipment registered",
       importance: "recommended",
       route: "/setup/tractors",
+      source: "tractors + vineyard_machines + spray_equipment + equipment_items",
       evaluate: () => {
         const e = facts.equipment;
         if (!e) return { done: null };
@@ -221,6 +281,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Vineyard owner",
       importance: "required",
       route: "/team",
+      source: "vineyard_members.role = owner",
       evaluate: () => (facts.team === null ? { done: null } : { done: facts.team.owners > 0 }),
     },
     {
@@ -229,6 +290,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Team members invited",
       importance: "recommended",
       route: "/team",
+      source: "vineyard_members (accepted members only)",
       evaluate: () =>
         facts.team === null
           ? { done: null }
@@ -240,11 +302,13 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Saved chemicals",
       importance: "required",
       route: "/setup/chemicals",
+      source: "saved_chemicals (vineyard-scoped)",
       evaluate: () => {
         const s = facts.spray;
         if (!s) return { done: null };
-        if (!sprayApplicable(s)) return { done: null, applicable: false };
-        return { done: s.chemicals > 0, detail: `${s.chemicals} chemicals` };
+        if (!sprayApplicable(s))
+          return { done: null, applicable: false, reason: sprayReason(s) };
+        return { done: s.chemicals > 0, detail: `${s.chemicals} chemicals`, reason: sprayReason(s) };
       },
     },
     {
@@ -253,11 +317,17 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Spray equipment",
       importance: "required",
       route: "/setup/spray-equipment",
+      source: "spray_equipment (vineyard-scoped)",
       evaluate: () => {
         const s = facts.spray;
         if (!s) return { done: null };
-        if (!sprayApplicable(s)) return { done: null, applicable: false };
-        return { done: s.sprayEquipment > 0, detail: `${s.sprayEquipment} sprayers` };
+        if (!sprayApplicable(s))
+          return { done: null, applicable: false, reason: sprayReason(s) };
+        return {
+          done: s.sprayEquipment > 0,
+          detail: `${s.sprayEquipment} sprayers`,
+          reason: sprayReason(s),
+        };
       },
     },
     {
@@ -266,11 +336,12 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Irrigation systems",
       importance: "required",
       route: "/irrigation/setup",
+      source: "get_irrigation_setup_status → required.systems_ok",
       evaluate: () => {
         const i = facts.irrigation;
         if (!i) return { done: null };
-        if (!i.applicable) return { done: null, applicable: false };
-        return { done: i.systemsOk };
+        if (!i.applicable) return { done: null, applicable: false, reason: i.applicabilityReason };
+        return { done: i.systemsOk, reason: i.applicabilityReason };
       },
     },
     {
@@ -279,11 +350,12 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Valves & zones",
       importance: "required",
       route: "/irrigation/setup",
+      source: "get_irrigation_setup_status → required.valves_ok",
       evaluate: () => {
         const i = facts.irrigation;
         if (!i) return { done: null };
-        if (!i.applicable) return { done: null, applicable: false };
-        return { done: i.valvesOk };
+        if (!i.applicable) return { done: null, applicable: false, reason: i.applicabilityReason };
+        return { done: i.valvesOk, reason: i.applicabilityReason };
       },
     },
     {
@@ -292,11 +364,12 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Valve → block allocations",
       importance: "required",
       route: "/irrigation/setup",
+      source: "get_irrigation_setup_status → required.allocations_ok",
       evaluate: () => {
         const i = facts.irrigation;
         if (!i) return { done: null };
-        if (!i.applicable) return { done: null, applicable: false };
-        return { done: i.allocationsOk };
+        if (!i.applicable) return { done: null, applicable: false, reason: i.applicabilityReason };
+        return { done: i.allocationsOk, reason: i.applicabilityReason };
       },
     },
     {
@@ -305,6 +378,7 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Season & operational preferences",
       importance: "optional",
       route: "/setup/operational-preferences",
+      source: "not read by the portal yet",
       evaluate: () => {
         const p = facts.preferences;
         if (!p || p.seasonConfigured === null) return { done: null };
@@ -336,6 +410,9 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       applicable,
       countsTowardReadiness:
         applicable && spec.importance === "required" && out.done !== null,
+      source: spec.source,
+      sourceState: applicable && out.done === null ? "unreadable" : "ok",
+      applicabilityReason: out.reason,
     };
   });
 
@@ -402,8 +479,19 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
   };
 }
 
+/**
+ * Stage 3.1: spray setup only applies when this vineyard actually uses the
+ * VineTrack spray workflow. Catalogue rows (saved chemicals) and stored
+ * sprayers are NOT evidence of use — a vineyard can hold both without ever
+ * planning or recording a spray. Only vineyard-scoped operational records
+ * (spray jobs + completed spray records) make the area required.
+ */
 function sprayApplicable(s: NonNullable<SetupHealthFacts["spray"]>): boolean {
-  return s.usageEvidence > 0 || s.chemicals > 0 || s.sprayEquipment > 0;
+  return s.operationalEvidence > 0;
+}
+
+function sprayReason(s: NonNullable<SetupHealthFacts["spray"]>): string {
+  return s.evidenceDetail ?? `spray jobs + records = ${s.operationalEvidence}`;
 }
 
 function buildCaption(

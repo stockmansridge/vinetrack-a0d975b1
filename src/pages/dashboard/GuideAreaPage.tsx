@@ -10,6 +10,8 @@ import { FeatureCard } from "@/components/guide/FeatureCard";
 import { CoreSetupChecklist } from "@/components/guide/CoreSetupChecklist";
 import { SetupOverview } from "@/components/guide/SetupOverview";
 import { SetupHealthChecks } from "@/components/guide/SetupHealthChecks";
+import { SetupHealthDiagnostics } from "@/components/guide/SetupHealthDiagnostics";
+
 import { useVineyard } from "@/context/VineyardContext";
 import { useSetupHealth } from "@/lib/guide/setupHealthQuery";
 import { ExpandableSection } from "@/components/guide/ExpandableSection";
@@ -337,7 +339,9 @@ function SetupAreaDetail() {
         error={error}
         onRefresh={refetch}
       />
+      <SetupHealthDiagnostics summary={summary} />
       <ExpandableSection
+
         id="setup-usage"
         moreLabel="Show platform usage overview"
         lessLabel="Hide platform usage overview"
