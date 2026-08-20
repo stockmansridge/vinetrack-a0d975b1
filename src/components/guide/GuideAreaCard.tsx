@@ -53,16 +53,22 @@ export function GuideAreaCard({
           "lg:h-[84px] lg:grid-cols-[38px_48px_minmax(0,1fr)_160px_285px] lg:gap-x-4",
         )}
       >
-        {/* Step number */}
+        {/* Step number — red while unresolved/incomplete (Stage 3 will flip
+            complete steps to the green variant; variants defined above). */}
         <div className="hidden lg:flex lg:justify-center">
-          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-primary/[0.05] text-[12.5px] font-semibold text-primary">
+          <span
+            className={cn(
+              "flex h-[30px] w-[30px] items-center justify-center rounded-full border text-[12.5px] font-semibold",
+              STEP_TONE[stepTone],
+            )}
+          >
             {index + 1}
           </span>
         </div>
 
         {/* Icon */}
         <div className="flex items-center gap-3 lg:justify-center">
-          <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[9px] border border-border bg-muted/40 text-muted-foreground">
+          <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[9px] border border-border bg-card text-muted-foreground">
             <Icon className="h-[18px] w-[18px]" aria-hidden />
           </span>
           <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:hidden">
@@ -85,7 +91,7 @@ export function GuideAreaCard({
         <div className="flex flex-wrap items-center gap-1.5 lg:h-full lg:w-full lg:flex-col lg:flex-nowrap lg:items-start lg:justify-center lg:gap-[5px]">
           {area.showsSetupStatus && (
             <>
-              <SetupStatusPill status={setupStatus} />
+              <GuideRowStatusPill status={setupStatus} />
               {setupCaption && (
                 <span className="text-[11.5px] leading-none text-muted-foreground">
                   {setupCaption}
@@ -98,11 +104,13 @@ export function GuideAreaCard({
               {area.metaLabel}
             </span>
           )}
-          <span className="inline-flex h-[30px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-primary/30 bg-primary/[0.06] px-2.5 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/10">
-            {area.actionLabel}
+          {/* Standardised landing CTA — identical label + geometry on all rows */}
+          <span className="inline-flex h-[31px] w-[100px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-card px-3 text-[12px] font-semibold text-foreground/80 transition-colors group-hover:border-primary/30 group-hover:bg-muted group-hover:text-primary">
+            Learn more
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
         </div>
+
 
         {/* Image — always right on desktop, nearly filling the row */}
         <GuideVisualSlot
