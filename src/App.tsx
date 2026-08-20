@@ -105,6 +105,8 @@ import AdminSprayRecordsPage from "./pages/admin/AdminSprayRecordsPage";
 import AdminWorkTasksPage from "./pages/admin/AdminWorkTasksPage";
 import SystemAdminsPage from "./pages/admin/SystemAdminsPage";
 import GuideImagesPage from "./pages/admin/GuideImagesPage";
+import GuideContentPage from "./pages/admin/GuideContentPage";
+import GuideContentSectionPage from "./pages/admin/GuideContentSectionPage";
 import BillingGrantsPage from "./pages/admin/BillingGrantsPage";
 import AccessEntitlementsPage from "./pages/admin/AccessEntitlementsPage";
 import BlockTroubleshooterPage from "./pages/admin/BlockTroubleshooterPage";
@@ -287,6 +289,8 @@ const App = () => (
                     <Route path="/admin/notices" element={<AppNoticesPage />} />
                     <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
                     <Route path="/admin/guide-images" element={<GuideImagesPage />} />
+                    <Route path="/admin/guide-content" element={<GuideContentPage />} />
+                    <Route path="/admin/guide-content/:section" element={<GuideContentSectionPage />} />
                     <Route path="/admin/email-diagnostics" element={<EmailDiagnosticsPage />} />
                     <Route path="/soon/*" element={<ComingSoon />} />
                    </Route>
