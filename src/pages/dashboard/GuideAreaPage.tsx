@@ -19,6 +19,14 @@ import { PlatformOverview } from "@/components/guide/PlatformOverview";
 import { ReportsPayoff } from "@/components/guide/ReportsPayoff";
 import { PlatformBadges } from "@/components/guide/PlatformBadges";
 import { InternalBadge } from "@/components/guide/GuideBadges";
+import { WorkflowGuide } from "@/components/guide/WorkflowGuide";
+import {
+  guideWorkflow,
+  workflowPlatforms,
+  workflowProductAction,
+  type GuideWorkflow,
+} from "@/lib/guide/guideWorkflows";
+
 import {
   guideAreaBySlug,
   guideAreaItems,
@@ -54,45 +62,54 @@ export default function GuideAreaPage() {
   if (!area) return <Navigate to="/dashboard/how-vinetrack-works" replace />;
 
   const items = guideAreaItems(area);
+  // Stage 4A: the four field workflows use the shared visual guide structure.
+  const workflow = guideWorkflow(area.id);
 
   return (
     <GuidePageShell className="space-y-6">
       <div className="space-y-2.5">
         <Breadcrumb title={area.title} />
-        <AreaHero area={area} items={items} />
+        <AreaHero area={area} items={items} workflow={workflow} />
       </div>
 
-      {area.workflow && area.workflow.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            How it works
-          </h2>
-          <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {area.workflow.map((step, i) => (
-              <li
-                key={step.label}
-                className="flex gap-3 rounded-xl border border-border bg-card p-3"
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
-                  {i + 1}
-                </span>
-                <span>
-                  <span className="block text-[13.5px] font-semibold text-foreground">
-                    {step.label}
-                  </span>
-                  {step.detail && (
-                    <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted-foreground">
-                      {step.detail}
+      {workflow ? (
+        <WorkflowGuide workflow={workflow} />
+      ) : (
+        <>
+          {area.workflow && area.workflow.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                How it works
+              </h2>
+              <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {area.workflow.map((step, i) => (
+                  <li
+                    key={step.label}
+                    className="flex gap-3 rounded-xl border border-border bg-card p-3"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
+                      {i + 1}
                     </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </section>
+                    <span>
+                      <span className="block text-[13.5px] font-semibold text-foreground">
+                        {step.label}
+                      </span>
+                      {step.detail && (
+                        <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted-foreground">
+                          {step.detail}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          <AreaDetail area={area} items={items} />
+        </>
       )}
 
-      <AreaDetail area={area} items={items} />
 
       <div className="border-t border-border pt-6">
         <Link
@@ -126,14 +143,24 @@ function Breadcrumb({ title }: { title: string }) {
 function AreaHero({
   area,
   items,
+  workflow,
 }: {
   area: GuideArea;
   items: HowVineTrackWorksItem[];
+  workflow?: GuideWorkflow;
 }) {
-  const platforms = Array.from(
-    new Set(items.flatMap((i) => i.platforms)),
-  ) as GuidePlatform[];
-  const primary = items.find((i) => i.webRoute);
+  // Workflow guides take their availability and product action straight from
+  // the workflow's own catalogue items, so a badge can never claim a surface
+  // the catalogue does not verify.
+  const platforms = workflow
+    ? workflowPlatforms(workflow)
+    : (Array.from(new Set(items.flatMap((i) => i.platforms))) as GuidePlatform[]);
+  const catalogueAction = items.find((i) => i.webRoute);
+  const action = workflow
+    ? workflowProductAction(workflow)
+    : catalogueAction?.webRoute
+      ? { label: `Open ${catalogueAction.title}`, route: catalogueAction.webRoute }
+      : undefined;
   // Same uploaded image key as the landing row — one upload feeds both.
   const uploaded = useGuideImage(area.id as GuideImageKey);
 
@@ -160,17 +187,18 @@ function AreaHero({
               <PlatformBadges platforms={platforms} />
             </div>
           )}
-          {primary?.webRoute && (
+          {action && (
             <div>
               <Link
-                to={primary.webRoute}
+                to={action.route}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[13.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               >
-                Open {primary.title}
+                {action.label}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           )}
+
         </div>
         <GuideVisualSlot
           visualKey={area.visualKey}
