@@ -488,43 +488,86 @@ function decodeRates(raw: any): WriteLabelRate[] {
   return asArray(raw)
     .map((r) => {
       if (!r || typeof r !== "object") return null;
-      const unit = s(r.unit);
+      const unit = s(r.unit) ?? "";
       const value = num(r.value ?? r.rate_per_unit);
       const min = num(r.min_value ?? r.rate_min);
       const max = num(r.max_value ?? r.rate_max);
-      if (!unit || (value == null && min == null && max == null)) return null;
+      const rawText = s(r.raw_text);
+      const basis = normaliseLabelRateBasis(r.basis ?? r.rate_basis);
+      // A row with no number is only kept when the label stated something we
+      // can show as reference text (basis "other"). It never fills a field.
+      if (value == null && min == null && max == null && !rawText) return null;
+      if ((value == null && min == null && max == null) || !unit) {
+        return {
+          label: s(r.label) ?? "",
+          basis: "other",
+          unit,
+          raw_text: rawText,
+        } as WriteLabelRate;
+      }
       return {
         label: s(r.label) ?? "",
-        basis: normaliseLabelRateBasis(r.basis ?? r.rate_basis),
+        basis,
         unit,
         value,
         min_value: min,
         max_value: max,
-        raw_text: s(r.raw_text),
+        raw_text: rawText,
       } as WriteLabelRate;
     })
     .filter((r): r is WriteLabelRate => !!r);
 }
 
-function decodeUses(raw: any[]): WriteRegisteredUse[] {
+/**
+ * Per-use provenance gate. LD-2 attaches evidence per registered use
+ * (`use.provenance.rates`, `.withholding_period`, …). That is authoritative
+ * for THAT use — a top-level `field_provenance.label_rates` must never be
+ * assumed to cover a use that stated no rate evidence of its own.
+ */
+function useFieldAllowed(gate: FieldGate, use: any, key: string, topKey: string): boolean {
+  const prov = use?.provenance;
+  if (prov && typeof prov === "object" && key in prov) {
+    return isAuthoritativeProvenance(normaliseFieldProvenance((prov as any)[key]));
+  }
+  const top = gate.map[topKey];
+  if (top != null) return isAuthoritativeProvenance(top);
+  // No per-use and no top-level evidence key: the use itself was already
+  // gated through `registered_uses`.
+  return true;
+}
+
+function decodeUses(raw: any[], gate: FieldGate): WriteRegisteredUse[] {
   return raw
     .map((u) => {
       if (!u || typeof u !== "object") return null;
       const crop = s(u.crop) ?? "";
       const target = s(u.target_raw ?? u.target) ?? "";
       if (!crop && !target) return null;
+      const rates = useFieldAllowed(gate, u, "rates", "label_rates")
+        ? decodeRates(u.rates)
+        : [];
+      const whp = useFieldAllowed(gate, u, "withholding_period", "withholding_periods")
+        ? num(u.withholding_period_days)
+        : undefined;
+      const rei = useFieldAllowed(gate, u, "re_entry", "re_entry")
+        ? num(u.re_entry_period_hours)
+        : undefined;
+      const restrictions = useFieldAllowed(gate, u, "restrictions", "restrictions")
+        ? s(u.restrictions)
+        : undefined;
       return {
         crop,
         target_raw: target,
-        rates: decodeRates(u.rates),
+        rates,
         // Never inferred from free text here: the resolver is the authority.
-        withholding_period_days: num(u.withholding_period_days),
-        re_entry_period_hours: num(u.re_entry_period_hours),
-        restrictions: s(u.restrictions),
+        withholding_period_days: whp,
+        re_entry_period_hours: rei,
+        restrictions,
       } as WriteRegisteredUse;
     })
     .filter((u): u is WriteRegisteredUse => !!u);
 }
+
 
 function decodeConflicts(raw: any[]): WriteConflict[] {
   return raw
