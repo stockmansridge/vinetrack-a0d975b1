@@ -34,6 +34,8 @@ export function GuideAreaCard({
 }) {
   const { Icon } = guideVisual(area.visualKey);
   const to = guideAreaRoute(area);
+  // One uploaded image per area key feeds both this row and the drill-down hero.
+  const uploaded = useGuideImage(area.id as GuideImageKey);
 
   return (
     <Link
