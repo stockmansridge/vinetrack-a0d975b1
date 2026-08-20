@@ -7,6 +7,8 @@ import {
   guideItemsForSection,
   SHARED_OPERATIONAL_TOOL_IDS,
 } from "@/lib/guide/howVineTrackWorksCatalogue";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { showsInternalContent } from "@/lib/guide/guideAccess";
 
 /**
  * Stage 4B — the Operational Tools index.
@@ -23,7 +25,11 @@ export function OperationalToolsCatalogue() {
   const guides = operationalToolGuides();
   const mapItems = guideItemsForSection("maps_intelligence");
   const mapsPublic = mapItems.filter((i) => i.availability === "available");
-  const mapsInternal = mapItems.filter((i) => i.availability !== "available");
+  const viewer = useGuideViewer();
+  // Internal entries (Mapping, Crop Health) never render for customer roles.
+  const mapsInternal = showsInternalContent(viewer)
+    ? mapItems.filter((i) => i.availability !== "available")
+    : [];
 
   return (
     <div className="space-y-10">

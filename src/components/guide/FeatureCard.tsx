@@ -7,6 +7,8 @@ import { PlatformBadges } from "./PlatformBadges";
 import { AvailabilityBadge, ImportanceBadge } from "./GuideBadges";
 import { guideVisual } from "./guideVisuals";
 import type { HowVineTrackWorksItem } from "@/lib/guide/howVineTrackWorksCatalogue";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision, showsDevelopmentLabels } from "@/lib/guide/guideAccess";
 
 /**
  * Generic guide feature card.
@@ -21,6 +23,9 @@ export function FeatureCard({ item }: { item: HowVineTrackWorksItem }) {
   const { Icon, tone } = guideVisual(item.visualKey);
   const isInternal = item.availability !== "available";
   const hasDetail = (item.subItems?.length ?? 0) > 0;
+  const viewer = useGuideViewer();
+  const internalLabels = showsDevelopmentLabels(viewer);
+  const action = guideActionDecision(item.webRoute, viewer);
 
   return (
     <Card
@@ -48,7 +53,7 @@ export function FeatureCard({ item }: { item: HowVineTrackWorksItem }) {
           </h3>
           <div className="flex flex-wrap items-center gap-1.5">
             <ImportanceBadge importance={item.importance} />
-            <AvailabilityBadge availability={item.availability} />
+            {internalLabels && <AvailabilityBadge availability={item.availability} />}
           </div>
         </div>
 
@@ -82,7 +87,7 @@ export function FeatureCard({ item }: { item: HowVineTrackWorksItem }) {
                 />
               </button>
             )}
-            {item.webRoute && (
+            {action.show && item.webRoute && (
               <Link
                 to={item.webRoute}
                 className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
@@ -99,7 +104,7 @@ export function FeatureCard({ item }: { item: HowVineTrackWorksItem }) {
             Available in the mobile apps only — there is no web screen for this feature.
           </p>
         )}
-        {item.mobileFeatureKey && (
+        {internalLabels && item.mobileFeatureKey && (
           <p className="text-[10.5px] uppercase tracking-wide text-muted-foreground/60">
             Tool ID: {item.mobileFeatureKey}
           </p>

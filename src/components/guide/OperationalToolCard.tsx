@@ -11,6 +11,8 @@ import {
   operationalToolPlatforms,
   type OperationalToolGuide,
 } from "@/lib/guide/operationalToolGuides";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision } from "@/lib/guide/guideAccess";
 
 /**
  * Stage 4B — compact catalogue card for one Operational Tool.
@@ -24,7 +26,9 @@ export function OperationalToolCard({ guide }: { guide: OperationalToolGuide }) 
   const item = operationalToolCatalogueItem(guide);
   const { Icon, tone } = guideVisual(item?.visualKey);
   const platforms = operationalToolPlatforms(guide);
-  const action = operationalToolAction(guide);
+  const viewer = useGuideViewer();
+  const rawAction = operationalToolAction(guide);
+  const action = guideActionDecision(rawAction?.route, viewer).show ? rawAction : undefined;
 
   return (
     <Card

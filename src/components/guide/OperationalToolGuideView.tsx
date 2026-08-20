@@ -10,6 +10,8 @@ import {
   OPERATIONAL_TOOLS_ROUTE,
   type OperationalToolGuide,
 } from "@/lib/guide/operationalToolGuides";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision } from "@/lib/guide/guideAccess";
 
 /**
  * Stage 4B — the single shared structure for every Operational Tool guide.
@@ -22,7 +24,10 @@ export function OperationalToolGuideView({ guide }: { guide: OperationalToolGuid
   const item = operationalToolCatalogueItem(guide);
   const title = item?.title ?? guide.toolId;
   const platforms = operationalToolPlatforms(guide);
-  const action = operationalToolAction(guide);
+  const viewer = useGuideViewer();
+  const rawAction = operationalToolAction(guide);
+  const actionAccess = guideActionDecision(rawAction?.route, viewer);
+  const action = actionAccess.show ? rawAction : undefined;
 
   return (
     <div className="space-y-6" data-tool-guide={guide.toolId}>
@@ -72,7 +77,9 @@ export function OperationalToolGuideView({ guide }: { guide: OperationalToolGuid
               </div>
             ) : (
               <p className="text-[12.5px] text-muted-foreground">
-                This tool runs in the VineTrack mobile apps — there is no portal screen for it.
+                {rawAction
+                  ? actionAccess.hint
+                  : "This tool runs in the VineTrack mobile apps — there is no portal screen for it."}
               </p>
             )}
           </div>
