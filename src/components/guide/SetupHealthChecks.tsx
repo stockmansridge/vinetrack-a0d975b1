@@ -25,18 +25,20 @@ export function SetupHealthChecks({
   error?: Error | null;
   onRefresh?: () => void;
 }) {
+  const presentation = deriveSetupPresentation(summary, { loading, error });
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden" data-setup-readiness={presentation.state}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4">
         <div className="flex flex-wrap items-center gap-2.5">
           <p className="text-[14.5px] font-semibold text-foreground">Setup readiness</p>
-          <SetupStatusPill status={summary.status} />
-          <span className="text-[12.5px] text-muted-foreground">
-            {loading ? "Checking your setup…" : summary.caption}
-          </span>
-          {summary.resolved && summary.totalRequired > 0 && (
-            <span className="text-[12px] text-muted-foreground">
-              ({summary.completedRequired} of {summary.totalRequired} required checks)
+          <SetupPresentationPill presentation={presentation} />
+          {presentation.detail && (
+            <span className="text-[12.5px] text-muted-foreground">{presentation.detail}</span>
+          )}
+          {!loading && !error && summary.recommendedOutstanding > 0 && (
+            <span className="text-[12px] font-medium text-amber-700 dark:text-amber-400">
+              {summary.recommendedOutstanding} recommendation
+              {summary.recommendedOutstanding === 1 ? "" : "s"}
             </span>
           )}
         </div>
