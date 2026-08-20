@@ -122,9 +122,8 @@ export function SetupCard({
       {item.subItems && item.subItems.length > 0 && (
         <ul className="grid gap-1 rounded-md bg-muted/50 p-3 text-[12.5px] text-muted-foreground sm:grid-cols-2">
           {item.subItems.map((s) => (
-            <li key={s} className="flex items-center gap-2">
-              <CircleDashed className="h-3.5 w-3.5 shrink-0 opacity-60" />
-              <span className="truncate">{s}</span>
+            <li key={s} className="truncate">
+              {s}
             </li>
           ))}
         </ul>
