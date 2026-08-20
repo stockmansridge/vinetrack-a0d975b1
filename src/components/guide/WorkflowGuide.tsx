@@ -6,6 +6,10 @@ import { ArrowRight, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { GuideScreenshot } from "@/components/guide/GuideScreenshot";
+import { GuideStepList } from "@/components/guide/GuideStepList";
+import { useGuideSection } from "@/lib/guide/guideContentStore";
+import { visibleSteps } from "@/lib/guide/guideContent";
+
 import {
   workflowProductAction,
   type GuideWorkflow,
@@ -24,65 +28,21 @@ import {
  */
 export function WorkflowGuide({ workflow }: { workflow: GuideWorkflow }) {
   const action = workflowProductAction(workflow);
+  const { section } = useGuideSection(workflow.areaKey);
+  const steps = visibleSteps(section);
 
   return (
     <div className="space-y-8" data-workflow-area={workflow.areaKey}>
       <section className="space-y-4" aria-labelledby="how-it-works">
-        <SectionHeading id="how-it-works" title="How it works" description={workflow.intro} />
+        <SectionHeading
+          id="how-it-works"
+          title="How it works"
+          description={section?.intro ?? workflow.intro}
+        />
         <SequenceStrip steps={workflow.sequence} />
-        <ol className="space-y-4">
-          {workflow.steps.map((step, i) => (
-            <li key={step.title}>
-              <Card
-                className={cn(
-                  "grid gap-4 overflow-hidden p-4 sm:p-5",
-                  step.imageKey && "lg:grid-cols-[minmax(0,1fr)_minmax(0,42%)] lg:items-center",
-                )}
-              >
-                <div className="min-w-0 space-y-2">
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
-                      {i + 1}
-                    </span>
-                    <h3 className="text-[15px] font-semibold text-foreground">{step.title}</h3>
-                  </div>
-                  <p className="text-[13.5px] leading-relaxed text-muted-foreground">
-                    {step.body}
-                  </p>
-                  {step.examples && step.examples.length > 0 && (
-                    <ul className="flex flex-wrap gap-1.5 pt-0.5">
-                      {step.examples.map((ex) => (
-                        <li
-                          key={ex}
-                          className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11.5px] font-medium text-foreground/80"
-                        >
-                          {ex}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {step.where && (
-                    <p className="pt-0.5 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-primary">
-                      {step.where}
-                    </p>
-                  )}
-                </div>
-                {step.imageKey && (
-                  <GuideScreenshot
-                    imageKey={step.imageKey}
-                    alt={step.imageAlt ?? step.title}
-                    className={cn(
-                      // Alternating placement on desktop keeps the page from
-                      // feeling like a single column of screenshots.
-                      i % 2 === 1 ? "lg:order-first" : undefined,
-                    )}
-                  />
-                )}
-              </Card>
-            </li>
-          ))}
-        </ol>
+        <GuideStepList steps={steps} />
       </section>
+
 
       {workflow.platformRoles && workflow.platformRoles.length > 0 && (
         <section className="space-y-3" aria-labelledby="where-it-happens">

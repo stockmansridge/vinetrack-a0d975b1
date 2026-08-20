@@ -22,6 +22,10 @@ import { useSetupHealth } from "@/lib/guide/setupHealthQuery";
 import { ExpandableSection } from "@/components/guide/ExpandableSection";
 import { PlatformBadges } from "@/components/guide/PlatformBadges";
 import { WorkflowGuide } from "@/components/guide/WorkflowGuide";
+import { GuideStepList } from "@/components/guide/GuideStepList";
+import { useGuideSection } from "@/lib/guide/guideContentStore";
+import { visibleSteps } from "@/lib/guide/guideContent";
+
 import { OperationalToolsCatalogue } from "@/components/guide/OperationalToolsCatalogue";
 import { PlatformsGuide } from "@/components/guide/PlatformsGuide";
 import { ReportsGuide } from "@/components/guide/ReportsGuide";
@@ -61,11 +65,13 @@ export default function GuideAreaPage() {
   const items = visibleGuideItems(guideAreaItems(area), viewer);
   // Stage 4A: the four field workflows use the shared visual guide structure.
   const workflow = guideWorkflow(area.id);
+  const { section } = useGuideSection(area.id);
+  const managedSteps = visibleSteps(section);
 
   return (
     <GuidePageShell className="space-y-6">
       <div className="space-y-2.5">
-        <Breadcrumb title={area.title} />
+        <Breadcrumb title={section?.heading ?? area.title} />
         <AreaHero area={area} items={items} workflow={workflow} />
       </div>
 
@@ -73,35 +79,15 @@ export default function GuideAreaPage() {
         <WorkflowGuide workflow={workflow} />
       ) : (
         <>
-          {area.workflow && area.workflow.length > 0 && (
+          {managedSteps.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-lg font-semibold tracking-tight text-foreground">
                 How it works
               </h2>
-              <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {area.workflow.map((step, i) => (
-                  <li
-                    key={step.label}
-                    className="flex gap-3 rounded-xl border border-border bg-card p-3"
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
-                      {i + 1}
-                    </span>
-                    <span>
-                      <span className="block text-[13.5px] font-semibold text-foreground">
-                        {step.label}
-                      </span>
-                      {step.detail && (
-                        <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted-foreground">
-                          {step.detail}
-                        </span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              <GuideStepList steps={managedSteps} />
             </section>
           )}
+
 
           <AreaDetail area={area} items={items} />
         </>
@@ -163,6 +149,7 @@ function AreaHero({
   const action = guideActionDecision(proposed?.route, viewer).show ? proposed : undefined;
   // Same uploaded image key as the landing row — one upload feeds both.
   const uploaded = useGuideImage(area.id as GuideImageKey);
+  const { section } = useGuideSection(area.id);
 
   return (
     <Card className="overflow-hidden">
@@ -173,12 +160,13 @@ function AreaHero({
               {area.stepLabel}
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              {area.title}
+              {section?.heading ?? area.title}
             </h1>
           </div>
           <p className="max-w-2xl text-[14.5px] leading-relaxed text-muted-foreground">
-            {area.detailIntro}
+            {workflow ? area.detailIntro : (section?.intro ?? area.detailIntro)}
           </p>
+
           {platforms.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[12px] font-medium text-muted-foreground">
