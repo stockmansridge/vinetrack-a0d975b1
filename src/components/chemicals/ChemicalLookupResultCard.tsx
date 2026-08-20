@@ -140,15 +140,17 @@ export function ChemicalLookupResultCard({
           <Row label="Country" value={fields.registrationCountry ? countryLabel(fields.registrationCountry) : undefined} />
           <Row label="Actives" value={fields.activeIngredientText} />
           <Row label="Groups" value={fields.chemicalGroupText} />
+          <Row label="Rate" value={fields.rateText} />
           <Row
             label="WHP"
-            value={fields.withholdingDays != null ? `${fields.withholdingDays} days` : undefined}
+            value={fields.withholdingText}
           />
           <Row
             label="REI"
             value={fields.reEntryHours != null ? `${fields.reEntryHours} hours` : undefined}
           />
           <Row label="Label version" value={fields.labelVersion} />
+
         </div>
 
         {result.conflicts.length > 0 && (
