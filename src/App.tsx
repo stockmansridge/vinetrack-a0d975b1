@@ -125,6 +125,8 @@ const App = () => (
         <AuthProvider>
           <VineyardProvider>
             <Routes>
+              <Route path="/tmp-guide-preview" element={<HowVineTrackWorksPage />} />
+              <Route path="/tmp-guide-preview/:area" element={<GuideAreaPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/signup" element={<SignUp />} />
@@ -139,8 +141,6 @@ const App = () => (
                    <Route element={<RoleRoute />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/tmp-guide-preview" element={<HowVineTrackWorksPage />} />
-                    <Route path="/tmp-guide-preview/:area" element={<GuideAreaPage />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
                     <Route element={<RequireSystemAdmin />}>
                       <Route
