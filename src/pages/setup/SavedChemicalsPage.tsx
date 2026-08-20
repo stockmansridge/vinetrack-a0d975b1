@@ -930,14 +930,23 @@ function ChemicalEditor({
     setForm((p) => ({ ...p, [k]: v }));
 
   const applySuggestion = (s: AppliedSuggestion) => {
-    // ---- Upgraded resolver result. Canonical fields come ONLY from the
-    // authoritative structured response; `ai_suggestion` is never applied and
-    // unresolved rates / WHP / REI stay blank rather than being invented.
-    if (s.resolved?.authoritative && s.resolved.draft) {
+    // ---- Upgraded resolver result. This branch is TERMINAL: once a
+    // structured resolver result has been handled, no legacy AI/lookup
+    // fallback below may run or overwrite a canonical field.
+    //
+    // Canonical fields come ONLY from the authoritative structured response;
+    // `ai_suggestion` is never applied, and an unresolved rate / WHP / REI is
+    // left blank rather than inherited from a legacy suggestion.
+    if (s.resolved) {
       const r = s.resolved;
-      const draft = r.draft!;
-      setIntel(draft);
-      setIntelBase(draft);
+      if (!r.authoritative || !r.draft) {
+        // Unresolved / ambiguous / AI-only: only the typed product name is
+        // kept so the operator can enter the product manually.
+        setForm((p) => ({ ...p, name: s.name ?? p.name ?? "" }));
+        return;
+      }
+      setIntel(r.draft);
+      setIntelBase(r.draft);
       setUpgraded(true);
       if (s.master) {
         setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
@@ -955,17 +964,15 @@ function ChemicalEditor({
             ? r.fields.labelReference
             : (p.label_url ?? ""),
       }));
-      if (r.fields.withholdingDays != null) setWhp(String(r.fields.withholdingDays));
-      if (r.fields.reEntryHours != null) setRei(String(r.fields.reEntryHours));
-      if (r.fields.restrictions) setRestNotes(r.fields.restrictions);
+      // Label-backed only. When the structured response does not return a
+      // WHP / REI with authoritative provenance the field is CLEARED, so a
+      // stale or AI-sourced number can never survive an authoritative apply.
+      setWhp(r.fields.withholdingDays != null ? String(r.fields.withholdingDays) : "");
+      setRei(r.fields.reEntryHours != null ? String(r.fields.reEntryHours) : "");
+      setRestNotes(r.fields.restrictions ?? "");
       return;
     }
-    // ---- Unresolved / ambiguous: nothing authoritative is populated. Only
-    // the typed product name is kept so the operator can enter it manually.
-    if (s.resolved && !s.resolved.authoritative) {
-      setForm((p) => ({ ...p, name: s.name ?? p.name ?? "" }));
-      return;
-    }
+
 
     // ---- Master Catalogue result: copy the verified SQL 194 intelligence
     // verbatim and record the link + revision. It is never re-derived from
@@ -1046,8 +1053,9 @@ function ChemicalEditor({
 
     });
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
-    if (s.whp_days) setWhp(s.whp_days);
-    if (s.rei_hours) setRei(s.rei_hours);
+    // WHP / REI are label facts. A legacy AI candidate is not label evidence,
+    // so it may never populate them — they stay blank for manual entry.
+
   };
 
   return (
