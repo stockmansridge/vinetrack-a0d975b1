@@ -15,11 +15,12 @@ import { SetupHealthDiagnostics } from "@/components/guide/SetupHealthDiagnostic
 import { useVineyard } from "@/context/VineyardContext";
 import { useSetupHealth } from "@/lib/guide/setupHealthQuery";
 import { ExpandableSection } from "@/components/guide/ExpandableSection";
-import { PlatformOverview } from "@/components/guide/PlatformOverview";
-import { ReportsPayoff } from "@/components/guide/ReportsPayoff";
 import { PlatformBadges } from "@/components/guide/PlatformBadges";
-import { InternalBadge } from "@/components/guide/GuideBadges";
 import { WorkflowGuide } from "@/components/guide/WorkflowGuide";
+import { OperationalToolsCatalogue } from "@/components/guide/OperationalToolsCatalogue";
+import { PlatformsGuide } from "@/components/guide/PlatformsGuide";
+import { ReportsGuide } from "@/components/guide/ReportsGuide";
+
 import {
   guideWorkflow,
   workflowPlatforms,
@@ -33,20 +34,10 @@ import {
   type GuideArea,
 } from "@/lib/guide/guideAreas";
 import {
-  guideItemsForSection,
-  SHARED_OPERATIONAL_TOOL_IDS,
   type GuidePlatform,
   type HowVineTrackWorksItem,
 } from "@/lib/guide/howVineTrackWorksCatalogue";
 
-const PLATFORM_HEADLINE: Record<string, string> = {
-  "platform.ios":
-    "The field app. Works offline, records trips by GPS and syncs when back in range.",
-  "platform.android":
-    "The same field app for Android crews, with the same operational tools.",
-  "platform.web":
-    "The management portal. Setup, planning, reporting and everything administrative.",
-};
 
 /**
  * Focused guide view for one area: /dashboard/how-vinetrack-works/<slug>.
@@ -225,97 +216,22 @@ function AreaDetail({
     return <SetupAreaDetail />;
   }
 
-
-
   if (area.detailKind === "operational_tools") {
-    const mapItems = guideItemsForSection("maps_intelligence");
-    const mapsPublic = mapItems.filter((i) => i.availability === "available");
-    const mapsInternal = mapItems.filter((i) => i.availability !== "available");
-
-    return (
-      <div className="space-y-10">
-        <section className="space-y-4">
-          <SectionHeading
-            title={`The ${SHARED_OPERATIONAL_TOOL_IDS.length} shared tools`}
-            description="The same tool IDs appear on the iOS and Android home grid. Some also have a portal surface; some are mobile-only."
-          />
-          <GuideGrid>
-            {items.map((item) => (
-              <FeatureCard key={item.id} item={item} />
-            ))}
-          </GuideGrid>
-        </section>
-
-        <section className="space-y-4">
-          <SectionHeading
-            title="Maps & vineyard intelligence"
-            description="Spatial features — vineyard mapping, boundaries, rows and in-field guidance."
-          />
-          <GuideGrid>
-            {mapsPublic.map((item) => (
-              <FeatureCard key={item.id} item={item} />
-            ))}
-          </GuideGrid>
-
-          {mapsInternal.length > 0 && (
-            <div className="space-y-3 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/[0.04] p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <InternalBadge />
-                <p className="text-[13px] font-semibold text-foreground">
-                  Internal development — not customer-facing
-                </p>
-              </div>
-              <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-                These entries exist for catalogue completeness and internal review only.
-                They must not be presented to customers as available capabilities.
-              </p>
-              <GuideGrid>
-                {mapsInternal.map((item) => (
-                  <FeatureCard key={item.id} item={item} />
-                ))}
-              </GuideGrid>
-            </div>
-          )}
-        </section>
-      </div>
-    );
+    return <OperationalToolsCatalogue />;
   }
 
   if (area.detailKind === "platforms") {
-    const deviceIds = ["platform.ios", "platform.android", "platform.web"];
-    const devices = items.filter((i) => deviceIds.includes(i.id));
-    const advanced = items.filter((i) => !deviceIds.includes(i.id));
-
-    return (
-      <div className="space-y-10">
-        <section className="space-y-4">
-          <SectionHeading
-            title="One platform, three surfaces"
-            description="The mobile apps are built for the field; the portal is built for setup, planning and analysis."
-          />
-          <PlatformOverview items={devices} headline={PLATFORM_HEADLINE} />
-        </section>
-
-        {advanced.length > 0 && (
-          <section className="space-y-4">
-            <SectionHeading
-              title="API, integrations & support"
-              description="Advanced capabilities that sit alongside the three product surfaces."
-            />
-            <GuideGrid columns={2}>
-              {advanced.map((item) => (
-                <FeatureCard key={item.id} item={item} />
-              ))}
-            </GuideGrid>
-          </section>
-        )}
-      </div>
-    );
+    return <PlatformsGuide />;
   }
+
+  if (area.id === "reports") {
+    return <ReportsGuide />;
+  }
+
 
   return (
     <section className="space-y-4">
-      {area.id === "reports" && <ReportsPayoff />}
+      
       <SectionHeading
         title="What's included"
         description="The VineTrack features that make up this area."
