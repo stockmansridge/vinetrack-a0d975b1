@@ -34,7 +34,6 @@ import {
   LayoutDashboard as AdminDashIcon,
   Bell,
   Flag,
-  Image as ImageIcon,
   ChevronDown,
   Globe2,
   Scissors,
