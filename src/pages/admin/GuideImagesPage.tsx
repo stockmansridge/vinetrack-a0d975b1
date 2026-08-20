@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import { GuideImageCoverage } from "@/components/guide/GuideImageCoverage";
 
