@@ -587,7 +587,10 @@ export function parseChemicalLookup(
   const matchSource = normaliseLookupMatchSource(root.match_source ?? root.matchSource);
   const jurisdiction = parseLookupJurisdiction(root, vineyardCountry);
   const aiSuggestion = parseAiSuggestion(root);
-  const { present, map } = parseFieldProvenance(root.field_provenance ?? root.fieldProvenance);
+  const parsedProvenance = parseFieldProvenance(root.field_provenance ?? root.fieldProvenance);
+  const present = parsedProvenance.present;
+  const map = withProvenanceAliases(parsedProvenance.map);
+
   const envelope = parseMasterLookupEnvelope(root);
   const master =
     normaliseMatchSource(root.match_source ?? root.matchSource) === "master"
