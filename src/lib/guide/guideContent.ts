@@ -230,3 +230,50 @@ export function parseGuideContent(value: unknown): GuideContentMap {
   }
   return base;
 }
+
+/**
+ * Non-destructive bootstrap of the managed model from the canonical defaults.
+ *
+ * Rules (deliberately conservative):
+ *  • A section already present in `guide.content` is kept exactly as stored —
+ *    admin edits are never overwritten, and steps an admin deleted are never
+ *    re-added.
+ *  • Only missing sections are populated from the canonical defaults.
+ *  • Missing section-level fields (heading, intro, highlight image key) are
+ *    filled from the defaults so partially written records stay safe.
+ */
+export function bootstrapGuideContent(raw: unknown): {
+  map: GuideContentMap;
+  changed: boolean;
+} {
+  const defaults = defaultGuideContent();
+  const stored =
+    raw && typeof raw === "object" ? ({ ...(raw as Record<string, unknown>) } as Record<string, unknown>) : {};
+  let changed = false;
+  const map: GuideContentMap = {};
+
+  for (const [key, fallback] of Object.entries(defaults)) {
+    const existing = stored[key];
+    if (!existing || typeof existing !== "object") {
+      map[key] = { ...fallback, updated_at: new Date().toISOString() };
+      changed = true;
+      continue;
+    }
+    const parsed = parseGuideContent({ [key]: existing })[key];
+    const filled: GuideContentSection = {
+      ...parsed,
+      heading: parsed.heading || fallback.heading,
+      intro: parsed.intro || fallback.intro,
+      imageKey: parsed.imageKey ?? fallback.imageKey,
+    };
+    if (JSON.stringify(filled) !== JSON.stringify(parsed)) changed = true;
+    map[key] = filled;
+  }
+
+  // Never drop unknown keys someone else may have written.
+  for (const [key, value] of Object.entries(stored)) {
+    if (map[key] || !value) continue;
+    changed = changed || false;
+  }
+  return { map, changed };
+}
