@@ -80,6 +80,8 @@ import IrrigationImportPage from "./pages/tools/IrrigationImportPage";
 import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
 import { RequireIrrigationCapability } from "./components/irrigation/RequireIrrigationCapability";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
+import HowVineTrackWorksPage from "./pages/dashboard/HowVineTrackWorksPage";
+
 
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
@@ -137,6 +139,13 @@ const App = () => (
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
+                    <Route element={<RequireSystemAdmin />}>
+                      <Route
+                        path="/dashboard/how-vinetrack-works"
+                        element={<HowVineTrackWorksPage />}
+                      />
+                    </Route>
+
                     <Route path="/blocks/:blockId" element={<BlockDetailPage />} />
                     <Route path="/paddocks" element={<PaddocksListPage />} />
                     <Route path="/setup/paddocks" element={<PaddocksPage />} />

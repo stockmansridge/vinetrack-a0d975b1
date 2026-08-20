@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   Fuel,
   LifeBuoy,
+  BookOpen,
+
   DollarSign,
   ShieldCheck,
   LayoutDashboard as AdminDashIcon,
@@ -76,6 +78,13 @@ const dashboard: NavItem[] = [
   { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
   { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
 ];
+
+// System Admin-only guide (internal preview). Access is enforced by the route
+// guard — this entry only controls navigation visibility.
+const dashboardSystemAdmin: NavItem[] = [
+  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen },
+];
+
 
 // "Work" — day-to-day operational records
 const work: NavItem[] = [
@@ -190,7 +199,7 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
-  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { isAdmin: isSystemAdmin, loading: systemAdminLoading } = useIsSystemAdmin();
   const { capabilities: irrigation } = useIrrigationCapabilities(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
@@ -289,7 +298,15 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
       <SidebarContent>
-        {renderGroup("Dashboard", visible(dashboard))}
+        {renderGroup(
+          "Dashboard",
+          visible(
+            isSystemAdmin && !systemAdminLoading
+              ? [...dashboard, ...dashboardSystemAdmin]
+              : dashboard,
+          ),
+        )}
+
         {renderGroup(
           "Work",
           visible(
