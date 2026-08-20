@@ -385,10 +385,21 @@ export interface CanonicalChemicalFields {
   labelVersion?: string;
   /** Only when the label actually stated it. */
   withholdingDays?: number;
+  /** LD-2 presentation: "Not required when used as directed" for a stated 0. */
+  withholdingText?: string;
   reEntryHours?: number;
   restrictions?: string;
   target?: string;
+  /** LD-2 authoritative label rates for the primary (grape) use. */
+  rates?: LookupRateView[];
+  ratePer100L?: LookupRateView;
+  ratePerHectare?: LookupRateView;
+  /** Reference-only rows (basis "other") — display, never applied. */
+  rateReferenceOnly?: LookupRateView[];
+  /** Combined display text for the usable rates. */
+  rateText?: string;
 }
+
 
 export interface ChemicalLookupResult {
   matchSource: LookupMatchSource;
