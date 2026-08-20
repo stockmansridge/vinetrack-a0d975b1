@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, RefreshCw } from "lucide-react";
+import { ArrowRight, ChevronDown, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SetupStatusPill } from "./SetupCard";
 import { SetupPresentationPill } from "./SetupPresentationPill";
@@ -21,14 +23,24 @@ export function SetupHealthChecks({
   loading,
   error,
   onRefresh,
+  /**
+   * Stage 5C.1 — collapse the long check list by default when required setup
+   * is complete. The summary line stays visible and the user can always
+   * reopen the list manually.
+   */
+  defaultCollapsed = false,
 }: {
   summary: SetupHealthSummary;
   loading?: boolean;
   error?: Error | null;
   onRefresh?: () => void;
+  defaultCollapsed?: boolean;
 }) {
   const presentation = deriveSetupPresentation(summary, { loading, error });
   const viewer = useGuideViewer();
+  // null = follow the automatic default; a boolean = the user's own choice.
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
+  const open = manualOpen ?? !defaultCollapsed;
   return (
     <Card className="overflow-hidden" data-setup-readiness={presentation.state}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4">
@@ -45,12 +57,27 @@ export function SetupHealthChecks({
             </span>
           )}
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setManualOpen(!open)}
+            aria-expanded={open}
+            aria-controls="setup-health-checks"
+            data-setup-checks-open={open ? "true" : "false"}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+          >
+            {open ? "Hide setup checks" : "Show setup checks"}
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")}
+            />
+          </button>
         {onRefresh && (
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
             Re-check
           </Button>
         )}
+        </div>
       </div>
 
       {error && (
@@ -59,7 +86,8 @@ export function SetupHealthChecks({
         </p>
       )}
 
-      <ul className="divide-y divide-border/60">
+      {open && (
+      <ul id="setup-health-checks" className="divide-y divide-border/60">
         {summary.checks.map((check) => {
           const action =
             check.status === "complete"
@@ -80,7 +108,7 @@ export function SetupHealthChecks({
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 {check.importance}
               </span>
-              <SetupStatusPill status={check.status} />
+              <SetupStatusPill status={check.status} label={check.statusLabel} />
               {action.show && check.route && (
                 <Link
                   to={check.route}
@@ -103,6 +131,7 @@ export function SetupHealthChecks({
           );
         })}
       </ul>
+      )}
     </Card>
   );
 }

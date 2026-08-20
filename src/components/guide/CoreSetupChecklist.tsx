@@ -13,6 +13,13 @@ import {
   coreSetupGroups,
   type CoreSetupGroup,
 } from "@/lib/guide/coreSetupGroups";
+import {
+  hasIndividualSetupActions,
+  setupDetailActions,
+  setupGroupAction,
+} from "@/lib/guide/setupDetailActions";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { setupActionDecision } from "@/lib/guide/guideAccess";
 
 /**
  * Compact Core Setup checklist with progressive disclosure.
@@ -64,7 +71,14 @@ function CoreSetupSummaryCard({
 }) {
   const [open, setOpen] = useState(false);
   const { Icon, tone } = guideVisual(group.visualKey);
-  const route = coreSetupGroupRoute(group);
+  const viewer = useGuideViewer();
+  const actions = setupDetailActions(group.id);
+  const individual = hasIndividualSetupActions(group.id);
+  // One genuine destination → keep a single group CTA. Several independent
+  // destinations → the per-item links replace every generic link.
+  const route = individual
+    ? undefined
+    : (setupGroupAction(group.id) ?? coreSetupGroupRoute(group));
   const panelId = `core-setup-${group.id}`;
 
   return (
@@ -126,7 +140,8 @@ function CoreSetupSummaryCard({
                   <p className="text-[13px] font-semibold text-foreground">{item.title}</p>
                   <ImportanceBadge importance={item.importance} />
                 </div>
-                {item.webRoute && (
+                {/* No generic "Open" when the area lists its own destinations. */}
+                {!individual && item.webRoute && setupActionDecision(item.webRoute, viewer).show && (
                   <Link
                     to={item.webRoute}
                     className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-primary hover:underline"
@@ -139,7 +154,7 @@ function CoreSetupSummaryCard({
               <p className="text-[12.5px] leading-relaxed text-muted-foreground">
                 {item.shortDescription}
               </p>
-              {item.subItems && item.subItems.length > 0 && (
+              {actions.length === 0 && item.subItems && item.subItems.length > 0 && (
                 <ul className="grid gap-1 sm:grid-cols-2">
                   {item.subItems.map((s) => (
                     <li
@@ -154,6 +169,40 @@ function CoreSetupSummaryCard({
               <PlatformBadges platforms={item.platforms} />
             </div>
           ))}
+
+          {actions.length > 0 && (
+            <ul className="space-y-1 border-t border-border/70 pt-3" data-setup-actions={group.id}>
+              {actions.map((a) => {
+                const decision = setupActionDecision(a.route, viewer);
+                return (
+                  <li key={a.id}>
+                    {decision.show ? (
+                      <Link
+                        to={a.route}
+                        data-setup-action={a.id}
+                        data-setup-action-route={a.route}
+                        className="group/row flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-primary/5"
+                      >
+                        <span className="truncate">{a.label}</span>
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] font-semibold text-primary">
+                          Open
+                          <ArrowRight className="h-3 w-3 transition-transform group-hover/row:translate-x-0.5" />
+                        </span>
+                      </Link>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1.5 text-[12.5px] text-muted-foreground">
+                        <span className="truncate">{a.label}</span>
+                        {decision.hint && (
+                          <span className="shrink-0 text-[11px]">{decision.hint}</span>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
 
           {checks && checks.length > 0 && (
             <ul className="space-y-1 border-t border-border/70 pt-3">
