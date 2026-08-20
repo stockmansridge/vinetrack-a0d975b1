@@ -137,7 +137,46 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
   return (
     <Card className="p-4">
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="relative h-[150px] w-full overflow-hidden rounded-lg border border-border bg-muted/30">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`${slot.label}: drop an image here or press Enter to choose a file`}
+          onClick={() => !busy && inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !busy) {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!busy) setDragOver(true);
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!busy) setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
+            if (busy) return;
+            // One image per slot — only the first dropped file is used.
+            void onPick(e.dataTransfer.files?.[0]);
+          }}
+          className={cn(
+            "relative h-[150px] w-full cursor-pointer overflow-hidden rounded-lg border bg-muted/30 transition-colors",
+            dragOver ? "border-2 border-dashed border-primary bg-primary/10" : "border-border",
+            busy && "cursor-progress opacity-90",
+          )}
+        >
           {url && !broken ? (
             <img
               src={url}
