@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   SETUP_DETAIL_ACTIONS,
   hasIndividualSetupActions,
@@ -49,9 +50,11 @@ const facts = (over: Partial<SetupHealthFacts> = {}): SetupHealthFacts => ({
 
 const renderChecks = (summary: ReturnType<typeof deriveSetupHealth>, collapsed: boolean) =>
   render(
-    <MemoryRouter>
-      <SetupHealthChecks summary={summary} defaultCollapsed={collapsed} />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <SetupHealthChecks summary={summary} defaultCollapsed={collapsed} />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 
 // ── 1. Equipment mapping ───────────────────────────────────────────────────
