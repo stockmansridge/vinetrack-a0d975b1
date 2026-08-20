@@ -13,6 +13,8 @@ import { useReversePruningEntry } from "@/lib/pruningQuery";
 import { hardDeleteWorkTask, fetchWorkTasksByIds } from "@/lib/workTasksQuery";
 import { useQuery } from "@tanstack/react-query";
 import { costingMethodLabel, resolveCostingMethod } from "@/lib/pieceRateCosting";
+import { useActivityWorkTaskAggregates } from "@/lib/pruningActivityWorkTasks";
+
 import { formatDate } from "@/lib/dateFormat";
 import EditPruningDialog from "@/components/pruning/EditPruningDialog";
 import PruningActivityDialog from "@/components/pruning/PruningActivityDialog";
