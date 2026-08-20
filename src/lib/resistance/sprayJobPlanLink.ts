@@ -324,6 +324,8 @@ export interface JobPlanDeviation {
 export function deviationAgainstSnapshot(args: {
   provenance: SprayJobPlanProvenance | null;
   planDisease: string | null;
+  /** Blocks the plan intended for this position (plan-level block selection). */
+  plannedBlockIds: string[];
   executed: { referenceId: string; groups: string[]; blockIds: string[]; targets: string[] | null };
 }): JobPlanDeviation {
   const intent = frozenIntent(args.provenance);
@@ -339,7 +341,7 @@ export function deviationAgainstSnapshot(args: {
     {
       positionId: intent.id,
       groups: intent.groups,
-      blockIds: args.executed.blockIds.length ? args.executed.blockIds : [],
+      blockIds: args.plannedBlockIds,
       disease: intent.target ?? args.planDisease ?? "",
     },
     args.executed,
