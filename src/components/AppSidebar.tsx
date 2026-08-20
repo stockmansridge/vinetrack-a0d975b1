@@ -77,6 +77,13 @@ const dashboard: NavItem[] = [
   { title: "Live Dashboard", url: "/dashboard/live", icon: Activity },
 ];
 
+// System Admin-only guide (internal preview). Access is enforced by the route
+// guard — this entry only controls navigation visibility.
+const dashboardSystemAdmin: NavItem[] = [
+  { title: "How VineTrack Works", url: "/dashboard/how-vinetrack-works", icon: BookOpen },
+];
+
+
 // "Work" — day-to-day operational records
 const work: NavItem[] = [
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
