@@ -280,6 +280,16 @@ function SetupAreaDetail() {
   const { selectedVineyardId } = useVineyard();
   const { summary, loading, error, refetch } = useSetupHealth(selectedVineyardId);
 
+  // Collapsed by default only when every required check is complete; anything
+  // needing attention (or unknown / failed) stays expanded.
+  const setupChecksCollapsedByDefault =
+    !loading &&
+    !error &&
+    summary.resolved &&
+    summary.totalRequired > 0 &&
+    summary.completedRequired === summary.totalRequired &&
+    summary.actionsRequired === 0;
+
   return (
     <section className="space-y-4">
       <SectionHeading
@@ -291,6 +301,7 @@ function SetupAreaDetail() {
         loading={loading}
         error={error}
         onRefresh={refetch}
+        defaultCollapsed={setupChecksCollapsedByDefault}
       />
       <SetupHealthDiagnostics summary={summary} />
       <ExpandableSection
