@@ -49,6 +49,7 @@ import { createResistancePlan, saveResistancePlan } from "@/lib/resistancePlanQu
 import { isRevisionConflict, RevisionConflictError } from "@/lib/revisionWrite";
 import { useResistancePlanAssessment } from "@/hooks/useResistancePlanAssessment";
 import { ResistanceEvaluationCard, STATUS_LABEL } from "./ResistanceEvaluationCard";
+import { PlanPositionLinkage } from "./PlanPositionLinkage";
 import { DISEASE_LABEL, type ResistanceDisease } from "@/lib/resistance/resistanceRuleset";
 import { makeSeasonCalendar, seasonForEpochMs, seasonIdForStartYear } from "@/lib/resistance/resistanceSeason";
 import { formatDate } from "@/lib/dateFormat";
@@ -124,6 +125,10 @@ export function ResistancePlanEditor({
     intelligenceById,
   });
 
+  const planDirty = useMemo(
+    () => JSON.stringify(plan) !== JSON.stringify(initial),
+    [plan, initial],
+  );
   const issues = planValidationIssues({ ...plan, vineyardId });
   const needsAck = assessment.requiresAcknowledgement;
   const canSave = issues.length === 0 && (!needsAck || acknowledged);
@@ -589,6 +594,13 @@ export function ResistancePlanEditor({
                           )}
                         </div>
                       )}
+
+                      <PlanPositionLinkage
+                        plan={{ ...plan, vineyardId }}
+                        position={pos}
+                        canEdit
+                        dirty={planDirty}
+                      />
                     </div>
                   );
                 })}
