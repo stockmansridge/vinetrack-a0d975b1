@@ -71,7 +71,14 @@ function CoreSetupSummaryCard({
 }) {
   const [open, setOpen] = useState(false);
   const { Icon, tone } = guideVisual(group.visualKey);
-  const route = coreSetupGroupRoute(group);
+  const viewer = useGuideViewer();
+  const actions = setupDetailActions(group.id);
+  const individual = hasIndividualSetupActions(group.id);
+  // One genuine destination → keep a single group CTA. Several independent
+  // destinations → the per-item links replace every generic link.
+  const route = individual
+    ? undefined
+    : (setupGroupAction(group.id) ?? coreSetupGroupRoute(group));
   const panelId = `core-setup-${group.id}`;
 
   return (
