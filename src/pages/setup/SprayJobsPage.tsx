@@ -444,13 +444,24 @@ function JobsTable({
   const STATUS_ORDER: Record<string, number> = {
     draft: 1, scheduled: 2, in_progress: 3, completed: 4, cancelled: 5,
   };
+  const growthCol: ColDef = {
+    key: "growth",
+    label: "Growth",
+    accessor: (j) => j.growth_stage_code ?? "",
+    render: (j) => (
+      <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
+        {j.growth_stage_code ?? "—"}
+      </TableCell>
+    ),
+  };
+
   const columnDefs: ColDef[] = useMemo(() => {
     if (mode === "templates") {
       return [
+        growthCol,
         { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
         { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
         { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
-        { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
         { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
           const lines = (j.chemical_lines ?? []).filter((l) => (l?.name ?? "").trim());
           return (
@@ -507,12 +518,12 @@ function JobsTable({
       ];
     }
     return [
+      growthCol,
       { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
       { key: "planned", label: "Planned date", accessor: (j) => (j.planned_date ? new Date(j.planned_date) : null), render: (j) => <TableCell>{fmtDate(j.planned_date)}</TableCell> },
       { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell> },
       { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
       { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
-      { key: "growth", label: "Growth", accessor: (j) => j.growth_stage_code ?? "", render: (j) => <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>{j.growth_stage_code ?? "—"}</TableCell> },
       { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)), render: (j) => <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell> },
       { key: "water", label: "Water (L)", accessor: (j) => (j.water_volume == null ? null : Number(j.water_volume)), render: (j) => <TableCell>{fmt(j.water_volume)}</TableCell> },
       { key: "cf", label: "CF", accessor: (j) => (j.concentration_factor == null ? null : Number(j.concentration_factor)), render: (j) => <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell> },
