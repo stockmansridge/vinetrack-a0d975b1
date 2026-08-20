@@ -531,7 +531,13 @@ describe("Stage 3B — chemical intelligence integration", () => {
     const job = run(foliar()).input as unknown as Record<string, unknown>;
     const tpl = run({ ...foliar(), isTemplate: true }).input as unknown as Record<string, unknown>;
     for (const payload of [job, tpl]) {
-      expect(Object.keys(payload).some((k) => /snapshot/i.test(k))).toBe(false);
+      // The only permitted snapshot is the SQL 201 frozen plan position.
+      expect(
+        Object.keys(payload).some(
+          (k) => /snapshot/i.test(k) && k !== "resistance_position_snapshot",
+        ),
+      ).toBe(false);
+      expect(payload.resistance_position_snapshot).toBeNull();
       expect((payload.chemical_lines as any[])[0]).not.toHaveProperty("chemicalSnapshot");
     }
   });

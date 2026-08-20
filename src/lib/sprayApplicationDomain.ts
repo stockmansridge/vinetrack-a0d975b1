@@ -16,6 +16,8 @@ import {
   type WriteVerificationStatus,
 } from "@/lib/chemicalIntelligenceWrite";
 import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import type { SprayJobPlanProvenance } from "@/lib/resistance/sprayJobPlanLink";
+import { provenanceFromJobRow } from "@/lib/resistance/sprayJobPlanLink";
 
 export type { SprayTarget };
 
@@ -314,6 +316,12 @@ export interface SprayApplication {
   carrier: SprayCarrierInput;
   products: SprayProductLine[];
   tankCapacityLitres: number | null;
+  /**
+   * SQL 201 Resistance Plan provenance. `null` for legacy/unlinked jobs and
+   * for every template. The frozen snapshot inside it — never the current
+   * plan — is the authority on original planned intent.
+   */
+  planProvenance: SprayJobPlanProvenance | null;
   /** Non-fatal notes describing what could not be resolved from legacy data. */
   compatibilityNotes: string[];
 }
@@ -342,6 +350,7 @@ export const emptySprayApplication = (): SprayApplication => ({
   carrier: { basis: null },
   products: [],
   tankCapacityLitres: null,
+  planProvenance: null,
   compatibilityNotes: [],
 });
 
@@ -446,6 +455,8 @@ export function fromLegacySprayJob(
   app.equipmentId = job.equipment_id ?? null;
   app.operatorUserId = job.operator_user_id ?? null;
   app.notes = job.notes ?? null;
+  // Templates never carry plan provenance, even if a row somehow has it.
+  app.planProvenance = app.isTemplate ? null : provenanceFromJobRow(job);
   app.blockIds = [...(opts.paddockIds ?? [])];
   if (app.isTemplate && (opts.paddockIds?.length ?? 0) === 0) {
     notes.push("Templates do not carry blocks in the current contract — blocks must be chosen per job.");

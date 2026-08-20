@@ -507,7 +507,16 @@ describe("no verdict is ever persisted", () => {
     const calculation = calculateSprayApplication({ application, geometry });
     const { input } = toSprayJobInput({ application, geometry, calculation });
 
-    const serialised = JSON.stringify(input).toLowerCase();
+    // SQL 201 provenance columns (resistance_plan_id and friends) are the only
+    // permitted "resistance" keys, and they are NULL for an unlinked job.
+    expect(input.resistance_plan_id).toBeNull();
+    expect(input.resistance_position_id).toBeNull();
+    expect(input.resistance_position_snapshot).toBeNull();
+    expect(input.resistance_plan_source_revision).toBeNull();
+    const withoutProvenance = Object.fromEntries(
+      Object.entries(input).filter(([k]) => !k.startsWith("resistance_")),
+    );
+    const serialised = JSON.stringify(withoutProvenance).toLowerCase();
     for (const token of ["resistance", "verdict", "croplife", "compliance_status", "score"]) {
       expect(serialised.includes(token), token).toBe(false);
     }

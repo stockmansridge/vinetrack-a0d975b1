@@ -16,6 +16,7 @@ import type { ApplicationGeometry } from "@/lib/sprayApplicationGeometry";
 import type { CarrierResult, SprayCalculationResult } from "@/lib/sprayCalculation";
 import type { SprayJobChemicalLine, SprayJobInput } from "@/lib/sprayJobsQuery";
 import { chemUnitOnly } from "@/lib/rateBasis";
+import { provenanceWritePayload } from "@/lib/resistance/sprayJobPlanLink";
 
 const pos = (v: unknown): number | null => {
   const n = Number(v);
@@ -122,6 +123,9 @@ export function toSprayJobInput(args: {
     canonical_row_length_metres: isTemplate ? null : round(geometry.canonicalRowLengthMetres, 2),
     geometry_source: isTemplate ? null : geometry.geometrySource,
     geometry_quality: isTemplate ? null : geometry.geometryQuality,
+
+    // SQL 201 — plan provenance rides with the job. Templates are stripped.
+    ...provenanceWritePayload(isTemplate ? null : app.planProvenance ?? null),
   };
 
   return { input, paddockIds: isTemplate ? [] : [...app.blockIds] };

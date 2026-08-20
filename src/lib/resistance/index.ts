@@ -11,4 +11,7 @@ export * from "./resistanceEventSource";
 export * from "./resistanceCandidate";
 export * from "./resistanceHistoryQuery";
 export * from "./resistancePlanEvents";
+export * from "./planDeviation";
+export * from "./sprayJobPlanLink";
+export * from "./sprayJobPlanLinkQuery";
 
