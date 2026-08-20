@@ -20,6 +20,47 @@ import { focusToObjectPosition, type GuideImageKey } from "@/lib/guide/guideImag
  * Status is rendered ONLY for areas that opt in (`showsSetupStatus`) — using a
  * tool for the first time must never look like a failed setup check.
  */
+/**
+ * Visual variants for the numbered step circle. Only `incomplete` and
+ * `neutral` are reachable today — Stage 3 will map real setup health onto
+ * `complete` / `recommended`. No completion is inferred here.
+ */
+export type GuideStepTone = "incomplete" | "complete" | "recommended" | "neutral";
+
+const STEP_TONE: Record<GuideStepTone, string> = {
+  incomplete: "border-destructive bg-destructive text-destructive-foreground",
+  complete: "border-emerald-600 bg-emerald-600 text-white",
+  recommended: "border-amber-500 bg-amber-500 text-white",
+  neutral: "border-border bg-muted text-muted-foreground",
+};
+
+/** Compact landing-row status pill — pale red while unresolved. */
+function GuideRowStatusPill({ status }: { status: SetupStatus }) {
+  const tone =
+    status === "complete"
+      ? { dot: "bg-emerald-600", cls: "border-emerald-600/30 bg-emerald-600/10 text-emerald-800 dark:text-emerald-400", label: "Complete" }
+      : status === "recommended"
+        ? { dot: "bg-amber-500", cls: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400", label: "Recommended" }
+        : status === "not_applicable"
+          ? { dot: "bg-muted-foreground/50", cls: "border-border bg-muted text-muted-foreground", label: "Not applicable" }
+          : {
+              dot: "bg-destructive",
+              cls: "border-destructive/25 bg-destructive/[0.07] text-destructive",
+              label: status === "action_required" ? "Action required" : "Not checked yet",
+            };
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none",
+        tone.cls,
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} aria-hidden />
+      {tone.label}
+    </span>
+  );
+}
+
 export function GuideAreaCard({
   area,
   index,
