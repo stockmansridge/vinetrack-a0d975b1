@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { GUIDE_IMAGE_BUCKET, guideImagePublicUrl } from "@/lib/guide/guideImageStore";
 import {
+  defaultGuideContent,
   parseGuideContent,
   type GuideContentMap,
   type GuideContentSection,
@@ -71,7 +72,9 @@ export function useGuideSection(key: string | undefined): {
   loading: boolean;
 } {
   const { data, isLoading } = useGuideContent();
-  return { section: key ? data?.[key] : undefined, loading: isLoading };
+  if (!key) return { section: undefined, loading: isLoading };
+  // Never block the guide on the network: fall back to built-in defaults.
+  return { section: data?.[key] ?? defaultGuideContent()[key], loading: isLoading };
 }
 
 /** Persist one whole section (heading, intro, rows and their order). */

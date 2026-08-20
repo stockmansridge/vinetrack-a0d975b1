@@ -1,9 +1,8 @@
-import { ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useGuideImages, guideImagePublicUrl } from "@/lib/guide/guideImageStore";
+import { guideImagePublicUrl } from "@/lib/guide/guideImageStore";
+import { GuideScreenshot } from "@/components/guide/GuideScreenshot";
 import type { GuideContentStep } from "@/lib/guide/guideContent";
-import type { GuideImageKey } from "@/lib/guide/guideImages";
 
 /**
  * The one renderer for managed How VineTrack Works step rows.
@@ -19,21 +18,14 @@ export function GuideStepList({
   steps: GuideContentStep[];
   className?: string;
 }) {
-  const { data: imageMap } = useGuideImages();
-
-  const resolve = (step: GuideContentStep): string | undefined => {
-    if (step.image?.path) return guideImagePublicUrl(step.image);
-    if (step.imageKey) return guideImagePublicUrl(imageMap?.[step.imageKey as GuideImageKey]);
-    return undefined;
-  };
-
   if (steps.length === 0) return null;
 
   return (
     <ol className={cn("space-y-4", className)}>
       {steps.map((step, i) => {
-        const url = resolve(step);
-        const hasImage = Boolean(url || step.imageKey || step.image);
+        const url = step.image ? guideImagePublicUrl(step.image) : undefined;
+        const hasImage = Boolean(url || step.imageKey);
+        const alternate = i % 2 === 1 ? "lg:order-first" : undefined;
         return (
           <li key={step.id}>
             <Card
@@ -73,16 +65,15 @@ export function GuideStepList({
                 )}
               </div>
 
-              {hasImage && (
-                <div
-                  data-guide-step-image={step.id}
-                  className={cn(
-                    "relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border bg-muted/30",
-                    // Alternating placement on desktop; stacks together on mobile.
-                    i % 2 === 1 ? "lg:order-first" : undefined,
-                  )}
-                >
-                  {url ? (
+              {hasImage &&
+                (url ? (
+                  <div
+                    data-guide-step-image={step.id}
+                    className={cn(
+                      "relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border bg-muted/30",
+                      alternate,
+                    )}
+                  >
                     <img
                       src={url}
                       alt={step.heading}
@@ -90,20 +81,14 @@ export function GuideStepList({
                       decoding="async"
                       className="h-full w-full object-contain p-2"
                     />
-                  ) : (
-                    <div
-                      role="img"
-                      aria-label={step.heading}
-                      className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-muted-foreground"
-                    >
-                      <ImageIcon className="h-6 w-6 opacity-50" aria-hidden />
-                      <span aria-hidden className="max-w-[20rem] text-[11.5px] leading-relaxed opacity-70">
-                        {step.heading}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <GuideScreenshot
+                    imageKey={step.imageKey!}
+                    alt={step.heading}
+                    className={alternate}
+                  />
+                ))}
             </Card>
           </li>
         );
