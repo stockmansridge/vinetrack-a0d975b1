@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   Fuel,
   LifeBuoy,
+  BookOpen,
+
   DollarSign,
   ShieldCheck,
   LayoutDashboard as AdminDashIcon,
