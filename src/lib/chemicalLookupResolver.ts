@@ -179,13 +179,24 @@ export function parseLookupJurisdiction(
       : null;
   const raw =
     block && typeof block === "object"
-      ? (block.country_code ?? block.country ?? block.iso2 ?? null)
+      ? (block.resolved_country_code ??
+        block.country_code ??
+        block.resolved_country_name ??
+        block.country ??
+        block.iso2 ??
+        block.requested_country ??
+        null)
       : block;
   const country = vineyardCountryCode(raw);
   const scheme =
     block && typeof block === "object"
-      ? (String(block.registration_scheme ?? block.scheme ?? "").trim().toLowerCase() || undefined)
+      ? (String(
+          block.registration_scheme ?? block.register_adapter ?? block.scheme ?? "",
+        )
+          .trim()
+          .toLowerCase() || undefined)
       : undefined;
+
 
   if (!country) {
     return {
