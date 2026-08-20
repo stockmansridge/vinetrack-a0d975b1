@@ -1,5 +1,6 @@
 import { GuideHero } from "@/components/guide/GuideHero";
 import { GuideAreaCard } from "@/components/guide/GuideAreaCard";
+import { GuidePageShell } from "@/components/guide/GuidePageShell";
 import { LANDING_GUIDE_AREAS } from "@/lib/guide/guideAreas";
 
 /**
