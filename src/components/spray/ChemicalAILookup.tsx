@@ -12,6 +12,7 @@ import {
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
 import { ChemicalLookupResultCard } from "@/components/chemicals/ChemicalLookupResultCard";
+import { buildStructuredLookupBody } from "@/lib/chemicalLookupRequest";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
   matchMasterByIdentity,
