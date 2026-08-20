@@ -169,8 +169,9 @@ function AreaHero({
         </div>
         <GuideVisualSlot
           visualKey={area.visualKey}
-          imageSrc={area.imageSrc}
+          imageSrc={uploaded.url ?? area.imageSrc}
           imageAlt={area.imageAlt}
+          objectPosition={focusToObjectPosition(uploaded.focus)}
           aspect="aspect-[16/9] lg:aspect-auto"
           iconClassName="h-12 w-12"
           className="order-first min-h-[180px] lg:order-last lg:min-h-[260px]"
