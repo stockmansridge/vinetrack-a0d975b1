@@ -132,6 +132,8 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/no-access" element={<NoAccess />} />
               <Route path="/unsubscribe" element={<UnsubscribePage />} />
+              {/* TEMP-PREVIEW */}
+              <Route path="/__guide-preview" element={<HowVineTrackWorksPage />} />
               <Route element={<RequireAuth />}>
                 <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/select-vineyard" element={<SelectVineyard />} />
