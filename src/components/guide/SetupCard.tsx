@@ -53,7 +53,7 @@ const STATUS_META: Record<
   },
   not_checked: {
     label: "Not checked yet",
-    Icon: CircleDashed,
+    Icon: MinusCircle,
     badge: "border-border bg-muted text-muted-foreground",
     stripe: "bg-muted-foreground/25",
   },
