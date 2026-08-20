@@ -41,6 +41,7 @@ export function GuideHero({
           objectPosition={focusToObjectPosition(uploaded.focus ?? "right")}
           aspect=""
           subtle
+          eager
           className="h-full"
         />
       </div>
