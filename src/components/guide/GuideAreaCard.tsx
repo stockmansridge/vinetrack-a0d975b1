@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { GuideVisualSlot } from "./GuideVisualSlot";
 import { SetupStatusPill, type SetupStatus } from "./SetupCard";
@@ -8,11 +7,13 @@ import { guideVisual } from "./guideVisuals";
 import { guideAreaRoute, type GuideArea } from "@/lib/guide/guideAreas";
 
 /**
- * Large, full-width landing card — one per major VineTrack area.
+ * Compact landing row — one per major VineTrack area (Stage 2.7).
  *
- * Layout: ~60–70% text, ~30–40% image on desktop; stacked on narrow screens.
- * Exactly one action per card, and it always drills into the focused guide
- * view rather than expanding content underneath.
+ * Fixed anatomy on desktop, identical for every row, never alternating:
+ *   step number → icon → title/description → status/CTA → image (always right)
+ *
+ * The image is inset inside the card and never drives the row height; the row
+ * targets ~118px. Colour comes from the imagery, not from pastel panels.
  *
  * Status is rendered ONLY for areas that opt in (`showsSetupStatus`) — using a
  * tool for the first time must never look like a failed setup check.
@@ -31,76 +32,80 @@ export function GuideAreaCard({
 }) {
   const { Icon } = guideVisual(area.visualKey);
   const to = guideAreaRoute(area);
-  const imageLeft = area.imagePosition === "left";
 
   return (
-    <Card className="group overflow-hidden transition-shadow hover:shadow-lg">
+    <Link
+      to={to}
+      aria-label={area.title}
+      className={cn(
+        "group block rounded-[11px] border border-border bg-card p-2.5 transition-colors",
+        "hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+    >
       <div
         className={cn(
-          "grid lg:grid-cols-[minmax(0,1fr)_minmax(0,35%)]",
-          imageLeft && "lg:grid-cols-[minmax(0,35%)_minmax(0,1fr)]",
+          "grid items-center gap-x-4 gap-y-3",
+          "lg:grid-cols-[44px_56px_minmax(0,1fr)_196px_300px] lg:gap-x-5",
         )}
       >
+        {/* Step number */}
+        <div className="hidden lg:flex lg:justify-center">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-[13px] font-semibold text-foreground/70">
+            {index + 1}
+          </span>
+        </div>
+
+        {/* Icon */}
+        <div className="flex items-center gap-3 lg:justify-center">
+          <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[10px] border border-border bg-muted/40 text-muted-foreground">
+            <Icon className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:hidden">
+            {index + 1} · {area.stepLabel}
+          </span>
+        </div>
+
+        {/* Title + description */}
+        <div className="min-w-0 py-1 pl-0.5">
+          <h2 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
+            {area.title}
+          </h2>
+          <p className="mt-1 line-clamp-2 text-[13.5px] leading-snug text-muted-foreground">
+            {area.description}
+          </p>
+        </div>
+
+        {/* Status + action */}
+        <div className="flex flex-wrap items-center gap-2 lg:w-full lg:flex-col lg:items-start lg:gap-2">
+          {area.showsSetupStatus && (
+            <>
+              <SetupStatusPill status={setupStatus} />
+              {setupCaption && (
+                <span className="text-[12px] text-muted-foreground">{setupCaption}</span>
+              )}
+            </>
+          )}
+          {area.metaLabel && (
+            <span className="text-[12px] font-medium text-muted-foreground">
+              {area.metaLabel}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/[0.06] whitespace-nowrap px-3 py-1.5 text-[12.5px] font-semibold text-primary transition-colors group-hover:bg-primary/10">
+            {area.actionLabel}
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </div>
+
+        {/* Image — always right on desktop */}
         <GuideVisualSlot
           visualKey={area.visualKey}
           imageSrc={area.imageSrc}
           imageAlt={area.imageAlt}
-          aspect="aspect-[16/9] lg:aspect-auto"
-          iconClassName="h-12 w-12"
-          className={cn(
-            "order-first min-h-[180px] lg:order-none lg:min-h-[240px]",
-            !imageLeft && "lg:order-last",
-          )}
+          aspect=""
+          iconClassName="h-6 w-6"
+          className="order-last h-[96px] w-full rounded-lg"
         />
-
-        <div className="flex flex-col justify-center gap-4 p-6 sm:p-8">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/60 text-foreground/80">
-              <Icon className="h-5 w-5" aria-hidden />
-            </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              {String(index + 1).padStart(2, "0")} · {area.stepLabel}
-            </span>
-          </div>
-
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              {area.title}
-            </h2>
-            <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-muted-foreground">
-              {area.description}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {area.showsSetupStatus && (
-              <>
-                <SetupStatusPill status={setupStatus} />
-                {setupCaption && (
-                  <span className="text-[12.5px] font-medium text-muted-foreground">
-                    {setupCaption}
-                  </span>
-                )}
-              </>
-            )}
-            {area.metaLabel && (
-              <span className="rounded-full border border-border bg-muted/60 px-2.5 py-1 text-[12px] font-medium text-foreground/80">
-                {area.metaLabel}
-              </span>
-            )}
-          </div>
-
-          <div>
-            <Link
-              to={to}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[13.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              {area.actionLabel}
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </div>
-        </div>
       </div>
-    </Card>
+    </Link>
   );
 }
