@@ -66,3 +66,19 @@ export async function fetchPositionCoverage(
   };
 }
 
+
+/** Every Spray Job created from a plan position (one position → many jobs). */
+export async function fetchSprayJobsForPosition(
+  planId: string,
+  positionId: string,
+) {
+  const { data, error } = await supabase
+    .from("spray_jobs")
+    .select("*")
+    .eq("resistance_plan_id", planId)
+    .eq("resistance_position_id", positionId)
+    .is("deleted_at", null)
+    .order("planned_date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as any[];
+}

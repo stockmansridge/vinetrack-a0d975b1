@@ -83,6 +83,7 @@ export function SprayJobWizard({
   lookups,
   linkedRecords,
   planProvenance,
+  prefill,
   onCreated,
 }: {
   open: boolean;
@@ -100,6 +101,8 @@ export function SprayJobWizard({
    * is already frozen on the row).
    */
   planProvenance?: SprayJobPlanProvenance | null;
+  /** Applied to NEW drafts only — never to an existing job. */
+  prefill?: Partial<SprayApplication> | null;
   onCreated?: (job: SprayJob) => void;
 }) {
   const qc = useQueryClient();
@@ -164,11 +167,12 @@ export function SprayJobWizard({
     if (!job) {
       const pref = normaliseCarrierBasisPreference(carrierPreference);
       if (pref && pref !== "either") draft.carrier = { ...draft.carrier, basis: pref };
+      if (prefill) Object.assign(draft, prefill);
       if (planProvenance && !draft.isTemplate) draft.planProvenance = planProvenance;
     }
     setApp(draft);
     setHydrated(true);
-  }, [open, hydrated, job, paddockIds, chemicalsResult, intelligenceById, carrierPreference, vineyardId, isTemplate, planProvenance]);
+  }, [open, hydrated, job, paddockIds, chemicalsResult, intelligenceById, carrierPreference, vineyardId, isTemplate, planProvenance, prefill]);
 
   // Completion freezes provenance server-side (SQL 201); reflect that here.
   const { data: linkedRecordRows } = useQuery({
