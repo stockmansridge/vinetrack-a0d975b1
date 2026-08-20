@@ -13,6 +13,11 @@ import { SetupHealthChecks } from "@/components/guide/SetupHealthChecks";
 import { SetupHealthDiagnostics } from "@/components/guide/SetupHealthDiagnostics";
 
 import { useVineyard } from "@/context/VineyardContext";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import {
+  guideActionDecision,
+  visibleGuideItems,
+} from "@/lib/guide/guideAccess";
 import { useSetupHealth } from "@/lib/guide/setupHealthQuery";
 import { ExpandableSection } from "@/components/guide/ExpandableSection";
 import { PlatformBadges } from "@/components/guide/PlatformBadges";
@@ -52,7 +57,8 @@ export default function GuideAreaPage() {
 
   if (!area) return <Navigate to="/dashboard/how-vinetrack-works" replace />;
 
-  const items = guideAreaItems(area);
+  const viewer = useGuideViewer();
+  const items = visibleGuideItems(guideAreaItems(area), viewer);
   // Stage 4A: the four field workflows use the shared visual guide structure.
   const workflow = guideWorkflow(area.id);
 
@@ -146,12 +152,15 @@ function AreaHero({
   const platforms = workflow
     ? workflowPlatforms(workflow)
     : (Array.from(new Set(items.flatMap((i) => i.platforms))) as GuidePlatform[]);
+  const viewer = useGuideViewer();
   const catalogueAction = items.find((i) => i.webRoute);
-  const action = workflow
+  const proposed = workflow
     ? workflowProductAction(workflow)
     : catalogueAction?.webRoute
       ? { label: `Open ${catalogueAction.title}`, route: catalogueAction.webRoute }
       : undefined;
+  // Stage 5B: never advertise a destination the viewer's role cannot open.
+  const action = guideActionDecision(proposed?.route, viewer).show ? proposed : undefined;
   // Same uploaded image key as the landing row — one upload feeds both.
   const uploaded = useGuideImage(area.id as GuideImageKey);
 
