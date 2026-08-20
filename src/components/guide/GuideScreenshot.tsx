@@ -60,7 +60,7 @@ export function GuideScreenshot({
           className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-muted-foreground"
         >
           <ImageIcon className="h-6 w-6 opacity-50" aria-hidden />
-          <span className="max-w-[20rem] text-[11.5px] leading-relaxed opacity-70">{alt}</span>
+          <span aria-hidden className="max-w-[20rem] text-[11.5px] leading-relaxed opacity-70">{alt}</span>
         </div>
       )}
     </div>

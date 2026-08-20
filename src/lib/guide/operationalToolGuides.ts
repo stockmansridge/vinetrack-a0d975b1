@@ -239,7 +239,7 @@ export const OPERATIONAL_TOOL_GUIDES: OperationalToolGuide[] = [
     outcomes: [
       "A phenology record for the season",
       "Growth stage context for spray records and planning",
-      "A PDF growth stage report",
+      "A growth stage record you can export to CSV",
     ],
     platformNote:
       "Observations are recorded in the mobile apps; the portal is where the history is reviewed and exported.",

@@ -102,11 +102,12 @@ const WHY = [
 ];
 
 const EXPORTS = [
-  "PDF — trip reports, spray reports, growth stage records, rainfall and cost reports",
-  "CSV — trips, costs, spray, rainfall and yield data",
-  "Excel — yield analytics",
+  "PDF — trip, spray, cost, work task, pruning activity and rainfall reports",
+  "CSV — trips, costs, work tasks, pruning activity, growth stage records, rainfall, yield and data coverage",
+  "Excel — yield analytics, spray reports and work task reports",
   "Documents & Exports is the central launcher for the exports the portal supports",
 ];
+
 
 function route(itemId: string): string | undefined {
   return HOW_VINETRACK_WORKS_CATALOGUE.find((i) => i.id === itemId)?.webRoute;
