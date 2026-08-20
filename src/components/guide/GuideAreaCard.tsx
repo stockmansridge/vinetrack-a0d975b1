@@ -45,7 +45,7 @@ export function GuideAreaCard({
       <div
         className={cn(
           "grid items-center gap-x-4 gap-y-3",
-          "lg:grid-cols-[44px_56px_minmax(0,1fr)_auto_300px] lg:gap-x-5",
+          "lg:grid-cols-[44px_56px_minmax(0,1fr)_196px_300px] lg:gap-x-5",
         )}
       >
         {/* Step number */}
@@ -76,7 +76,7 @@ export function GuideAreaCard({
         </div>
 
         {/* Status + action */}
-        <div className="flex flex-wrap items-center gap-2 lg:w-[168px] lg:flex-col lg:items-start lg:gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:w-full lg:flex-col lg:items-start lg:gap-2">
           {area.showsSetupStatus && (
             <>
               <SetupStatusPill status={setupStatus} />
@@ -90,7 +90,7 @@ export function GuideAreaCard({
               {area.metaLabel}
             </span>
           )}
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/[0.06] px-3 py-1.5 text-[12.5px] font-semibold text-primary transition-colors group-hover:bg-primary/10">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/[0.06] whitespace-nowrap px-3 py-1.5 text-[12.5px] font-semibold text-primary transition-colors group-hover:bg-primary/10">
             {area.actionLabel}
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
