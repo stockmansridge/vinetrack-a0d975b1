@@ -3,6 +3,8 @@ import { ArrowRight, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SetupStatusPill } from "./SetupCard";
+import { SetupPresentationPill } from "./SetupPresentationPill";
+import { deriveSetupPresentation } from "@/lib/guide/setupPresentation";
 import type { SetupHealthSummary } from "@/lib/guide/setupHealth";
 
 /**
