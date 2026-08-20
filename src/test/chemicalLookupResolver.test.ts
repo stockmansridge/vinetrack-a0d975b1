@@ -253,7 +253,7 @@ describe("Ridomil Gold — ambiguous", () => {
     expect(r.authoritative).toBe(false);
     expect(r.fields.withholdingDays).toBeUndefined();
     expect(r.draft).toBeNull();
-    expect(r.guidance).toContain("more than one");
+    expect(r.guidance).toContain("More than one");
   });
 });
 
