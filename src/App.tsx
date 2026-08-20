@@ -80,6 +80,8 @@ import IrrigationImportPage from "./pages/tools/IrrigationImportPage";
 import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
 import { RequireIrrigationCapability } from "./components/irrigation/RequireIrrigationCapability";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
+import HowVineTrackWorksPage from "./pages/dashboard/HowVineTrackWorksPage";
+
 
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
 import TractorFuelLogsPage from "./pages/TractorFuelLogsPage";
