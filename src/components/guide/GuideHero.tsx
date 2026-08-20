@@ -20,11 +20,14 @@ export function GuideHero({
   imageSrc,
   imageAlt = "VineTrack across the vineyard, mobile apps and management portal",
   setup,
+  showInternalBadge = false,
 }: {
   imageSrc?: string;
   imageAlt?: string;
   /** Stage 3.2 — single authoritative overall Setup presentation. */
   setup?: SetupPresentation;
+  /** Stage 5B: internal-only badge. Customers never see it. */
+  showInternalBadge?: boolean;
 }) {
   const uploaded = useGuideImage("hero");
   return (
@@ -49,10 +52,15 @@ export function GuideHero({
       />
 
       <div className="relative flex h-[218px] flex-col justify-center gap-2 px-7 py-6 lg:max-w-[64%]">
-        <span className="inline-flex w-fit items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          <Lock className="h-3 w-3" />
-          Internal preview
-        </span>
+        {showInternalBadge && (
+          <span
+            data-guide-internal-badge
+            className="inline-flex w-fit items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            <Lock className="h-3 w-3" />
+            Internal preview
+          </span>
+        )}
 
         <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-foreground sm:text-[32px]">
           How VineTrack Works
