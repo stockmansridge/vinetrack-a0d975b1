@@ -21,7 +21,7 @@ import {
   type WriteLabelRate,
   type WriteRegisteredUse,
 } from "@/lib/chemicalIntelligenceWrite";
-import { composeUnit, normaliseUnit, type RateBasis } from "@/lib/rateBasis";
+import { chemUnitOnly, composeUnit, normaliseUnit, type RateBasis } from "@/lib/rateBasis";
 
 export interface LookupRateView {
   basis: LabelRateBasis;
@@ -64,7 +64,9 @@ const nfmt = (n: number): string => String(Number(n));
 export function toRateView(rate: WriteLabelRate): LookupRateView {
   const basis = rate.basis;
   const range = isRangeBasis(basis);
-  const unit = (rate.unit ?? "").trim();
+  // Some registers state the unit with the basis baked in ("L/ha"). Strip it
+  // so the display never reads "0.35 L/ha/ha".
+  const unit = chemUnitOnly((rate.unit ?? "").trim()).trim();
   const rawText = rate.raw_text?.trim() || undefined;
   const rb = portalBasis(basis);
 
