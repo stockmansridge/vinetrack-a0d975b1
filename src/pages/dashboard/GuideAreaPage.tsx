@@ -2,6 +2,9 @@ import { Navigate, useParams, Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { GuideVisualSlot } from "@/components/guide/GuideVisualSlot";
+import { GuidePageShell } from "@/components/guide/GuidePageShell";
+import { useGuideImage } from "@/lib/guide/guideImageStore";
+import { focusToObjectPosition, type GuideImageKey } from "@/lib/guide/guideImages";
 import { GuideGrid } from "@/components/guide/GuideSection";
 import { FeatureCard } from "@/components/guide/FeatureCard";
 import { CoreSetupChecklist } from "@/components/guide/CoreSetupChecklist";
@@ -95,7 +98,7 @@ export default function GuideAreaPage() {
           Back to How VineTrack Works
         </Link>
       </div>
-    </div>
+    </GuidePageShell>
   );
 }
 
