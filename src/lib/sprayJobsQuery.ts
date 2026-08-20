@@ -334,13 +334,27 @@ export async function duplicateSprayJob(id: string, asTemplate: boolean): Promis
   const { data, error } = await supabase.rpc("duplicate_spray_job", { p_id: id, p_as_template: asTemplate });
   if (error) throw error;
   // RPC may return either the new id or a row; try to extract.
-  if (typeof data === "string") return data;
-  if (data && typeof data === "object") {
+  let newId = "";
+  if (typeof data === "string") newId = data;
+  else if (data && typeof data === "object") {
     const r: any = Array.isArray(data) ? data[0] : data;
-    return r?.id ?? r?.new_id ?? "";
+    newId = r?.id ?? r?.new_id ?? "";
   }
-  return "";
+  // SQL 201: a template must never inherit resistance plan provenance.
+  if (newId && asTemplate) {
+    await supabase
+      .from("spray_jobs")
+      .update({
+        resistance_plan_id: null,
+        resistance_position_id: null,
+        resistance_position_snapshot: null,
+        resistance_plan_source_revision: null,
+      })
+      .eq("id", newId);
+  }
+  return newId;
 }
+
 
 export interface VineyardTeamMember {
   membership_id: string;
