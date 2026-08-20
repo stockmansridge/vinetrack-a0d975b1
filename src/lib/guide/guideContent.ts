@@ -27,6 +27,17 @@ export interface GuideStepImage {
   updated_at?: string;
 }
 
+export type GuideStepImagePosition = "left" | "right";
+
+/**
+ * Legacy layout: rows alternated by index (even rows had the image on the
+ * right). Used only to migrate steps saved before imagePosition existed, so
+ * the guide keeps its current appearance.
+ */
+export function legacyImagePosition(index: number): GuideStepImagePosition {
+  return index % 2 === 1 ? "left" : "right";
+}
+
 export interface GuideContentStep {
   /** Stable row id — never shown to admins, never used as the step number. */
   id: string;
@@ -40,6 +51,11 @@ export interface GuideContentStep {
   imageKey?: GuideImageKey;
   /** Uploaded screenshot for this row — takes precedence over imageKey. */
   image?: GuideStepImage;
+  /**
+   * Which side the image sits on for desktop/tablet rendering. Explicitly
+   * managed per step — never derived from the row number.
+   */
+  imagePosition?: GuideStepImagePosition;
   enabled: boolean;
 }
 
@@ -83,6 +99,7 @@ function structuredSteps(areaId: string): GuideContentStep[] | undefined {
       id: `setup.${g.id}`,
       heading: g.title,
       body: g.summary,
+      imagePosition: "left",
       enabled: false,
     }));
   }
@@ -92,6 +109,7 @@ function structuredSteps(areaId: string): GuideContentStep[] | undefined {
       heading: operationalToolCatalogueItem(g)?.title ?? g.toolId,
       body: g.purpose,
       imageKey: g.imageKey,
+      imagePosition: "left",
       enabled: false,
     }));
   }
@@ -101,6 +119,7 @@ function structuredSteps(areaId: string): GuideContentStep[] | undefined {
       heading: c.title,
       body: c.body,
       imageKey: c.imageKey,
+      imagePosition: "left",
       enabled: false,
     }));
   }
@@ -117,6 +136,7 @@ function defaultSteps(area: GuideArea): GuideContentStep[] {
       platform: s.where,
       items: s.examples ? [...s.examples] : undefined,
       imageKey: s.imageKey,
+      imagePosition: legacyImagePosition(i),
       enabled: true,
     }));
   }
@@ -126,6 +146,7 @@ function defaultSteps(area: GuideArea): GuideContentStep[] {
     id: `${area.id}.${i + 1}`,
     heading: s.label,
     body: s.detail ?? "",
+    imagePosition: legacyImagePosition(i),
     enabled: true,
   }));
 }
@@ -171,6 +192,7 @@ export function newGuideStep(sectionKey: string): GuideContentStep {
     id: `${sectionKey}.${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     heading: "",
     body: "",
+    imagePosition: "left",
     enabled: true,
   };
 }
@@ -200,6 +222,10 @@ function sanitiseStep(raw: unknown, index: number, sectionKey: string): GuideCon
       : undefined,
     imageKey: typeof r.imageKey === "string" ? (r.imageKey as GuideImageKey) : undefined,
     image,
+    imagePosition:
+      r.imagePosition === "left" || r.imagePosition === "right"
+        ? r.imagePosition
+        : legacyImagePosition(index),
     enabled: r.enabled !== false,
   };
 }

@@ -29,6 +29,7 @@ import { GuideImageKeyEditor } from "@/components/admin/guide/GuideImageSlotEdit
 import {
   GUIDE_PLATFORM_LABELS,
   type GuideContentStep,
+  type GuideStepImagePosition,
 } from "@/lib/guide/guideContent";
 
 const NO_PLATFORM = "__none__";
@@ -68,6 +69,8 @@ export function GuideStepEditor({
   const set = (patch: Partial<GuideContentStep>) => onChange({ ...step, ...patch });
   const items = step.items ?? [];
 
+  const position: GuideStepImagePosition = step.imagePosition ?? "right";
+
   const setItems = (next: string[]) => set({ items: next.length > 0 ? next : undefined });
 
   return (
@@ -103,6 +106,10 @@ export function GuideStepEditor({
         >
           {step.heading || "Untitled step"}
         </button>
+
+        <span className="hidden shrink-0 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline">
+          Image: {position === "left" ? "Left" : "Right"}
+        </span>
 
         <div className="flex shrink-0 items-center gap-1">
           <Button
@@ -192,6 +199,35 @@ export function GuideStepEditor({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Image position</Label>
+              <div
+                role="group"
+                aria-label="Image position"
+                className="inline-flex overflow-hidden rounded-md border border-border"
+              >
+                {(["left", "right"] as const).map((side) => (
+                  <button
+                    key={side}
+                    type="button"
+                    aria-pressed={position === side}
+                    onClick={() => set({ imagePosition: side })}
+                    className={cn(
+                      "px-4 py-1.5 text-[13px] font-semibold capitalize transition-colors",
+                      position === side
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {side}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11.5px] text-muted-foreground">
+                Desktop only — steps always stack vertically on mobile.
+              </p>
             </div>
 
             <div className="space-y-1.5">

@@ -93,3 +93,34 @@ describe("Guide Content — canonical import of the existing guide", () => {
     expect(bootstrapGuideContent(map).changed).toBe(false);
   });
 });
+
+describe("Guide Content — per-step image position", () => {
+  it("migrates legacy steps to the position they currently display in", () => {
+    const merged = parseGuideContent({
+      pins: {
+        heading: "Pins",
+        intro: "i",
+        steps: [
+          { id: "a", heading: "A", body: "", enabled: true },
+          { id: "b", heading: "B", body: "", enabled: true },
+        ],
+      },
+    });
+    expect(merged.pins.steps.map((s) => s.imagePosition)).toEqual(["right", "left"]);
+  });
+
+  it("keeps an explicitly managed position regardless of row order", () => {
+    const merged = parseGuideContent({
+      pins: {
+        heading: "Pins",
+        intro: "i",
+        steps: [{ id: "a", heading: "A", body: "", enabled: true, imagePosition: "left" }],
+      },
+    });
+    expect(merged.pins.steps[0].imagePosition).toBe("left");
+  });
+
+  it("defaults new steps to image left", () => {
+    expect(newGuideStep("pins").imagePosition).toBe("left");
+  });
+});

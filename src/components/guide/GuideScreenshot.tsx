@@ -40,7 +40,7 @@ export function GuideScreenshot({
       data-guide-image-state={src ? "image" : "placeholder"}
       className={cn(
         "relative w-full overflow-hidden rounded-xl border border-border bg-muted/30",
-        "aspect-[16/10]",
+        "aspect-[16/10] max-h-[380px]",
         className,
       )}
     >
