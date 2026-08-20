@@ -42,6 +42,8 @@ export interface SetupCheckResult {
   sourceState: SetupSourceState;
   /** Diagnostics only — e.g. "spray jobs/records = 0". */
   applicabilityReason?: string;
+  /** Customer-facing status wording override (optional items only). */
+  statusLabel?: string;
 }
 
 export interface SetupGroupHealth {
@@ -116,7 +118,12 @@ export interface SetupHealthFacts {
     valvesOk: boolean;
     allocationsOk: boolean;
   } | null;
-  preferences: { seasonConfigured: boolean | null } | null;
+  preferences: {
+    /** True only when a season start is genuinely persisted for the vineyard. */
+    seasonConfigured: boolean | null;
+    /** Human detail, e.g. "Season starts 1 July". */
+    seasonDetail?: string;
+  } | null;
 }
 
 export const EMPTY_SETUP_FACTS: SetupHealthFacts = {
@@ -378,11 +385,14 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       label: "Season & operational preferences",
       importance: "optional",
       route: "/setup/operational-preferences",
-      source: "not read by the portal yet",
+      source: "get_vineyard_season_settings (persisted season start)",
       evaluate: () => {
         const p = facts.preferences;
-        if (!p || p.seasonConfigured === null) return { done: null };
-        return { done: p.seasonConfigured };
+        if (!p || p.seasonConfigured === null)
+          return { done: null, detail: "Unable to check" };
+        return p.seasonConfigured
+          ? { done: true, detail: p.seasonDetail ?? "Season start configured" }
+          : { done: false, detail: p.seasonDetail ?? "Using defaults" };
       },
     },
   ];
@@ -411,6 +421,14 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
       countsTowardReadiness:
         applicable && spec.importance === "required" && out.done !== null,
       source: spec.source,
+      statusLabel:
+        spec.importance === "optional"
+          ? out.done === null
+            ? "Unable to check"
+            : out.done
+              ? "Configured"
+              : "Using defaults"
+          : undefined,
       sourceState: applicable && out.done === null ? "unreadable" : "ok",
       applicabilityReason: out.reason,
     };
@@ -420,7 +438,11 @@ export function deriveSetupHealth(facts: SetupHealthFacts): SetupHealthSummary {
   const completedRequired = counted.filter((c) => c.status === "complete").length;
   const totalRequired = counted.length;
   const actionsRequired = checks.filter((c) => c.status === "action_required").length;
-  const recommendedOutstanding = checks.filter((c) => c.status === "recommended").length;
+  // Optional items (e.g. Preferences) never count as an outstanding
+  // recommendation and never influence readiness.
+  const recommendedOutstanding = checks.filter(
+    (c) => c.status === "recommended" && c.importance === "recommended",
+  ).length;
 
   const groupIds = Array.from(new Set(checks.map((c) => c.groupId)));
   const groups: SetupGroupHealth[] = groupIds.map((id) => {

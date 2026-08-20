@@ -8,6 +8,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { fetchWeatherStatusForVineyard } from "@/lib/weatherStatusQuery";
 import {
+  MONTHS,
+  fetchVineyardSeasonSettings,
+} from "@/lib/vineyardSeasonSettingsQuery";
+import {
   deriveSetupHealth,
   EMPTY_SETUP_FACTS,
   type SetupBlockFact,
@@ -188,11 +192,35 @@ async function fetchWeather(vineyardId: string) {
   return { anyConfigured: s.anyConfigured };
 }
 
+/**
+ * Operational preferences (optional). The shared RPC
+ * `get_vineyard_season_settings` is the authority: a persisted season start
+ * reports "Configured", an absent one reports "Using defaults". A failed read
+ * stays unknown — it is never rendered as a failure and never affects
+ * readiness, which excludes optional checks entirely.
+ */
+async function fetchPreferences(vineyardId: string) {
+  const s = await fetchVineyardSeasonSettings(vineyardId);
+  const monthLabel =
+    MONTHS.find((m) => m.value === s.season_start_month)?.label ??
+    String(s.season_start_month);
+  return {
+    seasonConfigured: s.configured,
+    seasonDetail:
+      s.configured === null
+        ? undefined
+        : s.configured
+          ? `Season starts ${s.season_start_day} ${monthLabel}`
+          : `No saved preference — showing default ${s.season_start_day} ${monthLabel}`,
+  };
+}
+
 export async function fetchSetupHealthFacts(vineyardId: string): Promise<SetupHealthFacts> {
   const blocksResult = await Promise.allSettled([fetchBlocks(vineyardId)]);
   const blocks = ok(blocksResult[0]);
 
-  const [vineyard, weather, equipment, team, spray, irrigation] = await Promise.allSettled([
+  const [vineyard, weather, equipment, team, spray, irrigation, preferences] =
+    await Promise.allSettled([
     (async () => {
       const { data, error } = await (supabase as any)
         .from("vineyards")
@@ -212,6 +240,7 @@ export async function fetchSetupHealthFacts(vineyardId: string): Promise<SetupHe
     fetchTeam(vineyardId),
     fetchSpray(vineyardId),
     fetchIrrigation(vineyardId, blocks),
+    fetchPreferences(vineyardId),
   ]);
 
   return {
@@ -223,9 +252,7 @@ export async function fetchSetupHealthFacts(vineyardId: string): Promise<SetupHe
     team: ok(team),
     spray: ok(spray),
     irrigation: ok(irrigation),
-    // Operational preferences have no authoritative read contract in the
-    // portal yet — reported as "not checked" rather than guessed.
-    preferences: null,
+    preferences: ok(preferences),
   };
 }
 

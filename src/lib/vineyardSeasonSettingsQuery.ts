@@ -15,6 +15,12 @@ export interface SeasonSettings {
   season_start_month: number; // 1-12
   season_start_day: number;   // 1-31 (constrained by month)
   updated_at?: string | null;
+  /**
+   * Stage 5C.1 — whether the returned values are a PERSISTED vineyard
+   * preference (true), portal defaults shown because nothing is stored
+   * (false), or undeterminable because the read returned no row (null).
+   */
+  configured?: boolean | null;
 }
 
 export const SEASON_DEFAULTS: SeasonSettings = {
@@ -70,6 +76,10 @@ export function vintageForDate(date: Date, month: number, day: number): number {
 
 function coerce(raw: any): SeasonSettings {
   const row = Array.isArray(raw) ? raw[0] : raw;
+  const configured =
+    row == null
+      ? null
+      : row.season_start_month != null && row.season_start_day != null;
   const m = Number(row?.season_start_month);
   const d = Number(row?.season_start_day);
   const month = Number.isInteger(m) && m >= 1 && m <= 12 ? m : SEASON_DEFAULTS.season_start_month;
@@ -78,6 +88,7 @@ function coerce(raw: any): SeasonSettings {
     season_start_month: month,
     season_start_day: clampSeasonDay(month, dayRaw),
     updated_at: row?.updated_at ?? null,
+    configured,
   };
 }
 
