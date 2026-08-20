@@ -91,6 +91,9 @@ export function parseApvmaQuery(raw: string | null | undefined): ApvmaQuery | nu
 export type ApvmaRequestMode = "import" | "refresh";
 
 export interface ApvmaLookupBody {
+  /** Required by the deployed resolver; without it it returns "Unknown action". */
+  action: "structured";
+  productName?: string;
   mode: "master_import" | "master_refresh";
   country: string;
   country_code: string;
@@ -108,6 +111,8 @@ export function buildApvmaLookupBody(
   opts: { mode?: ApvmaRequestMode; masterChemicalId?: string } = {},
 ): ApvmaLookupBody {
   return {
+    action: "structured",
+    productName: query.productName ?? query.registrationNumber,
     mode: opts.mode === "refresh" ? "master_refresh" : "master_import",
     country: APVMA_COUNTRY,
     country_code: APVMA_COUNTRY,
