@@ -9,6 +9,9 @@ import { GuideGrid } from "@/components/guide/GuideSection";
 import { FeatureCard } from "@/components/guide/FeatureCard";
 import { CoreSetupChecklist } from "@/components/guide/CoreSetupChecklist";
 import { SetupOverview } from "@/components/guide/SetupOverview";
+import { SetupHealthChecks } from "@/components/guide/SetupHealthChecks";
+import { useVineyard } from "@/context/VineyardContext";
+import { useSetupHealth } from "@/lib/guide/setupHealthQuery";
 import { ExpandableSection } from "@/components/guide/ExpandableSection";
 import { PlatformOverview } from "@/components/guide/PlatformOverview";
 import { ReportsPayoff } from "@/components/guide/ReportsPayoff";
@@ -189,23 +192,10 @@ function AreaDetail({
   items: HowVineTrackWorksItem[];
 }) {
   if (area.detailKind === "setup") {
-    return (
-      <section className="space-y-4">
-        <SectionHeading
-          title="Setup areas"
-          description="Open any area to see the individual checks behind it. Stage 3 will attach live setup health here."
-        />
-        <ExpandableSection
-          id="setup-usage"
-          moreLabel="Show platform usage overview"
-          lessLabel="Hide platform usage overview"
-          preview={<CoreSetupChecklist />}
-        >
-          <SetupOverview />
-        </ExpandableSection>
-      </section>
-    );
+    return <SetupAreaDetail />;
   }
+
+
 
   if (area.detailKind === "operational_tools") {
     const mapItems = guideItemsForSection("maps_intelligence");
@@ -323,5 +313,43 @@ function SectionHeading({
         {description}
       </p>
     </div>
+  );
+}
+
+/**
+ * Setup drill-down (Stage 3) — live Core Setup health for the selected
+ * vineyard. Group cards show real statuses and "n of m complete"; the full
+ * per-check list sits behind a disclosure so the page stays scannable.
+ */
+function SetupAreaDetail() {
+  const { selectedVineyardId } = useVineyard();
+  const { summary, loading, error, refetch } = useSetupHealth(selectedVineyardId);
+
+  return (
+    <section className="space-y-4">
+      <SectionHeading
+        title="Setup areas"
+        description="Live setup health for the selected vineyard. Readiness counts required checks only — recommended and optional steps never change the percentage."
+      />
+      <SetupHealthChecks
+        summary={summary}
+        loading={loading}
+        error={error}
+        onRefresh={refetch}
+      />
+      <ExpandableSection
+        id="setup-usage"
+        moreLabel="Show platform usage overview"
+        lessLabel="Hide platform usage overview"
+        preview={
+          <CoreSetupChecklist
+            statuses={summary.groupStatuses}
+            progress={summary.groupProgress}
+          />
+        }
+      >
+        <SetupOverview />
+      </ExpandableSection>
+    </section>
   );
 }
