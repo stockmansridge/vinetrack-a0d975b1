@@ -63,15 +63,20 @@ export function GuideHero({
           then follow the workflows that plan, record and explain your vineyard.
         </p>
 
-        {/* Setup readiness — reserved for live Core Setup health in Stage 3. */}
-        <div className="inline-flex w-fit flex-wrap items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5">
-          <CircleDashed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
-          <p className="text-[12.5px] font-semibold text-foreground">Core setup</p>
-          <GuideRowStatusPill status={coreSetupStatus} />
-          {coreSetupCaption && (
-            <span className="text-[12px] text-muted-foreground">{coreSetupCaption}</span>
-          )}
-        </div>
+        {/* Setup readiness — one coherent state from deriveSetupPresentation. */}
+        {setup && (
+          <div
+            data-setup-hero={setup.state}
+            className="inline-flex w-fit flex-wrap items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5"
+          >
+            <CircleDashed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+            <p className="text-[12.5px] font-semibold text-foreground">Core setup</p>
+            <SetupPresentationPill presentation={setup} />
+            {setup.percentage !== null && (
+              <span className="text-[12px] text-muted-foreground">{setup.percentage}%</span>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
