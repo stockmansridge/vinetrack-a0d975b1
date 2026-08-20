@@ -81,6 +81,7 @@ import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
 import { RequireIrrigationCapability } from "./components/irrigation/RequireIrrigationCapability";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
 import HowVineTrackWorksPage from "./pages/dashboard/HowVineTrackWorksPage";
+import GuideAreaPage from "./pages/dashboard/GuideAreaPage";
 
 
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
