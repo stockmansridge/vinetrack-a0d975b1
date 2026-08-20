@@ -298,7 +298,15 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
       <SidebarContent>
-        {renderGroup("Dashboard", visible(dashboard))}
+        {renderGroup(
+          "Dashboard",
+          visible(
+            isSystemAdmin && !systemAdminLoading
+              ? [...dashboard, ...dashboardSystemAdmin]
+              : dashboard,
+          ),
+        )}
+
         {renderGroup(
           "Work",
           visible(
