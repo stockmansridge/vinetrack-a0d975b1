@@ -9,7 +9,8 @@ import type { GuideContentStep } from "@/lib/guide/guideContent";
  *
  * Used by the public guide AND by the System Admin preview, so what an admin
  * previews is exactly what a reader sees. Step numbers come from row order —
- * never from stored content — and the image side alternates automatically.
+ * never from stored content — while the image side comes from the step's own
+ * managed `imagePosition`, never from the row number.
  */
 export function GuideStepList({
   steps,
@@ -25,13 +26,15 @@ export function GuideStepList({
       {steps.map((step, i) => {
         const url = step.image ? guideImagePublicUrl(step.image) : undefined;
         const hasImage = Boolean(url || step.imageKey);
-        const alternate = i % 2 === 1 ? "lg:order-first" : undefined;
+        const imageLeft = (step.imagePosition ?? "right") === "left";
+        const imageSide = imageLeft ? "lg:order-first" : undefined;
         return (
           <li key={step.id}>
             <Card
               className={cn(
                 "grid gap-4 overflow-hidden p-4 sm:p-5",
-                hasImage && "lg:grid-cols-[minmax(0,1fr)_minmax(0,42%)] lg:items-center",
+                hasImage &&
+                  "lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)] lg:items-center",
               )}
             >
               <div className="min-w-0 space-y-2">
@@ -70,8 +73,8 @@ export function GuideStepList({
                   <div
                     data-guide-step-image={step.id}
                     className={cn(
-                      "relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border bg-muted/30",
-                      alternate,
+                      "flex w-full items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/30 p-3",
+                      imageSide,
                     )}
                   >
                     <img
@@ -79,14 +82,14 @@ export function GuideStepList({
                       alt={step.heading}
                       loading="lazy"
                       decoding="async"
-                      className="h-full w-full object-contain p-2"
+                      className="max-h-[380px] w-auto max-w-full object-contain"
                     />
                   </div>
                 ) : (
                   <GuideScreenshot
                     imageKey={step.imageKey!}
                     alt={step.heading}
-                    className={alternate}
+                    className={imageSide}
                   />
                 ))}
             </Card>
