@@ -42,14 +42,14 @@ const SOURCES = [
   },
 ];
 
-interface ReportCategory {
+export interface ReportCategory {
   title: string;
   body: string;
   itemId: string;
   imageKey?: "reports.activity" | "reports.costs" | "reports.sprays";
 }
 
-const CATEGORIES: ReportCategory[] = [
+export const REPORT_CATEGORIES: ReportCategory[] = [
   {
     title: "Activity reporting",
     body: "Trip reports, work task reports and pruning activity — what was done, where and how quickly.",
@@ -152,7 +152,7 @@ export function ReportsGuide() {
           description="The reporting areas currently available in the portal."
         />
         <div className="grid gap-3 sm:grid-cols-2">
-          {CATEGORIES.map((c) => {
+          {REPORT_CATEGORIES.map((c) => {
             const to = openable(route(c.itemId));
             return (
               <Card key={c.itemId} className="flex h-full flex-col gap-3 p-4">
