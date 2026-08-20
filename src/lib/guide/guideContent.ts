@@ -13,6 +13,12 @@
 
 import { GUIDE_AREAS, LANDING_GUIDE_AREAS, type GuideArea } from "@/lib/guide/guideAreas";
 import { guideWorkflow } from "@/lib/guide/guideWorkflows";
+import { coreSetupGroups } from "@/lib/guide/coreSetupGroups";
+import {
+  operationalToolCatalogueItem,
+  operationalToolGuides,
+} from "@/lib/guide/operationalToolGuides";
+import { REPORT_CATEGORIES } from "@/lib/guide/reportCategories";
 import type { GuideImageKey } from "@/lib/guide/guideImages";
 
 /** An uploaded screenshot stored in the existing guide-images bucket. */
@@ -44,6 +50,11 @@ export interface GuideContentSection {
   intro: string;
   steps: GuideContentStep[];
   enabled: boolean;
+  /**
+   * Existing Guide Images key for this section's highlight/landing image
+   * (e.g. "pins"). Reused as-is — never a second identifier.
+   */
+  imageKey?: GuideImageKey;
   updated_at?: string;
 }
 
@@ -68,12 +79,11 @@ export const GUIDE_PLATFORM_LABELS = [
  */
 function structuredSteps(areaId: string): GuideContentStep[] | undefined {
   if (areaId === "setup") {
-    return coreSetupGroups().map((g, i) => ({
+    return coreSetupGroups().map((g) => ({
       id: `setup.${g.id}`,
       heading: g.title,
       body: g.summary,
       enabled: false,
-      ...(i === -1 ? {} : {}),
     }));
   }
   if (areaId === "operational-tools") {
@@ -214,6 +224,7 @@ export function parseGuideContent(value: unknown): GuideContentMap {
       intro: typeof r.intro === "string" ? r.intro : fallback.intro,
       steps,
       enabled: r.enabled !== false,
+      imageKey: fallback.imageKey,
       updated_at: typeof r.updated_at === "string" ? r.updated_at : undefined,
     };
   }
