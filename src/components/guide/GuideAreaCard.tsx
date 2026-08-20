@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GuideVisualSlot } from "./GuideVisualSlot";
-import { SetupStatusPill, type SetupStatus } from "./SetupCard";
+import { type SetupStatus } from "./SetupCard";
 import { guideVisual } from "./guideVisuals";
 import { guideAreaRoute, type GuideArea } from "@/lib/guide/guideAreas";
 import { useGuideImage } from "@/lib/guide/guideImageStore";
