@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
 import { GUIDE_IMAGE_BUCKET, guideImagePublicUrl } from "@/lib/guide/guideImageStore";
 import {
+  bootstrapGuideContent,
   defaultGuideContent,
   parseGuideContent,
   type GuideContentMap,
@@ -19,6 +20,13 @@ import {
 
 export const GUIDE_CONTENT_FLAG_KEY = "guide.content";
 export const GUIDE_CONTENT_QK = ["guide", "content"] as const;
+
+async function readRawGuideContent(): Promise<unknown> {
+  const { data, error } = await (supabase as any).rpc("get_system_feature_flags");
+  if (error) throw describeBackendError(error);
+  const row = (data ?? []).find((f: { key: string }) => f.key === GUIDE_CONTENT_FLAG_KEY);
+  return row?.value ?? null;
+}
 
 async function readGuideContent(): Promise<GuideContentMap> {
   const { data, error } = await (supabase as any).rpc("get_system_feature_flags");
@@ -129,4 +137,25 @@ export function useUploadGuideStepImage() {
 
 export function guideStepImageUrl(image: GuideStepImage | undefined): string | undefined {
   return guideImagePublicUrl(image);
+}
+
+/**
+ * One-time, non-destructive import of the existing guide into `guide.content`.
+ *
+ * Safe to call repeatedly: it writes only when a section (or a section-level
+ * field) is missing, and it never overwrites content edited through Guide
+ * Content. Nothing is reset and no other feature flag is touched.
+ */
+export function useBootstrapGuideContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<{ imported: boolean }> => {
+      const raw = await readRawGuideContent();
+      const { map, changed } = bootstrapGuideContent(raw);
+      if (!changed) return { imported: false };
+      await writeGuideContent(map);
+      return { imported: true };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: GUIDE_CONTENT_QK }),
+  });
 }

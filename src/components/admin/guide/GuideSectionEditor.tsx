@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { GuideStepEditor } from "@/components/admin/guide/GuideStepEditor";
 import { GuideSectionPreview } from "@/components/admin/guide/GuideSectionPreview";
+import { GuideImageKeyEditor } from "@/components/admin/guide/GuideImageSlotEditor";
 import { useGuideImages, guideImagePublicUrl } from "@/lib/guide/guideImageStore";
 import { useSaveGuideSection } from "@/lib/guide/guideContentStore";
 import {
@@ -106,6 +107,17 @@ export function GuideSectionEditor({ section }: { section: GuideContentSection }
           </Label>
         </div>
       </Card>
+
+      {draft.imageKey && (
+        <div className="space-y-2">
+          <h2 className="text-base font-semibold">Section highlight image</h2>
+          <p className="text-[13px] text-muted-foreground">
+            Shown on the How VineTrack Works landing row and at the top of this section's
+            page. This is the existing guide image — replacing it here updates it everywhere.
+          </p>
+          <GuideImageKeyEditor imageKey={draft.imageKey} />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">

@@ -13,6 +13,12 @@
 
 import { GUIDE_AREAS, LANDING_GUIDE_AREAS, type GuideArea } from "@/lib/guide/guideAreas";
 import { guideWorkflow } from "@/lib/guide/guideWorkflows";
+import { coreSetupGroups } from "@/lib/guide/coreSetupGroups";
+import {
+  operationalToolCatalogueItem,
+  operationalToolGuides,
+} from "@/lib/guide/operationalToolGuides";
+import { REPORT_CATEGORIES } from "@/lib/guide/reportCategories";
 import type { GuideImageKey } from "@/lib/guide/guideImages";
 
 /** An uploaded screenshot stored in the existing guide-images bucket. */
@@ -44,6 +50,11 @@ export interface GuideContentSection {
   intro: string;
   steps: GuideContentStep[];
   enabled: boolean;
+  /**
+   * Existing Guide Images key for this section's highlight/landing image
+   * (e.g. "pins"). Reused as-is — never a second identifier.
+   */
+  imageKey?: GuideImageKey;
   updated_at?: string;
 }
 
@@ -58,6 +69,44 @@ export const GUIDE_PLATFORM_LABELS = [
   "Web / iOS / Android",
 ] as const;
 
+/**
+ * Canonical defaults for the three areas whose drill-down pages render their
+ * own structured content (live setup health, the tool catalogue, the reports
+ * guide). The copy below is the copy those pages already display — it is
+ * imported from the same modules, never re-typed — so admins can see and edit
+ * it here. They default to `enabled: false` because these pages do not render
+ * a step list today; enabling a row publishes it without any redesign.
+ */
+function structuredSteps(areaId: string): GuideContentStep[] | undefined {
+  if (areaId === "setup") {
+    return coreSetupGroups().map((g) => ({
+      id: `setup.${g.id}`,
+      heading: g.title,
+      body: g.summary,
+      enabled: false,
+    }));
+  }
+  if (areaId === "operational-tools") {
+    return operationalToolGuides().map((g) => ({
+      id: `operational-tools.${g.toolId}`,
+      heading: operationalToolCatalogueItem(g)?.title ?? g.toolId,
+      body: g.purpose,
+      imageKey: g.imageKey,
+      enabled: false,
+    }));
+  }
+  if (areaId === "reports") {
+    return REPORT_CATEGORIES.map((c) => ({
+      id: `reports.${c.itemId}`,
+      heading: c.title,
+      body: c.body,
+      imageKey: c.imageKey,
+      enabled: false,
+    }));
+  }
+  return undefined;
+}
+
 function defaultSteps(area: GuideArea): GuideContentStep[] {
   const workflow = guideWorkflow(area.id);
   if (workflow) {
@@ -71,6 +120,8 @@ function defaultSteps(area: GuideArea): GuideContentStep[] {
       enabled: true,
     }));
   }
+  const structured = structuredSteps(area.id);
+  if (structured) return structured;
   return (area.workflow ?? []).map((s, i) => ({
     id: `${area.id}.${i + 1}`,
     heading: s.label,
@@ -88,6 +139,8 @@ export function defaultGuideSection(area: GuideArea): GuideContentSection {
     intro: workflow?.intro ?? area.detailIntro,
     steps: defaultSteps(area),
     enabled: true,
+    /** Landing row + drill-down hero image slot (existing Guide Images key). */
+    imageKey: area.id as GuideImageKey,
   };
 }
 
@@ -97,6 +150,7 @@ export function defaultGuideContent(): GuideContentMap {
   for (const area of LANDING_GUIDE_AREAS) out[area.id] = defaultGuideSection(area);
   return out;
 }
+
 
 export function manageableGuideAreas(): GuideArea[] {
   return LANDING_GUIDE_AREAS;
@@ -170,8 +224,50 @@ export function parseGuideContent(value: unknown): GuideContentMap {
       intro: typeof r.intro === "string" ? r.intro : fallback.intro,
       steps,
       enabled: r.enabled !== false,
+      imageKey: fallback.imageKey,
       updated_at: typeof r.updated_at === "string" ? r.updated_at : undefined,
     };
   }
   return base;
+}
+
+/**
+ * Non-destructive bootstrap of the managed model from the canonical defaults.
+ *
+ * Rules (deliberately conservative):
+ *  • A section already present in `guide.content` is kept exactly as stored —
+ *    admin edits are never overwritten, and steps an admin deleted are never
+ *    re-added.
+ *  • Only missing sections are populated from the canonical defaults.
+ *  • Missing section-level fields (heading, intro, highlight image key) are
+ *    filled from the defaults so partially written records stay safe.
+ */
+export function bootstrapGuideContent(raw: unknown): {
+  map: GuideContentMap;
+  changed: boolean;
+} {
+  const defaults = defaultGuideContent();
+  const stored =
+    raw && typeof raw === "object" ? ({ ...(raw as Record<string, unknown>) } as Record<string, unknown>) : {};
+  let changed = false;
+  const map: GuideContentMap = {};
+
+  for (const [key, fallback] of Object.entries(defaults)) {
+    const existing = stored[key];
+    if (!existing || typeof existing !== "object") {
+      map[key] = { ...fallback, updated_at: new Date().toISOString() };
+      changed = true;
+      continue;
+    }
+    const parsed = parseGuideContent({ [key]: existing })[key];
+    const filled: GuideContentSection = {
+      ...parsed,
+      heading: parsed.heading || fallback.heading,
+      intro: parsed.intro || fallback.intro,
+      imageKey: parsed.imageKey ?? fallback.imageKey,
+    };
+    if (JSON.stringify(filled) !== JSON.stringify(parsed)) changed = true;
+    map[key] = filled;
+  }
+  return { map, changed };
 }
