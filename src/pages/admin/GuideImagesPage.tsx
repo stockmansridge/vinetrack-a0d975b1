@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { AdminGate, AdminPageHeader } from "./_shared";
 import { GuideImageCoverage } from "@/components/guide/GuideImageCoverage";
 
@@ -106,6 +107,7 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [broken, setBroken] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const upload = useUploadGuideImage();
   const setFocus = useSetGuideImageFocus();
@@ -136,7 +138,46 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
   return (
     <Card className="p-4">
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="relative h-[150px] w-full overflow-hidden rounded-lg border border-border bg-muted/30">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`${slot.label}: drop an image here or press Enter to choose a file`}
+          onClick={() => !busy && inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !busy) {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!busy) setDragOver(true);
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!busy) setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
+            if (busy) return;
+            // One image per slot — only the first dropped file is used.
+            void onPick(e.dataTransfer.files?.[0]);
+          }}
+          className={cn(
+            "relative h-[150px] w-full cursor-pointer overflow-hidden rounded-lg border bg-muted/30 transition-colors",
+            dragOver ? "border-2 border-dashed border-primary bg-primary/10" : "border-border",
+            busy && "cursor-progress opacity-90",
+          )}
+        >
           {url && !broken ? (
             <img
               src={url}
@@ -148,7 +189,19 @@ function SlotRow({ slot }: { slot: GuideImageSlot }) {
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
               <ImageIcon className="h-6 w-6 opacity-60" aria-hidden />
-              <span className="text-xs">No custom image — placeholder in use</span>
+              <span className="text-xs">No custom image — drag an image here or use Upload</span>
+            </div>
+          )}
+
+          {dragOver && !busy && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary/15 text-xs font-semibold text-primary">
+              Drop image to upload
+            </div>
+          )}
+          {upload.isPending && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-xs font-medium">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Uploading…
             </div>
           )}
         </div>
