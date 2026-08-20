@@ -199,16 +199,6 @@ export interface PositionCoverage {
   completedBlockIds: string[];
 }
 
-const uniqStrings = (v: unknown): string[] => {
-  const list = Array.isArray(v) ? v : [];
-  const out: string[] = [];
-  for (const item of list) {
-    const s = typeof item === "string" ? item : item == null ? "" : String(item);
-    if (s && !out.includes(s)) out.push(s);
-  }
-  return out;
-};
-
 /* -------------------------------------------------------------- progress */
 
 export type PositionProgress =
