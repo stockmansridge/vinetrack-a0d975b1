@@ -35,7 +35,7 @@ const STEP_TONE: Record<GuideStepTone, string> = {
 };
 
 /** Compact landing-row status pill — pale red while unresolved. */
-function GuideRowStatusPill({ status }: { status: SetupStatus }) {
+export function GuideRowStatusPill({ status }: { status: SetupStatus }) {
   const tone =
     status === "complete"
       ? { dot: "bg-emerald-600", cls: "border-emerald-600/30 bg-emerald-600/10 text-emerald-800 dark:text-emerald-400", label: "Complete" }

@@ -1,6 +1,7 @@
 import { Lock, CircleDashed } from "lucide-react";
 import { GuideVisualSlot } from "./GuideVisualSlot";
-import { SetupStatusPill, type SetupStatus } from "./SetupCard";
+import { type SetupStatus } from "./SetupCard";
+import { GuideRowStatusPill } from "./GuideAreaCard";
 import { useGuideImage } from "@/lib/guide/guideImageStore";
 import { focusToObjectPosition } from "@/lib/guide/guideImages";
 
@@ -67,7 +68,7 @@ export function GuideHero({
         <div className="inline-flex w-fit flex-wrap items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5">
           <CircleDashed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
           <p className="text-[12.5px] font-semibold text-foreground">Core setup</p>
-          <SetupStatusPill status={coreSetupStatus} />
+          <GuideRowStatusPill status={coreSetupStatus} />
           {coreSetupCaption && (
             <span className="text-[12px] text-muted-foreground">{coreSetupCaption}</span>
           )}
