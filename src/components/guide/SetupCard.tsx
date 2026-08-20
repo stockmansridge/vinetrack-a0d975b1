@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, AlertTriangle, CircleAlert, CheckCircle2, MinusCircle, CircleDashed } from "lucide-react";
+import { ArrowRight, AlertTriangle, CircleAlert, CheckCircle2, MinusCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { PlatformBadges } from "./PlatformBadges";
