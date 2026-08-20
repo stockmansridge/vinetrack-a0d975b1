@@ -10,7 +10,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, Link2Off, Loader2, Plus, Search } from "lucide-react";
+import { CheckCircle2, ExternalLink, Link2Off, Loader2, Plus, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
