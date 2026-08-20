@@ -930,6 +930,43 @@ function ChemicalEditor({
     setForm((p) => ({ ...p, [k]: v }));
 
   const applySuggestion = (s: AppliedSuggestion) => {
+    // ---- Upgraded resolver result. Canonical fields come ONLY from the
+    // authoritative structured response; `ai_suggestion` is never applied and
+    // unresolved rates / WHP / REI stay blank rather than being invented.
+    if (s.resolved?.authoritative && s.resolved.draft) {
+      const r = s.resolved;
+      const draft = r.draft!;
+      setIntel(draft);
+      setIntelBase(draft);
+      setUpgraded(true);
+      if (s.master) {
+        setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
+      }
+      setForm((p) => ({
+        ...p,
+        name: r.fields.name ?? s.name ?? p.name ?? "",
+        use: r.fields.category ?? p.use ?? "",
+        manufacturer: r.fields.registrant ?? p.manufacturer ?? "",
+        active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
+        chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
+        problem: r.fields.target ?? p.problem ?? "",
+        label_url:
+          r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
+            ? r.fields.labelReference
+            : (p.label_url ?? ""),
+      }));
+      if (r.fields.withholdingDays != null) setWhp(String(r.fields.withholdingDays));
+      if (r.fields.reEntryHours != null) setRei(String(r.fields.reEntryHours));
+      if (r.fields.restrictions) setRestNotes(r.fields.restrictions);
+      return;
+    }
+    // ---- Unresolved / ambiguous: nothing authoritative is populated. Only
+    // the typed product name is kept so the operator can enter it manually.
+    if (s.resolved && !s.resolved.authoritative) {
+      setForm((p) => ({ ...p, name: s.name ?? p.name ?? "" }));
+      return;
+    }
+
     // ---- Master Catalogue result: copy the verified SQL 194 intelligence
     // verbatim and record the link + revision. It is never re-derived from
     // free text and never sent back through AI.
