@@ -193,7 +193,7 @@ export function masterEvidenceFields(row: MasterChemicalRow): EvidenceField[] {
     "registration_status",
     "Registration status",
     "identity",
-    str((row as Record<string, unknown>).registration_status) ??
+    str((row as unknown as Record<string, unknown>).registration_status) ??
       str(row.verification_status)?.replace(/_/g, " ") ??
       null,
     registerLevel,
