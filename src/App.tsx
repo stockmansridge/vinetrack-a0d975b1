@@ -81,6 +81,7 @@ import IrrigationReportsPage from "./pages/reports/IrrigationReportsPage";
 import { RequireIrrigationCapability } from "./components/irrigation/RequireIrrigationCapability";
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
 import HowVineTrackWorksPage from "./pages/dashboard/HowVineTrackWorksPage";
+import GuideAreaPage from "./pages/dashboard/GuideAreaPage";
 
 
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
@@ -143,6 +144,12 @@ const App = () => (
                       <Route
                         path="/dashboard/how-vinetrack-works"
                         element={<HowVineTrackWorksPage />}
+                      />
+                      {/* Focused guide drill-downs: setup, pins, trips, sprays,
+                          work-tasks, operational-tools, reports, platforms. */}
+                      <Route
+                        path="/dashboard/how-vinetrack-works/:area"
+                        element={<GuideAreaPage />}
                       />
                     </Route>
 

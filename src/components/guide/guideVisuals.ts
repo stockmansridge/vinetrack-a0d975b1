@@ -58,6 +58,18 @@ const DEFAULT_VISUAL: GuideVisual = {
 };
 
 const GUIDE_VISUALS: Record<string, GuideVisual> = {
+  // Landing-page areas (Stage 2.6). Real imagery attaches here via `imageSrc`.
+  "area.setup": { Icon: Grape, tone: "from-primary/20 via-primary/10 to-transparent text-primary" },
+  "area.pins": { Icon: MapPin, tone: "from-orange-500/20 via-orange-500/10 to-transparent text-orange-600 dark:text-orange-400" },
+  "area.trips": { Icon: Route, tone: "from-sky-500/20 via-sky-500/10 to-transparent text-sky-600 dark:text-sky-400" },
+  "area.sprays": { Icon: Droplet, tone: "from-cyan-500/20 via-cyan-500/10 to-transparent text-cyan-600 dark:text-cyan-400" },
+  "area.work_tasks": { Icon: ClipboardList, tone: "from-indigo-500/20 via-indigo-500/10 to-transparent text-indigo-600 dark:text-indigo-400" },
+  "area.tools": { Icon: Wrench, tone: "from-amber-500/20 via-amber-500/10 to-transparent text-amber-600 dark:text-amber-400" },
+  "area.reports": { Icon: FileBarChart, tone: "from-teal-500/20 via-teal-500/10 to-transparent text-teal-600 dark:text-teal-400" },
+  "area.platforms": { Icon: Smartphone, tone: "from-foreground/10 via-foreground/5 to-transparent text-foreground" },
+
+  "hero.platforms": { Icon: Grape, tone: "from-primary/20 via-primary/10 to-transparent text-primary" },
+
   "core.vineyard": { Icon: Grape, tone: "from-primary/15 to-primary/5 text-primary" },
   "core.blocks": { Icon: MapIcon, tone: "from-primary/15 to-primary/5 text-primary" },
   "core.planting": { Icon: Sprout, tone: "from-primary/15 to-primary/5 text-primary" },
