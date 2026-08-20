@@ -104,11 +104,14 @@ export function jurisdictionNotice(
   return {
     suitability,
     labelAuthoritative: false,
+    // When the vineyard jurisdiction IS known, the country is not the unknown
+    // part — the registration identity is. Say so plainly.
     message: vin
-      ? "Registration country unknown — label guidance is not confirmed for this vineyard."
+      ? `${countryLabel(vin)} registration not resolved — label guidance is not confirmed.`
       : MISSING_VINEYARD_COUNTRY_MESSAGE,
     action: vin ? jurisdictionVerifyPrompt(vin) : null,
   };
+
 }
 
 /** A Master record is only eligible when it is registered in this country. */
