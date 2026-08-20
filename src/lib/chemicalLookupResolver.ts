@@ -61,12 +61,20 @@ export const AUTHORITATIVE_MATCH_SOURCES: LookupMatchSource[] = ["master", "auth
 export function normaliseLookupMatchSource(value: unknown): LookupMatchSource {
   const s = String(value ?? "").trim().toLowerCase();
   if (s === "master") return "master";
-  if (s === "authoritative" || s === "official" || s === "official_register") return "authoritative";
+  if (
+    s === "authoritative" ||
+    s === "authoritative_candidate" ||
+    s === "official" ||
+    s === "official_register" ||
+    s === "register_match"
+  )
+    return "authoritative";
   if (s === "ai_candidate" || s === "ai" || s === "candidate" || s === "ai_suggestion")
     return "ai_candidate";
   if (s === "ambiguous" || s === "multiple" || s === "multiple_matches") return "ambiguous";
   return "unresolved";
 }
+
 
 export const isAuthoritativeMatch = (m: LookupMatchSource): boolean =>
   AUTHORITATIVE_MATCH_SOURCES.includes(m);
