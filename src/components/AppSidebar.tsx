@@ -199,7 +199,7 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
   const { currentRole, memberships, selectedVineyardId } = useVineyard();
-  const { isAdmin: isSystemAdmin } = useIsSystemAdmin();
+  const { isAdmin: isSystemAdmin, loading: systemAdminLoading } = useIsSystemAdmin();
   const { capabilities: irrigation } = useIrrigationCapabilities(selectedVineyardId);
   const { data: logoUrl } = useVineyardLogo();
   const vineyardName =
