@@ -129,6 +129,8 @@ function AreaHero({
     new Set(items.flatMap((i) => i.platforms)),
   ) as GuidePlatform[];
   const primary = items.find((i) => i.webRoute);
+  // Same uploaded image key as the landing row — one upload feeds both.
+  const uploaded = useGuideImage(area.id as GuideImageKey);
 
   return (
     <Card className="overflow-hidden">
