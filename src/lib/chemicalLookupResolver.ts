@@ -365,7 +365,6 @@ function withProvenanceAliases(map: FieldProvenanceMap): FieldProvenanceMap {
   alias("registrant", "registration");
   alias("registration_country", "registration");
   alias("category", "product_category");
-  alias("registered_uses", "label_rates");
   return out;
 }
 
