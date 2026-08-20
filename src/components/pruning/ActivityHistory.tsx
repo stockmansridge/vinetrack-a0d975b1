@@ -44,6 +44,14 @@ export default function ActivityHistory({
     queryFn: () => fetchWorkTasksByIds(taskIds),
   });
   const taskById = new Map((tasksQ.data ?? []).map((t) => [t.id, t]));
+
+  // SQL 200 — Work Tasks now link to the parent ACTIVITY, so history rows must
+  // read their hours/cost from those links, not only the legacy work_task_id.
+  const activityAggQ = useActivityWorkTaskAggregates(
+    entries.map((e) => e.pruning_activity_id).filter(Boolean) as string[],
+  );
+  const aggByActivity = activityAggQ.data ?? new Map();
+
   const money = (n: number) =>
     n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 2 });
   const [editEntryId, setEditEntryId] = useState<string | null>(null);
