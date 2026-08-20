@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   GUIDE_ROLE_MATRIX,
   canOpenGuideRoute,
@@ -114,10 +115,13 @@ async function renderHero() {
     isSystemAdmin: (globalThis as any).__isAdmin as boolean,
     role: (globalThis as any).__role as any,
   };
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <MemoryRouter>
-      <GuideHero showInternalBadge={shows(viewer)} />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <GuideHero showInternalBadge={shows(viewer)} />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
