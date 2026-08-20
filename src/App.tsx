@@ -82,6 +82,8 @@ import { RequireIrrigationCapability } from "./components/irrigation/RequireIrri
 import { RequireSystemAdmin } from "./components/RequireSystemAdmin";
 import HowVineTrackWorksPage from "./pages/dashboard/HowVineTrackWorksPage";
 import GuideAreaPage from "./pages/dashboard/GuideAreaPage";
+import OperationalToolGuidePage from "./pages/dashboard/OperationalToolGuidePage";
+
 
 
 import FuelPurchasesPage from "./pages/FuelPurchasesPage";
@@ -148,10 +150,17 @@ const App = () => (
                       />
                       {/* Focused guide drill-downs: setup, pins, trips, sprays,
                           work-tasks, operational-tools, reports, platforms. */}
+                      {/* Stage 4B: one focused guide per operational tool.
+                          Declared before the generic :area route. */}
+                      <Route
+                        path="/dashboard/how-vinetrack-works/operational-tools/:tool"
+                        element={<OperationalToolGuidePage />}
+                      />
                       <Route
                         path="/dashboard/how-vinetrack-works/:area"
                         element={<GuideAreaPage />}
                       />
+
                     </Route>
 
                     <Route path="/blocks/:blockId" element={<BlockDetailPage />} />

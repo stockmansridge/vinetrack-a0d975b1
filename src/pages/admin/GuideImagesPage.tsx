@@ -72,7 +72,7 @@ export default function GuideImagesPage() {
                   <CollapsibleTrigger asChild>
                     <Button variant="outline" size="sm">
                       <ChevronDown className="mr-1.5 h-4 w-4" />
-                      Workflow images ({group.workflow.length})
+                      {group.secondaryLabel} ({group.workflow.length})
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-3 pt-3">
@@ -82,6 +82,7 @@ export default function GuideImagesPage() {
                   </CollapsibleContent>
                 </Collapsible>
               )}
+
             </section>
           ))}
         </div>

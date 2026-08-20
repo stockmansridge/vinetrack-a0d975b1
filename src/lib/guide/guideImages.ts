@@ -36,7 +36,38 @@ export type GuideWorkflowImageKey =
   | "work-tasks.step.progress"
   | "work-tasks.step.complete";
 
-export type GuideImageKey = GuideAreaImageKey | GuideWorkflowImageKey;
+/**
+ * Stage 4B — one primary image per Operational Tool guide. The key uses the
+ * stable shared OperationalToolCatalog ID so the slot, the route and the
+ * catalogue entry always agree.
+ */
+export type GuideToolImageKey =
+  | "tool.work_tasks"
+  | "tool.equipment_maintenance"
+  | "tool.fuel_log"
+  | "tool.irrigation_advisor"
+  | "tool.disease_risk"
+  | "tool.yield_records"
+  | "tool.growth_stages"
+  | "tool.optimal_ripeness"
+  | "tool.cost_reports"
+  | "tool.fertiliser_calculator"
+  | "tool.pruning_tracker"
+  | "tool.irrigation_records"
+  | "tool.resistance_planner";
+
+/** Stage 4B — a small number of supporting visuals on the Reports guide. */
+export type GuideReportImageKey =
+  | "reports.activity"
+  | "reports.costs"
+  | "reports.sprays";
+
+export type GuideImageKey =
+  | GuideAreaImageKey
+  | GuideWorkflowImageKey
+  | GuideToolImageKey
+  | GuideReportImageKey;
+
 
 export type GuideImageFocus = "left" | "center" | "right";
 
@@ -207,7 +238,62 @@ const WORKFLOW_SLOTS: GuideImageSlot[] = [
   workflowSlot("work-tasks.step.complete", "work-tasks", "Work Tasks", "Complete & report", "Work Tasks guide — step 6"),
 ];
 
-export const GUIDE_IMAGE_SLOTS: GuideImageSlot[] = [...AREA_SLOTS, ...WORKFLOW_SLOTS];
+/** Stage 4B — one primary image per Operational Tool guide. */
+const TOOL_SLOTS: GuideImageSlot[] = (
+  [
+    ["tool.work_tasks", "Work Tasks"],
+    ["tool.equipment_maintenance", "Maintenance Log"],
+    ["tool.fuel_log", "Fuel Log"],
+    ["tool.irrigation_advisor", "Irrigation Advisor"],
+    ["tool.disease_risk", "Disease Risk"],
+    ["tool.yield_records", "Yields"],
+    ["tool.growth_stages", "Growth Stage Records"],
+    ["tool.optimal_ripeness", "Optimal Ripeness"],
+    ["tool.cost_reports", "Cost Reports"],
+    ["tool.fertiliser_calculator", "Fertiliser Calculator"],
+    ["tool.pruning_tracker", "Pruning Tracker"],
+    ["tool.irrigation_records", "Irrigation Records"],
+    ["tool.resistance_planner", "Resistance Planner"],
+  ] as [GuideToolImageKey, string][]
+).map(([key, label]) => ({
+  key,
+  label,
+  usage: `${label} tool guide hero`,
+  guidance:
+    "A real VineTrack screenshot or vineyard photo for this tool. Shown whole on a neutral surface.",
+  minWidth: 800,
+  defaultFocus: "center" as GuideImageFocus,
+  group: "operational-tools",
+  groupLabel: "Operational Tools",
+  kind: "screenshot" as GuideImageKind,
+}));
+
+/** Stage 4B — a few supporting visuals on the Reports & Insights guide. */
+const REPORT_SLOTS: GuideImageSlot[] = (
+  [
+    ["reports.activity", "Activity reporting"],
+    ["reports.costs", "Cost & labour reporting"],
+    ["reports.sprays", "Spray records & compliance"],
+  ] as [GuideReportImageKey, string][]
+).map(([key, label]) => ({
+  key,
+  label,
+  usage: `Reports guide — ${label.toLowerCase()} example`,
+  guidance: "A real VineTrack report screenshot. Shown whole (never cropped).",
+  minWidth: 600,
+  defaultFocus: "center" as GuideImageFocus,
+  group: "reports",
+  groupLabel: "Reports & Insights",
+  kind: "screenshot" as GuideImageKind,
+}));
+
+export const GUIDE_IMAGE_SLOTS: GuideImageSlot[] = [
+  ...AREA_SLOTS,
+  ...WORKFLOW_SLOTS,
+  ...TOOL_SLOTS,
+  ...REPORT_SLOTS,
+];
+
 
 export function guideImageSlot(key: string): GuideImageSlot | undefined {
   return GUIDE_IMAGE_SLOTS.find((s) => s.key === key);
@@ -218,7 +304,14 @@ export interface GuideImageGroup {
   groupLabel: string;
   primary: GuideImageSlot[];
   workflow: GuideImageSlot[];
+  /** Label for the collapsed set of secondary slots in this group. */
+  secondaryLabel: string;
 }
+
+const SECONDARY_LABEL: Record<string, string> = {
+  "operational-tools": "Tool images",
+  reports: "Supporting report images",
+};
 
 /** Slots grouped by guide area, for the System Admin manager. */
 export function guideImageGroups(): GuideImageGroup[] {
@@ -227,7 +320,13 @@ export function guideImageGroups(): GuideImageGroup[] {
   for (const slot of GUIDE_IMAGE_SLOTS) {
     let g = byGroup.get(slot.group);
     if (!g) {
-      g = { group: slot.group, groupLabel: slot.groupLabel, primary: [], workflow: [] };
+      g = {
+        group: slot.group,
+        groupLabel: slot.groupLabel,
+        primary: [],
+        workflow: [],
+        secondaryLabel: SECONDARY_LABEL[slot.group] ?? "Workflow images",
+      };
       byGroup.set(slot.group, g);
       order.push(slot.group);
     }
@@ -235,6 +334,7 @@ export function guideImageGroups(): GuideImageGroup[] {
   }
   return order.map((k) => byGroup.get(k)!);
 }
+
 
 /** CSS object-position value for a focus setting. */
 export function focusToObjectPosition(focus: GuideImageFocus | undefined): string {
