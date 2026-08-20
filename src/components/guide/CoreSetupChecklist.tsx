@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, CircleDashed } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { SetupStatusPill, type SetupStatus } from "./SetupCard";
+import { SetupStatusIcon, SetupStatusPill, type SetupStatus } from "./SetupCard";
+import type { SetupCheckResult } from "@/lib/guide/setupHealth";
 import { PlatformBadges } from "./PlatformBadges";
 import { ImportanceBadge } from "./GuideBadges";
 import { guideVisual } from "./guideVisuals";
