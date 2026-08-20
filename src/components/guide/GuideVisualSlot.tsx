@@ -68,6 +68,8 @@ export function GuideVisualSlot({
           src={src}
           alt={imageAlt}
           loading="lazy"
+          style={{ objectPosition }}
+          onError={() => setFailed(src)}
           className="h-full w-full object-cover"
         />
       ) : subtle ? (
