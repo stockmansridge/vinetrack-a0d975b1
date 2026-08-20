@@ -229,6 +229,55 @@ export function useActivityWorkTasks(
   });
 }
 
+/**
+ * Activity id -> Work Task aggregate, for a list of activities (history view).
+ * Uses the SQL 200 link only; legacy per-entry `work_task_id` is handled by the
+ * caller.
+ */
+export async function fetchActivityWorkTaskAggregates(
+  activityIds: string[],
+): Promise<Map<string, WorkTaskAggregate>> {
+  const ids = Array.from(new Set(activityIds.filter(Boolean)));
+  const out = new Map<string, WorkTaskAggregate>();
+  if (ids.length === 0) return out;
+
+  const { data, error } = await (supabase as any)
+    .from("work_tasks")
+    .select("*")
+    .in(WORK_TASK_ACTIVITY_COLUMN, ids)
+    .is("deleted_at", null);
+  if (error) return out;
+
+  const tasks = (data ?? []) as unknown as WorkTask[];
+  const summaries = await Promise.all(
+    tasks.map(async (t) => ({
+      activityId: String((t as any)[WORK_TASK_ACTIVITY_COLUMN] ?? ""),
+      summary: summariseLinkedWorkTask(t, await fetchLabourLinesForTask(t.id)),
+    })),
+  );
+
+  const byActivity = new Map<string, LinkedWorkTaskSummary[]>();
+  summaries.forEach(({ activityId, summary }) => {
+    if (!activityId) return;
+    const list = byActivity.get(activityId);
+    if (list) list.push(summary);
+    else byActivity.set(activityId, [summary]);
+  });
+  byActivity.forEach((list, activityId) =>
+    out.set(activityId, aggregateLinkedWorkTasks(list)));
+  return out;
+}
+
+export function useActivityWorkTaskAggregates(activityIds: string[]) {
+  const key = Array.from(new Set(activityIds.filter(Boolean))).sort().join(",");
+  return useQuery({
+    queryKey: ["pruning", "activity-work-task-aggregates", key],
+    enabled: key.length > 0,
+    queryFn: () => fetchActivityWorkTaskAggregates(key.split(",")),
+  });
+}
+
+
 /** activity id -> linked task ids, for the whole vineyard (report path). */
 export async function fetchWorkTaskLinksForVineyard(
   vineyardId: string,
