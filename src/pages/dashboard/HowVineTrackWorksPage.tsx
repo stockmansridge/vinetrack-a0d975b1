@@ -15,7 +15,7 @@ import { LANDING_GUIDE_AREAS } from "@/lib/guide/guideAreas";
  */
 export default function HowVineTrackWorksPage() {
   return (
-    <div className="w-full px-[18px] pb-6 pt-3 xl:px-5">
+    <GuidePageShell>
       <GuideHero />
 
       <div className="mt-3 space-y-2">
@@ -23,6 +23,6 @@ export default function HowVineTrackWorksPage() {
           <GuideAreaCard key={area.id} area={area} index={i} />
         ))}
       </div>
-    </div>
+    </GuidePageShell>
   );
 }

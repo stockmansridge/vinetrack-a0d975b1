@@ -48,9 +48,11 @@ export default function GuideAreaPage() {
   const items = guideAreaItems(area);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-8 p-4 sm:p-6 lg:p-8">
-      <Breadcrumb title={area.title} />
-      <AreaHero area={area} items={items} />
+    <GuidePageShell className="space-y-6">
+      <div className="space-y-2.5">
+        <Breadcrumb title={area.title} />
+        <AreaHero area={area} items={items} />
+      </div>
 
       {area.workflow && area.workflow.length > 0 && (
         <section className="space-y-3">
