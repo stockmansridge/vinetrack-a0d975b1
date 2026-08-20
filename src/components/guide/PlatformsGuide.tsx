@@ -1,4 +1,7 @@
 import { Link } from "react-router-dom";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision } from "@/lib/guide/guideAccess";
+
 import { Apple, ArrowRight, ChevronRight, Monitor, Plug, LifeBuoy, Smartphone } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PlatformBadges } from "@/components/guide/PlatformBadges";
@@ -121,7 +124,9 @@ function route(id: string): string | undefined {
 }
 
 export function PlatformsGuide() {
-  const apiRoute = route("platform.api");
+  const viewer = useGuideViewer();
+  const raw = route("platform.api");
+  const apiRoute = guideActionDecision(raw, viewer).show ? raw : undefined;
 
   return (
     <div className="space-y-8" data-guide-view="platforms">

@@ -30,6 +30,7 @@ export function GuideVisualSlot({
   subtle = false,
   placeholderLabel,
   objectPosition = "center center",
+  eager = false,
 }: {
   visualKey?: string;
   imageSrc?: string;
@@ -44,6 +45,8 @@ export function GuideVisualSlot({
   placeholderLabel?: string;
   /** CSS object-position; images always crop with object-fit: cover. */
   objectPosition?: string;
+  /** Above-the-fold visuals (the hero) load eagerly; everything else is lazy. */
+  eager?: boolean;
 }) {
   const visual = guideVisual(visualKey);
   const requested = imageSrc ?? visual.imageSrc;
@@ -67,7 +70,9 @@ export function GuideVisualSlot({
         <img
           src={src}
           alt={imageAlt}
-          loading="lazy"
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={eager ? "high" : "auto"}
           style={{ objectPosition }}
           onError={() => setFailed(src)}
           className="h-full w-full object-cover"

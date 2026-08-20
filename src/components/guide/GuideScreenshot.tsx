@@ -49,6 +49,7 @@ export function GuideScreenshot({
           src={src}
           alt={alt}
           loading="lazy"
+          decoding="async"
           onError={() => setBroken(true)}
           style={{ objectPosition: focusToObjectPosition(focus) }}
           className={cn("h-full w-full", isScreenshot ? "object-contain p-2" : "object-cover")}

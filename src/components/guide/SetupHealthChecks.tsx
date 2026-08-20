@@ -6,6 +6,8 @@ import { SetupStatusPill } from "./SetupCard";
 import { SetupPresentationPill } from "./SetupPresentationPill";
 import { deriveSetupPresentation } from "@/lib/guide/setupPresentation";
 import type { SetupHealthSummary } from "@/lib/guide/setupHealth";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { setupActionDecision } from "@/lib/guide/guideAccess";
 
 /**
  * Live Core Setup health detail (Stage 3).
@@ -26,6 +28,7 @@ export function SetupHealthChecks({
   onRefresh?: () => void;
 }) {
   const presentation = deriveSetupPresentation(summary, { loading, error });
+  const viewer = useGuideViewer();
   return (
     <Card className="overflow-hidden" data-setup-readiness={presentation.state}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4">
@@ -57,7 +60,12 @@ export function SetupHealthChecks({
       )}
 
       <ul className="divide-y divide-border/60">
-        {summary.checks.map((check) => (
+        {summary.checks.map((check) => {
+          const action =
+            check.status === "complete"
+              ? { show: false as const, hint: undefined }
+              : setupActionDecision(check.route, viewer);
+          return (
           <li
             key={check.id}
             className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
@@ -73,7 +81,7 @@ export function SetupHealthChecks({
                 {check.importance}
               </span>
               <SetupStatusPill status={check.status} />
-              {check.route && check.status !== "complete" && (
+              {action.show && check.route && (
                 <Link
                   to={check.route}
                   className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-primary hover:underline"
@@ -82,9 +90,18 @@ export function SetupHealthChecks({
                   <ArrowRight className="h-3 w-3" />
                 </Link>
               )}
+              {!action.show && action.hint && (
+                <span
+                  data-setup-action-hint={check.id}
+                  className="text-[11.5px] text-muted-foreground"
+                >
+                  {action.hint}
+                </span>
+              )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </Card>
   );

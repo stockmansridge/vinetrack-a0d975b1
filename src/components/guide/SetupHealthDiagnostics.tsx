@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { SetupHealthSummary } from "@/lib/guide/setupHealth";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { showsSetupDiagnostics } from "@/lib/guide/guideAccess";
 
 /**
  * System Admin-only setup health diagnostics (Stage 3.1 §12).
@@ -15,6 +17,11 @@ import type { SetupHealthSummary } from "@/lib/guide/setupHealth";
  */
 export function SetupHealthDiagnostics({ summary }: { summary: SetupHealthSummary }) {
   const [open, setOpen] = useState(false);
+  const viewer = useGuideViewer();
+
+  // Stage 5B: independently gated. This panel must stay System Admin-only even
+  // after the parent guide is opened to customer roles.
+  if (!showsSetupDiagnostics(viewer)) return null;
 
   return (
     <Card className="overflow-hidden">

@@ -1,4 +1,7 @@
 import { Link } from "react-router-dom";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision } from "@/lib/guide/guideAccess";
+
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";

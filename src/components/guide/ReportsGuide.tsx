@@ -1,4 +1,7 @@
 import { Link } from "react-router-dom";
+import { useGuideViewer } from "@/lib/guide/useGuideViewer";
+import { guideActionDecision } from "@/lib/guide/guideAccess";
+
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { GuideScreenshot } from "@/components/guide/GuideScreenshot";
@@ -114,7 +117,9 @@ function route(itemId: string): string | undefined {
 }
 
 export function ReportsGuide() {
-  const reportsRoute = route("reports.activity") ?? "/reports";
+  const viewer = useGuideViewer();
+  const openable = (r?: string) => (guideActionDecision(r, viewer).show ? r : undefined);
+  const reportsRoute = openable(route("reports.activity")) ?? undefined;
 
   return (
     <div className="space-y-8" data-guide-view="reports">
@@ -148,7 +153,7 @@ export function ReportsGuide() {
         />
         <div className="grid gap-3 sm:grid-cols-2">
           {CATEGORIES.map((c) => {
-            const to = route(c.itemId);
+            const to = openable(route(c.itemId));
             return (
               <Card key={c.itemId} className="flex h-full flex-col gap-3 p-4">
                 {c.imageKey && (
