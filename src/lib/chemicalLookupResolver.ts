@@ -494,7 +494,28 @@ export function primaryUse(uses: WriteRegisteredUse[]): WriteRegisteredUse | und
  * Parse the upgraded resolver envelope. This is the ONLY place the portal
  * decides what a lookup is allowed to populate.
  */
+/**
+ * Does this payload actually speak the upgraded resolver contract? A legacy
+ * AI-shaped body (bare `activeIngredient` / `candidates`, no match_source,
+ * jurisdiction or field_provenance) must NOT be presented as a structured
+ * resolver answer — it has no provenance, so nothing in it may be trusted.
+ */
+export function isStructuredLookupEnvelope(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const r = payload as Record<string, unknown>;
+  if (typeof r.error === "string" && r.error) return false;
+  return (
+    r.match_source != null ||
+    r.matchSource != null ||
+    r.jurisdiction != null ||
+    r.jurisdiction_context != null ||
+    r.field_provenance != null ||
+    r.fieldProvenance != null
+  );
+}
+
 export function parseChemicalLookup(
+
   payload: unknown,
   vineyardCountry?: string | null,
 ): ChemicalLookupResult {
