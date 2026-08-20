@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
+import {
+  parseChemicalLookup,
+  lookupJurisdictionHeadline,
+  type ChemicalLookupResult,
+} from "@/lib/chemicalLookupResolver";
+import { ChemicalLookupResultCard } from "@/components/chemicals/ChemicalLookupResultCard";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
   matchMasterByIdentity,
@@ -60,6 +67,12 @@ export interface AppliedSuggestion {
    * the Master link + revision. Never set for AI candidates.
    */
   master?: MasterChemicalRow;
+  /**
+   * Upgraded `chemical-info-lookup` resolver result. When present it is the
+   * ONLY authority for canonical fields; AI suggestions inside it are display
+   * data and are never applied.
+   */
+  resolved?: ChemicalLookupResult;
 }
 
 interface RawCandidate {
@@ -119,6 +132,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
   const [masterResult, setMasterResult] = useState<MasterChemicalRow | null>(null);
+  const [resolved, setResolved] = useState<ChemicalLookupResult | null>(null);
   const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
   const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" | "master" } | null>(null);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
@@ -183,6 +197,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     setError(null);
     setCandidates(null);
     setMasterResult(null);
+    setResolved(null);
     setExistingMatches([]);
     setApplied(null);
     setResultsCollapsed(false);
@@ -210,6 +225,35 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       }
     } catch (e) {
       console.warn("[master-chemicals] lookup unavailable, falling through", e);
+    }
+
+    // ---- Upgraded resolver (`chemical-info-lookup`). Its envelope is the
+    // single source for jurisdiction, provenance and match status. Canonical
+    // fields are only ever taken from its structured response.
+    try {
+      const { data, error: infoErr } = await iosSupabase.functions.invoke(
+        "chemical-info-lookup",
+        {
+          body: {
+            product_name: q,
+            country: countryCode,
+            country_code: countryCode,
+            structured: true,
+          },
+        },
+      );
+      if (!infoErr && data && typeof data === "object") {
+        const result = parseChemicalLookup(data, countryCode);
+        // A cross-country label is never presented as authoritative here.
+        if (result.jurisdiction.status !== "mismatch") {
+          setResolved(result);
+          setLoading(false);
+          return;
+        }
+      }
+      if (infoErr) console.warn("[chemical-info-lookup] unavailable, falling through", infoErr);
+    } catch (e) {
+      console.warn("[chemical-info-lookup] failed, falling through", e);
     }
 
     try {
@@ -331,6 +375,24 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     setResultsCollapsed(true);
   }
 
+  /** Apply an authoritative resolver result. AI suggestions are not applied. */
+  function applyResolved(result: ChemicalLookupResult) {
+    if (!result.authoritative) return;
+    const finalName = result.fields.name?.trim() || name.trim();
+    onApply({
+      name: finalName,
+      manufacturer: result.fields.registrant,
+      label_url:
+        result.fields.labelReference && /^https?:\/\//i.test(result.fields.labelReference)
+          ? result.fields.labelReference
+          : undefined,
+      master: result.master ?? undefined,
+      resolved: result,
+    });
+    setApplied({ name: finalName, manufacturer: result.fields.registrant, source: "master" });
+    setResultsCollapsed(true);
+  }
+
   function applyManual() {
     const q = name.trim();
     onApply({ name: q });
@@ -343,12 +405,16 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-medium">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          {countryCode
-            ? `Chemical lookup — ${countryLabel(countryCode)} labels`
-            : "Chemical lookup — vineyard country not set"}
+          {resolved
+            ? lookupJurisdictionHeadline(resolved.jurisdiction)
+            : countryCode
+              ? `Chemical lookup — ${countryLabel(countryCode)} labels`
+              : "Chemical lookup — vineyard country not set"}
         </div>
-        {countryCode && (
-          <Badge variant="outline" className="text-[10px]">{countryCode}</Badge>
+        {(resolved?.jurisdiction.country ?? countryCode) && (
+          <Badge variant="outline" className="text-[10px]">
+            {resolved?.jurisdiction.country ?? countryCode}
+          </Badge>
         )}
       </div>
       {!countryCode && (
@@ -413,6 +479,23 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               Change product
             </button>
           ) : null}
+        </div>
+      )}
+
+      {!resultsCollapsed && resolved && (
+        <div className="space-y-1">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {resolved.authoritative
+              ? resolved.matchSource === "master"
+                ? "VineTrack Master Catalogue"
+                : "Registered product"
+              : "Lookup result"}
+          </div>
+          <ChemicalLookupResultCard
+            result={resolved}
+            onApply={() => applyResolved(resolved)}
+            onManual={applyManual}
+          />
         </div>
       )}
 
