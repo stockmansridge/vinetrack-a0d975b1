@@ -1053,8 +1053,9 @@ function ChemicalEditor({
 
     });
     if (s.rate_per_ha != null) setRateStr(String(s.rate_per_ha));
-    if (s.whp_days) setWhp(s.whp_days);
-    if (s.rei_hours) setRei(s.rei_hours);
+    // WHP / REI are label facts. A legacy AI candidate is not label evidence,
+    // so it may never populate them — they stay blank for manual entry.
+
   };
 
   return (
