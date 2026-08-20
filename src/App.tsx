@@ -137,6 +137,13 @@ const App = () => (
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/dashboard/live" element={<LiveDashboardPage />} />
+                    <Route element={<RequireSystemAdmin />}>
+                      <Route
+                        path="/dashboard/how-vinetrack-works"
+                        element={<HowVineTrackWorksPage />}
+                      />
+                    </Route>
+
                     <Route path="/blocks/:blockId" element={<BlockDetailPage />} />
                     <Route path="/paddocks" element={<PaddocksListPage />} />
                     <Route path="/setup/paddocks" element={<PaddocksPage />} />
