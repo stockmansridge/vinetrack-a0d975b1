@@ -7,7 +7,7 @@
 // rules stay authoritative — a refusal is surfaced, never worked around.
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, History, Loader2, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
+import { AlertTriangle, BadgeCheck, History, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty } from "./_shared";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
