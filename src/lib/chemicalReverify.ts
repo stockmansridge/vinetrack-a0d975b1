@@ -804,3 +804,114 @@ export async function reverifyChemical(args: {
     jurisdiction,
   };
 }
+
+/* ------------------------------------------------- authoritative merging */
+
+/**
+ * Merge an authoritative refreshed draft into the stored one.
+ *
+ * Rules (P5 contract):
+ *  - never blank an existing value because the refreshed evidence is silent
+ *  - never collapse a range, never flatten a multi-rate use
+ *  - a reference-only rate (`basis:"other"`, or missing unit/number) is kept
+ *    for display but never replaces an applicable rate
+ *  - registered uses are matched by crop + target, never by array order
+ *  - per-use provenance is merged key-wise and never dropped
+ *  - Master linkage lives outside the draft and is untouched here
+ */
+export function mergeAuthoritativeDraft(
+  before: ChemicalIntelligenceDraft,
+  next: ChemicalIntelligenceDraft,
+): ChemicalIntelligenceDraft {
+  const unresolved = new Set([...before.unresolvedFields, ...next.unresolvedFields]);
+
+  // ---- actives: keep stored chemistry unless the refresh actually states it
+  const nextByName = new Map(next.actives.map((a) => [a.name.trim().toLowerCase(), a]));
+  const seen = new Set<string>();
+  const actives: WriteActiveIngredient[] = before.actives.map((prior) => {
+    const key = prior.name.trim().toLowerCase();
+    const inc = nextByName.get(key);
+    if (!inc) return prior;
+    seen.add(key);
+    return {
+      ...prior,
+      concentration: inc.concentration ?? prior.concentration,
+      concentration_unit: inc.concentration_unit ?? prior.concentration_unit,
+      activity_group: inc.activity_group ?? prior.activity_group,
+      group_source: inc.activity_group ? inc.group_source ?? prior.group_source : prior.group_source,
+      identity_source: inc.identity_source ?? prior.identity_source,
+    };
+  });
+  for (const [key, a] of nextByName) if (!seen.has(key)) actives.push(a);
+
+  // ---- registration: fill or update, never erase
+  const registration = { ...before.registration };
+  const priorCountry = normaliseCountry(before.registration.country);
+  const nextCountry = normaliseCountry(next.registration.country);
+  const countryConflict = !!priorCountry && !!nextCountry && priorCountry !== nextCountry;
+  if (countryConflict) unresolved.add("registration_country");
+  else if (nextCountry) registration.country = nextCountry;
+  const r = next.registration;
+  if (r.scheme) registration.scheme = r.scheme;
+  if (r.number?.trim()) registration.number = r.number.trim();
+  if (r.registrant?.trim()) registration.registrant = r.registrant.trim();
+  if (r.registered_product_name?.trim())
+    registration.registered_product_name = r.registered_product_name.trim();
+  if (r.label_reference?.trim()) registration.label_reference = r.label_reference.trim();
+  if (r.label_version?.trim()) registration.label_version = r.label_version.trim();
+
+  // ---- registered uses
+  const mergeRates = (
+    prior: WriteLabelRate[],
+    inc: WriteLabelRate[],
+  ): WriteLabelRate[] => {
+    const incApplicable = inc.filter((x) => !isReferenceOnlyRate(x));
+    const incReference = inc.filter((x) => isReferenceOnlyRate(x));
+    const priorApplicable = prior.filter((x) => !isReferenceOnlyRate(x));
+    const priorReference = prior.filter((x) => isReferenceOnlyRate(x));
+    // Applicable rates only change when the refresh states applicable rates.
+    const applicable = incApplicable.length ? incApplicable : priorApplicable;
+    const reference = incReference.length ? incReference : priorReference;
+    return [...applicable, ...reference];
+  };
+
+  const mergeProvenance = (
+    prior: Record<string, unknown> | undefined,
+    inc: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined => {
+    if (!prior && !inc) return undefined;
+    return { ...(prior ?? {}), ...(inc ?? {}) };
+  };
+
+  const nextUses = new Map(next.registeredUses.map((u) => [useKey(u), u]));
+  const usedKeys = new Set<string>();
+  const registeredUses: WriteRegisteredUse[] = before.registeredUses.map((prior) => {
+    const inc = nextUses.get(useKey(prior));
+    if (!inc) return prior;
+    usedKeys.add(useKey(prior));
+    return {
+      ...prior,
+      rates: mergeRates(prior.rates ?? [], inc.rates ?? []),
+      withholding_period_days: inc.withholding_period_days ?? prior.withholding_period_days,
+      re_entry_period_hours: inc.re_entry_period_hours ?? prior.re_entry_period_hours,
+      restrictions: inc.restrictions ?? prior.restrictions,
+      provenance: mergeProvenance(prior.provenance, inc.provenance),
+      extra: inc.extra ?? prior.extra,
+    };
+  });
+  for (const [key, u] of nextUses) if (!usedKeys.has(key)) registeredUses.push(u);
+
+  let sources = before.sources;
+  for (const s of next.sources) sources = withSource(sources, s);
+
+  const merged: ChemicalIntelligenceDraft = {
+    ...before,
+    actives,
+    registration,
+    registeredUses,
+    sources,
+    unresolvedFields: Array.from(unresolved),
+  };
+  merged.conflicts = reconcileConflicts(merged);
+  return merged;
+}
