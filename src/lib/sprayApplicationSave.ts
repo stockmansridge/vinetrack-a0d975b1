@@ -45,7 +45,8 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
   // P8 — freeze the chemistry that was actually selected onto the line, so a
   // later Saved Chemical re-verify can never rewrite this job's chemistry and
   // plan deviation has real groups to compare.
-  const stamp = chemistryStampFromLine(line);
+  // An existing stamp is reused verbatim — editing a job never re-stamps it.
+  const stamp = line.chemistryStamp ?? chemistryStampFromLine(line);
   return {
     chemical_id: line.savedChemicalId ?? null,
     savedChemicalId: line.savedChemicalId ?? null,

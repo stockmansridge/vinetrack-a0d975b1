@@ -21,6 +21,7 @@ import { provenanceFromJobRow } from "@/lib/resistance/sprayJobPlanLink";
 import {
   readChemistryStamp,
   stampDivergesFromCurrent,
+  type JobChemistryStamp,
 } from "@/lib/resistance/sprayJobChemistryStamp";
 
 
@@ -259,6 +260,12 @@ export interface SprayProductLine {
   intelligence?: ChemicalIntelligence | null;
   /** Legacy display string preserved verbatim for historical fidelity. */
   legacyChemicalGroup?: string | null;
+  /**
+   * P8 — the chemistry stamp this line was loaded with. Re-saved verbatim so
+   * editing an unrelated field can never re-stamp the job from a Saved
+   * Chemical that has changed since.
+   */
+  chemistryStamp?: JobChemistryStamp | null;
   costPerUnit?: number | null;
   notes?: string | null;
 }
@@ -526,6 +533,7 @@ export function fromLegacySprayJob(
       labelMinRate: null,
       labelMaxRate: null,
       labelRateUnit: null,
+      chemistryStamp: stamp,
       activityGroups: stamp ? stamp.activity_groups : liveGroups,
       verificationStatus: (stamp?.verification_status ??
         intel?.verification.status ??
