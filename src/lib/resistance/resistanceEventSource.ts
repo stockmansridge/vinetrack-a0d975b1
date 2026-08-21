@@ -28,6 +28,7 @@
 // vineyard only has one block".
 import { readChemicalSnapshot } from "@/lib/sprayChemicalSnapshot";
 import { readApplicationBlocks } from "@/lib/sprayRecordAttribution";
+import { qualifiedGroupCode } from "./resistanceGroupSource";
 import {
   diseaseFromSprayTargetRaw,
   groupSignatureOf,
@@ -243,7 +244,13 @@ export function productLinesFromRecord(record: Record<string, any>): ResistanceP
         : [];
     chemicals.forEach((chemical: any, lineIndex: number) => {
       const snapshot = readChemicalSnapshot(chemical?.chemicalSnapshot);
-      const codes = snapshot?.activity_groups ?? [];
+      // P8 — prefer scheme-qualified codes reconstructed from the frozen
+      // actives, so a snapshot written before schemes were qualified still
+      // reads HRAC/IRAC chemistry as itself rather than as FRAC.
+      const activeCodes = (snapshot?.active_ingredients ?? [])
+        .map((a) => qualifiedGroupCode(a.activity_group?.scheme, a.activity_group?.code))
+        .filter((c): c is string => !!c);
+      const codes = activeCodes.length > 0 ? activeCodes : snapshot?.activity_groups ?? [];
       const name = String(chemical?.name ?? chemical?.chemical_name ?? "").trim();
       let availability: ChemicalIntelligenceAvailability = "unavailable";
       // A snapshot can exist and still carry nothing assessable — a legacy line
