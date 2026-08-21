@@ -40,6 +40,10 @@ export function legacyTargetText(app: SprayApplication): string | null {
 
 export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
   const basis = line.rateBasis ?? "whole_block_area";
+  // P8 — freeze the chemistry that was actually selected onto the line, so a
+  // later Saved Chemical re-verify can never rewrite this job's chemistry and
+  // plan deviation has real groups to compare.
+  const stamp = chemistryStampFromLine(line);
   return {
     chemical_id: line.savedChemicalId ?? null,
     savedChemicalId: line.savedChemicalId ?? null,
@@ -56,8 +60,11 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
     rate_basis: basis === "per_100_litres" ? "per_100_litres" : "per_hectare",
     costPerUnit: line.costPerUnit ?? null,
     notes: line.notes ?? null,
+    ...(line.legacyChemicalGroup ? { chemical_group: line.legacyChemicalGroup } : {}),
+    ...(stamp ?? {}),
   };
 }
+
 
 export interface SaveMapping {
   input: SprayJobInput;
