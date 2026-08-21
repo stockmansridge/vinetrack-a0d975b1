@@ -72,7 +72,29 @@ export interface MasterPreviewChange {
   label: string;
   current: string | null;
   proposed: string | null;
+  /** Attribution reported by the resolver, when present. */
+  source?: string | null;
+  /** Untouched wire values — used for structured (non-JSON) rendering. */
+  currentRaw?: unknown;
+  proposedRaw?: unknown;
 }
+
+export interface MasterIdentity {
+  country: string | null;
+  scheme: string | null;
+  number: string | null;
+  productName: string | null;
+}
+
+export const identityEmpty = (i: MasterIdentity | null): boolean =>
+  !i || (!i.country && !i.scheme && !i.number && !i.productName);
+
+export const formatIdentity = (i: MasterIdentity | null): string => {
+  if (identityEmpty(i)) return "Not reported";
+  const id = i as MasterIdentity;
+  const key = [id.country, id.scheme, id.number].filter(Boolean).join(" · ");
+  return [id.productName, key].filter(Boolean).join(" — ") || "Not reported";
+};
 
 export interface MasterReviewPreview {
   /** Server-side preview id — the only thing Apply sends back. */
@@ -85,6 +107,12 @@ export interface MasterReviewPreview {
   changes: MasterPreviewChange[];
   identityGuard: IdentityGuardStatus;
   identityGuardDetail: string | null;
+  /** Which identity check failed (country / scheme / number / product name). */
+  identityFailedCheck: string | null;
+  /** Identity currently stored on the Master record, as echoed by the server. */
+  identityStored: MasterIdentity | null;
+  /** Identity the resolver matched against the source register. */
+  identityResolved: MasterIdentity | null;
   expiresAt: string | null;
   /** False when the resolver had no source data / produced nothing writable. */
   writable: boolean;
@@ -139,6 +167,9 @@ function normaliseChanges(
             label: humanLabel(entry),
             current: text(current[entry]),
             proposed: text(proposed[entry]),
+            source: null,
+            currentRaw: current[entry],
+            proposedRaw: proposed[entry],
           };
         }
         const e = obj(entry);
@@ -149,6 +180,9 @@ function normaliseChanges(
           label: text(e.label) ?? humanLabel(field),
           current: text(e.current ?? e.before ?? e.from ?? current[field]),
           proposed: text(e.proposed ?? e.after ?? e.to ?? proposed[field]),
+          source: text(e.source ?? e.provenance ?? e.origin),
+          currentRaw: e.current ?? e.before ?? e.from ?? current[field],
+          proposedRaw: e.proposed ?? e.after ?? e.to ?? proposed[field],
         };
       })
       .filter((c): c is MasterPreviewChange => !!c);
@@ -158,11 +192,16 @@ function normaliseChanges(
     return Object.entries(obj(raw)).map(([field, v]) => {
       const e = obj(v);
       const hasPair = "current" in e || "proposed" in e || "before" in e || "after" in e;
+      const currentRaw = hasPair ? (e.current ?? e.before) : current[field];
+      const proposedRaw = hasPair ? (e.proposed ?? e.after) : v;
       return {
         field,
         label: humanLabel(field),
-        current: text(hasPair ? (e.current ?? e.before) : current[field]),
-        proposed: text(hasPair ? (e.proposed ?? e.after) : v),
+        current: text(currentRaw),
+        proposed: text(proposedRaw),
+        source: text(e.source ?? e.provenance),
+        currentRaw,
+        proposedRaw,
       };
     });
   }
@@ -173,7 +212,54 @@ function normaliseChanges(
     label: humanLabel(field),
     current: text(current[field]),
     proposed: text(proposed[field]),
+    source: null,
+    currentRaw: current[field],
+    proposedRaw: proposed[field],
   }));
+}
+
+function readIdentity(value: unknown): MasterIdentity | null {
+  const v = obj(value);
+  const identity: MasterIdentity = {
+    country: text(v.registration_country ?? v.country ?? v.country_code),
+    scheme: text(v.registration_scheme ?? v.scheme),
+    number: text(v.registration_number ?? v.number ?? v.apvma_number),
+    productName: text(v.registered_product_name ?? v.product_name ?? v.name),
+  };
+  return identityEmpty(identity) ? null : identity;
+}
+
+const IDENTITY_CHECK_LABEL: Record<string, string> = {
+  registration_country: "Registration country",
+  registration_scheme: "Registration scheme",
+  registration_number: "Registration number",
+  registered_product_name: "Registered product name",
+};
+
+function identityFailedCheck(
+  s: Record<string, any>,
+  current: Record<string, any>,
+  proposed: Record<string, any>,
+): string | null {
+  const g = obj(s.identity_guard);
+  const explicit = text(g.failed_check ?? g.field ?? g.check ?? s.identity_guard_field);
+  if (explicit) return IDENTITY_CHECK_LABEL[explicit] ?? humanLabel(explicit);
+  const stored = readIdentity(g.stored ?? g.master ?? g.expected ?? current);
+  const resolved = readIdentity(g.resolved ?? g.actual ?? g.source ?? s.resolved_identity ?? proposed);
+  if (!stored || !resolved) return null;
+  const keys: (keyof MasterIdentity)[] = ["number", "country", "scheme", "productName"];
+  const labels: Record<string, string> = {
+    number: "Registration number",
+    country: "Registration country",
+    scheme: "Registration scheme",
+    productName: "Registered product name",
+  };
+  for (const k of keys) {
+    const a = stored[k];
+    const b = resolved[k];
+    if (a && b && a.toLowerCase() !== b.toLowerCase()) return labels[k];
+  }
+  return null;
 }
 
 /** Parse whatever the resolver returned into the preview view-model. */
@@ -203,6 +289,17 @@ export function parseMasterReviewPreview(payload: unknown): MasterReviewPreview 
     ),
     identityGuardDetail:
       text(obj(s.identity_guard).detail ?? obj(s.identity_guard).reason ?? s.identity_guard_reason),
+    identityFailedCheck: identityFailedCheck(s, current, proposed),
+    identityStored: readIdentity(
+      obj(s.identity_guard).stored ?? obj(s.identity_guard).master ?? obj(s.identity_guard).expected ?? current,
+    ),
+    identityResolved: readIdentity(
+      obj(s.identity_guard).resolved ??
+        obj(s.identity_guard).actual ??
+        obj(s.identity_guard).source ??
+        s.resolved_identity ??
+        proposed,
+    ),
     expiresAt: text(s.expires_at ?? s.expiry ?? s.expiresAt),
     writable,
     message: text(s.message ?? root.message),
