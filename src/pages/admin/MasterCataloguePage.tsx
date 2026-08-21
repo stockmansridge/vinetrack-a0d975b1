@@ -7,7 +7,7 @@
 // rules stay authoritative — a refusal is surfaced, never worked around.
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, History, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
+import { AlertTriangle, BadgeCheck, History, KeyRound, PencilLine, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty } from "./_shared";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,17 @@ import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel"
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
 import { MasterReviewPreviewDialog } from "@/components/chemicals/MasterReviewPreviewDialog";
 import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
-import { masterReviewSummary } from "@/lib/masterReview";
+import { masterReviewSummary, type ClassifiedConflict } from "@/lib/masterReview";
+import {
+  identityFieldsCorrectable,
+  readinessReasonAction,
+  type MasterCorrectableField,
+} from "@/lib/masterReviewActions";
+import { MasterCorrectionDialog } from "@/components/chemicals/MasterCorrectionDialog";
+import { MasterAdjudicateDialog } from "@/components/chemicals/MasterAdjudicateDialog";
+import { MasterIdentityRekeyDialog } from "@/components/chemicals/MasterIdentityRekeyDialog";
+import { MasterReviewHistory } from "@/components/chemicals/MasterReviewHistory";
+import { MasterActionBadge } from "@/components/chemicals/MasterActionBadge";
 import {
   approvalReadiness,
   fetchMasterVersions,
@@ -204,11 +214,21 @@ function ReviewDialog({
   const qc = useQueryClient();
   const [notes, setNotes] = useState(row.review_notes ?? "");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const [correctField, setCorrectField] = useState<MasterCorrectableField | null>(null);
+  const [adjudicating, setAdjudicating] = useState<ClassifiedConflict | null>(null);
+  const [rekeyOpen, setRekeyOpen] = useState(false);
   // null until a preview has actually been run in this session.
   const [fresherAvailable, setFresherAvailable] = useState<boolean | null>(null);
   const readiness = approvalReadiness(row);
   const draft = masterChemicalDraft(row);
   const current = row.review_status;
+  const canRekey = identityFieldsCorrectable(row);
+
+  const openCorrection = (field?: MasterCorrectableField | null) => {
+    setCorrectField(field ?? null);
+    setCorrectOpen(true);
+  };
 
   const versions = useQuery({
     queryKey: [...QK, "versions", row.id],
@@ -256,16 +276,46 @@ function ReviewDialog({
 
           <MasterChemicalCard master={row} />
 
-          <MasterEvidencePanel row={row} />
+          <MasterEvidencePanel
+            row={row}
+            onAdjudicate={(item) => setAdjudicating(item)}
+            onCorrect={(f) => openCorrection(f)}
+            onRefresh={() => setPreviewOpen(true)}
+          />
 
           {!readiness.ready && (
-            <div className="rounded-md border border-warning/50 bg-warning/10 p-2 text-xs">
-              <div className="font-medium">Evidence gaps</div>
-              <ul className="list-disc pl-4 mt-1 space-y-0.5 text-muted-foreground">
-                {readiness.reasons.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
+            <div className="rounded-md border border-border/60">
+              <div className="border-b border-border/60 px-3 py-1.5 text-xs font-semibold">
+                Evidence gaps ({readiness.reasons.length})
+              </div>
+              <div className="divide-y divide-border/60 text-xs">
+                {readiness.reasons.map((r, i) => {
+                  const act = readinessReasonAction(r, row);
+                  return (
+                    <div key={i} className="px-3 py-2 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="break-words">{r}</span>
+                        <MasterActionBadge kind={act.kind} />
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">{act.detail}</div>
+                      {act.kind === "admin_correction_available" && act.correctField && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openCorrection(act.correctField)}
+                        >
+                          Correct {act.correctField.replace(/_/g, " ")}
+                        </Button>
+                      )}
+                      {act.kind === "refresh_from_apvma" && (
+                        <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}>
+                          Preview APVMA update
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -287,6 +337,11 @@ function ReviewDialog({
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+                Registered uses, rates, withholding periods and re-entry intervals are typed,
+                evidence-level data. They cannot be edited or adjudicated from the portal — a gap
+                here is only closed by an authoritative APVMA preview and apply.
               </div>
             </div>
           )}
@@ -314,14 +369,24 @@ function ReviewDialog({
             </div>
           </div>
 
+          <MasterReviewHistory masterChemicalId={row.id} enabled={open} />
+
           <div>
             <div className="text-xs text-muted-foreground mb-1">Review notes</div>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="flex-wrap gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => openCorrection(null)}>
+            <PencilLine className="h-4 w-4 mr-1" /> Correct fields
+          </Button>
+          {canRekey && (
+            <Button variant="outline" onClick={() => setRekeyOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-1" /> Correct identity
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setPreviewOpen(true)}>
             <RefreshCw className="h-4 w-4 mr-1" /> Preview APVMA update
           </Button>
@@ -341,6 +406,31 @@ function ReviewDialog({
             </Button>
           )}
         </DialogFooter>
+
+        <MasterCorrectionDialog
+          row={row}
+          open={correctOpen}
+          onOpenChange={setCorrectOpen}
+          focusField={correctField}
+          invalidateKey={QK}
+        />
+
+        <MasterAdjudicateDialog
+          row={row}
+          item={adjudicating}
+          open={!!adjudicating}
+          onOpenChange={(v) => !v && setAdjudicating(null)}
+          invalidateKey={QK}
+        />
+
+        {canRekey && (
+          <MasterIdentityRekeyDialog
+            row={row}
+            open={rekeyOpen}
+            onOpenChange={setRekeyOpen}
+            invalidateKey={QK}
+          />
+        )}
 
         <MasterReviewPreviewDialog
           row={row}

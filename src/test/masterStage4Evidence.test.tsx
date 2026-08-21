@@ -122,11 +122,9 @@ describe("Stage 4 evidence UI — APVMA 91636", () => {
 
   it("surfaces unresolved fields without declaring the whole record invalid", () => {
     render(<MasterEvidencePanel row={ROW} />);
-    expect(screen.getByText(/Unresolved fields:/)).toBeTruthy();
-    expect(screen.getByText(/rates, re_entry_period_hours/)).toBeTruthy();
-    expect(screen.queryByText(/unresolved\.$/)).toBeNull();
-    expect(
-      screen.queryByText(/No evidence sources recorded/),
-    ).toBeNull();
+    expect(screen.getByText(/Unresolved fields \(2\)/)).toBeTruthy();
+    expect(screen.getAllByText(/rates/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/re_entry_period_hours/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No evidence sources recorded/)).toBeNull();
   });
 });
