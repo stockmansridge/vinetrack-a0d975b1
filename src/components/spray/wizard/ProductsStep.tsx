@@ -9,9 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   PRODUCT_RATE_BASES,
   type ProductRateBasis,
+  type SprayApplication,
   type SprayProductLine,
 } from "@/lib/sprayApplicationDomain";
-import { applyRegisteredUse, productLineFromChemical } from "@/lib/sprayApplicationDraft";
+import {
+  applyLabelRate,
+  isApplicableLabelRate,
+  productLineFromChemical,
+} from "@/lib/sprayApplicationDraft";
 import {
   PRODUCT_BASIS_FRIENDLY,
   RATE_VALIDATION_FRIENDLY,
@@ -31,13 +36,6 @@ import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNot
 import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
 const UNITS = ["L", "mL", "kg", "g"];
-
-const basisFromLabel = (basis: string | null | undefined): ProductRateBasis | null => {
-  const b = (basis ?? "").toLowerCase();
-  if (b.includes("100")) return "per_100_litres";
-  if (b.includes("hect") || b.includes("ha")) return "whole_block_area";
-  return null;
-};
 
 export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: StepProps) {
   const chemicals = useMemo(
@@ -85,6 +83,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: St
           <ProductRow
             key={i}
             index={i}
+            mode={app.mode}
             line={line}
             result={calc.products[i]}
             chemicals={chemicals}
@@ -101,6 +100,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: St
 
 function ProductRow({
   index,
+  mode,
   line,
   result,
   chemicals,
@@ -110,6 +110,7 @@ function ProductRow({
   onRemove,
 }: {
   index: number;
+  mode: SprayApplication["mode"];
   line: SprayProductLine;
   result: any;
   chemicals: ChemicalIntelligence[];
@@ -280,7 +281,7 @@ function ProductRow({
                         type="button"
                         disabled={!canEdit}
                         className="block w-full rounded px-1 py-1 text-left hover:bg-muted/60"
-                        onClick={() => onChange(applyLabelRate(line, rate, app.mode))}
+                        onClick={() => onChange(applyLabelRate(line, rate, mode))}
                       >
                         {formatLabelRate(rate) ?? "Rate not stated"}
                       </button>
