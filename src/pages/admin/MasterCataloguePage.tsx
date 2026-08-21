@@ -22,7 +22,7 @@ import { toast } from "@/hooks/use-toast";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel";
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
-import { MasterRefreshDialog } from "@/components/chemicals/MasterRefreshDialog";
+import { MasterReviewPreviewDialog } from "@/components/chemicals/MasterReviewPreviewDialog";
 import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
 import { masterReviewSummary } from "@/lib/masterReview";
 import {
@@ -203,8 +203,8 @@ function ReviewDialog({
 }) {
   const qc = useQueryClient();
   const [notes, setNotes] = useState(row.review_notes ?? "");
-  const [refreshOpen, setRefreshOpen] = useState(false);
-  // null until an APVMA refresh has actually been run in this session.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // null until a preview has actually been run in this session.
   const [fresherAvailable, setFresherAvailable] = useState<boolean | null>(null);
   const readiness = approvalReadiness(row);
   const draft = masterChemicalDraft(row);
@@ -322,8 +322,8 @@ function ReviewDialog({
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button variant="outline" onClick={() => setRefreshOpen(true)}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Refresh from APVMA
+          <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Preview APVMA update
           </Button>
           {current !== "retired" && (
             <Button
@@ -342,17 +342,23 @@ function ReviewDialog({
           )}
         </DialogFooter>
 
-        <MasterRefreshDialog
+        <MasterReviewPreviewDialog
           row={row}
-          open={refreshOpen}
-          onOpenChange={setRefreshOpen}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
           invalidateKey={QK}
-          onRefreshed={(res, changed) => {
-            setFresherAvailable(changed);
+          onApplied={(res) => {
+            const ok = res.outcome === "applied" || res.outcome === "already_applied";
+            setFresherAvailable(res.outcome === "applied" ? false : fresherAvailable);
+            versions.refetch();
             toast({
-              title: changed ? "APVMA data updated" : "No change from APVMA",
+              title: ok
+                ? res.outcome === "applied"
+                  ? `Applied — revision ${res.revision ?? "updated"}`
+                  : "Already applied"
+                : "Not applied",
               description: res.message,
-              variant: res.outcome === "identity_mismatch" ? "destructive" : undefined,
+              variant: ok ? undefined : "destructive",
             });
           }}
         />
