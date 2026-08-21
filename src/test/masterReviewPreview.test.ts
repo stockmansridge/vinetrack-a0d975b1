@@ -18,6 +18,11 @@ const prosaro: MasterChemicalRow = {
   catalogue_version: 4,
 };
 
+// Mirrors the live LD-2 resolver output for APVMA 63243: the authoritative
+// label wording is "Harvest - NOT REQUIRED WHEN USED AS DIRECTED", i.e. WHP 0
+// (never 21 days), and the label reference is the full eLabels PDF URL.
+const PROSARO_LABEL_REFERENCE = "https://elabels.apvma.gov.au/63243ELBL.pdf";
+
 const productionPreview = {
   preview_id: "prev-6f0c1a2b-9999",
   master_chemical_id: "master-prosaro",
@@ -30,12 +35,12 @@ const productionPreview = {
     withholding_period_days: null,
   },
   proposed_patch: {
-    label_reference: "https://portal.apvma.gov.au/elabels/63243",
-    withholding_period_days: 21,
+    label_reference: PROSARO_LABEL_REFERENCE,
+    withholding_period_days: 0,
   },
   changes: [
-    { field: "label_reference", current: null, proposed: "https://portal.apvma.gov.au/elabels/63243" },
-    { field: "withholding_period_days", current: null, proposed: 21 },
+    { field: "label_reference", current: null, proposed: PROSARO_LABEL_REFERENCE },
+    { field: "withholding_period_days", current: null, proposed: 0 },
   ],
 };
 
