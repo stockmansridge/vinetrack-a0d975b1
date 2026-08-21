@@ -81,9 +81,17 @@ export interface RegisteredUse {
   rateText: string | null;
   withholdingPeriod: string | null;
   reEntryPeriod: string | null;
+  /** P9 — structured legal periods. `null` means unresolved, never zero. */
+  withholdingDays: number | null;
+  reEntryHours: number | null;
+  /** P9 — display wording for the WHP, "not required" statement included. */
+  withholdingText: string | null;
+  /** P9 — verbatim per-use label restrictions. Never paraphrased. */
+  restrictions: string | null;
 
   notes: string | null;
 }
+
 
 export interface ChemicalCommercial {
   unit: string | null;
