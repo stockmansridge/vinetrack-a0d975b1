@@ -10,7 +10,7 @@ import {
   groupSignatureOf,
   type ResistanceDisease,
 } from "./resistanceRuleset";
-import { resolveProductGroups } from "./resistanceGroupSource";
+import { qualifiedGroupCode, resolveProductGroups } from "./resistanceGroupSource";
 import {
   type ResistanceApplicationEvent,
   type ResistanceProductLine,

@@ -15,3 +15,4 @@ export * from "./planDeviation";
 export * from "./sprayJobPlanLink";
 export * from "./sprayJobPlanLinkQuery";
 
+export * from "./resistanceGroupSource";

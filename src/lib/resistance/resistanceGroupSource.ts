@@ -14,6 +14,24 @@ import {
 } from "./resistanceEvent";
 
 /**
+ * Scheme-qualified code for one activity group, accepting either the read
+ * model's uppercase schemes ("FRAC"/"HRAC"/"IRAC"/"NA") or the write model's
+ * lowercase tokens ("frac"/"hrac"/"irac"/"not_applicable"). A herbicide or
+ * insecticide code keeps its scheme so it can never be read as the fungicide
+ * group carrying the same numeral.
+ */
+export function qualifiedGroupCode(
+  scheme: string | null | undefined,
+  code: string | null | undefined,
+): string | null {
+  const s = (scheme ?? "").trim().toUpperCase();
+  if (!code || !code.trim()) return null;
+  if (s === "NA" || s === "NOT_APPLICABLE") return null;
+  if (s === "HRAC" || s === "IRAC") return `${s} ${code.trim()}`;
+  return code.trim();
+}
+
+/**
  * Scheme-qualified group codes carried by a product's STRUCTURED intelligence.
  * The scheme is preserved because HRAC 9 and FRAC 9 are different chemistry
  * that happen to share a numeral.
@@ -23,14 +41,7 @@ export function structuredGroupCodes(
 ): string[] {
   if (!intel?.structured) return [];
   return intel.activityGroups
-    .filter((g) => g.scheme !== "NA")
-    .map((g) =>
-      g.code
-        ? g.scheme === "HRAC" || g.scheme === "IRAC"
-          ? `${g.scheme} ${g.code}`
-          : g.code
-        : null,
-    )
+    .map((g) => qualifiedGroupCode(g.scheme, g.code))
     .filter((c): c is string => !!c);
 }
 
