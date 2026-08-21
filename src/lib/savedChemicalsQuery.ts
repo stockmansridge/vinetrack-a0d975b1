@@ -141,7 +141,13 @@ const ALLOWED_FIELDS: (keyof SavedChemicalInput)[] = [
   "master_chemical_id", "master_source_revision",
 ];
 
-function sanitize(input: SavedChemicalInput) {
+/**
+ * `mode: "insert"` fills the shared schema's NOT NULL text columns with empty
+ * strings. `mode: "update"` only ever touches fields the caller supplied — a
+ * partial edit must not blank a column (e.g. the legacy active-ingredient
+ * projection) that iOS/Android populated.
+ */
+function sanitize(input: SavedChemicalInput, mode: "insert" | "update" = "insert") {
   const out: Record<string, any> = {};
   for (const k of ALLOWED_FIELDS) {
     const v = input[k];
@@ -195,6 +201,7 @@ function sanitize(input: SavedChemicalInput) {
     "label_url",
     "product_url",
   ]) {
+    if (mode === "update" && !(key in out)) continue;
     if (out[key] == null) out[key] = "";
   }
   if (out.purchase != null && typeof out.purchase === "object") {
@@ -253,7 +260,7 @@ export async function createSavedChemical(vineyardId: string, input: SavedChemic
 
 export async function updateSavedChemical(id: string, input: SavedChemicalInput) {
   const payload = {
-    ...sanitize(input),
+    ...sanitize(input, "update"),
     client_updated_at: new Date().toISOString(),
   };
   if (import.meta.env.DEV) {
