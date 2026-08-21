@@ -517,45 +517,66 @@ const clean = <T extends Record<string, unknown>>(obj: T): T => {
   return out as T;
 };
 
+/** Deep structural copy that preserves explicit nulls (provenance semantics). */
+const copyJson = <T>(v: T): T =>
+  v == null || typeof v !== "object" ? v : (JSON.parse(JSON.stringify(v)) as T);
+
+/** Keys of `o` that the portal does not model, captured verbatim. */
+function extrasOf(o: Record<string, unknown>, known: string[]): WireExtras | undefined {
+  const out: WireExtras = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (known.includes(k)) continue;
+    out[k] = copyJson(v);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Unknown extras are written first so modelled keys always win. */
+const withExtras = (
+  base: Record<string, unknown>,
+  extra: WireExtras | undefined,
+): Record<string, unknown> => (extra ? { ...copyJson(extra), ...base } : base);
+
 function encodeActive(a: WriteActiveIngredient): Record<string, unknown> {
   const group = a.activity_group;
-  return clean({
-    name: a.name.trim(),
-    concentration: finiteOrUndef(a.concentration),
-    concentration_unit: a.concentration_unit,
-    activity_group: group
-      ? clean({
-          scheme: group.scheme,
-          code: group.code,
-          common_name: trimOrUndef(group.common_name),
-        })
-      : undefined,
-    group_source: group ? a.group_source : undefined,
-    identity_source: a.identity_source,
-  });
+  return withExtras(
+    clean({
+      name: a.name.trim(),
+      concentration: finiteOrUndef(a.concentration),
+      concentration_unit: a.concentration_unit,
+      activity_group: group
+        ? clean({
+            scheme: group.scheme,
+            code: group.code,
+            common_name: trimOrUndef(group.common_name),
+          })
+        : undefined,
+      group_source: group ? a.group_source : undefined,
+      identity_source: a.identity_source,
+    }),
+    a.extra,
+  );
 }
 
 function encodeRate(r: WriteLabelRate): Record<string, unknown> {
-  const range = isRangeBasis(r.basis);
   const base: Record<string, unknown> = {
     label: r.label ?? "",
     basis: r.basis,
     unit: r.unit ?? "",
   };
-  if (range) {
-    const min = finiteOrUndef(r.min_value);
-    const max = finiteOrUndef(r.max_value);
-    if (min != null) base.min_value = min;
-    if (max != null) base.max_value = max;
-  } else {
-    const v = finiteOrUndef(r.value);
-    if (v != null) base.value = v;
-  }
-  if (r.basis === "other") {
-    const raw = trimOrUndef(r.raw_text);
-    if (raw) base.raw_text = raw;
-  }
-  return base;
+  // Ranges are never collapsed to an endpoint, and a single value is never
+  // synthesised from a range. Whatever the writer stored round-trips as-is.
+  const min = finiteOrUndef(r.min_value);
+  const max = finiteOrUndef(r.max_value);
+  if (min != null) base.min_value = min;
+  if (max != null) base.max_value = max;
+  const v = finiteOrUndef(r.value);
+  if (v != null) base.value = v;
+  // `basis: "other"` stays reference-only: its raw text is preserved and no
+  // numeric value is invented for it.
+  const raw = trimOrUndef(r.raw_text);
+  if (raw) base.raw_text = raw;
+  return withExtras(base, r.extra);
 }
 
 function encodeUse(u: WriteRegisteredUse): Record<string, unknown> {
@@ -571,16 +592,26 @@ function encodeUse(u: WriteRegisteredUse): Record<string, unknown> {
   if (rei != null) out.re_entry_period_hours = rei;
   const restrictions = trimOrUndef(u.restrictions);
   if (restrictions) out.restrictions = restrictions;
-  return out;
+  // Per-use provenance is evidence: copied verbatim, nulls included.
+  if (u.provenance && typeof u.provenance === "object") {
+    out.provenance = copyJson(u.provenance);
+  }
+  return withExtras(out, u.extra);
 }
 
 const encodeSource = (s: WriteDataSource): Record<string, unknown> =>
-  clean({
-    kind: s.kind,
-    name: (s.name ?? "").trim(),
-    reference: trimOrUndef(s.reference),
-    retrieved_at: trimOrUndef(s.retrieved_at),
-  });
+  withExtras(
+    clean({
+      // An unrecognised kind is preserved on the wire (it is still treated as
+      // non-authoritative by every trust decision in this module).
+      kind: trimOrUndef(s.raw_kind) ?? s.kind,
+      name: (s.name ?? "").trim(),
+      reference: trimOrUndef(s.reference),
+      retrieved_at: trimOrUndef(s.retrieved_at),
+    }),
+    s.extra,
+  );
+
 
 export interface EncodedChemicalIntelligence {
   active_ingredients?: unknown[];
