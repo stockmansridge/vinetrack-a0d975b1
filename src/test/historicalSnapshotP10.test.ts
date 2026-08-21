@@ -42,7 +42,8 @@ describe("P10A — immutable snapshot", () => {
     expect(line.registrationIdentityKey).toBe("AU:apvma:63243");
     expect(line.countryCode).toBe("AU");
     expect(line.activeIngredients.map((a) => a.name)).toEqual(["Prothioconazole", "Tebuconazole"]);
-    expect(line.activityGroups).toEqual(["FRAC 3"]);
+    // FRAC is the engine's unprefixed default; HRAC/IRAC stay qualified.
+    expect(line.activityGroups).toEqual(["3"]);
     expect(line.verificationStatus).toBe("verified");
     expect(line.rate).toBe(1);
     expect(line.rateBasis).toBe("per_hectare");
@@ -72,10 +73,9 @@ describe("P10A — immutable snapshot", () => {
       } as any),
     );
     const chem = readRecordChemistry(recordWith([{ name: "Mix", rate: 2, unit: "L/ha", chemicalSnapshot: snap }]));
-    expect(recordGroupCodes(chem)).toEqual(["FRAC 3", "FRAC 7"]);
-    expect(productLinesFromRecord(recordWith([{ name: "Mix", chemicalSnapshot: snap }]))[0].groups).toContain(
-      "FRAC 3",
-    );
+    expect(recordGroupCodes(chem)).toEqual(["3", "7"]);
+    expect(productLinesFromRecord(recordWith([{ name: "Mix", chemicalSnapshot: snap }]))[0].groups,
+    ).toContain("3");
   });
 
   it("HRAC / IRAC codes stay scheme-qualified and never become FRAC", () => {
@@ -87,7 +87,7 @@ describe("P10A — immutable snapshot", () => {
     );
     const chem = readRecordChemistry(recordWith([{ name: "Glypho", chemicalSnapshot: snap }]));
     expect(chem.lines[0].activityGroups).toEqual(["HRAC 9"]);
-    expect(chem.lines[0].activityGroups).not.toContain("FRAC 9");
+    expect(chem.lines[0].activityGroups).not.toContain("9");
   });
 });
 
