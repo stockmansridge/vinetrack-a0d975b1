@@ -696,6 +696,7 @@ export async function reverifyChemical(args: {
   if (!identity) {
     return {
       outcome: "failed",
+      state: "unresolved",
       title: "Could not re-verify",
       detail: "No product identity to look up. Add a product name or registration number first.",
       diff: [],
@@ -708,6 +709,7 @@ export async function reverifyChemical(args: {
   } catch (e: any) {
     return {
       outcome: "failed",
+      state: "unavailable",
       title: "Could not re-verify",
       detail: `Lookup service failed: ${e?.message ?? String(e)}. The existing verification is unchanged.`,
       identity,
@@ -718,6 +720,7 @@ export async function reverifyChemical(args: {
   if (!candidates.length) {
     return {
       outcome: "failed",
+      state: "unresolved",
       title: "Could not re-verify",
       detail: `No authoritative record was returned for ${identity.description}. The existing verification is unchanged.`,
       identity,
@@ -729,6 +732,7 @@ export async function reverifyChemical(args: {
   if (!match) {
     return {
       outcome: "needs_review",
+      state: "unresolved",
       title: "Needs review",
       detail: `The lookup returned ${candidates.length} record(s) that do not confidently match ${identity.description}. Nothing was changed.`,
       identity,
@@ -749,6 +753,7 @@ export async function reverifyChemical(args: {
   if (proposed.conflicts.length > 0) {
     return {
       outcome: "needs_review",
+      state: "conflict",
       title: "Needs review",
       detail:
         "The retrieved information conflicts with the stored record. Review the differences before accepting." +
@@ -770,6 +775,7 @@ export async function reverifyChemical(args: {
         : refreshed.verifiedAt ?? null;
     return {
       outcome: "current",
+      state: "no_change",
       title: foreign
         ? "Product identity confirmed — not verified for this vineyard"
         : "Chemical information is current",
@@ -785,6 +791,7 @@ export async function reverifyChemical(args: {
 
   return {
     outcome: "updated",
+    state: classifyChangeState(diff),
     title: foreign
       ? "Updated information found — not verified for this vineyard"
       : "Updated information found",
