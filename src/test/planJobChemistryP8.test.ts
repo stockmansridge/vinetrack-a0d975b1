@@ -139,13 +139,13 @@ describe("P8 — reload and edit do not rewrite job chemistry", () => {
   const jobRow = () => {
     const { input } = save(draftWith(intel()));
     return {
+      ...input,
       id: "job-1",
       vineyard_id: "v1",
       resistance_plan_id: "plan-1",
       resistance_position_id: "pos-1",
       resistance_position_snapshot: { id: "pos-1", sequence: 1, groups: ["3"] },
       resistance_plan_source_revision: 3,
-      ...input,
     } as any;
   };
 
