@@ -32,6 +32,8 @@ export interface StampedActive {
 }
 
 export interface JobChemistryStamp {
+  /** Identity of the Saved Chemical this stamp describes. */
+  saved_chemical_id?: string | null;
   activity_groups: WriteActivityGroup[];
   verification_status: WriteVerificationStatus;
   registration_identity_key?: string | null;
@@ -118,6 +120,7 @@ export function chemistryStampFromLine(line: {
     return null;
   }
   return {
+    saved_chemical_id: line.savedChemicalId ?? null,
     activity_groups: groups,
     verification_status: verification(line.verificationStatus),
     ...(identity ? { registration_identity_key: identity } : {}),
@@ -156,6 +159,12 @@ export function readChemistryStamp(line: unknown): JobChemistryStamp | null {
   const hasVerification = typeof o.verification_status === "string";
   if (groups.length === 0 && actives.length === 0 && !identity && !hasVerification) return null;
   return {
+    saved_chemical_id:
+      typeof o.saved_chemical_id === "string"
+        ? o.saved_chemical_id
+        : typeof o.savedChemicalId === "string"
+          ? o.savedChemicalId
+          : null,
     activity_groups: groups,
     verification_status: verification(o.verification_status),
     registration_identity_key: identity,
@@ -212,4 +221,13 @@ export function stampDivergesFromCurrent(
   const stamped = stampGroupCodes(stamp).sort();
   if (current.join("|") !== stamped.join("|")) return true;
   return intel.verification.status !== stamp.verification_status;
+}
+
+/** A stamp only describes the product it was taken from. */
+export function stampMatchesLine(
+  stamp: JobChemistryStamp | null | undefined,
+  savedChemicalId: string | null | undefined,
+): boolean {
+  if (!stamp) return false;
+  return (stamp.saved_chemical_id ?? null) === (savedChemicalId ?? null);
 }

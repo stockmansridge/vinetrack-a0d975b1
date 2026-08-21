@@ -17,7 +17,10 @@ import type { CarrierResult, SprayCalculationResult } from "@/lib/sprayCalculati
 import type { SprayJobChemicalLine, SprayJobInput } from "@/lib/sprayJobsQuery";
 import { chemUnitOnly } from "@/lib/rateBasis";
 import { provenanceWritePayload } from "@/lib/resistance/sprayJobPlanLink";
-import { chemistryStampFromLine } from "@/lib/resistance/sprayJobChemistryStamp";
+import {
+  chemistryStampFromLine,
+  stampMatchesLine,
+} from "@/lib/resistance/sprayJobChemistryStamp";
 
 
 const pos = (v: unknown): number | null => {
@@ -46,7 +49,9 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
   // later Saved Chemical re-verify can never rewrite this job's chemistry and
   // plan deviation has real groups to compare.
   // An existing stamp is reused verbatim — editing a job never re-stamps it.
-  const stamp = line.chemistryStamp ?? chemistryStampFromLine(line);
+  const stamp = stampMatchesLine(line.chemistryStamp, line.savedChemicalId)
+    ? line.chemistryStamp!
+    : chemistryStampFromLine(line);
   return {
     chemical_id: line.savedChemicalId ?? null,
     savedChemicalId: line.savedChemicalId ?? null,
