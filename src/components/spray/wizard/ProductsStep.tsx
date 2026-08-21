@@ -292,8 +292,25 @@ function ProductRow({
                       </div>
                     ),
                   )}
+                  {/* P9 — legal periods and restrictions shown as the label
+                      states them. Missing values stay unresolved; nothing is
+                      defaulted, inferred or paraphrased. */}
+                  <div className="text-muted-foreground">
+                    WHP: {use.withholdingText ?? use.withholdingPeriod ?? "Not stated"}
+                    {" · "}
+                    REI:{" "}
+                    {use.reEntryHours != null
+                      ? `${use.reEntryHours} ${use.reEntryHours === 1 ? "hour" : "hours"}`
+                      : (use.reEntryPeriod ?? "Not stated")}
+                  </div>
+                  {use.restrictions && (
+                    <div className="whitespace-pre-wrap text-muted-foreground">
+                      {use.restrictions}
+                    </div>
+                  )}
                 </div>
               ))}
+
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">
