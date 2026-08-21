@@ -58,9 +58,15 @@ export function parseRestrictions(raw?: string | null): ParsedRestrictions {
 
 export function composeRestrictions(p: ParsedRestrictions): string {
   const parts: string[] = [];
-  if (p.whpDays.trim()) parts.push(`WHP: ${p.whpDays.trim()} days.`);
-  if (p.reiHours.trim()) parts.push(`REI: ${p.reiHours.trim()} hours.`);
+  const whp = p.whpDays.trim();
+  // "1 days" is not label wording. Zero stays zero — the "not required when
+  // used as directed" statement lives verbatim in the free text, so it is
+  // never rewritten into, or out of, the numeric period.
+  if (whp) parts.push(`WHP: ${whp} ${Number(whp) === 1 ? "day" : "days"}.`);
+  const rei = p.reiHours.trim();
+  if (rei) parts.push(`REI: ${rei} ${Number(rei) === 1 ? "hour" : "hours"}.`);
   const rest = p.rest.trim();
   if (rest) parts.push(rest);
   return parts.join(" ");
 }
+
