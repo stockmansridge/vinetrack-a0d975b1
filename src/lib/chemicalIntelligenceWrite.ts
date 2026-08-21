@@ -141,6 +141,14 @@ export interface WriteActivityGroup {
   common_name?: string;
 }
 
+/**
+ * P4 cross-platform parity: every wire object carries an `extra` bag holding
+ * keys the portal does not model. Decode captures them, encode writes them
+ * back verbatim, so a Saved Chemical authored by iOS/Android never loses
+ * fields just because this client is older than the writer.
+ */
+export type WireExtras = Record<string, unknown>;
+
 export interface WriteActiveIngredient {
   name: string;
   concentration?: number;
@@ -148,6 +156,7 @@ export interface WriteActiveIngredient {
   activity_group?: WriteActivityGroup;
   group_source?: DataSourceKind;
   identity_source?: DataSourceKind;
+  extra?: WireExtras;
 }
 
 export interface WriteDataSource {
@@ -155,6 +164,9 @@ export interface WriteDataSource {
   name: string;
   reference?: string;
   retrieved_at?: string;
+  /** Original `kind` string when it is outside the known vocabulary. */
+  raw_kind?: string;
+  extra?: WireExtras;
 }
 
 export interface WriteConflict {
@@ -174,6 +186,7 @@ export interface WriteLabelRate {
   max_value?: number;
   unit: string;
   raw_text?: string;
+  extra?: WireExtras;
 }
 
 export interface WriteRegisteredUse {
@@ -184,7 +197,15 @@ export interface WriteRegisteredUse {
   withholding_period_days?: number;
   re_entry_period_hours?: number;
   restrictions?: string;
+  /**
+   * LD-2 per-use provenance (`{ claim, rates, withholding_period, ... }`).
+   * Preserved verbatim, including explicit nulls — a null here means
+   * "unresolved" and must never be dropped or invented.
+   */
+  provenance?: Record<string, unknown>;
+  extra?: WireExtras;
 }
+
 
 export interface WriteRegistration {
   country?: string;
