@@ -1,17 +1,23 @@
-// Classified conflicts for a Master record.
+// Classified conflicts for a Master record, each with an explicit action.
 //
-// The screen must distinguish an automatically-resolved precedence conflict
-// (authoritative source beat AI) from a genuine admin decision. Neither can be
-// written from the portal today — there is no backend action for recording a
-// per-field conflict resolution — so this surface is explicit about that.
-import { AlertTriangle, ShieldCheck, CircleHelp } from "lucide-react";
+// R2-C2: an issue never looks actionable unless an action really exists. Where
+// SQL 203 accepts an adjudication (`stored` / `superseded_by_refresh`) the row
+// offers it; registration identity and typed/evidence-level conflicts say
+// plainly that they cannot be resolved that way.
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DATA_SOURCE_KIND_LABEL } from "@/lib/chemicalIntelligenceWrite";
 import {
   MASTER_CONFLICT_CLASS_LABEL,
   safeExternalUrl,
   type ClassifiedConflict,
 } from "@/lib/masterReview";
+import type { MasterChemicalRow } from "@/lib/masterChemicals";
+import {
+  conflictAction,
+  type MasterCorrectableField,
+} from "@/lib/masterReviewActions";
+import { MasterActionBadge } from "@/components/chemicals/MasterActionBadge";
 
 function ValueText({ value }: { value: string | null }) {
   const url = safeExternalUrl(value);
@@ -25,24 +31,19 @@ function ValueText({ value }: { value: string | null }) {
   return <span className="break-words">{value ?? "—"}</span>;
 }
 
-function ClassBadge({ item }: { item: ClassifiedConflict }) {
-  const map = {
-    decision_required: {
-      cls: "border-transparent bg-destructive/15 text-destructive",
-      Icon: AlertTriangle,
-    },
-    auto_resolved: { cls: "border-transparent bg-secondary text-secondary-foreground", Icon: ShieldCheck },
-    unresolved_missing: { cls: "border-transparent bg-muted text-muted-foreground", Icon: CircleHelp },
-  }[item.klass];
-  const Icon = map.Icon;
-  return (
-    <Badge className={`${map.cls} text-[10px] gap-1 whitespace-nowrap`}>
-      <Icon className="h-3 w-3" /> {MASTER_CONFLICT_CLASS_LABEL[item.klass]}
-    </Badge>
-  );
-}
-
-export function MasterConflictList({ items }: { items: ClassifiedConflict[] }) {
+export function MasterConflictList({
+  items,
+  row,
+  onAdjudicate,
+  onCorrect,
+  onRefresh,
+}: {
+  items: ClassifiedConflict[];
+  row?: MasterChemicalRow;
+  onAdjudicate?: (item: ClassifiedConflict) => void;
+  onCorrect?: (field: MasterCorrectableField) => void;
+  onRefresh?: () => void;
+}) {
   if (items.length === 0) return null;
   const decisions = items.filter((i) => i.klass === "decision_required");
 
@@ -55,67 +56,87 @@ export function MasterConflictList({ items }: { items: ClassifiedConflict[] }) {
         </span>
       </div>
       <div className="divide-y divide-border/60 text-xs">
-        {items.map((item, i) => (
-          <div key={i} className="px-3 py-2 space-y-1">
-            <div className="flex items-start justify-between gap-2">
-              <div className="font-medium break-words">
-                {item.conflict.field}
-                {item.conflict.active_ingredient_name
-                  ? ` · ${item.conflict.active_ingredient_name}`
-                  : ""}
+        {items.map((item, i) => {
+          const act = row ? conflictAction(item, row) : null;
+          return (
+            <div key={i} className="px-3 py-2 space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-medium break-words">
+                  {item.conflict.field}
+                  {item.conflict.active_ingredient_name
+                    ? ` · ${item.conflict.active_ingredient_name}`
+                    : ""}
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <Badge variant="outline" className="text-[10px] whitespace-nowrap">
+                    {MASTER_CONFLICT_CLASS_LABEL[item.klass]}
+                  </Badge>
+                  {act && <MasterActionBadge kind={act.kind} />}
+                </div>
               </div>
-              <ClassBadge item={item} />
-            </div>
 
-            {item.klass === "decision_required" ? (
-              <div className="space-y-0.5">
-                <div>
-                  <span className="text-muted-foreground">
-                    {DATA_SOURCE_KIND_LABEL[item.conflict.authoritative_source]}:{" "}
-                  </span>
-                  <ValueText value={item.conflict.authoritative_value} />
-                </div>
-                <div>
-                  <span className="text-muted-foreground">
-                    {DATA_SOURCE_KIND_LABEL[item.conflict.extracted_source]}:{" "}
-                  </span>
-                  <ValueText value={item.conflict.extracted_value} />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                <div>
-                  <span className="text-muted-foreground">Value in catalogue: </span>
-                  <ValueText value={item.winningValue} />
-                  {item.winningSource && (
+              {item.klass === "decision_required" ? (
+                <div className="space-y-0.5">
+                  <div>
                     <span className="text-muted-foreground">
-                      {" "}
-                      ({DATA_SOURCE_KIND_LABEL[item.winningSource]})
+                      {DATA_SOURCE_KIND_LABEL[item.conflict.authoritative_source]}:{" "}
                     </span>
+                    <ValueText value={item.conflict.authoritative_value} />
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">
+                      {DATA_SOURCE_KIND_LABEL[item.conflict.extracted_source]}:{" "}
+                    </span>
+                    <ValueText value={item.conflict.extracted_value} />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <div>
+                    <span className="text-muted-foreground">Value in catalogue: </span>
+                    <ValueText value={item.winningValue} />
+                    {item.winningSource && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        ({DATA_SOURCE_KIND_LABEL[item.winningSource]})
+                      </span>
+                    )}
+                  </div>
+                  {item.rejectedValue && (
+                    <div className="text-muted-foreground line-through decoration-muted-foreground/50">
+                      Rejected evidence: {item.rejectedValue}
+                      {item.rejectedSource
+                        ? ` (${DATA_SOURCE_KIND_LABEL[item.rejectedSource]})`
+                        : ""}
+                    </div>
                   )}
                 </div>
-                {item.rejectedValue && (
-                  <div className="text-muted-foreground line-through decoration-muted-foreground/50">
-                    Rejected evidence: {item.rejectedValue}
-                    {item.rejectedSource
-                      ? ` (${DATA_SOURCE_KIND_LABEL[item.rejectedSource]})`
-                      : ""}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            <div className="text-[11px] text-muted-foreground/80">{item.explanation}</div>
-          </div>
-        ))}
+              <div className="text-[11px] text-muted-foreground/80">{item.explanation}</div>
+              {act && (
+                <div className="text-[11px] text-muted-foreground/80">{act.detail}</div>
+              )}
+
+              {act?.adjudicable && onAdjudicate && (
+                <Button size="sm" variant="outline" onClick={() => onAdjudicate(item)}>
+                  Record decision
+                </Button>
+              )}
+              {act?.kind === "admin_correction_available" && act.correctField && onCorrect && (
+                <Button size="sm" variant="outline" onClick={() => onCorrect(act.correctField!)}>
+                  Correct {act.correctField.replace(/_/g, " ")}
+                </Button>
+              )}
+              {act?.kind === "refresh_from_apvma" && onRefresh && (
+                <Button size="sm" variant="outline" onClick={onRefresh}>
+                  Preview APVMA update
+                </Button>
+              )}
+            </div>
+          );
+        })}
       </div>
-      {decisions.length > 0 && (
-        <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
-          Selecting between competing values is not yet writable from the portal — the shared
-          VineTrack backend exposes no per-field conflict resolution action. Record the decision in
-          the review notes, or re-run the APVMA refresh so the backend resolves it.
-        </div>
-      )}
     </div>
   );
 }
