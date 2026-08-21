@@ -34,7 +34,7 @@ function Cell({ value }: { value: string | null }) {
       </a>
     );
   }
-  return <span className="break-words">{value ?? "—"}</span>;
+  return <span className="whitespace-pre-wrap break-all">{value ?? "—"}</span>;
 }
 
 export function MasterReviewPreviewDialog({
@@ -100,7 +100,7 @@ export function MasterReviewPreviewDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Preview APVMA update</DialogTitle>
           <DialogDescription>
@@ -177,7 +177,7 @@ export function MasterReviewPreviewDialog({
             {preview.message && <div className="text-muted-foreground">{preview.message}</div>}
 
             <div className="rounded-md border border-border/60">
-              <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5 font-semibold">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5 font-semibold">
                 <span>Current vs proposed ({preview.changes.length} change(s))</span>
                 <span className="font-normal text-muted-foreground">proposed_patch is display only</span>
               </div>
@@ -190,12 +190,14 @@ export function MasterReviewPreviewDialog({
                   preview.changes.map((c) => (
                     <div key={c.field} className="px-3 py-2 bg-warning/10">
                       <div className="font-medium">{c.label}</div>
-                      <div className="mt-0.5 grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-                        <div className="text-muted-foreground">
+                      <div className="mt-1 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-start">
+                        <div className="min-w-0 max-h-40 overflow-y-auto rounded border border-border/40 bg-background/60 p-2 text-muted-foreground">
+                          <div className="mb-1 text-[10px] uppercase tracking-wide opacity-70">Current</div>
                           <Cell value={c.current} />
                         </div>
-                        <ArrowRight className="h-3.5 w-3.5 mt-0.5 text-muted-foreground" />
-                        <div className="font-medium">
+                        <ArrowRight className="hidden md:block h-3.5 w-3.5 mt-6 text-muted-foreground" />
+                        <div className="min-w-0 max-h-40 overflow-y-auto rounded border border-border/40 bg-background/60 p-2 font-medium">
+                          <div className="mb-1 text-[10px] uppercase tracking-wide font-normal opacity-70">Proposed</div>
                           <Cell value={c.proposed} />
                         </div>
                       </div>
