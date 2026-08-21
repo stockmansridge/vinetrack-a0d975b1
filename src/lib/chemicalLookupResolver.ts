@@ -571,6 +571,12 @@ function decodeUses(raw: any[], gate: FieldGate): WriteRegisteredUse[] {
       const restrictions = useFieldAllowed(gate, u, "restrictions", "restrictions")
         ? s(u.restrictions)
         : undefined;
+      // LD-2 per-use provenance is preserved verbatim, explicit nulls
+      // included — a null means "unresolved" and must never be dropped.
+      const provenance =
+        u.provenance && typeof u.provenance === "object" && !Array.isArray(u.provenance)
+          ? ({ ...u.provenance } as Record<string, unknown>)
+          : undefined;
       return {
         crop,
         target_raw: target,
@@ -579,6 +585,7 @@ function decodeUses(raw: any[], gate: FieldGate): WriteRegisteredUse[] {
         withholding_period_days: whp,
         re_entry_period_hours: rei,
         restrictions,
+        provenance,
       } as WriteRegisteredUse;
     })
     .filter((u): u is WriteRegisteredUse => !!u);
