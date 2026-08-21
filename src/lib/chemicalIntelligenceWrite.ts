@@ -731,19 +731,40 @@ function decodeGroup(value: unknown): WriteActivityGroup | undefined {
   }) as WriteActivityGroup;
 }
 
+const ACTIVE_KEYS = [
+  "name",
+  "active_ingredient",
+  "concentration",
+  "concentration_unit",
+  "unit",
+  "activity_group",
+  "activityGroup",
+  "group_source",
+  "identity_source",
+];
+
 function decodeActive(value: unknown): WriteActiveIngredient | null {
   const o = rec(value);
   const name = trimOrUndef(o.name ?? o.active_ingredient);
   if (!name) return null;
+  const rawUnit = trimOrUndef(o.concentration_unit ?? o.unit);
+  const unit = normaliseConcentrationUnit(rawUnit);
+  const extra = extrasOf(o, ACTIVE_KEYS) ?? {};
+  // A concentration unit outside the known vocabulary is kept verbatim rather
+  // than dropped — mobile may legitimately use a unit this build predates.
+  if (rawUnit && !unit) extra.concentration_unit = rawUnit;
   return clean({
     name,
     concentration: finiteOrUndef(o.concentration),
-    concentration_unit: normaliseConcentrationUnit(o.concentration_unit ?? o.unit),
+    concentration_unit: unit,
     activity_group: decodeGroup(o.activity_group ?? o.activityGroup),
     group_source: o.group_source ? normaliseDataSourceKind(o.group_source) : undefined,
     identity_source: o.identity_source ? normaliseDataSourceKind(o.identity_source) : undefined,
+    extra: Object.keys(extra).length ? extra : undefined,
   }) as WriteActiveIngredient;
 }
+
+const RATE_KEYS = ["label", "basis", "value", "min_value", "max_value", "unit", "raw_text"];
 
 function decodeRate(value: unknown): WriteLabelRate {
   const o = rec(value);
@@ -756,6 +777,7 @@ function decodeRate(value: unknown): WriteLabelRate {
     max_value: finiteOrUndef(o.max_value),
     unit: trimOrUndef(o.unit) ?? "",
     raw_text: trimOrUndef(o.raw_text),
+    extra: extrasOf(o, RATE_KEYS),
   }) as WriteLabelRate;
 }
 
@@ -774,12 +796,28 @@ export function deriveSprayTarget(targetRaw: string | null | undefined): SprayTa
   return undefined;
 }
 
+const USE_KEYS = [
+  "crop",
+  "target",
+  "target_raw",
+  "rates",
+  "withholding_period_days",
+  "re_entry_period_hours",
+  "restrictions",
+  "provenance",
+];
+
 function decodeUse(value: unknown): WriteRegisteredUse | null {
   const o = rec(value);
   const crop = trimOrUndef(o.crop) ?? "";
   const targetRaw = trimOrUndef(o.target_raw ?? o.target) ?? "";
   const rates = asArray(o.rates).map(decodeRate);
-  if (!crop && !targetRaw && rates.length === 0) return null;
+  const whp = intOrUndef(o.withholding_period_days);
+  const rei = intOrUndef(o.re_entry_period_hours);
+  const restrictions = trimOrUndef(o.restrictions);
+  if (!crop && !targetRaw && rates.length === 0 && whp == null && rei == null && !restrictions) {
+    return null;
+  }
   const target =
     typeof o.target === "string" && o.target.includes("_")
       ? (o.target as SprayTarget)
@@ -789,23 +827,37 @@ function decodeUse(value: unknown): WriteRegisteredUse | null {
     target_raw: targetRaw,
     target,
     rates,
-    withholding_period_days: intOrUndef(o.withholding_period_days),
-    re_entry_period_hours: intOrUndef(o.re_entry_period_hours),
-    restrictions: trimOrUndef(o.restrictions),
+    withholding_period_days: whp,
+    re_entry_period_hours: rei,
+    restrictions,
+    provenance:
+      o.provenance && typeof o.provenance === "object"
+        ? (copyJson(o.provenance) as Record<string, unknown>)
+        : undefined,
+    extra: extrasOf(o, USE_KEYS),
   }) as WriteRegisteredUse;
 }
+
+const SOURCE_KEYS = ["kind", "name", "label", "reference", "url", "retrieved_at", "retrievedAt"];
 
 function decodeSource(value: unknown): WriteDataSource | null {
   const o = rec(value);
   const name = trimOrUndef(o.name ?? o.label);
   if (!name && !o.kind) return null;
+  const rawKind = trimOrUndef(o.kind);
+  const kind = normaliseDataSourceKind(o.kind);
   return clean({
-    kind: normaliseDataSourceKind(o.kind),
+    kind,
+    // Keep the original token when it is outside the known vocabulary so the
+    // value written back matches what mobile stored.
+    raw_kind: rawKind && !(DATA_SOURCE_KINDS as string[]).includes(rawKind) ? rawKind : undefined,
     name: name ?? "",
     reference: trimOrUndef(o.reference ?? o.url),
     retrieved_at: trimOrUndef(o.retrieved_at ?? o.retrievedAt),
+    extra: extrasOf(o, SOURCE_KEYS),
   }) as WriteDataSource;
 }
+
 
 function decodeConflict(value: unknown): WriteConflict | null {
   const o = rec(value);
