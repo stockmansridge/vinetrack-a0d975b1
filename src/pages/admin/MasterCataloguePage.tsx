@@ -7,7 +7,7 @@
 // rules stay authoritative — a refusal is surfaced, never worked around.
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, History, Loader2, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
+import { AlertTriangle, BadgeCheck, History, RefreshCw, Search, ShieldOff, Download } from "lucide-react";
 import { AdminGate, AdminPageHeader, AdminError, AdminEmpty } from "./_shared";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,9 @@ import { toast } from "@/hooks/use-toast";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel";
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
-import { refreshFromApvma } from "@/lib/masterChemicalImport";
+import { MasterRefreshDialog } from "@/components/chemicals/MasterRefreshDialog";
+import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
+import { masterReviewSummary } from "@/lib/masterReview";
 import {
   approvalReadiness,
   fetchMasterVersions,
@@ -201,6 +203,9 @@ function ReviewDialog({
 }) {
   const qc = useQueryClient();
   const [notes, setNotes] = useState(row.review_notes ?? "");
+  const [refreshOpen, setRefreshOpen] = useState(false);
+  // null until an APVMA refresh has actually been run in this session.
+  const [fresherAvailable, setFresherAvailable] = useState<boolean | null>(null);
   const readiness = approvalReadiness(row);
   const draft = masterChemicalDraft(row);
   const current = row.review_status;
@@ -209,20 +214,6 @@ function ReviewDialog({
     queryKey: [...QK, "versions", row.id],
     enabled: open,
     queryFn: () => fetchMasterVersions(row.id),
-  });
-
-  const refresh = useMutation({
-    mutationFn: () => refreshFromApvma(row),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: QK });
-      toast({
-        title: res.outcome === "updated" ? "Refreshed from APVMA" : "Nothing changed",
-        description: res.message,
-        variant: res.outcome === "identity_mismatch" ? "destructive" : undefined,
-      });
-    },
-    onError: (e: any) =>
-      toast({ title: "Refresh failed", description: e?.message ?? String(e), variant: "destructive" }),
   });
 
   const mut = useMutation({
@@ -256,6 +247,13 @@ function ReviewDialog({
         </DialogHeader>
 
         <div className="space-y-3 text-sm">
+          <MasterReviewSummaryCard
+            summary={masterReviewSummary(row, {
+              blockingReasons: readiness.reasons,
+              fresherAvailable,
+            })}
+          />
+
           <MasterChemicalCard master={row} />
 
           <MasterEvidencePanel row={row} />
@@ -324,17 +322,8 @@ function ReviewDialog({
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button
-            variant="outline"
-            disabled={refresh.isPending}
-            onClick={() => refresh.mutate()}
-          >
-            {refresh.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-1" />
-            )}
-            Refresh from APVMA
+          <Button variant="outline" onClick={() => setRefreshOpen(true)}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Refresh from APVMA
           </Button>
           {current !== "retired" && (
             <Button
@@ -352,6 +341,21 @@ function ReviewDialog({
             </Button>
           )}
         </DialogFooter>
+
+        <MasterRefreshDialog
+          row={row}
+          open={refreshOpen}
+          onOpenChange={setRefreshOpen}
+          invalidateKey={QK}
+          onRefreshed={(res, changed) => {
+            setFresherAvailable(changed);
+            toast({
+              title: changed ? "APVMA data updated" : "No change from APVMA",
+              description: res.message,
+              variant: res.outcome === "identity_mismatch" ? "destructive" : undefined,
+            });
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

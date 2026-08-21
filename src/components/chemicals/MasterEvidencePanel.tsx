@@ -3,7 +3,7 @@
 // A Master record is never summarised as a single "APVMA Verified" stamp: the
 // registration may be authoritative while the registered uses were interpreted
 // from a label. Every field carries its own provenance badge.
-import { AlertTriangle, CircleHelp, FileText, Landmark, Sparkles, Tags } from "lucide-react";
+import { AlertTriangle, CircleHelp, ExternalLink, FileText, Landmark, Sparkles, Tags } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   EVIDENCE_LEVEL_LABEL,
@@ -14,6 +14,8 @@ import {
   type EvidenceLevel,
 } from "@/lib/masterEvidence";
 import { masterChemicalDraft, type MasterChemicalRow } from "@/lib/masterChemicals";
+import { classifyMasterConflicts, safeExternalUrl } from "@/lib/masterReview";
+import { MasterConflictList } from "@/components/chemicals/MasterConflictList";
 
 const LEVEL_STYLE: Record<EvidenceLevel, string> = {
   official_register: "border-transparent bg-primary/15 text-primary",
@@ -43,12 +45,24 @@ function EvidenceBadge({ level }: { level: EvidenceLevel }) {
 }
 
 function FieldRow({ field }: { field: EvidenceField }) {
+  const url = safeExternalUrl(field.value);
   return (
     <div className="flex items-start justify-between gap-2 px-3 py-1.5">
       <div className="min-w-0">
         <div className="text-xs font-medium">{field.label}</div>
         <div className="text-xs text-muted-foreground break-words">
-          {field.value ?? "Not supplied"}
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary underline break-all"
+            >
+              {field.value} <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+          ) : (
+            (field.value ?? "Not supplied")
+          )}
         </div>
         {field.detail && (
           <div className="text-[11px] text-muted-foreground/80 break-words">{field.detail}</div>
@@ -58,6 +72,7 @@ function FieldRow({ field }: { field: EvidenceField }) {
     </div>
   );
 }
+
 
 function Group({ title, fields }: { title: string; fields: EvidenceField[] }) {
   if (fields.length === 0) return null;
@@ -99,27 +114,7 @@ export function MasterEvidencePanel({ row }: { row: MasterChemicalRow }) {
       <Group title="Constituents and activity groups" fields={of("chemistry")} />
       <Group title="Registered uses, rates, WHP and re-entry" fields={of("uses")} />
 
-      {draft.conflicts.length > 0 && (
-        <div className="rounded-md border border-destructive/40">
-          <div className="border-b border-destructive/40 px-3 py-1.5 text-xs font-semibold text-destructive">
-            Conflicts ({draft.conflicts.length})
-          </div>
-          <div className="divide-y divide-border/60 text-xs">
-            {draft.conflicts.map((c, i) => (
-              <div key={i} className="px-3 py-2">
-                <div className="font-medium">
-                  {c.field}
-                  {c.active_ingredient_name ? ` · ${c.active_ingredient_name}` : ""}
-                </div>
-                <div className="text-muted-foreground">
-                  Extracted "{c.extracted_value || "—"}" vs authoritative "
-                  {c.authoritative_value || "—"}"
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <MasterConflictList items={classifyMasterConflicts(row)} />
 
       {draft.unresolvedFields.length > 0 && (
         <div className="rounded-md border border-border/60 px-3 py-2 text-xs">
