@@ -377,8 +377,16 @@ function ReviewDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="flex-wrap gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => openCorrection(null)}>
+            <PencilLine className="h-4 w-4 mr-1" /> Correct fields
+          </Button>
+          {canRekey && (
+            <Button variant="outline" onClick={() => setRekeyOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-1" /> Correct identity
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setPreviewOpen(true)}>
             <RefreshCw className="h-4 w-4 mr-1" /> Preview APVMA update
           </Button>
