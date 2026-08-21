@@ -67,11 +67,13 @@ describe("preview parsing (Prosaro 63243)", () => {
     expect(previewExpired(p)).toBe(false);
   });
 
-  it("surfaces current vs proposed eLabel reference and WHP", () => {
+  it("surfaces the full authoritative eLabel reference and the label WHP of 0", () => {
     const byField = Object.fromEntries(p.changes.map((c) => [c.field, c]));
     expect(byField.label_reference.current).toBeNull();
-    expect(byField.label_reference.proposed).toContain("elabels/63243");
-    expect(byField.withholding_period_days.proposed).toBe("21");
+    expect(byField.label_reference.proposed).toBe(PROSARO_LABEL_REFERENCE);
+    // "NOT REQUIRED WHEN USED AS DIRECTED" => 0, never 21 days.
+    expect(byField.withholding_period_days.proposed).toBe("0");
+    expect(byField.withholding_period_days.proposed).not.toBe("21");
     expect(previewApplyBlockedReason(p)).toBeNull();
   });
 
