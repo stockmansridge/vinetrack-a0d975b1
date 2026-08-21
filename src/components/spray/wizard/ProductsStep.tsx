@@ -264,26 +264,40 @@ function ProductRow({
           {showUses && (
             <div className="divide-y rounded-md border text-xs">
               {intel.registeredUses.map((use, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={!canEdit}
-                  className="w-full px-2 py-1.5 text-left hover:bg-muted/60"
-                  onClick={() =>
-                    onChange(applyRegisteredUse(line, use, basisFromLabel(use.rate?.basis)))
-                  }
-                >
-                  <span className="font-medium">{use.target ?? use.crop ?? "Registered use"}</span>
-                  <span className="ml-2 text-muted-foreground">
-                    {formatLabelRate(use.rate) ?? use.rateText ?? "Rate not stated"}
-                  </span>
-                </button>
+                <div key={i} className="space-y-1 px-2 py-1.5">
+                  <div className="font-medium">
+                    {[use.crop, use.target].filter(Boolean).join(" · ") || "Registered use"}
+                  </div>
+                  {use.rates.length === 0 && (
+                    <div className="text-muted-foreground">{use.rateText ?? "Rate not stated"}</div>
+                  )}
+                  {/* Every label rate is offered — a multi-rate label is never
+                      flattened to one line, and a range keeps both endpoints. */}
+                  {use.rates.map((rate, r) =>
+                    isApplicableLabelRate(rate) ? (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={!canEdit}
+                        className="block w-full rounded px-1 py-1 text-left hover:bg-muted/60"
+                        onClick={() => onChange(applyLabelRate(line, rate, app.mode))}
+                      >
+                        {formatLabelRate(rate) ?? "Rate not stated"}
+                      </button>
+                    ) : (
+                      <div key={r} className="px-1 py-1 text-muted-foreground">
+                        {rate.rawText ?? formatLabelRate(rate) ?? "Rate not stated"}{" "}
+                        <span className="italic">(reference only — not an application rate)</span>
+                      </div>
+                    ),
+                  )}
+                </div>
               ))}
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">
             {labelAuthoritative
-              ? "Selecting a use fills the label range for guidance only — the rate stays yours to choose."
+              ? "Selecting a label rate fills the range for guidance only — the rate and basis stay yours to choose."
               : `These uses, rates, withholding and re-entry come from the ${countryLabel(
                   intel.product.country,
                 )} label and are not authoritative for this vineyard.`}
