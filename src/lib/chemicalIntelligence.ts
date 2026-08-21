@@ -65,15 +65,23 @@ export interface LabelRate {
   max: number | null;
   unit: string | null;
   basis: string | null;
+  /** Label text for a rate that carries no usable number (basis "other"). */
+  rawText?: string | null;
+  /** True for `basis: "other"` — reference material, never an application rate. */
+  referenceOnly?: boolean;
 }
 
 export interface RegisteredUse {
   crop: string | null;
   target: string | null;
+  /** Every label rate as stored. Ranges keep both endpoints. */
+  rates: LabelRate[];
+  /** First applicable (non reference-only) rate, for compact display. */
   rate: LabelRate | null;
   rateText: string | null;
   withholdingPeriod: string | null;
   reEntryPeriod: string | null;
+
   notes: string | null;
 }
 
