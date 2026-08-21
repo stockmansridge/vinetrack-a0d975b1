@@ -43,12 +43,24 @@ function EvidenceBadge({ level }: { level: EvidenceLevel }) {
 }
 
 function FieldRow({ field }: { field: EvidenceField }) {
+  const url = safeExternalUrl(field.value);
   return (
     <div className="flex items-start justify-between gap-2 px-3 py-1.5">
       <div className="min-w-0">
         <div className="text-xs font-medium">{field.label}</div>
         <div className="text-xs text-muted-foreground break-words">
-          {field.value ?? "Not supplied"}
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary underline break-all"
+            >
+              {field.value} <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+          ) : (
+            (field.value ?? "Not supplied")
+          )}
         </div>
         {field.detail && (
           <div className="text-[11px] text-muted-foreground/80 break-words">{field.detail}</div>
@@ -58,6 +70,7 @@ function FieldRow({ field }: { field: EvidenceField }) {
     </div>
   );
 }
+
 
 function Group({ title, fields }: { title: string; fields: EvidenceField[] }) {
   if (fields.length === 0) return null;
