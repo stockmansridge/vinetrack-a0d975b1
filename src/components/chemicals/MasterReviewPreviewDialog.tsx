@@ -34,7 +34,7 @@ function Cell({ value }: { value: string | null }) {
       </a>
     );
   }
-  return <span className="break-words">{value ?? "—"}</span>;
+  return <span className="whitespace-pre-wrap break-all">{value ?? "—"}</span>;
 }
 
 export function MasterReviewPreviewDialog({
