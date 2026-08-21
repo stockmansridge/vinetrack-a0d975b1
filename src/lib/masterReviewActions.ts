@@ -619,3 +619,32 @@ export async function fetchMasterReviewActions(
   if (error) throw error;
   return toReviewTimeline((data ?? []) as MasterReviewActionRow[]);
 }
+
+/* ------------------------------------------------- approval-gap treatment */
+
+/**
+ * Map an `approvalReadiness` reason (free text mirrored from the backend's
+ * rules) onto the action taxonomy so an evidence gap never looks actionable
+ * when nothing can be done about it from the portal.
+ */
+export function readinessReasonAction(
+  reason: string,
+  row: MasterChemicalRow,
+): MasterIssueAction {
+  const n = norm(reason);
+  if (n.includes("label reference")) return unresolvedFieldAction("label_reference", row);
+  if (n.includes("registrant")) return unresolvedFieldAction("registrant", row);
+  if (n.includes("frac") || n.includes("hrac") || n.includes("irac") || n.includes("group"))
+    return unresolvedFieldAction("activity_group", row);
+  if (n.includes("active ingredient")) return unresolvedFieldAction("active_ingredients", row);
+  if (n.includes("registration identity")) return unresolvedFieldAction("registration_number", row);
+  if (n.includes("verification conflict"))
+    return action("admin_decision_required", {
+      detail: "Resolve the listed evidence conflicts below before approving.",
+    });
+  if (n.includes("unresolved fields"))
+    return action("refresh_from_apvma", {
+      detail: MASTER_ACTION_DETAIL.refresh_from_apvma,
+    });
+  return action("not_manually_resolvable");
+}
