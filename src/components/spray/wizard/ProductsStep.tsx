@@ -9,9 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   PRODUCT_RATE_BASES,
   type ProductRateBasis,
+  type SprayApplication,
   type SprayProductLine,
 } from "@/lib/sprayApplicationDomain";
-import { applyRegisteredUse, productLineFromChemical } from "@/lib/sprayApplicationDraft";
+import {
+  applyLabelRate,
+  isApplicableLabelRate,
+  productLineFromChemical,
+} from "@/lib/sprayApplicationDraft";
 import {
   PRODUCT_BASIS_FRIENDLY,
   RATE_VALIDATION_FRIENDLY,
@@ -31,13 +36,6 @@ import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNot
 import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
 const UNITS = ["L", "mL", "kg", "g"];
-
-const basisFromLabel = (basis: string | null | undefined): ProductRateBasis | null => {
-  const b = (basis ?? "").toLowerCase();
-  if (b.includes("100")) return "per_100_litres";
-  if (b.includes("hect") || b.includes("ha")) return "whole_block_area";
-  return null;
-};
 
 export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: StepProps) {
   const chemicals = useMemo(
@@ -85,6 +83,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: St
           <ProductRow
             key={i}
             index={i}
+            mode={app.mode}
             line={line}
             result={calc.products[i]}
             chemicals={chemicals}
@@ -101,6 +100,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: St
 
 function ProductRow({
   index,
+  mode,
   line,
   result,
   chemicals,
@@ -110,6 +110,7 @@ function ProductRow({
   onRemove,
 }: {
   index: number;
+  mode: SprayApplication["mode"];
   line: SprayProductLine;
   result: any;
   chemicals: ChemicalIntelligence[];
@@ -264,26 +265,40 @@ function ProductRow({
           {showUses && (
             <div className="divide-y rounded-md border text-xs">
               {intel.registeredUses.map((use, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={!canEdit}
-                  className="w-full px-2 py-1.5 text-left hover:bg-muted/60"
-                  onClick={() =>
-                    onChange(applyRegisteredUse(line, use, basisFromLabel(use.rate?.basis)))
-                  }
-                >
-                  <span className="font-medium">{use.target ?? use.crop ?? "Registered use"}</span>
-                  <span className="ml-2 text-muted-foreground">
-                    {formatLabelRate(use.rate) ?? use.rateText ?? "Rate not stated"}
-                  </span>
-                </button>
+                <div key={i} className="space-y-1 px-2 py-1.5">
+                  <div className="font-medium">
+                    {[use.crop, use.target].filter(Boolean).join(" · ") || "Registered use"}
+                  </div>
+                  {use.rates.length === 0 && (
+                    <div className="text-muted-foreground">{use.rateText ?? "Rate not stated"}</div>
+                  )}
+                  {/* Every label rate is offered — a multi-rate label is never
+                      flattened to one line, and a range keeps both endpoints. */}
+                  {use.rates.map((rate, r) =>
+                    isApplicableLabelRate(rate) ? (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={!canEdit}
+                        className="block w-full rounded px-1 py-1 text-left hover:bg-muted/60"
+                        onClick={() => onChange(applyLabelRate(line, rate, mode))}
+                      >
+                        {formatLabelRate(rate) ?? "Rate not stated"}
+                      </button>
+                    ) : (
+                      <div key={r} className="px-1 py-1 text-muted-foreground">
+                        {rate.rawText ?? formatLabelRate(rate) ?? "Rate not stated"}{" "}
+                        <span className="italic">(reference only — not an application rate)</span>
+                      </div>
+                    ),
+                  )}
+                </div>
               ))}
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">
             {labelAuthoritative
-              ? "Selecting a use fills the label range for guidance only — the rate stays yours to choose."
+              ? "Selecting a label rate fills the range for guidance only — the rate and basis stay yours to choose."
               : `These uses, rates, withholding and re-entry come from the ${countryLabel(
                   intel.product.country,
                 )} label and are not authoritative for this vineyard.`}

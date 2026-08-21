@@ -104,12 +104,84 @@ export function productLineFromChemical(args: {
   };
 }
 
+/* ------------------------------------------------------- label rate guidance */
+
+export interface DraftLabelRate {
+  min: number | null;
+  max: number | null;
+  unit: string | null;
+  basis: string | null;
+  rawText?: string | null;
+  referenceOnly?: boolean;
+}
+
+/**
+ * A label rate is usable as guidance only when it carries a real number and is
+ * not reference-only (`basis: "other"`). Reference text is never promoted into
+ * an application rate, and an unresolved rate never invents one.
+ */
+export function isApplicableLabelRate(rate: DraftLabelRate | null | undefined): boolean {
+  if (!rate) return false;
+  if (rate.referenceOnly || (rate.basis ?? "").toLowerCase() === "other") return false;
+  return rate.min != null || rate.max != null;
+}
+
+/**
+ * Product rate basis suggested by a label rate basis.
+ *
+ * Banded applications are deliberately NOT guessed: a per-hectare label rate
+ * may be intended per gross block hectare or per treated hectare, and only the
+ * operator can say which. Guessing there silently doses the wrong area.
+ */
+export function suggestRateBasisFromLabel(
+  labelBasis: string | null | undefined,
+  mode: SprayApplication["mode"],
+): SprayProductLine["rateBasis"] {
+  const b = (labelBasis ?? "").toLowerCase();
+  if (!b || b === "other") return null;
+  if (b.includes("100_l") || b.includes("100 l") || b.includes("litre") || b.includes("100l")) {
+    return "per_100_litres";
+  }
+  if (b.includes("100_m") || b.includes("100 m") || b.includes("metre")) return "per_100_metres";
+  if (b.includes("hect") || b.includes("_ha") || b === "ha") {
+    return mode === "banded" ? null : "whole_block_area";
+  }
+  return null;
+}
+
+/**
+ * Apply one structured label rate as guidance. The rate the operator will
+ * actually use is never set here — only the label range, its unit and, when it
+ * is unambiguous, the rate basis.
+ */
+export function applyLabelRate(
+  line: SprayProductLine,
+  rate: DraftLabelRate | null,
+  mode: SprayApplication["mode"] = null,
+): SprayProductLine {
+  if (!isApplicableLabelRate(rate)) {
+    // Reference-only or unresolved: clear stale guidance, change nothing else.
+    return { ...line, labelMinRate: null, labelMaxRate: null, labelRateUnit: null };
+  }
+  const suggested = suggestRateBasisFromLabel(rate!.basis, mode);
+  return {
+    ...line,
+    labelMinRate: rate!.min ?? null,
+    labelMaxRate: rate!.max ?? null,
+    labelRateUnit: rate!.unit ?? null,
+    rateBasis: line.rateBasis ?? suggested,
+  };
+}
+
 /** Apply a structured registered use as guidance — rate stays operator-chosen. */
 export function applyRegisteredUse(
   line: SprayProductLine,
-  use: { rate: { min: number | null; max: number | null; unit: string | null; basis: string | null } | null },
+  use: { rate: DraftLabelRate | null },
   suggestedBasis: SprayProductLine["rateBasis"],
 ): SprayProductLine {
+  if (!isApplicableLabelRate(use.rate)) {
+    return { ...line, labelMinRate: null, labelMaxRate: null, labelRateUnit: null };
+  }
   return {
     ...line,
     labelMinRate: use.rate?.min ?? null,

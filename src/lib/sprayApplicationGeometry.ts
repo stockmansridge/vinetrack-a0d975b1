@@ -309,6 +309,9 @@ export function buildApplicationGeometry(blocks: SprayBlockGeometry[]): Applicat
   if (treatedAreaHa == null) issues.push("missing_treated_area");
   if (canonicalRowLengthMetres == null) issues.push("missing_row_length");
   if (blocks.some((b) => b.geometryQuality === "incomplete")) issues.push("incomplete_block_geometry");
+  // Per-block reasons must survive aggregation — otherwise the operator is told
+  // "treated area unavailable" without being told the band width is missing.
+  for (const b of blocks) for (const code of b.issues) issues.push(code);
 
   const geometrySource = blocks.reduce<GeometrySource>((worst, b) => {
     return SOURCE_RANK[b.geometrySource] < SOURCE_RANK[worst] ? b.geometrySource : worst;
