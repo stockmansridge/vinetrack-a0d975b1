@@ -283,9 +283,10 @@ export function diffChemicalDrafts(
       continue;
     }
     push("uses", `${label} — rate`, rateText(prior.rates), rateText(u.rates));
-    push("uses", `${label} — withholding period`, txt(prior.withholding_period_days), txt(u.withholding_period_days));
-    push("uses", `${label} — re-entry period`, txt(prior.re_entry_period_hours), txt(u.re_entry_period_hours));
+    push("uses", `${label} — withholding period`, whpText(prior), whpText(u));
+    push("uses", `${label} — re-entry period`, reiText(prior), reiText(u));
     push("uses", `${label} — restrictions`, txt(prior.restrictions), txt(u.restrictions));
+
   }
   for (const [key, u] of beforeUses) {
     if (!afterUses.has(key)) {
