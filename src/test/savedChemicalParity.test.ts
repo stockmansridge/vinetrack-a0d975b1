@@ -270,3 +270,25 @@ describe("Saved Chemical parity — unknown fields and legacy records", () => {
     expect(payload.master_source_revision).toBe(4);
   });
 });
+
+describe("Saved Chemical parity — partial update safety", () => {
+  it("an edit that omits a field leaves that column untouched", async () => {
+    updates.length = 0;
+    await updateSavedChemical("sc-1", { name: "Sprayseal", rate_per_ha: 2 });
+    const payload = updates[0];
+    expect(payload.active_ingredient).toBeUndefined();
+    expect(payload.chemical_group).toBeUndefined();
+    expect(payload.label_url).toBeUndefined();
+    expect(payload.notes).toBeUndefined();
+  });
+
+  it("an insert still satisfies the NOT NULL text columns", async () => {
+    inserts.length = 0;
+    const { createSavedChemical } = await import("@/lib/savedChemicalsQuery");
+    await createSavedChemical("v1", { name: "New product" });
+    const payload = inserts[0];
+    expect(payload.active_ingredient).toBe("");
+    expect(payload.notes).toBe("");
+    expect(payload.unit).toBe("Litres");
+  });
+});
