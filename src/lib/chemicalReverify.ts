@@ -306,8 +306,31 @@ export function diffChemicalDrafts(
 
 export type ReverifyOutcome = "current" | "updated" | "needs_review" | "failed";
 
+/**
+ * P5 contract states. `outcome` stays as the coarse UI bucket; `state` is the
+ * precise contract answer the operator must be able to distinguish.
+ */
+export type ReverifyState =
+  | "no_change"
+  | "authoritative_update"
+  | "new_authoritative"
+  | "conflict"
+  | "unresolved"
+  | "unavailable";
+
+export const REVERIFY_STATE_LABEL: Record<ReverifyState, string> = {
+  no_change: "No material change",
+  authoritative_update: "Authoritative data updated",
+  new_authoritative: "New authoritative data available",
+  conflict: "Evidence conflict",
+  unresolved: "Product unresolved / ambiguous",
+  unavailable: "Source unavailable",
+};
+
 export interface ReverifyResult {
   outcome: ReverifyOutcome;
+  /** Precise P5 state; always set. */
+  state: ReverifyState;
   /** Headline for the operator. */
   title: string;
   detail: string;
@@ -322,6 +345,16 @@ export interface ReverifyResult {
    */
   jurisdiction?: JurisdictionSuitability;
 }
+
+/**
+ * A change set that only ADDS information (every "before" was blank) is new
+ * authoritative data; anything that replaces a stored value is an update.
+ */
+export function classifyChangeState(diff: ReverifyDiffEntry[]): ReverifyState {
+  if (!diff.length) return "no_change";
+  return diff.every((d) => d.before === DASH) ? "new_authoritative" : "authoritative_update";
+}
+
 
 const normName = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
