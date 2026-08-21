@@ -100,7 +100,7 @@ export function MasterReviewPreviewDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Preview APVMA update</DialogTitle>
           <DialogDescription>
