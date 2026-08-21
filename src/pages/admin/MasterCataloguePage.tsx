@@ -24,7 +24,17 @@ import { MasterEvidencePanel } from "@/components/chemicals/MasterEvidencePanel"
 import { ApvmaImportDialog } from "@/components/chemicals/ApvmaImportDialog";
 import { MasterReviewPreviewDialog } from "@/components/chemicals/MasterReviewPreviewDialog";
 import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSummaryCard";
-import { masterReviewSummary } from "@/lib/masterReview";
+import { masterReviewSummary, type ClassifiedConflict } from "@/lib/masterReview";
+import {
+  identityFieldsCorrectable,
+  unresolvedFieldAction,
+  type MasterCorrectableField,
+} from "@/lib/masterReviewActions";
+import { MasterCorrectionDialog } from "@/components/chemicals/MasterCorrectionDialog";
+import { MasterAdjudicateDialog } from "@/components/chemicals/MasterAdjudicateDialog";
+import { MasterIdentityRekeyDialog } from "@/components/chemicals/MasterIdentityRekeyDialog";
+import { MasterReviewHistory } from "@/components/chemicals/MasterReviewHistory";
+import { MasterActionBadge } from "@/components/chemicals/MasterActionBadge";
 import {
   approvalReadiness,
   fetchMasterVersions,
