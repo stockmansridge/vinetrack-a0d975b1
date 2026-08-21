@@ -18,6 +18,11 @@ import {
 import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import type { SprayJobPlanProvenance } from "@/lib/resistance/sprayJobPlanLink";
 import { provenanceFromJobRow } from "@/lib/resistance/sprayJobPlanLink";
+import {
+  readChemistryStamp,
+  stampDivergesFromCurrent,
+} from "@/lib/resistance/sprayJobChemistryStamp";
+
 
 export type { SprayTarget };
 
