@@ -73,11 +73,15 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
       const nextBasis = s.rate_basis ?? "per_hectare";
       const unit = s.unit ?? "L";
       const composed = s.rate_unit ?? `${unit}${nextBasis === "per_100L" ? "/100L" : "/ha"}`;
+      // P9 — an AI suggestion is unverified reference material. WHP / REI are
+      // legal label facts and are never written from it; they stay unresolved
+      // until authoritative evidence (lookup / master link) supplies them.
       const restrictions = composeRestrictions({
-        whpDays: s.whp_days ?? "",
-        reiHours: s.rei_hours ?? "",
+        whpDays: "",
+        reiHours: "",
         rest: s.target ? `Target: ${s.target}` : "",
       });
+
       const name = (s.name ?? "").trim() || "Unnamed product";
 
       // Only persist to the library if we have a valid rate (NOT NULL in DB).

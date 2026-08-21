@@ -34,6 +34,8 @@ import {
   jurisdictionVerifyPrompt,
   type JurisdictionSuitability,
 } from "@/lib/chemicalJurisdiction";
+import { withholdingDisplay } from "@/lib/chemicalLabelRates";
+
 
 /* -------------------------------------------------------------- identity */
 
@@ -232,6 +234,23 @@ const rateText = (rates: WriteLabelRate[] | undefined): string => {
 const useKey = (u: WriteRegisteredUse) =>
   `${(u.crop ?? "").trim().toLowerCase()}|${(u.target_raw ?? "").trim().toLowerCase()}`;
 
+/**
+ * P9 — legal period wording. A stated 0 backed by "not required when used as
+ * directed" label wording reads as that statement; any other 0 stays 0 days.
+ * A missing period is unresolved, never zero and never inferred from WHP.
+ */
+const whpText = (u: WriteRegisteredUse): string =>
+  withholdingDisplay(
+    u.withholding_period_days,
+    [u.restrictions, ...(u.rates ?? []).map((r) => r.raw_text)].filter(Boolean).join("\n"),
+  ) ?? DASH;
+
+const reiText = (u: WriteRegisteredUse): string =>
+  u.re_entry_period_hours == null
+    ? DASH
+    : `${formatChemicalNumber(u.re_entry_period_hours)} ${u.re_entry_period_hours === 1 ? "hour" : "hours"}`;
+
+
 /** Human-readable, prioritised structured diff. Never raw JSON. */
 export function diffChemicalDrafts(
   before: ChemicalIntelligenceDraft,
@@ -283,9 +302,10 @@ export function diffChemicalDrafts(
       continue;
     }
     push("uses", `${label} — rate`, rateText(prior.rates), rateText(u.rates));
-    push("uses", `${label} — withholding period`, txt(prior.withholding_period_days), txt(u.withholding_period_days));
-    push("uses", `${label} — re-entry period`, txt(prior.re_entry_period_hours), txt(u.re_entry_period_hours));
+    push("uses", `${label} — withholding period`, whpText(prior), whpText(u));
+    push("uses", `${label} — re-entry period`, reiText(prior), reiText(u));
     push("uses", `${label} — restrictions`, txt(prior.restrictions), txt(u.restrictions));
+
   }
   for (const [key, u] of beforeUses) {
     if (!afterUses.has(key)) {

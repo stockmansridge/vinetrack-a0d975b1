@@ -23,6 +23,8 @@
 // Hard rule: legacy scalars are compatibility *projections* only. A legacy
 // value such as "3 + 11" is never parsed into structured activity groups —
 // legacy-only means "structured intelligence unavailable".
+import { withholdingDisplay } from "@/lib/chemicalLabelRates";
+
 
 export type ActivityScheme = "FRAC" | "HRAC" | "IRAC" | "NA" | "UNKNOWN";
 
@@ -81,9 +83,17 @@ export interface RegisteredUse {
   rateText: string | null;
   withholdingPeriod: string | null;
   reEntryPeriod: string | null;
+  /** P9 — structured legal periods. `null` means unresolved, never zero. */
+  withholdingDays: number | null;
+  reEntryHours: number | null;
+  /** P9 — display wording for the WHP, "not required" statement included. */
+  withholdingText: string | null;
+  /** P9 — verbatim per-use label restrictions. Never paraphrased. */
+  restrictions: string | null;
 
   notes: string | null;
 }
+
 
 export interface ChemicalCommercial {
   unit: string | null;
@@ -395,6 +405,15 @@ function parseRegisteredUse(value: unknown): RegisteredUse | null {
   if (!rates.length && single) rates.push(single);
   // Reference-only rates (`basis: "other"`) never become the applicable rate.
   const rate = rates.find((r) => !r.referenceOnly && (r.min != null || r.max != null)) ?? null;
+  // P9 — legal periods are read structurally. A missing value stays null
+  // (unresolved); REI is never inferred from WHP or any other label text.
+  const whpDays = numOrNull(
+    pick(o, ["withholding_period_days", "withholdingPeriodDays", "whp_days"]),
+  );
+  const reiHours = numOrNull(
+    pick(o, ["re_entry_period_hours", "reEntryPeriodHours", "re_entry_hours", "rei_hours"]),
+  );
+  const restrictions = str(pick(o, ["restrictions", "restriction_text", "restrictionsText"]));
   const use: RegisteredUse = {
     crop: str(pick(o, ["crop", "crop_name", "cropName", "commodity"])),
     target: str(pick(o, ["target", "pest", "disease", "weed", "target_name", "target_raw"])),
@@ -417,15 +436,25 @@ function parseRegisteredUse(value: unknown): RegisteredUse | null {
         "rei",
         "re_entry_interval",
         "reEntryInterval",
+        "re_entry_period_hours",
         "re_entry_hours",
       ]),
     ),
+    withholdingDays: whpDays,
+    reEntryHours: reiHours,
+    withholdingText:
+      withholdingDisplay(
+        whpDays,
+        [restrictions, ...rates.map((r) => r.rawText)].filter(Boolean).join("\n"),
+      ) ?? null,
+    restrictions,
     notes: str(pick(o, ["notes", "comment", "restrictions"])),
   };
   const empty =
     !use.crop && !use.target && !use.rates.length && !use.rateText && !use.withholdingPeriod &&
     !use.reEntryPeriod && !use.notes;
   return empty ? null : use;
+
 }
 
 
