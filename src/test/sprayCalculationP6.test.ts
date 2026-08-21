@@ -23,7 +23,7 @@ import {
   suggestRateBasisFromLabel,
 } from "@/lib/sprayApplicationDraft";
 import type { SprayProductLine } from "@/lib/sprayApplicationDomain";
-import { parseChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import { readFileSync } from "node:fs";
 
 /** 10 ha block, 3 m rows → 33 333.33 m of row. */
@@ -135,7 +135,7 @@ describe("P6A — product rate parity", () => {
 
   it("consumes a P4/P5 Saved Chemical multi-rate use without flattening", () => {
     const fixture = JSON.parse(readFileSync("src/test/fixtures/ld2-custodia-forte-au.json", "utf8"));
-    const intel = parseChemicalIntelligence({
+    const intel = toChemicalIntelligence({
       id: "c1",
       name: "CUSTODIA FORTE FUNGICIDE",
       registered_uses: fixture.registered_uses,
