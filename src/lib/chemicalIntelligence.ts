@@ -23,6 +23,8 @@
 // Hard rule: legacy scalars are compatibility *projections* only. A legacy
 // value such as "3 + 11" is never parsed into structured activity groups —
 // legacy-only means "structured intelligence unavailable".
+import { withholdingDisplay } from "@/lib/chemicalLabelRates";
+
 
 export type ActivityScheme = "FRAC" | "HRAC" | "IRAC" | "NA" | "UNKNOWN";
 
