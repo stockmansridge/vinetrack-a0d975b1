@@ -6,36 +6,27 @@
 // master_id, reason)` with the signed-in admin's JWT.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Loader2, RefreshCw, ShieldCheck, Upload } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { safeExternalUrl } from "@/lib/masterReview";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { MasterPreviewFieldDiff } from "@/components/chemicals/MasterPreviewFieldDiff";
+import { MasterPreviewUsesDiff } from "@/components/chemicals/MasterPreviewUsesDiff";
+import { MasterPreviewIdentityCard } from "@/components/chemicals/MasterPreviewIdentityCard";
+import { isRegisteredUsesField } from "@/lib/masterPreviewDiff";
 import {
   applyMasterReviewPreview,
   previewApplyBlockedReason,
   previewExpired,
   requestMasterReviewPreview,
-  IDENTITY_GUARD_LABEL,
   type MasterApplyResult,
   type MasterReviewPreview,
 } from "@/lib/masterReviewPreview";
 import { masterRevision, type MasterChemicalRow } from "@/lib/masterChemicals";
-
-function Cell({ value }: { value: string | null }) {
-  const url = safeExternalUrl(value);
-  if (url) {
-    return (
-      <a href={url} target="_blank" rel="noreferrer" className="text-primary underline break-all">
-        {value}
-      </a>
-    );
-  }
-  return <span className="whitespace-pre-wrap break-all">{value ?? "—"}</span>;
-}
 
 export function MasterReviewPreviewDialog({
   row,
@@ -82,6 +73,8 @@ export function MasterReviewPreviewDialog({
   });
 
   const blocked = preview ? previewApplyBlockedReason(preview) : null;
+  const scalarChanges = (preview?.changes ?? []).filter((c) => !isRegisteredUsesField(c.field));
+  const useChanges = (preview?.changes ?? []).filter((c) => isRegisteredUsesField(c.field));
   const applied = applyResult?.outcome === "applied" || applyResult?.outcome === "already_applied";
 
   const reset = () => {
@@ -152,13 +145,6 @@ export function MasterReviewPreviewDialog({
               <Badge variant="outline" className="text-[10px]">
                 base revision {preview.baseRevision ?? masterRevision(row) ?? "—"}
               </Badge>
-              <Badge
-                variant={preview.identityGuard === "match" ? "secondary" : "destructive"}
-                className="text-[10px]"
-              >
-                <ShieldCheck className="h-3 w-3 mr-1" />
-                {IDENTITY_GUARD_LABEL[preview.identityGuard]}
-              </Badge>
               <Badge variant="outline" className="text-[10px]">
                 {preview.expiresAt
                   ? `${previewExpired(preview) ? "expired" : "expires"} ${new Date(
@@ -171,41 +157,57 @@ export function MasterReviewPreviewDialog({
               </Badge>
             </div>
 
-            {preview.identityGuardDetail && (
-              <div className="text-muted-foreground">{preview.identityGuardDetail}</div>
-            )}
+            <MasterPreviewIdentityCard
+              preview={preview}
+              row={row}
+              blockedReason={blocked}
+              reasonMissing={!reason.trim()}
+            />
+
             {preview.message && <div className="text-muted-foreground">{preview.message}</div>}
 
             <div className="rounded-md border border-border/60">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5 font-semibold">
-                <span>Current vs proposed ({preview.changes.length} change(s))</span>
-                <span className="font-normal text-muted-foreground">proposed_patch is display only</span>
+                <span>Proposed changes ({preview.changes.length})</span>
+                <span className="font-normal text-muted-foreground">
+                  display only — the portal never sends a patch
+                </span>
               </div>
-              <div className="divide-y divide-border/60">
-                {preview.changes.length === 0 ? (
-                  <div className="px-3 py-2 text-muted-foreground">
-                    The resolver proposed no changes to this record.
-                  </div>
-                ) : (
-                  preview.changes.map((c) => (
-                    <div key={c.field} className="px-3 py-2 bg-warning/10">
-                      <div className="font-medium">{c.label}</div>
-                      <div className="mt-1 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-start">
-                        <div className="min-w-0 max-h-40 overflow-y-auto rounded border border-border/40 bg-background/60 p-2 text-muted-foreground">
-                          <div className="mb-1 text-[10px] uppercase tracking-wide opacity-70">Current</div>
-                          <Cell value={c.current} />
-                        </div>
-                        <ArrowRight className="hidden md:block h-3.5 w-3.5 mt-6 text-muted-foreground" />
-                        <div className="min-w-0 max-h-40 overflow-y-auto rounded border border-border/40 bg-background/60 p-2 font-medium">
-                          <div className="mb-1 text-[10px] uppercase tracking-wide font-normal opacity-70">Proposed</div>
-                          <Cell value={c.proposed} />
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              {preview.changes.length === 0 ? (
+                <div className="px-3 py-2 text-muted-foreground">
+                  The resolver proposed no changes to this record.
+                </div>
+              ) : (
+                <div className="space-y-3 p-3">
+                  <MasterPreviewFieldDiff changes={scalarChanges} />
+                  {useChanges.map((c) => (
+                    <MasterPreviewUsesDiff
+                      key={c.field}
+                      label={c.label}
+                      current={c.currentRaw ?? preview.currentValues[c.field] ?? c.current}
+                      proposed={c.proposedRaw ?? preview.proposedPatch[c.field] ?? c.proposed}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
+
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  Show technical JSON (debugging only)
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <pre className="max-h-64 overflow-auto rounded-md border border-border/60 bg-muted/40 p-2 text-[10px] leading-relaxed">
+                  {JSON.stringify(
+                    { current_values: preview.currentValues, proposed_patch: preview.proposedPatch },
+                    null,
+                    2,
+                  )}
+                </pre>
+              </CollapsibleContent>
+            </Collapsible>
 
             {blocked && (
               <div className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning/10 p-2">
