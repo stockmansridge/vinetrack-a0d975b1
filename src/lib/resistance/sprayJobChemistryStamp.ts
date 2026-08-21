@@ -95,7 +95,7 @@ export function chemistryStampFromLine(line: {
 }): JobChemistryStamp | null {
   const groups = groupList(line.activityGroups);
   const intel = line.intelligence ?? null;
-  const actives: StampedActive[] = (intel?.structured ? intel.actives : []).map((a) => ({
+  const actives: StampedActive[] = (intel?.structured ? intel.actives ?? [] : []).map((a) => ({
     name: a.name ?? "",
     ...(a.concentration != null ? { concentration: a.concentration } : {}),
     ...(a.unit ? { concentration_unit: a.unit } : {}),
@@ -103,11 +103,12 @@ export function chemistryStampFromLine(line: {
       ? { activity_group: { scheme: scheme(a.group.scheme), code: a.group.code } }
       : {}),
   }));
-  const identity = intel
+  const product = intel?.product ?? null;
+  const identity = product
     ? registrationIdentityKey(
-        intel.product.country,
-        intel.product.registrationScheme,
-        intel.product.registrationNumber,
+        product.country,
+        product.registrationScheme,
+        product.registrationNumber,
       )
     : undefined;
 
@@ -124,7 +125,7 @@ export function chemistryStampFromLine(line: {
     activity_groups: groups,
     verification_status: verification(line.verificationStatus),
     ...(identity ? { registration_identity_key: identity } : {}),
-    ...(intel?.product.country ? { country_code: intel.product.country.toUpperCase() } : {}),
+    ...(product?.country ? { country_code: product.country.toUpperCase() } : {}),
     ...(actives.length ? { actives } : {}),
     stamped_at: new Date().toISOString(),
   };
@@ -214,13 +215,13 @@ export function stampDivergesFromCurrent(
   intel: ChemicalIntelligence | null | undefined,
 ): boolean {
   if (!stamp || !intel?.structured) return false;
-  const current = intel.activityGroups
+  const current = (intel.activityGroups ?? [])
     .map((g) => qualifiedGroupCode(g.scheme, g.code))
     .filter((c): c is string => !!c)
     .sort();
   const stamped = stampGroupCodes(stamp).sort();
   if (current.join("|") !== stamped.join("|")) return true;
-  return intel.verification.status !== stamp.verification_status;
+  return (intel.verification?.status ?? "unverified") !== stamp.verification_status;
 }
 
 /** A stamp only describes the product it was taken from. */
