@@ -369,6 +369,8 @@ function ReviewDialog({
             </div>
           </div>
 
+          <MasterReviewHistory masterChemicalId={row.id} enabled={open} />
+
           <div>
             <div className="text-xs text-muted-foreground mb-1">Review notes</div>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
