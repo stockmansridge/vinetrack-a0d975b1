@@ -243,7 +243,12 @@ export function calculateProducts(args: {
   const { products, geometry, carrier } = args;
   return products.map((line, index) => {
     const diagnostics: SprayDiagnostic[] = [];
-    const rate = Number.isFinite(Number(line.rate)) ? Number(line.rate) : null;
+    // `Number(null)` is 0 — an empty rate must never become a zero rate.
+    const rawRate = line.rate;
+    const rate =
+      rawRate == null || rawRate === ("" as unknown) || !Number.isFinite(Number(rawRate))
+        ? null
+        : Number(rawRate);
     let multiplier: number | null = null;
     let multiplierKind: ProductResult["multiplierKind"] = null;
 
