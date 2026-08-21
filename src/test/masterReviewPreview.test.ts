@@ -41,7 +41,7 @@ const productionPreview = {
 
 describe("master review preview request", () => {
   it("sends only the action and identity — never a patch", () => {
-    const body = buildMasterReviewPreviewBody(prosaro) as Record<string, unknown>;
+    const body = buildMasterReviewPreviewBody(prosaro) as unknown as Record<string, unknown>;
     expect(body.action).toBe("master_review_preview");
     expect(body.master_chemical_id).toBe("master-prosaro");
     expect(body.registration_number).toBe("63243");
