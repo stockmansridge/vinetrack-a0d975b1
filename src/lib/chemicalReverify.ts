@@ -34,6 +34,8 @@ import {
   jurisdictionVerifyPrompt,
   type JurisdictionSuitability,
 } from "@/lib/chemicalJurisdiction";
+import { withholdingDisplay } from "@/lib/chemicalLabelRates";
+
 
 /* -------------------------------------------------------------- identity */
 
