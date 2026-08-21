@@ -10,9 +10,8 @@ import {
   groupSignatureOf,
   type ResistanceDisease,
 } from "./resistanceRuleset";
+import { resolveProductGroups } from "./resistanceGroupSource";
 import {
-  availabilityFromVerificationStatus,
-  type ChemicalIntelligenceAvailability,
   type ResistanceApplicationEvent,
   type ResistanceProductLine,
 } from "./resistanceEvent";
@@ -40,14 +39,7 @@ export function candidateProductLines(
     const { codes, availability } = resolveProductGroups({
       intel,
       fallbackCodes: (line.activityGroups ?? [])
-        .filter((g) => g.scheme !== "NA")
-        .map((g) =>
-          g.code
-            ? g.scheme === "HRAC" || g.scheme === "IRAC"
-              ? `${g.scheme} ${g.code}`
-              : g.code
-            : null,
-        )
+        .map((g) => qualifiedGroupCode(g.scheme, g.code))
         .filter((c): c is string => !!c),
     });
 
