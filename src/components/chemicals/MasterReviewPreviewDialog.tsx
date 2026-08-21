@@ -190,12 +190,14 @@ export function MasterReviewPreviewDialog({
                   preview.changes.map((c) => (
                     <div key={c.field} className="px-3 py-2 bg-warning/10">
                       <div className="font-medium">{c.label}</div>
-                      <div className="mt-0.5 grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-                        <div className="text-muted-foreground">
+                      <div className="mt-1 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-start">
+                        <div className="min-w-0 max-h-40 overflow-y-auto rounded border border-border/40 bg-background/60 p-2 text-muted-foreground">
+                          <div className="mb-1 text-[10px] uppercase tracking-wide opacity-70">Current</div>
                           <Cell value={c.current} />
                         </div>
-                        <ArrowRight className="h-3.5 w-3.5 mt-0.5 text-muted-foreground" />
-                        <div className="font-medium">
+                        <ArrowRight className="hidden md:block h-3.5 w-3.5 mt-6 text-muted-foreground" />
+                        <div className="min-w-0 max-h-40 overflow-y-auto rounded border border-border/40 bg-background/60 p-2 font-medium">
+                          <div className="mb-1 text-[10px] uppercase tracking-wide font-normal opacity-70">Proposed</div>
                           <Cell value={c.proposed} />
                         </div>
                       </div>
