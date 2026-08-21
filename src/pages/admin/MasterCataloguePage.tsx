@@ -27,7 +27,7 @@ import { MasterReviewSummaryCard } from "@/components/chemicals/MasterReviewSumm
 import { masterReviewSummary, type ClassifiedConflict } from "@/lib/masterReview";
 import {
   identityFieldsCorrectable,
-  unresolvedFieldAction,
+  readinessReasonAction,
   type MasterCorrectableField,
 } from "@/lib/masterReviewActions";
 import { MasterCorrectionDialog } from "@/components/chemicals/MasterCorrectionDialog";
