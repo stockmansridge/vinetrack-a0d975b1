@@ -31,12 +31,14 @@ import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNot
 
 const SECTIONS: ReverifySection[] = ["chemistry", "registration", "uses"];
 
-const OUTCOME_UI = {
-  current: { icon: CheckCircle2, cls: "bg-primary/15 text-primary", label: "Current" },
-  updated: { icon: ShieldCheck, cls: "bg-warning/20 text-warning-foreground", label: "Updated information" },
-  needs_review: { icon: AlertTriangle, cls: "bg-warning/20 text-warning-foreground", label: "Needs review" },
-  failed: { icon: XCircle, cls: "bg-destructive/15 text-destructive", label: "Could not re-verify" },
-} as const;
+const STATE_UI: Record<ReverifyState, { icon: typeof ShieldCheck; cls: string }> = {
+  no_change: { icon: CheckCircle2, cls: "bg-primary/15 text-primary" },
+  authoritative_update: { icon: ShieldCheck, cls: "bg-warning/20 text-warning-foreground" },
+  new_authoritative: { icon: ShieldCheck, cls: "bg-warning/20 text-warning-foreground" },
+  conflict: { icon: AlertTriangle, cls: "bg-destructive/15 text-destructive" },
+  unresolved: { icon: AlertTriangle, cls: "bg-warning/20 text-warning-foreground" },
+  unavailable: { icon: XCircle, cls: "bg-destructive/15 text-destructive" },
+};
 
 export function ChemicalReverifyDialog({
   open,
@@ -45,7 +47,7 @@ export function ChemicalReverifyDialog({
   productName,
   country,
   onAccept,
-  lookup = defaultLookup,
+  resolver,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -53,7 +55,8 @@ export function ChemicalReverifyDialog({
   productName?: string | null;
   country?: string | null;
   onAccept: (next: ChemicalIntelligenceDraft) => void;
-  lookup?: (identity: ReverifyIdentity) => Promise<ReverifyCandidate[]>;
+  /** Test seam — defaults to the shared authoritative resolver. */
+  resolver?: ReverifyResolver;
 }) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ReverifyResult | null>(null);
@@ -65,18 +68,17 @@ export function ChemicalReverifyDialog({
   const run = async () => {
     setRunning(true);
     setResult(null);
-    const r = await reverifyChemical({
+    const r = await reverifySavedChemical({
       draft,
       productName,
-      country,
-      vineyardCountry,
-      lookup,
+      vineyardCountry: vineyardCountry!,
+      resolver,
     });
     setResult(r);
     setRunning(false);
   };
 
-  const ui = result ? OUTCOME_UI[result.outcome] : null;
+  const ui = result ? STATE_UI[result.state] : null;
   const Icon = ui?.icon ?? ShieldCheck;
 
   return (
@@ -116,7 +118,7 @@ export function ChemicalReverifyDialog({
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Badge className={`border-transparent gap-1 ${ui!.cls}`}>
-                  <Icon className="h-3.5 w-3.5" /> {ui!.label}
+                  <Icon className="h-3.5 w-3.5" /> {REVERIFY_STATE_LABEL[result.state]}
                 </Badge>
                 <span className="font-medium">{result.title}</span>
               </div>
@@ -153,7 +155,7 @@ export function ChemicalReverifyDialog({
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
             {result ? "Run again" : "Re-verify"}
           </Button>
-          {result?.proposed && (result.outcome === "updated" || result.outcome === "needs_review" || result.outcome === "current") && (
+          {result?.proposed && (
             <Button
               type="button"
               onClick={() => {
@@ -162,7 +164,7 @@ export function ChemicalReverifyDialog({
                 setResult(null);
               }}
             >
-              {result.outcome === "current" ? "Accept refreshed evidence" : "Accept changes"}
+              {result.state === "no_change" ? "Accept refreshed evidence" : "Accept changes"}
             </Button>
           )}
         </DialogFooter>
