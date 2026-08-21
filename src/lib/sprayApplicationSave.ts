@@ -17,6 +17,8 @@ import type { CarrierResult, SprayCalculationResult } from "@/lib/sprayCalculati
 import type { SprayJobChemicalLine, SprayJobInput } from "@/lib/sprayJobsQuery";
 import { chemUnitOnly } from "@/lib/rateBasis";
 import { provenanceWritePayload } from "@/lib/resistance/sprayJobPlanLink";
+import { chemistryStampFromLine } from "@/lib/resistance/sprayJobChemistryStamp";
+
 
 const pos = (v: unknown): number | null => {
   const n = Number(v);
