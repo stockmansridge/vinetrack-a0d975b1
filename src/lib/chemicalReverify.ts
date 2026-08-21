@@ -198,13 +198,35 @@ const activeGroup = (a: WriteActiveIngredient): string =>
     ? `${a.activity_group.scheme.toUpperCase()} ${a.activity_group.code}`
     : DASH;
 
-const rateText = (r: WriteLabelRate | undefined): string => {
-  if (!r) return DASH;
+/** A rate is applicable only when it has a basis, a unit and a number. */
+export function isReferenceOnlyRate(r: WriteLabelRate | undefined): boolean {
+  if (!r) return true;
+  const hasNumber = r.value != null || r.min_value != null || r.max_value != null;
+  return r.basis === "other" || !(r.unit ?? "").trim() || !hasNumber;
+}
+
+const oneRateText = (r: WriteLabelRate): string => {
   const value =
     r.min_value != null || r.max_value != null
       ? `${txt(r.min_value)}–${txt(r.max_value)}`
       : txt(r.value);
-  return `${value} ${r.unit ?? ""}`.trim();
+  const core = `${value} ${r.unit ?? ""}`.trim();
+  const basis = r.basis && r.basis !== "other" ? ` [${r.basis}]` : "";
+  if (isReferenceOnlyRate(r)) {
+    const raw = (r.raw_text ?? "").trim();
+    return `${raw || core || DASH} (reference only)`;
+  }
+  return `${core}${basis}`;
+};
+
+/**
+ * All rates for a use, never just the first. Flattening a multi-rate label
+ * into `rates[0]` hides real label differences and is a parity defect.
+ */
+const rateText = (rates: WriteLabelRate[] | undefined): string => {
+  const list = (rates ?? []).filter(Boolean);
+  if (!list.length) return DASH;
+  return list.map(oneRateText).join(" · ");
 };
 
 const useKey = (u: WriteRegisteredUse) =>
@@ -250,25 +272,27 @@ export function diffChemicalDrafts(
   push("registration", "Label version", txt(rb.label_version), txt(ra.label_version));
 
   // --- registered uses -----------------------------------------------------
+  // Matched by crop + target, never by array order.
   const beforeUses = new Map(before.registeredUses.map((u) => [useKey(u), u]));
   const afterUses = new Map(after.registeredUses.map((u) => [useKey(u), u]));
   for (const [key, u] of afterUses) {
     const label = `${u.crop || "Any crop"} · ${u.target_raw || "Any target"}`;
     const prior = beforeUses.get(key);
     if (!prior) {
-      out.push({ section: "uses", label: `Use added: ${label}`, before: DASH, after: rateText(u.rates?.[0]) });
+      out.push({ section: "uses", label: `Use added: ${label}`, before: DASH, after: rateText(u.rates) });
       continue;
     }
-    push("uses", `${label} — rate`, rateText(prior.rates?.[0]), rateText(u.rates?.[0]));
+    push("uses", `${label} — rate`, rateText(prior.rates), rateText(u.rates));
     push("uses", `${label} — withholding period`, txt(prior.withholding_period_days), txt(u.withholding_period_days));
     push("uses", `${label} — re-entry period`, txt(prior.re_entry_period_hours), txt(u.re_entry_period_hours));
+    push("uses", `${label} — restrictions`, txt(prior.restrictions), txt(u.restrictions));
   }
   for (const [key, u] of beforeUses) {
     if (!afterUses.has(key)) {
       out.push({
         section: "uses",
         label: `Use removed: ${u.crop || "Any crop"} · ${u.target_raw || "Any target"}`,
-        before: rateText(u.rates?.[0]),
+        before: rateText(u.rates),
         after: DASH,
       });
     }
@@ -276,6 +300,7 @@ export function diffChemicalDrafts(
 
   return out;
 }
+
 
 /* --------------------------------------------------------------- results */
 
