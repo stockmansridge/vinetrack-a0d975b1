@@ -8,7 +8,7 @@
 //   legacy record       → missing provenance never becomes zero
 import { describe, it, expect } from "vitest";
 import { withholdingDisplay, isNotRequiredWording } from "@/lib/chemicalLabelRates";
-import { parseChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { toChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import { composeRestrictions, parseRestrictions } from "@/lib/chemicalCategories";
 import { diffChemicalDrafts } from "@/lib/chemicalReverify";
 import { emptyDraft } from "@/lib/chemicalIntelligenceWrite";
@@ -41,7 +41,7 @@ describe("WHP rule", () => {
   });
 
   it("Spray Seal 80160 — zero WHP reads as the label statement", () => {
-    const chem = parseChemicalIntelligence(
+    const chem = toChemicalIntelligence(
       row([
         {
           crop: "GRAPES",
@@ -57,7 +57,7 @@ describe("WHP rule", () => {
   });
 
   it("Custodia Forte 91636 — per-use WHP stays tied to its crop/target", () => {
-    const chem = parseChemicalIntelligence(
+    const chem = toChemicalIntelligence(
       row([
         { crop: "Grapevines", target_raw: "Powdery mildew", withholding_period_days: 28, re_entry_period_hours: 24 },
         { crop: "Apples", target_raw: "Black spot", withholding_period_days: 7 },
@@ -71,7 +71,7 @@ describe("WHP rule", () => {
 
 describe("REI rule", () => {
   it("preserves authoritative hours and never infers from WHP", () => {
-    const chem = parseChemicalIntelligence(
+    const chem = toChemicalIntelligence(
       row([{ crop: "Grapevines", withholding_period_days: 28 }]),
     );
     expect(chem.registeredUses[0].reEntryHours).toBeNull();
@@ -80,14 +80,14 @@ describe("REI rule", () => {
   });
 
   it("does not substitute a default for an unresolved REI", () => {
-    const chem = parseChemicalIntelligence(row([{ crop: "Grapevines", re_entry_period_hours: 12 }]));
+    const chem = toChemicalIntelligence(row([{ crop: "Grapevines", re_entry_period_hours: 12 }]));
     expect(chem.registeredUses[0].reEntryHours).toBe(12);
   });
 });
 
 describe("restrictions behaviour", () => {
   it("keeps long label restrictions verbatim", () => {
-    const chem = parseChemicalIntelligence(row([{ crop: "Grapevines", restrictions: LONG }]));
+    const chem = toChemicalIntelligence(row([{ crop: "Grapevines", restrictions: LONG }]));
     expect(chem.registeredUses[0].restrictions).toBe(LONG);
   });
 
@@ -144,7 +144,7 @@ describe("re-verify diff", () => {
 
 describe("legacy record with no provenance", () => {
   it("yields no invented periods", () => {
-    const chem = parseChemicalIntelligence({ id: "c2", name: "Legacy", restrictions: "Some note" } as any);
+    const chem = toChemicalIntelligence({ id: "c2", name: "Legacy", restrictions: "Some note" } as any);
     expect(chem.registeredUses).toHaveLength(0);
   });
 });
