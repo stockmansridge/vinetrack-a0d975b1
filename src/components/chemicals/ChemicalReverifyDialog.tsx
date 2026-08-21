@@ -10,19 +10,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import {
-  type ChemicalIntelligenceDraft,
-} from "@/lib/chemicalIntelligenceWrite";
-import {
-  type ReverifyCandidate,
   type ReverifyIdentity,
   type ReverifyResult,
   type ReverifySection,
+  type ReverifyState,
+  REVERIFY_STATE_LABEL,
   SECTION_LABEL,
   resolveReverifyIdentity,
-  reverifyChemical,
 } from "@/lib/chemicalReverify";
+import {
+  reverifySavedChemical,
+  type ReverifyResolver,
+} from "@/lib/chemicalReverifyLookup";
 import {
   vineyardCountryCode,
   MISSING_VINEYARD_COUNTRY_MESSAGE,
@@ -30,26 +30,6 @@ import {
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 
 const SECTIONS: ReverifySection[] = ["chemistry", "registration", "uses"];
-
-async function defaultLookup(identity: ReverifyIdentity): Promise<ReverifyCandidate[]> {
-  const { data, error } = await supabase.functions.invoke("chemical-ai-lookup", {
-    body: {
-      product_name: identity.query,
-      country: identity.country ?? null,
-      country_code: identity.country ?? null,
-    },
-  });
-  if (error) {
-    const serverMsg = (data as any)?.error;
-    throw new Error(typeof serverMsg === "string" && serverMsg ? serverMsg : error.message);
-  }
-  const list = Array.isArray((data as any)?.candidates)
-    ? (data as any).candidates
-    : (data as any)?.suggestion
-    ? [(data as any).suggestion]
-    : [];
-  return list as ReverifyCandidate[];
-}
 
 const OUTCOME_UI = {
   current: { icon: CheckCircle2, cls: "bg-primary/15 text-primary", label: "Current" },
