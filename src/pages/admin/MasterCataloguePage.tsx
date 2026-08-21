@@ -276,16 +276,46 @@ function ReviewDialog({
 
           <MasterChemicalCard master={row} />
 
-          <MasterEvidencePanel row={row} />
+          <MasterEvidencePanel
+            row={row}
+            onAdjudicate={(item) => setAdjudicating(item)}
+            onCorrect={(f) => openCorrection(f)}
+            onRefresh={() => setPreviewOpen(true)}
+          />
 
           {!readiness.ready && (
-            <div className="rounded-md border border-warning/50 bg-warning/10 p-2 text-xs">
-              <div className="font-medium">Evidence gaps</div>
-              <ul className="list-disc pl-4 mt-1 space-y-0.5 text-muted-foreground">
-                {readiness.reasons.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
+            <div className="rounded-md border border-border/60">
+              <div className="border-b border-border/60 px-3 py-1.5 text-xs font-semibold">
+                Evidence gaps ({readiness.reasons.length})
+              </div>
+              <div className="divide-y divide-border/60 text-xs">
+                {readiness.reasons.map((r, i) => {
+                  const act = readinessReasonAction(r, row);
+                  return (
+                    <div key={i} className="px-3 py-2 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="break-words">{r}</span>
+                        <MasterActionBadge kind={act.kind} />
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">{act.detail}</div>
+                      {act.kind === "admin_correction_available" && act.correctField && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openCorrection(act.correctField)}
+                        >
+                          Correct {act.correctField.replace(/_/g, " ")}
+                        </Button>
+                      )}
+                      {act.kind === "refresh_from_apvma" && (
+                        <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}>
+                          Preview APVMA update
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
