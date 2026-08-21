@@ -133,9 +133,15 @@ export function useResistanceAssessment(args: {
         : [];
     }
 
-    const overallStatus = worstEvaluationStatus(
+    const engineWorst = worstEvaluationStatus(
       blockAssessments.flatMap((b) => b.evaluations.map((e) => e.status)),
     );
+    // A failed history read is never a clean season — identical treatment to
+    // the Resistance Planner, so both surfaces degrade the same way.
+    const historyFailed = !!historyQ.error;
+    const overallStatus: ResistanceEvaluationStatus | null = historyFailed
+      ? "unable_to_fully_assess"
+      : engineWorst;
 
     return {
       overallStatus,
@@ -143,6 +149,7 @@ export function useResistanceAssessment(args: {
         !historyQ.isLoading && statusRequiresAcknowledgement(overallStatus),
       isLoading: historyQ.isLoading,
       error: (historyQ.error as Error | null) ?? null,
+
       season,
       diseases: assessed,
       blocks: blockAssessments,

@@ -9,11 +9,10 @@ import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import type { ResistancePlanPosition } from "@/lib/resistancePlanContract";
 import { groupSignatureOf, type ResistanceDisease } from "./resistanceRuleset";
 import {
-  availabilityFromVerificationStatus,
-  type ChemicalIntelligenceAvailability,
   type ResistanceApplicationEvent,
   type ResistanceProductLine,
 } from "./resistanceEvent";
+import { resolveProductGroups } from "./resistanceGroupSource";
 import type { ResistanceSeason } from "./resistanceSeason";
 
 export const PLANNED_APPLICATION_PREFIX = "plan-position:";
@@ -37,14 +36,14 @@ function productLines(
     : null;
 
   // Group-first: the POSITION's groups are the strategy decision. A chosen
-  // product adds identity and verification context, not the group itself.
-  const codes = position.groups;
-  let availability: ChemicalIntelligenceAvailability = "unavailable";
-  if (codes.length > 0) {
-    availability = intel?.structured
-      ? availabilityFromVerificationStatus(intel.verification.status)
-      : "available_unverified";
-  }
+  // product adds identity and verification context, not the group itself —
+  // and a linked product can only vouch for codes its own structured
+  // chemistry actually carries. Shared with the Live Resistance Check.
+  const { codes, availability } = resolveProductGroups({
+    intel,
+    fallbackCodes: position.groups,
+    explicitCodes: position.groups,
+  });
 
   return [
     {

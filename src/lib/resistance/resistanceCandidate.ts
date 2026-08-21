@@ -10,9 +10,8 @@ import {
   groupSignatureOf,
   type ResistanceDisease,
 } from "./resistanceRuleset";
+import { qualifiedGroupCode, resolveProductGroups } from "./resistanceGroupSource";
 import {
-  availabilityFromVerificationStatus,
-  type ChemicalIntelligenceAvailability,
   type ResistanceApplicationEvent,
   type ResistanceProductLine,
 } from "./resistanceEvent";
@@ -33,28 +32,17 @@ export function candidateProductLines(
 ): ResistanceProductLine[] {
   return app.products.map((line, index) => {
     const intel = line.savedChemicalId ? intelligenceById.get(line.savedChemicalId) ?? null : null;
-    const structuredGroups = intel?.structured ? intel.activityGroups : [];
     // Scheme is carried through, not discarded: an HRAC or IRAC code must
-    // never be read as the fungicide group with the same numeral.
-    const codes = (structuredGroups.length ? structuredGroups : line.activityGroups ?? [])
-      .filter((g) => g.scheme !== "NA")
-      .map((g) =>
-        g.code
-          ? g.scheme === "HRAC" || g.scheme === "IRAC"
-            ? `${g.scheme} ${g.code}`
-            : g.code
-          : null,
-      )
-      .filter((c): c is string => !!c);
+    // never be read as the fungicide group with the same numeral. Resolution
+    // and evidence quality are shared with the Resistance Planner so both
+    // surfaces describe the same product the same way.
+    const { codes, availability } = resolveProductGroups({
+      intel,
+      fallbackCodes: (line.activityGroups ?? [])
+        .map((g) => qualifiedGroupCode(g.scheme, g.code))
+        .filter((c): c is string => !!c),
+    });
 
-    let availability: ChemicalIntelligenceAvailability = "unavailable";
-    if (codes.length > 0) {
-      availability = intel?.structured
-        ? availabilityFromVerificationStatus(intel.verification.status)
-        : // Groups typed on the line with no structured chemistry behind them
-          // are usable, and must be shown as unverified.
-          "available_unverified";
-    }
 
     return {
       lineId: line.savedChemicalId ?? `draft-line-${index}`,
