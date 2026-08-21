@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { type ChemicalIntelligenceDraft } from "@/lib/chemicalIntelligenceWrite";
 import {
-  type ReverifyIdentity,
   type ReverifyResult,
   type ReverifySection,
   type ReverifyState,
