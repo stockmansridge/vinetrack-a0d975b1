@@ -12,6 +12,7 @@ import {
   type WriteVerificationStatus,
 } from "@/lib/chemicalIntelligenceWrite";
 import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import { qualifiedGroupCode } from "@/lib/resistance/resistanceGroupSource";
 
 /** Bumped by the FRAC/HRAC/IRAC reference table, mirrored from iOS/Android. */
 export const ACTIVITY_GROUP_TABLE_VERSION = 1;
@@ -86,8 +87,13 @@ export function buildChemicalSnapshot(
       })
     : [];
 
+  // P8 — scheme-qualified: HRAC 9 and FRAC 9 are different chemistry that
+  // happen to share a numeral. A bare "9" in frozen history would later read
+  // as the fungicide group.
   const groups = structured
-    ? chem.activityGroups.map((g) => g.code).filter((c): c is string => !!c)
+    ? chem.activityGroups
+        .map((g) => qualifiedGroupCode(g.scheme, g.code))
+        .filter((c): c is string => !!c)
     : [];
 
   const legacy = opts.legacyChemicalGroup ?? chem.legacy?.chemicalGroup ?? null;

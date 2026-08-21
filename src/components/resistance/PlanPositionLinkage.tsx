@@ -24,6 +24,7 @@ import {
   provenanceFromJobRow,
   provenanceFromPosition,
 } from "@/lib/resistance/sprayJobPlanLink";
+import { jobGroupCodes } from "@/lib/resistance/sprayJobChemistryStamp";
 import {
   fetchPositionCoverage,
   fetchSprayJobsForPosition,
@@ -77,11 +78,9 @@ export function PlanPositionLinkage({
           plannedBlockIds: plan.blockIds,
           executed: {
             referenceId: job.id,
-            groups: (job.chemical_lines ?? []).flatMap((l: any) =>
-              Array.isArray(l?.activity_groups)
-                ? l.activity_groups.map((g: any) => String(g?.code ?? g))
-                : [],
-            ),
+            // P8 — read the frozen per-line chemistry stamp (scheme-qualified),
+            // never display text or the live Saved Chemical.
+            groups: jobGroupCodes(job),
             blockIds: [],
             targets: job.targets ?? null,
           },

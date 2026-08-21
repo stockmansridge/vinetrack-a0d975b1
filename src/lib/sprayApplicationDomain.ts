@@ -18,6 +18,12 @@ import {
 import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import type { SprayJobPlanProvenance } from "@/lib/resistance/sprayJobPlanLink";
 import { provenanceFromJobRow } from "@/lib/resistance/sprayJobPlanLink";
+import {
+  readChemistryStamp,
+  stampDivergesFromCurrent,
+  type JobChemistryStamp,
+} from "@/lib/resistance/sprayJobChemistryStamp";
+
 
 export type { SprayTarget };
 
@@ -254,6 +260,12 @@ export interface SprayProductLine {
   intelligence?: ChemicalIntelligence | null;
   /** Legacy display string preserved verbatim for historical fidelity. */
   legacyChemicalGroup?: string | null;
+  /**
+   * P8 — the chemistry stamp this line was loaded with. Re-saved verbatim so
+   * editing an unrelated field can never re-stamp the job from a Saved
+   * Chemical that has changed since.
+   */
+  chemistryStamp?: JobChemistryStamp | null;
   costPerUnit?: number | null;
   notes?: string | null;
 }
@@ -492,6 +504,26 @@ export function fromLegacySprayJob(
     const intel = id ? opts.intelligenceById?.get(id) ?? null : null;
     const basis = legacyLineBasis(line);
     if (!id) notes.push(`Product "${line.name ?? "unnamed"}" is not linked to a saved chemical.`);
+
+    // P8 — the chemistry frozen on the line when the job was created is the
+    // authority. The live Saved Chemical is attached for label/rate guidance
+    // but never silently replaces the recorded groups or evidence quality.
+    const stamp = readChemistryStamp(line);
+    const liveGroups: WriteActivityGroup[] = intel
+      ? intel.activityGroups
+          .filter((g) => !!g.code)
+          .map((g) => ({
+            scheme: (g.scheme === "NA" || g.scheme === "UNKNOWN"
+              ? "not_applicable"
+              : g.scheme.toLowerCase()) as WriteActivityGroup["scheme"],
+            code: g.code as string,
+          }))
+      : [];
+    if (stamp && stampDivergesFromCurrent(stamp, intel)) {
+      notes.push(
+        `Chemistry for "${line.name ?? "product"}" has changed in the Chemical Store since this job was created — the job keeps the chemistry it was created with.`,
+      );
+    }
     return {
       savedChemicalId: id,
       productName: line.name ?? null,
@@ -501,23 +533,18 @@ export function fromLegacySprayJob(
       labelMinRate: null,
       labelMaxRate: null,
       labelRateUnit: null,
-      activityGroups: intel
-        ? intel.activityGroups
-            .filter((g) => !!g.code)
-            .map((g) => ({
-              scheme: (g.scheme === "NA" || g.scheme === "UNKNOWN"
-                ? "not_applicable"
-                : g.scheme.toLowerCase()) as WriteActivityGroup["scheme"],
-              code: g.code as string,
-            }))
-        : [],
-      verificationStatus: (intel?.verification.status ?? "unverified") as WriteVerificationStatus,
+      chemistryStamp: stamp,
+      activityGroups: stamp ? stamp.activity_groups : liveGroups,
+      verificationStatus: (stamp?.verification_status ??
+        intel?.verification.status ??
+        "unverified") as WriteVerificationStatus,
       intelligence: intel,
       legacyChemicalGroup: (line as any).chemical_group ?? null,
       costPerUnit: num(line.costPerUnit),
       notes: line.notes ?? null,
     } satisfies SprayProductLine;
   });
+
 
   app.tankCapacityLitres = positive(opts.tankCapacityLitres) ?? positive(job.water_volume);
   app.compatibilityNotes = notes;
