@@ -338,6 +338,11 @@ function ReviewDialog({
                   </div>
                 ))}
               </div>
+              <div className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+                Registered uses, rates, withholding periods and re-entry intervals are typed,
+                evidence-level data. They cannot be edited or adjudicated from the portal — a gap
+                here is only closed by an authoritative APVMA preview and apply.
+              </div>
             </div>
           )}
 
