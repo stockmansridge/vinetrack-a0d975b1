@@ -198,13 +198,35 @@ const activeGroup = (a: WriteActiveIngredient): string =>
     ? `${a.activity_group.scheme.toUpperCase()} ${a.activity_group.code}`
     : DASH;
 
-const rateText = (r: WriteLabelRate | undefined): string => {
-  if (!r) return DASH;
+/** A rate is applicable only when it has a basis, a unit and a number. */
+export function isReferenceOnlyRate(r: WriteLabelRate | undefined): boolean {
+  if (!r) return true;
+  const hasNumber = r.value != null || r.min_value != null || r.max_value != null;
+  return r.basis === "other" || !(r.unit ?? "").trim() || !hasNumber;
+}
+
+const oneRateText = (r: WriteLabelRate): string => {
   const value =
     r.min_value != null || r.max_value != null
       ? `${txt(r.min_value)}–${txt(r.max_value)}`
       : txt(r.value);
-  return `${value} ${r.unit ?? ""}`.trim();
+  const core = `${value} ${r.unit ?? ""}`.trim();
+  const basis = r.basis && r.basis !== "other" ? ` [${r.basis}]` : "";
+  if (isReferenceOnlyRate(r)) {
+    const raw = (r.raw_text ?? "").trim();
+    return `${raw || core || DASH} (reference only)`;
+  }
+  return `${core}${basis}`;
+};
+
+/**
+ * All rates for a use, never just the first. Flattening a multi-rate label
+ * into `rates[0]` hides real label differences and is a parity defect.
+ */
+const rateText = (rates: WriteLabelRate[] | undefined): string => {
+  const list = (rates ?? []).filter(Boolean);
+  if (!list.length) return DASH;
+  return list.map(oneRateText).join(" · ");
 };
 
 const useKey = (u: WriteRegisteredUse) =>
@@ -250,25 +272,27 @@ export function diffChemicalDrafts(
   push("registration", "Label version", txt(rb.label_version), txt(ra.label_version));
 
   // --- registered uses -----------------------------------------------------
+  // Matched by crop + target, never by array order.
   const beforeUses = new Map(before.registeredUses.map((u) => [useKey(u), u]));
   const afterUses = new Map(after.registeredUses.map((u) => [useKey(u), u]));
   for (const [key, u] of afterUses) {
     const label = `${u.crop || "Any crop"} · ${u.target_raw || "Any target"}`;
     const prior = beforeUses.get(key);
     if (!prior) {
-      out.push({ section: "uses", label: `Use added: ${label}`, before: DASH, after: rateText(u.rates?.[0]) });
+      out.push({ section: "uses", label: `Use added: ${label}`, before: DASH, after: rateText(u.rates) });
       continue;
     }
-    push("uses", `${label} — rate`, rateText(prior.rates?.[0]), rateText(u.rates?.[0]));
+    push("uses", `${label} — rate`, rateText(prior.rates), rateText(u.rates));
     push("uses", `${label} — withholding period`, txt(prior.withholding_period_days), txt(u.withholding_period_days));
     push("uses", `${label} — re-entry period`, txt(prior.re_entry_period_hours), txt(u.re_entry_period_hours));
+    push("uses", `${label} — restrictions`, txt(prior.restrictions), txt(u.restrictions));
   }
   for (const [key, u] of beforeUses) {
     if (!afterUses.has(key)) {
       out.push({
         section: "uses",
         label: `Use removed: ${u.crop || "Any crop"} · ${u.target_raw || "Any target"}`,
-        before: rateText(u.rates?.[0]),
+        before: rateText(u.rates),
         after: DASH,
       });
     }
@@ -277,12 +301,36 @@ export function diffChemicalDrafts(
   return out;
 }
 
+
 /* --------------------------------------------------------------- results */
 
 export type ReverifyOutcome = "current" | "updated" | "needs_review" | "failed";
 
+/**
+ * P5 contract states. `outcome` stays as the coarse UI bucket; `state` is the
+ * precise contract answer the operator must be able to distinguish.
+ */
+export type ReverifyState =
+  | "no_change"
+  | "authoritative_update"
+  | "new_authoritative"
+  | "conflict"
+  | "unresolved"
+  | "unavailable";
+
+export const REVERIFY_STATE_LABEL: Record<ReverifyState, string> = {
+  no_change: "No material change",
+  authoritative_update: "Authoritative data updated",
+  new_authoritative: "New authoritative data available",
+  conflict: "Evidence conflict",
+  unresolved: "Product unresolved / ambiguous",
+  unavailable: "Source unavailable",
+};
+
 export interface ReverifyResult {
   outcome: ReverifyOutcome;
+  /** Precise P5 state; always set. */
+  state: ReverifyState;
   /** Headline for the operator. */
   title: string;
   detail: string;
@@ -297,6 +345,16 @@ export interface ReverifyResult {
    */
   jurisdiction?: JurisdictionSuitability;
 }
+
+/**
+ * A change set that only ADDS information (every "before" was blank) is new
+ * authoritative data; anything that replaces a stored value is an update.
+ */
+export function classifyChangeState(diff: ReverifyDiffEntry[]): ReverifyState {
+  if (!diff.length) return "no_change";
+  return diff.every((d) => d.before === DASH) ? "new_authoritative" : "authoritative_update";
+}
+
 
 const normName = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -638,6 +696,7 @@ export async function reverifyChemical(args: {
   if (!identity) {
     return {
       outcome: "failed",
+      state: "unresolved",
       title: "Could not re-verify",
       detail: "No product identity to look up. Add a product name or registration number first.",
       diff: [],
@@ -650,6 +709,7 @@ export async function reverifyChemical(args: {
   } catch (e: any) {
     return {
       outcome: "failed",
+      state: "unavailable",
       title: "Could not re-verify",
       detail: `Lookup service failed: ${e?.message ?? String(e)}. The existing verification is unchanged.`,
       identity,
@@ -660,6 +720,7 @@ export async function reverifyChemical(args: {
   if (!candidates.length) {
     return {
       outcome: "failed",
+      state: "unresolved",
       title: "Could not re-verify",
       detail: `No authoritative record was returned for ${identity.description}. The existing verification is unchanged.`,
       identity,
@@ -671,6 +732,7 @@ export async function reverifyChemical(args: {
   if (!match) {
     return {
       outcome: "needs_review",
+      state: "unresolved",
       title: "Needs review",
       detail: `The lookup returned ${candidates.length} record(s) that do not confidently match ${identity.description}. Nothing was changed.`,
       identity,
@@ -691,6 +753,7 @@ export async function reverifyChemical(args: {
   if (proposed.conflicts.length > 0) {
     return {
       outcome: "needs_review",
+      state: "conflict",
       title: "Needs review",
       detail:
         "The retrieved information conflicts with the stored record. Review the differences before accepting." +
@@ -712,6 +775,7 @@ export async function reverifyChemical(args: {
         : refreshed.verifiedAt ?? null;
     return {
       outcome: "current",
+      state: "no_change",
       title: foreign
         ? "Product identity confirmed — not verified for this vineyard"
         : "Chemical information is current",
@@ -727,6 +791,7 @@ export async function reverifyChemical(args: {
 
   return {
     outcome: "updated",
+    state: classifyChangeState(diff),
     title: foreign
       ? "Updated information found — not verified for this vineyard"
       : "Updated information found",
@@ -738,4 +803,115 @@ export async function reverifyChemical(args: {
     diff,
     jurisdiction,
   };
+}
+
+/* ------------------------------------------------- authoritative merging */
+
+/**
+ * Merge an authoritative refreshed draft into the stored one.
+ *
+ * Rules (P5 contract):
+ *  - never blank an existing value because the refreshed evidence is silent
+ *  - never collapse a range, never flatten a multi-rate use
+ *  - a reference-only rate (`basis:"other"`, or missing unit/number) is kept
+ *    for display but never replaces an applicable rate
+ *  - registered uses are matched by crop + target, never by array order
+ *  - per-use provenance is merged key-wise and never dropped
+ *  - Master linkage lives outside the draft and is untouched here
+ */
+export function mergeAuthoritativeDraft(
+  before: ChemicalIntelligenceDraft,
+  next: ChemicalIntelligenceDraft,
+): ChemicalIntelligenceDraft {
+  const unresolved = new Set([...before.unresolvedFields, ...next.unresolvedFields]);
+
+  // ---- actives: keep stored chemistry unless the refresh actually states it
+  const nextByName = new Map(next.actives.map((a) => [a.name.trim().toLowerCase(), a]));
+  const seen = new Set<string>();
+  const actives: WriteActiveIngredient[] = before.actives.map((prior) => {
+    const key = prior.name.trim().toLowerCase();
+    const inc = nextByName.get(key);
+    if (!inc) return prior;
+    seen.add(key);
+    return {
+      ...prior,
+      concentration: inc.concentration ?? prior.concentration,
+      concentration_unit: inc.concentration_unit ?? prior.concentration_unit,
+      activity_group: inc.activity_group ?? prior.activity_group,
+      group_source: inc.activity_group ? inc.group_source ?? prior.group_source : prior.group_source,
+      identity_source: inc.identity_source ?? prior.identity_source,
+    };
+  });
+  for (const [key, a] of nextByName) if (!seen.has(key)) actives.push(a);
+
+  // ---- registration: fill or update, never erase
+  const registration = { ...before.registration };
+  const priorCountry = normaliseCountry(before.registration.country);
+  const nextCountry = normaliseCountry(next.registration.country);
+  const countryConflict = !!priorCountry && !!nextCountry && priorCountry !== nextCountry;
+  if (countryConflict) unresolved.add("registration_country");
+  else if (nextCountry) registration.country = nextCountry;
+  const r = next.registration;
+  if (r.scheme) registration.scheme = r.scheme;
+  if (r.number?.trim()) registration.number = r.number.trim();
+  if (r.registrant?.trim()) registration.registrant = r.registrant.trim();
+  if (r.registered_product_name?.trim())
+    registration.registered_product_name = r.registered_product_name.trim();
+  if (r.label_reference?.trim()) registration.label_reference = r.label_reference.trim();
+  if (r.label_version?.trim()) registration.label_version = r.label_version.trim();
+
+  // ---- registered uses
+  const mergeRates = (
+    prior: WriteLabelRate[],
+    inc: WriteLabelRate[],
+  ): WriteLabelRate[] => {
+    const incApplicable = inc.filter((x) => !isReferenceOnlyRate(x));
+    const incReference = inc.filter((x) => isReferenceOnlyRate(x));
+    const priorApplicable = prior.filter((x) => !isReferenceOnlyRate(x));
+    const priorReference = prior.filter((x) => isReferenceOnlyRate(x));
+    // Applicable rates only change when the refresh states applicable rates.
+    const applicable = incApplicable.length ? incApplicable : priorApplicable;
+    const reference = incReference.length ? incReference : priorReference;
+    return [...applicable, ...reference];
+  };
+
+  const mergeProvenance = (
+    prior: Record<string, unknown> | undefined,
+    inc: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined => {
+    if (!prior && !inc) return undefined;
+    return { ...(prior ?? {}), ...(inc ?? {}) };
+  };
+
+  const nextUses = new Map(next.registeredUses.map((u) => [useKey(u), u]));
+  const usedKeys = new Set<string>();
+  const registeredUses: WriteRegisteredUse[] = before.registeredUses.map((prior) => {
+    const inc = nextUses.get(useKey(prior));
+    if (!inc) return prior;
+    usedKeys.add(useKey(prior));
+    return {
+      ...prior,
+      rates: mergeRates(prior.rates ?? [], inc.rates ?? []),
+      withholding_period_days: inc.withholding_period_days ?? prior.withholding_period_days,
+      re_entry_period_hours: inc.re_entry_period_hours ?? prior.re_entry_period_hours,
+      restrictions: inc.restrictions ?? prior.restrictions,
+      provenance: mergeProvenance(prior.provenance, inc.provenance),
+      extra: inc.extra ?? prior.extra,
+    };
+  });
+  for (const [key, u] of nextUses) if (!usedKeys.has(key)) registeredUses.push(u);
+
+  let sources = before.sources;
+  for (const s of next.sources) sources = withSource(sources, s);
+
+  const merged: ChemicalIntelligenceDraft = {
+    ...before,
+    actives,
+    registration,
+    registeredUses,
+    sources,
+    unresolvedFields: Array.from(unresolved),
+  };
+  merged.conflicts = reconcileConflicts(merged);
+  return merged;
 }
