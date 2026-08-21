@@ -177,7 +177,7 @@ export function MasterReviewPreviewDialog({
             {preview.message && <div className="text-muted-foreground">{preview.message}</div>}
 
             <div className="rounded-md border border-border/60">
-              <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5 font-semibold">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5 font-semibold">
                 <span>Current vs proposed ({preview.changes.length} change(s))</span>
                 <span className="font-normal text-muted-foreground">proposed_patch is display only</span>
               </div>
