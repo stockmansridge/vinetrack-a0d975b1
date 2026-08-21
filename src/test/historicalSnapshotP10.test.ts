@@ -74,7 +74,7 @@ describe("P10A — immutable snapshot", () => {
     );
     const chem = readRecordChemistry(recordWith([{ name: "Mix", rate: 2, unit: "L/ha", chemicalSnapshot: snap }]));
     expect(recordGroupCodes(chem)).toEqual(["3", "7"]);
-    expect(productLinesFromRecord(recordWith([{ name: "Mix", chemicalSnapshot: snap }]))[0].groups,
+    expect(productLinesFromRecord(recordWith([{ name: "Mix", chemicalSnapshot: snap }]))[0].groups.codes,
     ).toContain("3");
   });
 
