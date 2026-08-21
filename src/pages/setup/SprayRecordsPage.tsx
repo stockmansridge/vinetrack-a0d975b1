@@ -1,3 +1,4 @@
+import { readRecordChemistry } from "@/lib/sprayRecordChemistry";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
@@ -366,7 +367,7 @@ function SprayRecordSheet({
               </Section>
             )}
 
-            <TanksSection tanks={record.tanks} />
+            <TanksSection record={record} />
 
             <Section title="Meta">
               <Field label="Trip ID" value={fmt(record.trip_id)} />
@@ -399,9 +400,11 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
-function TanksSection({ tanks }: { tanks: any }) {
-  const arr = Array.isArray(tanks) ? tanks : tanks ? [tanks] : [];
-  if (arr.length === 0) {
+function TanksSection({ record }: { record: any }) {
+  // P10 — read the record's own frozen chemistry. Nothing here consults the
+  // current Saved Chemical, so a later edit/re-verify cannot rewrite history.
+  const chem = readRecordChemistry(record);
+  if (chem.tanks.length === 0) {
     return (
       <Section title="Tanks">
         <span className="text-muted-foreground">No tank data recorded.</span>
@@ -411,52 +414,74 @@ function TanksSection({ tanks }: { tanks: any }) {
   return (
     <div>
       <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-        Tanks ({arr.length})
+        Tanks ({chem.tanks.length})
       </div>
+      {chem.historicalChemistryUnavailable && (
+        <div className="mb-2 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+          Historical chemical data unavailable — this record was created before
+          chemical snapshots were captured. Current chemical details are not shown
+          because they are not what was applied.
+        </div>
+      )}
       <div className="space-y-2">
-        {arr.map((t, i) => {
-          const chems = Array.isArray(t?.chemicals) ? t.chemicals : [];
-          return (
-            <Collapsible key={i} defaultOpen={i === 0}>
-              <div className="rounded-md border bg-card/50">
-                <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
-                  <div className="flex flex-col">
-                    <span className="font-medium">
-                      Tank {i + 1}
-                      {t?.tank_number ? ` · #${t.tank_number}` : ""}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {t?.water_volume != null ? `${t.water_volume} L water` : "Water volume —"}
-                      {chems.length ? ` · ${chems.length} chemical${chems.length > 1 ? "s" : ""}` : ""}
-                    </span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="border-t p-3 space-y-2">
-                  {chems.length > 0 && (
-                    <div className="space-y-1">
-                      {chems.map((c: any, ci: number) => (
-                        <div
-                          key={ci}
-                          className="flex items-center justify-between text-xs border-b last:border-0 py-1"
-                        >
-                          <span>{c?.name ?? c?.chemical_name ?? "Chemical"}</span>
-                          <span className="text-muted-foreground">
-                            {c?.dose ?? c?.rate ?? c?.amount ?? ""}{" "}
-                            {c?.unit ?? ""}
-                          </span>
-                        </div>
-                      ))}
+        {chem.tanks.map((t) => (
+          <Collapsible key={t.tankIndex} defaultOpen={t.tankIndex === 0}>
+            <div className="rounded-md border bg-card/50">
+              <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
+                <div className="flex flex-col">
+                  <span className="font-medium">
+                    Tank {t.tankIndex + 1}
+                    {t.tankNumber != null ? ` · #${t.tankNumber}` : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t.waterLitres != null ? `${t.waterLitres} L water` : "Water volume —"}
+                    {t.chemicals.length
+                      ? ` · ${t.chemicals.length} chemical${t.chemicals.length > 1 ? "s" : ""}`
+                      : ""}
+                  </span>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="border-t p-3 space-y-2">
+                {t.chemicals.map((c) => (
+                  <div key={c.lineId} className="border-b last:border-0 py-1.5 space-y-0.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium">{c.productName ?? "Chemical"}</span>
+                      <span className="text-muted-foreground text-right">{c.rateText}</span>
                     </div>
-                  )}
-                  <pre className="text-[11px] bg-muted/40 rounded p-2 overflow-x-auto">
-                    {JSON.stringify(t, null, 2)}
-                  </pre>
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
-          );
-        })}
+                    {c.snapshot === "frozen" ? (
+                      <div className="text-[11px] text-muted-foreground space-y-0.5">
+                        {c.activeIngredients.length > 0 && (
+                          <div>
+                            Actives:{" "}
+                            {c.activeIngredients
+                              .map((a) =>
+                                a.concentration != null
+                                  ? `${a.name} ${a.concentration}${a.unit ?? ""}`
+                                  : a.name,
+                              )
+                              .join(" + ")}
+                          </div>
+                        )}
+                        {c.activityGroups.length > 0 && (
+                          <div>Groups: {c.activityGroups.join(", ")}</div>
+                        )}
+                        {c.registrationIdentityKey && (
+                          <div>Registration: {c.registrationIdentityKey}</div>
+                        )}
+                        <div>Evidence at completion: {c.verificationStatus ?? "unverified"}</div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground">
+                        Historical chemical data unavailable for this line.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        ))}
       </div>
     </div>
   );

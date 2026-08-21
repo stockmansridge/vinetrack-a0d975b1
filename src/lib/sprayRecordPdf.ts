@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { SprayRecord } from "./sprayRecordsQuery";
+import { readRecordChemistry } from "./sprayRecordChemistry";
 import type { TripCostBreakdown } from "./tripCosting";
 import { AU_FORMATTERS, type RegionFormatters } from "./regionFormatters";
 
@@ -11,35 +12,76 @@ const fmtVal = (v: any): string => {
   return String(v);
 };
 
+// P10 — every chemical fact printed here comes from the completed record's
+// own frozen snapshot. The current Saved Chemical / Master Chemical is never
+// read: re-verifying a product must not change a historical spray sheet.
 function chemicalSummary(
-  tanks: any,
+  record: SprayRecord,
   fmt: RegionFormatters,
-): { product: string; rate: string; water: string } {
-  const arr = Array.isArray(tanks) ? tanks : tanks ? [tanks] : [];
-  if (arr.length === 0) return { product: NR, rate: NR, water: NR };
+): {
+  product: string;
+  rate: string;
+  water: string;
+  actives: string;
+  groups: string;
+  registration: string;
+  evidence: string;
+} {
+  const chem = readRecordChemistry(record as any);
+  if (chem.tanks.length === 0) {
+    return {
+      product: NR,
+      rate: NR,
+      water: NR,
+      actives: NR,
+      groups: NR,
+      registration: NR,
+      evidence: NR,
+    };
+  }
 
   const products: string[] = [];
   const rates: string[] = [];
   const waters: string[] = [];
+  const actives: string[] = [];
+  const groups: string[] = [];
+  const registrations: string[] = [];
 
-  arr.forEach((t: any, i: number) => {
-    const w = t?.water_volume;
-    if (w != null) waters.push(`Tank ${i + 1}: ${fmt.volume(w)}`);
-    const chems = Array.isArray(t?.chemicals) ? t.chemicals : [];
-    chems.forEach((c: any) => {
-      const name = c?.name ?? c?.chemical_name ?? c?.product ?? null;
-      if (name) products.push(String(name));
-      const rate = c?.dose ?? c?.rate ?? c?.amount ?? null;
-      // chemical product unit (L/kg/g/mL) is a manufacturer label — leave alone
-      const unit = c?.unit ?? "";
-      if (rate != null) rates.push(`${name ?? "Chem"}: ${rate}${unit ? " " + unit : ""}`);
+  chem.tanks.forEach((t) => {
+    if (t.waterLitres != null) waters.push(`Tank ${t.tankIndex + 1}: ${fmt.volume(t.waterLitres)}`);
+    t.chemicals.forEach((c) => {
+      const name = c.productName ?? "Chemical";
+      products.push(name);
+      // `basis: "other"` and an unrecorded basis are never printed as an
+      // applied numeric rate — the qualifier travels with the number.
+      rates.push(`${name}: ${c.rateText}`);
+      const ai = c.activeIngredients
+        .map((a) => (a.concentration != null ? `${a.name} ${a.concentration}${a.unit ?? ""}` : a.name))
+        .filter(Boolean);
+      if (ai.length) actives.push(`${name}: ${ai.join(" + ")}`);
+      for (const g of c.activityGroups) if (!groups.includes(g)) groups.push(g);
+      if (c.registrationIdentityKey) registrations.push(`${name}: ${c.registrationIdentityKey}`);
     });
   });
+
+  const evidence = chem.historicalChemistryUnavailable
+    ? "Historical chemical data unavailable (no snapshot recorded)"
+    : chem.lines
+        .map((l) =>
+          l.snapshot === "frozen"
+            ? `${l.productName ?? "Chemical"}: ${l.verificationStatus ?? "unverified"}`
+            : `${l.productName ?? "Chemical"}: not recorded`,
+        )
+        .join("; ");
 
   return {
     product: products.length ? products.join(", ") : NR,
     rate: rates.length ? rates.join("; ") : NR,
     water: waters.length ? waters.join("; ") : NR,
+    actives: actives.length ? actives.join("; ") : NR,
+    groups: groups.length ? groups.join(", ") : NR,
+    registration: registrations.length ? registrations.join("; ") : NR,
+    evidence: evidence || NR,
   };
 }
 
@@ -98,7 +140,9 @@ export function exportSprayRecordPdf(
   doc.line(margin, 78, pageWidth - margin, 78);
   doc.setTextColor(0);
 
-  const { product, rate, water } = chemicalSummary(record.tanks, fmt);
+  const { product, rate, water, actives, groups, registration, evidence } =
+    chemicalSummary(record, fmt);
+  const figures = readRecordChemistry(record as any).figures;
 
   const speedVal =
     record.average_speed != null ? fmt.speed(record.average_speed) || NR : NR;
@@ -121,6 +165,17 @@ export function exportSprayRecordPdf(
     ["Chemical / Product", product],
     ["Rate", rate],
     ["Water volume", water],
+    ["Active ingredients", actives],
+    ["Activity groups", groups],
+    ["Registration", registration],
+    ["Chemical evidence", evidence],
+    ["Applied L/ha", figures.litresPerHectare != null ? String(figures.litresPerHectare) : NR],
+    [
+      "Applied L/100 m",
+      figures.appliedLitresPer100m != null ? String(figures.appliedLitresPer100m) : NR,
+    ],
+    ["Gross area (ha)", figures.grossAreaHa != null ? String(figures.grossAreaHa) : NR],
+    ["Treated area (ha)", figures.treatedAreaHa != null ? String(figures.treatedAreaHa) : NR],
     ["Temperature (°C)", fmtVal(record.temperature)],
     ["Wind speed", windSpeedVal],
     ["Wind direction", fmtVal(record.wind_direction)],
