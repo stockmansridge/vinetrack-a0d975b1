@@ -23,6 +23,7 @@
 import type { Trip } from "@/lib/tripsQuery";
 import type { OperatorCategory } from "@/lib/operatorCategoriesQuery";
 import type { FuelPurchase } from "@/lib/fuelPurchasesQuery";
+import { normaliseTanks } from "./sprayRecordChemistry";
 import type { SprayRecord } from "@/lib/sprayRecordsQuery";
 import type { VineyardMemberRow } from "@/lib/teamMembersQuery";
 import type { SavedChemical } from "@/lib/savedChemicalsQuery";
@@ -136,7 +137,9 @@ function chemicalCostFromTanks(
   if (!tanks) return { cost: 0, lines: 0, missing: 0 };
   // tanks may be an array of tanks, each with `chemicals` / `chemicalLines`,
   // OR a flat array of chemical lines, OR a single tank object.
-  const arr = Array.isArray(tanks) ? tanks : [tanks];
+  // P10 — `tanks` may also arrive as the `{ tanks: [...] }` envelope; treating
+  // that envelope as a single tank silently costed the record at zero.
+  const arr = normaliseTanks(tanks);
   let cost = 0;
   let lines = 0;
   let missing = 0;
