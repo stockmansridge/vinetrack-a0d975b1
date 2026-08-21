@@ -65,15 +65,23 @@ export interface LabelRate {
   max: number | null;
   unit: string | null;
   basis: string | null;
+  /** Label text for a rate that carries no usable number (basis "other"). */
+  rawText?: string | null;
+  /** True for `basis: "other"` — reference material, never an application rate. */
+  referenceOnly?: boolean;
 }
 
 export interface RegisteredUse {
   crop: string | null;
   target: string | null;
+  /** Every label rate as stored. Ranges keep both endpoints. */
+  rates: LabelRate[];
+  /** First applicable (non reference-only) rate, for compact display. */
   rate: LabelRate | null;
   rateText: string | null;
   withholdingPeriod: string | null;
   reEntryPeriod: string | null;
+
   notes: string | null;
 }
 
@@ -341,17 +349,19 @@ function parseActive(
 function parseLabelRate(value: unknown): LabelRate | null {
   if (value == null) return null;
   if (typeof value === "number") return { min: value, max: value, unit: null, basis: null };
-  if (typeof value !== "object") return null;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
   const o = value as Record<string, unknown>;
-  const min = numOrNull(pick(o, ["min", "rate_min", "rateMin", "minimum", "low"]));
-  const max = numOrNull(pick(o, ["max", "rate_max", "rateMax", "maximum", "high"]));
+  const min = numOrNull(pick(o, ["min", "min_value", "rate_min", "rateMin", "minimum", "low"]));
+  const max = numOrNull(pick(o, ["max", "max_value", "rate_max", "rateMax", "maximum", "high"]));
   const single = numOrNull(pick(o, ["rate", "value", "amount"]));
   const unit = str(pick(o, ["unit", "rate_unit", "rateUnit", "units"]));
   const basis = str(pick(o, ["basis", "rate_basis", "rateBasis", "label_rate_basis"]));
+  const rawText = str(pick(o, ["raw_text", "rawText", "label"]));
   const lo = min ?? single;
   const hi = max ?? single;
-  if (lo == null && hi == null && !unit && !basis) return null;
-  return { min: lo, max: hi, unit, basis };
+  if (lo == null && hi == null && !unit && !basis && !rawText) return null;
+  const referenceOnly = (basis ?? "").toLowerCase() === "other";
+  return { min: lo, max: hi, unit, basis, rawText, referenceOnly };
 }
 
 export function formatLabelRate(rate: LabelRate | null): string | null {
@@ -361,7 +371,7 @@ export function formatLabelRate(rate: LabelRate | null): string | null {
   if (min != null && max != null) value = min === max ? String(min) : `${min}–${max}`;
   else if (min != null) value = `${min}`;
   else if (max != null) value = `${max}`;
-  if (!value) return basis ? `Basis: ${basis}` : null;
+  if (!value) return rate.rawText ?? (basis ? `Basis: ${basis}` : null);
   return [`${value}${unit ? ` ${unit}` : ""}`, basis].filter(Boolean).join(" · ");
 }
 
@@ -369,7 +379,12 @@ function parseRegisteredUse(value: unknown): RegisteredUse | null {
   if (!value || typeof value !== "object") return null;
   const o = value as Record<string, unknown>;
   const rateCandidate = pick(o, ["rate", "label_rate", "labelRate", "rates"]);
-  const rate =
+  // A `rates[]` array is the canonical shared shape — keep every entry so a
+  // multi-rate label is never flattened to one line.
+  const rates: LabelRate[] = Array.isArray(rateCandidate)
+    ? rateCandidate.map(parseLabelRate).filter((r): r is LabelRate => !!r)
+    : [];
+  const single =
     parseLabelRate(rateCandidate) ??
     parseLabelRate({
       min: pick(o, ["rate_min", "rateMin"]),
@@ -377,9 +392,13 @@ function parseRegisteredUse(value: unknown): RegisteredUse | null {
       unit: pick(o, ["rate_unit", "rateUnit"]),
       basis: pick(o, ["rate_basis", "rateBasis", "basis"]),
     });
+  if (!rates.length && single) rates.push(single);
+  // Reference-only rates (`basis: "other"`) never become the applicable rate.
+  const rate = rates.find((r) => !r.referenceOnly && (r.min != null || r.max != null)) ?? null;
   const use: RegisteredUse = {
     crop: str(pick(o, ["crop", "crop_name", "cropName", "commodity"])),
-    target: str(pick(o, ["target", "pest", "disease", "weed", "target_name"])),
+    target: str(pick(o, ["target", "pest", "disease", "weed", "target_name", "target_raw"])),
+    rates,
     rate,
     rateText: typeof rateCandidate === "string" ? str(rateCandidate) : null,
     withholdingPeriod: str(
@@ -404,10 +423,11 @@ function parseRegisteredUse(value: unknown): RegisteredUse | null {
     notes: str(pick(o, ["notes", "comment", "restrictions"])),
   };
   const empty =
-    !use.crop && !use.target && !use.rate && !use.rateText && !use.withholdingPeriod &&
+    !use.crop && !use.target && !use.rates.length && !use.rateText && !use.withholdingPeriod &&
     !use.reEntryPeriod && !use.notes;
   return empty ? null : use;
 }
+
 
 function parseSource(value: unknown): VerificationSource | null {
   if (value == null) return null;

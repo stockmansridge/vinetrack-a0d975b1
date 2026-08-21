@@ -141,6 +141,14 @@ export interface WriteActivityGroup {
   common_name?: string;
 }
 
+/**
+ * P4 cross-platform parity: every wire object carries an `extra` bag holding
+ * keys the portal does not model. Decode captures them, encode writes them
+ * back verbatim, so a Saved Chemical authored by iOS/Android never loses
+ * fields just because this client is older than the writer.
+ */
+export type WireExtras = Record<string, unknown>;
+
 export interface WriteActiveIngredient {
   name: string;
   concentration?: number;
@@ -148,6 +156,7 @@ export interface WriteActiveIngredient {
   activity_group?: WriteActivityGroup;
   group_source?: DataSourceKind;
   identity_source?: DataSourceKind;
+  extra?: WireExtras;
 }
 
 export interface WriteDataSource {
@@ -155,6 +164,9 @@ export interface WriteDataSource {
   name: string;
   reference?: string;
   retrieved_at?: string;
+  /** Original `kind` string when it is outside the known vocabulary. */
+  raw_kind?: string;
+  extra?: WireExtras;
 }
 
 export interface WriteConflict {
@@ -174,6 +186,7 @@ export interface WriteLabelRate {
   max_value?: number;
   unit: string;
   raw_text?: string;
+  extra?: WireExtras;
 }
 
 export interface WriteRegisteredUse {
@@ -184,7 +197,15 @@ export interface WriteRegisteredUse {
   withholding_period_days?: number;
   re_entry_period_hours?: number;
   restrictions?: string;
+  /**
+   * LD-2 per-use provenance (`{ claim, rates, withholding_period, ... }`).
+   * Preserved verbatim, including explicit nulls — a null here means
+   * "unresolved" and must never be dropped or invented.
+   */
+  provenance?: Record<string, unknown>;
+  extra?: WireExtras;
 }
+
 
 export interface WriteRegistration {
   country?: string;
@@ -496,45 +517,66 @@ const clean = <T extends Record<string, unknown>>(obj: T): T => {
   return out as T;
 };
 
+/** Deep structural copy that preserves explicit nulls (provenance semantics). */
+const copyJson = <T>(v: T): T =>
+  v == null || typeof v !== "object" ? v : (JSON.parse(JSON.stringify(v)) as T);
+
+/** Keys of `o` that the portal does not model, captured verbatim. */
+function extrasOf(o: Record<string, unknown>, known: string[]): WireExtras | undefined {
+  const out: WireExtras = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (known.includes(k)) continue;
+    out[k] = copyJson(v);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Unknown extras are written first so modelled keys always win. */
+const withExtras = (
+  base: Record<string, unknown>,
+  extra: WireExtras | undefined,
+): Record<string, unknown> => (extra ? { ...copyJson(extra), ...base } : base);
+
 function encodeActive(a: WriteActiveIngredient): Record<string, unknown> {
   const group = a.activity_group;
-  return clean({
-    name: a.name.trim(),
-    concentration: finiteOrUndef(a.concentration),
-    concentration_unit: a.concentration_unit,
-    activity_group: group
-      ? clean({
-          scheme: group.scheme,
-          code: group.code,
-          common_name: trimOrUndef(group.common_name),
-        })
-      : undefined,
-    group_source: group ? a.group_source : undefined,
-    identity_source: a.identity_source,
-  });
+  return withExtras(
+    clean({
+      name: a.name.trim(),
+      concentration: finiteOrUndef(a.concentration),
+      concentration_unit: a.concentration_unit,
+      activity_group: group
+        ? clean({
+            scheme: group.scheme,
+            code: group.code,
+            common_name: trimOrUndef(group.common_name),
+          })
+        : undefined,
+      group_source: group ? a.group_source : undefined,
+      identity_source: a.identity_source,
+    }),
+    a.extra,
+  );
 }
 
 function encodeRate(r: WriteLabelRate): Record<string, unknown> {
-  const range = isRangeBasis(r.basis);
   const base: Record<string, unknown> = {
     label: r.label ?? "",
     basis: r.basis,
     unit: r.unit ?? "",
   };
-  if (range) {
-    const min = finiteOrUndef(r.min_value);
-    const max = finiteOrUndef(r.max_value);
-    if (min != null) base.min_value = min;
-    if (max != null) base.max_value = max;
-  } else {
-    const v = finiteOrUndef(r.value);
-    if (v != null) base.value = v;
-  }
-  if (r.basis === "other") {
-    const raw = trimOrUndef(r.raw_text);
-    if (raw) base.raw_text = raw;
-  }
-  return base;
+  // Ranges are never collapsed to an endpoint, and a single value is never
+  // synthesised from a range. Whatever the writer stored round-trips as-is.
+  const min = finiteOrUndef(r.min_value);
+  const max = finiteOrUndef(r.max_value);
+  if (min != null) base.min_value = min;
+  if (max != null) base.max_value = max;
+  const v = finiteOrUndef(r.value);
+  if (v != null) base.value = v;
+  // `basis: "other"` stays reference-only: its raw text is preserved and no
+  // numeric value is invented for it.
+  const raw = trimOrUndef(r.raw_text);
+  if (raw) base.raw_text = raw;
+  return withExtras(base, r.extra);
 }
 
 function encodeUse(u: WriteRegisteredUse): Record<string, unknown> {
@@ -550,16 +592,26 @@ function encodeUse(u: WriteRegisteredUse): Record<string, unknown> {
   if (rei != null) out.re_entry_period_hours = rei;
   const restrictions = trimOrUndef(u.restrictions);
   if (restrictions) out.restrictions = restrictions;
-  return out;
+  // Per-use provenance is evidence: copied verbatim, nulls included.
+  if (u.provenance && typeof u.provenance === "object") {
+    out.provenance = copyJson(u.provenance);
+  }
+  return withExtras(out, u.extra);
 }
 
 const encodeSource = (s: WriteDataSource): Record<string, unknown> =>
-  clean({
-    kind: s.kind,
-    name: (s.name ?? "").trim(),
-    reference: trimOrUndef(s.reference),
-    retrieved_at: trimOrUndef(s.retrieved_at),
-  });
+  withExtras(
+    clean({
+      // An unrecognised kind is preserved on the wire (it is still treated as
+      // non-authoritative by every trust decision in this module).
+      kind: trimOrUndef(s.raw_kind) ?? s.kind,
+      name: (s.name ?? "").trim(),
+      reference: trimOrUndef(s.reference),
+      retrieved_at: trimOrUndef(s.retrieved_at),
+    }),
+    s.extra,
+  );
+
 
 export interface EncodedChemicalIntelligence {
   active_ingredients?: unknown[];
@@ -679,19 +731,40 @@ function decodeGroup(value: unknown): WriteActivityGroup | undefined {
   }) as WriteActivityGroup;
 }
 
+const ACTIVE_KEYS = [
+  "name",
+  "active_ingredient",
+  "concentration",
+  "concentration_unit",
+  "unit",
+  "activity_group",
+  "activityGroup",
+  "group_source",
+  "identity_source",
+];
+
 function decodeActive(value: unknown): WriteActiveIngredient | null {
   const o = rec(value);
   const name = trimOrUndef(o.name ?? o.active_ingredient);
   if (!name) return null;
+  const rawUnit = trimOrUndef(o.concentration_unit ?? o.unit);
+  const unit = normaliseConcentrationUnit(rawUnit);
+  const extra = extrasOf(o, ACTIVE_KEYS) ?? {};
+  // A concentration unit outside the known vocabulary is kept verbatim rather
+  // than dropped — mobile may legitimately use a unit this build predates.
+  if (rawUnit && !unit) extra.concentration_unit = rawUnit;
   return clean({
     name,
     concentration: finiteOrUndef(o.concentration),
-    concentration_unit: normaliseConcentrationUnit(o.concentration_unit ?? o.unit),
+    concentration_unit: unit,
     activity_group: decodeGroup(o.activity_group ?? o.activityGroup),
     group_source: o.group_source ? normaliseDataSourceKind(o.group_source) : undefined,
     identity_source: o.identity_source ? normaliseDataSourceKind(o.identity_source) : undefined,
+    extra: Object.keys(extra).length ? extra : undefined,
   }) as WriteActiveIngredient;
 }
+
+const RATE_KEYS = ["label", "basis", "value", "min_value", "max_value", "unit", "raw_text"];
 
 function decodeRate(value: unknown): WriteLabelRate {
   const o = rec(value);
@@ -704,6 +777,7 @@ function decodeRate(value: unknown): WriteLabelRate {
     max_value: finiteOrUndef(o.max_value),
     unit: trimOrUndef(o.unit) ?? "",
     raw_text: trimOrUndef(o.raw_text),
+    extra: extrasOf(o, RATE_KEYS),
   }) as WriteLabelRate;
 }
 
@@ -722,12 +796,28 @@ export function deriveSprayTarget(targetRaw: string | null | undefined): SprayTa
   return undefined;
 }
 
+const USE_KEYS = [
+  "crop",
+  "target",
+  "target_raw",
+  "rates",
+  "withholding_period_days",
+  "re_entry_period_hours",
+  "restrictions",
+  "provenance",
+];
+
 function decodeUse(value: unknown): WriteRegisteredUse | null {
   const o = rec(value);
   const crop = trimOrUndef(o.crop) ?? "";
   const targetRaw = trimOrUndef(o.target_raw ?? o.target) ?? "";
   const rates = asArray(o.rates).map(decodeRate);
-  if (!crop && !targetRaw && rates.length === 0) return null;
+  const whp = intOrUndef(o.withholding_period_days);
+  const rei = intOrUndef(o.re_entry_period_hours);
+  const restrictions = trimOrUndef(o.restrictions);
+  if (!crop && !targetRaw && rates.length === 0 && whp == null && rei == null && !restrictions) {
+    return null;
+  }
   const target =
     typeof o.target === "string" && o.target.includes("_")
       ? (o.target as SprayTarget)
@@ -737,23 +827,37 @@ function decodeUse(value: unknown): WriteRegisteredUse | null {
     target_raw: targetRaw,
     target,
     rates,
-    withholding_period_days: intOrUndef(o.withholding_period_days),
-    re_entry_period_hours: intOrUndef(o.re_entry_period_hours),
-    restrictions: trimOrUndef(o.restrictions),
+    withholding_period_days: whp,
+    re_entry_period_hours: rei,
+    restrictions,
+    provenance:
+      o.provenance && typeof o.provenance === "object"
+        ? (copyJson(o.provenance) as Record<string, unknown>)
+        : undefined,
+    extra: extrasOf(o, USE_KEYS),
   }) as WriteRegisteredUse;
 }
+
+const SOURCE_KEYS = ["kind", "name", "label", "reference", "url", "retrieved_at", "retrievedAt"];
 
 function decodeSource(value: unknown): WriteDataSource | null {
   const o = rec(value);
   const name = trimOrUndef(o.name ?? o.label);
   if (!name && !o.kind) return null;
+  const rawKind = trimOrUndef(o.kind);
+  const kind = normaliseDataSourceKind(o.kind);
   return clean({
-    kind: normaliseDataSourceKind(o.kind),
+    kind,
+    // Keep the original token when it is outside the known vocabulary so the
+    // value written back matches what mobile stored.
+    raw_kind: rawKind && !(DATA_SOURCE_KINDS as string[]).includes(rawKind) ? rawKind : undefined,
     name: name ?? "",
     reference: trimOrUndef(o.reference ?? o.url),
     retrieved_at: trimOrUndef(o.retrieved_at ?? o.retrievedAt),
+    extra: extrasOf(o, SOURCE_KEYS),
   }) as WriteDataSource;
 }
+
 
 function decodeConflict(value: unknown): WriteConflict | null {
   const o = rec(value);
