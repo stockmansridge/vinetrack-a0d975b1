@@ -120,7 +120,28 @@ export function calculateCarrier(args: {
     }
   } else {
     // l_per_100m — never falls back to an L/ha calculation.
-    const rate100m = applied100m ?? dilute100m;
+    //
+    // Dilute/runoff L/100 m and actual applied L/100 m are DIFFERENT numbers
+    // and must never be conflated. The applied volume is authoritative; the
+    // only permitted derivation is dilute ÷ a persisted concentration factor,
+    // and that is reported as derived.
+    const persistedCf = pos(carrier.concentrationFactor);
+    let rate100m = applied100m;
+    if (rate100m == null && dilute100m != null && persistedCf != null) {
+      rate100m = dilute100m / persistedCf;
+      diagnostics.push({
+        code: "applied_rate_derived_from_dilute",
+        severity: "info",
+        message: `Applied water derived from the dilute reference ÷ concentration factor (${persistedCf}×).`,
+      });
+    } else if (rate100m == null && dilute100m != null) {
+      diagnostics.push({
+        code: "dilute_only_carrier_rate",
+        severity: "error",
+        message:
+          "Only the dilute/runoff L/100 m is set. Enter the actual applied L/100 m — the dilute reference is not the applied volume.",
+      });
+    }
     if (rate100m == null) {
       diagnostics.push({
         code: "missing_carrier_rate",
