@@ -88,7 +88,17 @@ function Group({ title, fields }: { title: string; fields: EvidenceField[] }) {
   );
 }
 
-export function MasterEvidencePanel({ row }: { row: MasterChemicalRow }) {
+export function MasterEvidencePanel({
+  row,
+  onAdjudicate,
+  onCorrect,
+  onRefresh,
+}: {
+  row: MasterChemicalRow;
+  onAdjudicate?: (item: ClassifiedConflict) => void;
+  onCorrect?: (field: MasterCorrectableField) => void;
+  onRefresh?: () => void;
+}) {
   const fields = masterEvidenceFields(row);
   const summary = masterEvidenceSummary(row);
   const sources = masterEvidenceSources(row);
@@ -114,14 +124,21 @@ export function MasterEvidencePanel({ row }: { row: MasterChemicalRow }) {
       <Group title="Constituents and activity groups" fields={of("chemistry")} />
       <Group title="Registered uses, rates, WHP and re-entry" fields={of("uses")} />
 
-      <MasterConflictList items={classifyMasterConflicts(row)} />
+      <MasterConflictList
+        items={classifyMasterConflicts(row)}
+        row={row}
+        onAdjudicate={onAdjudicate}
+        onCorrect={onCorrect}
+        onRefresh={onRefresh}
+      />
 
-      {draft.unresolvedFields.length > 0 && (
-        <div className="rounded-md border border-border/60 px-3 py-2 text-xs">
-          <span className="font-semibold">Unresolved fields: </span>
-          <span className="text-muted-foreground">{draft.unresolvedFields.join(", ")}</span>
-        </div>
-      )}
+      <MasterUnresolvedList
+        row={row}
+        fields={draft.unresolvedFields.map(String)}
+        onCorrect={onCorrect}
+        onRefresh={onRefresh}
+      />
+
 
       <div className="rounded-md border border-border/60">
         <div className="border-b border-border/60 px-3 py-1.5 text-xs font-semibold">
