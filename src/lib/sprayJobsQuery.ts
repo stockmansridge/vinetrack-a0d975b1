@@ -53,7 +53,22 @@ export interface SprayJobChemicalLine {
    */
   costPerUnit?: number | null;
   notes?: string | null;
+  /**
+   * P8 — frozen chemistry stamp for this line (see
+   * `resistance/sprayJobChemistryStamp`). JSON column, no schema change. The
+   * chemistry a job was created with must survive a later Saved Chemical
+   * re-verify, and plan deviation needs real groups to compare.
+   */
+  activity_groups?: { scheme: string; code: string }[] | null;
+  verification_status?: string | null;
+  registration_identity_key?: string | null;
+  country_code?: string | null;
+  actives?: unknown[] | null;
+  stamped_at?: string | null;
+  /** Legacy display group text ("Group 3"), carried through unchanged. */
+  chemical_group?: string | null;
 }
+
 
 
 export interface SprayJob {
