@@ -116,7 +116,7 @@ export function reverifyFromLookupResult(args: {
   // --- jurisdiction is authoritative ---------------------------------------
   const resolvedCountry =
     normaliseCountry(result.draft.registration.country) ??
-    normaliseCountry(result.jurisdiction.resolvedCountry);
+    normaliseCountry(result.jurisdiction.country);
   const jurisdiction = jurisdictionSuitability(resolvedCountry, vineyardCountry);
   if (jurisdiction === "mismatch") {
     return {
