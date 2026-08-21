@@ -204,11 +204,21 @@ function ReviewDialog({
   const qc = useQueryClient();
   const [notes, setNotes] = useState(row.review_notes ?? "");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const [correctField, setCorrectField] = useState<MasterCorrectableField | null>(null);
+  const [adjudicating, setAdjudicating] = useState<ClassifiedConflict | null>(null);
+  const [rekeyOpen, setRekeyOpen] = useState(false);
   // null until a preview has actually been run in this session.
   const [fresherAvailable, setFresherAvailable] = useState<boolean | null>(null);
   const readiness = approvalReadiness(row);
   const draft = masterChemicalDraft(row);
   const current = row.review_status;
+  const canRekey = identityFieldsCorrectable(row);
+
+  const openCorrection = (field?: MasterCorrectableField | null) => {
+    setCorrectField(field ?? null);
+    setCorrectOpen(true);
+  };
 
   const versions = useQuery({
     queryKey: [...QK, "versions", row.id],
