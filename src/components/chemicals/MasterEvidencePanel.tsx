@@ -14,8 +14,14 @@ import {
   type EvidenceLevel,
 } from "@/lib/masterEvidence";
 import { masterChemicalDraft, type MasterChemicalRow } from "@/lib/masterChemicals";
-import { classifyMasterConflicts, safeExternalUrl } from "@/lib/masterReview";
+import {
+  classifyMasterConflicts,
+  safeExternalUrl,
+  type ClassifiedConflict,
+} from "@/lib/masterReview";
+import type { MasterCorrectableField } from "@/lib/masterReviewActions";
 import { MasterConflictList } from "@/components/chemicals/MasterConflictList";
+import { MasterUnresolvedList } from "@/components/chemicals/MasterUnresolvedList";
 
 const LEVEL_STYLE: Record<EvidenceLevel, string> = {
   official_register: "border-transparent bg-primary/15 text-primary",
