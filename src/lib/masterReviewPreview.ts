@@ -337,10 +337,12 @@ export async function applyMasterReviewPreview(
     throw new Error("Your session has expired. Sign in again before applying a review.");
   }
 
+  // Live SQL203 signature (verified against the shared project's schema cache):
+  //   public.master_review_apply(p_master_id, p_preview_id, p_reason)
   const { data, error } = await (supabase as any).rpc(MASTER_REVIEW_APPLY_RPC, {
-    preview_id: input.previewId,
-    master_id: input.masterId,
-    reason,
+    p_master_id: input.masterId,
+    p_preview_id: input.previewId,
+    p_reason: reason,
   });
 
   if (error) {
