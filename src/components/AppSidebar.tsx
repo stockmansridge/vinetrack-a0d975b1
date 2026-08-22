@@ -90,7 +90,7 @@ const dashboardSystemAdmin: NavItem[] = [
 const work: NavItem[] = [
   { title: "Pins / Repairs / Observations", url: "/pins", icon: MapPin },
   { title: "Field Trips", url: "/trips", icon: Sprout },
-  { title: "Spray Jobs & Templates", url: "/spray-jobs", icon: Layers },
+  { title: "Spray Program & Jobs", url: "/spray-jobs", icon: Layers },
   { title: "Work Tasks", url: "/work-tasks", icon: ClipboardList },
   { title: "Pruning Tracker", url: "/tools/pruning-tracker", icon: Scissors },
   { title: "Maintenance Logs", url: "/maintenance", icon: Wrench },

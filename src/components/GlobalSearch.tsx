@@ -21,7 +21,7 @@ const ITEMS: SearchItem[] = [
   { title: "Live Dashboard", url: "/dashboard/live", group: "Dashboard", keywords: ["live", "realtime", "weather"] },
 
   // Work
-  { title: "Spray Jobs & Templates", url: "/spray-jobs", group: "Work", keywords: ["spray", "chemicals", "templates", "program"] },
+  { title: "Spray Program & Jobs", url: "/spray-jobs", group: "Work", keywords: ["spray", "chemicals", "templates", "program"] },
   { title: "Work Tasks", url: "/work-tasks", group: "Work", keywords: ["tasks", "jobs"] },
   { title: "Field Trips", url: "/trips", group: "Work", keywords: ["trip", "route", "tractor"] },
   { title: "Pins / Repairs / Observations", url: "/pins", group: "Work", keywords: ["pin", "repair", "observation", "issue"] },
