@@ -65,7 +65,7 @@ export function ProgramStepDetailDialog({
   const stage = job.growth_stage_code ?? null;
   const stageDesc = growthStageDescription(stage);
   const targets = (job.targets ?? []).length
-    ? (job.targets as string[])
+    ? (job.targets as string[]).map((t) => sprayTargetLabel(t, targetLabels))
     : job.target
       ? job.target.split(/[,;]/).map((t) => t.trim()).filter(Boolean)
       : [];

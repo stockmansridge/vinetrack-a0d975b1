@@ -1,6 +1,7 @@
 // Stage 3B — Review step: full summary, tank plan and grouped diagnostics.
 import type { ReactNode } from "react";
 import { sprayTargetLabel } from "@/lib/sprayTargetLibrary";
+import { useVineyardSprayTargets } from "@/hooks/useVineyardSprayTargets";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -53,7 +54,7 @@ export function ReviewStep({
         <Card title="Target">
           <Row
             label="Targets"
-            value={(app.targets ?? []).map((t) => sprayTargetLabel(t)).join(", ") || "—"}
+            value={(app.targets ?? []).map((t) => sprayTargetLabel(t, targetLabels)).join(", ") || "—"}
           />
           {app.otherTargetNote && <Row label="Other" value={app.otherTargetNote} />}
           <Row label="Head target" value={app.headTarget ? HEAD_TARGET_LABEL[app.headTarget] : "—"} />
