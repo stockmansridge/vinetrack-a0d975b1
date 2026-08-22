@@ -106,6 +106,23 @@ export const SPRAY_TARGET_LABEL: Record<SprayTarget, string> = {
   other: "Other",
 };
 
+/**
+ * Any target identifier that may live in `spray_jobs.targets` — a built-in
+ * SprayTarget, or a vineyard's own slug from the SQL 204 library. Custom slugs
+ * are first-class: they are stored on the spray and must never be dropped.
+ */
+export type SprayTargetIdentifier = SprayTarget | (string & {});
+
+/** Normalises to a slug without requiring it to be a built-in target. */
+export function normaliseSprayTargetIdentifier(value: unknown): string | null {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return raw || null;
+}
+
 export function normaliseSprayTarget(value: unknown): SprayTarget | null {
   const raw = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   return (SPRAY_TARGETS as string[]).includes(raw) ? (raw as SprayTarget) : null;
@@ -309,7 +326,7 @@ export interface SprayApplication {
    * Structured targets (`spray_jobs.targets text[]`).
    * `null` = never recorded / unknown. `[]` = explicitly no targets.
    */
-  targets: SprayTarget[] | null;
+  targets: SprayTargetIdentifier[] | null;
   /** Legacy single free-text target, kept as compatibility context only. */
   legacyTargetText: string | null;
   /** Optional explanatory note for the structured `other` target. */
@@ -444,8 +461,10 @@ export function fromLegacySprayJob(
   }
 
   const hasTargetsColumn = Array.isArray(job.targets);
+  // Custom identifiers are preserved verbatim — an unknown slug is a fact the
+  // vineyard recorded, not a parse failure.
   const structuredTargets = hasTargetsColumn
-    ? (job.targets.map(normaliseSprayTarget).filter(Boolean) as SprayTarget[])
+    ? (job.targets.map(normaliseSprayTargetIdentifier).filter(Boolean) as SprayTargetIdentifier[])
     : [];
   app.legacyTargetText = job.target ?? null;
   if (hasTargetsColumn) {
@@ -563,7 +582,7 @@ export interface CandidateApplication {
   vineyardId: string | null;
   date: string | null;
   blockIds: string[];
-  targets: SprayTarget[] | null;
+  targets: SprayTargetIdentifier[] | null;
   mode: ApplicationMode | null;
   operationType: OperationType | null;
   headTarget: HeadTarget | null;

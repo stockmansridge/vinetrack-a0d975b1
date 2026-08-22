@@ -21,6 +21,7 @@ import { resolveApplicationGeometry } from "@/lib/sprayApplicationGeometry";
 import { calculateSprayApplication } from "@/lib/sprayCalculation";
 import { evaluateSaveGate, hydrateDraft } from "@/lib/sprayApplicationDraft";
 import { toSprayJobInput } from "@/lib/sprayApplicationSave";
+import { useVineyardSprayTargets } from "@/hooks/useVineyardSprayTargets";
 import {
   createSprayJob,
   fetchLinkedSprayRecords,
@@ -219,6 +220,10 @@ export function SprayJobWizard({
   }, [resistance.overallStatus]);
   const resistanceBlocksSave = resistance.requiresAcknowledgement && !resistanceAck;
 
+  // Custom target wording is shared vineyard vocabulary (SQL 204); the legacy
+  // free-text `target` column keeps the operator's exact wording.
+  const { labels: targetLabels } = useVineyardSprayTargets(vineyardId);
+
   const patch = (p: Partial<SprayApplication>) => setApp((a) => ({ ...a, ...p }));
   const update = (fn: (a: SprayApplication) => SprayApplication) => setApp(fn);
 
@@ -228,6 +233,7 @@ export function SprayJobWizard({
         application: { ...app, vineyardId },
         geometry,
         calculation: calc,
+        targetLabels,
       });
       if (editing) {
         // Provenance is frozen once a live record references the job — never
