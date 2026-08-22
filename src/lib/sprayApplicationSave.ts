@@ -4,10 +4,10 @@
 //
 // Nothing here recalculates. Numbers come from the Stage 3A calculation result;
 // this module only decides which canonical raw value lands in which column.
+import { sprayTargetLabel } from "@/lib/sprayTargetLibrary";
 import {
   OPERATION_TYPE_LABEL,
   OPERATION_TYPE_TO_MODE,
-  SPRAY_TARGET_LABEL,
   persistedHeadTarget,
   type SprayApplication,
   type SprayProductLine,
@@ -32,9 +32,12 @@ const round = (v: number | null | undefined, dp = 4): number | null =>
   v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** dp) / 10 ** dp;
 
 /** Free-text `target` kept in sync for legacy readers/exports — display only. */
-export function legacyTargetText(app: SprayApplication): string | null {
+export function legacyTargetText(
+  app: SprayApplication,
+  targetLabels?: Map<string, string> | null,
+): string | null {
   const note = (app.otherTargetNote ?? "").trim();
-  const structured = (app.targets ?? []).map((t) => SPRAY_TARGET_LABEL[t]);
+  const structured = (app.targets ?? []).map((t) => sprayTargetLabel(t, targetLabels));
   if (structured.length) {
     const text = structured.join(", ");
     return note ? `${text} — ${note}` : text;
