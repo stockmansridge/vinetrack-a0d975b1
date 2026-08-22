@@ -135,17 +135,25 @@ function ProductRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1">
           <Label className="text-xs">Product</Label>
-          <Select
-            value={line.savedChemicalId ?? "__none"}
+          <ChemicalStoreCombobox
+            chemicals={chemicals}
+            value={line.savedChemicalId}
             disabled={!canEdit}
-            onValueChange={(v) => {
-              if (v === "__none") {
+            triggerLabel={
+              line.savedChemicalId
+                ? undefined
+                : line.productName
+                  ? `${line.productName} — Not linked to Chemical Store`
+                  : undefined
+            }
+            onSelect={(id) => {
+              if (!id) {
                 onChange({ ...line, savedChemicalId: null, productName: null, intelligence: null });
                 return;
               }
-              const chem = intelligenceById.get(v) ?? null;
+              const chem = intelligenceById.get(id) ?? null;
               const fresh = productLineFromChemical({
-                savedChemicalId: v,
+                savedChemicalId: id,
                 productName: chem?.name ?? null,
                 unit: chem?.commercial.unit ?? line.unit,
                 intelligence: chem,
@@ -153,15 +161,7 @@ function ProductRow({
               });
               onChange({ ...fresh, rate: line.rate, rateBasis: line.rateBasis, notes: line.notes });
             }}
-          >
-            <SelectTrigger><SelectValue placeholder="Choose a product" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none">Not set</SelectItem>
-              {chemicals.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name ?? "Unnamed chemical"}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {intel && (
               <Badge
@@ -178,10 +178,19 @@ function ProductRow({
             )}
             {groups && <Badge variant="outline">{groups}</Badge>}
             {!line.savedChemicalId && line.productName && (
-              <Badge variant="outline">Not linked to a saved chemical</Badge>
+              <Badge variant="destructive">
+                {line.productName} — Not linked to Chemical Store
+              </Badge>
             )}
           </div>
+          {!line.savedChemicalId && line.productName && (
+            <p className="pt-1 text-xs text-muted-foreground">
+              Search above to deliberately <strong>replace this product</strong> with the correct
+              Chemical Store entry. A name match is never treated as a verified identity.
+            </p>
+          )}
         </div>
+
         {canEdit && (
           <Button type="button" size="icon" variant="ghost" onClick={onRemove} aria-label="Remove product">
             <Trash2 className="h-4 w-4" />
