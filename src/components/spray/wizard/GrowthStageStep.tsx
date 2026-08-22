@@ -11,7 +11,7 @@ export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
   const [zoom, setZoom] = useState<{ code: string; label: string; src: string } | null>(null);
 
   return (
-    <div className="flex h-full min-h-0 flex-col space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Growth stage</h3>
         {app.growthStageCode && canEdit && (
