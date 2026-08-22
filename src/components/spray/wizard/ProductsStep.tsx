@@ -176,7 +176,11 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
         initial={null}
         initialName={creating?.name ?? null}
         vineyardId={vineyardId}
-        existingLibrary={[]}
+        existingLibrary={chemicals.map((c) => ({
+          id: c.id,
+          name: c.name ?? "",
+          active_ingredient: c.legacy.activeIngredient ?? "",
+        }))}
         canSeeCosts={canSeeCosts}
         onSaved={onChemicalSaved}
       />

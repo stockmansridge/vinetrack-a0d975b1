@@ -122,7 +122,7 @@ export function ChemicalEditor({
   onOpenChange: (o: boolean) => void;
   initial: SavedChemical | null;
   vineyardId: string;
-  existingLibrary: SavedChemical[];
+  existingLibrary: Array<Pick<SavedChemical, "id" | "name" | "active_ingredient">>;
   canSeeCosts: boolean;
   /** Optional starting product name (new chemicals only). Never a verified identity. */
   initialName?: string | null;
