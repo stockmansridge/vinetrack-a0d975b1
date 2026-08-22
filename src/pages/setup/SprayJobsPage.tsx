@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2, Upload, FileSpreadsheet, Info } from "lucide-react";
 import { downloadSprayProgramTemplate } from "@/lib/sprayProgramTemplate";
 import { SprayProgramImportDialog } from "@/components/spray/SprayProgramImportDialog";
+import { ProgramStepDetailDialog } from "@/components/spray/ProgramStepDetailDialog";
+import { ProgramStepPickerDialog } from "@/components/spray/ProgramStepPickerDialog";
+import { PlanSprayFromProgramStep } from "@/components/spray/PlanSprayFromProgramStep";
+import { growthStageOrder, chemicalLineRateText, programLines } from "@/lib/sprayProgramStep";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -164,6 +168,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
   const [importOpen, setImportOpen] = useState(false);
   const [tplBusy, setTplBusy] = useState(false);
 
+  const qc = useQueryClient();
   const lookups = useLookups(selectedVineyardId);
 
   const effectiveTab = templatesOnly && tab === "planned" ? "templates" : tab;
@@ -243,7 +248,6 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           open={importOpen}
           onOpenChange={setImportOpen}
           vineyardId={selectedVineyardId}
-          programMode
         />
       )}
 
@@ -290,7 +294,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           onArchive={() => {
             const job = detailStep;
             setDetailStep(null);
-            archiveJob(job.id)
+            archiveSprayJob(job.id)
               .then(() => {
                 toast({ title: "Program Step archived" });
                 qc.invalidateQueries({ queryKey: ["spray_jobs", selectedVineyardId] });
@@ -348,13 +352,14 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
 }
 
 function JobsTable({
-  mode, canEdit, onEdit, maps, templatesOnly = false,
+  mode, canEdit, onEdit, maps, templatesOnly = false, onPlanSpray,
 }: {
   mode: "planned" | "templates" | "archived";
   canEdit: boolean;
   onEdit: (job: SprayJob) => void;
   maps: LookupMaps;
   templatesOnly?: boolean;
+  onPlanSpray?: (job: SprayJob) => void;
 }) {
   const { selectedVineyardId, memberships } = useVineyard();
   const formatters = useRegionFormatters();
