@@ -783,16 +783,16 @@ function JobsTable({
                       <Button size="sm" variant="ghost" onClick={() => onEdit(j)} title="Edit">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: false })} title="Duplicate">
+                      <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: mode === "templates" })} title={mode === "templates" ? "Duplicate Program Step" : "Duplicate"}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                       {mode === "planned" && (
-                        <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: true })} title="Save as template">
+                        <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: true })} title="Add to Program">
                           <Save className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {mode === "templates" && (
-                        <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: false })} title="Create planned job from template">
+                      {mode === "templates" && onPlanSpray && (
+                        <Button size="sm" variant="ghost" onClick={() => onPlanSpray(j)} title="Plan Spray">
                           <FileText className="h-3.5 w-3.5" />
                         </Button>
                       )}
