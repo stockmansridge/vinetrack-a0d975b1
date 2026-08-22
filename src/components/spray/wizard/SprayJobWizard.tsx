@@ -275,11 +275,10 @@ export function SprayJobWizard({
     if (s.key === "carrier" && app.operationType === "spreader" && app.mode !== "banded") return false;
     if (app.isTemplate && (s.key === "blocks" || s.key === "resistance")) return false;
     return true;
-  }).map((s) =>
-    app.isTemplate && s.key === "carrier"
-      ? ({ ...s, label: "Optional defaults" } as typeof s)
-      : s,
-  );
+  }).map((s) => ({
+    key: s.key as (typeof STEPS)[number]["key"],
+    label: app.isTemplate && s.key === "carrier" ? "Optional defaults" : (s.label as string),
+  }));
   const current = visibleSteps[Math.min(step, visibleSteps.length - 1)];
 
   const renderStep = () => {
