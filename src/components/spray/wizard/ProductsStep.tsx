@@ -33,13 +33,45 @@ import {
 import type { StepProps } from "./types";
 import { useVineyard } from "@/context/VineyardContext";
 import { ChemicalStoreCombobox } from "@/components/spray/ChemicalStoreCombobox";
+import { ChemicalEditor } from "@/components/chemicals/ChemicalEditorSheet";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCanSeeCosts } from "@/lib/permissions";
+import { toChemicalIntelligence, type ChemicalIntelligence as ChemIntel } from "@/lib/chemicalIntelligence";
+import type { SavedChemical } from "@/lib/savedChemicalsQuery";
 
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
 const UNITS = ["L", "mL", "kg", "g"];
 
-export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: StepProps) {
+/**
+ * The single authoritative binding path: a product line is linked to a Chemical
+ * Store product by its persisted id, never by a name match. Rate, basis and
+ * notes already entered on the line are always preserved.
+ */
+export function bindChemicalToLine(
+  line: SprayProductLine,
+  chem: ChemicalIntelligence | null,
+  id: string | null,
+): SprayProductLine {
+  if (!id) {
+    return { ...line, savedChemicalId: null, productName: null, intelligence: null };
+  }
+  const fresh = productLineFromChemical({
+    savedChemicalId: id,
+    productName: chem?.name ?? null,
+    unit: chem?.commercial.unit ?? line.unit,
+    intelligence: chem,
+    costPerUnit: chem?.commercial.costPerUnit ?? null,
+  });
+  return { ...fresh, rate: line.rate, rateBasis: line.rateBasis, notes: line.notes };
+}
+
+export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vineyardId }: StepProps) {
+  const qc = useQueryClient();
+  const canSeeCosts = useCanSeeCosts();
+  // `null` = closed. `{ index: null }` = create then append a new line.
+  const [creating, setCreating] = useState<{ index: number | null; name: string | null } | null>(null);
   const chemicals = useMemo(
     () => Array.from(intelligenceById.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     [intelligenceById],
@@ -56,20 +88,58 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: St
       ],
     });
 
+  // Saving a new chemical returns the persisted row here; it is bound by id to
+  // the row that asked for it (or appended as a new line) without touching any
+  // other part of the draft.
+  const onChemicalSaved = (saved: SavedChemical) => {
+    const intel = toChemicalIntelligence(saved as any) as ChemIntel;
+    const target = creating?.index ?? null;
+    if (target == null) {
+      patch({
+        products: [
+          ...app.products,
+          bindChemicalToLine(
+            productLineFromChemical({ savedChemicalId: null, productName: null, unit: null }),
+            intel,
+            intel.id,
+          ),
+        ],
+      });
+    } else {
+      patch({
+        products: app.products.map((p, idx) =>
+          idx === target ? bindChemicalToLine(p, intel, intel.id) : p,
+        ),
+      });
+    }
+    qc.invalidateQueries({ queryKey: ["saved-chemicals"] });
+    setCreating(null);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Products</h3>
         <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="ghost">
+          <Button asChild size="sm" variant="link" className="text-muted-foreground">
             <a href="/setup/chemicals" target="_blank" rel="noreferrer">
               Manage chemicals <ExternalLink className="ml-1 h-3.5 w-3.5" />
             </a>
           </Button>
           {canEdit && (
-            <Button type="button" size="sm" variant="outline" onClick={addLine}>
-              <Plus className="mr-1 h-3.5 w-3.5" /> Add product
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCreating({ index: null, name: null })}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add chemical
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={addLine}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add product
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -91,11 +161,29 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit }: St
             chemicals={chemicals}
             intelligenceById={intelligenceById}
             canEdit={canEdit}
+            onAddChemical={(name) => setCreating({ index: i, name })}
             onChange={(next) => setLine(i, next)}
             onRemove={() => patch({ products: app.products.filter((_, idx) => idx !== i) })}
           />
         ))}
       </div>
+
+      {/* The same Add New Chemical experience used by the Chemical Store,
+          nested here so the Program Step draft is never saved or discarded. */}
+      <ChemicalEditor
+        open={!!creating}
+        onOpenChange={(o) => { if (!o) setCreating(null); }}
+        initial={null}
+        initialName={creating?.name ?? null}
+        vineyardId={vineyardId}
+        existingLibrary={chemicals.map((c) => ({
+          id: c.id,
+          name: c.name ?? "",
+          active_ingredient: c.legacy.activeIngredient ?? "",
+        }))}
+        canSeeCosts={canSeeCosts}
+        onSaved={onChemicalSaved}
+      />
     </div>
   );
 }
@@ -110,6 +198,7 @@ function ProductRow({
   canEdit,
   onChange,
   onRemove,
+  onAddChemical,
 }: {
   index: number;
   mode: SprayApplication["mode"];
@@ -120,6 +209,7 @@ function ProductRow({
   canEdit: boolean;
   onChange: (next: SprayProductLine) => void;
   onRemove: () => void;
+  onAddChemical: (name: string | null) => void;
 }) {
   const [showUses, setShowUses] = useState(false);
   const { currentCountry } = useVineyard();
@@ -149,19 +239,8 @@ function ProductRow({
                   : undefined
             }
             onSelect={(id) => {
-              if (!id) {
-                onChange({ ...line, savedChemicalId: null, productName: null, intelligence: null });
-                return;
-              }
-              const chem = intelligenceById.get(id) ?? null;
-              const fresh = productLineFromChemical({
-                savedChemicalId: id,
-                productName: chem?.name ?? null,
-                unit: chem?.commercial.unit ?? line.unit,
-                intelligence: chem,
-                costPerUnit: chem?.commercial.costPerUnit ?? null,
-              });
-              onChange({ ...fresh, rate: line.rate, rateBasis: line.rateBasis, notes: line.notes });
+              const chem = id ? intelligenceById.get(id) ?? null : null;
+              onChange(bindChemicalToLine(line, chem, id));
             }}
           />
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -185,6 +264,18 @@ function ProductRow({
               </Badge>
             )}
           </div>
+          {canEdit && !line.savedChemicalId && (
+            <div className="pt-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onAddChemical(line.productName ?? null)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add chemical
+              </Button>
+            </div>
+          )}
           {!line.savedChemicalId && line.productName && (
             <p className="pt-1 text-xs text-muted-foreground">
               Search above to deliberately <strong>replace this product</strong> with the correct
