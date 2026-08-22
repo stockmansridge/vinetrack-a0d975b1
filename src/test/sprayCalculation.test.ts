@@ -655,7 +655,9 @@ describe("legacy spray job adapter", () => {
     );
     expect(app.mode).toBe("banded");
     expect(app.operationType).toBe("foliar");
-    expect(app.targets).toEqual(["botrytis"]);
+    // SQL 204: a non-built-in identifier is the vineyard's own target, not a
+    // parse failure, so it survives hydration verbatim.
+    expect(app.targets).toEqual(["botrytis", "not_a_target"]);
     expect(app.carrier.basis).toBe("l_per_100m");
     expect(app.headTarget).toBe("bunch_line"); // operation type is still foliar
     expect(app.totalTreatedBandWidthMetres).toBe(1);
