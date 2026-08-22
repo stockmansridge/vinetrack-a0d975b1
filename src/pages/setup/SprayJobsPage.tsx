@@ -250,26 +250,76 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
 
       <Tabs value={effectiveTab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
-          {!templatesOnly && <TabsTrigger value="planned">Planned Jobs</TabsTrigger>}
-          <TabsTrigger value="templates">{templatesOnly ? "Active" : "Templates"}</TabsTrigger>
+          <TabsTrigger value="templates">Program</TabsTrigger>
+          {!templatesOnly && <TabsTrigger value="planned">Planned Sprays</TabsTrigger>}
           <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="templates">
+          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
+            onEdit={(job) => setDetailStep(job)}
+            onPlanSpray={startPlanFromStep} />
+        </TabsContent>
         {!templatesOnly && (
           <TabsContent value="planned">
             <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
               onEdit={(job) => setEditing({ job, isTemplate: false })} />
           </TabsContent>
         )}
-        <TabsContent value="templates">
-          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
-            onEdit={(job) => setEditing({ job, isTemplate: true })} />
-        </TabsContent>
         <TabsContent value="archived">
           <JobsTable mode="archived" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
             onEdit={(job) => setEditing({ job, isTemplate: templatesOnly ? true : !!job.is_template })} />
         </TabsContent>
       </Tabs>
+
+      {detailStep && selectedVineyardId && (
+        <ProgramStepDetailDialog
+          open={true}
+          onOpenChange={(o) => !o && setDetailStep(null)}
+          job={detailStep}
+          vineyardId={selectedVineyardId}
+          canEdit={canEdit}
+          equipmentName={detailStep.equipment_id ? lookups.maps.equipment.get(detailStep.equipment_id) ?? null : null}
+          tractorName={detailStep.tractor_id ? lookups.maps.tractors.get(detailStep.tractor_id) ?? null : null}
+          onPlanSpray={() => startPlanFromStep(detailStep)}
+          onEdit={() => {
+            const job = detailStep;
+            setDetailStep(null);
+            setEditing({ job, isTemplate: true });
+          }}
+          onArchive={() => {
+            const job = detailStep;
+            setDetailStep(null);
+            archiveJob(job.id)
+              .then(() => {
+                toast({ title: "Program Step archived" });
+                qc.invalidateQueries({ queryKey: ["spray_jobs", selectedVineyardId] });
+              })
+              .catch((e: any) =>
+                toast({ title: "Archive failed", description: e?.message ?? String(e), variant: "destructive" }));
+          }}
+        />
+      )}
+
+      {pickerOpen && selectedVineyardId && (
+        <ProgramStepPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          vineyardId={selectedVineyardId}
+          onPick={startPlanFromStep}
+        />
+      )}
+
+      {planningFrom && selectedVineyardId && (
+        <PlanSprayFromProgramStep
+          open={true}
+          onOpenChange={(o) => !o && setPlanningFrom(null)}
+          vineyardId={selectedVineyardId}
+          programStep={planningFrom}
+          canEdit={canEdit}
+          lookups={lookups}
+        />
+      )}
 
       {editing && selectedVineyardId && (
         <SprayJobWizard
@@ -292,6 +342,7 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           }
         />
       )}
+
     </div>
   );
 }
