@@ -23,7 +23,7 @@ export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
       <p className="text-xs text-muted-foreground">
         Optional. Recording the stage helps with label compliance and reporting. Click a thumbnail to enlarge.
       </p>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 grid-cols-2">
         {GROWTH_STAGES.map((g) => {
           const label = g.label.replace(/^EL\d+\s*—\s*/i, "");
           const src = growthStageImageUrl(g.code);
@@ -32,10 +32,21 @@ export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
             <div
               key={g.code}
               className={cn(
-                "flex items-start gap-3 rounded-md border p-2 transition",
+                "flex items-start gap-3 rounded-md border p-3 transition",
                 selected ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted/50",
               )}
             >
+              <button
+                type="button"
+                disabled={!canEdit}
+                aria-pressed={selected}
+                aria-label={`Growth stage ${g.code}`}
+                onClick={() => patch({ growthStageCode: g.code })}
+                className="min-w-0 flex-1 text-left text-sm"
+              >
+                <span className="block text-xs font-semibold tabular-nums text-muted-foreground">{g.code}</span>
+                <span className="block whitespace-normal">{label}</span>
+              </button>
               {src ? (
                 <button
                   type="button"
@@ -61,17 +72,6 @@ export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
                   {g.code.replace(/^EL/i, "")}
                 </span>
               )}
-              <button
-                type="button"
-                disabled={!canEdit}
-                aria-pressed={selected}
-                aria-label={`Growth stage ${g.code}`}
-                onClick={() => patch({ growthStageCode: g.code })}
-                className="min-w-0 flex-1 text-left text-sm"
-              >
-                <span className="block text-xs font-semibold tabular-nums text-muted-foreground">{g.code}</span>
-                <span className="block whitespace-normal">{label}</span>
-              </button>
             </div>
           );
         })}
