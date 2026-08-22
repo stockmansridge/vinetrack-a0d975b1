@@ -23,7 +23,7 @@ export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
       <p className="text-xs text-muted-foreground">
         Optional. Recording the stage helps with label compliance and reporting. Click a thumbnail to enlarge.
       </p>
-      <div className="grid min-h-0 flex-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {GROWTH_STAGES.map((g) => {
           const label = g.label.replace(/^EL\d+\s*—\s*/i, "");
           const src = growthStageImageUrl(g.code);
