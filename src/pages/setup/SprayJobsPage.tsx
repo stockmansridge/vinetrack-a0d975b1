@@ -515,11 +515,15 @@ function JobsTable({
   };
   const growthCol: ColDef = {
     key: "growth",
-    label: "Growth",
-    accessor: (j) => j.growth_stage_code ?? "",
+    label: "Growth Stage",
+    // Numeric E-L order: EL7 must sort before EL12. Unset stages sort last.
+    accessor: (j) => growthStageOrder(j.growth_stage_code) ?? 9999,
     render: (j) => (
       <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
-        {j.growth_stage_code ?? "—"}
+        <div className="font-medium">{j.growth_stage_code ?? "—"}</div>
+        <div className="text-xs text-muted-foreground">
+          {j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}
+        </div>
       </TableCell>
     ),
   };
@@ -528,41 +532,19 @@ function JobsTable({
     if (mode === "templates") {
       return [
         growthCol,
-        { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
-        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
-        { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
-        { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
-          const lines = (j.chemical_lines ?? []).filter((l) => (l?.name ?? "").trim());
+        { key: "name", label: "Program Step", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
+        { key: "target", label: "Target", accessor: (j) => j.target ?? "", render: (j) => <TableCell className="max-w-[220px] whitespace-normal">{j.target ? j.target : "—"}</TableCell> },
+        { key: "chemicals", label: "Products & Rates", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
+          const lines = programLines(j);
           return (
             <TableCell className="min-w-[260px] max-w-[440px] align-top">
               {lines.length === 0 ? <span className="text-muted-foreground">—</span> : (
                 <ul className="flex flex-col gap-0.5 whitespace-normal break-words">
                   {lines.map((l, i) => {
-                    const name = (l.name ?? "").trim();
-                    const baseUnit = normaliseUnit(l.unit);
-                    // Determine basis suffix from rate_basis; fall back to
-                    // rate_per_ha / rate_per_100L when basis is missing.
-                    const basis =
-                      l.rate_basis === "per_hectare"
-                        ? "per_hectare"
-                        : l.rate_basis === "per_100L" || l.rate_basis === "per_100_litres"
-                          ? "per_100L"
-                          : (l as any).rate_per_ha != null
-                            ? "per_hectare"
-                            : (l as any).rate_per_100L != null
-                              ? "per_100L"
-                              : null;
-                    const suffix =
-                      basis === "per_hectare" ? "/ha" : basis === "per_100L" ? "/100 L" : "";
-                    const rateText =
-                      l.rate != null
-                        ? `${l.rate}${baseUnit ? ` ${baseUnit}` : ""}${suffix}`
-                        : "";
-                    const detail = rateText;
-
+                    const detail = chemicalLineRateText(l);
                     return (
                       <li key={i} className="leading-snug">
-                        <span className="font-medium">{name}</span>
+                        <span className="font-medium">{(l.name ?? "").trim()}</span>
                         {detail ? <span className="text-muted-foreground text-xs ml-1">— {detail}</span> : null}
                       </li>
                     );
@@ -572,20 +554,34 @@ function JobsTable({
             </TableCell>
           );
         } },
-        { key: "water", label: "Water (L)", accessor: (j) => (j.water_volume == null ? null : Number(j.water_volume)), render: (j) => <TableCell>{fmt(j.water_volume)}</TableCell> },
-        { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)), render: (j) => <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell> },
-        { key: "cf", label: "CF", accessor: (j) => (j.concentration_factor == null ? null : Number(j.concentration_factor)), render: (j) => <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell> },
+        { key: "operation", label: "Application", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => (
+          <TableCell>
+            <OperationTypeBadge value={j.operation_type} />
+            {j.spray_rate_per_ha != null && (
+              <div className="text-xs text-muted-foreground">{fmt(j.spray_rate_per_ha)} L/ha</div>
+            )}
+          </TableCell>
+        ) },
+        { key: "equipment", label: "Equipment", accessor: (j) => (j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "" : ""), render: (j) => (
+          <TableCell className="text-sm">
+            <div>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</div>
+            {j.tractor_id && (
+              <div className="text-xs text-muted-foreground">{maps.tractors.get(j.tractor_id) ?? ""}</div>
+            )}
+          </TableCell>
+        ) },
         { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null), render: (j) => <TableCell>{fmtDate(j.updated_at)}</TableCell> },
       ];
     }
     if (mode === "archived") {
       return [
         { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
-        { key: "type", label: "Type", accessor: (j) => (j.is_template ? "Template" : "Planned"), render: (j) => <TableCell>{j.is_template ? "Template" : "Planned"}</TableCell> },
+        { key: "type", label: "Type", accessor: (j) => (j.is_template ? "Program Step" : "Planned Spray"), render: (j) => <TableCell>{j.is_template ? "Program Step" : "Planned Spray"}</TableCell> },
         { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell> },
         { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null), render: (j) => <TableCell>{fmtDate(j.updated_at)}</TableCell> },
       ];
     }
+
     return [
       growthCol,
       { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
