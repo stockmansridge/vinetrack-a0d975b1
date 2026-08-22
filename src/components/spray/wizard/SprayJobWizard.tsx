@@ -244,7 +244,11 @@ export function SprayJobWizard({
     },
     onSuccess: (saved) => {
       if (!editing && saved) onCreated?.(saved as SprayJob);
-      toast({ title: editing ? "Saved" : app.isTemplate ? "Template created" : "Spray job created" });
+      toast({
+        title: editing
+          ? app.isTemplate ? "Program Step saved" : "Planned Spray saved"
+          : app.isTemplate ? "Program Step added" : "Planned Spray created",
+      });
       qc.invalidateQueries({ queryKey: ["spray_jobs"] });
       qc.invalidateQueries({ queryKey: ["spray_job_paddocks"] });
       onOpenChange(false);
@@ -264,8 +268,17 @@ export function SprayJobWizard({
     canEdit,
   };
 
-  const visibleSteps = STEPS.filter(
-    (s) => !(s.key === "carrier" && app.operationType === "spreader" && app.mode !== "banded"),
+  // A Program Step (`is_template = true`) is reusable configuration: it never
+  // carries blocks, and the resistance check needs a real block history, so
+  // both steps are hidden. The wizard, draft and calculation engine are shared.
+  const visibleSteps = STEPS.filter((s) => {
+    if (s.key === "carrier" && app.operationType === "spreader" && app.mode !== "banded") return false;
+    if (app.isTemplate && (s.key === "blocks" || s.key === "resistance")) return false;
+    return true;
+  }).map((s) =>
+    app.isTemplate && s.key === "carrier"
+      ? ({ ...s, label: "Optional defaults" } as typeof s)
+      : s,
   );
   const current = visibleSteps[Math.min(step, visibleSteps.length - 1)];
 
@@ -309,7 +322,9 @@ export function SprayJobWizard({
       <DialogContent className="flex h-[92vh] max-w-5xl flex-col gap-0 p-0">
         <DialogHeader className="border-b px-4 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            {editing ? "Edit" : "New"} {app.isTemplate ? "spray template" : "spray application"}
+            {app.isTemplate
+              ? editing ? "Edit Program Step" : "Add Program Step"
+              : editing ? "Edit Planned Spray" : "New Planned Spray"}
             {!canEdit && <Badge variant="outline">View only</Badge>}
           </DialogTitle>
         </DialogHeader>
@@ -413,7 +428,9 @@ export function SprayJobWizard({
                 onClick={() => saveMut.mutate()}
               >
                 {saveMut.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                {editing ? "Save changes" : app.isTemplate ? "Create template" : "Create job"}
+                {editing
+                  ? "Save changes"
+                  : app.isTemplate ? "Add Program Step" : "Create Planned Spray"}
               </Button>
             </div>
           </div>
