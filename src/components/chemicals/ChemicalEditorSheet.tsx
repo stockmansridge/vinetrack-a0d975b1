@@ -116,6 +116,7 @@ const EMPTY: SavedChemicalInput = {
 
 export function ChemicalEditor({
   open, onOpenChange, initial, vineyardId, existingLibrary, canSeeCosts, onSaved,
+  initialName,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -123,6 +124,8 @@ export function ChemicalEditor({
   vineyardId: string;
   existingLibrary: SavedChemical[];
   canSeeCosts: boolean;
+  /** Optional starting product name (new chemicals only). Never a verified identity. */
+  initialName?: string | null;
   /** Receives the persisted Saved Chemical row so callers can bind by identity. */
   onSaved: (saved: SavedChemical) => void;
 }) {
@@ -231,7 +234,7 @@ export function ChemicalEditor({
             : null,
         );
       } else {
-        setForm(EMPTY);
+        setForm({ ...EMPTY, name: initialName?.trim() ? initialName.trim() : "" });
         setRateStr("");
         setExistingCost(null);
         setPackSizeStr("");
@@ -248,7 +251,7 @@ export function ChemicalEditor({
       }
       setMasterUpdateOpen(false);
     }
-  }, [open, initial]);
+  }, [open, initial, initialName]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
