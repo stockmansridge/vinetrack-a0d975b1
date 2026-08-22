@@ -6,7 +6,7 @@ import {
   isBuiltInSprayTarget,
   prettifySprayTargetIdentifier,
 } from "@/lib/sprayTargetLibrary";
-import { hydrateSprayApplication } from "@/lib/sprayApplicationDomain";
+import { fromLegacySprayJob } from "@/lib/sprayApplicationDomain";
 
 describe("spray target slugs", () => {
   it("produces the shared identifier shape", () => {
@@ -39,7 +39,7 @@ describe("spray target slugs", () => {
 
 describe("hydration keeps custom identifiers", () => {
   it("does not discard a slug that is not a built-in target", () => {
-    const { application } = hydrateSprayApplication({
+    const application = fromLegacySprayJob({
       id: "j1",
       vineyard_id: "v1",
       is_template: true,
