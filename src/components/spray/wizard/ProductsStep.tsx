@@ -32,6 +32,8 @@ import {
 } from "@/lib/chemicalIntelligence";
 import type { StepProps } from "./types";
 import { useVineyard } from "@/context/VineyardContext";
+import { ChemicalStoreCombobox } from "@/components/spray/ChemicalStoreCombobox";
+
 import { JurisdictionNoticeBanner } from "@/components/chemicals/JurisdictionNotice";
 import { countryLabel, jurisdictionSuitability, labelFactsAuthoritative } from "@/lib/chemicalJurisdiction";
 
