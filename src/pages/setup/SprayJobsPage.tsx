@@ -155,10 +155,12 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
   const { selectedVineyardId, currentRole, memberships } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const { toast } = useToast();
-  const [tab, setTab] = useState<"planned" | "templates" | "archived">(
-    templatesOnly ? "templates" : "planned",
-  );
+  // Internal tab key "templates" is the Program tab (spray_jobs.is_template = true).
+  const [tab, setTab] = useState<"planned" | "templates" | "archived">("templates");
   const [editing, setEditing] = useState<{ job: SprayJob | null; isTemplate: boolean } | null>(null);
+  const [detailStep, setDetailStep] = useState<SprayJob | null>(null);
+  const [planningFrom, setPlanningFrom] = useState<SprayJob | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [tplBusy, setTplBusy] = useState(false);
 
@@ -173,56 +175,65 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
     try {
       await downloadSprayProgramTemplate({ vineyardId: selectedVineyardId, vineyardName });
     } catch (e: any) {
-      toast({ title: "Template download failed", description: e?.message ?? String(e), variant: "destructive" });
+      toast({ title: "Download failed", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setTplBusy(false);
     }
+  };
+
+  const startPlanFromStep = (step: SprayJob) => {
+    setPickerOpen(false);
+    setDetailStep(null);
+    setPlanningFrom(step);
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-start gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {templatesOnly ? "Spray Templates" : "Spray Jobs & Templates"}
-          </h1>
+          <h1 className="text-2xl font-semibold">Spray Program</h1>
           <p className="text-sm text-muted-foreground">
-            Plan and record vineyard spray applications, or create reusable templates for regular spray programs. Record products, application rates, equipment, operators, vineyard blocks, weather conditions and other spray details.
+            Build your vineyard spray program, maintain reusable Program Steps, and plan
+            upcoming spray applications.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {canEdit && effectiveTab !== "archived" && (
-            <Button onClick={() => setEditing({ job: null, isTemplate: effectiveTab === "templates" || templatesOnly })}>
-              <Plus className="h-4 w-4 mr-1" />
-              {templatesOnly
-                ? "New Spray Template"
-                : effectiveTab === "templates" ? "New template" : "New planned job"}
-            </Button>
-          )}
-          {canEdit && !templatesOnly && effectiveTab === "planned" && (
+          {canEdit && effectiveTab === "templates" && (
             <>
-              <Button variant="outline" onClick={handleDownloadTemplate} disabled={tplBusy || !selectedVineyardId}>
-                <FileSpreadsheet className="h-4 w-4 mr-1" />
-                {tplBusy ? "Preparing…" : "Download spray program template"}
+              <Button onClick={() => setEditing({ job: null, isTemplate: true })}>
+                <Plus className="h-4 w-4 mr-1" /> Add Program Step
               </Button>
               <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!selectedVineyardId}>
-                <Upload className="h-4 w-4 mr-1" />
-                Import spray program
+                <Upload className="h-4 w-4 mr-1" /> Import Program
+              </Button>
+              <Button variant="outline" onClick={handleDownloadTemplate} disabled={tplBusy || !selectedVineyardId}>
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                {tplBusy ? "Preparing…" : "Download Import Spreadsheet"}
+              </Button>
+            </>
+          )}
+          {canEdit && effectiveTab === "planned" && (
+            <>
+              <Button onClick={() => setPickerOpen(true)} disabled={!selectedVineyardId}>
+                <Plus className="h-4 w-4 mr-1" /> Plan Spray from Program
+              </Button>
+              <Button variant="outline" onClick={() => setEditing({ job: null, isTemplate: false })}>
+                One-off Spray
               </Button>
             </>
           )}
         </div>
       </div>
 
-      {canEdit && !templatesOnly && effectiveTab === "planned" && (
+      {canEdit && effectiveTab === "templates" && (
         <Alert>
           <Info className="h-4 w-4" />
-          <AlertTitle>Before importing a spray program</AlertTitle>
+          <AlertTitle>Before importing a program</AlertTitle>
           <AlertDescription>
-            For the smoothest import, set up your vineyard data first. Add your
-            blocks/paddocks, chemicals, spray equipment, tractors and team/operator
-            details before downloading the template. The template uses these existing
-            records as reference lists so imported jobs can match correctly.
+            For the smoothest import, set up your vineyard data first. Add your chemicals,
+            spray equipment and tractors before downloading the spreadsheet. The spreadsheet
+            uses these existing records as reference lists so imported Program Steps can match
+            correctly.
           </AlertDescription>
         </Alert>
       )}
@@ -232,8 +243,10 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           open={importOpen}
           onOpenChange={setImportOpen}
           vineyardId={selectedVineyardId}
+          programMode
         />
       )}
+
 
       <Tabs value={effectiveTab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
