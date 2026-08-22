@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Copy, Archive, RotateCcw, FileText, Save, X, Download, FileDown, Trash2, Upload, FileSpreadsheet, Info } from "lucide-react";
 import { downloadSprayProgramTemplate } from "@/lib/sprayProgramTemplate";
 import { SprayProgramImportDialog } from "@/components/spray/SprayProgramImportDialog";
+import { ProgramStepDetailDialog } from "@/components/spray/ProgramStepDetailDialog";
+import { ProgramStepPickerDialog } from "@/components/spray/ProgramStepPickerDialog";
+import { PlanSprayFromProgramStep } from "@/components/spray/PlanSprayFromProgramStep";
+import { growthStageOrder, chemicalLineRateText, programLines } from "@/lib/sprayProgramStep";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -155,13 +159,16 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
   const { selectedVineyardId, currentRole, memberships } = useVineyard();
   const canEdit = currentRole === "owner" || currentRole === "manager";
   const { toast } = useToast();
-  const [tab, setTab] = useState<"planned" | "templates" | "archived">(
-    templatesOnly ? "templates" : "planned",
-  );
+  // Internal tab key "templates" is the Program tab (spray_jobs.is_template = true).
+  const [tab, setTab] = useState<"planned" | "templates" | "archived">("templates");
   const [editing, setEditing] = useState<{ job: SprayJob | null; isTemplate: boolean } | null>(null);
+  const [detailStep, setDetailStep] = useState<SprayJob | null>(null);
+  const [planningFrom, setPlanningFrom] = useState<SprayJob | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [tplBusy, setTplBusy] = useState(false);
 
+  const qc = useQueryClient();
   const lookups = useLookups(selectedVineyardId);
 
   const effectiveTab = templatesOnly && tab === "planned" ? "templates" : tab;
@@ -173,56 +180,65 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
     try {
       await downloadSprayProgramTemplate({ vineyardId: selectedVineyardId, vineyardName });
     } catch (e: any) {
-      toast({ title: "Template download failed", description: e?.message ?? String(e), variant: "destructive" });
+      toast({ title: "Download failed", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setTplBusy(false);
     }
+  };
+
+  const startPlanFromStep = (step: SprayJob) => {
+    setPickerOpen(false);
+    setDetailStep(null);
+    setPlanningFrom(step);
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-start gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {templatesOnly ? "Spray Templates" : "Spray Jobs & Templates"}
-          </h1>
+          <h1 className="text-2xl font-semibold">Spray Program</h1>
           <p className="text-sm text-muted-foreground">
-            Plan and record vineyard spray applications, or create reusable templates for regular spray programs. Record products, application rates, equipment, operators, vineyard blocks, weather conditions and other spray details.
+            Build your vineyard spray program, maintain reusable Program Steps, and plan
+            upcoming spray applications.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {canEdit && effectiveTab !== "archived" && (
-            <Button onClick={() => setEditing({ job: null, isTemplate: effectiveTab === "templates" || templatesOnly })}>
-              <Plus className="h-4 w-4 mr-1" />
-              {templatesOnly
-                ? "New Spray Template"
-                : effectiveTab === "templates" ? "New template" : "New planned job"}
-            </Button>
-          )}
-          {canEdit && !templatesOnly && effectiveTab === "planned" && (
+          {canEdit && effectiveTab === "templates" && (
             <>
-              <Button variant="outline" onClick={handleDownloadTemplate} disabled={tplBusy || !selectedVineyardId}>
-                <FileSpreadsheet className="h-4 w-4 mr-1" />
-                {tplBusy ? "Preparing…" : "Download spray program template"}
+              <Button onClick={() => setEditing({ job: null, isTemplate: true })}>
+                <Plus className="h-4 w-4 mr-1" /> Add Program Step
               </Button>
               <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!selectedVineyardId}>
-                <Upload className="h-4 w-4 mr-1" />
-                Import spray program
+                <Upload className="h-4 w-4 mr-1" /> Import Program
+              </Button>
+              <Button variant="outline" onClick={handleDownloadTemplate} disabled={tplBusy || !selectedVineyardId}>
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                {tplBusy ? "Preparing…" : "Download Import Spreadsheet"}
+              </Button>
+            </>
+          )}
+          {canEdit && effectiveTab === "planned" && (
+            <>
+              <Button onClick={() => setPickerOpen(true)} disabled={!selectedVineyardId}>
+                <Plus className="h-4 w-4 mr-1" /> Plan Spray from Program
+              </Button>
+              <Button variant="outline" onClick={() => setEditing({ job: null, isTemplate: false })}>
+                One-off Spray
               </Button>
             </>
           )}
         </div>
       </div>
 
-      {canEdit && !templatesOnly && effectiveTab === "planned" && (
+      {canEdit && effectiveTab === "templates" && (
         <Alert>
           <Info className="h-4 w-4" />
-          <AlertTitle>Before importing a spray program</AlertTitle>
+          <AlertTitle>Before importing a program</AlertTitle>
           <AlertDescription>
-            For the smoothest import, set up your vineyard data first. Add your
-            blocks/paddocks, chemicals, spray equipment, tractors and team/operator
-            details before downloading the template. The template uses these existing
-            records as reference lists so imported jobs can match correctly.
+            For the smoothest import, set up your vineyard data first. Add your chemicals,
+            spray equipment and tractors before downloading the spreadsheet. The spreadsheet
+            uses these existing records as reference lists so imported Program Steps can match
+            correctly.
           </AlertDescription>
         </Alert>
       )}
@@ -235,28 +251,79 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
         />
       )}
 
+
       <Tabs value={effectiveTab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
-          {!templatesOnly && <TabsTrigger value="planned">Planned Jobs</TabsTrigger>}
-          <TabsTrigger value="templates">{templatesOnly ? "Active" : "Templates"}</TabsTrigger>
+          <TabsTrigger value="templates">Program</TabsTrigger>
+          {!templatesOnly && <TabsTrigger value="planned">Planned Sprays</TabsTrigger>}
           <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="templates">
+          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
+            onEdit={(job) => setDetailStep(job)}
+            onPlanSpray={startPlanFromStep} />
+        </TabsContent>
         {!templatesOnly && (
           <TabsContent value="planned">
             <JobsTable mode="planned" canEdit={canEdit} maps={lookups.maps}
               onEdit={(job) => setEditing({ job, isTemplate: false })} />
           </TabsContent>
         )}
-        <TabsContent value="templates">
-          <JobsTable mode="templates" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
-            onEdit={(job) => setEditing({ job, isTemplate: true })} />
-        </TabsContent>
         <TabsContent value="archived">
           <JobsTable mode="archived" canEdit={canEdit} maps={lookups.maps} templatesOnly={templatesOnly}
             onEdit={(job) => setEditing({ job, isTemplate: templatesOnly ? true : !!job.is_template })} />
         </TabsContent>
       </Tabs>
+
+      {detailStep && selectedVineyardId && (
+        <ProgramStepDetailDialog
+          open={true}
+          onOpenChange={(o) => !o && setDetailStep(null)}
+          job={detailStep}
+          vineyardId={selectedVineyardId}
+          canEdit={canEdit}
+          equipmentName={detailStep.equipment_id ? lookups.maps.equipment.get(detailStep.equipment_id) ?? null : null}
+          tractorName={detailStep.tractor_id ? lookups.maps.tractors.get(detailStep.tractor_id) ?? null : null}
+          onPlanSpray={() => startPlanFromStep(detailStep)}
+          onEdit={() => {
+            const job = detailStep;
+            setDetailStep(null);
+            setEditing({ job, isTemplate: true });
+          }}
+          onArchive={() => {
+            const job = detailStep;
+            setDetailStep(null);
+            archiveSprayJob(job.id)
+              .then(() => {
+                toast({ title: "Program Step archived" });
+                qc.invalidateQueries({ queryKey: ["spray_jobs", selectedVineyardId] });
+              })
+              .catch((e: any) =>
+                toast({ title: "Archive failed", description: e?.message ?? String(e), variant: "destructive" }));
+          }}
+        />
+      )}
+
+      {pickerOpen && selectedVineyardId && (
+        <ProgramStepPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          vineyardId={selectedVineyardId}
+          onPick={startPlanFromStep}
+        />
+      )}
+
+      {planningFrom && selectedVineyardId && (
+        <PlanSprayFromProgramStep
+          open={true}
+          onOpenChange={(o) => !o && setPlanningFrom(null)}
+          vineyardId={selectedVineyardId}
+          programStep={planningFrom}
+          canEdit={canEdit}
+          lookups={lookups}
+        />
+      )}
 
       {editing && selectedVineyardId && (
         <SprayJobWizard
@@ -279,18 +346,20 @@ export default function SprayJobsPage({ templatesOnly = false }: { templatesOnly
           }
         />
       )}
+
     </div>
   );
 }
 
 function JobsTable({
-  mode, canEdit, onEdit, maps, templatesOnly = false,
+  mode, canEdit, onEdit, maps, templatesOnly = false, onPlanSpray,
 }: {
   mode: "planned" | "templates" | "archived";
   canEdit: boolean;
   onEdit: (job: SprayJob) => void;
   maps: LookupMaps;
   templatesOnly?: boolean;
+  onPlanSpray?: (job: SprayJob) => void;
 }) {
   const { selectedVineyardId, memberships } = useVineyard();
   const formatters = useRegionFormatters();
@@ -446,11 +515,15 @@ function JobsTable({
   };
   const growthCol: ColDef = {
     key: "growth",
-    label: "Growth",
-    accessor: (j) => j.growth_stage_code ?? "",
+    label: "Growth Stage",
+    // Numeric E-L order: EL7 must sort before EL12. Unset stages sort last.
+    accessor: (j) => growthStageOrder(j.growth_stage_code) ?? 9999,
     render: (j) => (
       <TableCell title={j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}>
-        {j.growth_stage_code ?? "—"}
+        <div className="font-medium">{j.growth_stage_code ?? "—"}</div>
+        <div className="text-xs text-muted-foreground">
+          {j.growth_stage_code ? GROWTH_STAGE_LABEL.get(j.growth_stage_code) ?? "" : ""}
+        </div>
       </TableCell>
     ),
   };
@@ -459,41 +532,19 @@ function JobsTable({
     if (mode === "templates") {
       return [
         growthCol,
-        { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
-        { key: "operation", label: "Operation", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => <TableCell><OperationTypeBadge value={j.operation_type} /></TableCell> },
-        { key: "target", label: "Target pest/disease/weed", accessor: (j) => j.target ?? "", render: (j) => <TableCell>{j.target ? j.target : "—"}</TableCell> },
-        { key: "chemicals", label: "Chemicals", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
-          const lines = (j.chemical_lines ?? []).filter((l) => (l?.name ?? "").trim());
+        { key: "name", label: "Program Step", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
+        { key: "target", label: "Target", accessor: (j) => j.target ?? "", render: (j) => <TableCell className="max-w-[220px] whitespace-normal">{j.target ? j.target : "—"}</TableCell> },
+        { key: "chemicals", label: "Products & Rates", accessor: (j) => chemicalLinesSummary(j.chemical_lines), render: (j) => {
+          const lines = programLines(j);
           return (
             <TableCell className="min-w-[260px] max-w-[440px] align-top">
               {lines.length === 0 ? <span className="text-muted-foreground">—</span> : (
                 <ul className="flex flex-col gap-0.5 whitespace-normal break-words">
                   {lines.map((l, i) => {
-                    const name = (l.name ?? "").trim();
-                    const baseUnit = normaliseUnit(l.unit);
-                    // Determine basis suffix from rate_basis; fall back to
-                    // rate_per_ha / rate_per_100L when basis is missing.
-                    const basis =
-                      l.rate_basis === "per_hectare"
-                        ? "per_hectare"
-                        : l.rate_basis === "per_100L" || l.rate_basis === "per_100_litres"
-                          ? "per_100L"
-                          : (l as any).rate_per_ha != null
-                            ? "per_hectare"
-                            : (l as any).rate_per_100L != null
-                              ? "per_100L"
-                              : null;
-                    const suffix =
-                      basis === "per_hectare" ? "/ha" : basis === "per_100L" ? "/100 L" : "";
-                    const rateText =
-                      l.rate != null
-                        ? `${l.rate}${baseUnit ? ` ${baseUnit}` : ""}${suffix}`
-                        : "";
-                    const detail = rateText;
-
+                    const detail = chemicalLineRateText(l);
                     return (
                       <li key={i} className="leading-snug">
-                        <span className="font-medium">{name}</span>
+                        <span className="font-medium">{(l.name ?? "").trim()}</span>
                         {detail ? <span className="text-muted-foreground text-xs ml-1">— {detail}</span> : null}
                       </li>
                     );
@@ -503,20 +554,34 @@ function JobsTable({
             </TableCell>
           );
         } },
-        { key: "water", label: "Water (L)", accessor: (j) => (j.water_volume == null ? null : Number(j.water_volume)), render: (j) => <TableCell>{fmt(j.water_volume)}</TableCell> },
-        { key: "rate", label: "Rate / ha", accessor: (j) => (j.spray_rate_per_ha == null ? null : Number(j.spray_rate_per_ha)), render: (j) => <TableCell>{fmt(j.spray_rate_per_ha)}</TableCell> },
-        { key: "cf", label: "CF", accessor: (j) => (j.concentration_factor == null ? null : Number(j.concentration_factor)), render: (j) => <TableCell>{j.concentration_factor != null ? Number(j.concentration_factor).toFixed(2) : "—"}</TableCell> },
+        { key: "operation", label: "Application", accessor: (j) => opTypeLabel(j.operation_type), render: (j) => (
+          <TableCell>
+            <OperationTypeBadge value={j.operation_type} />
+            {j.spray_rate_per_ha != null && (
+              <div className="text-xs text-muted-foreground">{fmt(j.spray_rate_per_ha)} L/ha</div>
+            )}
+          </TableCell>
+        ) },
+        { key: "equipment", label: "Equipment", accessor: (j) => (j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "" : ""), render: (j) => (
+          <TableCell className="text-sm">
+            <div>{j.equipment_id ? maps.equipment.get(j.equipment_id) ?? "—" : "—"}</div>
+            {j.tractor_id && (
+              <div className="text-xs text-muted-foreground">{maps.tractors.get(j.tractor_id) ?? ""}</div>
+            )}
+          </TableCell>
+        ) },
         { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null), render: (j) => <TableCell>{fmtDate(j.updated_at)}</TableCell> },
       ];
     }
     if (mode === "archived") {
       return [
         { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
-        { key: "type", label: "Type", accessor: (j) => (j.is_template ? "Template" : "Planned"), render: (j) => <TableCell>{j.is_template ? "Template" : "Planned"}</TableCell> },
+        { key: "type", label: "Type", accessor: (j) => (j.is_template ? "Program Step" : "Planned Spray"), render: (j) => <TableCell>{j.is_template ? "Program Step" : "Planned Spray"}</TableCell> },
         { key: "status", label: "Status", accessor: (j) => STATUS_ORDER[String(j.status ?? "").toLowerCase()] ?? 0, render: (j) => <TableCell><Badge variant="secondary">{fmt(j.status)}</Badge></TableCell> },
         { key: "updated", label: "Updated", accessor: (j) => (j.updated_at ? new Date(j.updated_at) : null), render: (j) => <TableCell>{fmtDate(j.updated_at)}</TableCell> },
       ];
     }
+
     return [
       growthCol,
       { key: "name", label: "Name", accessor: (j) => j.name ?? "", render: (j) => <TableCell className="font-medium">{fmt(j.name)}</TableCell> },
@@ -714,16 +779,16 @@ function JobsTable({
                       <Button size="sm" variant="ghost" onClick={() => onEdit(j)} title="Edit">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: false })} title="Duplicate">
+                      <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: mode === "templates" })} title={mode === "templates" ? "Duplicate Program Step" : "Duplicate"}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                       {mode === "planned" && (
-                        <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: true })} title="Save as template">
+                        <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: true })} title="Add to Program">
                           <Save className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {mode === "templates" && (
-                        <Button size="sm" variant="ghost" onClick={() => dupMut.mutate({ id: j.id, asTemplate: false })} title="Create planned job from template">
+                      {mode === "templates" && onPlanSpray && (
+                        <Button size="sm" variant="ghost" onClick={() => onPlanSpray(j)} title="Plan Spray">
                           <FileText className="h-3.5 w-3.5" />
                         </Button>
                       )}
