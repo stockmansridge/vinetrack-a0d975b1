@@ -28,7 +28,9 @@ export function ReviewStep({
   lookups,
   extra,
   resistance,
+  vineyardId,
 }: StepProps & { extra?: ReactNode; resistance?: ReactNode }) {
+  const { labels: targetLabels } = useVineyardSprayTargets(vineyardId);
   const groups = groupDiagnostics(calc.diagnostics);
   const blockNames = app.blockIds.map((id) => lookups.maps.paddocks.get(id) ?? "Block");
 

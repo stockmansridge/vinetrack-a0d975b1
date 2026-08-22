@@ -18,6 +18,8 @@ import {
   type ChemicalIntelligence,
 } from "@/lib/chemicalIntelligence";
 import type { SprayJob } from "@/lib/sprayJobsQuery";
+import { sprayTargetLabel } from "@/lib/sprayTargetLibrary";
+import { useVineyardSprayTargets } from "@/hooks/useVineyardSprayTargets";
 import {
   chemicalLineRateText, growthStageDescription, programLines,
 } from "@/lib/sprayProgramStep";
@@ -46,6 +48,8 @@ export function ProgramStepDetailDialog({
   onEdit: () => void;
   onArchive: () => void;
 }) {
+  const { labels: targetLabels } = useVineyardSprayTargets(open ? vineyardId : null);
+
   const { data: chemResult } = useQuery({
     queryKey: ["saved-chemicals", vineyardId, "intelligence"],
     enabled: open && !!vineyardId,

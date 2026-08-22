@@ -92,6 +92,8 @@ export function toSprayJobInput(args: {
   application: SprayApplication;
   geometry: ApplicationGeometry;
   calculation: SprayCalculationResult;
+  /** Vineyard target library wording, for the legacy free-text column. */
+  targetLabels?: Map<string, string> | null;
 }): SaveMapping {
   const app = args.application;
   const geometry: ApplicationGeometry = args.geometry;
@@ -114,7 +116,7 @@ export function toSprayJobInput(args: {
     status: isTemplate ? null : app.status ?? "draft",
     operation_type: app.operationType ? OPERATION_TYPE_LABEL[app.operationType] : null,
     application_mode: mode,
-    target: legacyTargetText(app),
+    target: legacyTargetText(app, args.targetLabels),
     targets: app.targets ? [...app.targets] : null,
     spray_head_target: headTarget,
     growth_stage_code: app.growthStageCode ?? null,
