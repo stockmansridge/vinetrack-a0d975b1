@@ -1,5 +1,5 @@
 // Spray Program import dialog — upload .xlsx, preview, confirm.
-// Creates draft spray_jobs only. Never writes to spray_records.
+// Creates Program Steps / draft spray_jobs only. Never writes to spray_records.
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Upload, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
@@ -74,7 +74,7 @@ export function SprayProgramImportDialog({
       const ok = res.filter((r) => r.status === "imported" || r.status === "imported_with_warnings").length;
       const failed = res.filter((r) => r.status === "failed").length;
       toast({
-        title: `Imported ${ok} draft job${ok === 1 ? "" : "s"}`,
+        title: `Imported ${ok} row${ok === 1 ? "" : "s"}`,
         description: failed ? `${failed} failed — see results.` : undefined,
       });
       qc.invalidateQueries({ queryKey: ["spray_jobs", vineyardId] });
@@ -96,10 +96,12 @@ export function SprayProgramImportDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle>Import spray program</DialogTitle>
+          <DialogTitle>Import Spray Program</DialogTitle>
           <DialogDescription>
-            Upload a completed template. Each row becomes a <strong>draft planned spray job</strong>.
-            Nothing is written to spray records. Rows with errors are skipped.
+            Upload a completed spreadsheet. Each row becomes a <strong>Program Step</strong> (or a
+            draft Planned Spray when a date is supplied). Program Step rows do not need blocks,
+            a date or an operator. Nothing is written to application records, and rows with
+            errors are skipped.
           </DialogDescription>
         </DialogHeader>
 
@@ -119,7 +121,7 @@ export function SprayProgramImportDialog({
             <Button onClick={() => fileRef.current?.click()} disabled={parsing}>
               {parsing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Parsing…</> : "Choose .xlsx file"}
             </Button>
-            <p className="text-xs text-muted-foreground">Use the downloaded template for column structure.</p>
+            <p className="text-xs text-muted-foreground">Use the downloaded spreadsheet for column structure.</p>
           </div>
         )}
 
@@ -162,7 +164,7 @@ export function SprayProgramImportDialog({
                         <TableCell className="font-medium">
                           {r.name || "—"}
                           {r.is_template && (
-                            <Badge variant="outline" className="ml-2 text-[10px]">Template</Badge>
+                            <Badge variant="outline" className="ml-2 text-[10px]">Program Step</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs">{r.is_template ? "—" : (r.planned_date ?? "—")}</TableCell>
@@ -193,7 +195,7 @@ export function SprayProgramImportDialog({
           <div className="space-y-2 max-h-[60vh] overflow-auto">
             <div className="text-sm">
               <strong>{results.filter((r) => r.status === "imported" || r.status === "imported_with_warnings").length}</strong>
-              {" "}draft jobs created.
+              {" "}rows imported.
               {results.filter((r) => r.status === "failed").length > 0 && (
                 <span className="text-destructive">
                   {" "}{results.filter((r) => r.status === "failed").length} failed.
@@ -234,7 +236,7 @@ export function SprayProgramImportDialog({
                 disabled={importing || !rows.some((r) => r.errors.length === 0)}
               >
                 {importing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importing…</> :
-                  `Import ${rows.filter((r) => r.errors.length === 0).length} draft job(s)`}
+                  `Import ${rows.filter((r) => r.errors.length === 0).length} row(s)`}
               </Button>
             </>
           )}
