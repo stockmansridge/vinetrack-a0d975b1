@@ -34,8 +34,8 @@ describe("Work sidebar ordering", () => {
     expect(titles[1]).toBe("Field Trips");
   });
 
-  it("puts Spray Jobs third", () => {
-    expect(titles[2]).toBe("Spray Jobs & Templates");
+  it("puts Spray Program & Jobs third", () => {
+    expect(titles[2]).toBe("Spray Program & Jobs");
   });
 
   it("puts Work Tasks fourth", () => {
