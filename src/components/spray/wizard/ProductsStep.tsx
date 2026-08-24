@@ -156,6 +156,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
             key={i}
             index={i}
             mode={app.mode}
+            isTemplate={!!app.isTemplate}
             line={line}
             result={calc.products[i]}
             chemicals={chemicals}
@@ -191,6 +192,7 @@ export function ProductsStep({ app, patch, calc, intelligenceById, canEdit, vine
 function ProductRow({
   index,
   mode,
+  isTemplate,
   line,
   result,
   chemicals,
@@ -202,6 +204,7 @@ function ProductRow({
 }: {
   index: number;
   mode: SprayApplication["mode"];
+  isTemplate: boolean;
   line: SprayProductLine;
   result: any;
   chemicals: ChemicalIntelligence[];
@@ -291,6 +294,12 @@ function ProductRow({
         )}
       </div>
 
+      {isTemplate ? (
+        <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+          A Program Step lists the product only. The label rate, unit and rate basis are chosen
+          together from the registered label when the spray is planned against real blocks.
+        </p>
+      ) : (
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">Rate</Label>
@@ -333,6 +342,7 @@ function ProductRow({
           </Select>
         </div>
       </div>
+      )}
 
       {/* Foreign label facts stay visible but are never authoritative here. */}
       {intel && (
@@ -381,7 +391,7 @@ function ProductRow({
                       <button
                         key={r}
                         type="button"
-                        disabled={!canEdit}
+                        disabled={!canEdit || isTemplate}
                         className="block w-full rounded px-1 py-1 text-left hover:bg-muted/60"
                         onClick={() => onChange(applyLabelRate(line, rate, mode))}
                       >

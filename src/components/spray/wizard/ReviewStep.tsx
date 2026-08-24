@@ -200,7 +200,11 @@ export function ReviewStep({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium">{p.productName ?? "Product not set"}</span>
               <span className="text-xs text-muted-foreground">
-                {p.rate != null ? `${fmtNum(p.rate, 2)} ${p.unit ?? ""}` : "Rate not set"}
+                {p.rate != null
+                  ? `${fmtNum(p.rate, 2)} ${p.unit ?? ""}`
+                  : app.isTemplate
+                    ? "Rate chosen when planned"
+                    : "Rate not set"}
                 {p.rateBasis ? ` · ${PRODUCT_BASIS_FRIENDLY[p.rateBasis]}` : ""}
               </span>
               <span>{fmtQuantity(p.totalQuantity, p.unit)}</span>
