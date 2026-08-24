@@ -53,7 +53,7 @@ const STEPS = [
   { key: "target", label: "Target" },
   { key: "growth", label: "Growth stage" },
   { key: "equipment", label: "Equipment" },
-  { key: "carrier", label: "Carrier" },
+  { key: "carrier", label: "Canopy & spray volume" },
   { key: "products", label: "Products" },
   { key: "resistance", label: "Resistance check" },
   { key: "review", label: "Review" },
