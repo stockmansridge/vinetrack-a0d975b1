@@ -106,7 +106,7 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
               </p>
             </div>
             <div className="rounded-md border bg-muted/30 p-3 text-sm">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Treated area</div>
+              <div className="text-[11px] text-muted-foreground">Treated area</div>
               <div className="font-medium">{isTemplate ? LATER : fmtHa(geometry.treatedAreaHa)}</div>
               {!isTemplate && (
                 <div className="text-xs text-muted-foreground">
@@ -128,7 +128,9 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
               key={b}
               selected={basis === b}
               disabled={!canEdit}
-              onSelect={() => setCarrier({ basis: b, sprayerOutputChoice: null })}
+              // Switching representation must never destroy the canopy answer or
+              // the output the operator already typed for the other basis.
+              onSelect={() => setCarrier({ basis: b })}
               title={CARRIER_BASIS_CHOICE_LABEL[b]}
               hint={CARRIER_BASIS_CHOICE_HINT[b]}
             />
@@ -212,7 +214,7 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
               </div>
 
               <figure className="rounded-md border bg-muted/20 p-3">
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground">
                   Canopy reference
                 </div>
                 {hasCanopy ? (
@@ -238,7 +240,7 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
 
           <section className="space-y-3 rounded-md border p-3">
             <div className="flex items-center gap-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide">
+              <h3 className="text-sm font-semibold">
                 Recommended spray volume
               </h3>
               <HelpTip {...SPRAY_HELP.recommendation} />
@@ -289,11 +291,8 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
                     selected={choice === "recommended"}
                     disabled={!canEdit}
                     onSelect={chooseRecommended}
-                    title={
-                      basis === "l_per_ha" && recPerHa == null
-                        ? "Use canopy recommendation"
-                        : "Use recommended rate"
-                    }
+                    title="Use recommended volume"
+
                     hint={
                       basis === "l_per_100m"
                         ? `Sprayer set to ${fmtNum(recPer100m, 0)} L/100 m`
@@ -306,7 +305,7 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
                     selected={choice === "custom"}
                     disabled={!canEdit}
                     onSelect={() => setCarrier({ sprayerOutputChoice: "custom" })}
-                    title="Set my own rate"
+                    title="Set my own volume"
                     hint="Enter what the sprayer is actually set to apply"
                   />
                 </div>
@@ -373,8 +372,9 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
               ? "—"
               : recPerHa != null
                 ? `${fmtNum(recPerHa, 1)} L/ha`
-                : LATER
+                : "Calculated from block row spacing"
           }
+
           concentrationFactor={
             isManual
               ? "1.00× (manual total water)"
@@ -402,6 +402,28 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
             )}
           </div>
           <div className="grid gap-2 sm:grid-cols-3 text-sm">
+            {!isManual && (
+              <>
+                <Fact
+                  label="Dilute / run-off"
+                  value={
+                    recPer100m != null
+                      ? `${fmtNum(recPer100m, 0)} L/100 m${recPerHa != null ? ` · ${fmtNum(recPerHa, 0)} L/ha` : ""}`
+                      : "—"
+                  }
+                />
+                <Fact
+                  label="Actual sprayer output"
+                  value={
+                    carrier.litresPerHectare != null
+                      ? `${fmtNum(carrier.litresPerHectare, 0)} L/ha`
+                      : carrier.litresPer100m != null
+                        ? `${fmtNum(carrier.litresPer100m, 1)} L/100 m`
+                        : "—"
+                  }
+                />
+              </>
+            )}
             <Fact label="Total water" value={fmtLitres(carrier.totalCarrierLitres)} />
             <Fact
               label={carrier.derivedRatesAreReferenceOnly ? "L/ha (reference)" : "Effective L/ha"}
@@ -412,6 +434,13 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
               value={carrier.litresPer100m != null ? fmtNum(carrier.litresPer100m, 2) : "—"}
             />
           </div>
+          {carrier.appliedFromRecommendation && (
+            <p className="text-xs text-muted-foreground">
+              The sprayer output is the canopy recommendation, so this is a dilute application —
+              concentration factor 1.00×.
+            </p>
+          )}
+
           <p className="text-xs text-muted-foreground">
             {isManual
               ? "Total water is exactly what you entered. Any per-hectare or per-100 m figure shown is a derived reference only."
@@ -464,7 +493,7 @@ function ProgramDefaultSummary(props: {
   ];
   return (
     <section className="space-y-2 rounded-md border bg-muted/30 p-3">
-      <h4 className="text-sm font-semibold uppercase tracking-wide">Spray volume default</h4>
+      <h4 className="text-sm font-semibold">Spray volume default</h4>
       <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[12rem_minmax(0,1fr)]">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
@@ -484,7 +513,7 @@ function ProgramDefaultSummary(props: {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
       <div className="font-medium">{value}</div>
     </div>
   );

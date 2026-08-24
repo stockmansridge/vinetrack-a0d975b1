@@ -17,7 +17,7 @@ const dash = (v: unknown) => (v == null || v === "" ? "—" : String(v));
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-sm">{value}</div>
     </div>
   );
@@ -137,7 +137,7 @@ export function ChemicalIntelligenceDetail({ chem }: { chem: ChemicalIntelligenc
         {chem.registeredUses.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-muted-foreground">
+              <thead className="text-xs text-muted-foreground">
                 <tr>
                   <th className="py-1 text-left">Crop</th>
                   <th className="py-1 text-left">Target</th>

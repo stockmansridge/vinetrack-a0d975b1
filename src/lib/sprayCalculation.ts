@@ -48,6 +48,11 @@ export interface CarrierResult {
    * They are never inputs and never block the application.
    */
   derivedRatesAreReferenceOnly: boolean;
+  /**
+   * True when the operator chose "Use recommended volume" and the canopy
+   * recommendation became the actual sprayer output for this job.
+   */
+  appliedFromRecommendation: boolean;
   /** The AWRI dilute/runoff recommendation this application was judged against. */
   recommendedDiluteLitresPer100m: number | null;
   recommendedDiluteLitresPerHectare: number | null;
@@ -128,6 +133,17 @@ export function calculateCarrier(args: {
     geometry.rowSpacingMetres,
   );
 
+  /**
+   * "Use recommended volume" is an INTENT, not a number. A Program Step stores
+   * the intent with no figure (there is no row spacing to convert with); once
+   * real blocks exist the canopy recommendation becomes the actual sprayer
+   * output for this job. An explicitly recorded output always wins.
+   */
+  const useRecommended = carrier.sprayerOutputChoice === "recommended";
+  const appliedPerHa = lPerHa ?? (useRecommended ? recommendedPerHa : null);
+  const appliedPer100m = applied100m ?? (useRecommended ? recommendedPer100m : null);
+
+
   let totalCarrierLitres: number | null = null;
   let litresPerHectare: number | null = null;
   let litresPer100m: number | null = null;
@@ -165,7 +181,7 @@ export function calculateCarrier(args: {
       }
     }
   } else if (basis === "l_per_ha") {
-    if (lPerHa == null) {
+    if (appliedPerHa == null) {
       note("missing_carrier_rate", "error", "Carrier rate (L/ha) is not set.");
     } else if (carrierAreaHa == null) {
       note(
@@ -174,13 +190,14 @@ export function calculateCarrier(args: {
         "Cannot compute carrier volume — block geometry is incomplete.",
       );
     } else {
-      litresPerHectare = lPerHa;
+      litresPerHectare = appliedPerHa;
       // Gross hectares — banded included, per the confirmed Rork contract.
-      totalCarrierLitres = lPerHa * carrierAreaHa;
+      totalCarrierLitres = appliedPerHa * carrierAreaHa;
       if (geometry.uniformRowSpacing && geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0) {
-        litresPer100m = (lPerHa * geometry.rowSpacingMetres) / 100;
+        litresPer100m = (appliedPerHa * geometry.rowSpacingMetres) / 100;
       }
     }
+
   } else {
     // l_per_100m — never falls back to an L/ha calculation.
     //
@@ -189,7 +206,7 @@ export function calculateCarrier(args: {
     // only permitted derivation is dilute ÷ a persisted concentration factor,
     // and that is reported as derived.
     const persistedCf = pos(carrier.concentrationFactor);
-    let rate100m = applied100m;
+    let rate100m = appliedPer100m;
     if (rate100m == null && dilute100m != null && persistedCf != null) {
       rate100m = dilute100m / persistedCf;
       diagnostics.push({
@@ -240,8 +257,9 @@ export function calculateCarrier(args: {
       basis === "l_per_ha"
         // The canopy answer IS the dilute reference. An explicitly stored
         // dilute figure (historical rows) still wins.
-        ? concentrationFactorFrom(diluteLPerHa ?? recommendedPerHa, lPerHa)
-        : concentrationFactorFrom(dilute100m ?? recommendedPer100m, applied100m);
+        ? concentrationFactorFrom(diluteLPerHa ?? recommendedPerHa, appliedPerHa)
+        : concentrationFactorFrom(dilute100m ?? recommendedPer100m, appliedPer100m);
+
     if (derived != null) {
       concentrationFactor = derived;
       concentrationFactorSource = "derived";
@@ -254,6 +272,10 @@ export function calculateCarrier(args: {
     litresPerHectare,
     litresPer100m,
     derivedRatesAreReferenceOnly,
+    appliedFromRecommendation:
+      useRecommended &&
+      ((basis === "l_per_ha" && lPerHa == null && recommendedPerHa != null) ||
+        (basis === "l_per_100m" && applied100m == null && recommendedPer100m != null)),
     recommendedDiluteLitresPer100m: recommendedPer100m,
     recommendedDiluteLitresPerHectare: recommendedPerHa,
     concentrationFactor,
@@ -405,7 +427,7 @@ export function calculateProducts(args: {
         severity: templateMode ? "info" : "error",
         message: templateMode
           ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
-          : `Cannot compute ${line.productName ?? "product"} quantity — block geometry is incomplete.`,
+          : `Cannot compute ${line.productName ?? "product"} quantity — this rate is per hectare and the block area is not available. Select blocks or set the area.`,
         productIndex: index,
       });
     }

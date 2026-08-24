@@ -852,7 +852,7 @@ function JobsTable({
 function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className={`rounded border p-2 ${warn ? "border-warning bg-warning/10" : ""}`}>
-      <div className="text-muted-foreground text-[10px] uppercase tracking-wide">{label}</div>
+      <div className="text-muted-foreground text-[10px]">{label}</div>
       <div className={`font-medium ${warn ? "text-warning-foreground" : ""}`}>{value}</div>
     </div>
   );
@@ -960,7 +960,7 @@ function LinkedRecordsSection({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
+                <div className="text-muted-foreground text-[10px]">
                   Planned
                 </div>
                 <div className="flex items-center gap-1">Op: <OperationTypeBadge value={job.operation_type} /></div>
@@ -970,7 +970,7 @@ function LinkedRecordsSection({
                 </div>
               </div>
               <div>
-                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
+                <div className="text-muted-foreground text-[10px]">
                   Actual
                 </div>
                 <div className="flex items-center gap-1">Op: <OperationTypeBadge value={rec.operation_type} /></div>
@@ -1163,7 +1163,7 @@ function TankMixPreview({
 
       {result.chemicals.length > 0 && (
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+          <div className="text-xs text-muted-foreground mb-1">
             Per chemical
           </div>
           <div className="overflow-x-auto">
@@ -1205,7 +1205,7 @@ function TankMixPreview({
 
       {perPaddock.length > 0 && (
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+          <div className="text-xs text-muted-foreground mb-1">
             Per block / paddock
           </div>
           <div className="overflow-x-auto">

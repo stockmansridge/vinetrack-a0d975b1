@@ -595,7 +595,19 @@ export function fromLegacySprayJob(
     canopyType: basis === "manual" ? null : canopyType,
     canopySize: basis === "manual" ? null : canopySize,
     canopyDensity: basis === "manual" ? null : canopyDensity,
-    sprayerOutputChoice: null,
+    // The choice itself has no column. It is inferred, never guessed wrongly:
+    // a recorded sprayer output means the operator set their own volume; a
+    // canopy answer with no recorded output means they took the canopy
+    // recommendation.
+    sprayerOutputChoice:
+      basis === "manual"
+        ? null
+        : (basis === "l_per_ha" ? legacyLPerHa : positive(job.applied_litres_per_100m)) != null
+          ? "custom"
+          : canopySize && canopyDensity
+            ? "recommended"
+            : null,
+
     manualTotalLitres: basis === "manual" ? positive(job.water_volume) : null,
   };
   if (!persistedBasis && legacyLPerHa != null) {

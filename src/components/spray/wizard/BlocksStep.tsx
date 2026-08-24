@@ -199,7 +199,7 @@ export function BlocksStep({ app, patch, geometry, lookups, canEdit }: StepProps
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className="font-medium">{value}</div>
     </div>
   );

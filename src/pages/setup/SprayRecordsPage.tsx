@@ -385,7 +385,7 @@ function SprayRecordSheet({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{title}</div>
+      <div className="text-xs text-muted-foreground mb-2">{title}</div>
       <div className="rounded-md border bg-card/50 p-3 space-y-1.5">{children}</div>
     </div>
   );
@@ -413,7 +413,7 @@ function TanksSection({ record }: { record: any }) {
   }
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+      <div className="text-xs text-muted-foreground mb-2">
         Tanks ({chem.tanks.length})
       </div>
       {chem.historicalChemistryUnavailable && (

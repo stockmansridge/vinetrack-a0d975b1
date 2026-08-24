@@ -263,7 +263,7 @@ export function ReviewStep({
         ) : (
           groups.map(({ group, items }) => (
             <div key={group} className="rounded-md border p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
+              <div className="text-xs font-semibold text-muted-foreground">{group}</div>
               <ul className="mt-1 space-y-1 text-sm">
                 {items.map((d, i) => (
                   <li key={`${d.code}-${i}`} className="flex items-start gap-2">

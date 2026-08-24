@@ -55,13 +55,13 @@ export function MasterPreviewIdentityCard({
 
       <div className="mt-2 grid gap-2 md:grid-cols-2">
         <div className="min-w-0 rounded border border-border/50 bg-background/60 p-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          <div className="text-[10px] text-muted-foreground">
             Current Master identity
           </div>
           <div className="break-words">{formatIdentity(stored)}</div>
         </div>
         <div className="min-w-0 rounded border border-border/50 bg-background/60 p-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          <div className="text-[10px] text-muted-foreground">
             Resolver identity
           </div>
           <div className="break-words">{formatIdentity(preview.identityResolved)}</div>
