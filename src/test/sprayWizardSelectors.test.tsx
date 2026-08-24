@@ -4,9 +4,16 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApplicationStep } from "@/components/spray/wizard/ApplicationStep";
 import { GrowthStageStep } from "@/components/spray/wizard/GrowthStageStep";
 import { emptySprayApplication } from "@/lib/sprayApplicationDomain";
+
+const wrap = (ui: React.ReactElement) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    {ui}
+  </QueryClientProvider>
+);
 
 const src = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
 
@@ -27,7 +34,7 @@ function baseProps(overrides: Record<string, unknown> = {}) {
 describe("Application Type uses the shared SelectTile control", () => {
   it("renders real radios with an accessible selected state", () => {
     const props = baseProps({ app: { operationType: "foliar" } });
-    render(<ApplicationStep {...props} />);
+    render(wrap(<ApplicationStep {...props} />));
     const group = screen.getByRole("radiogroup", { name: /application type/i });
     const radios = within(group).getAllByRole("radio");
     expect(radios).toHaveLength(3);
@@ -43,7 +50,7 @@ describe("Application Type uses the shared SelectTile control", () => {
         seen.push(next.operationType);
       },
     });
-    render(<ApplicationStep {...props} />);
+    render(wrap(<ApplicationStep {...props} />));
     fireEvent.click(screen.getByRole("radio", { name: /spreader/i }));
     expect(seen).toContain("spreader");
   });
