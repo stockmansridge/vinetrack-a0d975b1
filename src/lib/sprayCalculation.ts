@@ -304,6 +304,7 @@ export function calculateProducts(args: {
         : Number(rawRate);
     let multiplier: number | null = null;
     let multiplierKind: ProductResult["multiplierKind"] = null;
+    let concentrationFactorApplied: number | null = null;
 
     if (!line.rateBasis) {
       diagnostics.push({
