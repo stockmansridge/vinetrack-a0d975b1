@@ -163,6 +163,20 @@ export function ReviewStep({
                 L/ha = L/100 m × 100 ÷ {fmtNum(geometry.rowSpacingMetres, 2)} m row spacing.
               </li>
             )}
+            {calc.carrier.recommendedDiluteLitresPer100m != null &&
+              calc.carrier.recommendedDiluteLitresPerHectare != null && (
+                <li>
+                  Recommended per area = {fmtNum(calc.carrier.recommendedDiluteLitresPer100m, 0)} × 100 ÷{" "}
+                  {fmtNum(geometry.rowSpacingMetres, 2)} ={" "}
+                  {fmtNum(calc.carrier.recommendedDiluteLitresPerHectare, 1)} L/ha.
+                </li>
+              )}
+            {app.isTemplate && (
+              <li>Program Step defaults only — total water is calculated when blocks are selected.</li>
+            )}
+            {calc.carrier.concentrationFactor == null && !app.isTemplate && (
+              <li>Concentration factor: calculated when planning the spray.</li>
+            )}
             {calc.carrier.concentrationFactor != null && (
               <li>
                 Concentration factor ×{fmtNum(calc.carrier.concentrationFactor, 2)}{" "}

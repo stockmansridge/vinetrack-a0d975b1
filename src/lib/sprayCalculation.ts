@@ -78,10 +78,34 @@ export function calculateCarrier(args: {
   mode: ApplicationMode | null;
   operationType?: OperationType | null;
   carrier: SprayApplication["carrier"];
+  /**
+   * Program Step (`is_template = true`) mode. A Program Step is reusable
+   * configuration with deliberately no blocks, so nothing that depends on
+   * block geometry — total water, effective rates, the concentration factor —
+   * can or should be resolved yet. Missing geometry is reported as
+   * "calculated when blocks are selected", never as an error.
+   */
+  templateMode?: boolean;
 }): CarrierResult {
   const { geometry, mode, carrier } = args;
+  const templateMode = !!args.templateMode;
   const diagnostics: SprayDiagnostic[] = [];
   const basis = carrier.basis;
+
+  /**
+   * At Program Step stage a missing input is not a defect: it is resolved when
+   * the operator plans the spray against real blocks.
+   */
+  const note = (code: string, severity: SprayDiagnosticSeverity, message: string) =>
+    diagnostics.push(
+      templateMode
+        ? {
+            code: `${code}_at_plan_spray`,
+            severity: "info",
+            message: "Calculated when blocks are selected.",
+          }
+        : { code, severity, message },
+    );
 
   // Carrier hectares are gross hectares. Treated hectares belong to products.
   const carrierAreaHa = geometry.grossAreaHa;
@@ -117,22 +141,18 @@ export function calculateCarrier(args: {
         message: "Spreader application — no carrier volume required.",
       });
     } else {
-      diagnostics.push({
-        code: "missing_carrier_basis",
-        severity: "error",
-        message: "Spray volume basis is not set.",
-      });
+      note("missing_carrier_basis", "error", "Spray volume basis is not set.");
     }
   } else if (basis === "manual") {
     // A deliberate bypass: no canopy, no row spacing, no row length, no
     // calibrated rate. The operator states the total water being mixed.
     derivedRatesAreReferenceOnly = true;
     if (manualTotal == null) {
-      diagnostics.push({
-        code: "missing_manual_total_water",
-        severity: "error",
-        message: "Enter the total spray water for this application.",
-      });
+      note(
+        "missing_manual_total_water",
+        "error",
+        "Enter the total spray water for this application.",
+      );
     } else {
       totalCarrierLitres = manualTotal;
       // Reference figures only — shown when geometry happens to exist, never
@@ -146,18 +166,13 @@ export function calculateCarrier(args: {
     }
   } else if (basis === "l_per_ha") {
     if (lPerHa == null) {
-      diagnostics.push({
-
-        code: "missing_carrier_rate",
-        severity: "error",
-        message: "Carrier rate (L/ha) is not set.",
-      });
+      note("missing_carrier_rate", "error", "Carrier rate (L/ha) is not set.");
     } else if (carrierAreaHa == null) {
-      diagnostics.push({
-        code: "incomplete_geometry_for_carrier",
-        severity: "error",
-        message: "Cannot compute carrier volume — block geometry is incomplete.",
-      });
+      note(
+        "incomplete_geometry_for_carrier",
+        "error",
+        "Cannot compute carrier volume — block geometry is incomplete.",
+      );
     } else {
       litresPerHectare = lPerHa;
       // Gross hectares — banded included, per the confirmed Rork contract.
@@ -183,25 +198,20 @@ export function calculateCarrier(args: {
         message: `Applied water derived from the dilute reference ÷ concentration factor (${persistedCf}×).`,
       });
     } else if (rate100m == null && dilute100m != null) {
-      diagnostics.push({
-        code: "dilute_only_carrier_rate",
-        severity: "error",
-        message:
-          "Only the dilute/runoff L/100 m is set. Enter the actual applied L/100 m — the dilute reference is not the applied volume.",
-      });
+      note(
+        "dilute_only_carrier_rate",
+        "error",
+        "Only the dilute/runoff L/100 m is set. Enter the actual applied L/100 m — the dilute reference is not the applied volume.",
+      );
     }
     if (rate100m == null) {
-      diagnostics.push({
-        code: "missing_carrier_rate",
-        severity: "error",
-        message: "Carrier rate (L/100 m) is not set.",
-      });
+      note("missing_carrier_rate", "error", "Carrier rate (L/100 m) is not set.");
     } else if (geometry.canonicalRowLengthMetres == null) {
-      diagnostics.push({
-        code: "incomplete_geometry_for_carrier",
-        severity: "error",
-        message: "Cannot compute carrier volume — canonical row length is unknown.",
-      });
+      note(
+        "incomplete_geometry_for_carrier",
+        "error",
+        "Cannot compute carrier volume — canonical row length is unknown.",
+      );
     } else {
       litresPer100m = rate100m;
       totalCarrierLitres = (geometry.canonicalRowLengthMetres / 100) * rate100m;
@@ -209,13 +219,13 @@ export function calculateCarrier(args: {
         // L/ha = L/100 m × 100 ÷ row spacing.
         litresPerHectare = (rate100m * 100) / geometry.rowSpacingMetres;
       } else {
-        diagnostics.push({
-          code: "cannot_derive_litres_per_hectare",
-          severity: "warning",
-          message: geometry.uniformRowSpacing
+        note(
+          "cannot_derive_litres_per_hectare",
+          "warning",
+          geometry.uniformRowSpacing
             ? "Row spacing unknown — the equivalent L/ha cannot be derived."
             : "Blocks have different row spacings — the equivalent L/ha cannot be derived.",
-        });
+        );
       }
     }
   }
@@ -228,8 +238,10 @@ export function calculateCarrier(args: {
   if (concentrationFactor == null) {
     const derived =
       basis === "l_per_ha"
-        ? concentrationFactorFrom(diluteLPerHa, lPerHa)
-        : concentrationFactorFrom(dilute100m, applied100m);
+        // The canopy answer IS the dilute reference. An explicitly stored
+        // dilute figure (historical rows) still wins.
+        ? concentrationFactorFrom(diluteLPerHa ?? recommendedPerHa, lPerHa)
+        : concentrationFactorFrom(dilute100m ?? recommendedPer100m, applied100m);
     if (derived != null) {
       concentrationFactor = derived;
       concentrationFactorSource = "derived";
@@ -297,8 +309,11 @@ export function calculateProducts(args: {
   products: SprayProductLine[];
   geometry: ApplicationGeometry;
   carrier: CarrierResult;
+  /** Program Step: quantities are resolved at Plan Spray, not here. */
+  templateMode?: boolean;
 }): ProductResult[] {
   const { products, geometry, carrier } = args;
+  const templateMode = !!args.templateMode;
   return products.map((line, index) => {
     const diagnostics: SprayDiagnostic[] = [];
     // `Number(null)` is 0 — an empty rate must never become a zero rate.
@@ -332,9 +347,11 @@ export function calculateProducts(args: {
           : null;
       if (multiplier == null) {
         diagnostics.push({
-          code: "per_100m_needs_row_length",
-          severity: "error",
-          message: `${line.productName ?? "Product"} is rated per 100 m but the canonical row length is unknown.`,
+          code: templateMode ? "per_100m_needs_row_length_at_plan_spray" : "per_100m_needs_row_length",
+          severity: templateMode ? "info" : "error",
+          message: templateMode
+            ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
+            : `${line.productName ?? "Product"} is rated per 100 m but the canonical row length is unknown.`,
           productIndex: index,
         });
       }
@@ -351,9 +368,11 @@ export function calculateProducts(args: {
           : null;
       if (multiplier == null) {
         diagnostics.push({
-          code: "per_100l_needs_carrier",
-          severity: "error",
-          message: `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
+          code: templateMode ? "per_100l_needs_carrier_at_plan_spray" : "per_100l_needs_carrier",
+          severity: templateMode ? "info" : "error",
+          message: templateMode
+            ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
+            : `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
           productIndex: index,
         });
       } else if (concentrationFactorApplied != null) {
@@ -382,9 +401,11 @@ export function calculateProducts(args: {
       line.rateBasis !== "per_100_metres"
     ) {
       diagnostics.push({
-        code: "incomplete_geometry_for_product",
-        severity: "error",
-        message: `Cannot compute ${line.productName ?? "product"} quantity — block geometry is incomplete.`,
+        code: templateMode ? "product_quantity_at_plan_spray" : "incomplete_geometry_for_product",
+        severity: templateMode ? "info" : "error",
+        message: templateMode
+          ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
+          : `Cannot compute ${line.productName ?? "product"} quantity — block geometry is incomplete.`,
         productIndex: index,
       });
     }
@@ -546,13 +567,22 @@ export function calculateSprayApplication(args: {
   geometry: ApplicationGeometry;
 }): SprayCalculationResult {
   const { application, geometry } = args;
+  // A Program Step is reusable configuration with no blocks by design, so
+  // anything that needs block geometry is deferred to Plan Spray.
+  const templateMode = !!application.isTemplate;
   const carrier = calculateCarrier({
     geometry,
     mode: application.mode,
     operationType: application.operationType,
     carrier: application.carrier,
+    templateMode,
   });
-  const products = calculateProducts({ products: application.products, geometry, carrier });
+  const products = calculateProducts({
+    products: application.products,
+    geometry,
+    carrier,
+    templateMode,
+  });
   const tanks = calculateTanks({
     totalCarrierLitres: carrier.totalCarrierLitres,
     tankCapacityLitres: application.tankCapacityLitres,
@@ -560,11 +590,13 @@ export function calculateSprayApplication(args: {
   });
 
   const diagnostics: SprayDiagnostic[] = [
-    ...geometry.issues.map<SprayDiagnostic>((code) => ({
-      code,
-      severity: code === "mixed_row_spacing" ? "warning" : "error",
-      message: GEOMETRY_ISSUE_MESSAGE[code] ?? `Geometry issue: ${code}`,
-    })),
+    ...(templateMode
+      ? []
+      : geometry.issues.map<SprayDiagnostic>((code) => ({
+          code,
+          severity: code === "mixed_row_spacing" ? "warning" : "error",
+          message: GEOMETRY_ISSUE_MESSAGE[code] ?? `Geometry issue: ${code}`,
+        }))),
     ...carrier.diagnostics,
     ...products.flatMap((p) => p.diagnostics),
     ...tanks.diagnostics,
