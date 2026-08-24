@@ -217,9 +217,10 @@ export function calculateCarrier(args: {
   }
 
   // Concentration factor: a persisted value is authoritative history.
-  let concentrationFactor = pos(carrier.concentrationFactor);
+  // Manual is always 1.00 — there is no dilute reference to concentrate from.
+  let concentrationFactor = basis === "manual" ? 1 : pos(carrier.concentrationFactor);
   let concentrationFactorSource: CarrierResult["concentrationFactorSource"] =
-    concentrationFactor != null ? "persisted" : null;
+    basis === "manual" ? "manual" : concentrationFactor != null ? "persisted" : null;
   if (concentrationFactor == null) {
     const derived =
       basis === "l_per_ha"
@@ -236,12 +237,16 @@ export function calculateCarrier(args: {
     totalCarrierLitres,
     litresPerHectare,
     litresPer100m,
+    derivedRatesAreReferenceOnly,
+    recommendedDiluteLitresPer100m: recommendedPer100m,
+    recommendedDiluteLitresPerHectare: recommendedPerHa,
     concentrationFactor,
     concentrationFactorSource,
     carrierAreaHa,
     diagnostics,
   };
 }
+
 
 /* ------------------------------------------------------------ products */
 
