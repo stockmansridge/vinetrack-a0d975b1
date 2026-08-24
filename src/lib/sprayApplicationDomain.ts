@@ -19,6 +19,7 @@ import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
 import {
   normaliseCanopyDensity,
   normaliseCanopySize,
+  normaliseCanopyType,
   type CanopyDensity,
   type CanopySize,
   type CanopyType,
