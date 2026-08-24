@@ -347,9 +347,11 @@ export function calculateProducts(args: {
           : null;
       if (multiplier == null) {
         diagnostics.push({
-          code: "per_100m_needs_row_length",
-          severity: "error",
-          message: `${line.productName ?? "Product"} is rated per 100 m but the canonical row length is unknown.`,
+          code: templateMode ? "per_100m_needs_row_length_at_plan_spray" : "per_100m_needs_row_length",
+          severity: templateMode ? "info" : "error",
+          message: templateMode
+            ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
+            : `${line.productName ?? "Product"} is rated per 100 m but the canonical row length is unknown.`,
           productIndex: index,
         });
       }
@@ -366,9 +368,11 @@ export function calculateProducts(args: {
           : null;
       if (multiplier == null) {
         diagnostics.push({
-          code: "per_100l_needs_carrier",
-          severity: "error",
-          message: `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
+          code: templateMode ? "per_100l_needs_carrier_at_plan_spray" : "per_100l_needs_carrier",
+          severity: templateMode ? "info" : "error",
+          message: templateMode
+            ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
+            : `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
           productIndex: index,
         });
       } else if (concentrationFactorApplied != null) {
@@ -397,9 +401,11 @@ export function calculateProducts(args: {
       line.rateBasis !== "per_100_metres"
     ) {
       diagnostics.push({
-        code: "incomplete_geometry_for_product",
-        severity: "error",
-        message: `Cannot compute ${line.productName ?? "product"} quantity — block geometry is incomplete.`,
+        code: templateMode ? "product_quantity_at_plan_spray" : "incomplete_geometry_for_product",
+        severity: templateMode ? "info" : "error",
+        message: templateMode
+          ? `${line.productName ?? "Product"} quantity is calculated when blocks are selected.`
+          : `Cannot compute ${line.productName ?? "product"} quantity — block geometry is incomplete.`,
         productIndex: index,
       });
     }
