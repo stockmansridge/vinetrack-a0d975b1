@@ -396,6 +396,13 @@ export interface SprayApplication {
   products: SprayProductLine[];
   tankCapacityLitres: number | null;
   /**
+   * Explicit operator confirmation that the equipment shown is the equipment
+   * being used for THIS application. A value prefilled from a Program Step or
+   * an existing job is never confirmation; changing the spray unit or tractor
+   * invalidates it. Session state — deliberately not persisted.
+   */
+  equipmentConfirmed: boolean;
+  /**
    * SQL 201 Resistance Plan provenance. `null` for legacy/unlinked jobs and
    * for every template. The frozen snapshot inside it — never the current
    * plan — is the authority on original planned intent.
