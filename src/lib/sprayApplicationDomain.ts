@@ -335,7 +335,24 @@ export interface SprayCarrierInput {
    * is authoritative history and is never silently re-derived.
    */
   concentrationFactor?: number | null;
+  /* ---- canopy answer (drives the AWRI dilute/runoff recommendation) ---- */
+  /**
+   * Trellis form. Not persisted by the current spray_jobs contract — see the
+   * persistence audit in `docs/`; only size/density round-trip today
+   * (`vsp_canopy_size` / `vsp_canopy_density`).
+   */
+  canopyType?: CanopyType | null;
+  canopySize?: CanopySize | null;
+  canopyDensity?: CanopyDensity | null;
+  /**
+   * Whether the operator sprays at the AWRI recommendation or at their own
+   * sprayer output. `null` = not yet answered.
+   */
+  sprayerOutputChoice?: "recommended" | "custom" | null;
+  /** Manual basis only: the total water being mixed/applied, in litres. */
+  manualTotalLitres?: number | null;
 }
+
 
 export interface SprayApplication {
   id: string | null;
