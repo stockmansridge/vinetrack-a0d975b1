@@ -134,6 +134,10 @@ export const SPRAY_HELP = {
       "Large — about 1.5 m high.\n" +
       "Full — a fully grown canopy, about 2 m high.\n\n" +
       "Pick the size that matches what you are about to spray, not what the block will look like later in the season.",
+    image: {
+      src: "/__l5e/assets-v1/bb793059-4eb0-4693-857f-8a820013be4e/canopy-ucr.png",
+      alt: "Canopy volume diagram: 100 m of row × 1 m high × 1 m wide",
+    },
   },
   canopyDensity: {
     title: "Canopy density",
