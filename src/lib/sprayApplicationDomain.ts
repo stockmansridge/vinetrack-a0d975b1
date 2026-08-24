@@ -16,6 +16,14 @@ import {
   type WriteVerificationStatus,
 } from "@/lib/chemicalIntelligenceWrite";
 import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import {
+  normaliseCanopyDensity,
+  normaliseCanopySize,
+  normaliseCanopyType,
+  type CanopyDensity,
+  type CanopySize,
+  type CanopyType,
+} from "@/lib/sprayCanopy";
 import type { SprayJobPlanProvenance } from "@/lib/resistance/sprayJobPlanLink";
 import { provenanceFromJobRow } from "@/lib/resistance/sprayJobPlanLink";
 import {
@@ -183,14 +191,38 @@ export function persistedHeadTarget(
   return headTargetAllowed(operationType) ? headTarget : null;
 }
 
-/* -------------------------------------------------------- carrier basis */
+/* --------------------------------------------- spray volume (carrier) basis */
 
-/** Persisted `spray_jobs.carrier_volume_basis`. */
-export type CarrierBasis = "l_per_ha" | "l_per_100m";
-export const CARRIER_BASES: CarrierBasis[] = ["l_per_ha", "l_per_100m"];
+/**
+ * Persisted `spray_jobs.carrier_volume_basis` — how the SPRAYER OUTPUT (water)
+ * is known for this application. It is not a chemical label rate basis.
+ *
+ *  - `l_per_100m` — calibrated per 100 m of row (vineyard row-length workflow)
+ *  - `l_per_ha`   — calibrated by area
+ *  - `manual`     — the operator states the TOTAL water being mixed/applied
+ *                   (knapsack, spot spraying); canopy and geometry are bypassed
+ */
+export type CarrierBasis = "l_per_ha" | "l_per_100m" | "manual";
+/** Only the two calibrated bases; `manual` is a deliberate bypass. */
+export const CALIBRATED_CARRIER_BASES: CarrierBasis[] = ["l_per_100m", "l_per_ha"];
+export const CARRIER_BASES: CarrierBasis[] = ["l_per_ha", "l_per_100m", "manual"];
 export const CARRIER_BASIS_LABEL: Record<CarrierBasis, string> = {
   l_per_ha: "L/ha",
   l_per_100m: "L/100 m of row",
+  manual: "Manual total water",
+};
+
+/** Longer wording used where the choice is being made, not just displayed. */
+export const CARRIER_BASIS_CHOICE_LABEL: Record<CarrierBasis, string> = {
+  l_per_100m: "L/100 m of row",
+  l_per_ha: "L/ha",
+  manual: "Manual — I know the total water",
+};
+
+export const CARRIER_BASIS_CHOICE_HINT: Record<CarrierBasis, string> = {
+  l_per_100m: "Sprayer calibrated per 100 metres of row — the vineyard row-length workflow.",
+  l_per_ha: "Sprayer calibrated by area. The same canopy answer sets the recommendation.",
+  manual: "Knapsack, spot spraying, or any job where the total tank water is already known.",
 };
 
 /**
@@ -206,8 +238,10 @@ export function normaliseCarrierBasis(value: unknown): CarrierBasis | null {
   if (raw === "litres_per_hectare" || raw === "l/ha" || raw === "per_hectare" || raw === "per_ha")
     return "l_per_ha";
   if (raw === "litres_per_100m" || raw === "l/100m" || raw === "per_100m") return "l_per_100m";
+  if (raw === "total" || raw === "manual_total" || raw === "total_water") return "manual";
   return null;
 }
+
 
 export function normaliseCarrierBasisPreference(value: unknown): CarrierBasisPreference | null {
   const raw = String(value ?? "").trim().toLowerCase();
@@ -309,7 +343,24 @@ export interface SprayCarrierInput {
    * is authoritative history and is never silently re-derived.
    */
   concentrationFactor?: number | null;
+  /* ---- canopy answer (drives the AWRI dilute/runoff recommendation) ---- */
+  /**
+   * Trellis form. Not persisted by the current spray_jobs contract — see the
+   * persistence audit in `docs/`; only size/density round-trip today
+   * (`vsp_canopy_size` / `vsp_canopy_density`).
+   */
+  canopyType?: CanopyType | null;
+  canopySize?: CanopySize | null;
+  canopyDensity?: CanopyDensity | null;
+  /**
+   * Whether the operator sprays at the AWRI recommendation or at their own
+   * sprayer output. `null` = not yet answered.
+   */
+  sprayerOutputChoice?: "recommended" | "custom" | null;
+  /** Manual basis only: the total water being mixed/applied, in litres. */
+  manualTotalLitres?: number | null;
 }
+
 
 export interface SprayApplication {
   id: string | null;
@@ -346,6 +397,13 @@ export interface SprayApplication {
   products: SprayProductLine[];
   tankCapacityLitres: number | null;
   /**
+   * Explicit operator confirmation that the equipment shown is the equipment
+   * being used for THIS application. A value prefilled from a Program Step or
+   * an existing job is never confirmation; changing the spray unit or tractor
+   * invalidates it. Session state — deliberately not persisted.
+   */
+  equipmentConfirmed: boolean;
+  /**
    * SQL 201 Resistance Plan provenance. `null` for legacy/unlinked jobs and
    * for every template. The frozen snapshot inside it — never the current
    * plan — is the authority on original planned intent.
@@ -379,6 +437,7 @@ export const emptySprayApplication = (): SprayApplication => ({
   carrier: { basis: null },
   products: [],
   tankCapacityLitres: null,
+  equipmentConfirmed: false,
   planProvenance: null,
   compatibilityNotes: [],
 });
@@ -506,17 +565,43 @@ export function fromLegacySprayJob(
 
   const persistedBasis = normaliseCarrierBasis(job.carrier_volume_basis);
   const legacyLPerHa = positive(job.spray_rate_per_ha);
+  const persistedCf = positive(job.concentration_factor);
+  const canopySize = normaliseCanopySize(job.vsp_canopy_size);
+  const canopyDensity = normaliseCanopyDensity(job.vsp_canopy_density);
+  // Trellis form has no column in the current spray_jobs contract, so it is
+  // NOT guessed on reopen — assuming VSP would silently produce a wrong
+  // sprawl recommendation. The recorded applied volume stays authoritative;
+  // only the recommendation needs the canopy answered again.
+  const canopyType: CanopyType | null = normaliseCanopyType((job as any).canopy_type);
+  if (!canopyType && (canopySize || canopyDensity)) {
+    notes.push(
+      "Canopy trellis form is not stored on this job — re-answer it to see the recommended dilute volume. The recorded spray volume is unchanged.",
+    );
+  }
+
+  const basis = persistedBasis ?? (legacyLPerHa != null ? "l_per_ha" : null);
+  // Dilute L/ha may not be stored; it is exactly recoverable from the persisted
+  // concentration factor (CF = dilute ÷ applied) rather than being guessed.
+  const diluteLPerHa =
+    positive((job as any).dilute_litres_per_hectare) ??
+    (persistedCf != null && legacyLPerHa != null ? persistedCf * legacyLPerHa : null);
   app.carrier = {
-    basis: persistedBasis ?? (legacyLPerHa != null ? "l_per_ha" : null),
-    litresPerHectare: legacyLPerHa,
-    diluteLitresPerHectare: positive(job.dilute_litres_per_hectare),
+    basis,
+    litresPerHectare: basis === "manual" ? null : legacyLPerHa,
+    diluteLitresPerHectare: basis === "manual" ? null : diluteLPerHa,
     appliedLitresPer100m: positive(job.applied_litres_per_100m),
     diluteLitresPer100m: positive(job.dilute_litres_per_100m),
-    concentrationFactor: positive(job.concentration_factor),
+    concentrationFactor: basis === "manual" ? 1 : persistedCf,
+    canopyType: basis === "manual" ? null : canopyType,
+    canopySize: basis === "manual" ? null : canopySize,
+    canopyDensity: basis === "manual" ? null : canopyDensity,
+    sprayerOutputChoice: null,
+    manualTotalLitres: basis === "manual" ? positive(job.water_volume) : null,
   };
   if (!persistedBasis && legacyLPerHa != null) {
     notes.push("Carrier basis not recorded — inferred L/ha from the legacy spray_rate_per_ha value.");
   }
+
 
   app.products = (job.chemical_lines ?? []).map((line) => {
     const id = (line.savedChemicalId ?? line.chemical_id ?? null) || null;
@@ -565,7 +650,11 @@ export function fromLegacySprayJob(
   });
 
 
-  app.tankCapacityLitres = positive(opts.tankCapacityLitres) ?? positive(job.water_volume);
+  // For a manual application `water_volume` is the total water the operator
+  // entered — it is not a tank size and must never be read back as one.
+  app.tankCapacityLitres =
+    positive(opts.tankCapacityLitres) ??
+    (app.carrier.basis === "manual" ? null : positive(job.water_volume));
   app.compatibilityNotes = notes;
   return app;
 }

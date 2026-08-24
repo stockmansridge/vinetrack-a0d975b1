@@ -66,7 +66,7 @@ describe("Stage 3B wizard shell", () => {
 
     fireEvent.click(step("Blocks"));
     await screen.findByText(/Block A/);
-    fireEvent.click(step("Carrier"));
+    fireEvent.click(step("Canopy & spray volume"));
     fireEvent.click(step("Application"));
 
     expect((await screen.findByLabelText("Name")).getAttribute("value")).toBe("Week 14 spray");
@@ -75,11 +75,11 @@ describe("Stage 3B wizard shell", () => {
   it("hides the Carrier step for a spreader application", async () => {
     renderWizard();
     await screen.findByLabelText("Name");
-    expect(step("Carrier")).toBeTruthy();
+    expect(step("Canopy & spray volume")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Spreader"));
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: /\d\s*Carrier/i })).toBeNull(),
+      expect(screen.queryByRole("button", { name: /\d\s*Canopy/i })).toBeNull(),
     );
   });
 

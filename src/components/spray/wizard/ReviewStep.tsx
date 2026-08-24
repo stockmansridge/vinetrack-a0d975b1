@@ -12,6 +12,11 @@ import {
 } from "@/lib/sprayApplicationDomain";
 import { GROWTH_STAGE_LABEL } from "@/lib/vspWaterRate";
 import {
+  CANOPY_DENSITY_LABEL,
+  CANOPY_SIZE_LABEL,
+  CANOPY_TYPE_LABEL,
+} from "@/lib/sprayCanopy";
+import {
   PRODUCT_BASIS_FRIENDLY,
   fmtHa,
   fmtLitres,
@@ -84,39 +89,130 @@ export function ReviewStep({
             label="Tank capacity"
             value={app.tankCapacityLitres ? fmtLitres(app.tankCapacityLitres) : "—"}
           />
+          {!app.isTemplate && (
+            <Row label="Confirmed" value={app.equipmentConfirmed ? "Yes" : "Not confirmed"} />
+          )}
         </Card>
       </section>
 
       {app.operationType !== "spreader" && (
-        <Card title="Carrier">
+        <Card title="Canopy & spray volume">
           <div className="grid gap-2 sm:grid-cols-4">
             <Row label="Basis" value={calc.carrier.basis ? CARRIER_BASIS_LABEL[calc.carrier.basis] : "—"} />
-            <Row label="L/ha" value={calc.carrier.litresPerHectare != null ? fmtNum(calc.carrier.litresPerHectare, 1) : "—"} />
-            <Row label="L/100 m" value={calc.carrier.litresPer100m != null ? fmtNum(calc.carrier.litresPer100m, 2) : "—"} />
+            <Row
+              label={calc.carrier.derivedRatesAreReferenceOnly ? "L/ha (ref)" : "L/ha"}
+              value={calc.carrier.litresPerHectare != null ? fmtNum(calc.carrier.litresPerHectare, 1) : "—"}
+            />
+            <Row
+              label={calc.carrier.derivedRatesAreReferenceOnly ? "L/100 m (ref)" : "L/100 m"}
+              value={calc.carrier.litresPer100m != null ? fmtNum(calc.carrier.litresPer100m, 2) : "—"}
+            />
             <Row label="Total water" value={fmtLitres(calc.carrier.totalCarrierLitres)} />
           </div>
-          {calc.carrier.concentrationFactor != null && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Concentration factor ×{fmtNum(calc.carrier.concentrationFactor, 2)} (
-              {calc.carrier.concentrationFactorSource === "persisted" ? "recorded with the job" : "calculated from dilute reference"}).
-            </p>
+
+          {(app.carrier.canopyType || app.carrier.canopySize || app.carrier.canopyDensity) && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-4">
+              <Row
+                label="Trellis"
+                value={app.carrier.canopyType ? CANOPY_TYPE_LABEL[app.carrier.canopyType] : "—"}
+              />
+              <Row
+                label="Canopy size"
+                value={app.carrier.canopySize ? CANOPY_SIZE_LABEL[app.carrier.canopySize] : "—"}
+              />
+              <Row
+                label="Density"
+                value={app.carrier.canopyDensity ? CANOPY_DENSITY_LABEL[app.carrier.canopyDensity] : "—"}
+              />
+              <Row
+                label="Recommended dilute"
+                value={
+                  calc.carrier.recommendedDiluteLitresPer100m != null
+                    ? `${fmtNum(calc.carrier.recommendedDiluteLitresPer100m, 0)} L/100 m`
+                    : "—"
+                }
+              />
+            </div>
           )}
+
+          {/* Show the math — every figure above traced back to its inputs. */}
+          <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+            {calc.carrier.basis === "manual" && (
+              <li>Total water = entered directly ({fmtLitres(calc.carrier.totalCarrierLitres)}). Any L/ha or L/100 m shown is a derived reference only.</li>
+            )}
+            {calc.carrier.basis === "l_per_100m" && (
+              <li>
+                Total water = {fmtNum(app.carrier.appliedLitresPer100m, 2)} L/100 m ×
+                {" "}
+                {geometry.canonicalRowLengthMetres != null
+                  ? `(${Math.round(geometry.canonicalRowLengthMetres).toLocaleString()} m ÷ 100)`
+                  : "(total row length ÷ 100)"}
+                {" = "}
+                {fmtLitres(calc.carrier.totalCarrierLitres)}
+              </li>
+            )}
+            {calc.carrier.basis === "l_per_ha" && (
+              <li>
+                Total water = {fmtNum(app.carrier.litresPerHectare, 1)} L/ha × {fmtHa(calc.carrier.carrierAreaHa)}
+                {" = "}
+                {fmtLitres(calc.carrier.totalCarrierLitres)}
+              </li>
+            )}
+            {calc.carrier.basis === "l_per_100m" && geometry.rowSpacingMetres != null && (
+              <li>
+                L/ha = L/100 m × 100 ÷ {fmtNum(geometry.rowSpacingMetres, 2)} m row spacing.
+              </li>
+            )}
+            {calc.carrier.concentrationFactor != null && (
+              <li>
+                Concentration factor ×{fmtNum(calc.carrier.concentrationFactor, 2)}{" "}
+                {calc.carrier.concentrationFactorSource === "persisted"
+                  ? "(recorded with the job)"
+                  : calc.carrier.concentrationFactorSource === "manual"
+                    ? "(manual total water is never concentrated)"
+                    : "= max(1.00, dilute ÷ applied)"}
+                .
+              </li>
+            )}
+          </ul>
         </Card>
       )}
+
 
       <Card title="Products">
         {calc.products.length === 0 && <p className="text-xs text-muted-foreground">No products added.</p>}
         {calc.products.map((p) => (
-          <div key={p.index} className="flex flex-wrap items-center justify-between gap-2 border-b py-1.5 text-sm last:border-0">
-            <span className="font-medium">{p.productName ?? "Product not set"}</span>
-            <span className="text-xs text-muted-foreground">
-              {p.rate != null ? `${fmtNum(p.rate, 2)} ${p.unit ?? ""}` : "Rate not set"}
-              {p.rateBasis ? ` · ${PRODUCT_BASIS_FRIENDLY[p.rateBasis]}` : ""}
-            </span>
-            <span>{fmtQuantity(p.totalQuantity, p.unit)}</span>
+          <div key={p.index} className="border-b py-1.5 text-sm last:border-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{p.productName ?? "Product not set"}</span>
+              <span className="text-xs text-muted-foreground">
+                {p.rate != null ? `${fmtNum(p.rate, 2)} ${p.unit ?? ""}` : "Rate not set"}
+                {p.rateBasis ? ` · ${PRODUCT_BASIS_FRIENDLY[p.rateBasis]}` : ""}
+              </span>
+              <span>{fmtQuantity(p.totalQuantity, p.unit)}</span>
+            </div>
+            {/* Show the math for this line. */}
+            {p.rate != null && p.multiplier != null && (
+              <div className="text-xs text-muted-foreground">
+                {fmtNum(p.rate, 2)} {p.unit ?? ""} × {fmtNum(p.multiplier, 2)}{" "}
+                {p.multiplierKind === "hundred_litres"
+                  ? "× 100 L"
+                  : p.multiplierKind === "hundred_metres"
+                    ? "× 100 m"
+                    : p.multiplierKind === "treated_hectares"
+                      ? "treated ha"
+                      : "ha"}
+                {p.concentrationFactorApplied != null
+                  ? ` × ${fmtNum(p.concentrationFactorApplied, 2)} CF`
+                  : ""}
+                {" = "}
+                {fmtQuantity(p.totalQuantity, p.unit)}
+              </div>
+            )}
           </div>
         ))}
       </Card>
+
 
       {calc.tanks.tanks.length > 0 && (
         <Card title={`Tank plan — ${calc.tanks.tanks.length} load${calc.tanks.tanks.length === 1 ? "" : "s"}`}>

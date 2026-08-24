@@ -13,6 +13,10 @@ import type {
   SprayProductLine,
 } from "@/lib/sprayApplicationDomain";
 import type { ApplicationGeometry } from "@/lib/sprayApplicationGeometry";
+import {
+  litresPerHectareFromPer100m,
+  recommendedDiluteLitresPer100m,
+} from "@/lib/sprayCanopy";
 
 export type SprayDiagnosticSeverity = "error" | "warning" | "info";
 
@@ -39,9 +43,17 @@ export interface CarrierResult {
   litresPerHectare: number | null;
   /** Effective L/100 m, derived when the basis is L/ha. */
   litresPer100m: number | null;
+  /**
+   * Manual basis only: the derived L/ha and L/100 m above are REFERENCE ONLY.
+   * They are never inputs and never block the application.
+   */
+  derivedRatesAreReferenceOnly: boolean;
+  /** The AWRI dilute/runoff recommendation this application was judged against. */
+  recommendedDiluteLitresPer100m: number | null;
+  recommendedDiluteLitresPerHectare: number | null;
   /** max(1, dilute ÷ applied), or the persisted value when one exists. */
   concentrationFactor: number | null;
-  concentrationFactorSource: "persisted" | "derived" | null;
+  concentrationFactorSource: "persisted" | "derived" | "manual" | null;
   /**
    * The hectares the carrier rate was applied to. For an L/ha carrier this is
    * ALWAYS the gross application hectares — including banded applications.
@@ -78,10 +90,24 @@ export function calculateCarrier(args: {
   const dilute100m = pos(carrier.diluteLitresPer100m);
   const lPerHa = pos(carrier.litresPerHectare);
   const diluteLPerHa = pos(carrier.diluteLitresPerHectare);
+  const manualTotal = pos(carrier.manualTotalLitres);
+
+  // The canopy answer only ever produces a RECOMMENDATION. What the sprayer
+  // actually applies is always the operator's recorded value.
+  const recommendedPer100m = recommendedDiluteLitresPer100m(
+    carrier.canopyType ?? null,
+    carrier.canopySize ?? null,
+    carrier.canopyDensity ?? null,
+  );
+  const recommendedPerHa = litresPerHectareFromPer100m(
+    recommendedPer100m,
+    geometry.rowSpacingMetres,
+  );
 
   let totalCarrierLitres: number | null = null;
   let litresPerHectare: number | null = null;
   let litresPer100m: number | null = null;
+  let derivedRatesAreReferenceOnly = false;
 
   if (!basis) {
     if (args.operationType === "spreader") {
@@ -94,12 +120,34 @@ export function calculateCarrier(args: {
       diagnostics.push({
         code: "missing_carrier_basis",
         severity: "error",
-        message: "Carrier volume basis is not set.",
+        message: "Spray volume basis is not set.",
       });
+    }
+  } else if (basis === "manual") {
+    // A deliberate bypass: no canopy, no row spacing, no row length, no
+    // calibrated rate. The operator states the total water being mixed.
+    derivedRatesAreReferenceOnly = true;
+    if (manualTotal == null) {
+      diagnostics.push({
+        code: "missing_manual_total_water",
+        severity: "error",
+        message: "Enter the total spray water for this application.",
+      });
+    } else {
+      totalCarrierLitres = manualTotal;
+      // Reference figures only — shown when geometry happens to exist, never
+      // required and never a blocker.
+      if (geometry.grossAreaHa != null && geometry.grossAreaHa > 0) {
+        litresPerHectare = manualTotal / geometry.grossAreaHa;
+      }
+      if (geometry.canonicalRowLengthMetres != null && geometry.canonicalRowLengthMetres > 0) {
+        litresPer100m = manualTotal / (geometry.canonicalRowLengthMetres / 100);
+      }
     }
   } else if (basis === "l_per_ha") {
     if (lPerHa == null) {
       diagnostics.push({
+
         code: "missing_carrier_rate",
         severity: "error",
         message: "Carrier rate (L/ha) is not set.",
@@ -173,9 +221,10 @@ export function calculateCarrier(args: {
   }
 
   // Concentration factor: a persisted value is authoritative history.
-  let concentrationFactor = pos(carrier.concentrationFactor);
+  // Manual is always 1.00 — there is no dilute reference to concentrate from.
+  let concentrationFactor = basis === "manual" ? 1 : pos(carrier.concentrationFactor);
   let concentrationFactorSource: CarrierResult["concentrationFactorSource"] =
-    concentrationFactor != null ? "persisted" : null;
+    basis === "manual" ? "manual" : concentrationFactor != null ? "persisted" : null;
   if (concentrationFactor == null) {
     const derived =
       basis === "l_per_ha"
@@ -192,12 +241,16 @@ export function calculateCarrier(args: {
     totalCarrierLitres,
     litresPerHectare,
     litresPer100m,
+    derivedRatesAreReferenceOnly,
+    recommendedDiluteLitresPer100m: recommendedPer100m,
+    recommendedDiluteLitresPerHectare: recommendedPerHa,
     concentrationFactor,
     concentrationFactorSource,
     carrierAreaHa,
     diagnostics,
   };
 }
+
 
 /* ------------------------------------------------------------ products */
 
@@ -220,6 +273,11 @@ export interface ProductResult {
     | "hundred_litres"
     | "hundred_metres"
     | null;
+  /**
+   * Set only for a dilute per-100 L rate sprayed concentrated: the factor the
+   * label rate was multiplied by so the block receives the labelled dose.
+   */
+  concentrationFactorApplied: number | null;
   rateValidation: RateValidation;
   diagnostics: SprayDiagnostic[];
 }
@@ -251,6 +309,7 @@ export function calculateProducts(args: {
         : Number(rawRate);
     let multiplier: number | null = null;
     let multiplierKind: ProductResult["multiplierKind"] = null;
+    let concentrationFactorApplied: number | null = null;
 
     if (!line.rateBasis) {
       diagnostics.push({
@@ -283,15 +342,30 @@ export function calculateProducts(args: {
       multiplierKind = "hundred_litres";
       multiplier =
         carrier.totalCarrierLitres != null ? carrier.totalCarrierLitres / 100 : null;
+      // A per-100 L label rate is a DILUTE rate: it assumes 100 L of dilute
+      // spray. Applying it unchanged to a concentrated tank under-doses the
+      // block by exactly the concentration factor, so the CF is applied here.
+      concentrationFactorApplied =
+        carrier.concentrationFactor != null && carrier.concentrationFactor > 1
+          ? carrier.concentrationFactor
+          : null;
       if (multiplier == null) {
         diagnostics.push({
           code: "per_100l_needs_carrier",
           severity: "error",
-          message: `${line.productName ?? "Product"} is rated per 100 L but the carrier volume is unknown.`,
+          message: `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
+          productIndex: index,
+        });
+      } else if (concentrationFactorApplied != null) {
+        diagnostics.push({
+          code: "per_100l_concentrated",
+          severity: "info",
+          message: `${line.productName ?? "Product"} is a dilute per-100 L rate — multiplied by the ×${concentrationFactorApplied.toFixed(2)} concentration factor.`,
           productIndex: index,
         });
       }
     }
+
 
     if (rate == null) {
       diagnostics.push({
@@ -347,14 +421,19 @@ export function calculateProducts(args: {
       rate,
       unit: line.unit,
       rateBasis: line.rateBasis,
-      totalQuantity: rate != null && multiplier != null ? rate * multiplier : null,
+      totalQuantity:
+        rate != null && multiplier != null
+          ? rate * multiplier * (concentrationFactorApplied ?? 1)
+          : null,
       multiplier,
       multiplierKind,
+      concentrationFactorApplied,
       rateValidation,
       diagnostics,
     };
   });
 }
+
 
 /* --------------------------------------------------------------- tanks */
 

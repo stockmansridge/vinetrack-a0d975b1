@@ -1,4 +1,7 @@
-// Stage 3B — Equipment step: tractor, sprayer, operator, tank capacity.
+// Equipment step — the operator must explicitly confirm the spray unit before
+// any volume is calculated against it. A value carried in from a Program Step
+// or an existing job is a suggestion, never a confirmation.
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +14,7 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
   const equipmentCapacity = Number(equipmentRow?.tank_capacity_litres);
   const hasEquipmentCapacity = Number.isFinite(equipmentCapacity) && equipmentCapacity > 0;
 
+
   return (
     <div className="space-y-6">
       <section className="grid gap-3 sm:grid-cols-2">
@@ -19,7 +23,10 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
           <Select
             value={app.tractorId ?? NONE}
             disabled={!canEdit}
-            onValueChange={(v) => patch({ tractorId: v === NONE ? null : v })}
+            onValueChange={(v) =>
+              patch({ tractorId: v === NONE ? null : v, equipmentConfirmed: false })
+            }
+
           >
             <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
             <SelectContent>
@@ -42,8 +49,11 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
               patch({
                 equipmentId: id,
                 tankCapacityLitres: Number.isFinite(cap) && cap > 0 ? cap : app.tankCapacityLitres,
+                // Changing the spray unit invalidates any earlier confirmation.
+                equipmentConfirmed: false,
               });
             }}
+
           >
             <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
             <SelectContent>
@@ -92,6 +102,30 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
           </div>
         )}
       </section>
+
+      {!app.isTemplate && (
+        <section className="rounded-md border bg-muted/30 p-3">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="equipment-confirmed"
+              disabled={!canEdit || !app.equipmentId}
+              checked={app.equipmentConfirmed}
+              onCheckedChange={(v) => patch({ equipmentConfirmed: v === true })}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="equipment-confirmed" className="text-sm font-medium">
+                I confirm this is the spray unit being used
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {app.equipmentId
+                  ? "Tank loads and calibrated volumes are calculated against this unit. Changing the unit or tractor clears this confirmation."
+                  : "Select the spray equipment above before confirming."}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
+
   );
 }
