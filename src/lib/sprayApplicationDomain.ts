@@ -568,14 +568,17 @@ export function fromLegacySprayJob(
   const persistedCf = positive(job.concentration_factor);
   const canopySize = normaliseCanopySize(job.vsp_canopy_size);
   const canopyDensity = normaliseCanopyDensity(job.vsp_canopy_density);
-  // Trellis form has no column in the current spray_jobs contract. Historical
-  // rows that recorded a canopy recorded a VSP canopy, so that is the only
-  // safe reading — and it is reported, never silently assumed.
-  const canopyType: CanopyType | null =
-    normaliseCanopyType(job.canopy_type) ?? (canopySize || canopyDensity ? "vsp" : null);
-  if (canopyType === "vsp" && !job.canopy_type && (canopySize || canopyDensity)) {
-    notes.push("Canopy trellis form is not stored on this job — read as VSP.");
+  // Trellis form has no column in the current spray_jobs contract, so it is
+  // NOT guessed on reopen — assuming VSP would silently produce a wrong
+  // sprawl recommendation. The recorded applied volume stays authoritative;
+  // only the recommendation needs the canopy answered again.
+  const canopyType: CanopyType | null = normaliseCanopyType((job as any).canopy_type);
+  if (!canopyType && (canopySize || canopyDensity)) {
+    notes.push(
+      "Canopy trellis form is not stored on this job — re-answer it to see the recommended dilute volume. The recorded spray volume is unchanged.",
+    );
   }
+
   const basis = persistedBasis ?? (legacyLPerHa != null ? "l_per_ha" : null);
   // Dilute L/ha may not be stored; it is exactly recoverable from the persisted
   // concentration factor (CF = dilute ÷ applied) rather than being guessed.
