@@ -647,7 +647,11 @@ export function fromLegacySprayJob(
   });
 
 
-  app.tankCapacityLitres = positive(opts.tankCapacityLitres) ?? positive(job.water_volume);
+  // For a manual application `water_volume` is the total water the operator
+  // entered — it is not a tank size and must never be read back as one.
+  app.tankCapacityLitres =
+    positive(opts.tankCapacityLitres) ??
+    (app.carrier.basis === "manual" ? null : positive(job.water_volume));
   app.compatibilityNotes = notes;
   return app;
 }
