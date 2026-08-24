@@ -1,4 +1,7 @@
-// Stage 3B — Equipment step: tractor, sprayer, operator, tank capacity.
+// Equipment step — the operator must explicitly confirm the spray unit before
+// any volume is calculated against it. A value carried in from a Program Step
+// or an existing job is a suggestion, never a confirmation.
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +13,7 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
   const equipmentRow = lookups.equipment.find((e: any) => e.id === app.equipmentId) as any;
   const equipmentCapacity = Number(equipmentRow?.tank_capacity_litres);
   const hasEquipmentCapacity = Number.isFinite(equipmentCapacity) && equipmentCapacity > 0;
+
 
   return (
     <div className="space-y-6">
