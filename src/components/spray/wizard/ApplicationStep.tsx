@@ -9,7 +9,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import {
   OPERATION_TYPES,
   OPERATION_TYPE_LABEL,
@@ -17,6 +16,7 @@ import {
 } from "@/lib/sprayApplicationDomain";
 import { applyOperationType, applyTemplate, hydrateDraft } from "@/lib/sprayApplicationDraft";
 import { chemicalLinesSummary, fetchSprayJobs } from "@/lib/sprayJobsQuery";
+import { SelectTile } from "./controls";
 import type { StepProps } from "./types";
 
 const STATUS_OPTIONS = ["draft", "scheduled", "in_progress", "completed", "cancelled"];
