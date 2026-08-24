@@ -12,6 +12,11 @@ import {
 } from "@/lib/sprayApplicationDomain";
 import { GROWTH_STAGE_LABEL } from "@/lib/vspWaterRate";
 import {
+  CANOPY_DENSITY_LABEL,
+  CANOPY_SIZE_LABEL,
+  CANOPY_TYPE_LABEL,
+} from "@/lib/sprayCanopy";
+import {
   PRODUCT_BASIS_FRIENDLY,
   fmtHa,
   fmtLitres,
