@@ -99,26 +99,19 @@ export function ApplicationStep({ app, patch, update, canEdit, vineyardId, intel
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Application type</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {OPERATION_TYPES.map((op) => {
-            const active = app.operationType === op;
-            return (
-              <button
-                key={op}
-                type="button"
-                disabled={!canEdit}
-                aria-pressed={active}
-                onClick={() => update((a) => applyOperationType(a, op))}
-                className={cn(
-                  "rounded-lg border p-4 text-left transition",
-                  active ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted/50",
-                )}
-              >
-                <div className="font-medium">{OPERATION_TYPE_LABEL[op]}</div>
-                <p className="mt-1 text-xs text-muted-foreground">{OPERATION_HELP[op]}</p>
-              </button>
-            );
-          })}
+        {/* Same shared selector as Canopy & Spray Volume — one selection
+            language across the whole wizard. */}
+        <div role="radiogroup" aria-label="Application type" className="grid gap-3 sm:grid-cols-3">
+          {OPERATION_TYPES.map((op) => (
+            <SelectTile
+              key={op}
+              selected={app.operationType === op}
+              disabled={!canEdit}
+              onSelect={() => update((a) => applyOperationType(a, op))}
+              title={OPERATION_TYPE_LABEL[op]}
+              hint={OPERATION_HELP[op]}
+            />
+          ))}
         </div>
         {app.operationType === "banded" && (
           <p className="text-xs text-muted-foreground">
