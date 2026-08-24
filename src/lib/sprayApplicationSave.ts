@@ -47,7 +47,9 @@ export function legacyTargetText(
 }
 
 export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
-  const basis = line.rateBasis ?? "whole_block_area";
+  // Never fabricate a basis: a product with no rate chosen yet (a Program Step
+  // product) stays basis-free rather than being stamped "per hectare".
+  const basis = line.rateBasis ?? (line.rate != null ? "whole_block_area" : null);
   // P8 — freeze the chemistry that was actually selected onto the line, so a
   // later Saved Chemical re-verify can never rewrite this job's chemistry and
   // plan deviation has real groups to compare.
@@ -68,7 +70,7 @@ export function toChemicalLine(line: SprayProductLine): SprayJobChemicalLine {
     product_rate_basis: basis,
     // iOS compatibility only knows two bases; treated_area / per_100_metres are
     // area-style rates from its point of view.
-    rate_basis: basis === "per_100_litres" ? "per_100_litres" : "per_hectare",
+    rate_basis: basis == null ? null : basis === "per_100_litres" ? "per_100_litres" : "per_hectare",
     costPerUnit: line.costPerUnit ?? null,
     notes: line.notes ?? null,
     ...(line.legacyChemicalGroup ? { chemical_group: line.legacyChemicalGroup } : {}),
@@ -121,7 +123,9 @@ export function toSprayJobInput(args: {
     name: app.name ?? null,
     is_template: isTemplate,
     planned_date: isTemplate ? null : app.plannedDate ?? null,
-    status: isTemplate ? null : app.status ?? "draft",
+    // `spray_jobs.status` is NOT NULL — a Program Step is still stored with a
+    // valid status ('draft'); `is_template` is what makes it a template.
+    status: isTemplate ? "draft" : app.status ?? "draft",
     operation_type: app.operationType ? OPERATION_TYPE_LABEL[app.operationType] : null,
     application_mode: mode,
     target: legacyTargetText(app, args.targetLabels),

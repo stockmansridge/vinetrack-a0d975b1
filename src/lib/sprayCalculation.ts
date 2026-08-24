@@ -349,10 +349,14 @@ export function calculateProducts(args: {
     let concentrationFactorApplied: number | null = null;
 
     if (!line.rateBasis) {
+      // A Program Step is reusable configuration: the label rate and its basis
+      // are chosen against the real target when the spray is planned.
       diagnostics.push({
-        code: "missing_rate_basis",
-        severity: "error",
-        message: `Rate basis is not set for ${line.productName ?? "this product"}.`,
+        code: templateMode ? "rate_basis_at_plan_spray" : "missing_rate_basis",
+        severity: templateMode ? "info" : "error",
+        message: templateMode
+          ? `${line.productName ?? "Product"} rate is chosen from the label when the spray is planned.`
+          : `Rate basis is not set for ${line.productName ?? "this product"}.`,
         productIndex: index,
       });
     } else if (line.rateBasis === "whole_block_area") {
@@ -410,9 +414,11 @@ export function calculateProducts(args: {
 
     if (rate == null) {
       diagnostics.push({
-        code: "missing_rate",
-        severity: "error",
-        message: `No rate entered for ${line.productName ?? "this product"}.`,
+        code: templateMode ? "rate_at_plan_spray" : "missing_rate",
+        severity: templateMode ? "info" : "error",
+        message: templateMode
+          ? `${line.productName ?? "Product"} rate is chosen from the label when the spray is planned.`
+          : `No rate entered for ${line.productName ?? "this product"}.`,
         productIndex: index,
       });
     }
