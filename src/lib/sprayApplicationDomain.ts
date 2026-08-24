@@ -564,17 +564,40 @@ export function fromLegacySprayJob(
 
   const persistedBasis = normaliseCarrierBasis(job.carrier_volume_basis);
   const legacyLPerHa = positive(job.spray_rate_per_ha);
+  const persistedCf = positive(job.concentration_factor);
+  const canopySize = normaliseCanopySize(job.vsp_canopy_size);
+  const canopyDensity = normaliseCanopyDensity(job.vsp_canopy_density);
+  // Trellis form has no column in the current spray_jobs contract. Historical
+  // rows that recorded a canopy recorded a VSP canopy, so that is the only
+  // safe reading — and it is reported, never silently assumed.
+  const canopyType: CanopyType | null =
+    normaliseCanopyType(job.canopy_type) ?? (canopySize || canopyDensity ? "vsp" : null);
+  if (canopyType === "vsp" && !job.canopy_type && (canopySize || canopyDensity)) {
+    notes.push("Canopy trellis form is not stored on this job — read as VSP.");
+  }
+  const basis = persistedBasis ?? (legacyLPerHa != null ? "l_per_ha" : null);
+  // Dilute L/ha may not be stored; it is exactly recoverable from the persisted
+  // concentration factor (CF = dilute ÷ applied) rather than being guessed.
+  const diluteLPerHa =
+    positive(job.dilute_litres_per_hectare) ??
+    (persistedCf != null && legacyLPerHa != null ? persistedCf * legacyLPerHa : null);
   app.carrier = {
-    basis: persistedBasis ?? (legacyLPerHa != null ? "l_per_ha" : null),
-    litresPerHectare: legacyLPerHa,
-    diluteLitresPerHectare: positive(job.dilute_litres_per_hectare),
+    basis,
+    litresPerHectare: basis === "manual" ? null : legacyLPerHa,
+    diluteLitresPerHectare: basis === "manual" ? null : diluteLPerHa,
     appliedLitresPer100m: positive(job.applied_litres_per_100m),
     diluteLitresPer100m: positive(job.dilute_litres_per_100m),
-    concentrationFactor: positive(job.concentration_factor),
+    concentrationFactor: basis === "manual" ? 1 : persistedCf,
+    canopyType: basis === "manual" ? null : canopyType,
+    canopySize: basis === "manual" ? null : canopySize,
+    canopyDensity: basis === "manual" ? null : canopyDensity,
+    sprayerOutputChoice: null,
+    manualTotalLitres: basis === "manual" ? positive(job.water_volume) : null,
   };
   if (!persistedBasis && legacyLPerHa != null) {
     notes.push("Carrier basis not recorded — inferred L/ha from the legacy spray_rate_per_ha value.");
   }
+
 
   app.products = (job.chemical_lines ?? []).map((line) => {
     const id = (line.savedChemicalId ?? line.chemical_id ?? null) || null;
