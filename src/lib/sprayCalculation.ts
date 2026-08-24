@@ -78,10 +78,34 @@ export function calculateCarrier(args: {
   mode: ApplicationMode | null;
   operationType?: OperationType | null;
   carrier: SprayApplication["carrier"];
+  /**
+   * Program Step (`is_template = true`) mode. A Program Step is reusable
+   * configuration with deliberately no blocks, so nothing that depends on
+   * block geometry — total water, effective rates, the concentration factor —
+   * can or should be resolved yet. Missing geometry is reported as
+   * "calculated when blocks are selected", never as an error.
+   */
+  templateMode?: boolean;
 }): CarrierResult {
   const { geometry, mode, carrier } = args;
+  const templateMode = !!args.templateMode;
   const diagnostics: SprayDiagnostic[] = [];
   const basis = carrier.basis;
+
+  /**
+   * At Program Step stage a missing input is not a defect: it is resolved when
+   * the operator plans the spray against real blocks.
+   */
+  const note = (code: string, severity: SprayDiagnosticSeverity, message: string) =>
+    diagnostics.push(
+      templateMode
+        ? {
+            code: `${code}_at_plan_spray`,
+            severity: "info",
+            message: "Calculated when blocks are selected.",
+          }
+        : { code, severity, message },
+    );
 
   // Carrier hectares are gross hectares. Treated hectares belong to products.
   const carrierAreaHa = geometry.grossAreaHa;
@@ -117,22 +141,18 @@ export function calculateCarrier(args: {
         message: "Spreader application — no carrier volume required.",
       });
     } else {
-      diagnostics.push({
-        code: "missing_carrier_basis",
-        severity: "error",
-        message: "Spray volume basis is not set.",
-      });
+      note("missing_carrier_basis", "error", "Spray volume basis is not set.");
     }
   } else if (basis === "manual") {
     // A deliberate bypass: no canopy, no row spacing, no row length, no
     // calibrated rate. The operator states the total water being mixed.
     derivedRatesAreReferenceOnly = true;
     if (manualTotal == null) {
-      diagnostics.push({
-        code: "missing_manual_total_water",
-        severity: "error",
-        message: "Enter the total spray water for this application.",
-      });
+      note(
+        "missing_manual_total_water",
+        "error",
+        "Enter the total spray water for this application.",
+      );
     } else {
       totalCarrierLitres = manualTotal;
       // Reference figures only — shown when geometry happens to exist, never
@@ -146,18 +166,13 @@ export function calculateCarrier(args: {
     }
   } else if (basis === "l_per_ha") {
     if (lPerHa == null) {
-      diagnostics.push({
-
-        code: "missing_carrier_rate",
-        severity: "error",
-        message: "Carrier rate (L/ha) is not set.",
-      });
+      note("missing_carrier_rate", "error", "Carrier rate (L/ha) is not set.");
     } else if (carrierAreaHa == null) {
-      diagnostics.push({
-        code: "incomplete_geometry_for_carrier",
-        severity: "error",
-        message: "Cannot compute carrier volume — block geometry is incomplete.",
-      });
+      note(
+        "incomplete_geometry_for_carrier",
+        "error",
+        "Cannot compute carrier volume — block geometry is incomplete.",
+      );
     } else {
       litresPerHectare = lPerHa;
       // Gross hectares — banded included, per the confirmed Rork contract.
@@ -183,25 +198,20 @@ export function calculateCarrier(args: {
         message: `Applied water derived from the dilute reference ÷ concentration factor (${persistedCf}×).`,
       });
     } else if (rate100m == null && dilute100m != null) {
-      diagnostics.push({
-        code: "dilute_only_carrier_rate",
-        severity: "error",
-        message:
-          "Only the dilute/runoff L/100 m is set. Enter the actual applied L/100 m — the dilute reference is not the applied volume.",
-      });
+      note(
+        "dilute_only_carrier_rate",
+        "error",
+        "Only the dilute/runoff L/100 m is set. Enter the actual applied L/100 m — the dilute reference is not the applied volume.",
+      );
     }
     if (rate100m == null) {
-      diagnostics.push({
-        code: "missing_carrier_rate",
-        severity: "error",
-        message: "Carrier rate (L/100 m) is not set.",
-      });
+      note("missing_carrier_rate", "error", "Carrier rate (L/100 m) is not set.");
     } else if (geometry.canonicalRowLengthMetres == null) {
-      diagnostics.push({
-        code: "incomplete_geometry_for_carrier",
-        severity: "error",
-        message: "Cannot compute carrier volume — canonical row length is unknown.",
-      });
+      note(
+        "incomplete_geometry_for_carrier",
+        "error",
+        "Cannot compute carrier volume — canonical row length is unknown.",
+      );
     } else {
       litresPer100m = rate100m;
       totalCarrierLitres = (geometry.canonicalRowLengthMetres / 100) * rate100m;
@@ -209,13 +219,13 @@ export function calculateCarrier(args: {
         // L/ha = L/100 m × 100 ÷ row spacing.
         litresPerHectare = (rate100m * 100) / geometry.rowSpacingMetres;
       } else {
-        diagnostics.push({
-          code: "cannot_derive_litres_per_hectare",
-          severity: "warning",
-          message: geometry.uniformRowSpacing
+        note(
+          "cannot_derive_litres_per_hectare",
+          "warning",
+          geometry.uniformRowSpacing
             ? "Row spacing unknown — the equivalent L/ha cannot be derived."
             : "Blocks have different row spacings — the equivalent L/ha cannot be derived.",
-        });
+        );
       }
     }
   }
