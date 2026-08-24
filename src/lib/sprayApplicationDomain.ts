@@ -436,6 +436,7 @@ export const emptySprayApplication = (): SprayApplication => ({
   carrier: { basis: null },
   products: [],
   tankCapacityLitres: null,
+  equipmentConfirmed: false,
   planProvenance: null,
   compatibilityNotes: [],
 });
