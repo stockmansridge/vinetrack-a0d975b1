@@ -273,6 +273,11 @@ export interface ProductResult {
     | "hundred_litres"
     | "hundred_metres"
     | null;
+  /**
+   * Set only for a dilute per-100 L rate sprayed concentrated: the factor the
+   * label rate was multiplied by so the block receives the labelled dose.
+   */
+  concentrationFactorApplied: number | null;
   rateValidation: RateValidation;
   diagnostics: SprayDiagnostic[];
 }
