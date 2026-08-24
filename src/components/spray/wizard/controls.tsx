@@ -62,7 +62,15 @@ export function SelectTile({
  * sentences long and must wrap, grow vertically and stay inside the modal on
  * small browser windows.
  */
-export function HelpTip({ title, body }: { title: string; body: string }) {
+export function HelpTip({
+  title,
+  body,
+  image,
+}: {
+  title: string;
+  body: string;
+  image?: { src: string; alt: string };
+}) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -80,7 +88,15 @@ export function HelpTip({ title, body }: { title: string; body: string }) {
         className="max-h-[60vh] w-[min(22rem,calc(100vw-3rem))] overflow-y-auto"
       >
         <div className="text-sm font-semibold">{title}</div>
-        <p className="mt-1 whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground">
+        {image && (
+          <img
+            src={image.src}
+            alt={image.alt}
+            loading="lazy"
+            className="mt-2 w-full rounded border bg-white object-contain"
+          />
+        )}
+        <p className="mt-2 whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground">
           {body}
         </p>
       </PopoverContent>
@@ -94,13 +110,13 @@ export function FieldHeading({
   className,
 }: {
   label: string;
-  help?: { title: string; body: string };
+  help?: { title: string; body: string; image?: { src: string; alt: string } };
   className?: string;
 }) {
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <span className="text-sm font-medium">{label}</span>
-      {help && <HelpTip title={help.title} body={help.body} />}
+      {help && <HelpTip title={help.title} body={help.body} image={help.image} />}
     </div>
   );
 }
