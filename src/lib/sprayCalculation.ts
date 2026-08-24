@@ -86,10 +86,24 @@ export function calculateCarrier(args: {
   const dilute100m = pos(carrier.diluteLitresPer100m);
   const lPerHa = pos(carrier.litresPerHectare);
   const diluteLPerHa = pos(carrier.diluteLitresPerHectare);
+  const manualTotal = pos(carrier.manualTotalLitres);
+
+  // The canopy answer only ever produces a RECOMMENDATION. What the sprayer
+  // actually applies is always the operator's recorded value.
+  const recommendedPer100m = recommendedDiluteLitresPer100m(
+    carrier.canopyType ?? null,
+    carrier.canopySize ?? null,
+    carrier.canopyDensity ?? null,
+  );
+  const recommendedPerHa = litresPerHectareFromPer100m(
+    recommendedPer100m,
+    geometry.rowSpacingMetres,
+  );
 
   let totalCarrierLitres: number | null = null;
   let litresPerHectare: number | null = null;
   let litresPer100m: number | null = null;
+  let derivedRatesAreReferenceOnly = false;
 
   if (!basis) {
     if (args.operationType === "spreader") {
@@ -102,12 +116,34 @@ export function calculateCarrier(args: {
       diagnostics.push({
         code: "missing_carrier_basis",
         severity: "error",
-        message: "Carrier volume basis is not set.",
+        message: "Spray volume basis is not set.",
       });
+    }
+  } else if (basis === "manual") {
+    // A deliberate bypass: no canopy, no row spacing, no row length, no
+    // calibrated rate. The operator states the total water being mixed.
+    derivedRatesAreReferenceOnly = true;
+    if (manualTotal == null) {
+      diagnostics.push({
+        code: "missing_manual_total_water",
+        severity: "error",
+        message: "Enter the total spray water for this application.",
+      });
+    } else {
+      totalCarrierLitres = manualTotal;
+      // Reference figures only — shown when geometry happens to exist, never
+      // required and never a blocker.
+      if (geometry.grossAreaHa != null && geometry.grossAreaHa > 0) {
+        litresPerHectare = manualTotal / geometry.grossAreaHa;
+      }
+      if (geometry.canonicalRowLengthMetres != null && geometry.canonicalRowLengthMetres > 0) {
+        litresPer100m = manualTotal / (geometry.canonicalRowLengthMetres / 100);
+      }
     }
   } else if (basis === "l_per_ha") {
     if (lPerHa == null) {
       diagnostics.push({
+
         code: "missing_carrier_rate",
         severity: "error",
         message: "Carrier rate (L/ha) is not set.",
