@@ -238,8 +238,10 @@ export function calculateCarrier(args: {
   if (concentrationFactor == null) {
     const derived =
       basis === "l_per_ha"
-        ? concentrationFactorFrom(diluteLPerHa, lPerHa)
-        : concentrationFactorFrom(dilute100m, applied100m);
+        // The canopy answer IS the dilute reference. An explicitly stored
+        // dilute figure (historical rows) still wins.
+        ? concentrationFactorFrom(diluteLPerHa ?? recommendedPerHa, lPerHa)
+        : concentrationFactorFrom(dilute100m ?? recommendedPer100m, applied100m);
     if (derived != null) {
       concentrationFactor = derived;
       concentrationFactorSource = "derived";
