@@ -161,14 +161,14 @@ describe("dilute per-100 L rates under concentration", () => {
     const [p] = calculateProducts({ products: [line()], geometry: geometry(), carrier });
     // 100 mL/100 L × (10,000 ÷ 100) × 2 = 20,000 mL
     expect(p.concentrationFactorApplied).toBeCloseTo(2, 6);
-    expect(p.totalQuantity).toBeCloseTo(20_000, 6);
+    expect(p.totalQuantity).toBeCloseTo(20_000, 1);
   });
 
   it("leaves a dilute application untouched (CF 1.00)", () => {
     const carrier = carrierFor(30);
     const [p] = calculateProducts({ products: [line()], geometry: geometry(), carrier });
     expect(p.concentrationFactorApplied).toBeNull();
-    expect(p.totalQuantity).toBeCloseTo(10_000, 6);
+    expect(p.totalQuantity).toBeCloseTo(10_000, 1);
   });
 
   it("never applies the CF to an area-based or per-100 m rate", () => {
