@@ -46,8 +46,11 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
               patch({
                 equipmentId: id,
                 tankCapacityLitres: Number.isFinite(cap) && cap > 0 ? cap : app.tankCapacityLitres,
+                // Changing the spray unit invalidates any earlier confirmation.
+                equipmentConfirmed: false,
               });
             }}
+
           >
             <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
             <SelectContent>
