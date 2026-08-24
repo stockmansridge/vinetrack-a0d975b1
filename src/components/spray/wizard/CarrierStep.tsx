@@ -21,7 +21,6 @@ import {
   CANOPY_TYPES,
   CANOPY_TYPE_LABEL,
   canopyDiluteRange,
-  litresPer100mFromPerHectare,
 } from "@/lib/sprayCanopy";
 import { fmtHa, fmtLitres, fmtNum, treatedProportionPct } from "@/lib/sprayFormat";
 import type { StepProps } from "./types";
