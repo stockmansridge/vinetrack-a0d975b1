@@ -12,7 +12,7 @@ import {
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
 import { ChemicalLookupResultCard } from "@/components/chemicals/ChemicalLookupResultCard";
-import { buildStructuredLookupBody } from "@/lib/chemicalLookupRequest";
+import { CHEMICAL_LOOKUP_WAIT_MESSAGE, buildStructuredLookupBody } from "@/lib/chemicalLookupRequest";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
   matchMasterByIdentity,
@@ -412,6 +412,13 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </Button>
       </div>
 
+      {/* Same first-search expectation-setting copy as iOS. Repeat lookups are
+          usually faster but are never promised as instant. */}
+      {loading && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {CHEMICAL_LOOKUP_WAIT_MESSAGE}
+        </p>
+      )}
 
       {error && (
         <div className="flex items-start gap-1.5 text-xs text-destructive">

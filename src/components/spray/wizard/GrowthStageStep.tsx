@@ -1,10 +1,14 @@
 // Stage 3B — Growth stage step (E-L codes, shared list).
+//
+// Selection uses the SAME shared SelectTile control as Application Type and
+// Canopy & Spray Volume, so every choice in the wizard reads as a control.
+// "Not set" is an explicit, selectable state: it stores `growthStageCode: null`
+// exactly as an untouched job does — no sentinel code is ever invented.
 import { useState } from "react";
 import { GROWTH_STAGES } from "@/lib/vspWaterRate";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { growthStageImageAlt, growthStageImageUrl } from "@/lib/growthStageImages";
-import { cn } from "@/lib/utils";
+import { SelectTile } from "./controls";
 import type { StepProps } from "./types";
 
 export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
@@ -12,41 +16,35 @@ export function GrowthStageStep({ app, patch, canEdit }: StepProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Growth stage</h3>
-        {app.growthStageCode && canEdit && (
-          <Button type="button" size="sm" variant="ghost" onClick={() => patch({ growthStageCode: null })}>
-            Clear
-          </Button>
-        )}
-      </div>
+      <h3 className="text-sm font-semibold">Growth stage</h3>
       <p className="text-xs text-muted-foreground">
-        Optional. Recording the stage helps with label compliance and reporting. Click a thumbnail to enlarge.
+        Optional. Recording the stage helps with label compliance and reporting. Click a thumbnail
+        to enlarge.
       </p>
-      <div className="grid gap-3 grid-cols-2">
+
+      <div role="radiogroup" aria-label="Growth stage" className="grid gap-3 grid-cols-2">
+        <SelectTile
+          className="col-span-2"
+          selected={!app.growthStageCode}
+          disabled={!canEdit}
+          onSelect={() => patch({ growthStageCode: null })}
+          title="Not set"
+          hint="No growth stage is recorded for this application."
+        />
         {GROWTH_STAGES.map((g) => {
           const label = g.label.replace(/^EL\d+\s*—\s*/i, "");
           const src = growthStageImageUrl(g.code);
           const selected = app.growthStageCode === g.code;
           return (
-            <div
-              key={g.code}
-              className={cn(
-                "flex items-start gap-3 rounded-md border p-3 transition",
-                selected ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted/50",
-              )}
-            >
-              <button
-                type="button"
+            <div key={g.code} className="flex items-start gap-2">
+              <SelectTile
+                className="flex-1"
+                selected={selected}
                 disabled={!canEdit}
-                aria-pressed={selected}
-                aria-label={`Growth stage ${g.code}`}
-                onClick={() => patch({ growthStageCode: g.code })}
-                className="min-w-0 flex-1 text-left text-sm"
-              >
-                <span className="block text-xs font-semibold tabular-nums text-muted-foreground">{g.code}</span>
-                <span className="block whitespace-normal">{label}</span>
-              </button>
+                onSelect={() => patch({ growthStageCode: g.code })}
+                title={g.code}
+                hint={label}
+              />
               {src ? (
                 <button
                   type="button"

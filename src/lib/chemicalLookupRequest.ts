@@ -32,3 +32,12 @@ export function buildStructuredLookupBody(
     ...extra,
   };
 }
+
+/**
+ * Shared first-search expectation copy. Identical wording to the iOS Chemical
+ * Store so both clients set the same expectation for the same backend work.
+ * Repeat lookups are usually faster, but are never promised as instant.
+ */
+export const CHEMICAL_LOOKUP_WAIT_MESSAGE =
+  "Official register searches and product details can take a few minutes the first time. " +
+  "Keep this screen open while VineTrack checks the product.";

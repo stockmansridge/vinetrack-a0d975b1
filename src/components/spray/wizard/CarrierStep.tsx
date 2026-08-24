@@ -27,8 +27,8 @@ import {
   CANOPY_TYPE_LABEL,
   SPRAY_HELP,
   canopyDiluteRange,
-  canopyImage,
 } from "@/lib/sprayCanopy";
+import { CanopyReferenceImage } from "@/components/spray/CanopyReferenceImage";
 import { fmtHa, fmtLitres, fmtNum, treatedProportionPct } from "@/lib/sprayFormat";
 import { FieldHeading, HelpTip, SelectTile } from "./controls";
 import type { StepProps } from "./types";
@@ -63,7 +63,7 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
     geometry.uniformRowSpacing && geometry.rowSpacingMetres != null && geometry.rowSpacingMetres > 0
       ? geometry.rowSpacingMetres
       : null;
-  const image = canopyImage(app.carrier.canopyType, app.carrier.canopySize);
+  const hasCanopy = !!app.carrier.canopyType && !!app.carrier.canopySize;
 
   const appliedValue =
     basis === "l_per_ha" ? app.carrier.litresPerHectare : app.carrier.appliedLitresPer100m;
@@ -215,14 +215,12 @@ export function CarrierStep({ app, patch, geometry, calc, canEdit }: StepProps) 
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   Canopy reference
                 </div>
-                {image ? (
-                  <img
-                    src={image}
-                    loading="lazy"
-                    width={640}
-                    height={640}
+                {hasCanopy ? (
+                  <CanopyReferenceImage
+                    type={app.carrier.canopyType}
+                    size={app.carrier.canopySize}
                     alt={`${CANOPY_TYPE_LABEL[app.carrier.canopyType!]} canopy at ${CANOPY_SIZE_LABEL[app.carrier.canopySize!].toLowerCase()} size`}
-                    className="mt-2 w-full rounded bg-background object-contain"
+                    className="mt-2"
                   />
                 ) : (
                   <div className="mt-2 flex aspect-square items-center justify-center rounded border border-dashed text-center text-xs text-muted-foreground">
