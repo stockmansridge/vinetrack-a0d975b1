@@ -336,15 +336,30 @@ export function calculateProducts(args: {
       multiplierKind = "hundred_litres";
       multiplier =
         carrier.totalCarrierLitres != null ? carrier.totalCarrierLitres / 100 : null;
+      // A per-100 L label rate is a DILUTE rate: it assumes 100 L of dilute
+      // spray. Applying it unchanged to a concentrated tank under-doses the
+      // block by exactly the concentration factor, so the CF is applied here.
+      concentrationFactorApplied =
+        carrier.concentrationFactor != null && carrier.concentrationFactor > 1
+          ? carrier.concentrationFactor
+          : null;
       if (multiplier == null) {
         diagnostics.push({
           code: "per_100l_needs_carrier",
           severity: "error",
-          message: `${line.productName ?? "Product"} is rated per 100 L but the carrier volume is unknown.`,
+          message: `${line.productName ?? "Product"} is rated per 100 L but the spray water volume is unknown.`,
+          productIndex: index,
+        });
+      } else if (concentrationFactorApplied != null) {
+        diagnostics.push({
+          code: "per_100l_concentrated",
+          severity: "info",
+          message: `${line.productName ?? "Product"} is a dilute per-100 L rate — multiplied by the ×${concentrationFactorApplied.toFixed(2)} concentration factor.`,
           productIndex: index,
         });
       }
     }
+
 
     if (rate == null) {
       diagnostics.push({
