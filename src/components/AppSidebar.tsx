@@ -28,6 +28,7 @@ import {
   Fuel,
   LifeBuoy,
   BookOpen,
+  Images,
 
   DollarSign,
   ShieldCheck,
