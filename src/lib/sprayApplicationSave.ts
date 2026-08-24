@@ -103,10 +103,18 @@ export function toSprayJobInput(args: {
   const mode = app.mode ?? (app.operationType ? OPERATION_TYPE_TO_MODE[app.operationType] : null);
   const headTarget = persistedHeadTarget(app.operationType, app.headTarget);
 
-  const litresPerHectare =
-    app.carrier.basis === "l_per_ha"
+  const isManual = app.carrier.basis === "manual";
+  // Manual is an explicit bypass: the operator states the total water, so no
+  // calibrated per-hectare rate is invented for it.
+  const litresPerHectare = isManual
+    ? null
+    : app.carrier.basis === "l_per_ha"
       ? pos(app.carrier.litresPerHectare)
       : pos(carrier.litresPerHectare);
+  // `dilute_litres_per_hectare` has no column; the dilute reference survives
+  // through `concentration_factor` (dilute = CF × applied) and is rebuilt on
+  // reopen. Manual applications are never concentrated, so CF is exactly 1.
+  const concentrationFactor = isManual ? 1 : carrier.concentrationFactor;
 
   const input: SprayJobInput = {
     vineyard_id: app.vineyardId ?? "",
@@ -128,10 +136,21 @@ export function toSprayJobInput(args: {
 
     carrier_volume_basis: app.carrier.basis,
     spray_rate_per_ha: round(litresPerHectare, 2),
-    applied_litres_per_100m: round(pos(app.carrier.appliedLitresPer100m), 3),
-    dilute_litres_per_100m: round(pos(app.carrier.diluteLitresPer100m), 3),
-    concentration_factor: round(carrier.concentrationFactor, 3),
-    water_volume: isTemplate ? null : round(carrier.totalCarrierLitres, 1),
+    applied_litres_per_100m: isManual ? null : round(pos(app.carrier.appliedLitresPer100m), 3),
+    dilute_litres_per_100m: isManual ? null : round(pos(app.carrier.diluteLitresPer100m), 3),
+    concentration_factor: round(concentrationFactor, 3),
+    // The canopy answer that produced the recommendation. Trellis form has no
+    // column, so only size and density round-trip.
+    vsp_canopy_size: isManual ? null : app.carrier.canopySize ?? null,
+    vsp_canopy_density: isManual ? null : app.carrier.canopyDensity ?? null,
+    // Manual stores the operator's stated total verbatim; every other basis
+    // stores the engine's computed total.
+    water_volume: isTemplate
+      ? null
+      : isManual
+        ? round(pos(app.carrier.manualTotalLitres), 1)
+        : round(carrier.totalCarrierLitres, 1),
+
 
     band_width_total_metres: mode === "banded" ? pos(app.totalTreatedBandWidthMetres) : null,
     row_spacing_metres: isTemplate
