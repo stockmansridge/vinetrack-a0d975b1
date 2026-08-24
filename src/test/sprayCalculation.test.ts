@@ -86,10 +86,14 @@ describe("spray vocabulary (Rork-confirmed raw values)", () => {
   });
 
   it("uses l_per_ha / l_per_100m carrier raws and tolerates legacy spellings", () => {
-    expect(CARRIER_BASES).toEqual(["l_per_ha", "l_per_100m"]);
+    // `manual` is the operator bypass; the two calibrated bases are unchanged.
+    expect(CALIBRATED_CARRIER_BASES).toEqual(["l_per_100m", "l_per_ha"]);
+    expect(CARRIER_BASES).toEqual(["l_per_ha", "l_per_100m", "manual"]);
     expect(normaliseCarrierBasis("L/100m")).toBe("l_per_100m");
     expect(normaliseCarrierBasis("litres_per_hectare")).toBe("l_per_ha");
     expect(normaliseCarrierBasis("litres_per_100m")).toBe("l_per_100m");
+    expect(normaliseCarrierBasis("manual")).toBe("manual");
+
     // "either" is a vineyard preference only, never an application basis.
     expect(normaliseCarrierBasis("either")).toBeNull();
     expect(normaliseCarrierBasisPreference("either")).toBe("either");
