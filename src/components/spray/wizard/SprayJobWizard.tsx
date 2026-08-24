@@ -171,6 +171,10 @@ export function SprayJobWizard({
       if (prefill) Object.assign(draft, prefill);
       if (planProvenance && !draft.isTemplate) draft.planProvenance = planProvenance;
     }
+    // Equipment carried in from a Program Step, a prefill or an existing job is
+    // a suggestion — the operator confirms it for this application every time.
+    draft.equipmentConfirmed = false;
+
     setApp(draft);
     setHydrated(true);
   }, [open, hydrated, job, paddockIds, chemicalsResult, intelligenceById, carrierPreference, vineyardId, isTemplate, planProvenance, prefill]);
