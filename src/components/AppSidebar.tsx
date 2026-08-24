@@ -190,6 +190,7 @@ const systemAdmin: NavItem[] = [
   { title: "Billing Grants", url: "/admin/billing-grants", icon: DollarSign },
   { title: "App Notices", url: "/admin/notices", icon: Bell },
   { title: "Feature Flags", url: "/admin/feature-flags", icon: Flag },
+  { title: "Canopy Reference Images", url: "/admin/canopy-images", icon: Images },
   { title: "Guide Content", url: "/admin/guide-content", icon: BookOpen },
   { title: "Email Test", url: "/admin/email-diagnostics", icon: Mail },
   { title: "Data Coverage", url: "/settings/data-coverage", icon: Database },
