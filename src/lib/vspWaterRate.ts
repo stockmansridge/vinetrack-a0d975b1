@@ -1,10 +1,22 @@
-// VSP water-rate calculator. Mirrors the iOS implementation.
-// Matrix values in L/100m of row.
+// VSP water-rate calculator (legacy Spray Jobs page surface).
+//
+// There is exactly ONE canopy table in the portal: `src/lib/sprayCanopy.ts`.
+// Everything here is a thin adapter over it so this screen can never disagree
+// with the Spray wizard's Canopy & Spray Volume step.
+import {
+  CANOPY_DILUTE_RANGE_L_PER_100M,
+  CANOPY_SIZE_DESCRIPTION,
+  litresPerHectareFromPer100m,
+  normaliseCanopyDensity,
+  normaliseCanopySize,
+  recommendedDiluteLitresPer100m,
+} from "@/lib/sprayCanopy";
+
 export const VSP_CANOPY_SIZES = [
-  { value: "Small", label: "Small — up to 0.5m × 0.5m" },
-  { value: "Medium", label: "Medium — up to 1m × 1m" },
-  { value: "Large", label: "Large — Wires Up - 1.5m × 0.5m" },
-  { value: "Full", label: "Full — Wires Up - 2m × 0.5m" },
+  { value: "Small", label: `Small — ${CANOPY_SIZE_DESCRIPTION.vsp.small}` },
+  { value: "Medium", label: `Medium — ${CANOPY_SIZE_DESCRIPTION.vsp.medium}` },
+  { value: "Large", label: `Large — ${CANOPY_SIZE_DESCRIPTION.vsp.large}` },
+  { value: "Full", label: `Full — ${CANOPY_SIZE_DESCRIPTION.vsp.full}` },
 ] as const;
 
 export const VSP_DENSITIES = [
@@ -13,15 +25,18 @@ export const VSP_DENSITIES = [
 ] as const;
 
 export const VSP_MATRIX: Record<string, Record<string, number>> = {
-  Small: { Low: 10, High: 20 },
-  Medium: { Low: 20, High: 40 },
-  Large: { Low: 30, High: 45 },
-  Full: { Low: 45, High: 75 },
+  Small: { Low: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.small.low, High: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.small.high },
+  Medium: { Low: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.medium.low, High: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.medium.high },
+  Large: { Low: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.large.low, High: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.large.high },
+  Full: { Low: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.full.low, High: CANOPY_DILUTE_RANGE_L_PER_100M.vsp.full.high },
 };
 
 export function vspLitresPer100m(size?: string | null, density?: string | null): number | null {
-  if (!size || !density) return null;
-  return VSP_MATRIX[size]?.[density] ?? null;
+  return recommendedDiluteLitresPer100m(
+    "vsp",
+    normaliseCanopySize(size),
+    normaliseCanopyDensity(density),
+  );
 }
 
 export function vspLitresPerHa(
@@ -32,8 +47,9 @@ export function vspLitresPerHa(
   const per100 = vspLitresPer100m(size, density);
   if (per100 == null) return null;
   if (!rowSpacingMetres || rowSpacingMetres <= 0) return 0;
-  return (per100 * 100) / rowSpacingMetres;
+  return litresPerHectareFromPer100m(per100, rowSpacingMetres) ?? 0;
 }
+
 
 export const GROWTH_STAGES: { code: string; label: string }[] = [
   { code: "EL1", label: "EL1 — Winter bud" },
