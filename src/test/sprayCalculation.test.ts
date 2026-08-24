@@ -11,6 +11,7 @@ import {
   emptySprayApplication,
   persistedHeadTarget,
   APPLICATION_MODES,
+  CALIBRATED_CARRIER_BASES,
   CARRIER_BASES,
   PRODUCT_RATE_BASES,
   OPERATION_TYPE_TO_MODE,
