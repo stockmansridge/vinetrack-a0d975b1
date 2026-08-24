@@ -13,6 +13,10 @@ import type {
   SprayProductLine,
 } from "@/lib/sprayApplicationDomain";
 import type { ApplicationGeometry } from "@/lib/sprayApplicationGeometry";
+import {
+  litresPerHectareFromPer100m,
+  recommendedDiluteLitresPer100m,
+} from "@/lib/sprayCanopy";
 
 export type SprayDiagnosticSeverity = "error" | "warning" | "info";
 
