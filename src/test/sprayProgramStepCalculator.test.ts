@@ -146,7 +146,9 @@ describe("D — Plan Spray using the recommendation", () => {
   });
 
   it("is a dilute spray — CF 1.00", () => {
-    expect(carrier.concentrationFactor).toBe(1);
+    // The 357.142857 input is the rounded recommendation, so the ratio lands a
+    // fraction above 1.0 — it still displays as 1.00×.
+    expect(carrier.concentrationFactor).toBeCloseTo(1, 6);
   });
 });
 
