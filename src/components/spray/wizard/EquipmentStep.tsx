@@ -23,7 +23,10 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
           <Select
             value={app.tractorId ?? NONE}
             disabled={!canEdit}
-            onValueChange={(v) => patch({ tractorId: v === NONE ? null : v })}
+            onValueChange={(v) =>
+              patch({ tractorId: v === NONE ? null : v, equipmentConfirmed: false })
+            }
+
           >
             <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
             <SelectContent>
