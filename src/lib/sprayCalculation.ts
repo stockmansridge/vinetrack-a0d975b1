@@ -416,14 +416,19 @@ export function calculateProducts(args: {
       rate,
       unit: line.unit,
       rateBasis: line.rateBasis,
-      totalQuantity: rate != null && multiplier != null ? rate * multiplier : null,
+      totalQuantity:
+        rate != null && multiplier != null
+          ? rate * multiplier * (concentrationFactorApplied ?? 1)
+          : null,
       multiplier,
       multiplierKind,
+      concentrationFactorApplied,
       rateValidation,
       diagnostics,
     };
   });
 }
+
 
 /* --------------------------------------------------------------- tanks */
 
