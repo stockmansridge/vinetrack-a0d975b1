@@ -309,8 +309,11 @@ export function calculateProducts(args: {
   products: SprayProductLine[];
   geometry: ApplicationGeometry;
   carrier: CarrierResult;
+  /** Program Step: quantities are resolved at Plan Spray, not here. */
+  templateMode?: boolean;
 }): ProductResult[] {
   const { products, geometry, carrier } = args;
+  const templateMode = !!args.templateMode;
   return products.map((line, index) => {
     const diagnostics: SprayDiagnostic[] = [];
     // `Number(null)` is 0 — an empty rate must never become a zero rate.
@@ -558,13 +561,22 @@ export function calculateSprayApplication(args: {
   geometry: ApplicationGeometry;
 }): SprayCalculationResult {
   const { application, geometry } = args;
+  // A Program Step is reusable configuration with no blocks by design, so
+  // anything that needs block geometry is deferred to Plan Spray.
+  const templateMode = !!application.isTemplate;
   const carrier = calculateCarrier({
     geometry,
     mode: application.mode,
     operationType: application.operationType,
     carrier: application.carrier,
+    templateMode,
   });
-  const products = calculateProducts({ products: application.products, geometry, carrier });
+  const products = calculateProducts({
+    products: application.products,
+    geometry,
+    carrier,
+    templateMode,
+  });
   const tanks = calculateTanks({
     totalCarrierLitres: carrier.totalCarrierLitres,
     tankCapacityLitres: application.tankCapacityLitres,
@@ -572,11 +584,13 @@ export function calculateSprayApplication(args: {
   });
 
   const diagnostics: SprayDiagnostic[] = [
-    ...geometry.issues.map<SprayDiagnostic>((code) => ({
-      code,
-      severity: code === "mixed_row_spacing" ? "warning" : "error",
-      message: GEOMETRY_ISSUE_MESSAGE[code] ?? `Geometry issue: ${code}`,
-    })),
+    ...(templateMode
+      ? []
+      : geometry.issues.map<SprayDiagnostic>((code) => ({
+          code,
+          severity: code === "mixed_row_spacing" ? "warning" : "error",
+          message: GEOMETRY_ISSUE_MESSAGE[code] ?? `Geometry issue: ${code}`,
+        }))),
     ...carrier.diagnostics,
     ...products.flatMap((p) => p.diagnostics),
     ...tanks.diagnostics,
