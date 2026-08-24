@@ -102,6 +102,30 @@ export function EquipmentStep({ app, patch, lookups, canEdit }: StepProps) {
           </div>
         )}
       </section>
+
+      {!app.isTemplate && (
+        <section className="rounded-md border bg-muted/30 p-3">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="equipment-confirmed"
+              disabled={!canEdit || !app.equipmentId}
+              checked={app.equipmentConfirmed}
+              onCheckedChange={(v) => patch({ equipmentConfirmed: v === true })}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="equipment-confirmed" className="text-sm font-medium">
+                I confirm this is the spray unit being used
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {app.equipmentId
+                  ? "Tank loads and calibrated volumes are calculated against this unit. Changing the unit or tractor clears this confirmation."
+                  : "Select the spray equipment above before confirming."}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
+
   );
 }
