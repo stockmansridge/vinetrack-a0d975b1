@@ -16,6 +16,13 @@ import {
   type WriteVerificationStatus,
 } from "@/lib/chemicalIntelligenceWrite";
 import type { ChemicalIntelligence } from "@/lib/chemicalIntelligence";
+import {
+  normaliseCanopyDensity,
+  normaliseCanopySize,
+  type CanopyDensity,
+  type CanopySize,
+  type CanopyType,
+} from "@/lib/sprayCanopy";
 import type { SprayJobPlanProvenance } from "@/lib/resistance/sprayJobPlanLink";
 import { provenanceFromJobRow } from "@/lib/resistance/sprayJobPlanLink";
 import {
