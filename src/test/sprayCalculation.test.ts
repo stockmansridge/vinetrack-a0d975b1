@@ -536,6 +536,7 @@ describe("tank splitting", () => {
         totalQuantity: 10,
         multiplier: 10,
         multiplierKind: "whole_block_hectares" as const,
+        concentrationFactorApplied: null,
         rateValidation: "unable_to_validate" as const,
         diagnostics: [],
       },
