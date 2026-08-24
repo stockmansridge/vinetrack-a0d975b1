@@ -39,9 +39,17 @@ export interface CarrierResult {
   litresPerHectare: number | null;
   /** Effective L/100 m, derived when the basis is L/ha. */
   litresPer100m: number | null;
+  /**
+   * Manual basis only: the derived L/ha and L/100 m above are REFERENCE ONLY.
+   * They are never inputs and never block the application.
+   */
+  derivedRatesAreReferenceOnly: boolean;
+  /** The AWRI dilute/runoff recommendation this application was judged against. */
+  recommendedDiluteLitresPer100m: number | null;
+  recommendedDiluteLitresPerHectare: number | null;
   /** max(1, dilute ÷ applied), or the persisted value when one exists. */
   concentrationFactor: number | null;
-  concentrationFactorSource: "persisted" | "derived" | null;
+  concentrationFactorSource: "persisted" | "derived" | "manual" | null;
   /**
    * The hectares the carrier rate was applied to. For an L/ha carrier this is
    * ALWAYS the gross application hectares — including banded applications.
