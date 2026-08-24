@@ -182,16 +182,37 @@ export function ReviewStep({
       <Card title="Products">
         {calc.products.length === 0 && <p className="text-xs text-muted-foreground">No products added.</p>}
         {calc.products.map((p) => (
-          <div key={p.index} className="flex flex-wrap items-center justify-between gap-2 border-b py-1.5 text-sm last:border-0">
-            <span className="font-medium">{p.productName ?? "Product not set"}</span>
-            <span className="text-xs text-muted-foreground">
-              {p.rate != null ? `${fmtNum(p.rate, 2)} ${p.unit ?? ""}` : "Rate not set"}
-              {p.rateBasis ? ` · ${PRODUCT_BASIS_FRIENDLY[p.rateBasis]}` : ""}
-            </span>
-            <span>{fmtQuantity(p.totalQuantity, p.unit)}</span>
+          <div key={p.index} className="border-b py-1.5 text-sm last:border-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{p.productName ?? "Product not set"}</span>
+              <span className="text-xs text-muted-foreground">
+                {p.rate != null ? `${fmtNum(p.rate, 2)} ${p.unit ?? ""}` : "Rate not set"}
+                {p.rateBasis ? ` · ${PRODUCT_BASIS_FRIENDLY[p.rateBasis]}` : ""}
+              </span>
+              <span>{fmtQuantity(p.totalQuantity, p.unit)}</span>
+            </div>
+            {/* Show the math for this line. */}
+            {p.rate != null && p.multiplier != null && (
+              <div className="text-xs text-muted-foreground">
+                {fmtNum(p.rate, 2)} {p.unit ?? ""} × {fmtNum(p.multiplier, 2)}{" "}
+                {p.multiplierKind === "hundred_litres"
+                  ? "× 100 L"
+                  : p.multiplierKind === "hundred_metres"
+                    ? "× 100 m"
+                    : p.multiplierKind === "treated_hectares"
+                      ? "treated ha"
+                      : "ha"}
+                {p.concentrationFactorApplied != null
+                  ? ` × ${fmtNum(p.concentrationFactorApplied, 2)} CF`
+                  : ""}
+                {" = "}
+                {fmtQuantity(p.totalQuantity, p.unit)}
+              </div>
+            )}
           </div>
         ))}
       </Card>
+
 
       {calc.tanks.tanks.length > 0 && (
         <Card title={`Tank plan — ${calc.tanks.tanks.length} load${calc.tanks.tanks.length === 1 ? "" : "s"}`}>
