@@ -183,14 +183,38 @@ export function persistedHeadTarget(
   return headTargetAllowed(operationType) ? headTarget : null;
 }
 
-/* -------------------------------------------------------- carrier basis */
+/* --------------------------------------------- spray volume (carrier) basis */
 
-/** Persisted `spray_jobs.carrier_volume_basis`. */
-export type CarrierBasis = "l_per_ha" | "l_per_100m";
-export const CARRIER_BASES: CarrierBasis[] = ["l_per_ha", "l_per_100m"];
+/**
+ * Persisted `spray_jobs.carrier_volume_basis` — how the SPRAYER OUTPUT (water)
+ * is known for this application. It is not a chemical label rate basis.
+ *
+ *  - `l_per_100m` — calibrated per 100 m of row (vineyard row-length workflow)
+ *  - `l_per_ha`   — calibrated by area
+ *  - `manual`     — the operator states the TOTAL water being mixed/applied
+ *                   (knapsack, spot spraying); canopy and geometry are bypassed
+ */
+export type CarrierBasis = "l_per_ha" | "l_per_100m" | "manual";
+/** Only the two calibrated bases; `manual` is a deliberate bypass. */
+export const CALIBRATED_CARRIER_BASES: CarrierBasis[] = ["l_per_100m", "l_per_ha"];
+export const CARRIER_BASES: CarrierBasis[] = ["l_per_ha", "l_per_100m", "manual"];
 export const CARRIER_BASIS_LABEL: Record<CarrierBasis, string> = {
   l_per_ha: "L/ha",
   l_per_100m: "L/100 m of row",
+  manual: "Manual total water",
+};
+
+/** Longer wording used where the choice is being made, not just displayed. */
+export const CARRIER_BASIS_CHOICE_LABEL: Record<CarrierBasis, string> = {
+  l_per_100m: "L/100 m of row",
+  l_per_ha: "L/ha",
+  manual: "Manual — I know the total water",
+};
+
+export const CARRIER_BASIS_CHOICE_HINT: Record<CarrierBasis, string> = {
+  l_per_100m: "Sprayer calibrated per 100 metres of row — the vineyard row-length workflow.",
+  l_per_ha: "Sprayer calibrated by area. The same canopy answer sets the recommendation.",
+  manual: "Knapsack, spot spraying, or any job where the total tank water is already known.",
 };
 
 /**
@@ -206,8 +230,10 @@ export function normaliseCarrierBasis(value: unknown): CarrierBasis | null {
   if (raw === "litres_per_hectare" || raw === "l/ha" || raw === "per_hectare" || raw === "per_ha")
     return "l_per_ha";
   if (raw === "litres_per_100m" || raw === "l/100m" || raw === "per_100m") return "l_per_100m";
+  if (raw === "total" || raw === "manual_total" || raw === "total_water") return "manual";
   return null;
 }
+
 
 export function normaliseCarrierBasisPreference(value: unknown): CarrierBasisPreference | null {
   const raw = String(value ?? "").trim().toLowerCase();
