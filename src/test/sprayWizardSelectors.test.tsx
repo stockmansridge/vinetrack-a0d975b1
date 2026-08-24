@@ -3,15 +3,15 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { ApplicationStep } from "@/components/spray/wizard/ApplicationStep";
 import { GrowthStageStep } from "@/components/spray/wizard/GrowthStageStep";
-import { emptyApplication } from "@/lib/sprayApplicationDomain";
+import { emptySprayApplication } from "@/lib/sprayApplicationDomain";
 
 const src = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
 
 function baseProps(overrides: Record<string, unknown> = {}) {
-  const app: any = { ...emptyApplication(), ...(overrides.app as object ?? {}) };
+  const app: any = { ...emptySprayApplication(), ...(overrides.app as object ?? {}) };
   return {
     app,
     patch: (overrides.patch as any) ?? (() => {}),
@@ -39,7 +39,7 @@ describe("Application Type uses the shared SelectTile control", () => {
     const props = baseProps({
       app: { operationType: "foliar" },
       update: (fn: any) => {
-        const next = fn({ ...emptyApplication(), operationType: "foliar" });
+        const next = fn({ ...emptySprayApplication(), operationType: "foliar" });
         seen.push(next.operationType);
       },
     });
@@ -127,6 +127,3 @@ describe("chemical search backend ownership", () => {
     );
   });
 });
-
-// `within` is imported lazily to keep the import list above tidy.
-import { within } from "@testing-library/react";
