@@ -583,7 +583,7 @@ export function fromLegacySprayJob(
   // Dilute L/ha may not be stored; it is exactly recoverable from the persisted
   // concentration factor (CF = dilute ÷ applied) rather than being guessed.
   const diluteLPerHa =
-    positive(job.dilute_litres_per_hectare) ??
+    positive((job as any).dilute_litres_per_hectare) ??
     (persistedCf != null && legacyLPerHa != null ? persistedCf * legacyLPerHa : null);
   app.carrier = {
     basis,
