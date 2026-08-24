@@ -35,7 +35,7 @@ export function MasterPreviewFieldDiff({ changes }: { changes: MasterPreviewChan
   if (changes.length === 0) return null;
   return (
     <div className="overflow-hidden rounded-md border border-border/60">
-      <div className="hidden md:grid grid-cols-[1fr_1.4fr_1.4fr_0.9fr_0.7fr] gap-2 border-b border-border/60 bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="hidden md:grid grid-cols-[1fr_1.4fr_1.4fr_0.9fr_0.7fr] gap-2 border-b border-border/60 bg-muted/40 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
         <span>Field</span>
         <span>Current</span>
         <span>Proposed</span>
@@ -52,11 +52,11 @@ export function MasterPreviewFieldDiff({ changes }: { changes: MasterPreviewChan
             >
               <div className="font-medium">{c.label}</div>
               <div className="min-w-0 max-h-32 overflow-y-auto text-muted-foreground">
-                <span className="md:hidden text-[10px] uppercase tracking-wide">Current: </span>
+                <span className="md:hidden text-[10px]">Current: </span>
                 <Value value={c.current} />
               </div>
               <div className="min-w-0 max-h-32 overflow-y-auto">
-                <span className="md:hidden text-[10px] uppercase tracking-wide">Proposed: </span>
+                <span className="md:hidden text-[10px]">Proposed: </span>
                 <Value value={c.proposed} />
               </div>
               <div className="text-muted-foreground">{changeSource(c)}</div>

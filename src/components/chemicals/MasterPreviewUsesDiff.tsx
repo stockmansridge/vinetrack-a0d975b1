@@ -24,7 +24,7 @@ function Field({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[10px] text-muted-foreground">{label}</div>
       <div
         className={`whitespace-pre-wrap break-words ${
           changed ? "rounded bg-warning/20 px-1 font-medium" : ""
@@ -48,7 +48,7 @@ function UsePanel({
   const ch = (f: string) => changedFields.includes(f);
   return (
     <div className="min-w-0 rounded border border-border/50 bg-background/60 p-2">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mb-1 text-[10px] font-semibold text-muted-foreground">
         {heading}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">

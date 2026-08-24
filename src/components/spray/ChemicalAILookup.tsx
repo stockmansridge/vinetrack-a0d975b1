@@ -454,7 +454,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
       {!resultsCollapsed && resolved && (
         <div className="space-y-1">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          <div className="text-[11px] text-muted-foreground">
             {resolved.authoritative
               ? resolved.matchSource === "master"
                 ? "VineTrack Master Catalogue"
@@ -471,7 +471,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
       {!resultsCollapsed && masterResult && (
         <div className="space-y-1">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          <div className="text-[11px] text-muted-foreground">
             VineTrack Master Catalogue
           </div>
           <MasterChemicalCard master={masterResult} vineyardCountry={countryCode} onApply={() => applyMaster(masterResult)} />
@@ -487,7 +487,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
       {!resultsCollapsed && existingMatches.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          <div className="text-[11px] text-muted-foreground">
             Already in your library
           </div>
           {existingMatches.slice(0, 5).map((m) => (
@@ -515,7 +515,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       {!resultsCollapsed && candidates && candidates.length > 0 && (
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground">
               Lookup results ({candidates.length}) for "{name.trim()}"
               {countryCode ? ` · ${countryLabel(countryCode)}` : ""}
             </div>

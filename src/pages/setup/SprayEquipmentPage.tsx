@@ -489,7 +489,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+      <Label className="text-xs text-muted-foreground">
         {label}
       </Label>
       {children}
