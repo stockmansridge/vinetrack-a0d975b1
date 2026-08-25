@@ -77,7 +77,7 @@ export default function VintageOverviewSection() {
   const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
   const rangeHint = `${startISO} → ${endISO}`;
-  const hemLabel = hemisphere === "southern" ? "Southern Hemisphere" : "Northern Hemisphere";
+  const hemLabel = hemisphereLabel(hemisphere);
 
   return (
     <section className="space-y-3">
