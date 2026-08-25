@@ -258,16 +258,21 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         return;
       }
       console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
+      lookupFailureDetail = describeLookupFailure(infoErr ?? data);
     } catch (e) {
       console.warn("[chemical-info-lookup] failed", e);
+      lookupFailureDetail = describeLookupFailure(e);
     }
 
     // Resolver unavailable: fail closed. No canonical data may come from the
     // legacy AI function.
     setError(
-      "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
+      lookupFailureDetail === "quota"
+        ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
+        : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
     );
     setLoading(false);
+
   }
 
 
