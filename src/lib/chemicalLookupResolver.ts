@@ -44,6 +44,12 @@ import {
   type LookupRateView,
 } from "@/lib/chemicalLabelRates";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
+import {
+  parseLookupDiagnostics,
+  parseRankingSummary,
+  type LookupDiagnostics,
+  type RankingSummary,
+} from "@/lib/chemicalLookupDiagnostics";
 import { vineyardCountryCode, countryLabel } from "@/lib/chemicalJurisdiction";
 import {
   normaliseMatchSource,
@@ -426,6 +432,17 @@ export interface ChemicalLookupResult {
   guidance: string | null;
   /** Inlined Master row when `match_source = master`. */
   master: MasterChemicalRow | null;
+  /**
+   * Additive diagnostics envelope (troubleshooting only — never rendered on
+   * the normal Chemical screen and never used to branch behaviour). `null`
+   * when the deployed function does not send it.
+   */
+  diagnostics: LookupDiagnostics | null;
+  /**
+   * Server ranking summary, when the deployed function supplies it. The
+   * portal never re-ranks a server-ranked response.
+   */
+  rankingSummary: RankingSummary | null;
 }
 
 const UNRESOLVED_GUIDANCE =
@@ -509,6 +526,9 @@ function decodeRates(raw: any): WriteLabelRate[] {
       const min = num(r.min_value ?? r.rate_min);
       const max = num(r.max_value ?? r.rate_max);
       const rawText = s(r.raw_text);
+      const condition = s(r.condition ?? r.conditions);
+      const conditionAmbiguous =
+        typeof r.condition_ambiguous === "boolean" ? r.condition_ambiguous : undefined;
       const basis = normaliseLabelRateBasis(r.basis ?? r.rate_basis);
       // A row with no number is only kept when the label stated something we
       // can show as reference text (basis "other"). It never fills a field.
@@ -519,6 +539,8 @@ function decodeRates(raw: any): WriteLabelRate[] {
           basis: "other",
           unit,
           raw_text: rawText,
+          condition,
+          condition_ambiguous: conditionAmbiguous,
         } as WriteLabelRate;
       }
       return {
@@ -529,6 +551,8 @@ function decodeRates(raw: any): WriteLabelRate[] {
         min_value: min,
         max_value: max,
         raw_text: rawText,
+        condition,
+        condition_ambiguous: conditionAmbiguous,
       } as WriteLabelRate;
     })
     .filter((r): r is WriteLabelRate => !!r);
@@ -653,6 +677,9 @@ export function parseChemicalLookup(
   const matchSource = normaliseLookupMatchSource(root.match_source ?? root.matchSource);
   const jurisdiction = parseLookupJurisdiction(root, vineyardCountry);
   const aiSuggestion = parseAiSuggestion(root);
+  // Additive, optional. Absent on older deployments; unknown fields tolerated.
+  const diagnostics = parseLookupDiagnostics(root);
+  const rankingSummary = parseRankingSummary(root);
   const parsedProvenance = parseFieldProvenance(root.field_provenance ?? root.fieldProvenance);
   const present = parsedProvenance.present;
   const map = withProvenanceAliases(parsedProvenance.map);
@@ -677,6 +704,8 @@ export function parseChemicalLookup(
       aiSuggestion,
       unresolvedFields: [],
       conflicts: [],
+      diagnostics,
+      rankingSummary,
       guidance:
         matchSource === "ambiguous"
           ? AMBIGUOUS_GUIDANCE
@@ -809,6 +838,9 @@ export function parseChemicalLookup(
     conflicts,
     guidance: null,
     master,
+    diagnostics,
+    rankingSummary,
+
   };
 }
 

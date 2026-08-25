@@ -71,7 +71,43 @@ export interface LabelRate {
   rawText?: string | null;
   /** True for `basis: "other"` — reference material, never an application rate. */
   referenceOnly?: boolean;
+  /** Rate-specific label/qualifier, verbatim. */
+  label?: string | null;
+  /** Verbatim label condition this rate applies under. */
+  condition?: string | null;
+  /** Server flag — the condition could not be resolved unambiguously. */
+  conditionAmbiguous?: boolean | null;
 }
+
+/**
+ * SQL 210 resistance classification state. This is DISTINCT from the FRAC /
+ * HRAC / IRAC scheme and code: it says whether the backend was able to
+ * classify the product at all. Blank group data is NOT `not_applicable`, and
+ * the portal never derives this from legacy free-text `chemical_group`.
+ */
+export type ResistanceClassificationState =
+  | "classified"
+  | "not_applicable"
+  | "unresolved";
+
+export function normaliseResistanceClassificationState(
+  value: unknown,
+): ResistanceClassificationState | null {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (s === "classified") return "classified";
+  if (s === "not_applicable" || s === "not applicable") return "not_applicable";
+  if (s === "unresolved") return "unresolved";
+  return null;
+}
+
+export const RESISTANCE_CLASSIFICATION_STATE_LABEL: Record<
+  ResistanceClassificationState,
+  string
+> = {
+  classified: "Resistance group classified",
+  not_applicable: "Resistance grouping not applicable",
+  unresolved: "Resistance group unresolved",
+};
 
 export interface RegisteredUse {
   crop: string | null;
@@ -127,6 +163,11 @@ export interface ChemicalIntelligence {
   activityGroups: ActivityGroup[];
   verification: ChemicalVerification;
   labelRateBases: string[];
+  /**
+   * SQL 210 — backend-owned resistance classification state. `null` means the
+   * backend did not supply it (older row/deployment); it is never inferred.
+   */
+  resistanceClassificationState: ResistanceClassificationState | null;
   registeredUses: RegisteredUse[];
   commercial: ChemicalCommercial;
   /** Display-only fallbacks. Never promoted to structured values. */
@@ -367,11 +408,26 @@ function parseLabelRate(value: unknown): LabelRate | null {
   const unit = str(pick(o, ["unit", "rate_unit", "rateUnit", "units"]));
   const basis = str(pick(o, ["basis", "rate_basis", "rateBasis", "label_rate_basis"]));
   const rawText = str(pick(o, ["raw_text", "rawText", "label"]));
+  const label = str(pick(o, ["label", "rate_label", "rateLabel"]));
+  const condition = str(pick(o, ["condition", "conditions", "rate_condition"]));
+  const conditionAmbiguousRaw = pick(o, ["condition_ambiguous", "conditionAmbiguous"]);
+  const conditionAmbiguous =
+    typeof conditionAmbiguousRaw === "boolean" ? conditionAmbiguousRaw : null;
   const lo = min ?? single;
   const hi = max ?? single;
   if (lo == null && hi == null && !unit && !basis && !rawText) return null;
   const referenceOnly = (basis ?? "").toLowerCase() === "other";
-  return { min: lo, max: hi, unit, basis, rawText, referenceOnly };
+  return {
+    min: lo,
+    max: hi,
+    unit,
+    basis,
+    rawText,
+    referenceOnly,
+    label,
+    condition,
+    conditionAmbiguous,
+  };
 }
 
 export function formatLabelRate(rate: LabelRate | null): string | null {
@@ -550,6 +606,10 @@ export function toChemicalIntelligence(row: Record<string, any>): ChemicalIntell
       unresolvedFields: stringList(row.verification_unresolved_fields),
     },
     labelRateBases: stringList(row.label_rate_bases),
+    // SQL 210 — backend-owned. Absent stays null; never inferred from groups.
+    resistanceClassificationState: normaliseResistanceClassificationState(
+      row.resistance_classification_state ?? row.resistanceClassificationState,
+    ),
     registeredUses,
     commercial: {
       unit: str(row.unit),

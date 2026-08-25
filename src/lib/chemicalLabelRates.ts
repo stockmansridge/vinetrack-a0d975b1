@@ -35,6 +35,10 @@ export interface LookupRateView {
   referenceOnly: boolean;
   label?: string;
   rawText?: string;
+  /** Verbatim label condition this rate applies under, when supplied. */
+  condition?: string;
+  /** Server flag — the condition could not be resolved unambiguously. */
+  conditionAmbiguous?: boolean;
   /** Human display, e.g. "35–54 mL/100 L". */
   text: string;
   /** Portal unit text ("mL/100L", "L/ha") — undefined when reference-only. */
@@ -101,6 +105,8 @@ export function toRateView(rate: WriteLabelRate): LookupRateView {
     referenceOnly,
     label: rate.label?.trim() || undefined,
     rawText,
+    condition: rate.condition?.trim() || undefined,
+    conditionAmbiguous: rate.condition_ambiguous,
     text,
     composedUnit:
       referenceOnly || !rb || !chemUnit ? undefined : composeUnit(chemUnit, rb),
@@ -115,6 +121,12 @@ export const rateViews = (use?: WriteRegisteredUse | null): LookupRateView[] =>
 
 export interface RateSelection {
   all: LookupRateView[];
+  /** Every usable rate, both bases, in label order. Never flattened. */
+  usable: LookupRateView[];
+  /** Every /100 L rate — a label may state more than one. */
+  per100LAll: LookupRateView[];
+  /** Every /ha rate — a label may state more than one. */
+  perHectareAll: LookupRateView[];
   per100L?: LookupRateView;
   perHectare?: LookupRateView;
   /** Reference-only rows (basis "other") — display, never applied. */
@@ -128,12 +140,17 @@ export interface RateSelection {
 export function selectRates(use?: WriteRegisteredUse | null): RateSelection {
   const all = rateViews(use);
   const usable = all.filter((r) => !r.referenceOnly);
-  const per100L = usable.find((r) => r.rateBasis === "per_100L");
-  const perHectare = usable.find((r) => r.rateBasis === "per_hectare");
+  const per100LAll = usable.filter((r) => r.rateBasis === "per_100L");
+  const perHectareAll = usable.filter((r) => r.rateBasis === "per_hectare");
+  const per100L = per100LAll[0];
+  const perHectare = perHectareAll[0];
   const preferred = per100L ?? perHectare;
   const text = usable.length ? usable.map((r) => r.text).join(" · ") : undefined;
   return {
     all,
+    usable,
+    per100LAll,
+    perHectareAll,
     per100L,
     perHectare,
     referenceOnly: all.filter((r) => r.referenceOnly),
