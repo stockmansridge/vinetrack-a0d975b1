@@ -186,6 +186,13 @@ export interface WriteLabelRate {
   max_value?: number;
   unit: string;
   raw_text?: string;
+  /** Label condition/qualifier this rate applies under, verbatim. */
+  condition?: string;
+  /**
+   * Server flag: the condition attached to this rate could not be resolved
+   * unambiguously. Never inferred by the portal.
+   */
+  condition_ambiguous?: boolean;
   extra?: WireExtras;
 }
 
@@ -576,6 +583,10 @@ function encodeRate(r: WriteLabelRate): Record<string, unknown> {
   // numeric value is invented for it.
   const raw = trimOrUndef(r.raw_text);
   if (raw) base.raw_text = raw;
+  const condition = trimOrUndef(r.condition);
+  if (condition) base.condition = condition;
+  if (typeof r.condition_ambiguous === "boolean")
+    base.condition_ambiguous = r.condition_ambiguous;
   return withExtras(base, r.extra);
 }
 
@@ -764,7 +775,17 @@ function decodeActive(value: unknown): WriteActiveIngredient | null {
   }) as WriteActiveIngredient;
 }
 
-const RATE_KEYS = ["label", "basis", "value", "min_value", "max_value", "unit", "raw_text"];
+const RATE_KEYS = [
+  "label",
+  "basis",
+  "value",
+  "min_value",
+  "max_value",
+  "unit",
+  "raw_text",
+  "condition",
+  "condition_ambiguous",
+];
 
 function decodeRate(value: unknown): WriteLabelRate {
   const o = rec(value);
@@ -777,6 +798,9 @@ function decodeRate(value: unknown): WriteLabelRate {
     max_value: finiteOrUndef(o.max_value),
     unit: trimOrUndef(o.unit) ?? "",
     raw_text: trimOrUndef(o.raw_text),
+    condition: trimOrUndef(o.condition),
+    condition_ambiguous:
+      typeof o.condition_ambiguous === "boolean" ? o.condition_ambiguous : undefined,
     extra: extrasOf(o, RATE_KEYS),
   }) as WriteLabelRate;
 }

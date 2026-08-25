@@ -12,7 +12,11 @@ import {
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
 import { ChemicalLookupResultCard } from "@/components/chemicals/ChemicalLookupResultCard";
-import { CHEMICAL_LOOKUP_WAIT_MESSAGE, buildStructuredLookupBody } from "@/lib/chemicalLookupRequest";
+import {
+  CHEMICAL_LOOKUP_WAIT_MESSAGE,
+  buildStructuredLookupBody,
+  newLookupCorrelationId,
+} from "@/lib/chemicalLookupRequest";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
   matchMasterByIdentity,
@@ -237,6 +241,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     setApplied(null);
     setResultsCollapsed(false);
     setLoading(true);
+    // One correlation id per lookup FLOW so Rork can trace this search and
+    // any structured lookup that follows it. Diagnostic only.
+    const correlationId = newLookupCorrelationId();
 
     // First, surface any existing library matches so the user can re-use them
     // instead of creating a duplicate.
@@ -272,7 +279,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
-        { body: buildStructuredLookupBody(q, countryCode) },
+        { body: buildStructuredLookupBody(q, countryCode, { correlationId }) },
       );
       // Only a payload that actually speaks the upgraded contract is treated
       // as a resolver result. A legacy AI-shaped body (no match_source /

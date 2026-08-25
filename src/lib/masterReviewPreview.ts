@@ -21,6 +21,7 @@
 
 import { supabase } from "@/integrations/ios-supabase/client";
 import { fetchMasterChemical, type MasterChemicalRow } from "@/lib/masterChemicals";
+import { withClientDiagnostics } from "@/lib/chemicalLookupRequest";
 
 const LOOKUP_FUNCTION = "chemical-info-lookup";
 export const MASTER_REVIEW_APPLY_RPC = "master_review_apply";
@@ -335,7 +336,9 @@ export async function requestMasterReviewPreview(
   row: MasterChemicalRow,
 ): Promise<MasterReviewPreview> {
   const body = buildMasterReviewPreviewBody(row);
-  const { data, error } = await supabase.functions.invoke(LOOKUP_FUNCTION, { body });
+  const { data, error } = await supabase.functions.invoke(LOOKUP_FUNCTION, {
+    body: withClientDiagnostics(body as unknown as Record<string, unknown>),
+  });
   if (error) {
     const serverMsg = (data as any)?.error;
     throw new Error(

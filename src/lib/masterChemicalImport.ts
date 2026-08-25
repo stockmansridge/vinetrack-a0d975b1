@@ -30,6 +30,8 @@ import {
 export const APVMA_COUNTRY = "AU";
 export const APVMA_SCHEME = "apvma";
 
+import { withClientDiagnostics } from "@/lib/chemicalLookupRequest";
+
 const LOOKUP_FUNCTION = "chemical-info-lookup";
 
 /* ------------------------------------------------------------- query kind */
@@ -228,7 +230,9 @@ async function resolveEnvelopeRow(
 }
 
 async function invokeLookup(body: ApvmaLookupBody) {
-  const { data, error } = await supabase.functions.invoke(LOOKUP_FUNCTION, { body });
+  const { data, error } = await supabase.functions.invoke(LOOKUP_FUNCTION, {
+    body: withClientDiagnostics(body as unknown as Record<string, unknown>),
+  });
   if (error) {
     const serverMsg = (data as any)?.error;
     throw new Error(
