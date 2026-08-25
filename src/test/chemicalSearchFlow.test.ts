@@ -144,19 +144,23 @@ describe("portal discovery path", () => {
 describe("multi-rate contract survives structured import", () => {
   it("keeps multiple /100 L and /ha rates unflattened", () => {
     const payload = {
-      match_source: "registered",
-      jurisdiction: { country: "AU", status: "resolved" },
-      field_provenance: { registered_uses: "label" },
-      registered_uses: [
-        {
-          crop: "Grapevine",
-          rates: [
-            { basis: "per_100_litres", value: 50, unit: "mL", condition: "low vigour" },
-            { basis: "per_100_litres", value: 100, unit: "mL", condition_ambiguous: true },
-            { basis: "per_hectare", min: 1, max: 2, unit: "L" },
-          ],
-        },
-      ],
+      match_source: "authoritative",
+      jurisdiction: { country_code: "AU", registration_scheme: "apvma" },
+      field_provenance: { registered_uses: "official_label" },
+      product: {
+        registered_product_name: "Multi Rate Product",
+        registration_country: "AU",
+        registered_uses: [
+          {
+            crop: "Grapevines",
+            rates: [
+              { basis: "per_100_litres", value: 50, unit: "mL", condition: "low vigour" },
+              { basis: "per_100_litres", value: 100, unit: "mL", condition_ambiguous: true },
+              { basis: "per_hectare", min: 1, max: 2, unit: "L" },
+            ],
+          },
+        ],
+      },
     };
     const result = parseChemicalLookup(payload, "AU");
     const uses = result.draft?.registeredUses ?? [];
