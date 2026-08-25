@@ -234,7 +234,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     // provenance and match status. Canonical fields are only ever taken from
     // its structured response. A failure here is NOT permission to populate
     // canonical fields from the legacy AI function.
+    let lookupFailureDetail: "quota" | "other" = "other";
     try {
+
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
         { body: buildStructuredLookupBody(q, countryCode) },
