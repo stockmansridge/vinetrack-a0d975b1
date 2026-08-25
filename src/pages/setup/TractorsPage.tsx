@@ -222,28 +222,31 @@ export default function TractorsPage() {
     setSuggestion(null);
   };
 
-  const validate = () => {
+  const validate = (): { fuel: number | null } | null => {
     const parsed = tractorSchema.safeParse({
       name: form.name,
       brand: form.brand,
       model: form.model,
       model_year:
         form.model_year === "" ? "" : Number(form.model_year),
-      fuel_usage_l_per_hour:
-        form.fuel_usage_l_per_hour === "" ? "" : Number(form.fuel_usage_l_per_hour),
     });
+    const fieldErrors: Partial<Record<keyof FormState, string>> = {};
     if (!parsed.success) {
-      const fieldErrors: Partial<Record<keyof FormState, string>> = {};
       for (const issue of parsed.error.issues) {
         const k = issue.path[0] as keyof FormState;
         if (!fieldErrors[k]) fieldErrors[k] = issue.message;
       }
-      setErrors(fieldErrors);
-      return null;
     }
-    setErrors({});
-    return parsed.data;
+    const fuel = validateTractorFuelUsage({
+      raw: form.fuel_usage_l_per_hour,
+      isNew: !editing,
+    });
+    if (!fuel.ok) fieldErrors.fuel_usage_l_per_hour = fuel.error;
+    setErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length > 0) return null;
+    return { fuel: fuel.value };
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
