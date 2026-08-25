@@ -81,37 +81,12 @@ export interface AppliedSuggestion {
   resolved?: ChemicalLookupResult;
 }
 
-interface RawCandidate {
-  product_name?: string;
-  active_ingredient?: string;
-  category?: string;
-  chemical_group?: string;
-  manufacturer?: string;
-  product_type?: "liquid" | "solid";
-  unit?: ChemUnit;
-  rate_basis?: RateBasis;
-  rate_per_unit?: number | null;
-  withholding_period_days?: number | null;
-  re_entry_period_hours?: number | null;
-  target?: string;
-  notes?: string;
-  safety_note?: string;
-  country?: string;
-  country_confirmed?: boolean;
-  confidence?: "high" | "medium" | "low" | "unknown";
-  cached?: boolean;
-  was_applied?: boolean;
-  times_seen?: number;
-  source_hint?: string;
-  label_url?: string;
-  product_url?: string;
-  sds_url?: string;
-}
-
 export interface ExistingLibraryItem {
   id: string;
   name?: string | null;
   active_ingredient?: string | null;
+  /** Reliable identity for "already in your Chemical Store" matching. */
+  registration_number?: string | null;
 }
 
 interface Props {
