@@ -1,10 +1,18 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
+import { supabase } from "@/integrations/ios-supabase/client";
 import {
   fetchVineyardRegionSettings,
   type CountryCode,
 } from "@/lib/vineyardRegionSettingsQuery";
+import { fetchVineyardLocation } from "@/lib/vineyardLocationQuery";
+import {
+  hemisphereFromCountry,
+  meanLatitudeFromPolygons,
+  resolveHemisphere,
+  type Hemisphere,
+} from "@/lib/hemisphere";
 import {
   SEASON_DEFAULTS,
   currentVintageForSeason,
@@ -13,19 +21,31 @@ import {
   vintageForDate as vintageForDateShared,
 } from "@/lib/vineyardSeasonSettingsQuery";
 
-export type Hemisphere = "southern" | "northern";
-
-const SOUTHERN: CountryCode[] = ["AU", "NZ", "ZA"];
+export type { Hemisphere };
 
 /**
- * @deprecated Hemisphere is no longer the source of truth for vintage.
- * Kept as an informational label only. Vintage is driven by the shared
- * `vineyards.season_start_month`/`season_start_day` values.
+ * @deprecated Country is a fallback only. Use `resolveHemisphere` from
+ * `@/lib/hemisphere`, which prefers the vineyard's physical latitude.
  */
 export function hemisphereForCountry(code: CountryCode | null | undefined): Hemisphere {
-  if (!code) return "southern";
-  return SOUTHERN.includes(code) ? "southern" : "northern";
+  return hemisphereFromCountry(code);
 }
+
+/**
+ * Fallback latitude for vineyards with no stored GPS: the mean latitude of
+ * their block/paddock polygon geometry (real recorded coordinates).
+ */
+async function fetchGeometryLatitude(vineyardId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("paddocks")
+    .select("polygon_points")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
+    .limit(50);
+  if (error) return null;
+  return meanLatitudeFromPolygons((data ?? []) as any[]);
+}
+
 
 /**
  * @deprecated Use `vintageForDate(date, month, day)` from
