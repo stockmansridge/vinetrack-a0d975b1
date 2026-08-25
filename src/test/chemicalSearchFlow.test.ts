@@ -151,8 +151,8 @@ describe("multi-rate contract survives structured import", () => {
         {
           crop: "Grapevine",
           rates: [
-            { basis: "per_100L", value: 50, unit: "mL", condition: "low vigour" },
-            { basis: "per_100L", value: 100, unit: "mL", condition_ambiguous: true },
+            { basis: "per_100_litres", value: 50, unit: "mL", condition: "low vigour" },
+            { basis: "per_100_litres", value: 100, unit: "mL", condition_ambiguous: true },
             { basis: "per_hectare", min: 1, max: 2, unit: "L" },
           ],
         },
@@ -162,8 +162,8 @@ describe("multi-rate contract survives structured import", () => {
     const uses = result.draft?.registeredUses ?? [];
     const rates = uses[0]?.rates ?? [];
     expect(rates.length).toBe(3);
-    expect(rates.filter((r) => r.basis === "per_100L").length).toBe(2);
+    expect(rates.filter((r) => r.basis === "per_100_litres").length).toBe(2);
     expect(rates.some((r) => r.condition === "low vigour")).toBe(true);
-    expect(rates.some((r) => r.conditionAmbiguous === true)).toBe(true);
+    expect(rates.some((r) => r.condition_ambiguous === true)).toBe(true);
   });
 });
