@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink, Globe, FileText } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import {
   parseChemicalLookup,
@@ -17,32 +16,32 @@ import {
   buildStructuredLookupBody,
   newLookupCorrelationId,
 } from "@/lib/chemicalLookupRequest";
-import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
-  matchMasterByIdentity,
+  ALREADY_IN_STORE_LABEL,
+  isSearchEnvelope,
+  masterForCandidate,
+  parseSearchCandidates,
+  requiresCandidateSelection,
+  savedChemicalForCandidate,
+  searchRequestBody,
+  structuredRequestBodyForCandidate,
+  type ChemicalSearchResponse,
+  type SearchCandidate,
+  type SavedChemicalIdentity,
+} from "@/lib/chemicalSearchFlow";
+import type { ProductCategory } from "@/lib/chemicalCategories";
+import {
   searchApprovedMasterChemicals,
-  parseMasterLookupEnvelope,
-  isTrustedMasterEnvelope,
-  fetchMasterChemical,
   type MasterChemicalRow,
 } from "@/lib/masterChemicals";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import {
   countryLabel,
-  jurisdictionSuitability,
-  masterEligibleForVineyard,
   vineyardCountryCode,
   MISSING_VINEYARD_COUNTRY_MESSAGE,
 } from "@/lib/chemicalJurisdiction";
 
-import {
-  inferProductType,
-  inferRateBasis,
-  normaliseUnit,
-  type ProductType,
-  type RateBasis,
-  type ChemUnit,
-} from "@/lib/rateBasis";
+import type { ProductType, RateBasis, ChemUnit } from "@/lib/rateBasis";
 
 export interface AppliedSuggestion {
   name?: string;
@@ -81,37 +80,12 @@ export interface AppliedSuggestion {
   resolved?: ChemicalLookupResult;
 }
 
-interface RawCandidate {
-  product_name?: string;
-  active_ingredient?: string;
-  category?: string;
-  chemical_group?: string;
-  manufacturer?: string;
-  product_type?: "liquid" | "solid";
-  unit?: ChemUnit;
-  rate_basis?: RateBasis;
-  rate_per_unit?: number | null;
-  withholding_period_days?: number | null;
-  re_entry_period_hours?: number | null;
-  target?: string;
-  notes?: string;
-  safety_note?: string;
-  country?: string;
-  country_confirmed?: boolean;
-  confidence?: "high" | "medium" | "low" | "unknown";
-  cached?: boolean;
-  was_applied?: boolean;
-  times_seen?: number;
-  source_hint?: string;
-  label_url?: string;
-  product_url?: string;
-  sds_url?: string;
-}
-
 export interface ExistingLibraryItem {
   id: string;
   name?: string | null;
   active_ingredient?: string | null;
+  /** Reliable identity for "already in your Chemical Store" matching. */
+  registration_number?: string | null;
 }
 
 interface Props {
@@ -122,10 +96,6 @@ interface Props {
   country?: string | null;
   /** Apply a candidate (AI lookup OR existing library item). */
   onApply: (s: AppliedSuggestion) => void;
-}
-
-function normalise(s: string | null | undefined): string {
-  return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 /**
@@ -158,7 +128,11 @@ async function describeLookupFailure(err: unknown): Promise<"quota" | "other"> {
     : "other";
 }
 
-
+function lookupFailureMessage(kind: "quota" | "other"): string {
+  return kind === "quota"
+    ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
+    : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.";
+}
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
@@ -168,60 +142,28 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
+  /** Server-ordered candidate list. Never re-sorted by the portal. */
+  const [search, setSearch] = useState<ChemicalSearchResponse | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [correlationId, setCorrelationId] = useState<string | null>(null);
   const [masterResult, setMasterResult] = useState<MasterChemicalRow | null>(null);
   const [resolved, setResolved] = useState<ChemicalLookupResult | null>(null);
-  const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
-  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" | "master" } | null>(null);
+  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "existing" | "manual" | "master" } | null>(null);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
 
-  async function preserveAppliedCandidate(candidate: RawCandidate | ExistingLibraryItem, fallbackName?: string) {
-    const queryName = name.trim() || fallbackName?.trim();
-    const productName = (
-      "product_name" in candidate
-        ? candidate.product_name
-        : (candidate as ExistingLibraryItem).name
-    )?.trim() || fallbackName?.trim();
-    if (!queryName || !productName) return;
+  // Informational only — saved chemicals never re-order or auto-select.
+  const existingIdentities: SavedChemicalIdentity[] = existingLibrary.map((c) => ({
+    id: c.id,
+    name: c.name,
+    active_ingredient: c.active_ingredient,
+    registration_number: c.registration_number,
+  }));
 
-    try {
-      await supabase.functions.invoke("chemical-ai-lookup", {
-        body: {
-          product_name: queryName,
-          country: countryCode,
-          mark_applied: true,
-          applied_candidate: {
-            product_name: productName,
-            manufacturer: ("manufacturer" in candidate ? candidate.manufacturer : "") ?? "",
-            active_ingredient: candidate.active_ingredient ?? null,
-            category: "category" in candidate ? candidate.category ?? null : null,
-            chemical_group: "chemical_group" in candidate ? candidate.chemical_group ?? null : null,
-            product_type: "product_type" in candidate ? candidate.product_type ?? null : null,
-            unit: "unit" in candidate ? candidate.unit ?? null : null,
-            rate_basis: "rate_basis" in candidate ? candidate.rate_basis ?? null : null,
-            rate_per_unit: "rate_per_unit" in candidate ? candidate.rate_per_unit ?? null : null,
-            withholding_period_days: "withholding_period_days" in candidate ? candidate.withholding_period_days ?? null : null,
-            re_entry_period_hours: "re_entry_period_hours" in candidate ? candidate.re_entry_period_hours ?? null : null,
-            target: "target" in candidate ? candidate.target ?? null : null,
-            notes: "notes" in candidate ? candidate.notes ?? null : null,
-            safety_note: "safety_note" in candidate ? candidate.safety_note ?? null : null,
-            country: "country" in candidate ? candidate.country ?? countryCode : countryCode,
-            country_confirmed: "country_confirmed" in candidate ? candidate.country_confirmed ?? null : null,
-            confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
-            source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
-            times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
-            label_url: "label_url" in candidate ? candidate.label_url ?? null : null,
-            product_url: "product_url" in candidate ? candidate.product_url ?? null : null,
-            sds_url: "sds_url" in candidate ? candidate.sds_url ?? null : null,
-          },
-        },
-      });
-    } catch (error) {
-      console.warn("Could not preserve applied chemical candidate", error);
-    }
-  }
-
-
+  /**
+   * Step 1 — DISCOVERY. Authoritative candidate search on the shared
+   * `chemical-info-lookup` function. The portal does not pre-empt it with a
+   * Master match or a saved-chemical match, and never re-orders the result.
+   */
   async function runLookup() {
     const q = name.trim();
     if (!q) {
@@ -234,62 +176,93 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       return;
     }
     setError(null);
-    setCandidates(null);
+    setSearch(null);
+    setSelectedIndex(null);
     setMasterResult(null);
     setResolved(null);
-    setExistingMatches([]);
     setApplied(null);
     setResultsCollapsed(false);
     setLoading(true);
-    // One correlation id per lookup FLOW so Rork can trace this search and
-    // any structured lookup that follows it. Diagnostic only.
-    const correlationId = newLookupCorrelationId();
+    // One correlation id per lookup FLOW: this search and any structured
+    // lookup selected from it share it. Diagnostic only.
+    const cid = newLookupCorrelationId();
+    setCorrelationId(cid);
 
-    // First, surface any existing library matches so the user can re-use them
-    // instead of creating a duplicate.
-    const qn = normalise(q);
-    const matches = existingLibrary.filter((c) => {
-      const haystack = `${normalise(c.name)} ${normalise(c.active_ingredient)}`;
-      return qn.length >= 3 && haystack.includes(qn);
-    });
-    setExistingMatches(matches);
-
-    // ---- Master-first, country-first: only approved Master records
-    // registered in THIS vineyard's country are eligible. Similar names
-    // ("Custodia Forte") never match by substring.
     try {
-      const rows = await searchApprovedMasterChemicals(q, countryCode);
-      const exact = matchMasterByIdentity(rows, { productName: q, country: countryCode });
+      const { data, error: searchErr } = await iosSupabase.functions.invoke(
+        "chemical-info-lookup",
+        { body: searchRequestBody(q, countryCode, cid) },
+      );
+      if (!searchErr && isSearchEnvelope(data)) {
+        const res = parseSearchCandidates(data);
+        if (res.candidates.length === 0) {
+          setError(
+            `No registered product matched "${q}" in ${countryLabel(countryCode)}. Check the spelling or add the chemical manually.`,
+          );
+          setLoading(false);
+          return;
+        }
+        setSearch(res);
+        setLoading(false);
+        // The server decides whether a single result is unambiguous; the
+        // portal never auto-picks the top-ranked candidate itself.
+        if (!requiresCandidateSelection(res)) {
+          void selectCandidate(res.candidates[0], cid);
+        }
+        return;
+      }
+      console.warn("[chemical-info-lookup:search] unavailable", searchErr ?? data);
+      // Older deployment without `action: "search"` — fall back to the direct
+      // structured lookup on the free text. Master is NOT consulted first.
+      await runStructuredFallback(q, countryCode, cid);
+      return;
+    } catch (e) {
+      console.warn("[chemical-info-lookup:search] failed", e);
+      await runStructuredFallback(q, countryCode, cid, e);
+      return;
+    }
+  }
+
+  /**
+   * Step 2 — SELECTION. The chosen registration is pinned: country + exact
+   * registration number drive the structured lookup. The original free-text
+   * query never re-decides identity.
+   */
+  async function selectCandidate(candidate: SearchCandidate, cid?: string) {
+    if (!countryCode) return;
+    const flowId = cid ?? correlationId ?? newLookupCorrelationId();
+    setError(null);
+    setSelectedIndex(candidate.index);
+    setLoading(true);
+
+    // Master catalogue reuse — ONLY for the exact same registration identity.
+    try {
+      const rows = await searchApprovedMasterChemicals(
+        candidate.productName ?? name.trim(),
+        countryCode,
+      );
+      const exact = masterForCandidate(rows, candidate);
       if (exact) {
         setMasterResult(exact);
+        setSearch(null);
         setLoading(false);
         return;
       }
     } catch (e) {
-      console.warn("[master-chemicals] lookup unavailable, falling through", e);
+      console.warn("[master-chemicals] cache lookup unavailable", e);
     }
 
-    // ---- Upgraded resolver (`chemical-info-lookup`) on the shared VineTrack
-    // production backend. Its envelope is the single source for jurisdiction,
-    // provenance and match status. Canonical fields are only ever taken from
-    // its structured response. A failure here is NOT permission to populate
-    // canonical fields from the legacy AI function.
-    let lookupFailureDetail: "quota" | "other" = "other";
+    let failure: "quota" | "other" = "other";
     try {
-
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
-        { body: buildStructuredLookupBody(q, countryCode, { correlationId }) },
+        { body: structuredRequestBodyForCandidate(candidate, countryCode, flowId) },
       );
-      // Only a payload that actually speaks the upgraded contract is treated
-      // as a resolver result. A legacy AI-shaped body (no match_source /
-      // jurisdiction / field_provenance) is a resolver failure.
       if (!infoErr && isStructuredLookupEnvelope(data)) {
         const result = parseChemicalLookup(data, countryCode);
-        // A cross-country label is never presented as authoritative here.
         if (result.jurisdiction.status !== "mismatch") {
-          // Terminal: the structured result owns the outcome of this lookup.
           setResolved(result);
+          setSearch(null);
           setLoading(false);
           return;
         }
@@ -300,63 +273,50 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         return;
       }
       console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
-      lookupFailureDetail = await describeLookupFailure(infoErr ?? data);
+      failure = await describeLookupFailure(infoErr ?? data);
     } catch (e) {
       console.warn("[chemical-info-lookup] failed", e);
-      lookupFailureDetail = await describeLookupFailure(e);
+      failure = await describeLookupFailure(e);
     }
-
-    // Resolver unavailable: fail closed. No canonical data may come from the
-    // legacy AI function.
-    setError(
-      lookupFailureDetail === "quota"
-        ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
-        : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
-    );
+    setError(lookupFailureMessage(failure));
     setLoading(false);
-
   }
 
-
-
-  function applyCandidate(c: RawCandidate) {
-    const cat = matchCategory(c.category) ?? (c.category as ProductCategory | undefined);
-    const unit = (c.unit ?? normaliseUnit(c.unit)) as ChemUnit | "" | undefined;
-    const productType: ProductType = c.product_type
-      ? c.product_type
-      : inferProductType(unit || undefined);
-    const basis: RateBasis = c.rate_basis ?? "per_hectare";
-    const composedUnit =
-      unit ? `${unit}${basis === "per_100L" ? "/100L" : "/ha"}` : undefined;
-    const finalName = c.product_name?.trim() || name.trim();
-    onApply({
-      name: finalName,
-      active_ingredient: c.active_ingredient,
-      category: cat ?? undefined,
-      chemical_group: c.chemical_group,
-      manufacturer: c.manufacturer,
-      product_type: productType,
-      unit: (unit || undefined) as ChemUnit | undefined,
-      rate_basis: basis,
-      rate_per_ha: c.rate_per_unit ?? null,
-      rate_unit: composedUnit,
-      whp_days:
-        c.withholding_period_days != null
-          ? String(c.withholding_period_days)
-          : undefined,
-      rei_hours:
-        c.re_entry_period_hours != null
-          ? String(c.re_entry_period_hours)
-          : undefined,
-      target: c.target,
-      notes: c.notes,
-      label_url: c.label_url && /^https?:\/\//i.test(c.label_url) ? c.label_url : undefined,
-      product_url: c.product_url && /^https?:\/\//i.test(c.product_url) ? c.product_url : undefined,
-      sds_url: c.sds_url && /^https?:\/\//i.test(c.sds_url) ? c.sds_url : undefined,
-    });
-    void preserveAppliedCandidate(c, finalName);
-    setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
-    setResultsCollapsed(true);
+  /** Legacy direct structured lookup for deployments without `action: search`. */
+  async function runStructuredFallback(
+    q: string,
+    cc: string,
+    cid: string,
+    priorError?: unknown,
+  ) {
+    let failure: "quota" | "other" = priorError
+      ? await describeLookupFailure(priorError)
+      : "other";
+    try {
+      const { data, error: infoErr } = await iosSupabase.functions.invoke(
+        "chemical-info-lookup",
+        { body: buildStructuredLookupBody(q, cc, { correlationId: cid }) },
+      );
+      if (!infoErr && isStructuredLookupEnvelope(data)) {
+        const result = parseChemicalLookup(data, cc);
+        if (result.jurisdiction.status !== "mismatch") {
+          setResolved(result);
+          setLoading(false);
+          return;
+        }
+        setError(
+          `The label returned is not registered in ${countryLabel(cc)}. Add the chemical manually.`,
+        );
+        setLoading(false);
+        return;
+      }
+      failure = await describeLookupFailure(infoErr ?? data);
+    } catch (e) {
+      failure = await describeLookupFailure(e);
+    }
+    // Fail closed: no canonical data may come from the legacy AI function.
+    setError(lookupFailureMessage(failure));
+    setLoading(false);
   }
 
   function applyMaster(row: MasterChemicalRow) {
@@ -380,7 +340,6 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       name: item.name ?? undefined,
       active_ingredient: item.active_ingredient ?? undefined,
     });
-    void preserveAppliedCandidate(item, item.name ?? name.trim());
     setApplied({ name: item.name ?? name.trim(), source: "existing" });
     setResultsCollapsed(true);
   }
@@ -487,7 +446,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               <span className="text-muted-foreground"> · review and save below</span>
             </span>
           </div>
-          {(candidates?.length || existingMatches.length) ? (
+          {search?.candidates.length ? (
             <button
               type="button"
               onClick={() => setResultsCollapsed(false)}
@@ -532,38 +491,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </div>
       )}
 
-      {!resultsCollapsed && existingMatches.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[11px] text-muted-foreground">
-            Already in your library
-          </div>
-          {existingMatches.slice(0, 5).map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => applyExisting(m)}
-              className="w-full text-left rounded border bg-background p-2 hover:bg-muted/50 focus:outline-none focus:bg-muted/60"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-sm font-medium">
-                  <Library className="h-3.5 w-3.5 text-primary" />
-                  {m.name ?? "Unnamed"}
-                </div>
-                <Badge variant="secondary" className="text-[10px]">Existing</Badge>
-              </div>
-              {m.active_ingredient && (
-                <div className="text-xs text-muted-foreground">{m.active_ingredient}</div>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!resultsCollapsed && candidates && candidates.length > 0 && (
+      {!resultsCollapsed && search && search.candidates.length > 0 && (
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] text-muted-foreground">
-              Lookup results ({candidates.length}) for "{name.trim()}"
+              Registered products ({search.candidates.length}) for "{name.trim()}"
               {countryCode ? ` · ${countryLabel(countryCode)}` : ""}
             </div>
             <button
@@ -574,136 +506,82 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               Not the right product? Enter manually
             </button>
           </div>
-          {candidates.map((c, i) => {
-            const unit = c.unit ?? (normaliseUnit(c.unit) as ChemUnit | "");
-            const basis = c.rate_basis ?? inferRateBasis(unit ? `${unit}/${"ha"}` : null);
-            const productType = c.product_type ?? inferProductType(unit || undefined);
-            const rateText =
-              c.rate_per_unit != null
-                ? `${c.rate_per_unit} ${unit || ""}${basis === "per_100L" ? "/100L" : "/ha"}`
-                : "Rate varies — check label";
+          {search.summary?.ambiguous && (
+            <div className="flex items-start gap-1.5 rounded border border-warning/50 bg-warning/10 p-2 text-[11px]">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                {search.summary.ambiguityReason ??
+                  "More than one registered product matched. Select the correct registration."}
+              </span>
+            </div>
+          )}
+          {/* Server order. Never re-sorted, never re-ranked by the portal. */}
+          {search.candidates.map((c) => {
+            const saved = savedChemicalForCandidate(existingIdentities, c);
             return (
-              <div key={i} className="rounded border bg-background p-2 text-xs space-y-1">
-                <div className="space-y-0.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-bold leading-tight">
-                      {c.manufacturer?.trim() || (
-                        <span className="italic text-muted-foreground font-normal">Manufacturer unknown</span>
+              <div key={c.index} className="rounded border bg-background p-2 text-xs space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium leading-tight">
+                      {c.productName ?? (
+                        <span className="italic text-muted-foreground font-normal">Unnamed product</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                      {c.cached && (
-                        <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                          Previously found
-                        </Badge>
-                      )}
-                      {c.was_applied && (
-                        <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
-                          Previously applied
-                        </Badge>
-                      )}
-                      {c.country && (
-                        <Badge
-                          variant={c.country_confirmed === false ? "outline" : "secondary"}
-                          className="text-[10px]"
-                        >
-                          {c.country}
-                          {c.country_confirmed === false ? " (unverified)" : ""}
-                        </Badge>
-                      )}
-                      <span className="text-[10px] text-muted-foreground">
-                        {c.confidence ?? "unknown"}
-                      </span>
+                    <div className="text-muted-foreground">
+                      {c.registrant ?? "Registrant unknown"}
                     </div>
                   </div>
-                  <div className="text-sm font-medium text-foreground/90">
-                    {c.product_name || (
-                      <span className="italic text-muted-foreground font-normal">Unnamed product</span>
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                    {saved && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        <Library className="h-3 w-3 mr-1" />
+                        {ALREADY_IN_STORE_LABEL}
+                      </Badge>
+                    )}
+                    {c.registrationCountry && (
+                      <Badge variant="outline" className="text-[10px]">{c.registrationCountry}</Badge>
                     )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  <Row label="Active" value={c.active_ingredient} />
-                  <Row label="Category" value={c.category} />
-                  <Row label="Group / MOA" value={c.chemical_group} />
-                  <Row label="Type" value={productType} />
-                  <Row label="Rate" value={rateText} />
-                  <Row
-                    label="WHP"
-                    value={
-                      c.withholding_period_days != null
-                        ? `${c.withholding_period_days} days`
-                        : undefined
-                    }
-                  />
-                  <Row
-                    label="REI"
-                    value={
-                      c.re_entry_period_hours != null
-                        ? `${c.re_entry_period_hours} hours`
-                        : undefined
-                    }
-                  />
-                  {c.target && <Row label="Target" value={c.target} />}
+                  <Row label="Registration" value={c.registrationNumber} />
+                  <Row label="Scheme" value={c.registrationScheme} />
+                  <Row label="Active" value={c.activeIngredientText} />
                 </div>
-                {c.notes && (
-                  <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
-                )}
-                <div className="flex flex-wrap gap-3">
-                  {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
-                    <a
-                      href={c.label_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={loading}
+                    onClick={() => selectCandidate(c)}
+                  >
+                    {loading && selectedIndex === c.index ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        Loading label…
+                      </>
+                    ) : (
+                      "Select this registration"
+                    )}
+                  </Button>
+                  {saved && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => applyExisting({ id: saved.id, name: saved.name, active_ingredient: saved.active_ingredient })}
                     >
-                      <FileText className="h-3 w-3" />
-                      Label
-                    </a>
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground italic">
-                      No label found
-                    </span>
-                  )}
-                  {c.sds_url && /^https?:\/\//i.test(c.sds_url) && (
-                    <a
-                      href={c.sds_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      SDS
-                    </a>
-                  )}
-                  {c.product_url && /^https?:\/\//i.test(c.product_url) && (
-                    <a
-                      href={c.product_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline"
-                      title="Manufacturer/distributor product page (not an official label)"
-                    >
-                      <Globe className="h-3 w-3" />
-                      Product page
-                    </a>
+                      Use stored
+                    </Button>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => applyCandidate(c)}
-                  className="w-full"
-                >
-                  <Check className="h-3.5 w-3.5 mr-1" />
-                  Apply this product
-                </Button>
               </div>
             );
           })}
           <p className="text-[11px] text-muted-foreground italic leading-snug pt-1">
-            You can search again if you do not see the right product. A second search may find additional chemicals or alternative product listings.
+            Results are supplied and ordered by the shared VineTrack register search.
           </p>
         </div>
       )}

@@ -170,6 +170,7 @@ export function ChemicalPicker({ open, onOpenChange, vineyardId, canCreate, onSe
                   id: c.id,
                   name: c.name,
                   active_ingredient: c.active_ingredient,
+                  registration_number: c.registration_number,
                 }))}
                 onApply={(s) => applyAIMut.mutate(s)}
               />
@@ -321,6 +322,7 @@ function NewChemicalDialog({
               id: c.id,
               name: c.name,
               active_ingredient: c.active_ingredient,
+              registration_number: c.registration_number,
             }))}
             onApply={(s: AppliedSuggestion) => {
               if (s.existing_chemical_id) {

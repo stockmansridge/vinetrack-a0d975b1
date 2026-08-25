@@ -523,8 +523,10 @@ function decodeRates(raw: any): WriteLabelRate[] {
       if (!r || typeof r !== "object") return null;
       const unit = s(r.unit) ?? "";
       const value = num(r.value ?? r.rate_per_unit);
-      const min = num(r.min_value ?? r.rate_min);
-      const max = num(r.max_value ?? r.rate_max);
+      // Range bounds: the shared contract may spell these `min_value`/`max_value`
+      // or plain `min`/`max`. Both survive — a range is never collapsed.
+      const min = num(r.min_value ?? r.rate_min ?? r.min);
+      const max = num(r.max_value ?? r.rate_max ?? r.max);
       const rawText = s(r.raw_text);
       const condition = s(r.condition ?? r.conditions);
       const conditionAmbiguous =

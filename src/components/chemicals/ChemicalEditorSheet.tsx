@@ -473,6 +473,7 @@ export function ChemicalEditor({
                 id: c.id,
                 name: c.name,
                 active_ingredient: c.active_ingredient,
+                registration_number: (c as { registration_number?: string | null }).registration_number,
               }))}
             onApply={applySuggestion}
           />
