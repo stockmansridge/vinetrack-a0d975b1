@@ -62,6 +62,17 @@ export const TRACTOR_ARCHIVE_RPC_UNAVAILABLE =
   "Tractor archiving is temporarily unavailable: the server-side tractor archive function is not deployed yet. " +
   "Nothing was changed.";
 
+export const TRACTOR_RPC_MALFORMED =
+  "Tractor save did not return a linked tractor and machine record. " +
+  "The save could not be confirmed — please retry.";
+
+/** SQL 209 returns SETOF rows: supabase-js gives an array. Take the first row. */
+export function firstRpcRow<T>(data: unknown): T | null {
+  if (Array.isArray(data)) return (data[0] as T) ?? null;
+  if (data && typeof data === "object") return data as T;
+  return null;
+}
+
 export async function saveTractor(input: TractorWriteInput): Promise<TractorWriteResult> {
   const rpc = await supabase.rpc("portal_upsert_tractor", {
     p_tractor_id: input.id ?? null,
@@ -80,12 +91,14 @@ export async function saveTractor(input: TractorWriteInput): Promise<TractorWrit
     throw rpc.error;
   }
 
-  const row = (rpc.data ?? {}) as { tractor_id?: string; machine_id?: string };
-  return {
-    tractor_id: row.tractor_id ?? input.id ?? "",
-    machine_id: row.machine_id ?? null,
-  };
+  const row = firstRpcRow<{ tractor_id?: string | null; machine_id?: string | null }>(rpc.data);
+  const tractorId = row?.tractor_id ?? null;
+  const machineId = row?.machine_id ?? null;
+  if (!tractorId || !machineId) throw new Error(TRACTOR_RPC_MALFORMED);
+
+  return { tractor_id: tractorId, machine_id: machineId };
 }
+
 
 export async function archiveTractor(id: string): Promise<void> {
   const atomic = await supabase.rpc("portal_archive_tractor", { p_tractor_id: id });
