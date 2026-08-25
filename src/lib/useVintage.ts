@@ -92,15 +92,36 @@ export function useVintage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const locationQ = useQuery({
+    queryKey: ["vineyard-location", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyardLocation(selectedVineyardId!),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const geometryLatQ = useQuery({
+    queryKey: ["vineyard-geometry-latitude", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchGeometryLatitude(selectedVineyardId!),
+    staleTime: 30 * 60 * 1000,
+  });
+
   return useMemo(() => {
     const month = seasonQ.data?.season_start_month ?? SEASON_DEFAULTS.season_start_month;
     const day = seasonQ.data?.season_start_day ?? SEASON_DEFAULTS.season_start_day;
     const vintage = currentVintageForSeason(month, day);
     const range = seasonRangeForVintage(month, day, vintage);
     const countryCode = regionQ.data?.country_code ?? null;
-    const hemisphere = hemisphereForCountry(countryCode);
+    // Hemisphere comes from physical latitude — never from units/region.
+    const hem = resolveHemisphere({
+      latitude: locationQ.data?.latitude ?? null,
+      geometryLatitude: geometryLatQ.data ?? null,
+      countryCode,
+    });
     return {
-      hemisphere,
+      hemisphere: hem.hemisphere,
+      hemisphereSource: hem.source,
+      latitude: hem.latitude,
       vintage,
       countryCode,
       seasonStartMonth: month,
@@ -108,8 +129,9 @@ export function useVintage() {
       isLoading: seasonQ.isLoading,
       ...range,
     };
-  }, [seasonQ.data, seasonQ.isLoading, regionQ.data]);
+  }, [seasonQ.data, seasonQ.isLoading, regionQ.data, locationQ.data, geometryLatQ.data]);
 }
+
 
 /** Convenience re-export so callers only import from one place. */
 export { vintageForDateShared as vintageForDate };
