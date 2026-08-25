@@ -380,7 +380,6 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       name: item.name ?? undefined,
       active_ingredient: item.active_ingredient ?? undefined,
     });
-    void preserveAppliedCandidate(item, item.name ?? name.trim());
     setApplied({ name: item.name ?? name.trim(), source: "existing" });
     setResultsCollapsed(true);
   }
