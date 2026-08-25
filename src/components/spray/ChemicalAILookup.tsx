@@ -175,53 +175,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" | "master" } | null>(null);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
 
-  async function preserveAppliedCandidate(candidate: RawCandidate | ExistingLibraryItem, fallbackName?: string) {
-    const queryName = name.trim() || fallbackName?.trim();
-    const productName = (
-      "product_name" in candidate
-        ? candidate.product_name
-        : (candidate as ExistingLibraryItem).name
-    )?.trim() || fallbackName?.trim();
-    if (!queryName || !productName) return;
-
-    try {
-      await supabase.functions.invoke("chemical-ai-lookup", {
-        body: {
-          product_name: queryName,
-          country: countryCode,
-          mark_applied: true,
-          applied_candidate: {
-            product_name: productName,
-            manufacturer: ("manufacturer" in candidate ? candidate.manufacturer : "") ?? "",
-            active_ingredient: candidate.active_ingredient ?? null,
-            category: "category" in candidate ? candidate.category ?? null : null,
-            chemical_group: "chemical_group" in candidate ? candidate.chemical_group ?? null : null,
-            product_type: "product_type" in candidate ? candidate.product_type ?? null : null,
-            unit: "unit" in candidate ? candidate.unit ?? null : null,
-            rate_basis: "rate_basis" in candidate ? candidate.rate_basis ?? null : null,
-            rate_per_unit: "rate_per_unit" in candidate ? candidate.rate_per_unit ?? null : null,
-            withholding_period_days: "withholding_period_days" in candidate ? candidate.withholding_period_days ?? null : null,
-            re_entry_period_hours: "re_entry_period_hours" in candidate ? candidate.re_entry_period_hours ?? null : null,
-            target: "target" in candidate ? candidate.target ?? null : null,
-            notes: "notes" in candidate ? candidate.notes ?? null : null,
-            safety_note: "safety_note" in candidate ? candidate.safety_note ?? null : null,
-            country: "country" in candidate ? candidate.country ?? countryCode : countryCode,
-            country_confirmed: "country_confirmed" in candidate ? candidate.country_confirmed ?? null : null,
-            confidence: "confidence" in candidate ? candidate.confidence ?? "medium" : "medium",
-            source_hint: "source_hint" in candidate ? candidate.source_hint ?? "manual_applied" : "manual_applied",
-            times_seen: "times_seen" in candidate ? candidate.times_seen ?? 1 : 1,
-            label_url: "label_url" in candidate ? candidate.label_url ?? null : null,
-            product_url: "product_url" in candidate ? candidate.product_url ?? null : null,
-            sds_url: "sds_url" in candidate ? candidate.sds_url ?? null : null,
-          },
-        },
-      });
-    } catch (error) {
-      console.warn("Could not preserve applied chemical candidate", error);
-    }
-  }
-
-
+  /**
+   * Step 1 — DISCOVERY. Authoritative candidate search on the shared
+   * `chemical-info-lookup` function. The portal does not pre-empt it with a
+   * Master match or a saved-chemical match, and never re-orders the result.
+   */
   async function runLookup() {
     const q = name.trim();
     if (!q) {
@@ -234,62 +192,93 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       return;
     }
     setError(null);
-    setCandidates(null);
+    setSearch(null);
+    setSelectedIndex(null);
     setMasterResult(null);
     setResolved(null);
-    setExistingMatches([]);
     setApplied(null);
     setResultsCollapsed(false);
     setLoading(true);
-    // One correlation id per lookup FLOW so Rork can trace this search and
-    // any structured lookup that follows it. Diagnostic only.
-    const correlationId = newLookupCorrelationId();
+    // One correlation id per lookup FLOW: this search and any structured
+    // lookup selected from it share it. Diagnostic only.
+    const cid = newLookupCorrelationId();
+    setCorrelationId(cid);
 
-    // First, surface any existing library matches so the user can re-use them
-    // instead of creating a duplicate.
-    const qn = normalise(q);
-    const matches = existingLibrary.filter((c) => {
-      const haystack = `${normalise(c.name)} ${normalise(c.active_ingredient)}`;
-      return qn.length >= 3 && haystack.includes(qn);
-    });
-    setExistingMatches(matches);
-
-    // ---- Master-first, country-first: only approved Master records
-    // registered in THIS vineyard's country are eligible. Similar names
-    // ("Custodia Forte") never match by substring.
     try {
-      const rows = await searchApprovedMasterChemicals(q, countryCode);
-      const exact = matchMasterByIdentity(rows, { productName: q, country: countryCode });
+      const { data, error: searchErr } = await iosSupabase.functions.invoke(
+        "chemical-info-lookup",
+        { body: searchRequestBody(q, countryCode, cid) },
+      );
+      if (!searchErr && isSearchEnvelope(data)) {
+        const res = parseSearchCandidates(data);
+        if (res.candidates.length === 0) {
+          setError(
+            `No registered product matched "${q}" in ${countryLabel(countryCode)}. Check the spelling or add the chemical manually.`,
+          );
+          setLoading(false);
+          return;
+        }
+        setSearch(res);
+        setLoading(false);
+        // The server decides whether a single result is unambiguous; the
+        // portal never auto-picks the top-ranked candidate itself.
+        if (!requiresCandidateSelection(res)) {
+          void selectCandidate(res.candidates[0], cid);
+        }
+        return;
+      }
+      console.warn("[chemical-info-lookup:search] unavailable", searchErr ?? data);
+      // Older deployment without `action: "search"` — fall back to the direct
+      // structured lookup on the free text. Master is NOT consulted first.
+      await runStructuredFallback(q, countryCode, cid);
+      return;
+    } catch (e) {
+      console.warn("[chemical-info-lookup:search] failed", e);
+      await runStructuredFallback(q, countryCode, cid, e);
+      return;
+    }
+  }
+
+  /**
+   * Step 2 — SELECTION. The chosen registration is pinned: country + exact
+   * registration number drive the structured lookup. The original free-text
+   * query never re-decides identity.
+   */
+  async function selectCandidate(candidate: SearchCandidate, cid?: string) {
+    if (!countryCode) return;
+    const flowId = cid ?? correlationId ?? newLookupCorrelationId();
+    setError(null);
+    setSelectedIndex(candidate.index);
+    setLoading(true);
+
+    // Master catalogue reuse — ONLY for the exact same registration identity.
+    try {
+      const rows = await searchApprovedMasterChemicals(
+        candidate.productName ?? name.trim(),
+        countryCode,
+      );
+      const exact = masterForCandidate(rows, candidate);
       if (exact) {
         setMasterResult(exact);
+        setSearch(null);
         setLoading(false);
         return;
       }
     } catch (e) {
-      console.warn("[master-chemicals] lookup unavailable, falling through", e);
+      console.warn("[master-chemicals] cache lookup unavailable", e);
     }
 
-    // ---- Upgraded resolver (`chemical-info-lookup`) on the shared VineTrack
-    // production backend. Its envelope is the single source for jurisdiction,
-    // provenance and match status. Canonical fields are only ever taken from
-    // its structured response. A failure here is NOT permission to populate
-    // canonical fields from the legacy AI function.
-    let lookupFailureDetail: "quota" | "other" = "other";
+    let failure: "quota" | "other" = "other";
     try {
-
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
-        { body: buildStructuredLookupBody(q, countryCode, { correlationId }) },
+        { body: structuredRequestBodyForCandidate(candidate, countryCode, flowId) },
       );
-      // Only a payload that actually speaks the upgraded contract is treated
-      // as a resolver result. A legacy AI-shaped body (no match_source /
-      // jurisdiction / field_provenance) is a resolver failure.
       if (!infoErr && isStructuredLookupEnvelope(data)) {
         const result = parseChemicalLookup(data, countryCode);
-        // A cross-country label is never presented as authoritative here.
         if (result.jurisdiction.status !== "mismatch") {
-          // Terminal: the structured result owns the outcome of this lookup.
           setResolved(result);
+          setSearch(null);
           setLoading(false);
           return;
         }
@@ -300,63 +289,50 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         return;
       }
       console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
-      lookupFailureDetail = await describeLookupFailure(infoErr ?? data);
+      failure = await describeLookupFailure(infoErr ?? data);
     } catch (e) {
       console.warn("[chemical-info-lookup] failed", e);
-      lookupFailureDetail = await describeLookupFailure(e);
+      failure = await describeLookupFailure(e);
     }
-
-    // Resolver unavailable: fail closed. No canonical data may come from the
-    // legacy AI function.
-    setError(
-      lookupFailureDetail === "quota"
-        ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
-        : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
-    );
+    setError(lookupFailureMessage(failure));
     setLoading(false);
-
   }
 
-
-
-  function applyCandidate(c: RawCandidate) {
-    const cat = matchCategory(c.category) ?? (c.category as ProductCategory | undefined);
-    const unit = (c.unit ?? normaliseUnit(c.unit)) as ChemUnit | "" | undefined;
-    const productType: ProductType = c.product_type
-      ? c.product_type
-      : inferProductType(unit || undefined);
-    const basis: RateBasis = c.rate_basis ?? "per_hectare";
-    const composedUnit =
-      unit ? `${unit}${basis === "per_100L" ? "/100L" : "/ha"}` : undefined;
-    const finalName = c.product_name?.trim() || name.trim();
-    onApply({
-      name: finalName,
-      active_ingredient: c.active_ingredient,
-      category: cat ?? undefined,
-      chemical_group: c.chemical_group,
-      manufacturer: c.manufacturer,
-      product_type: productType,
-      unit: (unit || undefined) as ChemUnit | undefined,
-      rate_basis: basis,
-      rate_per_ha: c.rate_per_unit ?? null,
-      rate_unit: composedUnit,
-      whp_days:
-        c.withholding_period_days != null
-          ? String(c.withholding_period_days)
-          : undefined,
-      rei_hours:
-        c.re_entry_period_hours != null
-          ? String(c.re_entry_period_hours)
-          : undefined,
-      target: c.target,
-      notes: c.notes,
-      label_url: c.label_url && /^https?:\/\//i.test(c.label_url) ? c.label_url : undefined,
-      product_url: c.product_url && /^https?:\/\//i.test(c.product_url) ? c.product_url : undefined,
-      sds_url: c.sds_url && /^https?:\/\//i.test(c.sds_url) ? c.sds_url : undefined,
-    });
-    void preserveAppliedCandidate(c, finalName);
-    setApplied({ name: finalName, manufacturer: c.manufacturer, source: "ai" });
-    setResultsCollapsed(true);
+  /** Legacy direct structured lookup for deployments without `action: search`. */
+  async function runStructuredFallback(
+    q: string,
+    cc: string,
+    cid: string,
+    priorError?: unknown,
+  ) {
+    let failure: "quota" | "other" = priorError
+      ? await describeLookupFailure(priorError)
+      : "other";
+    try {
+      const { data, error: infoErr } = await iosSupabase.functions.invoke(
+        "chemical-info-lookup",
+        { body: buildStructuredLookupBody(q, cc, { correlationId: cid }) },
+      );
+      if (!infoErr && isStructuredLookupEnvelope(data)) {
+        const result = parseChemicalLookup(data, cc);
+        if (result.jurisdiction.status !== "mismatch") {
+          setResolved(result);
+          setLoading(false);
+          return;
+        }
+        setError(
+          `The label returned is not registered in ${countryLabel(cc)}. Add the chemical manually.`,
+        );
+        setLoading(false);
+        return;
+      }
+      failure = await describeLookupFailure(infoErr ?? data);
+    } catch (e) {
+      failure = await describeLookupFailure(e);
+    }
+    // Fail closed: no canonical data may come from the legacy AI function.
+    setError(lookupFailureMessage(failure));
+    setLoading(false);
   }
 
   function applyMaster(row: MasterChemicalRow) {
