@@ -1,10 +1,18 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVineyard } from "@/context/VineyardContext";
+import { supabase } from "@/integrations/ios-supabase/client";
 import {
   fetchVineyardRegionSettings,
   type CountryCode,
 } from "@/lib/vineyardRegionSettingsQuery";
+import { fetchVineyardLocation } from "@/lib/vineyardLocationQuery";
+import {
+  hemisphereFromCountry,
+  meanLatitudeFromPolygons,
+  resolveHemisphere,
+  type Hemisphere,
+} from "@/lib/hemisphere";
 import {
   SEASON_DEFAULTS,
   currentVintageForSeason,
@@ -13,19 +21,31 @@ import {
   vintageForDate as vintageForDateShared,
 } from "@/lib/vineyardSeasonSettingsQuery";
 
-export type Hemisphere = "southern" | "northern";
-
-const SOUTHERN: CountryCode[] = ["AU", "NZ", "ZA"];
+export type { Hemisphere };
 
 /**
- * @deprecated Hemisphere is no longer the source of truth for vintage.
- * Kept as an informational label only. Vintage is driven by the shared
- * `vineyards.season_start_month`/`season_start_day` values.
+ * @deprecated Country is a fallback only. Use `resolveHemisphere` from
+ * `@/lib/hemisphere`, which prefers the vineyard's physical latitude.
  */
 export function hemisphereForCountry(code: CountryCode | null | undefined): Hemisphere {
-  if (!code) return "southern";
-  return SOUTHERN.includes(code) ? "southern" : "northern";
+  return hemisphereFromCountry(code);
 }
+
+/**
+ * Fallback latitude for vineyards with no stored GPS: the mean latitude of
+ * their block/paddock polygon geometry (real recorded coordinates).
+ */
+async function fetchGeometryLatitude(vineyardId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("paddocks")
+    .select("polygon_points")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null)
+    .limit(50);
+  if (error) return null;
+  return meanLatitudeFromPolygons((data ?? []) as any[]);
+}
+
 
 /**
  * @deprecated Use `vintageForDate(date, month, day)` from
@@ -72,15 +92,36 @@ export function useVintage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const locationQ = useQuery({
+    queryKey: ["vineyard-location", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchVineyardLocation(selectedVineyardId!),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const geometryLatQ = useQuery({
+    queryKey: ["vineyard-geometry-latitude", selectedVineyardId],
+    enabled: !!selectedVineyardId,
+    queryFn: () => fetchGeometryLatitude(selectedVineyardId!),
+    staleTime: 30 * 60 * 1000,
+  });
+
   return useMemo(() => {
     const month = seasonQ.data?.season_start_month ?? SEASON_DEFAULTS.season_start_month;
     const day = seasonQ.data?.season_start_day ?? SEASON_DEFAULTS.season_start_day;
     const vintage = currentVintageForSeason(month, day);
     const range = seasonRangeForVintage(month, day, vintage);
     const countryCode = regionQ.data?.country_code ?? null;
-    const hemisphere = hemisphereForCountry(countryCode);
+    // Hemisphere comes from physical latitude — never from units/region.
+    const hem = resolveHemisphere({
+      latitude: locationQ.data?.latitude ?? null,
+      geometryLatitude: geometryLatQ.data ?? null,
+      countryCode,
+    });
     return {
-      hemisphere,
+      hemisphere: hem.hemisphere,
+      hemisphereSource: hem.source,
+      latitude: hem.latitude,
       vintage,
       countryCode,
       seasonStartMonth: month,
@@ -88,8 +129,9 @@ export function useVintage() {
       isLoading: seasonQ.isLoading,
       ...range,
     };
-  }, [seasonQ.data, seasonQ.isLoading, regionQ.data]);
+  }, [seasonQ.data, seasonQ.isLoading, regionQ.data, locationQ.data, geometryLatQ.data]);
 }
+
 
 /** Convenience re-export so callers only import from one place. */
 export { vintageForDateShared as vintageForDate };

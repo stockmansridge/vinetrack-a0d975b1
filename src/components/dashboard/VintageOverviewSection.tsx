@@ -3,6 +3,8 @@ import { Droplet, CalendarDays, Scissors, Wrench, ClipboardList } from "lucide-r
 import { supabase } from "@/integrations/ios-supabase/client";
 import { useVineyard } from "@/context/VineyardContext";
 import { useVintage } from "@/lib/useVintage";
+import { hemisphereLabel } from "@/lib/hemisphere";
+
 import { usePruningVineyardSummary } from "@/lib/pruningSummaryQuery";
 import { MetricCard } from "@/components/ui/metric-card";
 
@@ -77,7 +79,7 @@ export default function VintageOverviewSection() {
   const pruningQ = usePruningVineyardSummary(selectedVineyardId, pruningSeasonYear);
 
   const rangeHint = `${startISO} → ${endISO}`;
-  const hemLabel = hemisphere === "southern" ? "Southern Hemisphere" : "Northern Hemisphere";
+  const hemLabel = hemisphereLabel(hemisphere);
 
   return (
     <section className="space-y-3">
