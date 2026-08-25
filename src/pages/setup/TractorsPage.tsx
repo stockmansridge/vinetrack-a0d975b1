@@ -42,6 +42,11 @@ import { z } from "zod";
 import { formatDate } from "@/lib/dateFormat";
 import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
 import { archiveTractor, saveTractor } from "@/lib/tractorWrite";
+import {
+  formatFuelUsage,
+  fuelUsageFieldValue,
+  validateTractorFuelUsage,
+} from "@/lib/tractorFuel";
 
 interface Tractor {
   id: string;
@@ -163,8 +168,7 @@ export default function TractorsPage() {
       brand: t.brand ?? "",
       model: t.model ?? "",
       model_year: t.model_year != null ? String(t.model_year) : "",
-      fuel_usage_l_per_hour:
-        t.fuel_usage_l_per_hour != null ? String(t.fuel_usage_l_per_hour) : "",
+      fuel_usage_l_per_hour: fuelUsageFieldValue(t.fuel_usage_l_per_hour),
       serial_number: t.serial_number ?? "",
       vin_number: t.vin_number ?? "",
     });
@@ -279,7 +283,7 @@ export default function TractorsPage() {
         brand: trimmedOrNull(form.brand),
         model: trimmedOrNull(form.model),
         model_year: numOrNull(form.model_year),
-        fuel_usage_l_per_hour: numOrNull(form.fuel_usage_l_per_hour),
+        fuel_usage_l_per_hour: valid.fuel,
         serial_number: trimmedOrNull(form.serial_number),
         vin_number: trimmedOrNull(form.vin_number),
         user_id: user.id,
@@ -414,7 +418,7 @@ export default function TractorsPage() {
                 <TableCell>{fmtCell(r.model)}</TableCell>
                 <TableCell>{fmtCell(r.model_year)}</TableCell>
                 <TableCell>{fmtCell(r.serial_number)}</TableCell>
-                <TableCell>{fmtCell(r.fuel_usage_l_per_hour)}</TableCell>
+                <TableCell>{formatFuelUsage(r.fuel_usage_l_per_hour)}</TableCell>
                 <TableCell>{fmtCell(r.updated_at)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {canEdit && (
@@ -494,7 +498,11 @@ export default function TractorsPage() {
                 <Field
                   label="Fuel usage (L/hr)"
                   error={errors.fuel_usage_l_per_hour}
-                  hint="Optional. Used for fuel and operating cost calculations. Leave blank if not known."
+                  hint={
+                    editing
+                      ? "Used for fuel and operating cost calculations. May be left unset on an existing tractor."
+                      : "Required for a new tractor. Enter the rate in L/hr, or use the estimate below and accept it."
+                  }
                 >
                   <Input
                     inputMode="decimal"
