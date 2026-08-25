@@ -124,6 +124,38 @@ function normalise(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Classify a resolver failure. The shared VineTrack research service can be
+ * rate-limited or out of provider quota (HTTP 429 / insufficient_quota); that
+ * is transient and deserves a different message from a hard outage.
+ */
+async function describeLookupFailure(err: unknown): Promise<"quota" | "other"> {
+  let text = "";
+  try {
+    text = typeof err === "string" ? err : JSON.stringify(err ?? "");
+  } catch {
+    text = String(err ?? "");
+  }
+  if (err && typeof err === "object") {
+    const e = err as { message?: unknown; context?: unknown };
+    text += ` ${String(e.message ?? "")}`;
+    // supabase-js attaches the raw Response as `context` on FunctionsHttpError.
+    const ctx = e.context as Response | undefined;
+    if (ctx && typeof (ctx as Response).text === "function") {
+      try {
+        text += ` ${await (ctx as Response).clone().text()}`;
+      } catch {
+        /* body already consumed or unavailable */
+      }
+    }
+  }
+  return /429|insufficient_quota|credit_balance_exhausted|rate limit|quota|transient/i.test(text)
+    ? "quota"
+    : "other";
+}
+
+
+
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
   // browser or IP fallback — when it is missing, lookup is blocked.
@@ -185,6 +217,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     }
   }
 
+
   async function runLookup() {
     const q = name.trim();
     if (!q) {
@@ -234,7 +267,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     // provenance and match status. Canonical fields are only ever taken from
     // its structured response. A failure here is NOT permission to populate
     // canonical fields from the legacy AI function.
+    let lookupFailureDetail: "quota" | "other" = "other";
     try {
+
       const { data, error: infoErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
         { body: buildStructuredLookupBody(q, countryCode) },
@@ -258,16 +293,21 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         return;
       }
       console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
+      lookupFailureDetail = await describeLookupFailure(infoErr ?? data);
     } catch (e) {
       console.warn("[chemical-info-lookup] failed", e);
+      lookupFailureDetail = await describeLookupFailure(e);
     }
 
     // Resolver unavailable: fail closed. No canonical data may come from the
     // legacy AI function.
     setError(
-      "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
+      lookupFailureDetail === "quota"
+        ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
+        : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.",
     );
     setLoading(false);
+
   }
 
 
