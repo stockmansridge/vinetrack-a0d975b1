@@ -307,13 +307,8 @@ export default function TractorsPage() {
     }
     setArchiveSubmitting(true);
     try {
-      const result = await archiveTractor(archiving.id);
+      await archiveTractor(archiving.id);
       toast.success("Tractor archived");
-      if (result.mirrorPending) {
-        toast.message(
-          "Linked machine record is archived with the tractor once the tractor write migration is applied.",
-        );
-      }
       await qc.invalidateQueries({ queryKey: ["list", "tractors", selectedVineyardId] });
       await qc.invalidateQueries({ queryKey: ["count", "tractors", selectedVineyardId] });
       setArchiving(null);
