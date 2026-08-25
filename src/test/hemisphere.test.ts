@@ -108,13 +108,15 @@ describe("vintage date ranges are unchanged by hemisphere", () => {
   });
 
   it("northern season (1 January) resolves January → December", () => {
-    const { startISO, endISO } = seasonRangeForVintage(1, 1, 2026);
+    // VineTrack labels a season by the year it ENDS in, so a 1 January
+    // season start for vintage 2027 spans the 2026 calendar year.
+    const { startISO, endISO } = seasonRangeForVintage(1, 1, 2027);
     expect(startISO).toBe("2026-01-01");
     expect(endISO).toBe("2026-12-31");
   });
 
   it("current vintage is driven by season start, not hemisphere", () => {
     expect(currentVintageForSeason(7, 1, new Date("2026-08-25T00:00:00Z"))).toBe(2027);
-    expect(currentVintageForSeason(1, 1, new Date("2026-08-25T00:00:00Z"))).toBe(2026);
+    expect(currentVintageForSeason(1, 1, new Date("2026-08-25T00:00:00Z"))).toBe(2027);
   });
 });
