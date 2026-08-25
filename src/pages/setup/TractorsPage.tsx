@@ -78,6 +78,9 @@ const tractorSchema = z.object({
     .optional(),
   // Fuel usage validation is handled separately (see src/lib/tractorFuel.ts):
   // required for a new tractor, optional for an existing 0/unset record.
+});
+
+
 
 
 type FormState = {
