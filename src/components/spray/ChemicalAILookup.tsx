@@ -487,7 +487,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               <span className="text-muted-foreground"> · review and save below</span>
             </span>
           </div>
-          {(candidates?.length || existingMatches.length) ? (
+          {search?.candidates.length ? (
             <button
               type="button"
               onClick={() => setResultsCollapsed(false)}
