@@ -129,20 +129,31 @@ function normalise(s: string | null | undefined): string {
  * rate-limited or out of provider quota (HTTP 429 / insufficient_quota); that
  * is transient and deserves a different message from a hard outage.
  */
-function describeLookupFailure(err: unknown): "quota" | "other" {
+async function describeLookupFailure(err: unknown): Promise<"quota" | "other"> {
   let text = "";
   try {
     text = typeof err === "string" ? err : JSON.stringify(err ?? "");
   } catch {
     text = String(err ?? "");
   }
-  if (err && typeof err === "object" && "message" in err) {
-    text += ` ${String((err as { message?: unknown }).message ?? "")}`;
+  if (err && typeof err === "object") {
+    const e = err as { message?: unknown; context?: unknown };
+    text += ` ${String(e.message ?? "")}`;
+    // supabase-js attaches the raw Response as `context` on FunctionsHttpError.
+    const ctx = e.context as Response | undefined;
+    if (ctx && typeof (ctx as Response).text === "function") {
+      try {
+        text += ` ${await (ctx as Response).clone().text()}`;
+      } catch {
+        /* body already consumed or unavailable */
+      }
+    }
   }
   return /429|insufficient_quota|credit_balance_exhausted|rate limit|quota|transient/i.test(text)
     ? "quota"
     : "other";
 }
+
 
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
