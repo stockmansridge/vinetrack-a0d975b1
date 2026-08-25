@@ -76,18 +76,9 @@ const tractorSchema = z.object({
         .max(CURRENT_YEAR + 1, { message: `Year must be ≤ ${CURRENT_YEAR + 1}` }),
     ])
     .optional(),
-  // Fuel usage is optional. A tractor whose configured rate is unset or 0
-  // stays fully editable — the Portal never invents a rate.
-  fuel_usage_l_per_hour: z
-    .union([
-      z.literal(""),
-      z
-        .number({ invalid_type_error: "Fuel usage must be a number" })
-        .min(0, { message: "Fuel usage cannot be negative" })
-        .max(1000, { message: "Fuel usage must be ≤ 1000" }),
-    ])
-    .optional(),
-});
+  // Fuel usage validation is handled separately (see src/lib/tractorFuel.ts):
+  // required for a new tractor, optional for an existing 0/unset record.
+
 
 type FormState = {
   name: string;
