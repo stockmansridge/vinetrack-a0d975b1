@@ -17,6 +17,19 @@ import {
   buildStructuredLookupBody,
   newLookupCorrelationId,
 } from "@/lib/chemicalLookupRequest";
+import {
+  ALREADY_IN_STORE_LABEL,
+  isSearchEnvelope,
+  masterForCandidate,
+  parseSearchCandidates,
+  requiresCandidateSelection,
+  savedChemicalForCandidate,
+  searchRequestBody,
+  structuredRequestBodyForCandidate,
+  type ChemicalSearchResponse,
+  type SearchCandidate,
+  type SavedChemicalIdentity,
+} from "@/lib/chemicalSearchFlow";
 import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
 import {
   matchMasterByIdentity,
