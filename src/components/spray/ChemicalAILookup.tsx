@@ -99,10 +99,6 @@ interface Props {
   onApply: (s: AppliedSuggestion) => void;
 }
 
-function normalise(s: string | null | undefined): string {
-  return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 /**
  * Classify a resolver failure. The shared VineTrack research service can be
  * rate-limited or out of provider quota (HTTP 429 / insufficient_quota); that
@@ -133,7 +129,11 @@ async function describeLookupFailure(err: unknown): Promise<"quota" | "other"> {
     : "other";
 }
 
-
+function lookupFailureMessage(kind: "quota" | "other"): string {
+  return kind === "quota"
+    ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
+    : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.";
+}
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
@@ -143,12 +143,22 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<RawCandidate[] | null>(null);
+  /** Server-ordered candidate list. Never re-sorted by the portal. */
+  const [search, setSearch] = useState<ChemicalSearchResponse | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [correlationId, setCorrelationId] = useState<string | null>(null);
   const [masterResult, setMasterResult] = useState<MasterChemicalRow | null>(null);
   const [resolved, setResolved] = useState<ChemicalLookupResult | null>(null);
-  const [existingMatches, setExistingMatches] = useState<ExistingLibraryItem[]>([]);
-  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "ai" | "existing" | "manual" | "master" } | null>(null);
+  const [applied, setApplied] = useState<{ name: string; manufacturer?: string; source: "existing" | "manual" | "master" } | null>(null);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
+
+  // Informational only — saved chemicals never re-order or auto-select.
+  const existingIdentities: SavedChemicalIdentity[] = existingLibrary.map((c) => ({
+    id: c.id,
+    name: c.name,
+    active_ingredient: c.active_ingredient,
+    registration_number: c.registration_number,
+  }));
 
   /**
    * Step 1 — DISCOVERY. Authoritative candidate search on the shared
