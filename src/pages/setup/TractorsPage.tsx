@@ -275,7 +275,7 @@ export default function TractorsPage() {
       // One authoritative server-side write keeps `tractors` and its linked
       // vineyard_machines mirror in step — never two independent browser
       // writes. See src/lib/tractorWrite.ts.
-      const result = await saveTractor({
+      await saveTractor({
         id: editing?.id ?? null,
         vineyard_id: selectedVineyardId,
         name: form.name.trim(),
@@ -288,11 +288,6 @@ export default function TractorsPage() {
         user_id: user.id,
       });
       toast.success(editing ? "Tractor updated" : "Tractor created");
-      if (result.mirrorPending) {
-        toast.message(
-          "Linked machine record pending — it is created once the tractor write migration is applied.",
-        );
-      }
       await qc.invalidateQueries({ queryKey: ["list", "tractors", selectedVineyardId] });
       await qc.invalidateQueries({ queryKey: ["count", "tractors", selectedVineyardId] });
       setDialogOpen(false);
