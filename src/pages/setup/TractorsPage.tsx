@@ -41,6 +41,7 @@ import { Plus, Pencil, Sparkles, Archive } from "lucide-react";
 import { z } from "zod";
 import { formatDate } from "@/lib/dateFormat";
 import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
+import { archiveTractor, saveTractor } from "@/lib/tractorWrite";
 
 interface Tractor {
   id: string;
@@ -75,13 +76,18 @@ const tractorSchema = z.object({
         .max(CURRENT_YEAR + 1, { message: `Year must be ≤ ${CURRENT_YEAR + 1}` }),
     ])
     .optional(),
+  // Fuel usage is optional. A tractor whose configured rate is unset or 0
+  // stays fully editable — the Portal never invents a rate.
   fuel_usage_l_per_hour: z
-    .number({ invalid_type_error: "Fuel usage is required" })
-    .gt(0, { message: "Fuel usage must be greater than 0" })
-    .max(1000, { message: "Fuel usage must be ≤ 1000" }),
+    .union([
+      z.literal(""),
+      z
+        .number({ invalid_type_error: "Fuel usage must be a number" })
+        .min(0, { message: "Fuel usage cannot be negative" })
+        .max(1000, { message: "Fuel usage must be ≤ 1000" }),
+    ])
+    .optional(),
 });
-
-const DEFAULT_FUEL_L_PER_HOUR = 14;
 
 type FormState = {
   name: string;
@@ -98,7 +104,7 @@ const emptyForm: FormState = {
   brand: "",
   model: "",
   model_year: "",
-  fuel_usage_l_per_hour: String(DEFAULT_FUEL_L_PER_HOUR),
+  fuel_usage_l_per_hour: "",
   serial_number: "",
   vin_number: "",
 };
@@ -230,7 +236,7 @@ export default function TractorsPage() {
       model_year:
         form.model_year === "" ? "" : Number(form.model_year),
       fuel_usage_l_per_hour:
-        form.fuel_usage_l_per_hour === "" ? NaN : Number(form.fuel_usage_l_per_hour),
+        form.fuel_usage_l_per_hour === "" ? "" : Number(form.fuel_usage_l_per_hour),
     });
     if (!parsed.success) {
       const fieldErrors: Partial<Record<keyof FormState, string>> = {};
@@ -254,7 +260,6 @@ export default function TractorsPage() {
     const valid = validate();
     if (!valid) return;
 
-    const nowIso = new Date().toISOString();
     const trimmedOrNull = (s: string) => {
       const t = s.trim();
       return t === "" ? null : t;
@@ -267,46 +272,26 @@ export default function TractorsPage() {
 
     setSubmitting(true);
     try {
-      if (editing) {
-        const updatePayload = {
-          name: form.name.trim(),
-          brand: trimmedOrNull(form.brand),
-          model: trimmedOrNull(form.model),
-          model_year: numOrNull(form.model_year),
-          fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
-          serial_number: trimmedOrNull(form.serial_number),
-          vin_number: trimmedOrNull(form.vin_number),
-          updated_by: user.id,
-          client_updated_at: nowIso,
-        };
-        const { error: upErr } = await supabase
-          .from("tractors")
-          .update(updatePayload)
-          .eq("id", editing.id)
-          .eq("vineyard_id", selectedVineyardId);
-        if (upErr) throw upErr;
-        toast.success("Tractor updated");
-      } else {
-        const id = crypto.randomUUID();
-        const insertPayload = {
-          id,
-          vineyard_id: selectedVineyardId,
-          name: form.name.trim(),
-          brand: trimmedOrNull(form.brand),
-          model: trimmedOrNull(form.model),
-          model_year: numOrNull(form.model_year),
-          fuel_usage_l_per_hour: Number(form.fuel_usage_l_per_hour),
-          serial_number: trimmedOrNull(form.serial_number),
-          vin_number: trimmedOrNull(form.vin_number),
-          created_by: user.id,
-          updated_by: user.id,
-          client_updated_at: nowIso,
-        };
-        const { error: insErr } = await supabase
-          .from("tractors")
-          .insert(insertPayload);
-        if (insErr) throw insErr;
-        toast.success("Tractor created");
+      // One authoritative server-side write keeps `tractors` and its linked
+      // vineyard_machines mirror in step — never two independent browser
+      // writes. See src/lib/tractorWrite.ts.
+      const result = await saveTractor({
+        id: editing?.id ?? null,
+        vineyard_id: selectedVineyardId,
+        name: form.name.trim(),
+        brand: trimmedOrNull(form.brand),
+        model: trimmedOrNull(form.model),
+        model_year: numOrNull(form.model_year),
+        fuel_usage_l_per_hour: numOrNull(form.fuel_usage_l_per_hour),
+        serial_number: trimmedOrNull(form.serial_number),
+        vin_number: trimmedOrNull(form.vin_number),
+        user_id: user.id,
+      });
+      toast.success(editing ? "Tractor updated" : "Tractor created");
+      if (result.mirrorPending) {
+        toast.message(
+          "Linked machine record pending — it is created once the tractor write migration is applied.",
+        );
       }
       await qc.invalidateQueries({ queryKey: ["list", "tractors", selectedVineyardId] });
       await qc.invalidateQueries({ queryKey: ["count", "tractors", selectedVineyardId] });
@@ -327,29 +312,28 @@ export default function TractorsPage() {
     }
     setArchiveSubmitting(true);
     try {
-      const { error: rpcErr } = await supabase.rpc("soft_delete_tractor", {
-        p_id: archiving.id,
-      });
-      if (rpcErr) {
-        const msg = (rpcErr.message || "").toLowerCase();
-        if (
-          msg.includes("permission") ||
-          msg.includes("denied") ||
-          msg.includes("not allowed") ||
-          msg.includes("rls")
-        ) {
-          toast.error("Only owners and managers can archive tractors.");
-        } else {
-          toast.error(`Archive failed: ${rpcErr.message}`);
-        }
-        return;
-      }
+      const result = await archiveTractor(archiving.id);
       toast.success("Tractor archived");
+      if (result.mirrorPending) {
+        toast.message(
+          "Linked machine record is archived with the tractor once the tractor write migration is applied.",
+        );
+      }
       await qc.invalidateQueries({ queryKey: ["list", "tractors", selectedVineyardId] });
       await qc.invalidateQueries({ queryKey: ["count", "tractors", selectedVineyardId] });
       setArchiving(null);
     } catch (err: any) {
-      toast.error(`Archive failed: ${err?.message ?? "Unknown error"}`);
+      const msg = (err?.message || "").toLowerCase();
+      if (
+        msg.includes("permission") ||
+        msg.includes("denied") ||
+        msg.includes("not allowed") ||
+        msg.includes("rls")
+      ) {
+        toast.error("Only owners and managers can archive tractors.");
+      } else {
+        toast.error(`Archive failed: ${err?.message ?? "Unknown error"}`);
+      }
     } finally {
       setArchiveSubmitting(false);
     }
@@ -521,9 +505,9 @@ export default function TractorsPage() {
                   />
                 </Field>
                 <Field
-                  label="Fuel usage (L/hr) *"
+                  label="Fuel usage (L/hr)"
                   error={errors.fuel_usage_l_per_hour}
-                  hint="Used for fuel cost and operating cost calculations."
+                  hint="Optional. Used for fuel and operating cost calculations. Leave blank if not known."
                 >
                   <Input
                     inputMode="decimal"
@@ -534,7 +518,7 @@ export default function TractorsPage() {
                         fuel_usage_l_per_hour: e.target.value.replace(/[^\d.]/g, ""),
                       }))
                     }
-                    required
+                    placeholder="Not set"
                   />
                 </Field>
               </div>

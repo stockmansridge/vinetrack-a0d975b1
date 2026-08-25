@@ -8,6 +8,19 @@
 // remain as legacy fallback.
 
 import { supabase } from "@/integrations/ios-supabase/client";
+import {
+  assertUserMachineType,
+  isUserVineyardMachine,
+  partitionMachines,
+  USER_MACHINE_TYPES,
+} from "@/lib/equipmentTaxonomy";
+
+export {
+  USER_MACHINE_TYPES,
+  partitionMachines,
+  isLinkedTractorMirror,
+  isOrphanTractorMachine,
+} from "@/lib/equipmentTaxonomy";
 
 export type MachineType =
   | "tractor"
@@ -66,12 +79,26 @@ const nowIso = () => new Date().toISOString();
 export async function fetchActiveVineyardMachines(
   vineyardId: string,
 ): Promise<VineyardMachine[]> {
+  const rows = await fetchActiveMachineRecords(vineyardId);
+  // Genuine user-managed machines only: linked tractor mirrors are internal
+  // representations and orphan tractor-machines belong in "Needs review".
+  return rows.filter(isUserVineyardMachine);
+}
+
+/**
+ * ALL active rows for the vineyard, tractor-typed ones included. Only the
+ * Vineyard Machines page should use this — it needs the orphan tractor rows to
+ * render the separate "Needs review" state. Everything else must go through
+ * fetchActiveVineyardMachines so the taxonomy stays enforced.
+ */
+export async function fetchActiveMachineRecords(
+  vineyardId: string,
+): Promise<VineyardMachine[]> {
   const { data, error } = await supabase
     .from("vineyard_machines")
     .select("*")
     .eq("vineyard_id", vineyardId)
-    .is("deleted_at", null)
-    .is("legacy_tractor_id", null);
+    .is("deleted_at", null);
   if (error) {
     // Table may not exist yet in some envs — degrade gracefully.
     const msg = (error.message || "").toLowerCase();
@@ -116,6 +143,8 @@ export interface CreateVineyardMachineInput {
 export async function createVineyardMachine(
   input: CreateVineyardMachineInput,
 ): Promise<VineyardMachine> {
+  // Taxonomy guard — the Portal can never create a new tractor-machine.
+  assertUserMachineType(input.machine_type);
   const payload = {
     id: crypto.randomUUID(),
     vineyard_id: input.vineyard_id,
@@ -160,6 +189,7 @@ export interface UpdateVineyardMachineInput {
 export async function updateVineyardMachine(
   input: UpdateVineyardMachineInput,
 ): Promise<VineyardMachine> {
+  if (input.machine_type !== undefined) assertUserMachineType(input.machine_type);
   const nextVersion = (input.current_sync_version ?? 0) + 1;
   const patch: Record<string, unknown> = {
     updated_by: input.user_id,

@@ -121,6 +121,7 @@ import { deriveMetrics } from "@/lib/paddockGeometry";
 import { useRegionFormatters } from "@/lib/useRegionFormatters";
 import type { RegionFormatters } from "@/lib/regionFormatters";
 import { useVintage } from "@/lib/useVintage";
+import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 import { vintageForDate } from "@/lib/vineyardSeasonSettingsQuery";
 
 
@@ -325,7 +326,15 @@ export default function WorkTasksPage() {
   const { data: vineyardMachines = [] } = useQuery({
     queryKey: ["vineyard_machines-lite", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchList<{ id: string; name?: string | null }>("vineyard_machines", selectedVineyardId!),
+    // Full list on purpose: historical machine lines must still resolve a name
+    // for tractor-typed rows. The picker filters them out separately.
+    queryFn: () =>
+      fetchList<{
+        id: string;
+        name?: string | null;
+        machine_type?: string | null;
+        legacy_tractor_id?: string | null;
+      }>("vineyard_machines", selectedVineyardId!),
   });
   const { data: tractorsList = [] } = useQuery({
     queryKey: ["tractors-lite", selectedVineyardId],
@@ -1816,7 +1825,12 @@ type MachinePickerGroup = {
 };
 
 interface MachineLookups {
-  machines: ReadonlyArray<{ id: string; name?: string | null }>;
+  machines: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    machine_type?: string | null;
+    legacy_tractor_id?: string | null;
+  }>;
   tractors: ReadonlyArray<{ id: string; name?: string | null }>;
   sprayEquipment: ReadonlyArray<{ id: string; name?: string | null }>;
   equipmentItems: ReadonlyArray<{ id: string; name?: string | null }>;
@@ -1832,7 +1846,13 @@ function buildMachinePickerGroups(lookups: MachineLookups): MachinePickerGroup[]
       .map((r) => ({ id: r.id, name: (r.name ?? "").trim(), source }));
 
   return [
-    { key: "machines", label: "Vineyard Machines", options: toOpts(lookups.machines, "vineyard_machine") },
+    {
+      key: "machines",
+      label: "Vineyard Machines",
+      // Tractor-typed rows are never offered here — linked mirrors duplicate
+      // the Tractors group and orphans are unpromoted tractors.
+      options: toOpts(lookups.machines.filter(isUserVineyardMachine), "vineyard_machine"),
+    },
     { key: "tractors", label: "Tractors", options: toOpts(lookups.tractors, "tractor") },
     { key: "spray", label: "Spray Equipment", options: toOpts(lookups.sprayEquipment, "spray_equipment") },
     { key: "other", label: "Other Equipment & Assets", options: toOpts(lookups.equipmentItems, "equipment_item") },
