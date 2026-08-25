@@ -185,6 +185,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     }
   }
 
+
   async function runLookup() {
     const q = name.trim();
     if (!q) {
