@@ -532,38 +532,11 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </div>
       )}
 
-      {!resultsCollapsed && existingMatches.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[11px] text-muted-foreground">
-            Already in your library
-          </div>
-          {existingMatches.slice(0, 5).map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => applyExisting(m)}
-              className="w-full text-left rounded border bg-background p-2 hover:bg-muted/50 focus:outline-none focus:bg-muted/60"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-sm font-medium">
-                  <Library className="h-3.5 w-3.5 text-primary" />
-                  {m.name ?? "Unnamed"}
-                </div>
-                <Badge variant="secondary" className="text-[10px]">Existing</Badge>
-              </div>
-              {m.active_ingredient && (
-                <div className="text-xs text-muted-foreground">{m.active_ingredient}</div>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!resultsCollapsed && candidates && candidates.length > 0 && (
+      {!resultsCollapsed && search && search.candidates.length > 0 && (
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] text-muted-foreground">
-              Lookup results ({candidates.length}) for "{name.trim()}"
+              Registered products ({search.candidates.length}) for "{name.trim()}"
               {countryCode ? ` · ${countryLabel(countryCode)}` : ""}
             </div>
             <button
@@ -574,136 +547,82 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               Not the right product? Enter manually
             </button>
           </div>
-          {candidates.map((c, i) => {
-            const unit = c.unit ?? (normaliseUnit(c.unit) as ChemUnit | "");
-            const basis = c.rate_basis ?? inferRateBasis(unit ? `${unit}/${"ha"}` : null);
-            const productType = c.product_type ?? inferProductType(unit || undefined);
-            const rateText =
-              c.rate_per_unit != null
-                ? `${c.rate_per_unit} ${unit || ""}${basis === "per_100L" ? "/100L" : "/ha"}`
-                : "Rate varies — check label";
+          {search.summary?.ambiguous && (
+            <div className="flex items-start gap-1.5 rounded border border-warning/50 bg-warning/10 p-2 text-[11px]">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                {search.summary.ambiguityReason ??
+                  "More than one registered product matched. Select the correct registration."}
+              </span>
+            </div>
+          )}
+          {/* Server order. Never re-sorted, never re-ranked by the portal. */}
+          {search.candidates.map((c) => {
+            const saved = savedChemicalForCandidate(existingIdentities, c);
             return (
-              <div key={i} className="rounded border bg-background p-2 text-xs space-y-1">
-                <div className="space-y-0.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-bold leading-tight">
-                      {c.manufacturer?.trim() || (
-                        <span className="italic text-muted-foreground font-normal">Manufacturer unknown</span>
+              <div key={c.index} className="rounded border bg-background p-2 text-xs space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium leading-tight">
+                      {c.productName ?? (
+                        <span className="italic text-muted-foreground font-normal">Unnamed product</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                      {c.cached && (
-                        <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                          Previously found
-                        </Badge>
-                      )}
-                      {c.was_applied && (
-                        <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-primary/30">
-                          Previously applied
-                        </Badge>
-                      )}
-                      {c.country && (
-                        <Badge
-                          variant={c.country_confirmed === false ? "outline" : "secondary"}
-                          className="text-[10px]"
-                        >
-                          {c.country}
-                          {c.country_confirmed === false ? " (unverified)" : ""}
-                        </Badge>
-                      )}
-                      <span className="text-[10px] text-muted-foreground">
-                        {c.confidence ?? "unknown"}
-                      </span>
+                    <div className="text-muted-foreground">
+                      {c.registrant ?? "Registrant unknown"}
                     </div>
                   </div>
-                  <div className="text-sm font-medium text-foreground/90">
-                    {c.product_name || (
-                      <span className="italic text-muted-foreground font-normal">Unnamed product</span>
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                    {saved && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        <Library className="h-3 w-3 mr-1" />
+                        {ALREADY_IN_STORE_LABEL}
+                      </Badge>
+                    )}
+                    {c.registrationCountry && (
+                      <Badge variant="outline" className="text-[10px]">{c.registrationCountry}</Badge>
                     )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  <Row label="Active" value={c.active_ingredient} />
-                  <Row label="Category" value={c.category} />
-                  <Row label="Group / MOA" value={c.chemical_group} />
-                  <Row label="Type" value={productType} />
-                  <Row label="Rate" value={rateText} />
-                  <Row
-                    label="WHP"
-                    value={
-                      c.withholding_period_days != null
-                        ? `${c.withholding_period_days} days`
-                        : undefined
-                    }
-                  />
-                  <Row
-                    label="REI"
-                    value={
-                      c.re_entry_period_hours != null
-                        ? `${c.re_entry_period_hours} hours`
-                        : undefined
-                    }
-                  />
-                  {c.target && <Row label="Target" value={c.target} />}
+                  <Row label="Registration" value={c.registrationNumber} />
+                  <Row label="Scheme" value={c.registrationScheme} />
+                  <Row label="Active" value={c.activeIngredientText} />
                 </div>
-                {c.notes && (
-                  <p className="text-muted-foreground italic text-[11px]">{c.notes}</p>
-                )}
-                <div className="flex flex-wrap gap-3">
-                  {c.label_url && /^https?:\/\//i.test(c.label_url) ? (
-                    <a
-                      href={c.label_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={loading}
+                    onClick={() => selectCandidate(c)}
+                  >
+                    {loading && selectedIndex === c.index ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        Loading label…
+                      </>
+                    ) : (
+                      "Select this registration"
+                    )}
+                  </Button>
+                  {saved && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => applyExisting({ id: saved.id, name: saved.name, active_ingredient: saved.active_ingredient })}
                     >
-                      <FileText className="h-3 w-3" />
-                      Label
-                    </a>
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground italic">
-                      No label found
-                    </span>
-                  )}
-                  {c.sds_url && /^https?:\/\//i.test(c.sds_url) && (
-                    <a
-                      href={c.sds_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      SDS
-                    </a>
-                  )}
-                  {c.product_url && /^https?:\/\//i.test(c.product_url) && (
-                    <a
-                      href={c.product_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary hover:underline"
-                      title="Manufacturer/distributor product page (not an official label)"
-                    >
-                      <Globe className="h-3 w-3" />
-                      Product page
-                    </a>
+                      Use stored
+                    </Button>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => applyCandidate(c)}
-                  className="w-full"
-                >
-                  <Check className="h-3.5 w-3.5 mr-1" />
-                  Apply this product
-                </Button>
               </div>
             );
           })}
           <p className="text-[11px] text-muted-foreground italic leading-snug pt-1">
-            You can search again if you do not see the right product. A second search may find additional chemicals or alternative product listings.
+            Results are supplied and ordered by the shared VineTrack register search.
           </p>
         </div>
       )}
