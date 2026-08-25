@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, Check, Library, ExternalLink, Globe, FileText } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, Check, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import { supabase as iosSupabase } from "@/integrations/ios-supabase/client";
 import {
   parseChemicalLookup,
@@ -30,32 +29,19 @@ import {
   type SearchCandidate,
   type SavedChemicalIdentity,
 } from "@/lib/chemicalSearchFlow";
-import { matchCategory, type ProductCategory } from "@/lib/chemicalCategories";
+import type { ProductCategory } from "@/lib/chemicalCategories";
 import {
-  matchMasterByIdentity,
   searchApprovedMasterChemicals,
-  parseMasterLookupEnvelope,
-  isTrustedMasterEnvelope,
-  fetchMasterChemical,
   type MasterChemicalRow,
 } from "@/lib/masterChemicals";
 import { MasterChemicalCard } from "@/components/chemicals/MasterChemicalCard";
 import {
   countryLabel,
-  jurisdictionSuitability,
-  masterEligibleForVineyard,
   vineyardCountryCode,
   MISSING_VINEYARD_COUNTRY_MESSAGE,
 } from "@/lib/chemicalJurisdiction";
 
-import {
-  inferProductType,
-  inferRateBasis,
-  normaliseUnit,
-  type ProductType,
-  type RateBasis,
-  type ChemUnit,
-} from "@/lib/rateBasis";
+import type { ProductType, RateBasis, ChemUnit } from "@/lib/rateBasis";
 
 export interface AppliedSuggestion {
   name?: string;
