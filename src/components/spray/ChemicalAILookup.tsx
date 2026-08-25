@@ -124,6 +124,27 @@ function normalise(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Classify a resolver failure. The shared VineTrack research service can be
+ * rate-limited or out of provider quota (HTTP 429 / insufficient_quota); that
+ * is transient and deserves a different message from a hard outage.
+ */
+function describeLookupFailure(err: unknown): "quota" | "other" {
+  let text = "";
+  try {
+    text = typeof err === "string" ? err : JSON.stringify(err ?? "");
+  } catch {
+    text = String(err ?? "");
+  }
+  if (err && typeof err === "object" && "message" in err) {
+    text += ` ${String((err as { message?: unknown }).message ?? "")}`;
+  }
+  return /429|insufficient_quota|credit_balance_exhausted|rate limit|quota|transient/i.test(text)
+    ? "quota"
+    : "other";
+}
+
+
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
   // browser or IP fallback — when it is missing, lookup is blocked.
