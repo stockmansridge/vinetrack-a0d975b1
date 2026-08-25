@@ -11,8 +11,13 @@
 // and fuel-rate drift appear. Both rows are written by ONE server-side
 // function, owned and deployed by Rork:
 //
-//   public.portal_upsert_tractor(...)  -> jsonb { tractor_id, machine_id }
-//   public.portal_archive_tractor(uuid)
+// SQL 209 functions, owned and deployed by Rork:
+//
+//   public.portal_upsert_tractor(...)  RETURNS TABLE (tractor_id uuid, machine_id uuid, ...)
+//   public.portal_archive_tractor(uuid) RETURNS TABLE (...)
+//
+// Both return SETOF rows, so supabase-js resolves `data` to an ARRAY of rows.
+
 //
 // There is deliberately NO client-side fallback. If the RPC is unavailable the
 // save FAILS with a clear message: writing `tractors` alone would create a
