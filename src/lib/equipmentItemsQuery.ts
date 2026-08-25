@@ -10,6 +10,7 @@
 // Soft-delete RPC: soft_delete_equipment_item(p_id) — falls back to a
 // direct deleted_at update if the RPC is not yet deployed.
 import { supabase } from "@/integrations/ios-supabase/client";
+import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 
 export type EquipmentCategory = "other";
 
@@ -177,10 +178,9 @@ export async function fetchEquipmentSelectorOptions(
       .is("deleted_at", null),
     supabase
       .from("vineyard_machines")
-      .select("id,name,legacy_tractor_id,deleted_at")
+      .select("id,name,machine_type,legacy_tractor_id,deleted_at")
       .eq("vineyard_id", vineyardId)
-      .is("deleted_at", null)
-      .is("legacy_tractor_id", null),
+      .is("deleted_at", null),
     fetchEquipmentItemsForVineyard(vineyardId, "other"),
   ]);
   if (tractors.error) throw tractors.error;
@@ -193,7 +193,10 @@ export async function fetchEquipmentSelectorOptions(
       throw machines.error;
     }
   } else {
-    machinesData = (machines.data ?? []) as any[];
+    // Tractor-typed rows never appear as Vineyard Machines in a selector:
+    // linked mirrors duplicate the Tractors group, orphans are unpromoted
+    // tractors. Both are offered from the Tractors group instead.
+    machinesData = ((machines.data ?? []) as any[]).filter(isUserVineyardMachine);
   }
 
   const map = (

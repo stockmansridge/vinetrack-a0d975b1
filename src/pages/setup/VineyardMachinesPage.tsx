@@ -44,16 +44,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Archive } from "lucide-react";
 import {
-  MACHINE_TYPES,
+  USER_MACHINE_TYPES,
   MACHINE_TYPE_LABELS,
   type MachineType,
   type VineyardMachine,
-  fetchActiveVineyardMachines,
+  fetchActiveMachineRecords,
   createVineyardMachine,
   updateVineyardMachine,
   softDeleteVineyardMachine,
 } from "@/lib/vineyardMachinesQuery";
 import { equipmentIdSubtitle } from "@/lib/equipmentIdentification";
+import { partitionMachines } from "@/lib/equipmentTaxonomy";
 
 type FormState = {
   name: string;
@@ -97,18 +98,25 @@ export default function VineyardMachinesPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["vineyard_machines", selectedVineyardId],
     enabled: !!selectedVineyardId,
-    queryFn: () => fetchActiveVineyardMachines(selectedVineyardId!),
+    queryFn: () => fetchActiveMachineRecords(selectedVineyardId!),
   });
 
+  // Linked tractor mirrors are internal representations and never listed here.
+  // Orphan tractor-machines (integrity check C9) are real tractors saved
+  // through the old mobile path — surfaced separately as "Needs review" until
+  // their targeted promotion migration is executed.
+  const partition = useMemo(() => partitionMachines(data ?? []), [data]);
+  const needsReview = partition.needsReview;
+
   const rows = useMemo(() => {
-    const list = data ?? [];
+    const list = partition.machines;
     if (!filter.trim()) return list;
     const f = filter.toLowerCase();
     return list.filter((r) =>
       [r.name, MACHINE_TYPE_LABELS[r.machine_type as MachineType] ?? r.machine_type, r.notes]
         .some((v) => String(v ?? "").toLowerCase().includes(f)),
     );
-  }, [data, filter]);
+  }, [partition.machines, filter]);
 
   const openCreate = () => {
     setEditing(null);
@@ -117,8 +125,8 @@ export default function VineyardMachinesPage() {
   };
 
   const openEdit = (m: VineyardMachine) => {
-    if (m.legacy_tractor_id) {
-      toast.message("This machine is managed in Tractors.");
+    if (m.machine_type === "tractor") {
+      toast.message("Tractors are managed under Setup › Tractors.");
       return;
     }
     setEditing(m);
@@ -270,15 +278,11 @@ export default function VineyardMachinesPage() {
               </TableRow>
             )}
             {rows.map((r) => {
-              const isLegacy = !!r.legacy_tractor_id;
               return (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">
                     <div>
                       {r.name}
-                      {isLegacy && (
-                        <Badge variant="outline" className="ml-2">Managed in Tractors</Badge>
-                      )}
                     </div>
                     {equipmentIdSubtitle(r.serial_number, r.vin_number) && (
                       <div className="text-xs text-muted-foreground font-normal">
@@ -292,7 +296,7 @@ export default function VineyardMachinesPage() {
                   <TableCell>{fmtNum(r.fuel_usage_l_per_hour)}</TableCell>
                   <TableCell className="max-w-[280px] truncate" title={r.notes ?? ""}>{r.notes ?? "—"}</TableCell>
                   <TableCell>
-                    {canEdit && !isLegacy && (
+                    {canEdit && (
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => openEdit(r)} aria-label="Edit">
                           <Pencil className="h-4 w-4" />
@@ -309,6 +313,44 @@ export default function VineyardMachinesPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {needsReview.length > 0 && (
+        <Card className="border-amber-500/50">
+          <div className="border-b border-border/60 px-4 py-3">
+            <h2 className="text-sm font-semibold">Needs review — recorded as a tractor</h2>
+            <p className="text-xs text-muted-foreground">
+              {needsReview.length === 1 ? "This machine was" : "These machines were"} saved
+              as a tractor through an older mobile path, so {needsReview.length === 1 ? "it is" : "they are"} not
+              a Vineyard Machine and {needsReview.length === 1 ? "is" : "are"} not counted as one.
+              A targeted migration promotes {needsReview.length === 1 ? "it" : "them"} to a proper
+              tractor record; after that {needsReview.length === 1 ? "it appears" : "they appear"} under
+              Setup › Tractors. No action is needed here.
+            </p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Recorded type</TableHead>
+                <TableHead>Default L/hr</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {needsReview.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell className="font-medium">{m.name}</TableCell>
+                  <TableCell>{MACHINE_TYPE_LABELS.tractor}</TableCell>
+                  <TableCell>{fmtNum(m.fuel_usage_l_per_hour)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">Awaiting promotion to Tractors</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -336,11 +378,14 @@ export default function VineyardMachinesPage() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MACHINE_TYPES.map((t) => (
+                    {USER_MACHINE_TYPES.map((t) => (
                       <SelectItem key={t} value={t}>{MACHINE_TYPE_LABELS[t]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Tractors are created and managed under Setup › Tractors.
+                </p>
               </div>
               <div className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div>

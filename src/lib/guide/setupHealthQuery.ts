@@ -6,6 +6,7 @@
 // through existing contracts. No new SQL, schema or RPCs.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/ios-supabase/client";
+import { isUserVineyardMachine } from "@/lib/equipmentTaxonomy";
 import { fetchWeatherStatusForVineyard } from "@/lib/weatherStatusQuery";
 import {
   MONTHS,
@@ -105,10 +106,27 @@ async function fetchTeam(vineyardId: string) {
   };
 }
 
+/**
+ * Vineyard Machines count excludes tractor-typed rows: linked mirrors are the
+ * internal representation of a tractor (already counted under Tractors) and
+ * orphan tractor-machines are tractors awaiting promotion. Counting either
+ * would double-count equipment on the setup health card.
+ */
+async function countUserVineyardMachines(vineyardId: string): Promise<number> {
+  const { data, error } = await (supabase as any)
+    .from("vineyard_machines")
+    .select("id,machine_type")
+    .eq("vineyard_id", vineyardId)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return ((data ?? []) as { machine_type?: string | null }[]).filter(isUserVineyardMachine)
+    .length;
+}
+
 async function fetchEquipment(vineyardId: string) {
   const [tractors, machines, sprayEquipment, other] = await Promise.allSettled([
     countRows("tractors", vineyardId),
-    countRows("vineyard_machines", vineyardId),
+    countUserVineyardMachines(vineyardId),
     countRows("spray_equipment", vineyardId),
     countRows("equipment_items", vineyardId),
   ]);

@@ -6,6 +6,11 @@
 // of fetches per vineyard. Detail lists are intentionally capped per issue
 // so vineyards with many records still render quickly.
 import { supabase } from "@/integrations/ios-supabase/client";
+import {
+  isLinkedTractorMirror,
+  isOrphanTractorMachine,
+  isUserVineyardMachine,
+} from "@/lib/equipmentTaxonomy";
 
 export type Severity = "critical" | "warning" | "info";
 
@@ -154,6 +159,7 @@ interface FuelPurchase {
 interface EquipRow {
   id: string;
   name?: string | null;
+  machine_type?: string | null;
   legacy_tractor_id?: string | null;
 }
 
@@ -275,7 +281,11 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     ),
     selectAll<EquipRow>("tractors", vineyardId, "id,name"),
     selectAll<EquipRow>("spray_equipment", vineyardId, "id,name"),
-    selectAll<EquipRow>("vineyard_machines", vineyardId, "id,name,legacy_tractor_id"),
+    selectAll<EquipRow>(
+      "vineyard_machines",
+      vineyardId,
+      "id,name,machine_type,legacy_tractor_id",
+    ),
     selectAll<EquipRow>("equipment_items", vineyardId, "id,name"),
   ]);
 
@@ -973,14 +983,10 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
     };
     ingest(tractors, "Tractor");
     ingest(sprayEquipment, "Spray Equipment");
-    // Exclude vineyard_machines that are pure migration shims for a legacy
-    // tractor row (legacy_tractor_id is set) — those intentionally share the
-    // same display name as the underlying tractor and would otherwise spam
-    // the duplicate-name list during the Vineyard Machines rollout.
-    ingest(
-      vineyardMachines.filter((m) => !m.legacy_tractor_id),
-      "Vineyard Machine",
-    );
+    // Tractor-typed machine rows are not Vineyard Machines: a linked mirror
+    // intentionally shares the tractor's name, and an orphan IS the tractor.
+    // Including either would spam the duplicate-name list.
+    ingest(vineyardMachines.filter(isUserVineyardMachine), "Vineyard Machine");
     ingest(equipmentItems, "Other Equipment");
     const dupNameDetails: IssueDetail[] = [];
     let dupNameCount = 0;
@@ -1057,19 +1063,42 @@ export async function runDataCoverage(vineyardId: string): Promise<DataCoverageR
       details: cap(missingRefDetails),
     });
 
-    const legacyTractorMachines = vineyardMachines.filter(
-      (m) => !!m.legacy_tractor_id,
-    );
+    // A linked mirror is the CORRECT internal representation of a tractor, not
+    // a defect: trips, fuel logs and spray records reference machine_id. It is
+    // reported for transparency only.
+    const linkedTractorMirrors = vineyardMachines.filter(isLinkedTractorMirror);
     push({
       group: "Equipment",
       key: "equip_legacy_tractor_machine",
-      name: "Vineyard Machines still tied to a legacy tractor reference",
+      name: "Tractors with a linked machine record",
       severity: "info",
-      explanation: "vineyard_machines.legacy_tractor_id is still set. These are placeholder shims for old tractor rows pending migration.",
-      suggestedAction: "Complete the Vineyard Machines migration so legacy_tractor_id can be cleared.",
-      count: legacyTractorMachines.length,
+      explanation:
+        "These machine records are the internal representation of a tractor so trips, fuel logs and spray records can reference it. They are managed under Setup › Tractors and are not shown or counted as Vineyard Machines. Nothing to fix.",
+      suggestedAction: "No action required.",
+      count: linkedTractorMirrors.length,
       details: cap(
-        legacyTractorMachines.map((m) => ({
+        linkedTractorMirrors.map((m) => ({
+          id: m.id,
+          label: m.name ?? "(unnamed machine)",
+        })),
+      ),
+    });
+
+    // Real defect (integrity check C9): a machine saved as a tractor with no
+    // tractor record behind it. It cannot be configured or costed as a tractor.
+    const orphanTractorMachines = vineyardMachines.filter(isOrphanTractorMachine);
+    push({
+      group: "Equipment",
+      key: "equip_orphan_tractor_machine",
+      name: "Machines recorded as a tractor with no tractor record",
+      severity: "warning",
+      explanation:
+        "These were saved as a tractor through an older mobile path, so they have no entry under Setup › Tractors and cannot carry tractor settings such as fuel use. They appear under Vineyard Machines as \u201CNeeds review\u201D.",
+      suggestedAction:
+        "Ask support to promote them to proper tractor records; their existing trips and fuel logs are preserved.",
+      count: orphanTractorMachines.length,
+      details: cap(
+        orphanTractorMachines.map((m) => ({
           id: m.id,
           label: m.name ?? "(unnamed machine)",
         })),
