@@ -560,6 +560,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           {/* Server order. Never re-sorted, never re-ranked by the portal. */}
           {search.candidates.map((c) => {
             const saved = savedChemicalForCandidate(existingIdentities, c);
+            const registered = !!c.registrationNumber;
             return (
               <div key={c.index} className="rounded border bg-background p-2 text-xs space-y-1">
                 <div className="flex items-start justify-between gap-2">
@@ -570,10 +571,15 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                       )}
                     </div>
                     <div className="text-muted-foreground">
-                      {c.registrant ?? "Registrant unknown"}
+                      {c.registrant ?? "Manufacturer unknown"}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                    {!registered && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Unverified suggestion
+                      </Badge>
+                    )}
                     {saved && (
                       <Badge variant="secondary" className="text-[10px]">
                         <Library className="h-3 w-3 mr-1" />
@@ -585,11 +591,23 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                     )}
                   </div>
                 </div>
+                {/* Grower-useful identity first. Scheme and diagnostics are not
+                    surfaced here. */}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  <Row label="Registration" value={c.registrationNumber} />
-                  <Row label="Scheme" value={c.registrationScheme} />
-                  <Row label="Active" value={c.activeIngredientText} />
+                  <Row label="Active ingredient" value={c.activeIngredientText} />
+                  <Row label="Product type" value={c.category} />
+                  {registered && (
+                    <Row
+                      label="Registration"
+                      value={`${(c.registrationScheme ?? "APVMA").toUpperCase()} ${c.registrationNumber}`}
+                    />
+                  )}
                 </div>
+                {!registered && (
+                  <p className="text-[11px] text-muted-foreground italic">
+                    No registration number was returned, so this is not a confirmed registered product.
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -598,10 +616,10 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                     disabled={loading}
                     onClick={() => selectCandidate(c)}
                   >
-                    {loading && selectedIndex === c.index ? (
+                    {phase === "enriching" && selectedIndex === c.index ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        Loading label…
+                        Loading product label details…
                       </>
                     ) : (
                       "Select this product"
@@ -621,6 +639,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               </div>
             );
           })}
+
           <p className="text-[11px] text-muted-foreground italic leading-snug pt-1">
             Results are supplied and ordered by the shared VineTrack register search.
           </p>
