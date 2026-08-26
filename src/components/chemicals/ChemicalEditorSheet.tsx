@@ -190,8 +190,30 @@ export function ChemicalEditor({
   // Manufacturer's own label URL from the lookup. Never the regulator label.
   const [manufacturerLabelUrl, setManufacturerLabelUrl] = useState<string | undefined>();
   // Operator-chosen default rate (grapevine label rate option id).
-  const [defaultRateId, setDefaultRateId] = useState<string | null>(null);
+  // ---- SQL 214 / D3 persisted operator default rates (Gate D4B-P2B).
+  // Two independent basis slots. NEVER inferred from rate_per_ha, never derived
+  // from the local display-only buildDefaultRateOptions().
+  const [defaultRates, setDefaultRates] = useState<PersistedDefaultRates>(
+    emptyPersistedDefaultRates(),
+  );
+  // Omit-vs-write gate: false => default_rates is omitted from the save payload
+  // so the existing DB value survives an unrelated edit.
+  const [defaultRatesDirty, setDefaultRatesDirty] = useState(false);
+  // Backend canonical options from the most recent authoritative lookup in THIS
+  // editor session. null => not fetched (saved snapshot shown as "unavailable").
+  const [canonicalRateOptions, setCanonicalRateOptions] =
+    useState<CanonicalDefaultRateOptions | null>(null);
+  const [defaultsClearedNotice, setDefaultsClearedNotice] = useState(false);
+  // Authoritative registered product identity behind the current canonical
+  // options / persisted defaults (§7). Used only to detect a proven change.
+  const [rateProductIdentity, setRateProductIdentity] = useState<{
+    country?: string | null;
+    scheme?: string | null;
+    number?: string | null;
+  } | null>(null);
+  const [labelVersion, setLabelVersion] = useState<string | null>(null);
   const showIntelEditor = !initial || upgraded || hasStructuredIntelligence(intel);
+
 
 
   // Linked Master record — used only for revision-drift detection. The saved
