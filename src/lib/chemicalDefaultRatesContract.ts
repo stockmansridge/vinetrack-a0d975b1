@@ -73,7 +73,11 @@ export interface PersistedDefaultRateSelection {
   min_value: number | null;
   max_value: number | null;
   source: DefaultRateSelectionSource;
-  selected_at: string;
+  /**
+   * Provenance, NOT identity (shared D3). Null/absent/malformed => null; the
+   * selection itself survives.
+   */
+  selected_at: string | null;
   label_version: string | null;
 }
 
@@ -95,6 +99,39 @@ const isCanonicalBasis = (v: unknown): v is CanonicalRateBasis =>
 function numOrNull(v: unknown): number | null | undefined {
   if (v == null) return null;
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
+
+/**
+ * Exact D3 amount shape.
+ *
+ * SINGLE: value finite, min_value null, max_value null.
+ * RANGE : value null, min_value & max_value finite, min_value <= max_value.
+ *
+ * Everything else is rejected: scalar mixed with bounds, only-min, only-max,
+ * no number at all, non-finite, inverted range. No midpoint/min/max fallback.
+ */
+function decodeAmountShape(
+  rawValue: unknown,
+  rawMin: unknown,
+  rawMax: unknown,
+): { value: number | null; min_value: number | null; max_value: number | null } | null {
+  const value = numOrNull(rawValue);
+  const min = numOrNull(rawMin);
+  const max = numOrNull(rawMax);
+  if (value === undefined || min === undefined || max === undefined) return null;
+
+  if (value !== null) {
+    if (min !== null || max !== null) return null;
+    return { value, min_value: null, max_value: null };
+  }
+  if (min === null || max === null) return null;
+  if (min > max) return null;
+  return { value: null, min_value: min, max_value: max };
+}
+
+/** Provenance string slot: absent/null/malformed => null. */
+function provenanceString(v: unknown): string | null {
+  return typeof v === "string" && v !== "" ? v : null;
 }
 
 /** Non-empty string array, verbatim. */
@@ -139,22 +176,17 @@ export function decodeCanonicalDefaultRateOption(
 
   if (typeof o.unit !== "string" || o.unit === "") return null;
 
-  const value_ = numOrNull(o.value);
-  const min = numOrNull(o.min_value);
-  const max = numOrNull(o.max_value);
-  if (value_ === undefined || min === undefined || max === undefined) return null;
-  // No scalar fallback and no range synthesis: an option with no number at all
-  // is not an operational default.
-  if (value_ === null && min === null && max === null) return null;
+  const amount = decodeAmountShape(o.value, o.min_value, o.max_value);
+  if (!amount) return null;
 
   const out: CanonicalDefaultRateOption = {
     option_key: optionKey,
     rate_ids: rateIds,
     basis: o.basis,
     unit: o.unit,
-    value: value_,
-    min_value: min,
-    max_value: max,
+    value: amount.value,
+    min_value: amount.min_value,
+    max_value: amount.max_value,
   };
 
   const directionIds = optionalStringArray(o.direction_ids);
@@ -214,26 +246,24 @@ function decodePersistedSelection(
   if (!isCanonicalBasis(o.basis) || o.basis !== expectedBasis) return null;
   if (typeof o.unit !== "string" || o.unit === "") return null;
 
-  const value_ = numOrNull(o.value);
-  const min = numOrNull(o.min_value);
-  const max = numOrNull(o.max_value);
-  if (value_ === undefined || min === undefined || max === undefined) return null;
+  const amount = decodeAmountShape(o.value, o.min_value, o.max_value);
+  if (!amount) return null;
 
   if (o.source !== "operator" && o.source !== "recommended") return null;
-  if (typeof o.selected_at !== "string" || o.selected_at === "") return null;
-  if (o.label_version != null && typeof o.label_version !== "string") return null;
 
   return {
     option_key: o.option_key,
     rate_ids: rateIds,
     basis: o.basis,
     unit: o.unit,
-    value: value_,
-    min_value: min,
-    max_value: max,
+    value: amount.value,
+    min_value: amount.min_value,
+    max_value: amount.max_value,
     source: o.source,
-    selected_at: o.selected_at,
-    label_version: (o.label_version as string | null | undefined) ?? null,
+    // Provenance is tolerant: malformed values degrade to null and never
+    // invalidate the operational selection (D3 `provenance_malformed`).
+    selected_at: provenanceString(o.selected_at),
+    label_version: provenanceString(o.label_version),
   };
 }
 
