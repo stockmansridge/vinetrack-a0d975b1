@@ -160,8 +160,12 @@ export interface SavedChemicalIdentity {
 
 /**
  * Informational only: is this exact candidate already in the vineyard store?
- * Registration number first; an exact (token-equal) product name is accepted
- * as a weaker identity when no registration number exists on either side.
+ *
+ * IDENTITY RULE: registration number ONLY. Both sides must carry a
+ * registration number and they must normalise to the same value. A name-only
+ * saved chemical is never presented as proof that a registered candidate is
+ * the same product (an unresolved saved record such as "Hortitrol Winter Oil"
+ * with a null registration number must not badge a registered candidate).
  * Never used for ranking, ordering or auto-selection.
  */
 export function savedChemicalForCandidate(
@@ -169,17 +173,11 @@ export function savedChemicalForCandidate(
   candidate: SearchCandidate,
 ): SavedChemicalIdentity | null {
   const reg = normaliseRegistrationNumber(candidate.registrationNumber);
-  if (reg) {
-    const byReg = saved.filter((s) => normaliseRegistrationNumber(s.registration_number) === reg);
-    if (byReg.length) return byReg[0];
-  }
-  const name = normaliseName(candidate.productName);
-  if (!name) return null;
-  const byName = saved.filter(
-    (s) => !normaliseRegistrationNumber(s.registration_number) && normaliseName(s.name) === name,
-  );
-  return byName.length === 1 ? byName[0] : null;
+  if (!reg) return null;
+  const byReg = saved.filter((s) => normaliseRegistrationNumber(s.registration_number) === reg);
+  return byReg.length ? byReg[0] : null;
 }
+
 
 export const ALREADY_IN_STORE_LABEL = "Already in your Chemical Store";
 
