@@ -45,7 +45,7 @@
       "provenance": { "rates": "official_label", "withholding_period": "official_label" },
       "rates": [
         {
-          "rate_id": "rate_v1_33182_downy_dilute_2l",
+          "rate_id": "rate_v1_2b559abc7cadaefe20e405674c523811",
           "text_layer_text": "2 L/100 L water",
           "label": "Dilute spraying",
           "basis": "per_100_litres",
@@ -53,7 +53,7 @@
           "unit": "L"
         },
         {
-          "rate_id": "rate_v1_33182_downy_dilute_3l",
+          "rate_id": "rate_v1_347ebfa9ad731449f589ae79458eaa88",
           "text_layer_text": "3 L/100 L water (high disease pressure)",
           "label": "Dilute spraying",
           "basis": "per_100_litres",
@@ -70,7 +70,7 @@
       "provenance": { "rates": "official_label" },
       "rates": [
         {
-          "rate_id": "rate_v1_33182_powdery_dilute_2l",
+          "rate_id": "rate_v1_758843c84a12d817494ccd5acd13720f",
           "text_layer_text": "2 L/100 L water",
           "label": "Dilute spraying",
           "basis": "per_100_litres",
@@ -78,7 +78,7 @@
           "unit": "L"
         },
         {
-          "rate_id": "rate_v1_33182_powdery_dilute_3l",
+          "rate_id": "rate_v1_805fb1dea8eb5f2bba9740b95d52a773",
           "text_layer_text": "3 L/100 L water (high disease pressure)",
           "label": "Dilute spraying",
           "basis": "per_100_litres",
@@ -93,10 +93,10 @@
     "per_hectare": [],
     "per_100_litres": [
       {
-        "option_key": "default_option_v1_33182_p100l_2l",
+        "option_key": "default_option_v1_42d1761ddc477436ffd40e7b881f0255",
         "rate_ids": [
-          "rate_v1_33182_downy_dilute_2l",
-          "rate_v1_33182_powdery_dilute_2l"
+          "rate_v1_2b559abc7cadaefe20e405674c523811",
+          "rate_v1_758843c84a12d817494ccd5acd13720f"
         ],
         "basis": "per_100_litres",
         "unit": "L",
@@ -113,10 +113,10 @@
         "condition_ambiguous": false
       },
       {
-        "option_key": "default_option_v1_33182_p100l_3l",
+        "option_key": "default_option_v1_94df25e59456a8a736cdb446e1a7af3e",
         "rate_ids": [
-          "rate_v1_33182_downy_dilute_3l",
-          "rate_v1_33182_powdery_dilute_3l"
+          "rate_v1_347ebfa9ad731449f589ae79458eaa88",
+          "rate_v1_805fb1dea8eb5f2bba9740b95d52a773"
         ],
         "basis": "per_100_litres",
         "unit": "L",
