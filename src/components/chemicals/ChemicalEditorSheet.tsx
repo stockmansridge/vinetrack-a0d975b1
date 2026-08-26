@@ -972,34 +972,23 @@ export function ChemicalEditor({
 
               {structuredUses && (
                 <Section title="Default rate">
+                  {defaultsClearedNotice && (
+                    <p className="mb-2 rounded-md border border-warning/50 bg-warning/10 p-2 text-[11px]">
+                      {PRODUCT_CHANGED_MESSAGE}
+                    </p>
+                  )}
+                  {/* Operator-owned shared default_rates contract. The legacy
+                      numeric rate editor lives under Advanced (mobile
+                      compatibility) and is never written from here. */}
                   <DefaultRatesCard
-                    options={defaultRateOptions}
-                    selectedId={defaultRateId}
-                    onSelect={(o) => {
-                      setDefaultRateId(o.id);
-                      // A label range is never collapsed to a single number —
-                      // the basis/unit is set and the operator enters the rate.
-                      setRateStr(!o.isRange && o.value != null ? String(o.value) : "");
-                      if (o.composedUnit) set("unit", o.composedUnit);
-                    }}
+                    options={canonicalRateOptions}
+                    slots={defaultRateSlots}
+                    onSelect={handleSelectDefaultRate}
+                    onClear={handleClearDefaultRate}
                   />
-                  <div className="mt-2 grid grid-cols-2 gap-3">
-                    <Field label="Default rate">
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        value={rateStr}
-                        placeholder="Not set"
-                        onChange={(e) => setRateStr(e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Unit">
-                      <Input value={form.unit ?? ""} placeholder="Not set" readOnly />
-                    </Field>
-                  </div>
                 </Section>
               )}
+
 
 
               {canSeeCosts && (
