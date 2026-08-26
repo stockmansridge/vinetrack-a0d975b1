@@ -33,8 +33,6 @@ const str = (v: unknown): string | undefined => {
 export const normaliseRegistrationNumber = (v: unknown): string =>
   String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-const normaliseName = (v: unknown): string =>
-  String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /* ---------------------------------------------------------- candidates */
 
@@ -48,11 +46,17 @@ export interface SearchCandidate {
   registrationCountry?: string;
   identityKey?: string;
   activeIngredientText?: string;
+  /**
+   * Product category / primary use EXACTLY as returned by the server. The
+   * portal never infers or derives a category client-side.
+   */
+  category?: string;
   labelReference?: string;
   ranking: ServerRankingMetadata;
   serverRanked: boolean;
   raw: Record<string, unknown>;
 }
+
 
 export interface ChemicalSearchResponse {
   candidates: SearchCandidate[];
@@ -84,7 +88,10 @@ export function parseSearchCandidates(payload: unknown): ChemicalSearchResponse 
       identityKey: str(o.registration_identity_key) ?? str(o.identity_key),
       activeIngredientText:
         str(o.active_ingredient) ?? str(o.active_ingredients_text) ?? str(o.actives),
+      category:
+        str(o.product_category) ?? str(o.category) ?? str(o.productCategory) ?? str(o.primary_use),
       labelReference: str(o.label_reference) ?? str(o.label_url),
+
       ranking: c.ranking,
       serverRanked: c.serverRanked,
       raw: o,
@@ -151,8 +158,12 @@ export interface SavedChemicalIdentity {
 
 /**
  * Informational only: is this exact candidate already in the vineyard store?
- * Registration number first; an exact (token-equal) product name is accepted
- * as a weaker identity when no registration number exists on either side.
+ *
+ * IDENTITY RULE: registration number ONLY. Both sides must carry a
+ * registration number and they must normalise to the same value. A name-only
+ * saved chemical is never presented as proof that a registered candidate is
+ * the same product (an unresolved saved record such as "Hortitrol Winter Oil"
+ * with a null registration number must not badge a registered candidate).
  * Never used for ranking, ordering or auto-selection.
  */
 export function savedChemicalForCandidate(
@@ -160,17 +171,11 @@ export function savedChemicalForCandidate(
   candidate: SearchCandidate,
 ): SavedChemicalIdentity | null {
   const reg = normaliseRegistrationNumber(candidate.registrationNumber);
-  if (reg) {
-    const byReg = saved.filter((s) => normaliseRegistrationNumber(s.registration_number) === reg);
-    if (byReg.length) return byReg[0];
-  }
-  const name = normaliseName(candidate.productName);
-  if (!name) return null;
-  const byName = saved.filter(
-    (s) => !normaliseRegistrationNumber(s.registration_number) && normaliseName(s.name) === name,
-  );
-  return byName.length === 1 ? byName[0] : null;
+  if (!reg) return null;
+  const byReg = saved.filter((s) => normaliseRegistrationNumber(s.registration_number) === reg);
+  return byReg.length ? byReg[0] : null;
 }
+
 
 export const ALREADY_IN_STORE_LABEL = "Already in your Chemical Store";
 

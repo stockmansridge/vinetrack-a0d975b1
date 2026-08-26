@@ -9,11 +9,7 @@ import {
   isStructuredLookupEnvelope,
   type ChemicalLookupResult,
 } from "@/lib/chemicalLookupResolver";
-import {
-  CHEMICAL_LOOKUP_WAIT_MESSAGE,
-  buildStructuredLookupBody,
-  newLookupCorrelationId,
-} from "@/lib/chemicalLookupRequest";
+import { newLookupCorrelationId } from "@/lib/chemicalLookupRequest";
 import {
   ALREADY_IN_STORE_LABEL,
   isSearchEnvelope,
@@ -132,14 +128,26 @@ async function describeLookupFailure(err: unknown): Promise<LookupFailure> {
   return "other";
 }
 
-function lookupFailureMessage(kind: LookupFailure): string {
+/** Message for a failure of the SEARCH (shortlist) request. */
+function searchFailureMessage(kind: LookupFailure): string {
   if (kind === "timeout") {
-    return "The official register search took too long to complete and was cut off by the shared VineTrack service. First-time searches for a product can take a few minutes — try the search again (repeat searches are usually faster), or add the chemical manually.";
+    return "The product search took too long. Try again, or enter the chemical manually.";
   }
   return kind === "quota"
-    ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
-    : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.";
+    ? "Product search is temporarily out of research capacity on the shared VineTrack service. Try again shortly, or enter the chemical manually."
+    : "Product search is unavailable right now. Try again, or enter the chemical manually.";
 }
+
+/** Message for a failure of the label ENRICHMENT after a product was chosen. */
+function enrichmentFailureMessage(kind: LookupFailure): string {
+  if (kind === "timeout") {
+    return "The product was selected, but the label details took too long to load. Retry label details.";
+  }
+  return kind === "quota"
+    ? "The product was selected, but label details are temporarily out of research capacity on the shared VineTrack service. Retry label details."
+    : "The product was selected, but the label details could not be loaded. Retry label details.";
+}
+
 
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
@@ -148,14 +156,24 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
   const countryCode = vineyardCountryCode(country);
   const [name, setName] = useState(initialName);
 
-  const [loading, setLoading] = useState(false);
+  /**
+   * SEARCH and ENRICHMENT are distinct user-visible phases. They never share a
+   * spinner, a message or an error recovery action.
+   */
+  const [phase, setPhase] = useState<"idle" | "searching" | "enriching">("idle");
+  const loading = phase !== "idle";
   const [error, setError] = useState<string | null>(null);
+  /** Which recovery affordance the current error offers. */
+  const [errorAction, setErrorAction] = useState<"retry_search" | "retry_label" | null>(null);
   /** Server-ordered candidate list. Never re-sorted by the portal. */
   const [search, setSearch] = useState<ChemicalSearchResponse | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [correlationId, setCorrelationId] = useState<string | null>(null);
+  /** Candidate kept so label enrichment can be retried without re-searching. */
+  const [pendingCandidate, setPendingCandidate] = useState<SearchCandidate | null>(null);
   /** The single selected-product summary shown after a one-step selection. */
   const [selected, setSelected] = useState<SelectedProductSummary | null>(null);
+
 
   // Informational only — saved chemicals never re-order or auto-select.
   const existingIdentities: SavedChemicalIdentity[] = existingLibrary.map((c) => ({
@@ -176,23 +194,28 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     const q = name.trim();
     if (!q) {
       setError("Enter a product name to look up.");
+      setErrorAction(null);
       return;
     }
     // Fail closed: jurisdiction comes from the vineyard, never from a locale.
     if (!countryCode) {
       setError(MISSING_VINEYARD_COUNTRY_MESSAGE);
+      setErrorAction(null);
       return;
     }
     setError(null);
+    setErrorAction(null);
     setSearch(null);
     setSelectedIndex(null);
     setSelected(null);
-    setLoading(true);
+    setPendingCandidate(null);
+    setPhase("searching");
     // One correlation id per lookup FLOW: this search and any structured
     // lookup selected from it share it. Diagnostic only.
     const cid = newLookupCorrelationId();
     setCorrelationId(cid);
 
+    let failure: LookupFailure = "other";
     try {
       const { data, error: searchErr } = await iosSupabase.functions.invoke(
         "chemical-info-lookup",
@@ -204,11 +227,12 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           setError(
             `No registered product found for "${q}" in ${countryLabel(countryCode)}. Check the spelling or enter it manually.`,
           );
-          setLoading(false);
+          setErrorAction("retry_search");
+          setPhase("idle");
           return;
         }
         setSearch(res);
-        setLoading(false);
+        setPhase("idle");
         // The server decides whether a single result is unambiguous; the
         // portal never auto-picks the top-ranked candidate itself.
         if (!requiresCandidateSelection(res)) {
@@ -217,15 +241,17 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         return;
       }
       console.warn("[chemical-info-lookup:search] unavailable", searchErr ?? data);
-      // Older deployment without `action: "search"` — fall back to the direct
-      // structured lookup on the free text. Master is NOT consulted first.
-      await runStructuredFallback(q, countryCode, cid);
-      return;
+      failure = await describeLookupFailure(searchErr ?? data);
     } catch (e) {
       console.warn("[chemical-info-lookup:search] failed", e);
-      await runStructuredFallback(q, countryCode, cid, e);
-      return;
+      failure = await describeLookupFailure(e);
     }
+    // BOUNDARY: a failed shortlist NEVER escalates into a full structured
+    // free-text lookup (register + research + label work). The typed query is
+    // preserved and the operator chooses: retry the search, or enter manually.
+    setError(searchFailureMessage(failure));
+    setErrorAction("retry_search");
+    setPhase("idle");
   }
 
   /**
@@ -238,8 +264,10 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
     if (!countryCode) return;
     const flowId = cid ?? correlationId ?? newLookupCorrelationId();
     setError(null);
+    setErrorAction(null);
     setSelectedIndex(candidate.index);
-    setLoading(true);
+    setPendingCandidate(candidate);
+    setPhase("enriching");
 
     // Master catalogue reuse — ONLY for the exact same registration identity.
     try {
@@ -250,7 +278,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       const exact = masterForCandidate(rows, candidate);
       if (exact) {
         applyMaster(exact);
-        setLoading(false);
+        setPhase("idle");
         return;
       }
     } catch (e) {
@@ -267,13 +295,13 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         const result = parseChemicalLookup(data, countryCode);
         if (result.jurisdiction.status !== "mismatch") {
           applyResolved(result, candidate);
-          setLoading(false);
+          setPhase("idle");
           return;
         }
         setError(
           `The label returned is not registered in ${countryLabel(countryCode)}. Enter the chemical manually.`,
         );
-        setLoading(false);
+        setPhase("idle");
         return;
       }
       console.warn("[chemical-info-lookup] unavailable", infoErr ?? data);
@@ -282,46 +310,19 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
       console.warn("[chemical-info-lookup] failed", e);
       failure = await describeLookupFailure(e);
     }
-    setError(lookupFailureMessage(failure));
-    setLoading(false);
+    // Enrichment failed: keep the chosen identity on screen. No re-search.
+    setSelected((prev) => prev ?? summaryFromCandidate(candidate));
+    setError(enrichmentFailureMessage(failure));
+    setErrorAction("retry_label");
+    setPhase("idle");
   }
 
-  /** Legacy direct structured lookup for deployments without `action: search`. */
-  async function runStructuredFallback(
-    q: string,
-    cc: string,
-    cid: string,
-    priorError?: unknown,
-  ) {
-    let failure: LookupFailure = priorError
-      ? await describeLookupFailure(priorError)
-      : "other";
-    try {
-      const { data, error: infoErr } = await iosSupabase.functions.invoke(
-        "chemical-info-lookup",
-        { body: buildStructuredLookupBody(q, cc, { correlationId: cid }) },
-      );
-      if (!infoErr && isStructuredLookupEnvelope(data)) {
-        const result = parseChemicalLookup(data, cc);
-        if (result.jurisdiction.status !== "mismatch") {
-          applyResolved(result);
-          setLoading(false);
-          return;
-        }
-        setError(
-          `The label returned is not registered in ${countryLabel(cc)}. Enter the chemical manually.`,
-        );
-        setLoading(false);
-        return;
-      }
-      failure = await describeLookupFailure(infoErr ?? data);
-    } catch (e) {
-      failure = await describeLookupFailure(e);
-    }
-    // Fail closed: no canonical data may come from the legacy AI function.
-    setError(lookupFailureMessage(failure));
-    setLoading(false);
+  /** Retry ONLY the label enrichment for the already-selected registration. */
+  function retryLabelDetails() {
+    if (!pendingCandidate) return;
+    void selectCandidate(pendingCandidate, correlationId ?? undefined);
   }
+
 
   function applyMaster(row: MasterChemicalRow) {
     const finalName = row.registered_product_name?.trim() || name.trim();
@@ -431,10 +432,10 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           }}
         />
         <Button type="button" size="sm" onClick={runLookup} disabled={loading || !countryCode}>
-          {loading ? (
+          {phase === "searching" ? (
             <>
               <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-              Looking up…
+              Searching…
             </>
           ) : (
             "Lookup"
@@ -442,20 +443,50 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </Button>
       </div>
 
-      {/* Same first-search expectation-setting copy as iOS. Repeat lookups are
-          usually faster but are never promised as instant. */}
-      {loading && (
+      {/* SEARCH and ENRICHMENT never share a message. */}
+      {phase === "searching" && (
         <p className="text-xs text-muted-foreground" role="status">
-          {CHEMICAL_LOOKUP_WAIT_MESSAGE}
+          Searching registered products…
+        </p>
+      )}
+      {phase === "enriching" && (
+        <p className="text-xs text-muted-foreground" role="status">
+          Loading product label details…
         </p>
       )}
 
       {error && (
-        <div className="flex items-start gap-1.5 text-xs text-destructive">
-          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>{error}</span>
+        <div className="space-y-1.5">
+          <div className="flex items-start gap-1.5 text-xs text-destructive">
+            <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+          {errorAction === "retry_search" && (
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={loading} onClick={runLookup}>
+                Retry search
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={applyManual}>
+                Enter manually
+              </Button>
+            </div>
+          )}
+          {errorAction === "retry_label" && (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading}
+                onClick={retryLabelDetails}
+              >
+                Retry label details
+              </Button>
+            </div>
+          )}
         </div>
       )}
+
 
       {/* Selected product summary. The candidate list is collapsed away — the
           operator reviews the populated form and confirms with Save chemical. */}
@@ -495,7 +526,9 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               onClick={() => {
                 setSelected(null);
                 setSelectedIndex(null);
+                setPendingCandidate(null);
                 setError(null);
+                setErrorAction(null);
               }}
             >
               Change product
@@ -525,6 +558,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           {/* Server order. Never re-sorted, never re-ranked by the portal. */}
           {search.candidates.map((c) => {
             const saved = savedChemicalForCandidate(existingIdentities, c);
+            const registered = !!c.registrationNumber;
             return (
               <div key={c.index} className="rounded border bg-background p-2 text-xs space-y-1">
                 <div className="flex items-start justify-between gap-2">
@@ -535,10 +569,15 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                       )}
                     </div>
                     <div className="text-muted-foreground">
-                      {c.registrant ?? "Registrant unknown"}
+                      {c.registrant ?? "Manufacturer unknown"}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                    {!registered && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Unverified suggestion
+                      </Badge>
+                    )}
                     {saved && (
                       <Badge variant="secondary" className="text-[10px]">
                         <Library className="h-3 w-3 mr-1" />
@@ -550,11 +589,23 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                     )}
                   </div>
                 </div>
+                {/* Grower-useful identity first. Scheme and diagnostics are not
+                    surfaced here. */}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  <Row label="Registration" value={c.registrationNumber} />
-                  <Row label="Scheme" value={c.registrationScheme} />
-                  <Row label="Active" value={c.activeIngredientText} />
+                  <Row label="Active ingredient" value={c.activeIngredientText} />
+                  <Row label="Product type" value={c.category} />
+                  {registered && (
+                    <Row
+                      label="Registration"
+                      value={`${(c.registrationScheme ?? "APVMA").toUpperCase()} ${c.registrationNumber}`}
+                    />
+                  )}
                 </div>
+                {!registered && (
+                  <p className="text-[11px] text-muted-foreground italic">
+                    No registration number was returned, so this is not a confirmed registered product.
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -563,10 +614,10 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
                     disabled={loading}
                     onClick={() => selectCandidate(c)}
                   >
-                    {loading && selectedIndex === c.index ? (
+                    {phase === "enriching" && selectedIndex === c.index ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        Loading label…
+                        Loading product label details…
                       </>
                     ) : (
                       "Select this product"
@@ -586,6 +637,7 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
               </div>
             );
           })}
+
           <p className="text-[11px] text-muted-foreground italic leading-snug pt-1">
             Results are supplied and ordered by the shared VineTrack register search.
           </p>
@@ -606,8 +658,24 @@ interface SelectedProductSummary {
   activeIngredient?: string;
   category?: string;
   verification?: string;
-  source: "registered" | "master" | "existing" | "manual";
+  source: "registered" | "master" | "existing" | "manual" | "pending";
 }
+
+/**
+ * Identity-only summary kept on screen when label enrichment fails. It carries
+ * nothing beyond what the candidate already stated — no estimated label data.
+ */
+function summaryFromCandidate(c: SearchCandidate): SelectedProductSummary {
+  return {
+    name: c.productName ?? "Selected product",
+    registrationNumber: c.registrationNumber,
+    registrant: c.registrant,
+    activeIngredient: c.activeIngredientText,
+    category: c.category,
+    source: "pending",
+  };
+}
+
 
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (

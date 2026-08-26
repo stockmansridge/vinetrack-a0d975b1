@@ -12,7 +12,9 @@ export type CandidatePromptKind =
   | "none"
   | "found"
   | "confirm_single"
-  | "select_multiple";
+  | "select_multiple"
+  | "unverified";
+
 
 export interface CandidatePrompt {
   kind: CandidatePromptKind;
@@ -46,6 +48,17 @@ export function candidatePrompt(res: ChemicalSearchResponse): CandidatePrompt {
       detail: "Enter manually",
     };
   }
+  // A candidate without a registration number is NOT a registered product and
+  // must never be titled as one.
+  const anyRegistered = res.candidates.some((c) => !!c.registrationNumber);
+  if (!anyRegistered) {
+    return {
+      kind: "unverified",
+      title: count > 1 ? "Unverified suggestions" : "Unverified suggestion",
+      detail:
+        "No registration number was returned for these, so they are not confirmed registered products. Check against the product label.",
+    };
+  }
   if (count > 1) {
     return {
       kind: "select_multiple",
@@ -64,3 +77,4 @@ export function candidatePrompt(res: ChemicalSearchResponse): CandidatePrompt {
         detail: "Confirm this is the product you use.",
       };
 }
+

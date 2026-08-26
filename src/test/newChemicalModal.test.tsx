@@ -23,6 +23,9 @@ import type { WriteRegisteredUse } from "@/lib/chemicalIntelligenceWrite";
 const candidate = (i: number, name: string) => ({
   index: i,
   productName: name,
+  // Registered identity — messaging for name-only candidates is covered in
+  // chemicalLookupBoundary.test.tsx.
+  registrationNumber: `9000${i}`,
   ranking: {} as any,
   serverRanked: true,
   raw: {},
