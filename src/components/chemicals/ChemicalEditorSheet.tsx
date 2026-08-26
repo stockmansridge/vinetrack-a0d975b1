@@ -448,19 +448,34 @@ export function ChemicalEditor({
       if (s.master) {
         setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
       }
-      // Default rate is a decision, not a guess. Only the conservative rule in
-      // chemicalDefaultRates may pre-select one; otherwise the field stays
-      // blank and the operator picks from the registered grapevine directions.
-      const rateOptions = buildDefaultRateOptions(r.draft.registeredUses, {
-        jurisdiction,
-      });
-      const recommendedGroup =
-        (rateOptions.per100L.recommendedId && rateOptions.per100L) ||
-        (rateOptions.perHectare.recommendedId && rateOptions.perHectare) ||
-        null;
-      const recommended = recommendedGroup
-        ? recommendedGroup.options.find((o) => o.id === recommendedGroup.recommendedId)
-        : undefined;
+      // ---- Default rates (Gate D4B-P2B).
+      // Canonical options come ONLY from the backend `default_rate_options`
+      // block. The local display-only buildDefaultRateOptions() may never stand
+      // in for it, and a lookup by itself NEVER changes default_rates.
+      const nextIdentity = r.fields.registrationNumber
+        ? {
+            country: r.fields.registrationCountry ?? null,
+            scheme: r.fields.registrationScheme ?? null,
+            number: r.fields.registrationNumber ?? null,
+          }
+        : null;
+      // A persisted default cites this product's rate_v1 identities. Clear both
+      // slots only when BOTH registrations are known and actually differ; a
+      // label revision change is NOT a product change.
+      const productChanged =
+        !!initial && isKnownDifferentRegisteredProduct(rateProductIdentity, nextIdentity);
+      if (productChanged) {
+        setDefaultRates(clearAllBasisSelections());
+        setDefaultRatesDirty(true);
+        setDefaultsClearedNotice(true);
+      } else {
+        setDefaultsClearedNotice(false);
+      }
+      // null => the deployed function sent no canonical block: keep persisted
+      // selections untouched and leave options unavailable.
+      if (r.defaultRateOptions) setCanonicalRateOptions(r.defaultRateOptions);
+      setRateProductIdentity(nextIdentity ?? rateProductIdentity);
+      setLabelVersion(r.fields.labelVersion ?? null);
       setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
       setForm((p) => ({
         ...p,
@@ -470,7 +485,9 @@ export function ChemicalEditor({
         active_ingredient: r.fields.activeIngredientText ?? p.active_ingredient ?? "",
         chemical_group: r.fields.chemicalGroupText ?? p.chemical_group ?? "",
         problem: r.fields.target ?? p.problem ?? "",
-        unit: recommended?.composedUnit ?? p.unit ?? "",
+        // §13: a canonical/recommended option never projects into the legacy
+        // unit or rate fields.
+        unit: p.unit ?? "",
         label_url:
           r.fields.regulatorLabelUrl ??
           (r.fields.labelReference && /^https?:\/\//i.test(r.fields.labelReference)
@@ -479,12 +496,7 @@ export function ChemicalEditor({
         // The manufacturer's own product page — never the regulator URL.
         product_url: r.fields.manufacturerProductUrl ?? p.product_url ?? "",
       }));
-      setDefaultRateId(recommended?.id ?? null);
-      setRateStr(
-        recommended && !recommended.isRange && recommended.value != null
-          ? String(recommended.value)
-          : "",
-      );
+
 
       // Label-backed only. When the structured response does not return a
       // WHP / REI with authoritative provenance the field is CLEARED, so a
