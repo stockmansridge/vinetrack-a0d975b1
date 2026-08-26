@@ -125,12 +125,12 @@ describe("chemical search backend ownership", () => {
     }
   });
 
-  it("shows the shared first-search wait message", async () => {
-    const { CHEMICAL_LOOKUP_WAIT_MESSAGE } = await import("@/lib/chemicalLookupRequest");
-    expect(CHEMICAL_LOOKUP_WAIT_MESSAGE).toContain("can take a few minutes the first time");
-    expect(CHEMICAL_LOOKUP_WAIT_MESSAGE).toContain("Keep this screen open");
-    expect(src("src/components/spray/ChemicalAILookup.tsx")).toContain(
-      "CHEMICAL_LOOKUP_WAIT_MESSAGE",
-    );
+  it("separates the search and label-enrichment wait messages", () => {
+    const file = src("src/components/spray/ChemicalAILookup.tsx");
+    expect(file).toContain("Searching registered products\u2026");
+    expect(file).toContain("Loading product label details\u2026");
+    // A shortlist must never be described as a multi-minute operation.
+    expect(file).not.toContain("CHEMICAL_LOOKUP_WAIT_MESSAGE");
+    expect(file).not.toMatch(/can take a few minutes/i);
   });
 });
