@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchList } from "@/lib/queries";
-import { fetchActiveVineyardMachines } from "@/lib/vineyardMachinesQuery";
 import {
   fetchVineyardTeamMembers,
   memberLabel,
@@ -17,37 +16,14 @@ export function useWizardLookups(vineyardId: string | null): WizardLookups {
     enabled: !!vineyardId,
     queryFn: () => fetchList("paddocks", vineyardId!),
   });
-  // Tractors live in two places: the legacy `tractors` table and the newer
-  // `vineyard_machines` table (Setup › Vineyard machines). The wizard must
-  // offer both, or a vineyard that only uses machines sees an empty list.
+  // spray_jobs.tractor_id references public.tractors.
+  // The Tractor picker therefore contains genuine tractors only.
+  // Vineyard Machines use a separate machine identity and are not valid
+  // values for spray_jobs.tractor_id.
   const { data: tractors } = useQuery({
-    queryKey: ["spray-wizard-machines", vineyardId],
+    queryKey: ["tractors-list", vineyardId],
     enabled: !!vineyardId,
-    queryFn: async () => {
-      const [legacy, machines] = await Promise.all([
-        fetchList("tractors", vineyardId!).catch(() => []),
-        fetchActiveVineyardMachines(vineyardId!).catch(() => []),
-      ]);
-      const rows = [
-        ...((legacy ?? []) as any[]).map((t) => ({
-          id: t.id,
-          name: t.name ?? t.model ?? "Tractor",
-        })),
-        ...((machines ?? []) as any[]).map((m) => ({
-          id: m.id,
-          name: m.name ?? "Machine",
-        })),
-      ];
-      const seen = new Set<string>();
-      return rows
-        .filter((r) => {
-          const key = (r.name ?? "").trim().toLowerCase();
-          if (!key || seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-        .sort((a, b) => a.name.localeCompare(b.name));
-    },
+    queryFn: () => fetchList("tractors", vineyardId!),
   });
   const { data: equipment } = useQuery({
     queryKey: ["equipment-list", vineyardId],
