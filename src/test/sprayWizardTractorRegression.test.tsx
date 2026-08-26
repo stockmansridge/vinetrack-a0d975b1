@@ -125,9 +125,10 @@ describe("EquipmentStep Tractor field", () => {
         />,
       ),
     );
-    const trigger = screen.getByRole("combobox", { name: /tractor/i });
+    const label = screen.getByText("Tractor");
+    const trigger = within(label.parentElement!).getByRole("combobox");
     fireEvent.click(trigger);
-    const options = within(document.body).getAllByRole("option");
+    const options = await waitFor(() => within(document.body).getAllByRole("option"));
     const texts = options.map((o) => o.textContent);
     expect(texts).toContain("New Holland T4");
     expect(texts).toContain("Fendt 211");
