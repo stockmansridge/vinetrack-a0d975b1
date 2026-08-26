@@ -37,7 +37,7 @@ const NAME_ONLY = {
 };
 
 const searchOk = (rows: unknown[]) => ({
-  data: { candidates: rows, ranking_summary: { ambiguous: rows.length > 1 } },
+  data: { candidates: rows, ranking_summary: { ambiguous: true } },
   error: null,
 });
 
