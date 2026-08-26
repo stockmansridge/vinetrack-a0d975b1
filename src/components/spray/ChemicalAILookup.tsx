@@ -102,7 +102,9 @@ interface Props {
  * rate-limited or out of provider quota (HTTP 429 / insufficient_quota); that
  * is transient and deserves a different message from a hard outage.
  */
-async function describeLookupFailure(err: unknown): Promise<"quota" | "other"> {
+type LookupFailure = "quota" | "timeout" | "other";
+
+async function describeLookupFailure(err: unknown): Promise<LookupFailure> {
   let text = "";
   try {
     text = typeof err === "string" ? err : JSON.stringify(err ?? "");
@@ -122,16 +124,23 @@ async function describeLookupFailure(err: unknown): Promise<"quota" | "other"> {
       }
     }
   }
-  return /429|insufficient_quota|credit_balance_exhausted|rate limit|quota|transient/i.test(text)
-    ? "quota"
-    : "other";
+  // Timeout is checked first: the server wraps it as a "transient" error too.
+  if (/timeout|timed out|exceeded \d+ms|deadline|504|gateway time/i.test(text)) return "timeout";
+  if (/429|insufficient_quota|credit_balance_exhausted|rate limit|quota|transient/i.test(text)) {
+    return "quota";
+  }
+  return "other";
 }
 
-function lookupFailureMessage(kind: "quota" | "other"): string {
+function lookupFailureMessage(kind: LookupFailure): string {
+  if (kind === "timeout") {
+    return "The official register search took too long to complete and was cut off by the shared VineTrack service. First-time searches for a product can take a few minutes — try the search again (repeat searches are usually faster), or add the chemical manually.";
+  }
   return kind === "quota"
     ? "Chemical lookup is temporarily out of research capacity on the shared VineTrack service. No verified label data could be retrieved — please try again later or add the chemical manually."
     : "Chemical lookup is unavailable right now. Verified label data could not be retrieved — please add the chemical manually.";
 }
+
 
 export function ChemicalAILookup({ initialName = "", existingLibrary = [], country, onApply }: Props) {
   // Jurisdiction is the selected vineyard's country. There is no locale,
