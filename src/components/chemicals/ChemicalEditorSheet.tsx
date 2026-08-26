@@ -368,6 +368,20 @@ export function ChemicalEditor({
         master_source_revision: masterLink?.revision ?? null,
         rate_per_ha: rateNum,
         restrictions,
+        // Omit-vs-write (§14): omitted while clean so an unrelated edit cannot
+        // wipe the persisted default; when dirty the FULL version-1 object is
+        // written, including explicit null slots. Never set to null just
+        // because both slots are null.
+        ...(defaultRatesDirty
+          ? {
+              default_rates: {
+                version: 1 as const,
+                per_hectare: defaultRates.per_hectare,
+                per_100_litres: defaultRates.per_100_litres,
+              },
+            }
+          : {}),
+
         purchase: canSeeCosts && costNum != null
           ? {
               ...(form.purchase ?? {}),
