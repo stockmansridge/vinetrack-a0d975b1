@@ -33,8 +33,6 @@ const str = (v: unknown): string | undefined => {
 export const normaliseRegistrationNumber = (v: unknown): string =>
   String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-const normaliseName = (v: unknown): string =>
-  String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /* ---------------------------------------------------------- candidates */
 
