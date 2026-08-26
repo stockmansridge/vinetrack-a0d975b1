@@ -394,6 +394,13 @@ export interface CanonicalChemicalFields {
   chemicalGroupText?: string;
   labelReference?: string;
   labelVersion?: string;
+  /** Manufacturer's own product page, when the backend resolved one. */
+  manufacturerProductUrl?: string;
+  /** Manufacturer's own label PDF — never the regulator label. */
+  manufacturerLabelUrl?: string;
+  /** Regulator (e.g. APVMA) label / register reference. */
+  regulatorLabelUrl?: string;
+
   /** Only when the label actually stated it. */
   withholdingDays?: number;
   /** LD-2 presentation: "Not required when used as directed" for a stated 0. */
@@ -797,7 +804,31 @@ export function parseChemicalLookup(
 
   draft.claimedStatus = verificationStatus as WriteVerificationStatus;
 
+  // Manufacturer links are kept strictly distinct from the regulator label —
+  // an APVMA URL is never presented as the manufacturer's own document.
+  const httpsUrl = (v: unknown): string | undefined => {
+    const t = s(v);
+    return t && /^https?:\/\//i.test(t) ? t : undefined;
+  };
+  const labelUrls = (p.label_urls ?? {}) as Record<string, unknown>;
+  const manufacturerProductUrl =
+    httpsUrl(p.manufacturer_product_url) ??
+    httpsUrl(p.product_url) ??
+    httpsUrl(labelUrls.manufacturer_product) ??
+    httpsUrl(labelUrls.product);
+  const manufacturerLabelUrl =
+    httpsUrl(p.manufacturer_label_url) ??
+    httpsUrl(labelUrls.manufacturer) ??
+    httpsUrl(
+      draft.sources.find((src) => src.kind === "manufacturer_label")?.reference,
+    );
+  const regulatorLabelUrl =
+    httpsUrl(p.regulator_label_url) ??
+    httpsUrl(labelUrls.regulator) ??
+    httpsUrl(labelReference);
+
   const fields: CanonicalChemicalFields = {
+
     name: productName,
     category: (matchCategory(categoryRaw) ?? undefined) as ProductCategory | undefined,
     registrant,
@@ -808,6 +839,10 @@ export function parseChemicalLookup(
     chemicalGroupText: actives.length ? legacyChemicalGroupProjection(actives) : undefined,
     labelReference,
     labelVersion,
+    manufacturerProductUrl,
+    manufacturerLabelUrl,
+    regulatorLabelUrl,
+
     withholdingDays: use?.withholding_period_days,
     withholdingText: withholdingDisplay(
       use?.withholding_period_days,

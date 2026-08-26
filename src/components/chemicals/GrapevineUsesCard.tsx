@@ -10,6 +10,7 @@ import type { WriteRegisteredUse } from "@/lib/chemicalIntelligenceWrite";
 import {
   NO_GRAPEVINE_RATE_MESSAGE,
   grapevineUseView,
+  normalGrapevineUses,
   partitionRegisteredUses,
 } from "@/lib/chemicalGrapevineUses";
 
@@ -23,10 +24,16 @@ function UseCard({ use }: { use: WriteRegisteredUse }) {
       ) : (
         <div className="space-y-1">
           {v.rates.map((r, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-medium">{r.text}</span>
-              <Badge variant="outline" className="text-[10px]">{r.basisLabel}</Badge>
-              {r.condition && <span className="text-muted-foreground">{r.condition}</span>}
+            <div key={i} className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-medium">{r.text}</span>
+                <Badge variant="outline" className="text-[10px]">{r.basisLabel}</Badge>
+              </div>
+              {(r.label || r.condition) && (
+                <div className="text-[11px] text-muted-foreground">
+                  {[r.label, r.condition].filter(Boolean).join(" — ")}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -49,8 +56,12 @@ export function GrapevineUsesCard({
   uses: WriteRegisteredUse[];
   className?: string;
 }) {
-  const { grapevine, other } = partitionRegisteredUses(uses);
+  // Normal display: rate-less duplicate regulator rows are suppressed when an
+  // authoritative rated row exists for the same target. Nothing is deleted.
+  const grapevine = normalGrapevineUses(uses);
+  const { other } = partitionRegisteredUses(uses);
   const [showOther, setShowOther] = useState(false);
+
 
   return (
     <div className={className}>
