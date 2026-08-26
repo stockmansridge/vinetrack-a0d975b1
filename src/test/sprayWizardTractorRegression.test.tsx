@@ -88,7 +88,7 @@ describe("useWizardLookups tractor source", () => {
   it("never exposes a vineyard machine id as a tractor option", async () => {
     let lookups: any;
     render(wrapper(<TestLookups vineyardId="v1" onLookups={(l) => (lookups = l)} />));
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => expect(lookups?.maps.tractors.size).toBe(2));
     for (const m of vineyardMachines) {
       expect(lookups.maps.tractors.has(m.id)).toBe(false);
     }
