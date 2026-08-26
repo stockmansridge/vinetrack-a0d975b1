@@ -356,6 +356,13 @@ function productBlock(payload: any): Record<string, any> {
       base.registered_product_name ?? reg.registered_product_name;
     base.label_reference = base.label_reference ?? reg.label_reference;
     base.label_version = base.label_version ?? reg.label_version;
+    // Deployed backend puts the split URLs inside the registration block.
+    base.manufacturer_label_url = base.manufacturer_label_url ?? reg.manufacturer_label_url;
+    base.regulator_label_url = base.regulator_label_url ?? reg.regulator_label_url;
+    base.manufacturer_product_url =
+      base.manufacturer_product_url ?? reg.manufacturer_product_url;
+    base.product_url = base.product_url ?? reg.product_url;
+    base.label_urls = base.label_urls ?? reg.label_urls;
   }
 
   // Verification lives in its own block on the production envelope.
