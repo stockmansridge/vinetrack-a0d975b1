@@ -332,6 +332,13 @@ export function ChemicalEditor({
         setIntelBase(emptyDraft());
         setUpgraded(false);
         setMasterLink(null);
+        setDefaultRates(emptyPersistedDefaultRates());
+        setDefaultRatesDirty(false);
+        setCanonicalRateOptions(null);
+        setDefaultsClearedNotice(false);
+        setRateProductIdentity(null);
+        setLabelVersion(null);
+
       }
       setMasterUpdateOpen(false);
     }
