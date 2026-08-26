@@ -436,10 +436,10 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
           }}
         />
         <Button type="button" size="sm" onClick={runLookup} disabled={loading || !countryCode}>
-          {loading ? (
+          {phase === "searching" ? (
             <>
               <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-              Looking up…
+              Searching…
             </>
           ) : (
             "Lookup"
@@ -447,20 +447,50 @@ export function ChemicalAILookup({ initialName = "", existingLibrary = [], count
         </Button>
       </div>
 
-      {/* Same first-search expectation-setting copy as iOS. Repeat lookups are
-          usually faster but are never promised as instant. */}
-      {loading && (
+      {/* SEARCH and ENRICHMENT never share a message. */}
+      {phase === "searching" && (
         <p className="text-xs text-muted-foreground" role="status">
-          {CHEMICAL_LOOKUP_WAIT_MESSAGE}
+          Searching registered products…
+        </p>
+      )}
+      {phase === "enriching" && (
+        <p className="text-xs text-muted-foreground" role="status">
+          Loading product label details…
         </p>
       )}
 
       {error && (
-        <div className="flex items-start gap-1.5 text-xs text-destructive">
-          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>{error}</span>
+        <div className="space-y-1.5">
+          <div className="flex items-start gap-1.5 text-xs text-destructive">
+            <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+          {errorAction === "retry_search" && (
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={loading} onClick={runLookup}>
+                Retry search
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={applyManual}>
+                Enter manually
+              </Button>
+            </div>
+          )}
+          {errorAction === "retry_label" && (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading}
+                onClick={retryLabelDetails}
+              >
+                Retry label details
+              </Button>
+            </div>
+          )}
         </div>
       )}
+
 
       {/* Selected product summary. The candidate list is collapsed away — the
           operator reviews the populated form and confirms with Save chemical. */}
