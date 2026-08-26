@@ -460,20 +460,14 @@ export function ChemicalEditor({
         : null;
       // A persisted default cites this product's rate_v1 identities. Clear both
       // slots only when BOTH registrations are known and actually differ; a
-      // label revision change is NOT a product change.
-      const productChanged =
-        !!initial && isKnownDifferentRegisteredProduct(rateProductIdentity, nextIdentity);
-      if (productChanged) {
-        setDefaultRates(clearAllBasisSelections());
-        setDefaultRatesDirty(true);
-        setDefaultsClearedNotice(true);
-      } else {
-        setDefaultsClearedNotice(false);
-      }
-      // null => the deployed function sent no canonical block: keep persisted
-      // selections untouched and leave options unavailable.
-      if (r.defaultRateOptions) setCanonicalRateOptions(r.defaultRateOptions);
-      setRateProductIdentity(nextIdentity ?? rateProductIdentity);
+      // label revision change is NOT a product change. This applies to NEW
+      // chemicals too (P2B.1 §1): product A's default may never survive a
+      // subsequent authoritative lookup of product B.
+      applyRateProductIdentity(nextIdentity);
+      // Canonical options live only for the lookup that supplied them
+      // (P2B.1 §2/§6): an authoritative apply with no option block makes the
+      // previous options unavailable. Persisted defaults / dirty stay untouched.
+      setCanonicalRateOptions(r.defaultRateOptions ?? null);
       setLabelVersion(r.fields.labelVersion ?? null);
       setManufacturerLabelUrl(r.fields.manufacturerLabelUrl);
       setForm((p) => ({
