@@ -999,7 +999,8 @@ export function ChemicalEditor({
 
 
               {canSeeCosts && (
-                <Collapsible>
+                <Collapsible defaultOpen>
+
                   <div className="rounded-md border border-border/60">
                     <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
                       <span>Purchase &amp; pricing</span>
