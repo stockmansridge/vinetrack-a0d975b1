@@ -313,41 +313,74 @@ describe("D4B-P2A — saved_chemicals.default_rates plumbing", () => {
 
 /* ------------------------------------------------ 11. identity round-trip test */
 
-describe("D4B-P2A — backend identity round-trip", () => {
+describe("D4B-P2A.2 — production APVMA 33182 identity round-trip", () => {
   it("keeps direction_id / rate_id / text_layer_text through lookup → save → reopen", () => {
     const res = parseChemicalLookup(vicol, "AU");
     const draft = res.draft!;
-    expect(draft.registeredUses).toHaveLength(2);
-    expect(draft.registeredUses[0].extra?.direction_id).toBe(
-      "direction_v1_33182_grapevine_downy",
-    );
-    expect(draft.registeredUses[0].rates[0].extra?.rate_id).toBe(
-      "rate_v1_2b559abc7cadaefe20e405674c523811",
-    );
-    expect(draft.registeredUses[0].rates[0].extra?.text_layer_text).toBe("2 L/100 L water");
+    // Six projected grapevine rows for four printed directions.
+    expect(draft.registeredUses).toHaveLength(6);
+
+    const directionIds = draft.registeredUses.map((u) => u.extra?.direction_id);
+    expect(directionIds).toEqual([
+      "direction_v1_7794c278eb02ee6af7801a045829937c",
+      "direction_v1_7794c278eb02ee6af7801a045829937c",
+      "direction_v1_7794c278eb02ee6af7801a045829937c",
+      "direction_v1_5de58ce95e39300352775925e32a73a0",
+      "direction_v1_8c7eac09fd4d814fff113a1465c4e1ee",
+      "direction_v1_90922a725050bec0228518cd4a0c0e3a",
+    ]);
+    expect(draft.registeredUses[0].rates[0].extra?.text_layer_text).toBe("2 L / 1OO L");
+    expect(draft.registeredUses[0].rates[0].raw_text).toBe("2 L / 100 L");
 
     const encoded = encodeChemicalIntelligenceForWrite(draft);
-    const row = { registered_uses: encoded.registered_uses };
-    const reopened = draftFromRow(row);
+    const reopened = draftFromRow({ registered_uses: encoded.registered_uses });
 
-    const ids = reopened.registeredUses.map((u) => u.extra?.direction_id);
-    expect(ids).toEqual([
-      "direction_v1_33182_grapevine_downy",
-      "direction_v1_33182_grapevine_powdery",
-    ]);
-    const rateIds = reopened.registeredUses.flatMap((u) =>
-      u.rates.map((r) => r.extra?.rate_id),
-    );
-    expect(rateIds).toEqual([
-      "rate_v1_2b559abc7cadaefe20e405674c523811",
-      "rate_v1_347ebfa9ad731449f589ae79458eaa88",
+    expect(reopened.registeredUses.map((u) => u.extra?.direction_id)).toEqual(directionIds);
+    expect(
+      reopened.registeredUses.flatMap((u) => u.rates.map((r) => r.extra?.rate_id)),
+    ).toEqual([
+      "rate_v1_758843c84a12d817494ccd5acd13720f",
+      "rate_v1_758843c84a12d817494ccd5acd13720f",
       "rate_v1_758843c84a12d817494ccd5acd13720f",
       "rate_v1_805fb1dea8eb5f2bba9740b95d52a773",
+      "rate_v1_347ebfa9ad731449f589ae79458eaa88",
+      "rate_v1_2b559abc7cadaefe20e405674c523811",
     ]);
-    expect(
-      reopened.registeredUses[1].rates[1].extra?.text_layer_text,
-    ).toBe("3 L/100 L water (high disease pressure)");
+    expect(reopened.registeredUses[3].rates[0].extra?.text_layer_text).toBe("3 L / 1OO L");
     // Wire identities are never duplicated into a second identity model.
     expect((reopened.registeredUses[0] as any).direction_id).toBeUndefined();
+  });
+
+  it("the multi-target Tas direction projects three rows sharing one identity", () => {
+    const draft = parseChemicalLookup(vicol, "AU").draft!;
+    const tas = draft.registeredUses.filter(
+      (u) => u.extra?.direction_id === "direction_v1_7794c278eb02ee6af7801a045829937c",
+    );
+    expect(tas).toHaveLength(3);
+    expect(tas.map((u) => u.target_raw)).toEqual([
+      "Grapeleaf Blister Mites",
+      "European Red Mites",
+      "Two Spotted Mites",
+    ]);
+    expect(new Set(tas.map((u) => u.rates[0].extra?.rate_id))).toEqual(
+      new Set(["rate_v1_758843c84a12d817494ccd5acd13720f"]),
+    );
+    // No fabricated WHP/REI: production rows carry null.
+    for (const u of tas) {
+      expect(u.withholding_period_days ?? null).toBeNull();
+      expect(u.re_entry_period_hours ?? null).toBeNull();
+    }
+  });
+
+  it("names the real product, active ingredient and registrant", () => {
+    const res = parseChemicalLookup(vicol, "AU");
+    expect(res.draft!.productName).toBe("VICOL WINTER OIL INSECTICIDE");
+    expect(res.draft!.registration?.registrant).toBe(
+      "VICTORIAN CHEMICAL COMPANY PROPRIETARY LIMITED",
+    );
+    expect(res.draft!.registration?.registration_number).toBe("33182");
+    expect(res.draft!.activeIngredients[0].name).toBe("Petroleum Oil");
+    expect(res.draft!.activeIngredients[0].concentration).toBe(861);
+    expect(res.draft!.activeIngredients[0].concentration_unit).toBe("g/L");
   });
 });
