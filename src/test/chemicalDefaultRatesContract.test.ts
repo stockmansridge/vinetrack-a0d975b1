@@ -374,13 +374,12 @@ describe("D4B-P2A.2 — production APVMA 33182 identity round-trip", () => {
 
   it("names the real product, active ingredient and registrant", () => {
     const res = parseChemicalLookup(vicol, "AU");
-    expect(res.draft!.productName).toBe("VICOL WINTER OIL INSECTICIDE");
-    expect(res.draft!.registration?.registrant).toBe(
-      "VICTORIAN CHEMICAL COMPANY PROPRIETARY LIMITED",
-    );
-    expect(res.draft!.registration?.registration_number).toBe("33182");
-    expect(res.draft!.activeIngredients[0].name).toBe("Petroleum Oil");
-    expect(res.draft!.activeIngredients[0].concentration).toBe(861);
-    expect(res.draft!.activeIngredients[0].concentration_unit).toBe("g/L");
+    expect(res.fields.name).toBe("VICOL WINTER OIL INSECTICIDE");
+    expect(res.fields.registrant).toBe("VICTORIAN CHEMICAL COMPANY PROPRIETARY LIMITED");
+    expect(res.fields.registrationNumber).toBe("33182");
+    const active = res.draft!.actives[0];
+    expect(active.name).toBe("Petroleum Oil");
+    expect(active.concentration).toBe(861);
+    expect(active.concentration_unit).toBe("g/L");
   });
 });
