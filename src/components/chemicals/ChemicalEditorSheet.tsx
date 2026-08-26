@@ -554,6 +554,11 @@ export function ChemicalEditor({
       setIntelBase(draft);
       setUpgraded(true);
       setMasterLink({ id: s.master.id, revision: masterRevision(s.master) ?? null });
+      // P2B.1 §5 — applying another Master product replaces the chemistry, so
+      // options from an earlier authoritative lookup are no longer current.
+      // Canonical options are NEVER manufactured from Master data.
+      invalidateCanonicalRateOptions();
+      applyRateProductIdentity(draftRateProductIdentity(draft));
       setForm((p) => ({
         ...p,
         name: s.master!.registered_product_name?.trim() || s.name || p.name || "",
