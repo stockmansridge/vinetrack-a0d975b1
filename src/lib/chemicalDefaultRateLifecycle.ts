@@ -16,7 +16,7 @@
 //  * An unsuccessful search (failed / timeout / ambiguous / AI-only) does not
 //    replace the authoritative chemistry, so it changes nothing at all.
 import {
-  emptyPersistedDefaultRates,
+  decodePersistedDefaultRates,
   type CanonicalDefaultRateOption,
   type CanonicalDefaultRateOptions,
   type CanonicalRateBasis,
@@ -25,7 +25,7 @@ import {
 import {
   clearAllBasisSelections,
   clearBasisSelection,
-  decodePersistedDefaultRatesOrEmpty,
+  emptyPersistedDefaultRates,
   isKnownDifferentRegisteredProduct,
   selectionFromCanonicalOption,
   withBasisSelection,
@@ -70,7 +70,7 @@ export function hydrateDefaultRateLifecycle(input: {
   labelVersion: string | null;
 }): DefaultRateLifecycleState {
   return {
-    defaultRates: decodePersistedDefaultRatesOrEmpty(input.storedDefaultRates),
+    defaultRates: decodePersistedDefaultRates(input.storedDefaultRates) ?? emptyPersistedDefaultRates(),
     dirty: false,
     canonicalOptions: null,
     productIdentity: input.productIdentity,
